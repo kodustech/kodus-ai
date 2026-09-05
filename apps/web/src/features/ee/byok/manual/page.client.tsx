@@ -53,7 +53,10 @@ import {
 import {
     providerHasCredentials,
     providerOwnsField,
+    providerSettingDefaults,
+    unownedStoredSettings,
 } from "../_components/_modals/edit-key/credential-config";
+import { SuccessClaim } from "../_components/success-claim";
 import {
     buildByokBlob,
     credentialSettingsFromConfig,
@@ -134,8 +137,8 @@ export function ByokManualPageClient({
     const lockedProvider = editCredential?.provider ?? presetProvider;
     const storedCred = lockedProvider
         ? existing?.credentials.find(
-              (c) => !c.managed && c.provider === lockedProvider,
-          )
+            (c) => !c.managed && c.provider === lockedProvider,
+        )
         : undefined;
     // The endpoint the stored credential already points at — so ADDING a model
     // to a connected custom-endpoint provider shows the URL its models actually
@@ -158,46 +161,46 @@ export function ByokManualPageClient({
     // credential's apiKey is a server mask; a blank form field keeps it.
     const existingConfig: BYOKConnectInput | null = isEditing
         ? {
-              provider: editCredential!.provider,
-              model: editModel!.model,
-              apiKey: "",
-              baseURL:
-                  typeof editSettings.baseURL === "string"
-                      ? editSettings.baseURL
-                      : undefined,
-              temperature: editModel!.temperature,
-              maxInputTokens: editModel!.maxInputTokens,
-              maxOutputTokens: editModel!.maxOutputTokens,
-              maxConcurrentRequests: editModel!.maxConcurrentRequests,
-              reasoningEffort: editModel!.reasoningEffort,
-              reasoningConfigOverride: editModel!.reasoningConfigOverride,
-              vertexLocation:
-                  typeof editSettings.vertexLocation === "string"
-                      ? editSettings.vertexLocation
-                      : undefined,
-              awsRegion:
-                  typeof editSettings.awsRegion === "string"
-                      ? editSettings.awsRegion
-                      : undefined,
-              // OpenRouter pinning is stored under credential settings like the
-              // three above, and was the only pair this lift forgot. The form
-              // default reads `existingConfig?.openrouterProviderOrder ?? null`,
-              // so omitting it here did two things: Edit always opened with an
-              // empty field however many times the user saved, and — because
-              // the backend REPLACES credential settings with what the form
-              // sends (only the aws* secrets are carried over) — the next save
-              // wrote settings without the key and ERASED the stored pin. The
-              // value could never survive its own edit dialog.
-              openrouterProviderOrder: Array.isArray(
-                  editSettings.openrouterProviderOrder,
-              )
-                  ? (editSettings.openrouterProviderOrder as string[])
-                  : undefined,
-              openrouterAllowFallbacks:
-                  typeof editSettings.openrouterAllowFallbacks === "boolean"
-                      ? editSettings.openrouterAllowFallbacks
-                      : undefined,
-          }
+            provider: editCredential!.provider,
+            model: editModel!.model,
+            apiKey: "",
+            baseURL:
+                typeof editSettings.baseURL === "string"
+                    ? editSettings.baseURL
+                    : undefined,
+            temperature: editModel!.temperature,
+            maxInputTokens: editModel!.maxInputTokens,
+            maxOutputTokens: editModel!.maxOutputTokens,
+            maxConcurrentRequests: editModel!.maxConcurrentRequests,
+            reasoningEffort: editModel!.reasoningEffort,
+            reasoningConfigOverride: editModel!.reasoningConfigOverride,
+            vertexLocation:
+                typeof editSettings.vertexLocation === "string"
+                    ? editSettings.vertexLocation
+                    : undefined,
+            awsRegion:
+                typeof editSettings.awsRegion === "string"
+                    ? editSettings.awsRegion
+                    : undefined,
+            // OpenRouter pinning is stored under credential settings like the
+            // three above, and was the only pair this lift forgot. The form
+            // default reads `existingConfig?.openrouterProviderOrder ?? null`,
+            // so omitting it here did two things: Edit always opened with an
+            // empty field however many times the user saved, and — because
+            // the backend REPLACES credential settings with what the form
+            // sends (only the aws* secrets are carried over) — the next save
+            // wrote settings without the key and ERASED the stored pin. The
+            // value could never survive its own edit dialog.
+            openrouterProviderOrder: Array.isArray(
+                editSettings.openrouterProviderOrder,
+            )
+                ? (editSettings.openrouterProviderOrder as string[])
+                : undefined,
+            openrouterAllowFallbacks:
+                typeof editSettings.openrouterAllowFallbacks === "boolean"
+                    ? editSettings.openrouterAllowFallbacks
+                    : undefined,
+        }
         : null;
 
     // Endpoint currently in effect for this provider: the edited model's, or the
@@ -207,27 +210,45 @@ export function ByokManualPageClient({
     // the re-auth probe).
     const currentBaseURL = existingConfig?.baseURL ?? storedBaseURL;
 
+    // The provider-scoped settings the CREDENTIAL actually holds, seeded off the
+    // registry rather than hand-listed here.
+    //
+    // Both flows through this screen write back to the same credential: editing a
+    // model, and adding a model to an already-connected provider. So both have to
+    // OPEN with what that credential holds — the save re-sends the form, and the
+    // server replaces `settings` with what it receives, so a field that opens
+    // blank is a field the save deletes.
+    const currentSettings = providerSettingDefaults(
+        lockedProvider,
+        isEditing ? editSettings : storedSettings,
+    ) as Record<string, unknown>;
+
     // Models already enabled on this provider — hidden from the "Add model"
     // dropdown so it never offers a duplicate. The currently-edited model stays
     // visible (ByokModelSelect keeps the selected value regardless).
     const configuredModelIds = lockedProvider
         ? (existing?.models ?? [])
-              .filter((m) => {
-                  const cred = existing?.credentials.find(
-                      (c) => c.id === m.credentialId,
-                  );
-                  return (
-                      cred && !cred.managed && cred.provider === lockedProvider
-                  );
-              })
-              .map((m) => m.model)
+            .filter((m) => {
+                const cred = existing?.credentials.find(
+                    (c) => c.id === m.credentialId,
+                );
+                return (
+                    cred && !cred.managed && cred.provider === lockedProvider
+                );
+            })
+            .map((m) => m.model)
         : [];
 
     const [showKeyInput, setShowKeyInput] = useState(!keyIsStored);
     const [testState, setTestState] = useState<
         | { status: "idle" }
         | { status: "testing" }
-        | { status: "success"; latencyMs: number; warning?: string }
+        | {
+          status: "success";
+          latencyMs: number;
+          warning?: string;
+          verifiedBy?: "catalog" | "probe";
+      }
         | { status: "error"; result: TestBYOKResult }
     >({ status: "idle" });
     const [isSaving, setIsSaving] = useState(false);
@@ -258,10 +279,10 @@ export function ByokManualPageClient({
             reasoningConfigOverride:
                 existingConfig?.reasoningConfigOverride ?? null,
             openrouterProviderOrder:
-                existingConfig?.openrouterProviderOrder ?? null,
+                (currentSettings.openrouterProviderOrder as string[]) ?? null,
             openrouterAllowFallbacks:
-                existingConfig?.openrouterAllowFallbacks ?? null,
-            vertexLocation: existingConfig?.vertexLocation ?? null,
+                (currentSettings.openrouterAllowFallbacks as boolean) ?? null,
+            vertexLocation: (currentSettings.vertexLocation as string) ?? null,
             // Sensitive Bedrock creds are stored encrypted server-side and
             // returned masked, so we can't populate the inputs from
             // existingConfig — that would re-submit the masked value and
@@ -271,7 +292,7 @@ export function ByokManualPageClient({
             awsBearerToken: null,
             awsAccessKeyId: null,
             awsSecretAccessKey: null,
-            awsRegion: existingConfig?.awsRegion ?? null,
+            awsRegion: (currentSettings.awsRegion as string) ?? null,
             awsSessionToken: null,
         },
     });
@@ -365,10 +386,11 @@ export function ByokManualPageClient({
                     setTestState(
                         result.ok
                             ? {
-                                  status: "success",
-                                  latencyMs: result.latencyMs,
-                                  warning: result.warning,
-                              }
+                                status: "success",
+                                latencyMs: result.latencyMs,
+                                warning: result.warning,
+                                verifiedBy: result.verifiedBy,
+                            }
                             : { status: "error", result },
                     );
                     return result;
@@ -412,7 +434,7 @@ export function ByokManualPageClient({
                 maxOutputTokens: data.maxOutputTokens ?? undefined,
                 openrouterProviderOrder:
                     data.openrouterProviderOrder &&
-                    data.openrouterProviderOrder.length > 0
+                        data.openrouterProviderOrder.length > 0
                         ? data.openrouterProviderOrder
                         : undefined,
                 openrouterAllowFallbacks:
@@ -431,6 +453,7 @@ export function ByokManualPageClient({
                     status: "success",
                     latencyMs: result.latencyMs,
                     warning: result.warning,
+                    verifiedBy: result.verifiedBy,
                 });
             } else {
                 setTestState({ status: "error", result });
@@ -482,43 +505,43 @@ export function ByokManualPageClient({
             // in ONE place now, not scattered as `provider === "x"` checks here.
             openrouterProviderOrder:
                 providerOwnsField(data.provider, "openrouterProviderOrder") &&
-                data.openrouterProviderOrder &&
-                data.openrouterProviderOrder.length > 0
+                    data.openrouterProviderOrder &&
+                    data.openrouterProviderOrder.length > 0
                     ? data.openrouterProviderOrder
                     : undefined,
             openrouterAllowFallbacks:
                 providerOwnsField(data.provider, "openrouterAllowFallbacks") &&
-                typeof data.openrouterAllowFallbacks === "boolean"
+                    typeof data.openrouterAllowFallbacks === "boolean"
                     ? data.openrouterAllowFallbacks
                     : undefined,
             vertexLocation:
                 providerOwnsField(data.provider, "vertexLocation") &&
-                data.vertexLocation?.trim()
+                    data.vertexLocation?.trim()
                     ? data.vertexLocation.trim()
                     : undefined,
             awsBearerToken:
                 providerOwnsField(data.provider, "awsBearerToken") &&
-                data.awsBearerToken?.trim()
+                    data.awsBearerToken?.trim()
                     ? data.awsBearerToken.trim()
                     : undefined,
             awsAccessKeyId:
                 providerOwnsField(data.provider, "awsAccessKeyId") &&
-                data.awsAccessKeyId?.trim()
+                    data.awsAccessKeyId?.trim()
                     ? data.awsAccessKeyId.trim()
                     : undefined,
             awsSecretAccessKey:
                 providerOwnsField(data.provider, "awsSecretAccessKey") &&
-                data.awsSecretAccessKey?.trim()
+                    data.awsSecretAccessKey?.trim()
                     ? data.awsSecretAccessKey.trim()
                     : undefined,
             awsRegion:
                 providerOwnsField(data.provider, "awsRegion") &&
-                data.awsRegion?.trim()
+                    data.awsRegion?.trim()
                     ? data.awsRegion.trim()
                     : undefined,
             awsSessionToken:
                 providerOwnsField(data.provider, "awsSessionToken") &&
-                data.awsSessionToken?.trim()
+                    data.awsSessionToken?.trim()
                     ? data.awsSessionToken.trim()
                     : undefined,
         };
@@ -527,23 +550,33 @@ export function ByokManualPageClient({
         // into the existing config: edit the model in place, reuse a connected
         // provider's key, or connect a brand-new provider credential.
         const modelFields = modelFieldsFromConfig(newConfig);
+        // Provider-scoped settings for an ALREADY-STORED credential. The form is
+        // authoritative for the keys it renders (so clearing one really clears
+        // it) and carries through the keys no form owns, because the server
+        // replaces this object wholesale rather than merging it.
+        const nextCredentialSettings: Record<string, unknown> = {
+            ...unownedStoredSettings(isEditing ? editSettings : storedSettings),
+            ...(credentialSettingsFromConfig(newConfig) ?? {}),
+        };
         const existingCred = (existing?.credentials ?? []).find(
             (c) => !c.managed && c.provider === newConfig.provider,
         );
         const blob: BYOKConfig =
             isEditing && editModel
                 ? buildByokBlob(existing, {
-                      kind: "edit-model",
-                      modelId: editModel.id,
-                      model: modelFields,
-                  })
+                    kind: "edit-model",
+                    modelId: editModel.id,
+                    model: modelFields,
+                    credentialSettings: nextCredentialSettings,
+                })
                 : existingCred
-                  ? buildByokBlob(existing, {
+                    ? buildByokBlob(existing, {
                         kind: "add-existing-provider",
                         credentialId: existingCred.id,
                         model: modelFields,
+                        credentialSettings: nextCredentialSettings,
                     })
-                  : buildByokBlob(existing, {
+                    : buildByokBlob(existing, {
                         kind: "add-new-provider",
                         newCredential: {
                             provider: newConfig.provider,
@@ -598,16 +631,16 @@ export function ByokManualPageClient({
                             {isEditing
                                 ? `Edit ${editLabel}`
                                 : lockedProviderLabel
-                                  ? `Add a ${lockedProviderLabel} model`
-                                  : "Configure a model manually"}
+                                    ? `Add a ${lockedProviderLabel} model`
+                                    : "Configure a model manually"}
                         </Page.Title>
                     </div>
                     <Page.Description className="text-pretty">
                         {isEditing
                             ? "Update this model's endpoint or tuning. Leave the key blank to keep the stored one."
                             : lockedProviderLabel
-                              ? `Type the model ID to enable${keyIsStored ? " — your key is already stored." : "."}`
-                              : "Pick any provider and model. Use this if your model isn't in the recommended list, or if you need a custom endpoint."}
+                                ? `Type the model ID to enable${keyIsStored ? " — your key is already stored." : "."}`
+                                : "Pick any provider and model. Use this if your model isn't in the recommended list, or if you need a custom endpoint."}
                     </Page.Description>
                 </Page.TitleContainer>
             </Page.Header>
@@ -662,7 +695,7 @@ export function ByokManualPageClient({
                                         <span className="text-text-secondary font-mono text-sm">
                                             {maskKey(
                                                 editCredential?.apiKey ??
-                                                    storedCred?.apiKey,
+                                                storedCred?.apiKey,
                                             )}
                                         </span>
                                         {/* The key is provider-level — changing it
@@ -868,14 +901,20 @@ function ModelManualFallback({ onRetry }: { onRetry: () => void }) {
     );
 }
 
+
 function TestResultBanner({
     state,
 }: {
     state:
-        | { status: "idle" }
-        | { status: "testing" }
-        | { status: "success"; latencyMs: number; warning?: string }
-        | { status: "error"; result: TestBYOKResult };
+    | { status: "idle" }
+    | { status: "testing" }
+    | {
+          status: "success";
+          latencyMs: number;
+          warning?: string;
+          verifiedBy?: "catalog" | "probe";
+      }
+    | { status: "error"; result: TestBYOKResult };
 }) {
     if (state.status === "idle" || state.status === "testing") return null;
 
@@ -890,11 +929,10 @@ function TestResultBanner({
                     <AlertTriangleIcon />
                     <AlertDescription className="flex flex-col gap-1 text-pretty">
                         <span>
-                            Connection OK — provider responded in{" "}
-                            <span className="tabular-nums">
-                                {state.latencyMs}ms
-                            </span>
-                            .
+                            <SuccessClaim
+                                latencyMs={state.latencyMs}
+                                verifiedBy={state.verifiedBy}
+                            />
                         </span>
                         <span>{state.warning}</span>
                     </AlertDescription>
@@ -905,8 +943,10 @@ function TestResultBanner({
             <Alert variant="success">
                 <CheckCircle2Icon />
                 <AlertDescription className="text-pretty">
-                    Connection OK — provider responded in{" "}
-                    <span className="tabular-nums">{state.latencyMs}ms</span>.
+                    <SuccessClaim
+                        latencyMs={state.latencyMs}
+                        verifiedBy={state.verifiedBy}
+                    />
                 </AlertDescription>
             </Alert>
         );
