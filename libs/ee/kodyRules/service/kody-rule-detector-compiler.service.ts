@@ -54,7 +54,7 @@ export class KodyRuleDetectorCompilerService
         organizationAndTeamData: OrganizationAndTeamData,
         ruleUuid: string,
         rule: Partial<IKodyRule>,
-    ): Promise<{ compiled: boolean; declineReason?: string }> {
+    ): Promise<{ compiled: boolean; declineReason?: string; scoped?: boolean }> {
         try {
             // native: resolve the kody-rules (codeReview) task to a `{main}`
             // carrier for runStructuredReviewCall. A non-v2/managed/BLOCKED
@@ -99,9 +99,16 @@ export class KodyRuleDetectorCompilerService
                 this.logger.log({
                     message: `Compiled T0 detector for rule ${ruleUuid}`,
                     context: KodyRuleDetectorCompilerService.name,
-                    metadata: { ruleUuid, pattern: detector.pattern },
+                    metadata: {
+                        ruleUuid,
+                        pattern: detector.pattern,
+                        extensions: detector.extensions,
+                    },
                 });
-                return { compiled: true };
+                return {
+                    compiled: true,
+                    scoped: !!detector.extensions?.length,
+                };
             }
             // Edited rule that used to be mechanical but no longer is:
             // clear the stale detector so review stops using it.

@@ -1,0 +1,86 @@
+corpus: 40 PRs / 400 files / 5415 added lines
+rules:  1 with a compiled detector
+
+── Avoid unnecessary semicolons  [;\s*(?:#.*)?$]  path=""  language=ruby
+   published: 614   out-of-language (certain false positives): 575 (93.6%)
+   by extension: .tsx:280 .scss:133 .jsx:115 .erb:37 .js:21 .gjs:14 .ts:12 .rb:2
+
+   .tsx (280) — FALSE POSITIVE
+     app/javascript/mastodon/features/public_timeline/components/feed_column_settings.tsx:1
+       import { useCallback } from 'react';
+     app/javascript/mastodon/features/public_timeline/components/feed_column_settings.tsx:3
+       import { FormattedMessage } from 'react-intl';
+     app/javascript/mastodon/features/public_timeline/components/feed_column_settings.tsx:8
+       } from 'immutable';
+     app/javascript/mastodon/features/public_timeline/components/feed_column_settings.tsx:10
+       import { changeColumnParams } from '@/mastodon/actions/columns';
+
+   .scss (133) — FALSE POSITIVE
+     app/javascript/mastodon/components/column_header/styles.module.scss:7
+       --column-header-gradient-start: 55%;
+     app/javascript/mastodon/components/column_header/styles.module.scss:13
+       );
+     app/javascript/mastodon/components/column_header/styles.module.scss:14
+       position: sticky;
+     app/javascript/mastodon/components/column_header/styles.module.scss:15
+       top: 0;
+
+   .jsx (115) — FALSE POSITIVE
+     app/javascript/mastodon/features/community_timeline/index.jsx:12
+       import { ColumnHeader as LegacyColumnHeader } from '@/mastodon/components/column/header';
+     app/javascript/mastodon/features/community_timeline/index.jsx:25
+       import { ColumnHeader, ColumnSettingsMenu } from '@/mastodon/components/column_header';
+     app/javascript/mastodon/features/community_timeline/index.jsx:26
+       import { FeedColumnSettings } from '../public_timeline/components/feed_column_settings';
+     app/javascript/mastodon/features/community_timeline/index.jsx:27
+       import { MultiColumnMenuItems } from '@/mastodon/components/column_header/multicolumn_settings';
+
+   .erb (37) — IN-LANG
+     app/views/events/show.html.erb:80
+       const chatFrame = document.getElementById("chat-frame");
+     app/views/events/show.html.erb:81
+       if (!chatFrame) return;
+     app/views/events/show.html.erb:85
+       (localStorage.getItem("config_body_class") || "").includes("dark-theme");
+     app/views/events/show.html.erb:90
+       const url = new URL(chatFrame.src);
+
+   .js (21) — FALSE POSITIVE
+     frontend/discourse/app/services/composer.js:3
+       import EmberObject, { action, computed } from "@ember/object";
+     frontend/discourse/app/services/composer.js:1635
+       const retry = await this.cancelComposer();
+     frontend/discourse/app/services/composer.js:1674
+       const retry = await this.cancelComposer();
+     frontend/discourse/app/services/composer.js:1870
+       return this.destroyDraft();
+
+   .gjs (14) — FALSE POSITIVE
+     frontend/discourse/app/components/reviewable/item.gjs:243
+       const scores = this.args.reviewable?.reviewable_scores ?? [];
+     frontend/discourse/app/components/reviewable/item.gjs:244
+       const summaries = {};
+     frontend/discourse/app/components/reviewable/item.gjs:251
+       };
+     frontend/discourse/app/components/reviewable/item.gjs:252
+       summaries[score_type.type].count += 1;
+
+   .ts (12) — FALSE POSITIVE
+     app/javascript/mastodon/components/status/hooks.ts:46
+       onOpen?: () => void;
+     app/javascript/mastodon/components/status/hooks.ts:101
+       onOpen?.();
+     app/javascript/mastodon/components/status/hooks.ts:123
+       onOpenCallback();
+     app/javascript/mastodon/components/status/hooks.ts:128
+       onOpenCallback(true);
+
+   .rb (2) — IN-LANG
+     db/migrate/20260903120000_add_feed_lookback_index_to_articles.rb:18
+       WHERE (published = true);
+     db/migrate/20260903120001_add_user_expires_at_index_to_recommended_articles_lists.rb:17
+       ON recommended_articles_lists (user_id, expires_at);
+
+════════════════════════════════════════════════════════
+TOTAL published without any LLM confirmation: 614
+  certain false positives (wrong language):  575 (93.6%)
