@@ -14,6 +14,7 @@ import { ArrowLeftIcon } from "lucide-react";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 
 import { buildByokBlob } from "../_components/byok-write";
+import { pickProbeModel } from "../_components/pick-probe-model";
 import { RotatePanel } from "../_components/rotate-panel";
 import { PROVIDER_LABELS } from "../_data/provider-labels";
 import type { BYOKConfig } from "../_types";
@@ -39,11 +40,9 @@ export function ByokProviderPageClient({
         ? existing?.credentials.find((c) => c.id === credentialId && !c.managed)
         : undefined;
 
-    // A probe needs a model to send the test request to; use the first model that
-    // authenticates through this credential (a connected provider always has one).
-    const probeModelId = credential
-        ? existing?.models.find((m) => m.credentialId === credential.id)?.model
-        : undefined;
+    // Probe what routing actually runs, not whatever sits first in the array —
+    // see pickProbeModel for why the accidental pick could block a rotation.
+    const probeModelId = pickProbeModel(existing, credential);
 
     // Credential gone (deleted in another tab, or a hand-edited URL): don't render
     // a broken form — show the way back instead.
