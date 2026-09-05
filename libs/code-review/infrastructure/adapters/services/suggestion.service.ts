@@ -1759,14 +1759,18 @@ export class SuggestionService implements ISuggestionService {
                             commentResult?.codeReviewFeedbackData
                                 ?.pullRequestReviewId;
 
-                        if (!commentId || !pullRequestReviewId) {
+                        // Same split as in CommentManagerService: only a missing
+                        // commentId breaks enrichment. `pullRequestReviewId`
+                        // describes the review object that Bitbucket does not
+                        // have, so demanding it reported an error on every
+                        // healthy Bitbucket suggestion.
+                        if (!commentId) {
                             this.logger.error({
-                                message: `Suggestion enrichment missing comment IDs for PR#${pullRequest.number}`,
+                                message: `Suggestion enrichment has no comment id for PR#${pullRequest.number}`,
                                 context: SuggestionService.name,
                                 metadata: {
                                     prNumber: pullRequest.number,
                                     suggestionId: suggestion?.id,
-                                    commentId,
                                     pullRequestReviewId,
                                     deliveryStatus:
                                         commentResult?.deliveryStatus,
@@ -1927,13 +1931,15 @@ export class SuggestionService implements ISuggestionService {
                                       result.codeReviewFeedbackData
                                           .pullRequestReviewId;
 
-                                  if (!prLevelCommentId || !prLevelReviewId) {
+                                  // Third copy of the same over-strict guard; a
+                                  // PR-level comment on Bitbucket has an id and
+                                  // no review id, and that is not a failure.
+                                  if (!prLevelCommentId) {
                                       this.logger.error({
-                                          message: `PR-level suggestion missing comment IDs`,
+                                          message: `PR-level suggestion has no comment id`,
                                           context: SuggestionService.name,
                                           metadata: {
                                               suggestionId: suggestion.id,
-                                              commentId: prLevelCommentId,
                                               pullRequestReviewId:
                                                   prLevelReviewId,
                                               deliveryStatus:
