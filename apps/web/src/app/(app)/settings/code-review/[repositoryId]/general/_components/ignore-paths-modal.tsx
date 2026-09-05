@@ -57,7 +57,16 @@ export const IgnorePathsModal = ({
         return paths.filter((path) => path.toLowerCase().includes(needle));
     }, [paths, query]);
 
-    const isDuplicate = newPath !== "" && paths.includes(newPath);
+    // Compared case-INSENSITIVELY, to agree with the filter directly above.
+    //
+    // The two disagreeing is what made this wrong: the filter lowercases both
+    // sides, so typing "YARN.LOCK" shows the existing "yarn.lock" as already on
+    // the list, while an exact-match guard let Enter add it again. The matcher
+    // runs with `nocase: false`, so that second entry ignores nothing — the user
+    // ends up with a pattern that reads as protection and does nothing.
+    const isDuplicate =
+        newPath !== "" &&
+        paths.some((path) => path.toLowerCase() === newPath.toLowerCase());
     const patternCheck = useMemo(
         () => (newPath === "" ? null : checkIgnorePattern(newPath)),
         [newPath],

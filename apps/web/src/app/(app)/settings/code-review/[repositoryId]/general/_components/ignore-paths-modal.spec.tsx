@@ -87,6 +87,37 @@ describe("IgnorePathsModal", () => {
         expect(applied(onSave)).toEqual(PATHS);
     });
 
+    it.each([
+        ["upper case", "YARN.LOCK"],
+        ["mixed case", "Yarn.Lock"],
+    ])("refuses a %s variant of a pattern already on the list", (_l, typed) => {
+        // The list filter compares case-insensitively, so the existing entry is
+        // right there on screen while the user types — and an exact-match guard
+        // still let Enter add a second copy. The matcher runs with
+        // `nocase: false`, so that copy ignores nothing: the user walks away
+        // with a pattern that reads as protection and does none.
+        const { search, onSave } = setup();
+
+        fireEvent.change(search, { target: { value: typed } });
+        fireEvent.keyDown(search, { key: "Enter" });
+
+        expect(
+            screen.getByText(/Valid glob syntax — already on the list/),
+        ).toBeInTheDocument();
+        expect(applied(onSave)).toEqual(PATHS);
+    });
+
+    it("still adds a pattern that only LOOKS similar to one on the list", () => {
+        // The guard must stay a comparison, not a fuzzy match: "yarn.lock.bak"
+        // is a different pattern and has to remain addable.
+        const { search, onSave } = setup();
+
+        fireEvent.change(search, { target: { value: "yarn.lock.bak" } });
+        fireEvent.keyDown(search, { key: "Enter" });
+
+        expect(applied(onSave)).toEqual([...PATHS, "yarn.lock.bak"]);
+    });
+
     it("confirms the syntax of a well-formed pattern as it is typed", () => {
         const { search } = setup();
 
