@@ -123,23 +123,36 @@ export class TestByokModelUseCase {
         if (catalog?.models?.length) {
             const found = catalog.models.some((m) => m.id === model);
             if (found) {
-                // Listing is not routing. This answered "the key works and the
-                // provider lists this id", which is cheap and usually enough —
-                // but it never called the model, so it cannot promise the model
-                // runs. Say which check happened and let the screen word itself
-                // honestly; a customer already read a catalog hit as proof the
-                // model worked while every real call to it was being refused.
-                return {
-                    ok: true,
-                    code: 'ok',
-                    latencyMs: Date.now() - start,
-                    verifiedBy: 'catalog',
-                };
+                // A hit is evidence about the CREDENTIAL only when producing the
+                // list actually used it. A live listing authenticates, so its
+                // hit is real evidence and spending an inference call would be
+                // waste — that fast path is deliberate and stays. A static
+                // catalog is never fetched, and a curated fallback is served
+                // exactly when the live call could not run, so neither says
+                // anything about the key: returning ok there would tell the user
+                // "your key works" on the strength of a hard-coded array, and
+                // let the rotate screen's save gate persist a dead credential.
+                // Those fall through to the real probe below, as a MISS does.
+                if (catalog.exercisedCredential) {
+                    // Listing is not routing. This answered "the key works and
+                    // the provider lists this id", which is cheap and usually
+                    // enough — but it never called the model, so it cannot
+                    // promise the model runs. Say which check happened and let
+                    // the screen word itself honestly; a customer already read a
+                    // catalog hit as proof the model worked while every real
+                    // call to it was being refused.
+                    return {
+                        ok: true,
+                        code: 'ok',
+                        latencyMs: Date.now() - start,
+                        verifiedBy: 'catalog',
+                    };
+                }
             }
             // Bedrock/Vertex catalogs are CURATED (not exhaustive), so a miss
             // isn't proof the model is invalid — fall through to a real probe.
             // Other providers list authoritatively, so a miss is a real miss.
-            if (!isCuratedCatalogProvider(input.provider)) {
+            else if (!isCuratedCatalogProvider(input.provider)) {
                 return {
                     ok: false,
                     code: 'not_found',

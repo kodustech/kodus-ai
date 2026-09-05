@@ -9,6 +9,10 @@ jest.mock('@libs/common/utils/crypto', () => ({
 function build(opts: {
     configValue: unknown;
     catalog?: Array<{ id: string; name: string }> | Error;
+    /** Whether producing the catalog used the org's key. Live listings do;
+     *  static and curated-fallback lists do not, and a hit from those must not
+     *  stand in for a real probe. Defaults to a live listing. */
+    exercisedCredential?: boolean;
 }) {
     const orgParams = {
         findByKey: jest.fn().mockResolvedValue(
@@ -21,7 +25,14 @@ function build(opts: {
     const getModels = {
         execute: jest.fn(async () => {
             if (opts.catalog instanceof Error) throw opts.catalog;
-            return { models: opts.catalog ?? [] };
+            // A LIVE listing by default: these cases are about the catalog fast
+            // path, which only applies when producing the list authenticated.
+            // The curated/static case has its own suite, where a hit must fall
+            // through to a real probe because the key was never used.
+            return {
+                models: opts.catalog ?? [],
+                exercisedCredential: opts.exercisedCredential ?? true,
+            };
         }),
     } as any;
     return {
