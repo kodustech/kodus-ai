@@ -1,68 +1,111 @@
 import { credentialSettingsOverride } from "./credential-settings-override";
 
 /**
- * The decision that turned a fix into a regression.
+ * The rule that both previous attempts got wrong, in opposite directions.
  *
- * Sending settings is an instruction to replace; omitting them is the only way
- * to say "keep what is stored". A screen that never saw the stored settings has
- * nothing to instruct with, and saying so is the difference between a save that
- * adds a model and a save that quietly empties a credential.
+ * Sending settings replaces them; omitting them keeps what is stored. Which is
+ * right depends on whether the form SAW the stored values — the object alone
+ * cannot say. Sending unconditionally erased a credential's pin when an unseeded
+ * form had only `{}` to send. Then staying silent whenever unseeded threw away
+ * settings the user had typed and watched "Test" validate.
+ *
+ * So the axis is authority, not size: a seeded form speaks for the credential
+ * and may remove; an unseeded one may only add.
  */
 const PIN = { openrouterProviderOrder: ["moonshot"] };
+const STORED = { ...PIN, baseURL: "https://x", awsSecretAccessKey: "••••" };
 
-describe("credentialSettingsOverride", () => {
-    it("speaks when editing a model — the form was seeded from the credential", () => {
+describe("credentialSettingsOverride — a seeded form is authoritative", () => {
+    it("passes what the form holds", () => {
         expect(
             credentialSettingsOverride({
-                isEditing: true,
-                lockedProvider: undefined,
-                settings: PIN,
+                seeded: true,
+                storedSettings: STORED,
+                formSettings: PIN,
             }),
         ).toEqual(PIN);
     });
 
-    it("speaks when the provider was fixed at mount (?provider=)", () => {
+    it("lets an empty form CLEAR — unpinning has to work", () => {
+        // Absence means removal here, because the field opened with the value
+        // in it and the user took it out.
         expect(
             credentialSettingsOverride({
-                isEditing: false,
-                lockedProvider: "open_router",
-                settings: PIN,
-            }),
-        ).toEqual(PIN);
-    });
-
-    it("stays silent when the user picks the provider inside the form", () => {
-        // The regression, pinned: nothing was seeded, so the object is whatever
-        // the form happened to hold — and passing it would replace the stored
-        // settings with it.
-        expect(
-            credentialSettingsOverride({
-                isEditing: false,
-                lockedProvider: undefined,
-                settings: PIN,
-            }),
-        ).toBeUndefined();
-    });
-
-    it("stays silent for an unseeded form even when it built an EMPTY object", () => {
-        // The exact shape that shipped: `{}` reads as "delete them all".
-        expect(
-            credentialSettingsOverride({
-                isEditing: false,
-                lockedProvider: undefined,
-                settings: {},
-            }),
-        ).toBeUndefined();
-    });
-
-    it("still allows a deliberate clear from a seeded form", () => {
-        // Silence must not swallow a real instruction: unpinning has to work.
-        expect(
-            credentialSettingsOverride({
-                isEditing: true,
-                lockedProvider: "open_router",
-                settings: {},
+                seeded: true,
+                storedSettings: STORED,
+                formSettings: {},
             }),
         ).toEqual({});
+    });
+});
+
+describe("credentialSettingsOverride — an unseeded form may only add", () => {
+    it("stays silent when nothing was typed", () => {
+        // The erasure that shipped: `{}` from a form that never saw the values
+        // read as "delete them all".
+        expect(
+            credentialSettingsOverride({
+                seeded: false,
+                storedSettings: STORED,
+                formSettings: {},
+            }),
+        ).toBeUndefined();
+    });
+
+    it("writes through what the user typed", () => {
+        // The mirror defect: the user picks the provider inside the form, the
+        // advanced fields appear, "Test" validates them — and dropping them is
+        // the original "validated, toasted as saved, never sent" bug again.
+        const out = credentialSettingsOverride({
+            seeded: false,
+            storedSettings: { baseURL: "https://x" },
+            formSettings: PIN,
+        });
+
+        expect(out).toMatchObject(PIN);
+    });
+
+    it("carries through a stored field the form never showed", () => {
+        // The whole reason this branch is additive: the user never saw the base
+        // URL, so their silence about it is not a decision to remove it.
+        const out = credentialSettingsOverride({
+            seeded: false,
+            storedSettings: { baseURL: "https://x" },
+            formSettings: PIN,
+        });
+
+        expect(out).toEqual({ baseURL: "https://x", ...PIN });
+    });
+
+    it("lets a typed value win over the stored one", () => {
+        const out = credentialSettingsOverride({
+            seeded: false,
+            storedSettings: { baseURL: "https://old" },
+            formSettings: { baseURL: "https://new" },
+        });
+
+        expect(out).toEqual({ baseURL: "https://new" });
+    });
+
+    it("never sends a secret back — the browser only holds its mask", () => {
+        // Re-sending "••••" would encrypt the mask and destroy the credential.
+        // Blank is the contract for keeping it.
+        const out = credentialSettingsOverride({
+            seeded: false,
+            storedSettings: STORED,
+            formSettings: PIN,
+        });
+
+        expect(out).not.toHaveProperty("awsSecretAccessKey");
+    });
+
+    it("handles a credential that holds nothing at all", () => {
+        expect(
+            credentialSettingsOverride({
+                seeded: false,
+                storedSettings: undefined,
+                formSettings: PIN,
+            }),
+        ).toEqual(PIN);
     });
 });

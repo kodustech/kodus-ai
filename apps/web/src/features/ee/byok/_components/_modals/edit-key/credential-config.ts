@@ -125,6 +125,24 @@ const FORM_OWNED_SETTING_KEYS: ReadonlySet<string> = new Set<string>([
 ]);
 
 /**
+ * A stored credential's settings minus anything secret.
+ *
+ * The read path masks the secrets before the blob reaches the browser, so what
+ * is held here for those fields is `••••`. Sending that back would encrypt the
+ * mask and destroy the credential — blank is the contract for "keep it". Every
+ * other key is real and safe to carry.
+ */
+export const nonSecretStoredSettings = (
+    settings: Record<string, unknown> | undefined,
+): Record<string, unknown> => {
+    const kept: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(settings ?? {})) {
+        if (!SECRET_SETTING_KEYS.has(key)) kept[key] = value;
+    }
+    return kept;
+};
+
+/**
  * The stored settings NO credential form owns, carried through a save untouched.
  *
  * The server replaces a credential's `settings` with what the client sends, so

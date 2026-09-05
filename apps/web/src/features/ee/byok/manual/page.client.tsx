@@ -551,36 +551,30 @@ export function ByokManualPageClient({
         // into the existing config: edit the model in place, reuse a connected
         // provider's key, or connect a brand-new provider credential.
         const modelFields = modelFieldsFromConfig(newConfig);
-        // Provider-scoped settings for an ALREADY-STORED credential. The form is
-        // authoritative for the keys it renders (so clearing one really clears
-        // it) and carries through the keys no form owns, because the server
-        // replaces this object wholesale rather than merging it.
-        const nextCredentialSettings: Record<string, unknown> = {
-            ...unownedStoredSettings(isEditing ? editSettings : storedSettings),
-            ...(credentialSettingsFromConfig(newConfig) ?? {}),
-        };
-        // Only override the credential's settings when the form was actually
-        // SEEDED from it. The seed needs a provider known at mount — editing a
-        // model, or "?provider=" — and the unlocked "configure a model manually"
-        // flow has neither: the user picks the provider inside the form, so
-        // `storedSettings` was empty when the defaults were built and the object
-        // above collapses to whatever they typed.
-        //
-        // Sending that as an override is not a no-op. The builder replaces
-        // settings whenever it receives an object, and an empty object is still
-        // an object — so adding a model to an already-connected provider through
-        // the unlocked flow would wipe that credential's pin, base URL and
-        // region. Omitting the key is what the BuildV2Edit contract means by
-        // "keep the stored ones", and it is the safe reading whenever the form
-        // never saw them.
-        const credentialSettings = credentialSettingsOverride({
-            isEditing,
-            lockedProvider,
-            settings: nextCredentialSettings,
-        });
         const existingCred = (existing?.credentials ?? []).find(
             (c) => !c.managed && c.provider === newConfig.provider,
         );
+        // The credential this save actually writes to, resolved HERE rather than
+        // at mount: in the unlocked flow the provider is chosen inside the form,
+        // so mount-time state knows nothing about it.
+        const targetSettings = (
+            isEditing ? editSettings : (existingCred?.settings ?? {})
+        ) as Record<string, unknown>;
+        // Provider-scoped settings the form is speaking for. Keys no form owns
+        // ride along, because the server replaces this object wholesale rather
+        // than merging it.
+        const nextCredentialSettings: Record<string, unknown> = {
+            ...unownedStoredSettings(targetSettings),
+            ...(credentialSettingsFromConfig(newConfig) ?? {}),
+        };
+        const credentialSettings = credentialSettingsOverride({
+            // Seeded only when a provider was known at mount — editing a model,
+            // or "?provider=". Otherwise the fields opened blank and their
+            // emptiness means "unknown", not "removed".
+            seeded: isEditing || !!lockedProvider,
+            storedSettings: targetSettings,
+            formSettings: nextCredentialSettings,
+        });
         const blob: BYOKConfig =
             isEditing && editModel
                 ? buildByokBlob(existing, {
