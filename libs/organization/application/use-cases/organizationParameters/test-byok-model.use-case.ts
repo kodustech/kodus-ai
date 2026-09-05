@@ -123,7 +123,18 @@ export class TestByokModelUseCase {
         if (catalog?.models?.length) {
             const found = catalog.models.some((m) => m.id === model);
             if (found) {
-                return { ok: true, code: 'ok', latencyMs: Date.now() - start };
+                // Listing is not routing. This answered "the key works and the
+                // provider lists this id", which is cheap and usually enough —
+                // but it never called the model, so it cannot promise the model
+                // runs. Say which check happened and let the screen word itself
+                // honestly; a customer already read a catalog hit as proof the
+                // model worked while every real call to it was being refused.
+                return {
+                    ok: true,
+                    code: 'ok',
+                    latencyMs: Date.now() - start,
+                    verifiedBy: 'catalog',
+                };
             }
             // Bedrock/Vertex catalogs are CURATED (not exhaustive), so a miss
             // isn't proof the model is invalid — fall through to a real probe.
