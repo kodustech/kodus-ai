@@ -249,10 +249,19 @@ describe('SuggestionEmbeddedService deterministic logic', () => {
             );
         });
 
-        it('rejects an id that is a string but not a UUID', () => {
+        it('rejects an id that is neither a UUID nor an ObjectId', () => {
             expect(
                 isValidSuggestion({ ...validBase(), id: 'not-a-uuid' }),
             ).toBe(false);
+        });
+
+        it('accepts a 24-char Mongo ObjectId hex id', () => {
+            expect(
+                isValidSuggestion({
+                    ...validBase(),
+                    id: '6a4fe1f32a96eaa5460394b9',
+                }),
+            ).toBe(true);
         });
 
         it('rejects when suggestionContent is missing', () => {

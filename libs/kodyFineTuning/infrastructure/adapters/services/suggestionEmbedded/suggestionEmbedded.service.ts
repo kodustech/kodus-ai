@@ -17,9 +17,7 @@ import { SuggestionEmbeddedEntity } from '@libs/kodyFineTuning/domain/suggestion
 import { getOpenAIEmbedding } from '@libs/common/utils/document';
 import { FeedbackType } from '@libs/kodyFineTuning/domain/enums/feedbackType.enum';
 import { SuggestionEmbeddedDatabaseRepository } from '../../repositories/suggestionEmbedded.repository';
-
-const UUID_REGEX =
-    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+import { isSuggestionId } from '@libs/platformData/domain/pullRequests/suggestion-id';
 
 @Injectable()
 export class SuggestionEmbeddedService implements ISuggestionEmbeddedService {
@@ -354,8 +352,7 @@ export class SuggestionEmbeddedService implements ISuggestionEmbeddedService {
     ): s is ISuggestionToEmbed {
         return (
             !!s &&
-            typeof s.id === 'string' &&
-            UUID_REGEX.test(s.id) &&
+            isSuggestionId(s.id) &&
             !!s.suggestionContent &&
             !!s.oneSentenceSummary &&
             !!s.label &&
