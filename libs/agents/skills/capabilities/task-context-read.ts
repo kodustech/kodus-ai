@@ -26,6 +26,7 @@ import {
     scoreNormalizedContext,
 } from './task-context/scoring';
 import { extractTaskContextFromToolResult } from './task-context/result-normalization';
+import { matchesRequestedTask } from './task-context/task-identity';
 import { buildToolAliasKey } from './task-context/tool-aliases';
 import { buildTaskContextArgsCandidates } from './task-context/arg-building';
 import { resolveTaskContextSiteHints } from './task-context/site-resolution';
@@ -193,7 +194,11 @@ export async function fetchTaskContext(
             discovery.cachedTools,
         );
 
-        if (agenticFirst.value && isUsableTaskContext(agenticFirst.value)) {
+        if (
+            agenticFirst.value &&
+            isUsableTaskContext(agenticFirst.value) &&
+            matchesRequestedTask(agenticFirst.value, hints)
+        ) {
             return {
                 normalized: agenticFirst.value,
                 raw: agenticFirst.value.description ?? '',
@@ -266,7 +271,9 @@ export async function fetchTaskContext(
     // bogus context to the downstream analyzer and generate a false
     // 'Need Task Information' finding — treat it as empty instead.
     const fallbackValue =
-        agenticFallback.value && isUsableTaskContext(agenticFallback.value)
+        agenticFallback.value &&
+        isUsableTaskContext(agenticFallback.value) &&
+        matchesRequestedTask(agenticFallback.value, hints)
             ? agenticFallback.value
             : undefined;
 
@@ -413,9 +420,16 @@ function resolveTaskContextHints(
         .filter((value): value is string => typeof value === 'string')
         .join('\n');
 
+    // `#993` arrives as a "ticket key" but is a number, not an identifier any
+    // tracker accepts. Left in, it is offered to key/query parameters where it
+    // resolves nothing, and its mere presence suppresses the free-text query
+    // fallback. The number reaches the hints via issueNumbers either way.
+    // A caller-supplied taskId is kept as-is — provider ids are free-form.
     const explicitTaskIds = uniqueNonEmpty([
         params.taskId ?? '',
-        ...(params.businessSignals?.ticketKeys ?? []),
+        ...(params.businessSignals?.ticketKeys ?? []).filter(
+            (key) => !key.trim().startsWith('#'),
+        ),
     ]);
     const explicitTaskLinks = uniqueNonEmpty([
         params.taskUrl ?? '',
@@ -606,6 +620,27 @@ async function resolveDeterministicTaskContext(input: {
 
             traces.push(...result.traces);
             if (!result.value) {
+                continue;
+            }
+
+            // A list/search tool answers with whatever it holds, and the richest
+            // entry wins the score — which is how an unrelated issue ends up
+            // being validated against the PR. Drop anything that is not the task
+            // the PR referenced instead of ranking it.
+            if (!matchesRequestedTask(result.value, input.hints)) {
+                input.logger.warn({
+                    message:
+                        '[task.context.read] discarded a task that does not match the PR reference',
+                    context: 'TaskContextReadCapability',
+                    metadata: {
+                        organizationId: input.params.organizationId,
+                        toolName,
+                        fetchedId: result.value.id,
+                        fetchedTitle: result.value.title,
+                        requestedKeys: input.hints.issueKeys,
+                        requestedNumbers: input.hints.issueNumbers,
+                    },
+                });
                 continue;
             }
 

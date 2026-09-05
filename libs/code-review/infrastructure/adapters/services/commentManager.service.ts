@@ -9,6 +9,7 @@ import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { getPRDescriptionLimit } from '@libs/code-review/utils/fit-pr-description';
 import { buildCommentFromSuggestion } from '@libs/common/utils/comment-builder.utils';
+import { extractTaskReferenceLines } from '@libs/common/utils/codeManagement/prTaskReferences';
 import {
     BehaviourForExistingDescription,
     BehaviourForNewCommits,
@@ -533,6 +534,25 @@ You must always respond in ${languageResultPrompt}.`;
 
                 if (!isCommitRun) {
                     finalDescription = `${startMarker}\n${newSummary}\n${endMarker}`;
+
+                    const replacesDescription =
+                        summaryConfig?.behaviourForExistingDescription !==
+                        BehaviourForExistingDescription.CONCATENATE;
+
+                    // Replacing the body used to take the author's `Closes #N`
+                    // with it, which unlinks the issue on the provider (no
+                    // auto-close on merge) and leaves later runs — business
+                    // logic validation, `@kody -v business-logic` — with no
+                    // task to resolve. Carry those lines into the replacement.
+                    if (replacesDescription) {
+                        const taskReferences = extractTaskReferenceLines(
+                            updatedPR?.body ?? '',
+                        );
+
+                        if (taskReferences.length) {
+                            finalDescription = `${taskReferences.join('\n')}\n\n${finalDescription}`;
+                        }
+                    }
 
                     // Apply CONCATENATE behavior if necessary
                     if (

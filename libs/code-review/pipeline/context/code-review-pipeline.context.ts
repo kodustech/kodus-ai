@@ -181,9 +181,18 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     };
 
     /**
-     * SHA-256 hash of the PR body at the time of the last successful business logic
-     * validation. Written by ProcessFilesPrLevelReviewStage and persisted to
-     * dataExecution.businessLogicHash to enable dedup on subsequent runs.
+     * Set by BusinessLogicValidationStage when a business-logic message was
+     * actually delivered to the PR author. Persisted to
+     * dataExecution.businessLogicValidatedAt and carried across executions, so
+     * the automatic validation runs once per PR instead of once per push.
+     */
+    businessLogicValidatedAt?: string;
+
+    /**
+     * SHA-256 hash of the PR body at the time of the last successful business
+     * logic validation. Written by ProcessFilesPrLevelReviewStage (legacy EE
+     * path); superseded by businessLogicValidatedAt on the agent pipeline,
+     * which does not key the gate on a body Kody's own summary may rewrite.
      */
     businessLogicPrBodyHash?: string;
 
