@@ -2,6 +2,7 @@ import type {
     BusinessValidationResponse,
     PullRequestSuggestionsResponse,
     ReviewConfig,
+    ReviewContext,
     ReviewResult,
     TrialReviewResult,
 } from '../../types/review.js';
@@ -66,6 +67,7 @@ export class RealReviewApi implements IReviewApi {
         config?: ReviewConfig,
         metrics?: GitMetrics,
         onProgress?: (status: string) => void,
+        reviewContext?: ReviewContext,
     ): Promise<ReviewResult> {
         const isTeamKey = accessToken.startsWith('kodus_');
 
@@ -83,7 +85,12 @@ export class RealReviewApi implements IReviewApi {
         // the parameter's meaning.
         const endpoint = '/cli/review';
 
-        const body = JSON.stringify({ diff, config, ...metrics });
+        const body = JSON.stringify({
+            diff,
+            config,
+            ...metrics,
+            ...(reviewContext ? { reviewContext } : {}),
+        });
         const payloadBytes = Buffer.byteLength(body, 'utf8');
         if (diff.length > MAX_DIFF_CHARS) {
             throw new CommandError(
@@ -264,6 +271,7 @@ export class RealReviewApi implements IReviewApi {
         fingerprint: string,
         metrics?: GitMetrics,
         githubPat?: string,
+        reviewContext?: ReviewContext,
     ): Promise<TrialReviewResult> {
         return this.requester<TrialReviewResult>('/cli/trial/review', {
             method: 'POST',
@@ -272,6 +280,7 @@ export class RealReviewApi implements IReviewApi {
                 fingerprint,
                 ...metrics,
                 ...(githubPat && { githubPat }),
+                ...(reviewContext ? { reviewContext } : {}),
             }),
         });
     }

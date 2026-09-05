@@ -1,3 +1,7 @@
+import {
+    createReviewContextDelivery,
+    type ReviewContextDelivery,
+} from '@libs/cli-review/domain/types/review-context.types';
 import { Injectable, Optional } from '@nestjs/common';
 import { LLM } from '@libs/llm/llm';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
@@ -162,6 +166,7 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
         let judgeViolations: ShardViolation[] = [];
         let shardsRun = 0;
         let shardsErrored = 0;
+        let reviewContextDeliveries: ReviewContextDelivery[] | undefined;
         if (semanticRules.length > 0) {
             const { byokConfig, main } = await resolveReviewAgentModel(
                 input,
@@ -199,6 +204,15 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             // (inside the helper) emits the `tu`-stamped LLM-usage span so the
             // sharded path's tokens still reach the user-facing token analytics.
             const runJudge: RunJudge = async ({ system, user, filename }) => {
+                const delivery = input.reviewContext
+                    ? createReviewContextDelivery(
+                          input.reviewContext,
+                          filename
+                              ? `kodus-rules-review-agent:${filename}`
+                              : 'kodus-rules-review-agent:pull-request',
+                          filename ? 'file-shard' : 'pr-shard',
+                      )
+                    : undefined;
                 const parsed = await LLM.run({
                     byokConfig: byokConfig ?? undefined,
                     // Wire schema, NOT the zod object: zodSchema() would
@@ -220,10 +234,19 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                     runName: 'kodus-rules-review-agent.shard',
                     organizationId:
                         input.organizationAndTeamData?.organizationId,
+                    recordTelemetryInputs: input.reviewContext ? false : undefined,
                     attrs: {
                         prNumber: input.prNumber,
                         agentName: this.getIdentity().name,
                         ...(filename ? { file: filename } : {}),
+                        ...(delivery && {
+                            reviewContextSource: delivery.source,
+                            reviewContextContentType: delivery.contentType,
+                            reviewContextSha256: delivery.sha256,
+                            reviewContextUtf8Bytes: delivery.utf8Bytes,
+                            reviewContextRecipient: delivery.recipient,
+                            reviewContextPhase: delivery.phase,
+                        }),
                     },
                 });
                 return ((parsed as any)?.violations ??
@@ -273,21 +296,31 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                     semanticRules: rulesForJudge.length,
                     mechanicalRules: mechanicalRules.length,
                     changedFiles: input.changedFiles?.length ?? 0,
+                    ...(input.reviewContext && {
+                        reviewContextDelivery: createReviewContextDelivery(
+                            input.reviewContext,
+                            this.getIdentity().name,
+                            'rule-judge',
+                        ),
+                    }),
                 },
                 () =>
                     judgeKodyRulesSharded({
                         changedFiles: input.changedFiles,
                         rules: rulesForJudge,
                         runJudge,
+                        reviewContext: input.reviewContext,
                         prTitle: input.prTitle,
                         prBody: input.prBody,
                         logger: this.shardLogger,
                         languageLabel,
                     }),
+                { recordOutput: !input.reviewContext },
             );
             judgeViolations = result.violations;
             shardsRun = result.shardsRun;
             shardsErrored = result.shardsErrored;
+            reviewContextDeliveries = result.reviewContextDeliveries;
 
             // Escalate a TOTAL shard failure. When every judge shard errored
             // (e.g. an OpenAI-strict wire-schema 400 for a BYOK org, which
@@ -370,6 +403,7 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             agentName: this.getIdentity().name,
             turnsUsed: shardsRun,
             durationMs,
+            reviewContextDeliveries,
         };
     }
 

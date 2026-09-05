@@ -16,6 +16,11 @@ import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-s
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
 
 import { buildFinderAgentSpec, runFinderWithVerify } from '@libs/code-review/infrastructure/agents/core/finder.agent';
+import {
+    REVIEW_CONTEXT_CONTENT_TYPE,
+    REVIEW_CONTEXT_SOURCE,
+    formatReviewContext,
+} from '@libs/cli-review/domain/types/review-context.types';
 
 const findings = {
     reasoning: 'two candidates',
@@ -29,7 +34,7 @@ const findings = {
  *  - finder: step1 submitResult(findings)
  *  - verifier: submitVerdict(keep) unless the prompt mentions "false positive"
  */
-function model() {
+function model(finderFindings = findings) {
     let finderDone = false;
     const doGenerate = (async (opts: any) => {
         const sys = JSON.stringify(opts?.prompt ?? opts ?? '');
@@ -40,9 +45,9 @@ function model() {
             tc = { id: 'v', name: 'submitVerdict', input: { keep: !refute, rationale: refute ? 'refuted' : 'confirmed' } };
         } else if (!finderDone) {
             finderDone = true;
-            tc = { id: 'f', name: 'submitResult', input: findings };
+            tc = { id: 'f', name: 'submitResult', input: finderFindings };
         } else {
-            tc = { id: 'f2', name: 'submitResult', input: findings };
+            tc = { id: 'f2', name: 'submitResult', input: finderFindings };
         }
         return {
             content: [{ type: 'tool-call', toolCallId: tc.id, toolName: tc.name, input: JSON.stringify(tc.input) }],
@@ -94,5 +99,132 @@ describe('runFinderWithVerify (parity: finder + verify, same runner)', () => {
         expect(r.kept.map((f) => f.relevantFile)).toEqual(['a.ts']);
         expect(r.droppedByVerify.map((d) => d.finding.relevantFile)).toEqual(['b.ts']);
         expect(r.droppedByVerify[0].evidence).toBe('refuted');
+    });
+
+    it('reports every context-bearing review phase that actually ran', async () => {
+        const tools = new InMemoryToolRegistry([]);
+        const finderSpec = buildFinderAgentSpec({
+            systemPrompt: 'find bugs',
+            modelId: 'mock',
+            tools,
+            coverageLedger: noCriticalLedger,
+        });
+        const runner = new AiSdkAgentRunner(undefined);
+        const reviewContext = {
+            source: REVIEW_CONTEXT_SOURCE,
+            contentType: REVIEW_CONTEXT_CONTENT_TYPE,
+            body: 'CANARY: inspect cleanup',
+        };
+
+        const result = await runFinderWithVerify(
+            {
+                runner,
+                finderSpec,
+                modelId: 'mock',
+                tools,
+                reviewContext,
+                heavy: true,
+                makeResampleSpec: () =>
+                    buildFinderAgentSpec({
+                        systemPrompt: 'find bugs',
+                        modelId: 'mock',
+                        tools,
+                        coverageLedger: {
+                            ...noCriticalLedger,
+                        },
+                    }),
+                recordTelemetryInputs: false,
+            },
+            {
+                prompt: `${formatReviewContext(reviewContext)}\n\n<ReviewTask>review</ReviewTask>`,
+            },
+            ctx,
+        );
+
+        expect(result.reviewContextPhases).toEqual([
+            'finder',
+            'synthesis-rescue',
+            'heavy-resample-1',
+            'heavy-resample-2',
+            'verifier',
+            'evidence-gate-verifier',
+        ]);
+    });
+
+    it('omits verifier phases when no candidate suggestions exist', async () => {
+        const tools = new InMemoryToolRegistry([]);
+        const finderSpec = buildFinderAgentSpec({
+            systemPrompt: 'find bugs',
+            modelId: 'mock',
+            tools,
+            coverageLedger: noCriticalLedger,
+        });
+        const runner = new AiSdkAgentRunner(undefined);
+        const reviewContext = {
+            source: REVIEW_CONTEXT_SOURCE,
+            contentType: REVIEW_CONTEXT_CONTENT_TYPE,
+            body: 'CANARY: no candidates',
+        };
+        mockResolve.mockImplementation(() => ({
+            model: model({ reasoning: 'none', suggestions: [] }),
+            callOptions: {},
+            providerOptions: {},
+            modelName: 'mock',
+            usageIdentity: {},
+        }));
+
+        const result = await runFinderWithVerify(
+            {
+                runner,
+                finderSpec,
+                modelId: 'mock',
+                tools,
+                reviewContext,
+                recordTelemetryInputs: false,
+            },
+            {
+                prompt: `${formatReviewContext(reviewContext)}\n\n<ReviewTask>review</ReviewTask>`,
+            },
+            ctx,
+        );
+
+        expect(result.reviewContextPhases).toEqual([
+            'finder',
+            'synthesis-rescue',
+        ]);
+    });
+
+    it('omits recall phases when heavy passes are disabled', async () => {
+        const tools = new InMemoryToolRegistry([]);
+        const finderSpec = buildFinderAgentSpec({
+            systemPrompt: 'find bugs',
+            modelId: 'mock',
+            tools,
+            coverageLedger: noCriticalLedger,
+        });
+        const runner = new AiSdkAgentRunner(undefined);
+        const reviewContext = {
+            source: REVIEW_CONTEXT_SOURCE,
+            contentType: REVIEW_CONTEXT_CONTENT_TYPE,
+            body: 'CANARY: finder and verifier only',
+        };
+
+        const result = await runFinderWithVerify(
+            {
+                runner,
+                finderSpec,
+                modelId: 'mock',
+                tools,
+                reviewContext,
+                skipHeavyPasses: true,
+                recordTelemetryInputs: false,
+            },
+            {
+                prompt: `${formatReviewContext(reviewContext)}\n\n<ReviewTask>review</ReviewTask>`,
+            },
+            ctx,
+        );
+
+        expect(result.reviewContextPhases).toEqual(['finder']);
     });
 });

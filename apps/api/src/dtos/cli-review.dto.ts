@@ -9,10 +9,55 @@ import {
     ArrayMaxSize,
     IsInt,
     Min,
+    IsIn,
+    ValidateBy,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+    REVIEW_CONTEXT_CONTENT_TYPE,
+    REVIEW_CONTEXT_MAX_BYTES,
+    REVIEW_CONTEXT_SOURCE,
+    type ReviewContext,
+} from '@libs/cli-review/domain/types/review-context.types';
+
+class ReviewContextDto implements ReviewContext {
+    @IsIn([REVIEW_CONTEXT_SOURCE], {
+        message: `source must be ${REVIEW_CONTEXT_SOURCE}`,
+    })
+    source: typeof REVIEW_CONTEXT_SOURCE;
+
+    @IsIn([REVIEW_CONTEXT_CONTENT_TYPE], {
+        message: `contentType must be ${REVIEW_CONTEXT_CONTENT_TYPE}`,
+    })
+    contentType: typeof REVIEW_CONTEXT_CONTENT_TYPE;
+
+    @IsString()
+    @ValidateBy({
+        name: 'reviewContextBody',
+        validator: {
+            validate: (value: unknown): boolean =>
+                typeof value === 'string' &&
+                value.length > 0 &&
+                !value.includes('\0') &&
+                Buffer.byteLength(value, 'utf8') <= REVIEW_CONTEXT_MAX_BYTES,
+            defaultMessage: ({ value }): string => {
+                if (typeof value !== 'string') {
+                    return 'body must be a string';
+                }
+                if (value.length === 0) {
+                    return 'body must not be empty';
+                }
+                if (value.includes('\0')) {
+                    return 'body must not contain NUL';
+                }
+                return `body must not exceed ${REVIEW_CONTEXT_MAX_BYTES} UTF-8 bytes`;
+            },
+        },
+    })
+    body: string;
+}
 
 class CliFileInputDto {
     @IsString()
@@ -125,6 +170,12 @@ export class CliReviewRequestDto {
     @Type(() => CliConfigDto)
     @ApiPropertyOptional({ type: CliConfigDto })
     config?: CliConfigDto;
+
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => ReviewContextDto)
+    @ApiPropertyOptional({ type: ReviewContextDto })
+    reviewContext?: ReviewContextDto;
 
     @IsOptional()
     @IsString()

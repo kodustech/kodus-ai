@@ -215,6 +215,8 @@ export interface LangfuseTelemetryMetadata {
 export type LangfuseTelemetryConfig = {
     isEnabled: boolean;
     functionId: string;
+    recordInputs?: boolean;
+    recordOutputs?: boolean;
     /** Carried for AI SDK 7 via `runtimeContext` (see `toAiSdkTelemetryArgs`). */
     metadata?: Record<string, AttributeValue>;
 };
@@ -229,6 +231,7 @@ export type LangfuseTelemetryConfig = {
 export function buildLangfuseTelemetry(
     functionId: string,
     metadata?: LangfuseTelemetryMetadata,
+    options?: { readonly recordInputs?: boolean },
 ): LangfuseTelemetryConfig {
     const attrs: Record<string, AttributeValue> = {};
     if (metadata?.organizationId) attrs.organizationId = metadata.organizationId;
@@ -240,6 +243,10 @@ export function buildLangfuseTelemetry(
     return {
         isEnabled: shouldTrace(),
         functionId,
+        ...(options?.recordInputs !== undefined && {
+            recordInputs: options.recordInputs,
+            recordOutputs: options.recordInputs,
+        }),
         ...(Object.keys(attrs).length > 0 && { metadata: attrs }),
     };
 }
@@ -258,14 +265,20 @@ export function toAiSdkTelemetryArgs(config: LangfuseTelemetryConfig): {
     telemetry: TelemetryOptions;
     runtimeContext?: Record<string, AttributeValue>;
 } {
-    const { isEnabled, functionId, metadata } = config;
+    const { isEnabled, functionId, recordInputs, recordOutputs, metadata } =
+        config;
+    const telemetryBase = {
+        isEnabled,
+        functionId,
+        ...(recordInputs !== undefined && { recordInputs }),
+        ...(recordOutputs !== undefined && { recordOutputs }),
+    };
     if (!metadata || Object.keys(metadata).length === 0) {
-        return { telemetry: { isEnabled, functionId } };
+        return { telemetry: telemetryBase };
     }
     return {
         telemetry: {
-            isEnabled,
-            functionId,
+            ...telemetryBase,
             includeRuntimeContext: Object.fromEntries(
                 Object.keys(metadata).map((k) => [k, true as const]),
             ),

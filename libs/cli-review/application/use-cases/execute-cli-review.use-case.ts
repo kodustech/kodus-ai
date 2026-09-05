@@ -215,6 +215,7 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 // CLI equivalent of `@kody review focus on X` — same sanitize +
                 // cap as the PR-comment path. Steers the finder when set.
                 reviewDirective: normalizeReviewDirective(input.config?.focus),
+                reviewContext: input.reviewContext,
                 // Heavy mode — extra critic pass in the finder for more recall.
                 heavy: input.config?.heavy === true,
                 validSuggestions: [],
@@ -291,7 +292,6 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                           },
                       }
                     : undefined,
-
             };
 
             // 5. Execute pipeline
@@ -347,18 +347,26 @@ export class ExecuteCliReviewUseCase implements IUseCase {
 
             return result.cliResponse;
         } catch (error) {
+            const safeError = input.reviewContext
+                ? new Error('CLI review failed while processing review context')
+                : error;
+            const safeErrorMessage =
+                safeError instanceof Error
+                    ? safeError.message
+                    : 'Unknown error';
+
             // Update execution as failed
             if (execution) {
                 await this.updateAutomationExecution(
                     execution,
                     AutomationStatus.ERROR,
-                    { error: error?.message || 'Unknown error' },
+                    { error: safeErrorMessage },
                 );
             }
 
             this.logger.error({
                 message: 'Error executing CLI review',
-                error,
+                error: safeError,
                 context: ExecuteCliReviewUseCase.name,
                 metadata: {
                     organizationId: organizationAndTeamData.organizationId,
@@ -366,7 +374,7 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                     correlationId,
                 },
             });
-            throw error;
+            throw safeError;
         }
     }
 

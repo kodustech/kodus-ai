@@ -24,6 +24,7 @@ import {
 import type {
     BusinessValidationResponse,
     ReviewConfig,
+    ReviewContext,
     ReviewResult,
     Severity,
     TrialReviewResult,
@@ -54,6 +55,7 @@ class ReviewService {
             branch?: string;
             focus?: string;
             heavy?: boolean;
+            reviewContext?: ReviewContext;
             quiet?: boolean;
             onProgress?: (status: string) => void;
         },
@@ -110,6 +112,7 @@ class ReviewService {
                     cliVersion: CLI_VERSION,
                 },
                 options?.onProgress,
+                options?.reviewContext,
             );
 
             createAnalyzeApiResponseVerboseMessages({
@@ -151,6 +154,7 @@ class ReviewService {
                 cliVersion: CLI_VERSION,
             },
             options?.onProgress,
+            options?.reviewContext,
         );
 
         createAnalyzeApiResponseVerboseMessages({
@@ -209,7 +213,10 @@ class ReviewService {
 
     async trialAnalyze(
         diff: string,
-        options?: { githubPat?: string },
+        options?: {
+            githubPat?: string;
+            reviewContext?: ReviewContext;
+        },
     ): Promise<TrialReviewResult> {
         const fingerprint = await getTrialIdentifier();
 
@@ -238,6 +245,7 @@ class ReviewService {
                 cliVersion: CLI_VERSION,
             },
             options?.githubPat,
+            options?.reviewContext,
         );
 
         createTrialAnalyzeResponseVerboseMessages({

@@ -12,8 +12,11 @@ import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { WorkflowType } from '@libs/core/workflow/domain/enums/workflow-type.enum';
 
 import { CliReviewJobPayload } from '@libs/cli-review/workflow/cli-review-job.types';
+import type { CliReviewInput } from '@libs/cli-review/domain/types/cli-review.types';
 
-export interface EnqueueCliReviewInput extends CliReviewJobPayload {
+export interface EnqueueCliReviewInput
+    extends Omit<CliReviewJobPayload, 'input'> {
+    input: CliReviewInput;
     correlationId?: string;
 }
 
@@ -35,10 +38,11 @@ export class EnqueueCliReviewUseCase implements IUseCase {
         input: EnqueueCliReviewInput,
     ): Promise<EnqueueCliReviewResult> {
         const correlationId = input.correlationId || IdGenerator.correlationId();
+        const { reviewContext, ...durableReviewInput } = input.input;
 
         const payload: CliReviewJobPayload = {
             organizationAndTeamData: input.organizationAndTeamData,
-            input: input.input,
+            input: durableReviewInput,
             isTrialMode: input.isTrialMode,
             userEmail: input.userEmail,
             gitContext: input.gitContext,
@@ -47,7 +51,7 @@ export class EnqueueCliReviewUseCase implements IUseCase {
             publicDiff: input.publicDiff,
         };
 
-        const jobId = await this.jobQueueService.enqueue({
+        const job = {
             correlationId,
             workflowType: WorkflowType.CLI_CODE_REVIEW,
             handlerType: HandlerType.PIPELINE_ASYNC,
@@ -57,7 +61,10 @@ export class EnqueueCliReviewUseCase implements IUseCase {
             priority: 0,
             retryCount: 0,
             maxRetries: 1,
-        });
+        };
+        const jobId = reviewContext
+            ? await this.jobQueueService.enqueueEphemeral(job, { reviewContext })
+            : await this.jobQueueService.enqueue(job);
 
         return { jobId, correlationId };
     }

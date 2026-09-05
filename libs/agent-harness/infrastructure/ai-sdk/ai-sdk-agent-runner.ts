@@ -282,6 +282,10 @@ export class AiSdkAgentRunner implements AgentRunner {
                 // Cancellation / timeout composed by the caller (parent + hard timeout).
                 signal: ctx.signal,
                 telemetryMetadata: input.telemetryMetadata as any,
+                recordTelemetryInputs:
+                    typeof input.telemetry?.recordInputs === 'boolean'
+                        ? input.telemetry.recordInputs
+                        : undefined,
                 loop: {
                     tools: toolMap,
                     maxSteps: spec.maxSteps,

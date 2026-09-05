@@ -4,9 +4,11 @@ import {
 } from './rabbitmq-error.handler';
 import { RateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
 
+const mockWarn = jest.fn();
+
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
-        warn: jest.fn(),
+        warn: mockWarn,
         error: jest.fn(),
         log: jest.fn(),
         debug: jest.fn(),
@@ -62,6 +64,24 @@ describe('RabbitMQErrorHandler', () => {
             content: Buffer.from('{"jobId":"job-1"}'),
         }) as any;
 
+    it('acks an ephemeral message without publishing a retry or dead-letter copy', async () => {
+        const { handler, amqpConnection } = makeHandler();
+        const channel = { ack: jest.fn() };
+        const msg = makeMessage({ 'x-kodus-ephemeral': true });
+
+        await handler.handle(
+            channel,
+            msg,
+            new Error('CANARY context echoed by provider'),
+            { dlqRoutingKey: 'workflow.job.failed' },
+        );
+
+        expect(channel.ack).toHaveBeenCalledWith(msg);
+        expect(amqpConnection.publish).not.toHaveBeenCalled();
+        expect(JSON.stringify(mockWarn.mock.calls)).not.toContain(
+            'CANARY context echoed by provider',
+        );
+    });
     it('acks the original message after publishing a delayed retry', async () => {
         const { handler, amqpConnection } = makeHandler();
         const channel = { ack: jest.fn() };

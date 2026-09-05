@@ -14,6 +14,21 @@
  * rabbitmq-dlq.initializer.ts — MUST reference this module so they can never
  * drift apart again. Do not inline queue arguments at either site.
  */
+export const CLI_REVIEW_EPHEMERAL_QUEUE =
+    'workflow.jobs.cli_code_review.ephemeral.queue';
+export const CLI_REVIEW_EPHEMERAL_ROUTING_KEY =
+    'workflow.ephemeral.CLI_CODE_REVIEW';
+export const CLI_REVIEW_EPHEMERAL_QUEUE_OPTIONS = {
+    durable: false,
+    autoDelete: false,
+    arguments: {
+        'x-queue-type': 'classic',
+        'x-message-ttl': 2_100_000,
+        'x-max-length': 100,
+        'x-overflow': 'reject-publish',
+    },
+} as const;
+
 export const WORKFLOW_JOB_QUEUE_ARGUMENTS: Record<
     string,
     Record<string, unknown>

@@ -49,6 +49,7 @@ import { extractJsonFromText } from '@libs/llm/structured-output-repair';
 import { collapseNearDuplicates } from '@libs/code-review/infrastructure/agents/engine/dedup-prompt';
 import { createLogger } from '@libs/core/log/logger';
 import type { NormalizedModel } from '@libs/llm/byok-config';
+import type { ReviewContext } from '@libs/cli-review/domain/types/review-context.types';
 import { z } from 'zod';
 
 export const FINDER_DONE_TOOL = 'submitResult' as const;
@@ -364,6 +365,7 @@ export async function recoverFindingsFromProse(
     byokConfig: NormalizedModel | undefined,
     organizationId: string | undefined,
     usageRunName?: string,
+    recordTelemetryInputs?: boolean,
 ): Promise<FinderSuggestion[]> {
     if (!looksLikeFindings(prose)) return [];
     try {
@@ -386,6 +388,7 @@ export async function recoverFindingsFromProse(
                 ? `${usageRunName}-recovery`
                 : 'code-review-recovery',
             organizationId,
+            recordTelemetryInputs,
         });
         return (result.suggestions as unknown as FinderSuggestion[]) ?? [];
     } catch {
@@ -434,6 +437,8 @@ export interface RunFinderWithVerifyParams {
     /** Injected prose-findings recovery capability (see ProseRecoverer). The
      *  adapter wires it to the internal-model fallback; omit to disable. */
     recoverProse?: ProseRecoverer;
+    reviewContext?: ReviewContext;
+    recordTelemetryInputs?: boolean;
 }
 
 export interface VerifyUsage {
@@ -465,6 +470,7 @@ export interface FinderWithVerifyResult {
      *  NOT in finderState — summed here so the caller can add it to the finder
      *  cost. */
     recallUsage: VerifyUsage;
+    reviewContextPhases?: string[];
 }
 
 const ZERO_VERIFY_USAGE: VerifyUsage = {
@@ -484,6 +490,7 @@ export async function runFinderWithVerify(
     input: { prompt: string },
     ctx: ToolContext,
 ): Promise<FinderWithVerifyResult> {
+    const reviewContextPhases: string[] = [];
     const finderState = await params.runner.run(
         params.finderSpec,
         {
@@ -492,11 +499,15 @@ export async function runFinderWithVerify(
                 buildLangfuseTelemetry(
                     params.agentName ?? 'finder',
                     params.telemetryMetadata,
+                    { recordInputs: params.recordTelemetryInputs },
                 ),
             ),
         },
         ctx,
     );
+    if (params.reviewContext) {
+        reviewContextPhases.push('finder');
+    }
     // Main finder findings — with prose-recovery applied (the same wrapper the
     // recall passes use, so an omission in any pass is caught consistently).
     const base = await extractFindingsWithRecovery(
@@ -523,9 +534,20 @@ export async function runFinderWithVerify(
             telemetryMetadata: params.telemetryMetadata,
             agentName: params.agentName,
             recoverProse: params.recoverProse,
+            recordTelemetryInputs: params.recordTelemetryInputs,
         },
         ctx,
     );
+    if (params.reviewContext && !params.skipHeavyPasses) {
+        if (!params.skipSynthesisRescue) {
+            reviewContextPhases.push('synthesis-rescue');
+        }
+        if (params.heavy) {
+            for (let index = 1; index <= HEAVY_RESAMPLE_EXTRA_RUNS; index++) {
+                reviewContextPhases.push(`heavy-resample-${index}`);
+            }
+        }
+    }
     const reasoning = recall.findings.reasoning;
     // HEAVY: collapse near-duplicate candidates BEFORE verify. The resample
     // re-finds the same bug with different wording — those survive the exact-content
@@ -558,6 +580,9 @@ export async function runFinderWithVerify(
             finderState,
             verifyUsage: ZERO_VERIFY_USAGE,
             recallUsage,
+            ...(reviewContextPhases.length > 0 && {
+                reviewContextPhases,
+            }),
         };
     }
 
@@ -571,11 +596,16 @@ export async function runFinderWithVerify(
         telemetryMetadata: params.telemetryMetadata,
         agentName: params.agentName,
         usageRunName: params.usageRunName,
+        reviewContext: params.reviewContext,
+        recordTelemetryInputs: params.recordTelemetryInputs,
     });
     const pass = await runVerificationPass<FinderSuggestion>(
         { candidates: suggestions, verifier, concurrency: params.concurrency },
         ctx,
     );
+    if (params.reviewContext) {
+        reviewContextPhases.push('verifier');
+    }
 
     let kept = pass.kept;
     let dropped = pass.dropped;
@@ -604,6 +634,8 @@ export async function runFinderWithVerify(
             telemetryMetadata: params.telemetryMetadata,
             agentName: params.agentName,
             usageRunName: params.usageRunName,
+            reviewContext: params.reviewContext,
+            recordTelemetryInputs: params.recordTelemetryInputs,
         });
         const gate = await runVerificationPass<FinderSuggestion>(
             {
@@ -613,6 +645,9 @@ export async function runFinderWithVerify(
             },
             ctx,
         );
+        if (params.reviewContext) {
+            reviewContextPhases.push('evidence-gate-verifier');
+        }
         // The gate's re-verify is the more thorough look — its verdict (and tool
         // evidence) supersedes the first pass for the re-checked findings.
         gate.kept.forEach((f, i) =>
@@ -652,6 +687,9 @@ export async function runFinderWithVerify(
         finderState,
         verifyUsage: sumVerifyUsage(verifier.usage, gateUsage),
         recallUsage,
+        ...(reviewContextPhases.length > 0 && {
+            reviewContextPhases,
+        }),
     };
 }
 
@@ -743,6 +781,7 @@ interface RecallPassesParams {
     agentName?: string;
     /** Injected prose-findings recovery (see ProseRecoverer). */
     recoverProse?: ProseRecoverer;
+    recordTelemetryInputs?: boolean;
 }
 
 const ZERO_RECALL_USAGE: VerifyUsage = {
@@ -779,6 +818,7 @@ export async function runRecallPasses(
                     buildLangfuseTelemetry(
                         `${params.agentName ?? 'finder'}-${label}`,
                         params.telemetryMetadata,
+                        { recordInputs: params.recordTelemetryInputs },
                     ),
                 ),
             },

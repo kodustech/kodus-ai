@@ -1,5 +1,10 @@
 import { ReviewOrchestratorService } from '@/code-review/infrastructure/agents/review-orchestrator.service';
 import { CodeSuggestion } from '@/core/infrastructure/config/types/general/codeReview.type';
+import {
+    createReviewContextDelivery,
+    REVIEW_CONTEXT_CONTENT_TYPE,
+    REVIEW_CONTEXT_SOURCE,
+} from '@libs/cli-review/domain/types/review-context.types';
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -141,6 +146,67 @@ describe('ReviewOrchestratorService', () => {
             expect(mockPerformanceAgent.execute).toHaveBeenCalledTimes(1);
             expect(result.suggestions).toHaveLength(3);
             expect(result.agentResults).toHaveLength(3);
+        });
+
+        it('forwards identical context to every enabled finder and aggregates body-free receipts', async () => {
+            const reviewContext = {
+                source: REVIEW_CONTEXT_SOURCE,
+                contentType: REVIEW_CONTEXT_CONTENT_TYPE,
+                body: 'CANARY identical agent evidence',
+            };
+            const bugDelivery = createReviewContextDelivery(
+                reviewContext,
+                'bug-agent',
+                'finder',
+            );
+            const securityDelivery = createReviewContextDelivery(
+                reviewContext,
+                'security-agent',
+                'finder',
+            );
+            const performanceDelivery = createReviewContextDelivery(
+                reviewContext,
+                'performance-agent',
+                'finder',
+            );
+            const deliveries = [
+                bugDelivery,
+                securityDelivery,
+                performanceDelivery,
+            ];
+            mockBugAgent.execute.mockResolvedValue({
+                ...makeOutput('bug-agent', []),
+                reviewContextDeliveries: [bugDelivery],
+            });
+            mockSecurityAgent.execute.mockResolvedValue({
+                ...makeOutput('security-agent', []),
+                reviewContextDeliveries: [securityDelivery],
+            });
+            mockPerformanceAgent.execute.mockResolvedValue({
+                ...makeOutput('performance-agent', []),
+                reviewContextDeliveries: [performanceDelivery],
+            });
+
+            const result = await orchestrator.execute({
+                ...baseInput,
+                reviewMode: 'deep',
+                reviewContext,
+                reviewOptions: { bug: true, security: true, performance: true },
+            });
+
+            for (const agent of [
+                mockBugAgent,
+                mockSecurityAgent,
+                mockPerformanceAgent,
+            ]) {
+                expect(agent.execute).toHaveBeenCalledWith(
+                    expect.objectContaining({ reviewContext }),
+                );
+            }
+            expect(result.reviewContextDeliveries).toEqual(deliveries);
+            expect(
+                JSON.stringify(result.reviewContextDeliveries),
+            ).not.toContain(reviewContext.body);
         });
 
         it('should skip disabled categories', async () => {

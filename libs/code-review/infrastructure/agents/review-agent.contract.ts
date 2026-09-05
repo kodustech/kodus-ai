@@ -22,6 +22,10 @@ import {
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import type { TraceContextDecision } from '@libs/cli-review/domain/types/trace-context.types';
+import type {
+    ReviewContext,
+    ReviewContextDelivery,
+} from '@libs/cli-review/domain/types/review-context.types';
 
 import { BYOKProvider } from '@libs/llm/model-providers';
 import type { NormalizedModel } from '@libs/llm/byok-config';
@@ -276,6 +280,7 @@ export interface ReviewAgentInput
      * suppressing concrete issues found elsewhere. (PR #1417.)
      */
     reviewDirective?: string;
+    reviewContext?: ReviewContext;
 }
 
 /**
@@ -295,6 +300,7 @@ export interface ReviewAgentOutput {
      *  forced compact prompt, dropped callGraph, etc). Empty when no
      *  adaptive strategy fired. */
     warnings?: ReviewWarning[];
+    reviewContextDeliveries?: readonly ReviewContextDelivery[];
     /**
      * The agent stopped because it ran out of budget (per-agent timeout) or
      * steps, NOT because it finished investigating. Its `suggestions` are
@@ -324,6 +330,7 @@ export interface AgentLoopInput {
     // decision; nothing downstream needs a pre-built LanguageModel.
     systemPrompt: string;
     userPrompt: string;
+    reviewContext?: ReviewContext;
     agentName?: string; // e.g. 'kodus-bug-review-agent' — used as Langfuse observation name
     /** Cost-span run name base for THIS review category (e.g. `code-review-bug`).
      *  Threaded onto every leaf model call the review makes (finder + verify +
@@ -500,6 +507,7 @@ export interface AgentLoopOutput {
      *  forced compact prompt, dropped callGraph, etc). Always present;
      *  empty array when no adaptive strategy fired. */
     warnings: ReviewWarning[];
+    reviewContextPhases?: string[];
     /** Low-level harness trace. Intended for eval/debug artifacts; product
      *  callers should keep using the domain fields above. */
     debugTrace?: Array<{

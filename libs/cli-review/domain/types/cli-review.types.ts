@@ -1,3 +1,8 @@
+import type {
+    ReviewContext,
+    ReviewContextDelivery,
+} from './review-context.types';
+
 export interface CliReviewIssueFix {
     range: {
         start: number;
@@ -25,6 +30,7 @@ export interface CliReviewResponse {
     issues: CliReviewIssue[];
     filesAnalyzed: number;
     duration: number;
+    reviewContextDeliveries?: readonly ReviewContextDelivery[];
 }
 
 export interface TrialCliReviewResponse extends CliReviewResponse {
@@ -71,4 +77,5 @@ export interface CliReviewConfig {
 export interface CliReviewInput {
     diff: string;
     config?: CliReviewConfig;
+    reviewContext?: ReviewContext;
 }

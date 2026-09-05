@@ -95,6 +95,7 @@ export interface BaseReviewCallParams {
     /** Langfuse span metadata (org / team / PR ...). Defaults to
      *  `{ organizationId }` when omitted — the structured callers' existing shape. */
     telemetryMetadata?: LangfuseTelemetryMetadata;
+    recordTelemetryInputs?: boolean;
     /** Observability span name; defaults to `runName`. */
     spanName?: string;
     /** Override the slot's sampling temperature — a fixed value the caller wants
@@ -224,6 +225,7 @@ async function runReviewCall<T>(
         timeoutMs,
         defaultModelOverride,
         telemetryMetadata,
+        recordTelemetryInputs,
         spanName,
         temperature: temperatureOverride,
         maxOutputTokens: maxOutputTokensOverride,
@@ -356,10 +358,16 @@ async function runReviewCall<T>(
                 // cancellation. A secondary pass may pass a shorter budget.
                 abortSignal: timeoutSignal(timeoutMs ?? LLM_CALL_TIMEOUT_MS),
                 ...toAiSdkTelemetryArgs(
-                    buildLangfuseTelemetry(
-                        runName,
-                        telemetryMetadata ?? { organizationId },
-                    ),
+                    recordTelemetryInputs === undefined
+                        ? buildLangfuseTelemetry(
+                              runName,
+                              telemetryMetadata ?? { organizationId },
+                          )
+                        : buildLangfuseTelemetry(
+                              runName,
+                              telemetryMetadata ?? { organizationId },
+                              { recordInputs: recordTelemetryInputs },
+                          ),
                 ),
             } as any);
 

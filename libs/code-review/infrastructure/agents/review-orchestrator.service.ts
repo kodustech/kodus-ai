@@ -16,6 +16,7 @@ import {
     ReviewAgentInput,
     ReviewAgentOutput,
 } from '@libs/code-review/infrastructure/agents/review-agent.contract';
+import type { ReviewContextDelivery } from '@libs/cli-review/domain/types/review-context.types';
 import {
     dedupReviewWarnings,
     type ReviewWarning,
@@ -58,6 +59,7 @@ export interface OrchestratorOutput {
      *  by (kind, modelName, contextWindowTokens). Empty array when no
      *  adaptive strategy fired. */
     warnings: ReviewWarning[];
+    reviewContextDeliveries?: ReviewContextDelivery[];
 }
 
 /**
@@ -304,6 +306,9 @@ export class ReviewOrchestratorService {
         const warnings = dedupReviewWarnings(
             agentResults.flatMap((r) => r.warnings ?? []),
         );
+        const reviewContextDeliveries = agentResults.flatMap(
+            (result) => result.reviewContextDeliveries ?? [],
+        );
 
         return {
             suggestions: allSuggestions,
@@ -312,6 +317,9 @@ export class ReviewOrchestratorService {
             incomplete,
             totalDurationMs,
             warnings,
+            ...(reviewContextDeliveries.length > 0 && {
+                reviewContextDeliveries,
+            }),
         };
     }
 

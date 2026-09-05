@@ -3,6 +3,10 @@ import { DataSource } from 'typeorm';
 
 import { IJobQueueService } from '@libs/core/workflow/domain/contracts/job-queue.service.contract';
 import { IWorkflowJob } from '@libs/core/workflow/domain/interfaces/workflow-job.interface';
+import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
+import { WorkflowType } from '@libs/core/workflow/domain/enums/workflow-type.enum';
+import type { WorkflowEphemeralPayload } from '@libs/core/workflow/domain/types/workflow-ephemeral-payload';
+import { CLI_REVIEW_EPHEMERAL_ROUTING_KEY } from './workflow-queue-arguments';
 
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { createLogger } from '@libs/core/log/logger';
@@ -111,6 +115,87 @@ export class WorkflowJobQueueService implements IJobQueueService {
             {
                 'workflow.component': 'queue',
                 'workflow.operation': 'enqueue',
+            },
+        );
+    }
+
+    async enqueueEphemeral(
+        job: Omit<IWorkflowJob, 'id' | 'createdAt' | 'updatedAt'>,
+        ephemeralPayload: WorkflowEphemeralPayload,
+    ): Promise<string> {
+        if (job.workflowType !== WorkflowType.CLI_CODE_REVIEW) {
+            throw new Error(
+                `Ephemeral transport is not configured for ${job.workflowType}`,
+            );
+        }
+
+        return this.observability.runInSpan(
+            'workflow.job.enqueue_ephemeral',
+            async (span) => {
+                const savedJob = await this.dataSource.transaction(
+                    async (transactionManager) =>
+                        this.jobRepository.create(job, transactionManager),
+                );
+                const exchange = 'workflow.exchange';
+                const routingKey = CLI_REVIEW_EPHEMERAL_ROUTING_KEY;
+                const messagePayload =
+                    this.messageBroker.transformMessageToMessageBroker({
+                        eventName: 'workflow.jobs.ephemeral',
+                        message: {
+                            jobId: savedJob.uuid,
+                            correlationId: job.correlationId,
+                            workflowType: job.workflowType,
+                            handlerType: job.handlerType,
+                            organizationId:
+                                job.organizationAndTeamData?.organizationId,
+                            teamId: job.organizationAndTeamData?.teamId,
+                            ephemeralPayload,
+                        },
+                    });
+
+                span.setAttributes({
+                    'workflow.job.id': savedJob.uuid,
+                    'workflow.job.type': job.workflowType,
+                    'workflow.job.handler': job.handlerType,
+                    'workflow.correlation.id': job.correlationId,
+                    'workflow.job.ephemeral': true,
+                });
+
+                try {
+                    await this.messageBroker.publishMessage(
+                        { exchange, routingKey },
+                        messagePayload,
+                        {
+                            persistent: false,
+                            expiration: 35 * 60 * 1000,
+                            messageId: messagePayload.messageId,
+                            correlationId: job.correlationId,
+                            headers: { 'x-kodus-ephemeral': true },
+                        },
+                    );
+                } catch (error) {
+                    await this.jobRepository.update(savedJob.uuid, {
+                        status: JobStatus.FAILED,
+                    });
+                    throw error;
+                }
+
+                this.logger.debug({
+                    message:
+                        'Workflow job created with ephemeral broker payload',
+                    context: WorkflowJobQueueService.name,
+                    metadata: {
+                        jobId: savedJob.uuid,
+                        correlationId: job.correlationId,
+                        workflowType: job.workflowType,
+                    },
+                });
+
+                return savedJob.uuid;
+            },
+            {
+                'workflow.component': 'queue',
+                'workflow.operation': 'enqueue_ephemeral',
             },
         );
     }

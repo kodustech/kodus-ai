@@ -93,6 +93,20 @@ export class RabbitMQErrorHandler implements OnModuleInit {
         const delayedExchange = `${baseExchange}.delayed`;
         const dlxExchange = `${baseExchange}.dlx`;
 
+        if (headers['x-kodus-ephemeral'] === true) {
+            this.logger.warn({
+                message:
+                    'Ephemeral message processing failed; dropping without retry',
+                context: RabbitMQErrorHandler.name,
+                metadata: {
+                    messageId,
+                    routingKey: msg.fields.routingKey,
+                },
+            });
+            channel.ack(msg);
+            return;
+        }
+
         try {
             if (retryCount < this.maxRetriesConsumer) {
                 await this.retryWithDelay(

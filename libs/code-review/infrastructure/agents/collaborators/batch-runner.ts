@@ -31,6 +31,16 @@ export interface BatchRunnerDeps {
     logger: { log: (e: any) => void; error: (e: any) => void };
 }
 
+export function collectBatchReviewContextDeliveries(
+    results: readonly ReviewAgentOutput[],
+): ReviewAgentOutput['reviewContextDeliveries'] {
+    const deliveries = results.flatMap(
+        (result) => result.reviewContextDeliveries ?? [],
+    );
+
+    return deliveries.length > 0 ? deliveries : undefined;
+}
+
 /**
  * Runs the agent in multiple batches when the total diff size exceeds the
  * model's context window budget. Each batch gets a subset of files with their
@@ -78,6 +88,7 @@ export async function runChunkedReview(
         const allDiscardedBySeverity: Partial<CodeSuggestion>[] = [];
         const allDiscardedByVerify: Partial<CodeSuggestion>[] = [];
         const allWarnings: ReviewWarning[] = [...(parentWarnings ?? [])];
+        const batchResults: ReviewAgentOutput[] = [];
         let totalTurns = 0;
         const batchErrors: Error[] = [];
 
@@ -125,6 +136,7 @@ export async function runChunkedReview(
 
                 const batchResult = await deps.runBatch(batchInput);
 
+                batchResults.push(batchResult);
                 allSuggestions.push(...batchResult.suggestions);
                 if (batchResult.discardedBySeverity) {
                     allDiscardedBySeverity.push(
@@ -209,6 +221,8 @@ export async function runChunkedReview(
         }
 
         const durationMs = Date.now() - startTime;
+        const reviewContextDeliveries =
+            collectBatchReviewContextDeliveries(batchResults);
 
         logger.log({
             message: `[AGENT] ${identity.name} PR#${input.prNumber} all batches done: ${allSuggestions.length} total findings in ${durationMs}ms`,
@@ -236,5 +250,8 @@ export async function runChunkedReview(
             turnsUsed: totalTurns,
             durationMs,
             warnings: allWarnings,
+            ...(reviewContextDeliveries
+                ? { reviewContextDeliveries }
+                : {}),
         };
 }

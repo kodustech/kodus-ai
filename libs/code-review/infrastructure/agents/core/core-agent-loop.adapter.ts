@@ -228,12 +228,15 @@ export async function runAgentLoopViaCore(
             // Wire the prose-findings recovery to the internal-model fallback.
             // The finder/recall passes stay decoupled from BYOK — they only see
             // the ProseRecoverer function.
+            reviewContext: input.reviewContext,
+            recordTelemetryInputs: input.reviewContext ? false : undefined,
             recoverProse: (reasoning: string) =>
                 recoverFindingsFromProse(
                     reasoning,
                     secrets.byokConfig,
                     input.telemetryMetadata?.organizationId,
                     input.usageRunName,
+                    input.reviewContext ? false : undefined,
                 ),
         },
         { prompt: input.userPrompt },
@@ -363,6 +366,9 @@ export async function runAgentLoopViaCore(
         droppedByVerify: r.droppedByVerify.map((d) => d.finding) as any,
         coverage,
         verification,
+        ...(r.reviewContextPhases && {
+            reviewContextPhases: r.reviewContextPhases,
+        }),
         verificationUsage: {
             inputTokens: vu.inputTokens,
             cacheReadTokens: vu.cacheReadTokens,

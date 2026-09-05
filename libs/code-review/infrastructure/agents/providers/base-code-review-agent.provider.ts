@@ -1,5 +1,9 @@
 import { createLogger } from '@libs/core/log/logger';
 import {
+    createReviewContextDelivery,
+    formatReviewContext,
+} from '@libs/cli-review/domain/types/review-context.types';
+import {
     attachClassification,
     classifyLLMError,
     getClassification,
@@ -11,7 +15,10 @@ import { ByokErrorCounter } from '@libs/notifications/application/byok-error-cou
 
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
-import { assignFileTiers, computeFileScores } from '@libs/code-review/infrastructure/agents/engine/file-priority-scorer';
+import {
+    assignFileTiers,
+    computeFileScores,
+} from '@libs/code-review/infrastructure/agents/engine/file-priority-scorer';
 import {
     PROMPT_BUDGET_RATIO,
     assertContextWindowFitsOverhead,
@@ -26,9 +33,7 @@ import {
     type PromptAgentMeta,
 } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
 import { resolveContextWindow } from '@libs/llm/model-context-window';
-import {
-    type ReviewWarning,
-} from '@libs/code-review/infrastructure/agents/engine/review-warnings';
+import { type ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import { resolveAdaptiveProfile } from '@libs/code-review/infrastructure/agents/engine/adaptive-fit';
 import { runAgentLoopViaCore } from '@libs/code-review/infrastructure/agents/core/core-agent-loop.adapter';
 import {
@@ -544,6 +549,7 @@ export abstract class BaseCodeReviewAgentProvider {
                 const loopParams = {
                     systemPrompt,
                     userPrompt,
+                    reviewContext: input.reviewContext,
                     agentName: identity.name,
                     // Cost-span run name for THIS category's leaf model calls.
                     // LLM.run records the ONE usage span per call under this name;
@@ -580,7 +586,8 @@ export abstract class BaseCodeReviewAgentProvider {
                     // Context window is sized against the resolved model.
                     contextWindowTokens: contextWindow,
                     reasoningEffort: modelParams.reasoningEffort,
-                    reasoningConfigOverride: modelParams.reasoningConfigOverride,
+                    reasoningConfigOverride:
+                        modelParams.reasoningConfigOverride,
                     byokProvider: modelParams.byokProvider,
                     // Without this the reasoning mapper can't tell an Opus 5
                     // from a Sonnet 4.5 and has to guess the thinking shape —
@@ -588,7 +595,8 @@ export abstract class BaseCodeReviewAgentProvider {
                     modelName: modelParams.modelName,
                     // Drives the BYOK concurrency limiter bucket + wrapper role.
                     byokRole: modelParams.role,
-                    openrouterProviderOrder: modelParams.openrouterProviderOrder,
+                    openrouterProviderOrder:
+                        modelParams.openrouterProviderOrder,
                     openrouterAllowFallbacks:
                         modelParams.openrouterAllowFallbacks,
                     parentSignal: input.parentSignal,
@@ -603,9 +611,11 @@ export abstract class BaseCodeReviewAgentProvider {
                                 });
                                 recentToolCalls.push({
                                     tool: tc.toolName,
-                                    args: JSON.stringify(
-                                        tc.args || tc.input || {},
-                                    ).substring(0, 100),
+                                    args: input.reviewContext
+                                        ? '[redacted for review context]'
+                                        : JSON.stringify(
+                                              tc.args || tc.input || {},
+                                          ).substring(0, 100),
                                 });
                             }
                         }
@@ -630,8 +640,22 @@ export abstract class BaseCodeReviewAgentProvider {
                 // Span input: strip the changedFiles patches (large) from
                 // loopParams so the trace records shape without every diff.
                 const { changedFiles: _cf, ...restParams } = loopParams as any;
+                const traceParams = input.reviewContext
+                    ? (({
+                          userPrompt: _userPrompt,
+                          reviewContext: _reviewContext,
+                          ...safe
+                      }) => safe)(restParams)
+                    : restParams;
                 const safeInput = {
-                    ...restParams,
+                    ...traceParams,
+                    ...(input.reviewContext && {
+                        reviewContextDelivery: createReviewContextDelivery(
+                            input.reviewContext,
+                            identity.name,
+                            'finder',
+                        ),
+                    }),
                     ...(_cf && {
                         changedFiles: _cf.map(
                             ({ patch: _patch, ...rest }: Record<string, any>) =>
@@ -651,6 +675,7 @@ export abstract class BaseCodeReviewAgentProvider {
                     },
                     safeInput,
                     () => loopFn(loopParams, loopSecrets),
+                    { recordOutput: !input.reviewContext },
                 );
             };
 
@@ -720,17 +745,21 @@ export abstract class BaseCodeReviewAgentProvider {
                 coverage: agentResult.coverage,
                 verification: agentResult.verification,
                 anomalies: agentResult.anomalies,
-                suggestionsPreview: suggestions.slice(0, 10).map((s) => ({
-                    relevantFile: s.relevantFile,
-                    relevantLinesStart: s.relevantLinesStart,
-                    relevantLinesEnd: s.relevantLinesEnd,
-                    oneSentenceSummary: s.oneSentenceSummary,
-                    label: s.label,
-                    severity: s.severity,
-                })),
+                suggestionsPreview: input.reviewContext
+                    ? []
+                    : suggestions.slice(0, 10).map((s) => ({
+                          relevantFile: s.relevantFile,
+                          relevantLinesStart: s.relevantLinesStart,
+                          relevantLinesEnd: s.relevantLinesEnd,
+                          oneSentenceSummary: s.oneSentenceSummary,
+                          label: s.label,
+                          severity: s.severity,
+                      })),
                 toolCalls: agentResult.toolCalls.map((tc) => ({
                     tool: tc.toolName || tc.tool,
-                    args: JSON.stringify(tc.args).substring(0, 100),
+                    args: input.reviewContext
+                        ? '[redacted for review context]'
+                        : JSON.stringify(tc.args).substring(0, 100),
                 })),
             });
 
@@ -772,6 +801,26 @@ export abstract class BaseCodeReviewAgentProvider {
                 },
             });
 
+            const reviewContext = input.reviewContext;
+            const reviewContextDeliveries = (() => {
+                if (!reviewContext) {
+                    return undefined;
+                }
+                const phases = agentResult.reviewContextPhases;
+                if (!phases || phases.length === 0) {
+                    throw new Error(
+                        'Review context delivery completed without phase evidence',
+                    );
+                }
+                return phases.map((phase) =>
+                    createReviewContextDelivery(
+                        reviewContext,
+                        identity.name,
+                        phase,
+                    ),
+                );
+            })();
+
             return {
                 suggestions,
                 discardedBySeverity: mapped.discardedBySeverity,
@@ -786,6 +835,7 @@ export abstract class BaseCodeReviewAgentProvider {
                 // loop's warnings: [] is the PR1 placeholder) with the
                 // strategy warnings emitted in this provider above.
                 warnings: [...agentWarnings, ...(agentResult.warnings ?? [])],
+                reviewContextDeliveries,
                 // Carry the cut-short signal out of the provider. It used to
                 // stop at `progress.send` (UI only), so the pipeline had no way
                 // to tell "found nothing" from "never finished looking".
@@ -797,6 +847,9 @@ export abstract class BaseCodeReviewAgentProvider {
             const errMsg =
                 error instanceof Error ? error.message : String(error);
             const errName = error instanceof Error ? error.name : undefined;
+            const safeErrMsg = input.reviewContext
+                ? 'Review agent failed while processing request-scoped context'
+                : errMsg;
 
             // Classify HERE, while the error still carries its status and
             // response body, and attach the result so every downstream reader
@@ -817,9 +870,11 @@ export abstract class BaseCodeReviewAgentProvider {
             progress.send({
                 status: 'error',
                 durationMs,
-                errorMessage: errMsg.substring(0, 500),
+                errorMessage: safeErrMsg.substring(0, 500),
                 errorName: errName,
-                errorFriendlyMessage: classification.friendlyMessage,
+                errorFriendlyMessage: input.reviewContext
+                    ? safeErrMsg
+                    : classification.friendlyMessage,
             });
             // Terminal BYOK (suspended key / no credit) → warn: user's provider
             // config, not a Kodus fault. Reuses the classification computed
@@ -827,16 +882,16 @@ export abstract class BaseCodeReviewAgentProvider {
             this.agentLogger[
                 isTerminalCategory(classification.category) ? 'warn' : 'error'
             ]({
-                message: `[AGENT] ${identity.name} failed for PR#${input.prNumber} after ${durationMs}ms: ${errMsg}`,
+                message: `[AGENT] ${identity.name} failed for PR#${input.prNumber} after ${durationMs}ms: ${safeErrMsg}`,
                 context: identity.name,
-                error,
+                ...(!input.reviewContext && { error }),
                 metadata: {
                     prNumber: input.prNumber,
                     durationMs,
                     model: effectiveModelName,
                     errorName: errName,
                     errorStack:
-                        error instanceof Error
+                        !input.reviewContext && error instanceof Error
                             ? error.stack?.substring(0, 500)
                             : undefined,
                 },
@@ -846,6 +901,11 @@ export abstract class BaseCodeReviewAgentProvider {
             // this, we returned `{ suggestions: [], turnsUsed: 0 }` which the
             // orchestrator treated as a fulfilled-with-no-findings result,
             // silently masking real crashes as legitimate "0 suggestions".
+            if (input.reviewContext) {
+                const safeError = new Error(safeErrMsg);
+                attachClassification(safeError, classification);
+                throw safeError;
+            }
             throw error;
         }
     }
@@ -867,6 +927,8 @@ export abstract class BaseCodeReviewAgentProvider {
 
     /** Protected so KodyRulesAgentProvider can override the user prompt. */
     protected buildUserPrompt(input: ReviewAgentInput): string {
-        return buildUserPromptFor(input, this.promptMeta(input));
+        const prompt = buildUserPromptFor(input, this.promptMeta(input));
+        const contextBlock = formatReviewContext(input.reviewContext);
+        return contextBlock ? `${contextBlock}\n\n${prompt}` : prompt;
     }
 }

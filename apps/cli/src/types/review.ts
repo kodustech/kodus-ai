@@ -1,5 +1,24 @@
 export type Severity = 'info' | 'warning' | 'error' | 'critical';
 
+export const REVIEW_CONTEXT_SOURCE = 'cli-review-context-file' as const;
+export const REVIEW_CONTEXT_CONTENT_TYPE = 'text/plain; charset=utf-8' as const;
+export const REVIEW_CONTEXT_MAX_BYTES = 12 * 1024;
+
+export interface ReviewContext {
+    readonly source: typeof REVIEW_CONTEXT_SOURCE;
+    readonly contentType: typeof REVIEW_CONTEXT_CONTENT_TYPE;
+    readonly body: string;
+}
+
+export interface ReviewContextDelivery {
+    readonly source: typeof REVIEW_CONTEXT_SOURCE;
+    readonly contentType: typeof REVIEW_CONTEXT_CONTENT_TYPE;
+    readonly sha256: string;
+    readonly utf8Bytes: number;
+    readonly recipient: string;
+    readonly phase: string;
+}
+
 /** Severity values the API may return before normalization. */
 export type ApiSeverity = Severity | 'high' | 'medium' | 'low';
 
@@ -40,6 +59,7 @@ export interface ReviewResult {
     issues: ReviewIssue[];
     filesAnalyzed: number;
     duration: number;
+    reviewContextDeliveries?: readonly ReviewContextDelivery[];
 }
 
 export interface ApiFileSuggestion {

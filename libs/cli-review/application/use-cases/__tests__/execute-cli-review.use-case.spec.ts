@@ -638,8 +638,7 @@ describe('ExecuteCliReviewUseCase', () => {
         };
 
         it('should use global repositoryId in trial mode', async () => {
-            const { useCase, pipelineStrategy, kodyRulesService } =
-                createMocks();
+            const { useCase, kodyRulesService } = createMocks();
 
             // Mock pipeline execution to return a valid cliResponse
             const mockExecute = jest
@@ -776,7 +775,9 @@ describe('ExecuteCliReviewUseCase', () => {
                 },
             });
 
-            expect(captured.reviewDirective).toBe('the auth /ReviewFocus logic');
+            expect(captured.reviewDirective).toBe(
+                'the auth /ReviewFocus logic',
+            );
             mockExecute.mockRestore();
         });
 
@@ -809,6 +810,84 @@ describe('ExecuteCliReviewUseCase', () => {
             });
 
             expect(captured.reviewDirective).toBeUndefined();
+            mockExecute.mockRestore();
+        });
+
+        it('forwards exact review context to the in-memory pipeline without persisting the body', async () => {
+            const { useCase, parametersService, automationExecutionService } =
+                createMocks();
+            parametersService.findByKey.mockResolvedValue(null);
+            const reviewContext = {
+                source: 'cli-review-context-file' as const,
+                contentType: 'text/plain; charset=utf-8' as const,
+                body: 'CANARY: inspect cleanup',
+            };
+            let captured: unknown;
+            const mockExecute = jest
+                .spyOn(
+                    require('@libs/core/infrastructure/pipeline/services/pipeline-executor.service')
+                        .PipelineExecutor.prototype,
+                    'execute',
+                )
+                .mockImplementation(async (context: unknown) => {
+                    captured = context;
+                    return {
+                        cliResponse: {
+                            summary: 'ok',
+                            issues: [],
+                            filesAnalyzed: 1,
+                            duration: 1,
+                        },
+                    };
+                });
+
+            await useCase.execute({
+                organizationAndTeamData: orgAndTeam,
+                input: { diff: '+ hello', reviewContext },
+            });
+
+            expect(captured).toEqual(
+                expect.objectContaining({ reviewContext }),
+            );
+            expect(
+                JSON.stringify(automationExecutionService.create.mock.calls),
+            ).not.toContain(reviewContext.body);
+
+            mockExecute.mockRestore();
+        });
+
+        it('keeps context-bearing pipeline errors out of durable execution metadata', async () => {
+            const { useCase, parametersService, automationExecutionService } =
+                createMocks();
+            parametersService.findByKey.mockResolvedValue(null);
+            const contextBody = 'CANARY private context body';
+            const mockExecute = jest
+                .spyOn(
+                    require('@libs/core/infrastructure/pipeline/services/pipeline-executor.service')
+                        .PipelineExecutor.prototype,
+                    'execute',
+                )
+                .mockRejectedValue(new Error(`provider echoed ${contextBody}`));
+
+            await expect(
+                useCase.execute({
+                    organizationAndTeamData: orgAndTeam,
+                    input: {
+                        diff: '+ hello',
+                        reviewContext: {
+                            source: 'cli-review-context-file',
+                            contentType: 'text/plain; charset=utf-8',
+                            body: contextBody,
+                        },
+                    },
+                }),
+            ).rejects.toThrow(
+                'CLI review failed while processing review context',
+            );
+
+            expect(
+                JSON.stringify(automationExecutionService.update.mock.calls),
+            ).not.toContain(contextBody);
             mockExecute.mockRestore();
         });
     });

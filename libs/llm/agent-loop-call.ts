@@ -107,6 +107,7 @@ export interface AgentLoopParams {
     providerOptions?: Record<string, unknown>;
     /** Langfuse observation metadata. */
     telemetryMetadata?: LangfuseTelemetryMetadata;
+    recordTelemetryInputs?: boolean;
     /** Cancellation / hard-timeout signal (the caller composes parent + timeout). */
     signal?: AbortSignal;
     /** Wall-clock ceiling for the whole loop. Defaults to AGENT_TIMEOUT_MS.
@@ -138,6 +139,7 @@ export async function runAgentLoopCall(
         organizationId,
         reporter,
         telemetryMetadata,
+        recordTelemetryInputs,
         signal: callerSignal,
     } = params;
 
@@ -236,7 +238,13 @@ export async function runAgentLoopCall(
             ...(loop.onStepFinish ? { onStepFinish: loop.onStepFinish as any } : {}),
             ...(telemetryMetadata
                 ? toAiSdkTelemetryArgs(
-                      buildLangfuseTelemetry(runName, telemetryMetadata),
+                      recordTelemetryInputs === undefined
+                          ? buildLangfuseTelemetry(runName, telemetryMetadata)
+                          : buildLangfuseTelemetry(
+                                runName,
+                                telemetryMetadata,
+                                { recordInputs: recordTelemetryInputs },
+                            ),
                   )
                 : {}),
         } as any);

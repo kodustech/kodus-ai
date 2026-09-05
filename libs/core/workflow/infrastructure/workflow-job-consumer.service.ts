@@ -15,6 +15,7 @@ import {
 } from '@libs/core/workflow/domain/contracts/workflow-job.repository.contract';
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
+import type { WorkflowEphemeralPayload } from '@libs/core/workflow/domain/types/workflow-ephemeral-payload';
 
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { createLogger } from '@libs/core/log/logger';
@@ -24,7 +25,12 @@ import {
 } from '@libs/core/workflow/domain/contracts/inbox-message.repository.contract';
 import { InboxStatus } from './repositories/schemas/inbox-message.model';
 import { createRabbitMQErrorHandlerWithFallback } from '@libs/core/infrastructure/queue/rabbitmq-error.handler';
-import { WORKFLOW_JOB_QUEUE_ARGUMENTS } from './workflow-queue-arguments';
+import {
+    CLI_REVIEW_EPHEMERAL_QUEUE,
+    CLI_REVIEW_EPHEMERAL_QUEUE_OPTIONS,
+    CLI_REVIEW_EPHEMERAL_ROUTING_KEY,
+    WORKFLOW_JOB_QUEUE_ARGUMENTS,
+} from './workflow-queue-arguments';
 import { runWithBoundedTimeout } from './run-with-bounded-timeout';
 import {
     ITaskProtectionService,
@@ -34,6 +40,7 @@ import {
 interface WorkflowJobMessage {
     jobId: string;
     correlationId?: string;
+    ephemeralPayload?: WorkflowEphemeralPayload;
     [key: string]: unknown;
 }
 
@@ -143,6 +150,31 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
         return this.handleWorkflowJob(
             'workflow-job-consumer.cli_code_review',
             'workflow.jobs.cli_code_review.queue',
+            message,
+            amqpMsg,
+        );
+    }
+
+    @RabbitSubscribe({
+        exchange: 'workflow.exchange',
+        routingKey: CLI_REVIEW_EPHEMERAL_ROUTING_KEY,
+        queue: CLI_REVIEW_EPHEMERAL_QUEUE,
+        errorBehavior: MessageHandlerErrorBehavior.ACK,
+        errorHandler: createRabbitMQErrorHandlerWithFallback(
+            'workflow.job.failed',
+        ),
+        queueOptions: {
+            channel: 'channel-cli-code-review-ephemeral',
+            ...CLI_REVIEW_EPHEMERAL_QUEUE_OPTIONS,
+        },
+    })
+    async handleEphemeralCliCodeReviewJob(
+        message: WorkflowJobMessage | MessagePayload<WorkflowJobMessage>,
+        amqpMsg: ConsumeMessage,
+    ): Promise<void> {
+        return this.handleWorkflowJob(
+            'workflow-job-consumer.cli_code_review_ephemeral',
+            CLI_REVIEW_EPHEMERAL_QUEUE,
             message,
             amqpMsg,
         );
@@ -273,7 +305,11 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
         if (queueName === 'workflow.jobs.ast_graph_incremental.queue')
             return 15;
         if (queueName === 'workflow.jobs.webhook.queue') return 20;
-        if (queueName === 'workflow.jobs.cli_code_review.queue') return 35;
+        if (
+            queueName === 'workflow.jobs.cli_code_review.queue' ||
+            queueName === CLI_REVIEW_EPHEMERAL_QUEUE
+        )
+            return 35;
         return 150;
     }
 
@@ -325,13 +361,10 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
                     'Invalid workflow job message: missing messageId or jobId',
                 context: WorkflowJobConsumer.name,
                 metadata: {
-                    message,
-                    unwrappedMessage,
-                    amqpMsg: {
-                        messageId,
-                        correlationId,
-                        queueName,
-                    },
+                    hasJobId: Boolean(unwrappedMessage.jobId),
+                    hasMessageId: Boolean(messageId),
+                    correlationId,
+                    queueName,
                 },
             });
             throw new Error('Invalid message: missing messageId or jobId');
@@ -398,7 +431,11 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
                 });
 
                 try {
-                    await this.jobProcessor.process(unwrappedMessage.jobId);
+                    await this.jobProcessor.process(
+                        unwrappedMessage.jobId,
+                        undefined,
+                        unwrappedMessage.ephemeralPayload,
+                    );
 
                     await this.inboxRepository.markAsProcessed(
                         messageId,

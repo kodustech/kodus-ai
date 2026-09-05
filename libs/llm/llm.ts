@@ -207,6 +207,7 @@ export class LLM {
                         provider: req.provider,
                         providerOptions: req.providerOptions,
                         telemetryMetadata: req.telemetryMetadata,
+                        recordTelemetryInputs: req.recordTelemetryInputs,
                         signal: req.signal,
                         maxOutputTokens: req.maxOutputTokens,
                         temperature: req.temperature,

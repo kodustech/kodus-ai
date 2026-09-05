@@ -434,20 +434,28 @@ kodus review src/index.ts src/utils.ts # Specific files
 
 #### All Flags
 
-| Flag                   | Description                                   |
-| ---------------------- | --------------------------------------------- |
-| `--staged`             | Analyze only staged files                     |
-| `--commit <sha>`       | Analyze a specific commit                     |
-| `--branch <name>`      | Compare against a branch                      |
-| `--rules-only`         | Only check configured rules                   |
-| `--fast`               | Faster analysis for large diffs               |
-| `--fix`                | Auto-apply all fixable issues                 |
-| `--prompt-only`        | AI agent optimized output                     |
-| `--context <file>`     | Include custom context file                   |
-| `--format <fmt>`       | Output format: `terminal`, `json`, `markdown` |
-| `--output <file>`      | Save output to file                           |
-| `--fail-on <severity>` | Exit code 1 if issues meet or exceed severity |
-| `-i, --interactive`    | Explicitly enable interactive mode            |
+| Flag                           | Description                                    |
+| ------------------------------ | ---------------------------------------------- |
+| `--staged`                     | Analyze only staged files                      |
+| `--commit <sha>`               | Analyze a specific commit                      |
+| `--branch <name>`              | Compare against a branch                       |
+| `--rules-only`                 | Only check configured rules                    |
+| `--fast`                       | Faster analysis for large diffs                |
+| `--fix`                        | Auto-apply all fixable issues                  |
+| `--prompt-only`                | AI agent optimized output                      |
+| `--context <file>`             | Include custom context file                    |
+| `--review-context-file <path>` | Send request-scoped evidence to finding agents |
+| `--format <fmt>`               | Output format: `terminal`, `json`, `markdown`  |
+| `--output <file>`              | Save output to file                            |
+| `--fail-on <severity>`         | Exit code 1 if issues meet or exceed severity  |
+| `-i, --interactive`            | Explicitly enable interactive mode             |
+
+`--review-context-file` accepts a non-empty UTF-8 text file up to 12 KiB. The
+file may be outside the repository. Kodus sends its contents separately from
+the selected diff, uses them only for the current review, and does not add them
+to repository files or durable review state. The response can include delivery
+receipts with the SHA-256, UTF-8 byte count, and agent phase, but not the
+context text.
 
 </details>
 
