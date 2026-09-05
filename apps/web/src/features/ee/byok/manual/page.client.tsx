@@ -56,6 +56,7 @@ import {
     providerSettingDefaults,
     unownedStoredSettings,
 } from "../_components/_modals/edit-key/credential-config";
+import { credentialSettingsOverride } from "../_components/credential-settings-override";
 import { SuccessClaim } from "../_components/success-claim";
 import {
     buildByokBlob,
@@ -558,6 +559,25 @@ export function ByokManualPageClient({
             ...unownedStoredSettings(isEditing ? editSettings : storedSettings),
             ...(credentialSettingsFromConfig(newConfig) ?? {}),
         };
+        // Only override the credential's settings when the form was actually
+        // SEEDED from it. The seed needs a provider known at mount — editing a
+        // model, or "?provider=" — and the unlocked "configure a model manually"
+        // flow has neither: the user picks the provider inside the form, so
+        // `storedSettings` was empty when the defaults were built and the object
+        // above collapses to whatever they typed.
+        //
+        // Sending that as an override is not a no-op. The builder replaces
+        // settings whenever it receives an object, and an empty object is still
+        // an object — so adding a model to an already-connected provider through
+        // the unlocked flow would wipe that credential's pin, base URL and
+        // region. Omitting the key is what the BuildV2Edit contract means by
+        // "keep the stored ones", and it is the safe reading whenever the form
+        // never saw them.
+        const credentialSettings = credentialSettingsOverride({
+            isEditing,
+            lockedProvider,
+            settings: nextCredentialSettings,
+        });
         const existingCred = (existing?.credentials ?? []).find(
             (c) => !c.managed && c.provider === newConfig.provider,
         );
@@ -567,14 +587,14 @@ export function ByokManualPageClient({
                     kind: "edit-model",
                     modelId: editModel.id,
                     model: modelFields,
-                    credentialSettings: nextCredentialSettings,
+                    credentialSettings,
                 })
                 : existingCred
                     ? buildByokBlob(existing, {
                         kind: "add-existing-provider",
                         credentialId: existingCred.id,
                         model: modelFields,
-                        credentialSettings: nextCredentialSettings,
+                        credentialSettings,
                     })
                     : buildByokBlob(existing, {
                         kind: "add-new-provider",

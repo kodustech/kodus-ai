@@ -135,6 +135,51 @@ describe('credential settings survive the save that is not about them', () => {
     });
 });
 
+describe('an unseeded form must not speak for the credential', () => {
+    // The screen can be opened without a provider in the URL, and the user then
+    // picks one inside the form. Nothing was seeded from the credential in that
+    // flow, because at mount there was no provider to look one up by.
+    //
+    // Sending the form's settings anyway is not harmless: the builder replaces
+    // whenever it receives an object, and an empty object is still an object.
+    // That is how a fix for "settings never save" turns into "settings get
+    // erased" one flow over.
+    it('keeps stored settings when no override is passed at all', () => {
+        const blob = buildByokBlob(stored(PIN), {
+            kind: 'add-existing-provider',
+            credentialId: 'cred-main',
+            model: { model: 'c' },
+        });
+
+        expect(credOf(blob, 'cred-main').settings).toEqual(PIN);
+    });
+
+    it('treats an EMPTY object as a real instruction to clear', () => {
+        // The distinction the caller depends on: `undefined` means "I have
+        // nothing to say", `{}` means "remove them". Collapsing the two would
+        // make unpinning impossible or make an unseeded save destructive —
+        // no single behaviour serves both.
+        const blob = buildByokBlob(stored(PIN), {
+            kind: 'add-existing-provider',
+            credentialId: 'cred-main',
+            model: { model: 'c' },
+            credentialSettings: {},
+        });
+
+        expect(credOf(blob, 'cred-main').settings).toEqual({});
+    });
+
+    it('keeps stored settings on edit-model when no override is passed', () => {
+        const blob = buildByokBlob(stored(PIN), {
+            kind: 'edit-model',
+            modelId: 'model-main',
+            model: { model: 'a' },
+        });
+
+        expect(credOf(blob, 'cred-main').settings).toEqual(PIN);
+    });
+});
+
 describe('seeding a form from the credential it will overwrite', () => {
     it('seeds every non-secret field the provider registered', () => {
         const seeded = providerSettingDefaults('open_router', {
