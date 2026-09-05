@@ -99,6 +99,26 @@ describe("credentialSettingsOverride — an unseeded form may only add", () => {
         expect(out).not.toHaveProperty("awsSecretAccessKey");
     });
 
+    it("cannot tell a cleared field from an unseen one — which is why seeding exists", () => {
+        // The honest limit of this branch, pinned so it is not mistaken for a
+        // guarantee. A field the user typed and then CLEARED is absent from
+        // formSettings, exactly like one they were never shown, so the stored
+        // value is carried back.
+        //
+        // No rule over this input can separate the two: the information is not
+        // here. The screen closes the gap instead — it seeds the fields once the
+        // provider is known, after which the form is authoritative and clearing
+        // is a real removal. This branch then covers only the render before that
+        // seed lands.
+        const out = credentialSettingsOverride({
+            seeded: false,
+            storedSettings: { baseURL: "https://old" },
+            formSettings: PIN,
+        });
+
+        expect(out).toHaveProperty("baseURL", "https://old");
+    });
+
     it("handles a credential that holds nothing at all", () => {
         expect(
             credentialSettingsOverride({

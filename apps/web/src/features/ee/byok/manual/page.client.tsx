@@ -1,7 +1,7 @@
 // @ts-nocheck
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Alert, AlertDescription } from "@components/ui/alert";
@@ -53,6 +53,7 @@ import {
 import {
     providerHasCredentials,
     providerOwnsField,
+    providerSettingDefaults,
     providerSettingDefaults,
     unownedStoredSettings,
 } from "../_components/_modals/edit-key/credential-config";
@@ -300,6 +301,48 @@ export function ByokManualPageClient({
 
     const { isValid } = form.formState;
     const provider = form.watch("provider");
+
+    // Fill the credential's settings into the form the moment the provider is
+    // known, so every flow reaches the save with the same knowledge.
+    //
+    // When the provider is known at mount — editing a model, or "?provider=" —
+    // the defaults already carry them. The unlocked "configure a model manually"
+    // flow has no provider at mount, so those fields opened blank even when the
+    // provider the user then picks already has a credential holding a base URL,
+    // a pin or a region.
+    //
+    // Three defects on this branch were patches over that gap, each answering
+    // "what does an empty field mean?" differently and each wrong somewhere: a
+    // save that sent the blank object ERASED the stored settings; a save that
+    // stayed silent DISCARDED what the user had just typed and watched Test
+    // validate; and either way a field typed then cleared is indistinguishable
+    // from one never shown. Seeding removes the question rather than answering
+    // it — once the fields hold what is stored, clearing one is a real removal
+    // and leaving one alone is a real keep, in every flow alike.
+    const seededProviderRef = useRef<string | null>(null);
+    useEffect(() => {
+        if (isEditing || lockedProvider || !provider) return;
+        // Only on an actual CHANGE, so no re-render can overwrite typing.
+        if (seededProviderRef.current === provider) return;
+        seededProviderRef.current = provider;
+
+        const cred = (existing?.credentials ?? []).find(
+            (c) => !c.managed && c.provider === provider,
+        );
+        const stored = (cred?.settings ?? {}) as Record<string, unknown>;
+
+        form.setValue(
+            "baseURL",
+            typeof stored.baseURL === "string" ? stored.baseURL : null,
+        );
+        // Secrets are deliberately absent from this seed: the browser holds only
+        // their mask, and a blank secret is what keeps the stored ciphertext.
+        for (const [key, value] of Object.entries(
+            providerSettingDefaults(provider, stored),
+        )) {
+            form.setValue(key as keyof EditKeyForm, value as never);
+        }
+    }, [provider, isEditing, lockedProvider, existing, form]);
     const model = form.watch("model");
     const apiKey = form.watch("apiKey");
     const watchedBaseURL = form.watch("baseURL");
@@ -568,10 +611,15 @@ export function ByokManualPageClient({
             ...(credentialSettingsFromConfig(newConfig) ?? {}),
         };
         const credentialSettings = credentialSettingsOverride({
-            // Seeded only when a provider was known at mount — editing a model,
-            // or "?provider=". Otherwise the fields opened blank and their
-            // emptiness means "unknown", not "removed".
-            seeded: isEditing || !!lockedProvider,
+            // Authoritative exactly when the fields were filled from the
+            // credential: at mount for a known provider, or by the effect above
+            // once the user picked one. The additive branch is left for the
+            // single render before that effect runs, where a blank field still
+            // means "unknown" rather than "removed".
+            seeded:
+                isEditing ||
+                !!lockedProvider ||
+                seededProviderRef.current === newConfig.provider,
             storedSettings: targetSettings,
             formSettings: nextCredentialSettings,
         });
