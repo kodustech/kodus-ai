@@ -15,8 +15,13 @@ import { PROVIDER_LABELS } from "../_data/provider-labels";
 import type { BYOKConnectInput, BYOKCredential } from "../_types";
 import { maskKey } from "../_utils";
 import { ByokBaseURLInput } from "./_modals/edit-key/_components/baseurl-input";
+import { ADVANCED_FIELDS } from "./_modals/edit-key/_components/credential-forms";
 import { ByokCredentialsInput } from "./_modals/edit-key/_components/credentials-input";
 import type { EditKeyForm } from "./_modals/edit-key/_types";
+import {
+    providerSettingDefaults,
+    unownedStoredSettings,
+} from "./_modals/edit-key/credential-config";
 import { credentialSettingsFromConfig } from "./byok-write";
 
 /**
@@ -53,6 +58,11 @@ export function RotatePanel({
     onCancel: () => void;
 }) {
     const settings = (credential.settings ?? {}) as Record<string, unknown>;
+    // The provider's own advanced fields (e.g. OpenRouter's upstream pinning).
+    // They are stored ON the credential, so the panel that rewrites a
+    // credential's settings has to render them — a field it cannot show is a
+    // field it silently drops on save.
+    const ProviderAdvancedFields = ADVANCED_FIELDS[credential.provider];
     const providerLabel =
         PROVIDER_LABELS[credential.provider] ?? credential.provider;
     const str = (v: unknown): string | null =>
@@ -66,8 +76,12 @@ export function RotatePanel({
             model: probeModelId ?? "",
             apiKey: "",
             baseURL: str(settings.baseURL),
-            awsRegion: str(settings.awsRegion),
-            vertexLocation: str(settings.vertexLocation),
+            awsRegion: null,
+            vertexLocation: null,
+            // Provider-owned non-secret settings, seeded off the registry so a
+            // field this panel does not hand-list still survives the save. The
+            // secrets stay null above/below: blank means "keep the ciphertext".
+            ...providerSettingDefaults(credential.provider, settings),
             awsBearerToken: null,
             awsAccessKeyId: null,
             awsSecretAccessKey: null,
@@ -79,7 +93,11 @@ export function RotatePanel({
     const [testState, setTestState] = useState<
         | { status: "idle" }
         | { status: "testing" }
-        | { status: "success"; latencyMs: number }
+        | {
+            status: "success";
+            latencyMs: number;
+            verifiedBy?: "catalog" | "probe";
+        }
         | { status: "error"; result: TestBYOKResult }
     >({ status: "idle" });
 
@@ -128,36 +146,40 @@ export function RotatePanel({
         try {
             const result = typedNewSecret(values)
                 ? await testBYOK({
-                      provider: credential.provider,
-                      model: probeModelId,
-                      apiKey: values.apiKey?.trim() || undefined,
-                      baseURL: values.baseURL?.trim() || undefined,
-                      vertexLocation:
-                          values.vertexLocation?.trim() || undefined,
-                      awsBearerToken:
-                          values.awsBearerToken?.trim() || undefined,
-                      awsAccessKeyId:
-                          values.awsAccessKeyId?.trim() || undefined,
-                      awsSecretAccessKey:
-                          values.awsSecretAccessKey?.trim() || undefined,
-                      awsRegion: values.awsRegion?.trim() || undefined,
-                      awsSessionToken:
-                          values.awsSessionToken?.trim() || undefined,
-                  })
+                    provider: credential.provider,
+                    model: probeModelId,
+                    apiKey: values.apiKey?.trim() || undefined,
+                    baseURL: values.baseURL?.trim() || undefined,
+                    vertexLocation:
+                        values.vertexLocation?.trim() || undefined,
+                    awsBearerToken:
+                        values.awsBearerToken?.trim() || undefined,
+                    awsAccessKeyId:
+                        values.awsAccessKeyId?.trim() || undefined,
+                    awsSecretAccessKey:
+                        values.awsSecretAccessKey?.trim() || undefined,
+                    awsRegion: values.awsRegion?.trim() || undefined,
+                    awsSessionToken:
+                        values.awsSessionToken?.trim() || undefined,
+                })
                 : await testBYOKModel({
-                      provider: credential.provider,
-                      model: probeModelId,
-                      // No new secret was typed, so the stored ciphertext is
-                      // re-used server-side. Only the SAFE region/location edits
-                      // ride along (a baseURL change is gated above to require the
-                      // key, so the stored secret never reaches a new host).
-                      awsRegion: values.awsRegion?.trim() || undefined,
-                      vertexLocation:
-                          values.vertexLocation?.trim() || undefined,
-                  });
+                    provider: credential.provider,
+                    model: probeModelId,
+                    // No new secret was typed, so the stored ciphertext is
+                    // re-used server-side. Only the SAFE region/location edits
+                    // ride along (a baseURL change is gated above to require the
+                    // key, so the stored secret never reaches a new host).
+                    awsRegion: values.awsRegion?.trim() || undefined,
+                    vertexLocation:
+                        values.vertexLocation?.trim() || undefined,
+                });
             setTestState(
                 result.ok
-                    ? { status: "success", latencyMs: result.latencyMs }
+                    ? {
+                        status: "success",
+                        latencyMs: result.latencyMs,
+                        verifiedBy: result.verifiedBy,
+                    }
                     : { status: "error", result },
             );
             return result;
@@ -192,9 +214,15 @@ export function RotatePanel({
             }
             // Non-secrets ride the form; blank secrets are OMITTED here so the
             // server's encryptOrKeep keeps the stored ciphertext (never the mask).
-            const nextSettings = credentialSettingsFromConfig(
-                values as unknown as BYOKConnectInput,
-            );
+            const nextSettings = {
+                // Keys no credential form owns are carried through untouched —
+                // the server REPLACES this object, so anything not re-sent is
+                // deleted.
+                ...unownedStoredSettings(settings),
+                ...(credentialSettingsFromConfig(
+                    values as unknown as BYOKConnectInput,
+                ) ?? {}),
+            };
             await onSave(values.apiKey?.trim() ?? "", nextSettings);
         } finally {
             setIsSaving(false);
@@ -240,6 +268,7 @@ export function RotatePanel({
                         </div>
                     }>
                     <ByokCredentialsInput />
+                    {ProviderAdvancedFields ? <ProviderAdvancedFields /> : null}
                     <ByokBaseURLInput />
                 </Suspense>
 
@@ -247,8 +276,25 @@ export function RotatePanel({
                     <Alert variant="success">
                         <CheckCircle2Icon />
                         <AlertDescription className="text-pretty">
-                            Connected — the credential authenticates (
-                            {testState.latencyMs} ms).
+                            {/* Two different claims, and the weaker one used to
+                                borrow the stronger one's words. A catalog hit
+                                proves the key authenticates and the id is
+                                listed; it never called the model, so it cannot
+                                say the model runs. Saying so is the difference
+                                between a useful check and false reassurance. */}
+                            {testState.verifiedBy === "catalog" ? (
+                                <>
+                                    Key works and your provider lists this model
+                                    ({testState.latencyMs} ms). This check
+                                    doesn&apos;t call the model, so it
+                                    can&apos;t confirm it will run.
+                                </>
+                            ) : (
+                                <>
+                                    Connected — the credential authenticates (
+                                    {testState.latencyMs} ms).
+                                </>
+                            )}
                         </AlertDescription>
                     </Alert>
                 )}
@@ -258,6 +304,22 @@ export function RotatePanel({
                         <AlertDescription className="text-pretty">
                             {testState.result.message ??
                                 "The credentials failed to connect. Check them and try again."}
+                            {/* What the PROVIDER said, verbatim. Our own line is a
+                                guess keyed on the HTTP status; the provider's is
+                                the actual reason, and it is frequently the only
+                                one that names the fix. A customer once spent a
+                                day regenerating a perfectly good key because we
+                                showed "the base URL is wrong or the API path
+                                isn't on your plan" while OpenRouter had replied,
+                                in this very field, that their account's
+                                allowed-providers setting had no upstream serving
+                                the model — and said where to change it. */}
+                            {testState.result.providerMessage && (
+                                <span className="text-text-secondary mt-2 block text-xs break-words">
+                                    Provider said:{" "}
+                                    {testState.result.providerMessage}
+                                </span>
+                            )}
                         </AlertDescription>
                     </Alert>
                 )}
