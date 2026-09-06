@@ -852,6 +852,36 @@ describe('#1831 — a detector cannot publish, and cannot leave its language', (
         expect(normalizeDetectorExtensions(undefined)).toBeUndefined();
     });
 
+    it('a scoped detector still covers extensionless files (Rakefile, Gemfile, Dockerfile)', () => {
+        // Review feedback on #1864. The extension check is a COST filter, so
+        // when it cannot determine a language it must abstain, not exclude:
+        // excluding would be a silent enforcement loss, because the judge only
+        // shards files where a detector fired, so nothing downstream would ever
+        // look at a Rakefile a Ruby rule genuinely applies to.
+        const scoped = {
+            uuid: 'ruby-rule',
+            title: 't',
+            rule: 'ruby only',
+            detector: {
+                type: 'regex' as const,
+                pattern: 'puts ',
+                extensions: ['.rb'],
+            },
+        };
+        const files = [
+            file('Rakefile', ['puts "hi"']),
+            file('Gemfile', ['puts "hi"']),
+            file('Dockerfile', ['puts "hi"']),
+            file('app/assets/app.scss', ['puts "hi"']),
+        ];
+        const hit = [...buildDetectorCandidates([scoped] as any, files as any)
+            .get('ruby-rule')!
+            .keys()].sort();
+        // .scss is excluded (known extension, not in scope); the extensionless
+        // files are kept and left for the judge to rule on.
+        expect(hit).toEqual(['Dockerfile', 'Gemfile', 'Rakefile']);
+    });
+
     it('AC: a language-agnostic rule keeps running everywhere', () => {
         // The scope must not become a silent narrowing. A rule that names no
         // language compiles with no extensions and behaves exactly as before.

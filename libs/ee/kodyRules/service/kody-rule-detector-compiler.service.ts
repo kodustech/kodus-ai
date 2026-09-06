@@ -100,6 +100,7 @@ export class KodyRuleDetectorCompilerService
                     message: `Compiled T0 detector for rule ${ruleUuid}`,
                     context: KodyRuleDetectorCompilerService.name,
                     metadata: {
+                        organizationAndTeamData,
                         ruleUuid,
                         pattern: detector.pattern,
                         extensions: detector.extensions,

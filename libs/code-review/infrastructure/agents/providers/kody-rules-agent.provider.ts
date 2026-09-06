@@ -337,8 +337,16 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             // (wire-schema 400 / provider outage / model unavailability) are in
             // the shard warn logs.
             if (shardsRun > 0 && shardsErrored === shardsRun) {
+                // Since #1831 a mechanical rule is confirmed by this same judge,
+                // so a T0-only org reaches this escalation for the first time.
+                // That is correct — the judge failing now genuinely means those
+                // rules were NOT applied, where before the regex had already
+                // decided — but the message must not claim "semantic" rules the
+                // org may not have.
+                const kind =
+                    semanticRules.length > 0 ? 'Kody Rules' : 'mechanical Kody Rules';
                 throw new Error(
-                    `Kody Rules could not be evaluated: all ${shardsRun} rule check(s) failed to run. Your semantic Kody Rules were not applied to this PR.`,
+                    `Kody Rules could not be evaluated: all ${shardsRun} rule check(s) failed to run. Your ${kind} were not applied to this PR.`,
                 );
             }
 

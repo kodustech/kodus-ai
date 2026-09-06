@@ -435,7 +435,15 @@ export function detectorAppliesToFile(
     const exts = detector.extensions;
     if (!exts?.length) return true;
     const m = String(filename).toLowerCase().match(/\.[^./]+$/);
-    return !!m && exts.includes(m[0]);
+    // No extension at all (Rakefile, Gemfile, Dockerfile, Makefile, LICENSE):
+    // we cannot tell the language, so we do not narrow. Excluding them would be
+    // a SILENT enforcement loss — a Ruby-scoped rule would never fire on a
+    // Rakefile, and because the judge only shards files where a detector fired,
+    // no LLM pass would catch it either. The scope is a cost filter, so when it
+    // cannot decide it must abstain and let the judge rule; the same reason
+    // `normalizeDetectorExtensions` returns undefined instead of an empty list.
+    if (!m) return true;
+    return exts.includes(m[0]);
 }
 
 /**
