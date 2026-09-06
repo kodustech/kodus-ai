@@ -79,6 +79,7 @@ import {
 import { KodyRuleSummaryService } from '@libs/kodyRules/infrastructure/adapters/services/kody-rule-summary.service';
 import {
     CodeReviewPipelineContext,
+    resolvedModel,
     DedupTraceGroupSummary,
     DedupTraceSuggestionSummary,
     DedupTraceSummary,
@@ -819,6 +820,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         category: classification.category,
                         provider: classification.provider,
                         friendlyMessage: classification.friendlyMessage,
+                        httpStatus: classification.httpStatus,
+                        providerMessage: classification.providerMessage,
+                        model: resolvedModel(context),
                         agentName: chosen.agentName,
                         occurredAt: new Date(),
                     };
@@ -1478,6 +1482,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         category: classification.category,
                         provider: classification.provider,
                         friendlyMessage: classification.friendlyMessage,
+                        httpStatus: classification.httpStatus,
+                        providerMessage: classification.providerMessage,
+                        model: resolvedModel(context),
                         occurredAt: new Date(),
                     };
                 }

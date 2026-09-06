@@ -1,4 +1,8 @@
-import type { ContextEvidence, ContextLayer, ContextPack } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
+import type {
+    ContextEvidence,
+    ContextLayer,
+    ContextPack,
+} from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import { IExternalPromptContext } from '@libs/ai-engine/domain/prompt/interfaces/promptExternalReference.interface';
 import { ContextAugmentationsMap } from '@libs/ai-engine/infrastructure/adapters/services/context/interfaces/code-review-context-pack.interface';
 import { AutomationExecutionEntity } from '@libs/automation/domain/automationExecution/entities/automation-execution.entity';
@@ -258,6 +262,13 @@ export interface CodeReviewPipelineContext extends PipelineContext {
         friendlyMessage: string;
         agentName?: string;
         occurredAt: Date;
+        /** Status the provider answered with, when it answered at all. */
+        httpStatus?: number;
+        /** The provider's own sentence, redacted and capped by the classifier. */
+        providerMessage?: string;
+        /** Model id the review actually ran on — the resolved slot's, not the
+         *  configured default, so a routed override is reported as what ran. */
+        model?: string;
     };
 
     /**
@@ -337,3 +348,19 @@ export interface DocumentationItem {
     snippet: string;
     source: 'exa-search';
 }
+
+/**
+ * The model the review ACTUALLY ran on.
+ *
+ * Read from the resolved slot rather than the configured default, so a routed
+ * or per-task override is reported as what ran instead of what was configured.
+ * Both failure paths that record `lastReviewError` already read `provider` off
+ * this same slot; taking the model from anywhere else would let a report name a
+ * provider and a model that never met.
+ */
+export const resolvedModel = (
+    context: Pick<CodeReviewPipelineContext, 'codeReviewConfig'>,
+): string | undefined => {
+    const model = context.codeReviewConfig?.resolvedModelSlot?.model;
+    return typeof model === 'string' && model.length > 0 ? model : undefined;
+};

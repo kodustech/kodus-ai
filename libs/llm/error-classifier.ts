@@ -1,3 +1,4 @@
+import { extractProviderMessage } from './review-error-diagnostics';
 import {
     AgentContextWindowTooSmallError,
     AgentPromptTooLargeError,
@@ -39,6 +40,13 @@ export interface ClassifiedErrorInfo {
     httpStatus?: number;
     /** Short, human-readable message safe to surface to the end user. */
     friendlyMessage: string;
+    /**
+     * The provider's OWN sentence, already redacted and capped for a public
+     * comment. Carried separately from `friendlyMessage` because the two answer
+     * different questions — ours says what to do, theirs says what happened —
+     * and dropping theirs is what left a failed review with nothing to act on.
+     */
+    providerMessage?: string;
 }
 
 const CLASSIFICATION_KEY = Symbol('reviewErrorClassification');
@@ -98,7 +106,8 @@ export function classifyLLMError(
     // detail (e.g. Vertex's "your project does not have access to it") lives
     // in the upstream `responseBody`/`data`. Classifying on `message` alone
     // misses it and mislabels access-denied as a plain model-not-found.
-    const lower = extractErrorText(err).toLowerCase() || rawMessage.toLowerCase();
+    const lower =
+        extractErrorText(err).toLowerCase() || rawMessage.toLowerCase();
     const httpStatus = extractHttpStatus(err);
 
     let category = matchByHttpStatus(httpStatus, lower);
@@ -120,6 +129,7 @@ export function classifyLLMError(
             category === LlmErrorCategory.CONTEXT_OVERFLOW
                 ? buildContextOverflowMessage(err, provider)
                 : buildFriendlyMessage(category, provider),
+        providerMessage: extractProviderMessage(err),
     };
 }
 
@@ -189,7 +199,9 @@ export function isTerminalCategory(category: LlmErrorCategory): boolean {
  * `error`. Pure — safe to call in any catch block.
  */
 export function llmErrorLogLevel(err: unknown): 'warn' | 'error' {
-    return isTerminalCategory(classifyLLMError(err).category) ? 'warn' : 'error';
+    return isTerminalCategory(classifyLLMError(err).category)
+        ? 'warn'
+        : 'error';
 }
 
 /**
