@@ -41,7 +41,7 @@ async function bootstrap() {
     process.env.COMPONENT_TYPE = 'webhook';
     const app = await NestFactory.create<NestExpressApplication>(
         WebhookHandlerModule,
-        { snapshot: true },
+        { snapshot: true, rawBody: true },
     );
 
     const logger = app.get(LoggerWrapperService);

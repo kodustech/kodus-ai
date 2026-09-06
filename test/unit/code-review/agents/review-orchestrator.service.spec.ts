@@ -1,5 +1,7 @@
 import { ReviewOrchestratorService } from '@/code-review/infrastructure/agents/review-orchestrator.service';
 import { CodeSuggestion } from '@/core/infrastructure/config/types/general/codeReview.type';
+import { ReviewAgentCatalog } from '@/code-review/infrastructure/agents/review-agent.catalog';
+import { ReviewRiskPlanner } from '@/code-review/domain/review-policy/review-risk-planner';
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -105,11 +107,15 @@ describe('ReviewOrchestratorService', () => {
             ),
         };
 
-        orchestrator = new ReviewOrchestratorService(
+        const catalog = new ReviewAgentCatalog(
             mockBugAgent,
             mockSecurityAgent,
             mockPerformanceAgent,
             mockGeneralistAgent,
+        );
+        orchestrator = new ReviewOrchestratorService(
+            catalog,
+            new ReviewRiskPlanner(),
         );
     });
 

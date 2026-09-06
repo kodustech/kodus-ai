@@ -27,6 +27,7 @@ import {
     PrReviewInProgressError,
 } from '@libs/code-review/domain/errors/pr-review-in-progress.error';
 import { describePipelineError } from '@libs/code-review/utils/describe-pipeline-error';
+import { CodeReviewRunFailedError } from '@libs/code-review/domain/errors/code-review-run-failed.error';
 
 /**
  * Messages the pipeline sets before it knows the outcome. Reporting one of
@@ -281,7 +282,15 @@ export class AutomationCodeReviewService implements Omit<
                     `Blocked by validation: ${payload.validationError.errorType}`,
                     this._buildExecutionData(payload),
                 );
-                return `Automation blocked: ${payload.validationError.errorType}`;
+                const validationError = new CodeReviewRunFailedError(
+                    `Automation blocked: ${payload.validationError.errorType}`,
+                );
+                (
+                    validationError as CodeReviewRunFailedError & {
+                        executionAlreadyFinalized?: boolean;
+                    }
+                ).executionAlreadyFinalized = true;
+                throw validationError;
             }
 
             // Fetch the last successful execution to pass to the handler
@@ -325,7 +334,24 @@ export class AutomationCodeReviewService implements Omit<
                 payload,
                 lastExecution?.dataExecution,
             );
-            return 'Automation executed successfully';
+
+            if (
+                !result ||
+                this.deriveFinalStatus(result) === AutomationStatus.ERROR
+            ) {
+                const message = result
+                    ? this.buildFinalMessage(result, AutomationStatus.ERROR)
+                    : 'Error processing the pull request: handler returned no result.';
+                const finalizedError = new CodeReviewRunFailedError(message);
+                (
+                    finalizedError as CodeReviewRunFailedError & {
+                        executionAlreadyFinalized?: boolean;
+                    }
+                ).executionAlreadyFinalized = true;
+                throw finalizedError;
+            }
+
+            return result;
         } catch (error) {
             // A refused command is not a failed run — there is no execution
             // to mark errored, and swallowing it here would put the request
@@ -333,8 +359,13 @@ export class AutomationCodeReviewService implements Omit<
             if (isPrReviewInProgressError(error)) {
                 throw error;
             }
-            await this._handleExecutionError(execution, error, payload);
-            return 'Error executing automation';
+            if (
+                !(error as { executionAlreadyFinalized?: boolean })
+                    ?.executionAlreadyFinalized
+            ) {
+                await this._handleExecutionError(execution, error, payload);
+            }
+            throw error;
         } finally {
             if (lock) {
                 try {
@@ -514,7 +545,7 @@ export class AutomationCodeReviewService implements Omit<
                 error: error instanceof Error ? error : undefined,
                 metadata: { teamAutomationId, status },
             });
-            return null;
+            throw error;
         }
     }
 
@@ -560,12 +591,20 @@ export class AutomationCodeReviewService implements Omit<
         lastExecutionData?: Record<string, any>,
     ) {
         if (!result) {
+            const message =
+                'Error processing the pull request: handler returned no result.';
             await this.updateAutomationExecution(
                 execution,
                 AutomationStatus.ERROR,
-                'Error processing the pull request: handler returned no result.',
+                message,
                 this._buildExecutionData(payload, undefined, lastExecutionData),
             );
+            this.logger.error({
+                message,
+                context: AutomationCodeReviewService.name,
+                error: new CodeReviewRunFailedError(message),
+                metadata: this.executionLogMetadata(payload),
+            });
             return;
         }
 
@@ -585,14 +624,38 @@ export class AutomationCodeReviewService implements Omit<
             'Kody Review Finished',
         );
 
-        this.logger.log({
-            message: `Successfully handled pull request for PR#${payload.pullRequest?.number}`,
-            context: AutomationCodeReviewService.name,
-            metadata: {
-                organizationAndTeamData: payload.organizationAndTeamData,
-                ...result,
-            },
-        });
+        const metadata = this.executionLogMetadata(payload, result);
+        if (finalStatus === AutomationStatus.ERROR) {
+            this.logger.error({
+                message: finalMessage,
+                context: AutomationCodeReviewService.name,
+                error: new CodeReviewRunFailedError(finalMessage),
+                metadata,
+            });
+        } else if (finalStatus === AutomationStatus.PARTIAL_ERROR) {
+            this.logger.warn({
+                message: finalMessage,
+                context: AutomationCodeReviewService.name,
+                metadata,
+            });
+        } else {
+            this.logger.log({
+                message: `Successfully handled pull request for PR#${payload.pullRequest?.number}`,
+                context: AutomationCodeReviewService.name,
+                metadata,
+            });
+        }
+    }
+
+    private executionLogMetadata(payload: any, result?: any) {
+        return {
+            organizationId: payload.organizationAndTeamData?.organizationId,
+            teamId: payload.organizationAndTeamData?.teamId,
+            repositoryId: payload.repository?.id,
+            pullRequestNumber: payload.pullRequest?.number,
+            correlationId: payload.correlationId,
+            pipelineErrors: result?.errors,
+        };
     }
 
     /**
@@ -661,13 +724,14 @@ export class AutomationCodeReviewService implements Omit<
                 : 'Code review failed.';
         }
 
-        return result?.statusInfo?.message || 'Automation completed successfully.';
+        return (
+            result?.statusInfo?.message || 'Automation completed successfully.'
+        );
     }
 
     private deriveFinalStatus(result: any): AutomationStatus {
         const statusInfoStatus = result?.statusInfo?.status as
-            | AutomationStatus
-            | undefined;
+            AutomationStatus | undefined;
 
         if (statusInfoStatus === AutomationStatus.SKIPPED) {
             return AutomationStatus.SKIPPED;
@@ -692,7 +756,7 @@ export class AutomationCodeReviewService implements Omit<
     }
 
     private async _handleExecutionError(
-        execution: IAutomationExecution,
+        execution: IAutomationExecution | null,
         error: any,
         payload: any,
     ) {
@@ -707,12 +771,14 @@ export class AutomationCodeReviewService implements Omit<
             metadata: payload,
         });
 
-        await this.updateAutomationExecution(
-            execution,
-            AutomationStatus.ERROR,
-            errorMessage,
-            this._buildExecutionData(payload),
-        );
+        if (execution) {
+            await this.updateAutomationExecution(
+                execution,
+                AutomationStatus.ERROR,
+                errorMessage,
+                this._buildExecutionData(payload),
+            );
+        }
     }
 
     /**
@@ -814,6 +880,12 @@ export class AutomationCodeReviewService implements Omit<
         ) {
             Object.assign(baseData, {
                 reviewWarnings: result.reviewWarnings,
+            });
+        }
+
+        if (result.reviewExecutionSnapshot) {
+            Object.assign(baseData, {
+                reviewExecutionSnapshot: result.reviewExecutionSnapshot,
             });
         }
 

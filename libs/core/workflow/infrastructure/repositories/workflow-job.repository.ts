@@ -111,6 +111,7 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
 
             const model = repo.create({
                 correlationId: job.correlationId,
+                idempotencyKey: job.idempotencyKey,
                 workflowType: job.workflowType,
                 handlerType: job.handlerType,
                 payload: sanitized.payload,
@@ -231,6 +232,16 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
         }
     }
 
+    async findIdByIdempotencyKey(
+        idempotencyKey: string,
+    ): Promise<string | null> {
+        const model = await this.repository.findOne({
+            where: { idempotencyKey },
+            select: { uuid: true },
+        });
+        return model?.uuid ?? null;
+    }
+
     async findMany(query: {
         status?: JobStatus;
         workflowType?: WorkflowType;
@@ -328,6 +339,7 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
         return {
             id: model.uuid,
             correlationId: model.correlationId,
+            idempotencyKey: model.idempotencyKey,
             workflowType: model.workflowType,
             handlerType: model.handlerType,
             payload: model.payload,

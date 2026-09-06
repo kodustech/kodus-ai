@@ -1,17 +1,12 @@
 import { createLogger } from '@libs/core/log/logger';
 import { llmErrorLogLevel } from '@libs/llm/error-classifier';
-import { Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
 import {
     CodeSuggestion,
     ReviewOptions,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
-import { BugAgentProvider } from '@libs/code-review/infrastructure/agents/providers/bug-agent.provider';
-import { SecurityAgentProvider } from '@libs/code-review/infrastructure/agents/providers/security-agent.provider';
-import { PerformanceAgentProvider } from '@libs/code-review/infrastructure/agents/providers/performance-agent.provider';
-import { GeneralistAgentProvider } from '@libs/code-review/infrastructure/agents/providers/generalist-agent.provider';
-import { KodyRulesAgentProvider } from '@libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider';
 import {
     ReviewAgentInput,
     ReviewAgentOutput,
@@ -20,10 +15,25 @@ import {
     dedupReviewWarnings,
     type ReviewWarning,
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
+import {
+    IReviewAgentCatalog,
+    REVIEW_AGENT_CATALOG_TOKEN,
+} from './review-agent.catalog';
+import {
+    ReviewExecutionPlan,
+    ReviewRiskPlanner,
+} from '../../domain/review-policy/review-risk-planner';
+import {
+    DEFAULT_REVIEW_POLICY,
+    ReviewPolicy,
+    ReviewPolicyConfig,
+    resolveReviewPolicy,
+} from '../../domain/review-policy/review-policy';
 
 export interface OrchestratorInput extends ReviewAgentInput {
     reviewOptions: ReviewOptions;
     kodyRules?: Partial<IKodyRule>[];
+    reviewPolicy?: ReviewPolicyConfig;
 }
 
 export interface OrchestratorAgentFailure {
@@ -58,6 +68,10 @@ export interface OrchestratorOutput {
      *  by (kind, modelName, contextWindowTokens). Empty array when no
      *  adaptive strategy fired. */
     warnings: ReviewWarning[];
+    /** Present for the built-in orchestrator; optional for legacy adapters. */
+    executionPlan?: ReviewExecutionPlan;
+    /** Present for the built-in orchestrator; optional for legacy adapters. */
+    reviewPolicy?: ReviewPolicy;
 }
 
 /**
@@ -70,92 +84,51 @@ export interface OrchestratorOutput {
 @Injectable()
 export class ReviewOrchestratorService {
     private readonly logger = createLogger(ReviewOrchestratorService.name);
-    private static readonly FAST_MODE_MAX_STEPS: Record<string, number> = {
-        'generalist': 4,
-        'bug': 4,
-        'security': 3,
-        'performance': 3,
-        'kody-rules': 4,
-    };
-    private static readonly NORMAL_MODE_MAX_STEPS: Record<string, number> = {
-        'generalist': 20,
-        'bug': 20,
-        'security': 12,
-        'performance': 12,
-        'kody-rules': 20,
-    };
-    private static readonly DEEP_MODE_MAX_STEPS = 100;
-
     constructor(
-        private readonly bugAgent: BugAgentProvider,
-        private readonly securityAgent: SecurityAgentProvider,
-        private readonly performanceAgent: PerformanceAgentProvider,
-        private readonly generalistAgent: GeneralistAgentProvider,
-        @Optional()
-        private readonly kodyRulesAgent?: KodyRulesAgentProvider,
+        @Inject(REVIEW_AGENT_CATALOG_TOKEN)
+        private readonly agentCatalog: IReviewAgentCatalog,
+        private readonly riskPlanner: ReviewRiskPlanner,
     ) {}
 
     async execute(input: OrchestratorInput): Promise<OrchestratorOutput> {
         const startTime = Date.now();
-        const { reviewOptions, kodyRules, ...agentInput } = input;
-
-        // Determine which agents to run based on review options
-        const agentTasks: Array<{
-            name: string;
-            provider: { execute: (input: any) => Promise<ReviewAgentOutput> };
-        }> = [];
-
-        const enabledCategories = [
-            reviewOptions.bug !== false && 'bug',
-            reviewOptions.security !== false && 'security',
-            reviewOptions.performance !== false && 'performance',
-        ].filter(Boolean) as Array<'bug' | 'security' | 'performance'>;
-
-        if (agentInput.reviewMode === 'deep') {
-            if (enabledCategories.includes('bug')) {
-                agentTasks.push({
-                    name: 'bug',
-                    provider: this.bugAgent,
-                });
-            }
-            if (enabledCategories.includes('security')) {
-                agentTasks.push({
-                    name: 'security',
-                    provider: this.securityAgent,
-                });
-            }
-            if (enabledCategories.includes('performance')) {
-                agentTasks.push({
-                    name: 'performance',
-                    provider: this.performanceAgent,
-                });
-            }
-        } else if (enabledCategories.length > 0) {
-            agentTasks.push({
-                name: 'generalist',
-                provider: {
-                    execute: (inp: ReviewAgentInput) =>
-                        this.generalistAgent.execute({
-                            ...inp,
-                            requestedCategories: enabledCategories,
-                        }),
+        const {
+            reviewOptions,
+            kodyRules,
+            reviewPolicy: policyConfig,
+            ...agentInput
+        } = input;
+        let reviewPolicy: ReviewPolicy;
+        try {
+            reviewPolicy = resolveReviewPolicy(policyConfig);
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    '[AGENT] Invalid review policy; falling back to the default policy',
+                context: ReviewOrchestratorService.name,
+                error: error instanceof Error ? error : undefined,
+                metadata: {
+                    organizationId:
+                        agentInput.organizationAndTeamData?.organizationId,
+                    repositoryFullName: agentInput.repositoryFullName,
+                    prNumber: agentInput.prNumber,
+                    policyVersion: policyConfig?.version,
+                    plannerStrategy: policyConfig?.planner?.strategy,
                 },
             });
+            reviewPolicy = DEFAULT_REVIEW_POLICY;
         }
+        const executionPlan = this.riskPlanner.plan({
+            reviewMode: agentInput.reviewMode,
+            reviewOptions,
+            changedFiles: agentInput.changedFiles,
+            hasKodyRules: Boolean(kodyRules?.length),
+            policy: reviewPolicy,
+        });
 
-        // Add Kody Rules agent if there are active standard rules
-        if (this.kodyRulesAgent && kodyRules && kodyRules.length > 0) {
-            agentTasks.push({
-                name: 'kody-rules',
-                provider: {
-                    execute: (inp: ReviewAgentInput) =>
-                        this.kodyRulesAgent!.execute({
-                            ...inp,
-                            kodyRules,
-                        }),
-                },
-            });
-        }
+        const agentTasks = executionPlan.agents
+            .filter((plan) => this.agentCatalog.has(plan.agentId))
+            .map((plan) => ({ name: plan.agentId, plan }));
 
         if (agentTasks.length === 0) {
             this.logger.log({
@@ -169,6 +142,8 @@ export class ReviewOrchestratorService {
                 incomplete: [],
                 totalDurationMs: Date.now() - startTime,
                 warnings: [],
+                executionPlan,
+                reviewPolicy,
             };
         }
 
@@ -195,14 +170,14 @@ export class ReviewOrchestratorService {
         const runAgent = async (task: (typeof agentTasks)[0]) => {
             const agentStart = Date.now();
             try {
-                return await task.provider.execute({
-                    ...agentInputWithoutContent,
-                    maxSteps: this.getMaxStepsForAgent(
-                        task.name,
-                        agentInput.reviewMode,
-                        agentInput.changedFiles?.length ?? 0,
-                    ),
-                });
+                return await this.agentCatalog.execute(
+                    task.plan,
+                    {
+                        ...agentInputWithoutContent,
+                        maxSteps: task.plan.maxSteps,
+                    },
+                    kodyRules,
+                );
             } catch (error) {
                 // Terminal BYOK (suspended key / no credit) → warn, not error:
                 // the user's provider config, not a Kodus fault. A real fault
@@ -312,44 +287,8 @@ export class ReviewOrchestratorService {
             incomplete,
             totalDurationMs,
             warnings,
+            executionPlan,
+            reviewPolicy,
         };
-    }
-
-    private getMaxStepsForAgent(
-        agentName: string,
-        reviewMode?: 'fast' | 'normal' | 'deep',
-        changedFilesCount = 0,
-    ): number {
-        if (reviewMode === 'deep') {
-            return ReviewOrchestratorService.DEEP_MODE_MAX_STEPS;
-        }
-
-        if (reviewMode === 'fast') {
-            return (
-                ReviewOrchestratorService.FAST_MODE_MAX_STEPS[agentName] ?? 4
-            );
-        }
-
-        const base =
-            ReviewOrchestratorService.NORMAL_MODE_MAX_STEPS[agentName] ?? 20;
-
-        // Adaptive step budget by PR size. A fixed budget spreads thin over
-        // large PRs (measured: recall on >500-line PRs drops to ~35% vs ~46%
-        // for medium), so the agent can't open enough files to investigate.
-        // Grant extra steps beyond a baseline file count, capped so cost/time
-        // stays bounded. Investigation-only lever: no prompt change, no new
-        // candidates generated — the same agent just gets to look deeper.
-        const BASELINE_FILES = 8; // ~median changed-files for this workload
-        const STEPS_PER_EXTRA_FILE = 0.5;
-        const ADAPTIVE_CAP = ReviewOrchestratorService.DEEP_MODE_MAX_STEPS; // 100
-
-        if (changedFilesCount <= BASELINE_FILES) {
-            return base;
-        }
-
-        const extra = Math.round(
-            (changedFilesCount - BASELINE_FILES) * STEPS_PER_EXTRA_FILE,
-        );
-        return Math.min(base + extra, ADAPTIVE_CAP);
     }
 }

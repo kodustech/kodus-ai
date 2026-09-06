@@ -1,5 +1,6 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { IdGenerator } from '@libs/core/utils/id-generator';
+import { createHash } from 'crypto';
 
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
@@ -17,6 +18,8 @@ export interface EnqueueWebhookInput {
     event: string;
     payload: Record<string, unknown>;
     correlationId?: string;
+    /** Provider delivery UUID. Re-deliveries with the same value are deduped. */
+    deliveryId?: string;
 }
 
 function normalizePlatformType(
@@ -59,20 +62,29 @@ export class EnqueueWebhookUseCase implements IUseCase {
         private readonly jobQueueService: IJobQueueService,
     ) {}
 
-    async execute(input: EnqueueWebhookInput): Promise<void> {
+    async execute(input: EnqueueWebhookInput): Promise<string> {
         try {
             const platformType = normalizePlatformType(input.platformType);
             const correlationId =
                 input.correlationId || IdGenerator.correlationId();
 
-            await this.jobQueueService.enqueue({
+            const deliveryId = input.deliveryId?.trim();
+            const idempotencyKey = deliveryId
+                ? `webhook:${platformType}:${createHash('sha256')
+                      .update(deliveryId)
+                      .digest('hex')}`
+                : undefined;
+
+            return await this.jobQueueService.enqueue({
                 correlationId,
+                idempotencyKey,
                 workflowType: WorkflowType.WEBHOOK_PROCESSING,
                 handlerType: HandlerType.WEBHOOK_RAW,
                 payload: input.payload,
                 metadata: {
                     platformType,
                     event: input.event,
+                    ...(deliveryId ? { deliveryId } : {}),
                 },
                 status: JobStatus.PENDING,
                 priority: 0,
@@ -85,7 +97,9 @@ export class EnqueueWebhookUseCase implements IUseCase {
                 context: EnqueueWebhookUseCase.name,
                 error,
                 metadata: {
-                    input,
+                    platformType: input.platformType,
+                    event: input.event,
+                    deliveryId: input.deliveryId,
                 },
             });
             throw error;

@@ -1,4 +1,7 @@
-import type { ContextLayer, ContextPack } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
+import type {
+    ContextLayer,
+    ContextPack,
+} from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import { LLMModelProvider } from '@libs/llm/model-providers';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
@@ -36,6 +39,7 @@ import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface
 import { KodyKnowledgeApprovalConfig } from '@libs/common/utils/kody-rules/knowledge-approval';
 import { OrganizationAndTeamData } from './organizationAndTeamData';
 import { ConfigLevel } from './pullRequestMessages.type';
+import type { ReviewPolicyConfig } from '@libs/code-review/domain/review-policy/review-policy';
 
 export {
     BehaviourForExistingDescription,
@@ -308,6 +312,8 @@ export type ImplementedSuggestionsToAnalyze = {
 export type CodeReviewConfig = {
     ignorePaths: string[];
     reviewMode?: 'fast' | 'normal' | 'deep';
+    /** Versioned execution policy resolved into an immutable per-run snapshot. */
+    reviewPolicy?: ReviewPolicyConfig;
     /** HEAVY mode — extra critic pass in the finder for more recall. Opt-in per
      *  review (CLI `--heavy` / PR `@kody review --heavy`). Off by default. */
     heavy?: boolean;
