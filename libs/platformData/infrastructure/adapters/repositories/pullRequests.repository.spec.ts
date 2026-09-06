@@ -1,5 +1,6 @@
 import { PullRequestsRepository } from './pullRequests.repository';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+import { SUGGESTION_ID_PATTERN } from '@libs/platformData/domain/pullRequests/suggestion-id';
 
 /**
  * Regression coverage for the cross-organization data leak that allowed
@@ -232,6 +233,38 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
             expect(findOneAndUpdate.mock.calls[1][0].organizationId).toBe(
                 'org-B',
             );
+        });
+    });
+
+    describe('findByOrganizationAndRepositoryWithStatusAndSyncedFlag', () => {
+        it('filters suggestion ids with UUID-or-ObjectId pattern', async () => {
+            let capturedPipeline: unknown[] | undefined;
+            const cursor = {
+                async *[Symbol.asyncIterator]() {
+                    /* no PRs */
+                },
+            };
+            model.aggregate = jest.fn((pipeline: unknown[]) => {
+                capturedPipeline = pipeline;
+                return {
+                    allowDiskUse: () => ({
+                        cursor: () => cursor,
+                    }),
+                };
+            });
+
+            await repo.findByOrganizationAndRepositoryWithStatusAndSyncedFlag(
+                'org-A',
+                { id: 'repo-1', fullName: 'org/repo' },
+                undefined,
+                false,
+            );
+
+            const regexes = JSON.stringify(capturedPipeline).match(
+                /"regex":"([^"]+)"/g,
+            );
+            expect(regexes).toEqual([`"regex":"${SUGGESTION_ID_PATTERN}"`]);
+            expect(SUGGESTION_ID_PATTERN).toContain('[0-9a-fA-F]{24}');
         });
     });
 });

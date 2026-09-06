@@ -29,6 +29,7 @@ import { PullRequestsEntity } from '@libs/platformData/domain/pullRequests/entit
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enums/implementationStatus.enum';
 import { UNRESOLVED_RANK_BONUS } from '@libs/platformData/domain/pullRequests/deep-link-rank';
+import { SUGGESTION_ID_PATTERN } from '@libs/platformData/domain/pullRequests/suggestion-id';
 
 @Injectable()
 export class PullRequestsRepository implements IPullRequestsRepository {
@@ -1188,11 +1189,6 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             matchStage.status = status;
         }
 
-        /* ---------- regex para validar UUID no $expr/$regexMatch ---------- */
-        const UUID_REGEX =
-            '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-' +
-            '[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$';
-
         const pipeline = [
             { $match: matchStage },
             {
@@ -1240,7 +1236,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                                                 {
                                                     $regexMatch: {
                                                         input: '$$s.id',
-                                                        regex: UUID_REGEX,
+                                                        regex: SUGGESTION_ID_PATTERN,
                                                     },
                                                 },
                                             ],
@@ -1305,11 +1301,6 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             matchStage.status = status;
         }
 
-        /* ---------- regex para validar UUID no $expr/$regexMatch ---------- */
-        const UUID_REGEX =
-            '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-' +
-            '[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$';
-
         const pipeline = [
             { $match: matchStage },
             {
@@ -1350,7 +1341,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                                                 {
                                                     $regexMatch: {
                                                         input: '$$s.id',
-                                                        regex: UUID_REGEX,
+                                                        regex: SUGGESTION_ID_PATTERN,
                                                     },
                                                 },
                                             ],
