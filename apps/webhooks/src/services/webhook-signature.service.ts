@@ -35,6 +35,7 @@ const PLATFORM_SECRET_KEYS: Partial<Record<PlatformType, string>> = {
 export class WebhookSignatureService {
     private readonly logger = createLogger(WebhookSignatureService.name);
     private readonly warnedMissingSecrets = new Set<PlatformType>();
+    private warnedDisabledWithSecret = false;
 
     constructor(private readonly configService: ConfigService) {}
 
@@ -42,12 +43,14 @@ export class WebhookSignatureService {
         platformType: PlatformType,
         req: RawBodyRequest,
     ): WebhookSignatureValidation {
+        const mode = this.validationMode();
+        this.warnOnceDisabledWithSecret(mode);
+
         if (platformType === PlatformType.AZURE_REPOS) {
             // Azure Repos uses the encrypted query-token flow in its controller.
             return { valid: true };
         }
 
-        const mode = this.validationMode();
         if (mode === 'disabled') {
             return { valid: true };
         }
@@ -114,6 +117,35 @@ export class WebhookSignatureService {
             return raw;
         }
         return 'disabled';
+    }
+
+    private warnOnceDisabledWithSecret(mode: ValidationMode): void {
+        if (
+            mode !== 'disabled' ||
+            this.warnedDisabledWithSecret ||
+            !this.secretConfiguredForAnyPlatform()
+        ) {
+            return;
+        }
+
+        this.warnedDisabledWithSecret = true;
+        this.logger.warn({
+            message:
+                'Webhook signature validation is disabled while one or more webhook secrets are configured',
+            context: WebhookSignatureService.name,
+            metadata: { mode },
+        });
+    }
+
+    private secretConfiguredForAnyPlatform(): boolean {
+        const secretKeys = [
+            ...Object.values(PLATFORM_SECRET_KEYS),
+            'CODE_MANAGEMENT_WEBHOOK_SIGNATURE_SECRET',
+        ];
+
+        return secretKeys.some((key) =>
+            Boolean(this.configService.get<string>(key)?.trim()),
+        );
     }
 
     private secretFor(platformType: PlatformType): string | undefined {

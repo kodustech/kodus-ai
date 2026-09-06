@@ -71,4 +71,26 @@ describe('WebhookSignatureService', () => {
             valid: true,
         });
     });
+
+    it('warns only once when validation is disabled with a configured secret', () => {
+        const service = serviceWith({
+            WEBHOOK_SIGNATURE_VALIDATION_MODE: 'invalid-mode',
+            CODE_MANAGEMENT_WEBHOOK_SIGNATURE_SECRET: 'shared-secret',
+        });
+        const warn = jest
+            .spyOn((service as any).logger, 'warn')
+            .mockImplementation();
+
+        service.validate(PlatformType.GITHUB, request('{}'));
+        service.validate(PlatformType.GITHUB, request('{}'));
+
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message:
+                    'Webhook signature validation is disabled while one or more webhook secrets are configured',
+                metadata: { mode: 'disabled' },
+            }),
+        );
+    });
 });
