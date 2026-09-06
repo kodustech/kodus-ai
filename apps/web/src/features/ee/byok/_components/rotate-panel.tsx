@@ -23,6 +23,7 @@ import {
     unownedStoredSettings,
 } from "./_modals/edit-key/credential-config";
 import { credentialSettingsFromConfig } from "./byok-write";
+import { SuccessClaim } from "./success-claim";
 
 /**
  * Credential-edit body for a connected provider. Renders the SAME provider-aware
@@ -94,10 +95,10 @@ export function RotatePanel({
         | { status: "idle" }
         | { status: "testing" }
         | {
-            status: "success";
-            latencyMs: number;
-            verifiedBy?: "catalog" | "probe";
-        }
+              status: "success";
+              latencyMs: number;
+              verifiedBy?: "catalog" | "probe";
+          }
         | { status: "error"; result: TestBYOKResult }
     >({ status: "idle" });
 
@@ -146,40 +147,40 @@ export function RotatePanel({
         try {
             const result = typedNewSecret(values)
                 ? await testBYOK({
-                    provider: credential.provider,
-                    model: probeModelId,
-                    apiKey: values.apiKey?.trim() || undefined,
-                    baseURL: values.baseURL?.trim() || undefined,
-                    vertexLocation:
-                        values.vertexLocation?.trim() || undefined,
-                    awsBearerToken:
-                        values.awsBearerToken?.trim() || undefined,
-                    awsAccessKeyId:
-                        values.awsAccessKeyId?.trim() || undefined,
-                    awsSecretAccessKey:
-                        values.awsSecretAccessKey?.trim() || undefined,
-                    awsRegion: values.awsRegion?.trim() || undefined,
-                    awsSessionToken:
-                        values.awsSessionToken?.trim() || undefined,
-                })
+                      provider: credential.provider,
+                      model: probeModelId,
+                      apiKey: values.apiKey?.trim() || undefined,
+                      baseURL: values.baseURL?.trim() || undefined,
+                      vertexLocation:
+                          values.vertexLocation?.trim() || undefined,
+                      awsBearerToken:
+                          values.awsBearerToken?.trim() || undefined,
+                      awsAccessKeyId:
+                          values.awsAccessKeyId?.trim() || undefined,
+                      awsSecretAccessKey:
+                          values.awsSecretAccessKey?.trim() || undefined,
+                      awsRegion: values.awsRegion?.trim() || undefined,
+                      awsSessionToken:
+                          values.awsSessionToken?.trim() || undefined,
+                  })
                 : await testBYOKModel({
-                    provider: credential.provider,
-                    model: probeModelId,
-                    // No new secret was typed, so the stored ciphertext is
-                    // re-used server-side. Only the SAFE region/location edits
-                    // ride along (a baseURL change is gated above to require the
-                    // key, so the stored secret never reaches a new host).
-                    awsRegion: values.awsRegion?.trim() || undefined,
-                    vertexLocation:
-                        values.vertexLocation?.trim() || undefined,
-                });
+                      provider: credential.provider,
+                      model: probeModelId,
+                      // No new secret was typed, so the stored ciphertext is
+                      // re-used server-side. Only the SAFE region/location edits
+                      // ride along (a baseURL change is gated above to require the
+                      // key, so the stored secret never reaches a new host).
+                      awsRegion: values.awsRegion?.trim() || undefined,
+                      vertexLocation:
+                          values.vertexLocation?.trim() || undefined,
+                  });
             setTestState(
                 result.ok
                     ? {
-                        status: "success",
-                        latencyMs: result.latencyMs,
-                        verifiedBy: result.verifiedBy,
-                    }
+                          status: "success",
+                          latencyMs: result.latencyMs,
+                          verifiedBy: result.verifiedBy,
+                      }
                     : { status: "error", result },
             );
             return result;
@@ -277,24 +278,15 @@ export function RotatePanel({
                         <CheckCircle2Icon />
                         <AlertDescription className="text-pretty">
                             {/* Two different claims, and the weaker one used to
-                                borrow the stronger one's words. A catalog hit
-                                proves the key authenticates and the id is
-                                listed; it never called the model, so it cannot
-                                say the model runs. Saying so is the difference
-                                between a useful check and false reassurance. */}
-                            {testState.verifiedBy === "catalog" ? (
-                                <>
-                                    Key works and your provider lists this model
-                                    ({testState.latencyMs} ms). This check
-                                    doesn&apos;t call the model, so it
-                                    can&apos;t confirm it will run.
-                                </>
-                            ) : (
-                                <>
-                                    Connected — the credential authenticates (
-                                    {testState.latencyMs} ms).
-                                </>
-                            )}
+                                borrow the stronger one's words. Which sentence
+                                each one earns is decided in ONE place: two
+                                screens wording the same claim by hand is how
+                                they drift, and a claim that drifts is a claim
+                                that stops being true on one of them. */}
+                            <SuccessClaim
+                                latencyMs={testState.latencyMs}
+                                verifiedBy={testState.verifiedBy}
+                            />
                         </AlertDescription>
                     </Alert>
                 )}

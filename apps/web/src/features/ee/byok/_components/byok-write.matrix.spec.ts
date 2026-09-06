@@ -1,5 +1,5 @@
-import { buildByokBlob, type BuildV2Edit } from "./byok-write";
 import type { BYOKConfig } from "../_types";
+import { buildByokBlob, type BuildV2Edit } from "./byok-write";
 
 /**
  * Every write path crossed with every state of the thing it writes.
@@ -95,8 +95,9 @@ const withOverride = (
 describe("byok-write — every write against every state", () => {
     describe("invariant 1: silence keeps what is stored", () => {
         it.each(withOverride(undefined))("%s", (_label, edit) => {
-            expect(credOf(buildByokBlob(config(PIN), edit), "cred-main").settings)
-                .toEqual(PIN);
+            expect(
+                credOf(buildByokBlob(config(PIN), edit), "cred-main").settings,
+            ).toEqual(PIN);
         });
 
         it.each(withOverride(undefined))(
@@ -111,8 +112,9 @@ describe("byok-write — every write against every state", () => {
 
     describe("invariant 2: an empty object clears", () => {
         it.each(withOverride({}))("%s", (_label, edit) => {
-            expect(credOf(buildByokBlob(config(PIN), edit), "cred-main").settings)
-                .toEqual({});
+            expect(
+                credOf(buildByokBlob(config(PIN), edit), "cred-main").settings,
+            ).toEqual({});
         });
     });
 
@@ -123,7 +125,8 @@ describe("byok-write — every write against every state", () => {
                 // The pin is GONE, not merged with the new value — mirroring the
                 // server, which replaces the object it receives.
                 expect(
-                    credOf(buildByokBlob(config(PIN), edit), "cred-main").settings,
+                    credOf(buildByokBlob(config(PIN), edit), "cred-main")
+                        .settings,
                 ).toEqual({ openrouterAllowFallbacks: false });
             },
         );
@@ -160,14 +163,20 @@ describe("byok-write — every write against every state", () => {
             ).toEqual(OTHER);
         });
 
-        it.each(everyWrite)("%s leaves the managed credential alone", (_l, edit) => {
-            // Managed credentials carry no key of their own; emitting a blank
-            // one would invent a field the runtime reads as a broken BYOK key.
-            const managed = credOf(buildByokBlob(config(PIN), edit), "cred-managed");
+        it.each(everyWrite)(
+            "%s leaves the managed credential alone",
+            (_l, edit) => {
+                // Managed credentials carry no key of their own; emitting a blank
+                // one would invent a field the runtime reads as a broken BYOK key.
+                const managed = credOf(
+                    buildByokBlob(config(PIN), edit),
+                    "cred-managed",
+                );
 
-            expect(managed.managed).toBe(true);
-            expect(managed.apiKey).toBeUndefined();
-        });
+                expect(managed.managed).toBe(true);
+                expect(managed.apiKey).toBeUndefined();
+            },
+        );
     });
 
     describe("invariant 5: a stored key is kept by blanking, never echoed", () => {
@@ -182,8 +191,9 @@ describe("byok-write — every write against every state", () => {
         it.each(everyWrite)("%s blanks cred-main's key", (_label, edit) => {
             // The fetched value is the `••••` display mask. Sending it back
             // would encrypt the mask and destroy the credential.
-            expect(credOf(buildByokBlob(config(PIN), edit), "cred-main").apiKey)
-                .toBe("");
+            expect(
+                credOf(buildByokBlob(config(PIN), edit), "cred-main").apiKey,
+            ).toBe("");
         });
 
         it("a rotate with a typed key sends that key verbatim", () => {

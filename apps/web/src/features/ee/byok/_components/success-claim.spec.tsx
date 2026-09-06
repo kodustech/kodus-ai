@@ -1,5 +1,6 @@
 /** @jest-environment jsdom */
 import "@testing-library/jest-dom";
+
 import { render, screen } from "@testing-library/react";
 
 import { SuccessClaim } from "./success-claim";

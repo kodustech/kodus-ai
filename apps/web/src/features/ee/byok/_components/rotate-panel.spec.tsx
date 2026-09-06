@@ -53,13 +53,13 @@ const credential = {
 
 const renderPanel = () => {
     const onSave = jest.fn(
-        async (_apiKey: string, _settings?: Record<string, unknown>) => { },
+        async (_apiKey: string, _settings?: Record<string, unknown>) => {},
     );
     render(
         <RotatePanel
             credential={credential as any}
             onSave={onSave}
-            onCancel={() => { }}
+            onCancel={() => {}}
         />,
     );
     return onSave;
@@ -175,17 +175,31 @@ describe("RotatePanel — what a test result is allowed to claim", () => {
         // Listing is not routing: the id can sit in the catalog while every real
         // call to it is refused. The weaker check must not borrow the stronger
         // check's words.
-        renderWith({ ok: true, code: "ok", latencyMs: 405, verifiedBy: "catalog" });
+        renderWith({
+            ok: true,
+            code: "ok",
+            latencyMs: 405,
+            verifiedBy: "catalog",
+        });
 
-        expect(await screen.findByText(/doesn't call the model/i)).toBeVisible();
-        expect(screen.queryByText(/credential authenticates/i)).toBeNull();
+        expect(
+            await screen.findByText(/doesn't call the model/i),
+        ).toBeVisible();
+        expect(screen.queryByText(/Connection OK/i)).toBeNull();
     });
 
     it("still makes the strong claim for a real probe", async () => {
-        renderWith({ ok: true, code: "ok", latencyMs: 405, verifiedBy: "probe" });
+        renderWith({
+            ok: true,
+            code: "ok",
+            latencyMs: 405,
+            verifiedBy: "probe",
+        });
 
-        expect(
-            await screen.findByText(/credential authenticates/i),
-        ).toBeVisible();
+        // Asserted through the SHARED claim component, which is the point: this
+        // panel used to word the same two claims by hand, so the wording could
+        // drift here while the other screen stayed honest — and a test pinned to
+        // this panel's private copy would have called that drift a pass.
+        expect(await screen.findByText(/Connection OK/i)).toBeVisible();
     });
 });

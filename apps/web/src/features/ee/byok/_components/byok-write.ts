@@ -5,7 +5,7 @@ import type {
     BYOKModelConfig,
     BYOKRouting,
     ReasoningEffort,
-} from '../_types';
+} from "../_types";
 
 /**
  * The config-level fields of a single model slot (everything on
@@ -47,17 +47,17 @@ export type NewCredentialInput = {
  */
 export type BuildV2Edit =
     | {
-          kind: 'connect';
+          kind: "connect";
           newCredential: NewCredentialInput;
           model: BYOKModelFields;
       }
     | {
-          kind: 'add-new-provider';
+          kind: "add-new-provider";
           newCredential: NewCredentialInput;
           model: BYOKModelFields;
       }
     | {
-          kind: 'add-existing-provider';
+          kind: "add-existing-provider";
           credentialId: string;
           model: BYOKModelFields;
           /** Provider-scoped settings for the REUSED credential. Omit to keep
@@ -65,21 +65,21 @@ export type BuildV2Edit =
           credentialSettings?: Record<string, unknown>;
       }
     | {
-          kind: 'rotate';
+          kind: "rotate";
           credentialId: string;
           /** New key, or "" to keep the stored ciphertext. NEVER the •••• mask. */
           apiKey: string;
           settings?: Record<string, unknown>;
       }
     | {
-          kind: 'edit-model';
+          kind: "edit-model";
           modelId: string;
           model: BYOKModelFields;
           /** Provider-scoped settings for the edited model's credential. Omit to
            *  keep the stored ones; pass an object (possibly empty) to REPLACE. */
           credentialSettings?: Record<string, unknown>;
       }
-    | { kind: 'routing'; routing: BYOKRouting };
+    | { kind: "routing"; routing: BYOKRouting };
 
 /**
  * Split the {@link BYOKConnectInput} the connect/edit form emits into the v2
@@ -101,7 +101,7 @@ export const credentialSettingsFromConfig = (
     if (cfg.awsSessionToken) settings.awsSessionToken = cfg.awsSessionToken;
     if (cfg.openrouterProviderOrder)
         settings.openrouterProviderOrder = cfg.openrouterProviderOrder;
-    if (typeof cfg.openrouterAllowFallbacks === 'boolean')
+    if (typeof cfg.openrouterAllowFallbacks === "boolean")
         settings.openrouterAllowFallbacks = cfg.openrouterAllowFallbacks;
     return Object.keys(settings).length > 0 ? settings : undefined;
 };
@@ -140,7 +140,7 @@ const keepCredential = (
     if (cred.managed) return next;
 
     const typed = apiKeyOverride?.trim();
-    next.apiKey = typed ? apiKeyOverride! : '';
+    next.apiKey = typed ? apiKeyOverride! : "";
     if (settingsOverride) next.settings = settingsOverride;
     return next;
 };
@@ -199,8 +199,8 @@ export const buildByokBlob = (
     const firstRun = hasNoVisibleModel(existing);
 
     switch (edit.kind) {
-        case 'connect':
-        case 'add-new-provider': {
+        case "connect":
+        case "add-new-provider": {
             const credentials = (existing?.credentials ?? []).map((c) =>
                 keepCredential(c),
             );
@@ -224,7 +224,7 @@ export const buildByokBlob = (
             return { version: 2, credentials, models, routing };
         }
 
-        case 'add-existing-provider': {
+        case "add-existing-provider": {
             const credentials = (existing?.credentials ?? []).map((c) =>
                 c.id === edit.credentialId
                     ? keepCredential(c, undefined, edit.credentialSettings)
@@ -240,7 +240,7 @@ export const buildByokBlob = (
             return { version: 2, credentials, models, routing };
         }
 
-        case 'rotate': {
+        case "rotate": {
             const credentials = (existing?.credentials ?? []).map((c) =>
                 c.id === edit.credentialId
                     ? keepCredential(c, edit.apiKey, edit.settings)
@@ -250,7 +250,7 @@ export const buildByokBlob = (
             return { version: 2, credentials, models, routing };
         }
 
-        case 'edit-model': {
+        case "edit-model": {
             // Provider-scoped settings (baseURL, openrouter*, …) live on the
             // CREDENTIAL, but the form that edits them is this model's form. So
             // an edit-model save has to be able to write them through to the
@@ -274,7 +274,7 @@ export const buildByokBlob = (
             return { version: 2, credentials, models, routing };
         }
 
-        case 'routing': {
+        case "routing": {
             // Routing-only save (04-10 Routing tab): credentials + models are
             // preserved verbatim (blank-key keepCredential ⇒ server keeps each
             // stored ciphertext, never echoing the •••• mask), and `routing` is

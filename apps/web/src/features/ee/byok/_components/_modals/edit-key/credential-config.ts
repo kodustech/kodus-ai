@@ -1,6 +1,6 @@
-import { z } from 'zod';
+import { z } from "zod";
 
-import type { EditKeyForm } from './_types';
+import type { EditKeyForm } from "./_types";
 
 /**
  * Per-provider credential CONFIG — the non-UI half of a provider's web wiring
@@ -18,15 +18,15 @@ import type { EditKeyForm } from './_types';
  * provider's credential.
  */
 export const PROVIDER_SETTING_KEYS = {
-    google_vertex: ['vertexLocation'],
+    google_vertex: ["vertexLocation"],
     amazon_bedrock: [
-        'awsBearerToken',
-        'awsAccessKeyId',
-        'awsSecretAccessKey',
-        'awsRegion',
-        'awsSessionToken',
+        "awsBearerToken",
+        "awsAccessKeyId",
+        "awsSecretAccessKey",
+        "awsRegion",
+        "awsSessionToken",
     ],
-    open_router: ['openrouterProviderOrder', 'openrouterAllowFallbacks'],
+    open_router: ["openrouterProviderOrder", "openrouterAllowFallbacks"],
 } satisfies Record<string, Array<keyof EditKeyForm>>;
 
 /**
@@ -47,7 +47,7 @@ const CREDS_PRESENT: Record<string, CredsPresent> = {
 
 /** Whether the entered credentials are complete enough to probe/save. */
 export const providerHasCredentials = (data: Partial<EditKeyForm>): boolean =>
-    (CREDS_PRESENT[data.provider ?? ''] ?? ((d) => !!d.apiKey?.trim()))(data);
+    (CREDS_PRESENT[data.provider ?? ""] ?? ((d) => !!d.apiKey?.trim()))(data);
 
 /** True when `field` is a credential/setting field the given provider owns. */
 export const providerOwnsField = (
@@ -68,10 +68,10 @@ export const providerOwnsField = (
  * cannot import a value from.
  */
 const SECRET_SETTING_KEYS: ReadonlySet<string> = new Set([
-    'awsBearerToken',
-    'awsAccessKeyId',
-    'awsSecretAccessKey',
-    'awsSessionToken',
+    "awsBearerToken",
+    "awsAccessKeyId",
+    "awsSecretAccessKey",
+    "awsSessionToken",
 ]);
 
 /**
@@ -114,11 +114,46 @@ export const providerSettingDefaults = (
 };
 
 /**
+ * What picking a provider in the form should refill, given whether that provider
+ * has already been seeded once.
+ *
+ * The provider select resets the form on every pick, and it resets ASYMMETRICALLY:
+ * `baseURL` is blanked each time, while the provider's other fields survive. So
+ * the seed has to mirror it field for field, and the two halves are not the same
+ * rule — each direction has already been a bug on this screen:
+ *
+ *   `baseURL` — refilled on EVERY pick. Re-picking the same provider does not
+ *   change the value, so a guard keyed on the provider never re-runs, the field
+ *   stays blank, and the next save deletes the stored URL as a deliberate clear.
+ *
+ *   everything else — filled ONCE per provider. The reset leaves these alone,
+ *   the user's unsaved edits included, so refilling them on a re-pick throws a
+ *   just-typed pin away over a mis-click.
+ */
+export const seedFieldsForPick = (
+    provider: string | undefined,
+    stored: Record<string, unknown> | undefined,
+    alreadySeeded: boolean,
+): Partial<EditKeyForm> => {
+    const fields: Record<string, unknown> = {
+        baseURL: typeof stored?.baseURL === "string" ? stored.baseURL : null,
+    };
+    if (alreadySeeded) return fields as Partial<EditKeyForm>;
+
+    // Secrets stay out: the browser holds only their mask, and a blank secret is
+    // what keeps the stored ciphertext.
+    return {
+        ...fields,
+        ...providerSettingDefaults(provider, stored),
+    } as Partial<EditKeyForm>;
+};
+
+/**
  * Every setting key some credential form is authoritative for: the shared
  * `baseURL` plus every provider's registered fields.
  */
 const FORM_OWNED_SETTING_KEYS: ReadonlySet<string> = new Set<string>([
-    'baseURL',
+    "baseURL",
     ...Object.values(
         PROVIDER_SETTING_KEYS as Record<string, readonly string[]>,
     ).flat(),
@@ -186,15 +221,15 @@ const refineBedrock: CreateRefiner = (data, ctx) => {
         if (!hasAccessKey) {
             ctx.addIssue({
                 code: z.ZodIssueCode.custom,
-                path: ['awsAccessKeyId'],
-                message: 'Access Key ID is required',
+                path: ["awsAccessKeyId"],
+                message: "Access Key ID is required",
             });
         }
         if (!hasSecret) {
             ctx.addIssue({
                 code: z.ZodIssueCode.custom,
-                path: ['awsSecretAccessKey'],
-                message: 'Secret Access Key is required',
+                path: ["awsSecretAccessKey"],
+                message: "Secret Access Key is required",
             });
         }
         return true;
@@ -203,9 +238,9 @@ const refineBedrock: CreateRefiner = (data, ctx) => {
     // Nothing filled in at all — nudge toward the recommended path.
     ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['awsBearerToken'],
+        path: ["awsBearerToken"],
         message:
-            'Paste a Bedrock API key, or expand Advanced to use IAM user credentials.',
+            "Paste a Bedrock API key, or expand Advanced to use IAM user credentials.",
     });
     return true;
 };

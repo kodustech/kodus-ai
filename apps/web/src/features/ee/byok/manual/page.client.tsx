@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { Suspense, useRef, useState } from "react";
@@ -54,6 +53,7 @@ import {
     providerHasCredentials,
     providerOwnsField,
     providerSettingDefaults,
+    seedFieldsForPick,
     unownedStoredSettings,
 } from "../_components/_modals/edit-key/credential-config";
 import {
@@ -320,8 +320,11 @@ export function ByokManualPageClient({
     // fields are blank against a credential that holds values, so it is filling
     // them, not ruling on them, that settles it.
     const seededProviderRef = useRef<string | null>(null);
-    const seedProviderSettings = () => {
-        const picked = form.getValues("provider");
+    const seedProviderSettings = (pickedProvider?: string) => {
+        // The picked value comes from the select itself. Reading it back out of
+        // the form would make the seed depend on the reset having already
+        // landed in RHF's store — a coupling with nothing holding it in place.
+        const picked = pickedProvider ?? form.getValues("provider");
         if (!picked) return;
 
         const cred = (existing?.credentials ?? []).find(
@@ -329,14 +332,15 @@ export function ByokManualPageClient({
         );
         const stored = (cred?.settings ?? {}) as Record<string, unknown>;
 
-        form.setValue(
-            "baseURL",
-            typeof stored.baseURL === "string" ? stored.baseURL : null,
-        );
-        // Secrets stay out of the seed: the browser holds only their mask, and
-        // a blank secret is what keeps the stored ciphertext.
+        // Which fields a pick refills is a rule of its own, and asymmetric —
+        // see `seedFieldsForPick`. Keeping it out of the component is what lets
+        // it be tested; both halves of it have already been a bug here.
         for (const [key, value] of Object.entries(
-            providerSettingDefaults(picked, stored),
+            seedFieldsForPick(
+                picked,
+                stored,
+                seededProviderRef.current === picked,
+            ),
         )) {
             form.setValue(key as keyof EditKeyForm, value as never);
         }
@@ -612,10 +616,11 @@ export function ByokManualPageClient({
         };
         const credentialSettings = credentialSettingsOverride({
             // Authoritative exactly when the fields were filled from the
-            // credential: at mount for a known provider, or by the effect above
-            // once the user picked one. The additive branch is left for the
-            // single render before that effect runs, where a blank field still
-            // means "unknown" rather than "removed".
+            // credential: at mount for a known provider, or by
+            // `seedProviderSettings` when the user picked one. Every path that
+            // can reach this save does one of those — a provider can only be
+            // set by the select, and the select seeds — so the additive branch
+            // below is a floor, not a flow.
             seeded:
                 isEditing ||
                 !!lockedProvider ||
@@ -827,13 +832,17 @@ export function ByokManualPageClient({
                                                     </FormControl.Root>
                                                 }>
                                                 <ByokProviderSelect
-                                                    onProviderChange={() => {
+                                                    onProviderChange={(
+                                                        picked,
+                                                    ) => {
                                                         setShowKeyInput(true);
                                                         // Runs after the
                                                         // select's reset, so
                                                         // the refill is the
                                                         // last word.
-                                                        seedProviderSettings();
+                                                        seedProviderSettings(
+                                                            picked,
+                                                        );
                                                     }}
                                                 />
                                             </Suspense>
