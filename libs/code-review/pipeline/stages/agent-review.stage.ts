@@ -80,6 +80,7 @@ import { KodyRuleSummaryService } from '@libs/kodyRules/infrastructure/adapters/
 import {
     CodeReviewPipelineContext,
     resolvedModel,
+    resolvedProvider,
     DedupTraceGroupSummary,
     DedupTraceSuggestionSummary,
     DedupTraceSummary,
@@ -818,11 +819,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 context = this.updateContext(context, (draft) => {
                     draft.lastReviewError = {
                         category: classification.category,
-                        provider: classification.provider,
+                        provider:
+                            resolvedProvider(context, chosen.error) ??
+                            classification.provider,
                         friendlyMessage: classification.friendlyMessage,
                         httpStatus: classification.httpStatus,
                         providerMessage: classification.providerMessage,
-                        model: resolvedModel(context),
+                        model: resolvedModel(context, chosen.error),
                         agentName: chosen.agentName,
                         occurredAt: new Date(),
                     };
@@ -1480,11 +1483,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 if (!draft.lastReviewError) {
                     draft.lastReviewError = {
                         category: classification.category,
-                        provider: classification.provider,
+                        provider:
+                            resolvedProvider(context, stageError) ??
+                            classification.provider,
                         friendlyMessage: classification.friendlyMessage,
                         httpStatus: classification.httpStatus,
                         providerMessage: classification.providerMessage,
-                        model: resolvedModel(context),
+                        model: resolvedModel(context, stageError),
                         occurredAt: new Date(),
                     };
                 }

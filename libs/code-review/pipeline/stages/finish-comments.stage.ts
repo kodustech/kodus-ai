@@ -23,6 +23,7 @@ import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-
 import {
     CodeReviewPipelineContext,
     resolvedModel,
+    resolvedProvider,
 } from '../context/code-review-pipeline.context';
 import { buildReviewErrorMessage } from '@libs/llm/review-error-diagnostics';
 import { PipelineError } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-context.interface';
@@ -278,11 +279,13 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     if (!draft.lastReviewError) {
                         draft.lastReviewError = {
                             category: classification.category,
-                            provider: classification.provider,
+                            provider:
+                                resolvedProvider(context, summaryError) ??
+                                classification.provider,
                             friendlyMessage: classification.friendlyMessage,
                             httpStatus: classification.httpStatus,
                             providerMessage: classification.providerMessage,
-                            model: resolvedModel(context),
+                            model: resolvedModel(context, summaryError),
                             occurredAt: new Date(),
                         };
                     }

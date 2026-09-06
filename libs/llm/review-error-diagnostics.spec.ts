@@ -125,9 +125,74 @@ describe('extractProviderMessage', () => {
     });
 
     it('collapses newlines so one body cannot dominate the comment', () => {
+        // Asserted on a STRUCTURED message: a raw body carrying blank lines
+        // reads as a dump and is dropped outright by the prose gate below, so
+        // this is the path where collapsing is what does the work.
         expect(
-            extractProviderMessage({ responseBody: 'line one\n\n   line two' }),
+            extractProviderMessage({
+                responseBody: JSON.stringify({
+                    error: { message: 'line one\n\n   line two' },
+                }),
+            }),
         ).toBe('line one line two');
+    });
+
+    // A cap bounds how much of an echoed request leaks; it never decides
+    // WHETHER it leaks, because truncation keeps the first 400 characters and
+    // that is exactly where an echoed prompt begins. So a raw body has to read
+    // as one plain sentence before any of it is published.
+    describe('a raw body has to earn its way into a public comment', () => {
+        const rawOf = (responseBody: string) =>
+            extractProviderMessage({ responseBody });
+
+        it('publishes a short plain-text explanation', () => {
+            expect(rawOf('Upstream provider is temporarily unavailable.')).toBe(
+                'Upstream provider is temporarily unavailable.',
+            );
+        });
+
+        it('drops a body that echoes the request it rejected', () => {
+            // Content filters quote the input they flagged. Truncating that
+            // publishes the opening of the prompt rather than protecting it.
+            const echoed =
+                'Request rejected. Input was: ' +
+                'function computeInternalPricing(customer) { return customer.tier * 1.7; } ' +
+                'and the rest of the file followed';
+
+            expect(rawOf(echoed)).toBeUndefined();
+        });
+
+        it('drops an unparsed payload the JSON reader could not read', () => {
+            expect(
+                rawOf('{"error": "truncated at the byte limit'),
+            ).toBeUndefined();
+            expect(
+                rawOf('<html><body>502 Bad Gateway</body></html>'),
+            ).toBeUndefined();
+        });
+
+        it('drops a multi-line dump', () => {
+            expect(
+                rawOf('Error: failed\n  at run (a.ts:1)\n  at main (b.ts:2)'),
+            ).toBeUndefined();
+        });
+
+        it('drops anything long enough to be carrying content', () => {
+            expect(rawOf('a '.repeat(200))).toBeUndefined();
+        });
+
+        it('still reads a STRUCTURED message of any shape — the provider named it', () => {
+            // The gate is for raw bodies only: a field the provider itself
+            // labelled `message` is a claim about what it is, and the cap plus
+            // redaction cover it from there.
+            expect(
+                extractProviderMessage({
+                    responseBody: JSON.stringify({
+                        error: { message: 'x'.repeat(300) },
+                    }),
+                }),
+            ).toHaveLength(300);
+        });
     });
 });
 

@@ -1,3 +1,4 @@
+import { readAttemptedSlot } from '@libs/llm/model-failover';
 import type {
     ContextEvidence,
     ContextLayer,
@@ -360,7 +361,36 @@ export interface DocumentationItem {
  */
 export const resolvedModel = (
     context: Pick<CodeReviewPipelineContext, 'codeReviewConfig'>,
+    err?: unknown,
 ): string | undefined => {
+    // The cascade is primary → fallback, so an error that survived both belongs
+    // to the fallback. Reporting the resolved slot there names a model that did
+    // not produce this failure — worse than saying nothing, because it reads as
+    // fact. `runWithModelFailover` stamps the attempt it actually ran.
+    const attempted = readAttemptedSlot(err)?.model;
+    if (typeof attempted === 'string' && attempted.length > 0) return attempted;
+
     const model = context.codeReviewConfig?.resolvedModelSlot?.model;
     return typeof model === 'string' && model.length > 0 ? model : undefined;
+};
+
+/**
+ * The provider that answered the failing attempt.
+ *
+ * Kept beside {@link resolvedModel} so the two are always read from the SAME
+ * attempt: a fallback model reported next to the primary's provider is a pair
+ * that never existed, which is the failure mode this helper prevents rather than
+ * a detail it improves.
+ */
+export const resolvedProvider = (
+    context: Pick<CodeReviewPipelineContext, 'codeReviewConfig'>,
+    err?: unknown,
+): string | undefined => {
+    const attempted = readAttemptedSlot(err)?.provider;
+    if (typeof attempted === 'string' && attempted.length > 0) return attempted;
+
+    const provider = context.codeReviewConfig?.resolvedModelSlot?.provider;
+    return typeof provider === 'string' && provider.length > 0
+        ? provider
+        : undefined;
 };

@@ -10,8 +10,14 @@
  *
  * The constraint that shapes this: the text lands in a PUBLIC pull request
  * comment. Provider bodies echo the request often enough that pasting one
- * verbatim is a disclosure bug waiting to happen, so nothing reaches the comment
- * without going through {@link redactSecrets} and a length cap.
+ * verbatim is a disclosure bug waiting to happen.
+ *
+ * The cap is NOT what protects that. Truncating keeps the first 400 characters,
+ * which is exactly where an echoed prompt begins — a cap bounds how much leaks,
+ * never whether it leaks. What protects it is that only two shapes are ever
+ * published: a field the provider itself labelled as a message, and a raw body
+ * short and plain enough to read as one sentence ({@link looksLikeProse}).
+ * Everything else is dropped, and {@link redactSecrets} runs over what is left.
  */
 
 /** Longest provider sentence that reaches a PR comment. */
@@ -89,8 +95,38 @@ const parsed = (text: string): unknown => {
     try {
         return JSON.parse(text);
     } catch {
+        // Not JSON. Nothing is lost by staying quiet: the caller falls through
+        // to the prose gate below, which is the only other thing that could be
+        // done with the text anyway.
         return undefined;
     }
+};
+
+/**
+ * Whether a raw body is safe to publish as prose.
+ *
+ * The structured path above reads ONE field a provider chose to call a message.
+ * A raw body has no such promise — it is whatever the endpoint returned, and
+ * content filters quote the input they rejected while gateways echo request
+ * fields. Truncating that does not help: a cap keeps the FIRST 400 characters,
+ * which is exactly where an echoed prompt begins.
+ *
+ * So a raw body has to earn its way out, and only a short single-sentence answer
+ * does: no structural punctuation (a payload, even a truncated one), no code
+ * fences or tags, and nothing long enough to be carrying content rather than
+ * explaining a failure. Anything else is dropped — the status and the classified
+ * message still get reported, which is the floor this exists to raise.
+ */
+const looksLikeProse = (text: string): boolean => {
+    const trimmed = text.trim();
+    if (trimmed.length === 0 || trimmed.length > 200) return false;
+    // Structure means payload, not prose.
+    if (/[{}[\]<>`]/.test(trimmed)) return false;
+    // A quoted key/value pair survives the brace test but is still a payload.
+    if (/"\s*:/.test(trimmed)) return false;
+    // Several lines is a stack trace or a dump, not a sentence.
+    if (trimmed.split(/\r?\n/).length > 2) return false;
+    return true;
 };
 
 /**
@@ -122,10 +158,11 @@ export const extractProviderMessage = (err: unknown): string | undefined => {
         if (found) return tidy(redactSecrets(found));
     }
 
-    // No structured body: fall back to a raw string body, which still beats the
-    // SDK's terse message when the provider answered in plain text.
+    // No structured body. A plain-text answer still beats the SDK's terse
+    // message — but only when it reads as an explanation rather than as a
+    // payload the endpoint echoed back. See `looksLikeProse`.
     for (const raw of [e.responseBody, e.body]) {
-        if (typeof raw === 'string' && raw.trim()) {
+        if (typeof raw === 'string' && looksLikeProse(raw)) {
             return tidy(redactSecrets(raw));
         }
     }
