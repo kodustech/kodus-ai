@@ -132,6 +132,48 @@ function distinctAttempts(
  * failure is not cascade-worthy. With a single slot (no fallback) this is a thin
  * pass-through — `runOne` is invoked exactly once.
  */
+const ATTEMPTED_SLOT = Symbol('attemptedSlot');
+
+/**
+ * Which model actually ran on the attempt that failed.
+ *
+ * The cascade is primary → fallback, so a terminal failure belongs to whichever
+ * attempt was LAST — not to the slot resolved before the run. A caller that
+ * reports the resolved slot after a fallback also failed names a model/provider
+ * pair that never co-occurred, and does it in exactly the case the report exists
+ * for: both routes down.
+ *
+ * Stamped here because this is the only place that knows. Non-enumerable, like
+ * `attachClassification`, so it stays out of JSON.stringify and span recordings.
+ */
+export function attachAttemptedSlot<T extends object>(
+    err: T,
+    slot: NormalizedModel | undefined,
+): T {
+    if (!slot) return err;
+    try {
+        Object.defineProperty(err, ATTEMPTED_SLOT, {
+            value: { model: slot.model, provider: slot.provider },
+            enumerable: false,
+            writable: false,
+            configurable: true,
+        });
+    } catch {
+        // Frozen or exotic error object — the caller falls back to the resolved
+        // slot, which is what it did before this existed.
+    }
+    return err;
+}
+
+/** The stamped attempt, when the error came through the failover. */
+export function readAttemptedSlot(
+    err: unknown,
+): { model?: string; provider?: string } | undefined {
+    if (!err || typeof err !== 'object') return undefined;
+    return (err as Record<symbol, unknown>)[ATTEMPTED_SLOT] as
+        { model?: string; provider?: string } | undefined;
+}
+
 export async function runWithModelFailover<T>(
     slots: Array<NormalizedModel | undefined>,
     runOne: (
@@ -190,7 +232,12 @@ export async function runWithModelFailover<T>(
                         exhausted: isLast,
                     },
                 });
-                throw err;
+                // Record WHICH attempt this was before it leaves: downstream
+                // reporting otherwise re-reads the pre-run resolved slot and
+                // names the primary for a failure that belongs to the fallback.
+                throw typeof err === 'object' && err !== null
+                    ? attachAttemptedSlot(err, attempts[i])
+                    : err;
             }
 
             const { category } = classifyLLMError(err);

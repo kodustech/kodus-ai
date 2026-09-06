@@ -20,7 +20,12 @@ import {
 } from '@libs/llm/error-classifier';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
-import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
+import {
+    CodeReviewPipelineContext,
+    resolvedModel,
+    resolvedProvider,
+} from '../context/code-review-pipeline.context';
+import { buildReviewErrorMessage } from '@libs/llm/review-error-diagnostics';
 import { PipelineError } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-context.interface';
 import { formatLinkedReposSummaryLine } from '@libs/ee/linked-repositories';
 import { PostTracePrCommentUseCase } from '@libs/cli-review/application/use-cases/post-trace-pr-comment.use-case';
@@ -274,8 +279,13 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     if (!draft.lastReviewError) {
                         draft.lastReviewError = {
                             category: classification.category,
-                            provider: classification.provider,
+                            provider:
+                                resolvedProvider(context, summaryError) ??
+                                classification.provider,
                             friendlyMessage: classification.friendlyMessage,
+                            httpStatus: classification.httpStatus,
+                            providerMessage: classification.providerMessage,
+                            model: resolvedModel(context, summaryError),
                             occurredAt: new Date(),
                         };
                     }
@@ -287,7 +297,14 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
 
         const { reviewFailed, reviewHasPartialErrors } =
             classifyErrors(context);
-        const reviewErrorMessage = context.lastReviewError?.friendlyMessage;
+        // Everything the classifier learned, not just its sentence. This line
+        // used to read `?.friendlyMessage` and drop the rest, which is how a
+        // failed review reported "Unexpected error while running the code
+        // review (open_router)" while the status, the model and the provider's
+        // own explanation sat on the same object (#1871).
+        const reviewErrorMessage = context.lastReviewError
+            ? buildReviewErrorMessage(context.lastReviewError)
+            : undefined;
         const reviewErrorCustomMessage = customMessageFor(reviewFailed);
 
         const startReviewMessage =

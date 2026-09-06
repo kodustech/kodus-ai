@@ -48,6 +48,7 @@ jest.mock('@libs/llm/error-classifier', () => {
 });
 
 import {
+    readAttemptedSlot,
     runWithModelFailover,
     shouldFailoverToNextModel,
     type FailoverAttemptControl,
@@ -68,7 +69,7 @@ const err = (cat: string, extra: Record<string, unknown> = {}) =>
     Object.assign(new Error(`boom:${cat}`), { __cat: cat, ...extra });
 
 const slot = (id: string): NormalizedModel =>
-    ({ model: id, byokModelId: id, provider: 'openai', apiKey: 'enc' } as any);
+    ({ model: id, byokModelId: id, provider: 'openai', apiKey: 'enc' }) as any;
 
 describe('shouldFailoverToNextModel', () => {
     it('cascades on terminal model-specific failures', () => {
@@ -200,7 +201,7 @@ describe('runWithModelFailover', () => {
 
     it('dedupes by model name when a slot has no byokModelId', async () => {
         const named = (m: string): NormalizedModel =>
-            ({ model: m, provider: 'openai', apiKey: 'enc' } as any);
+            ({ model: m, provider: 'openai', apiKey: 'enc' }) as any;
         const runOne = jest.fn().mockRejectedValue(err('AUTH_INVALID'));
         await expect(
             runWithModelFailover([named('X'), named('X')], runOne, opts),
@@ -279,5 +280,104 @@ describe('runWithModelFailover — observability ([LLM-ERROR]/[LLM-SUCCESS])', (
         expect(terminal.message).toContain('[LLM-ERROR]');
         expect(terminal.metadata.category).toBe('AUTH_INVALID');
         expect(terminal.metadata.exhausted).toBe(true);
+    });
+});
+
+describe('the failed attempt is recorded ON the error', () => {
+    const opts = { runName: 'test' };
+    const providerSlot = (model: string, provider: string): NormalizedModel =>
+        ({ model, byokModelId: model, provider, apiKey: 'enc' }) as any;
+
+    it('names the FALLBACK when the fallback is what failed', async () => {
+        // The whole point. Downstream reporting otherwise re-reads the slot
+        // resolved before the run and names the primary — a model that did not
+        // produce this failure, asserted as fact, in exactly the case a reader
+        // needs the truth: both routes down.
+        const runOne = jest
+            .fn()
+            .mockRejectedValueOnce(err('AUTH_INVALID'))
+            .mockRejectedValueOnce(err('AUTH_INVALID'));
+
+        await expect(
+            runWithModelFailover(
+                [
+                    providerSlot('primary-model', 'openai'),
+                    providerSlot('fallback-model', 'open_router'),
+                ],
+                runOne,
+                opts,
+            ),
+        ).rejects.toMatchObject({ __cat: 'AUTH_INVALID' });
+
+        const thrown = await runWithModelFailover(
+            [
+                providerSlot('primary-model', 'openai'),
+                providerSlot('fallback-model', 'open_router'),
+            ],
+            jest
+                .fn()
+                .mockRejectedValueOnce(err('AUTH_INVALID'))
+                .mockRejectedValueOnce(err('AUTH_INVALID')),
+            opts,
+        ).catch((e) => e);
+
+        // Model AND provider come from the same attempt: a fallback model
+        // reported beside the primary's provider is a pair that never existed.
+        expect(readAttemptedSlot(thrown)).toEqual({
+            model: 'fallback-model',
+            provider: 'open_router',
+        });
+    });
+
+    it('names the primary when there was no fallback to try', async () => {
+        const thrown = await runWithModelFailover(
+            [providerSlot('only-model', 'anthropic')],
+            jest.fn().mockRejectedValue(err('AUTH_INVALID')),
+            opts,
+        ).catch((e) => e);
+
+        expect(readAttemptedSlot(thrown)).toEqual({
+            model: 'only-model',
+            provider: 'anthropic',
+        });
+    });
+
+    it('names the primary when the error must not cascade', async () => {
+        // An unsafe-to-retry veto stops on the primary, so the primary is what
+        // ran and what should be reported.
+        const thrown = await runWithModelFailover(
+            [
+                providerSlot('primary-model', 'openai'),
+                providerSlot('fallback-model', 'open_router'),
+            ],
+            async (_slot, control: FailoverAttemptControl) => {
+                control.markUnsafeToRetry();
+                throw err('AUTH_INVALID');
+            },
+            opts,
+        ).catch((e) => e);
+
+        expect(readAttemptedSlot(thrown)).toMatchObject({
+            model: 'primary-model',
+        });
+    });
+
+    it('stays invisible to JSON and span recording', async () => {
+        // Non-enumerable, like the classification stamp — a diagnostic aid must
+        // not turn into payload on every error that crosses a boundary.
+        const thrown = await runWithModelFailover(
+            [providerSlot('only-model', 'anthropic')],
+            jest.fn().mockRejectedValue(err('AUTH_INVALID')),
+            opts,
+        ).catch((e) => e);
+
+        expect(Object.keys(thrown)).not.toContain('attemptedSlot');
+        expect(JSON.stringify(thrown)).not.toContain('only-model');
+    });
+
+    it('says nothing for an error that never went through the failover', () => {
+        expect(readAttemptedSlot(new Error('unrelated'))).toBeUndefined();
+        expect(readAttemptedSlot(undefined)).toBeUndefined();
+        expect(readAttemptedSlot('a string')).toBeUndefined();
     });
 });
