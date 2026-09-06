@@ -452,10 +452,24 @@ kodus review src/index.ts src/utils.ts # Specific files
 
 `--review-context-file` accepts a non-empty UTF-8 text file up to 12 KiB. The
 file may be outside the repository. Kodus sends its contents separately from
-the selected diff, uses them only for the current review, and does not add them
-to repository files or durable review state. The response can include delivery
-receipts with the SHA-256, UTF-8 byte count, and agent phase, but not the
-context text.
+the selected diff and uses them only for the current review. The request body
+is excluded from repository files, durable job and execution state, logs, and
+telemetry. Context-bearing model calls also disable telemetry input and output
+capture. The response can include delivery receipts with the SHA-256, UTF-8
+byte count, and agent phase, but not the context text.
+
+Model output is returned to the caller that supplied the packet, so Kodus does
+not claim that no response substring can occur in the packet. That would also
+remove legitimate code identifiers. Before the response is persisted or
+returned, the server redacts whole-field packet echoes from every
+model-controlled string field, including symbol-only echoes. It also redacts a
+field containing the normalized packet, a standalone normalized packet fragment
+of at least ten characters, a normalized packet line of at least ten characters,
+or a shared run of four to eight consecutive packet tokens. The required token
+run is half the output field's token count, with four as the minimum and eight as
+the maximum. Shorter partial overlaps remain unchanged. File, category, message,
+suggestion, recommendation, rule ID, and replacement text use this rule; summary
+and severity are generated or allowlist-normalized by the server.
 
 </details>
 

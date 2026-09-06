@@ -1,4 +1,5 @@
 import type { ExecuteCliReviewUseCase } from '@libs/cli-review/application/use-cases/execute-cli-review.use-case';
+import { redactReviewContextFromResponse } from '@libs/cli-review/pipeline/stages/format-cli-output.stage';
 import { CliReviewJobProcessorService } from '@libs/cli-review/workflow/cli-review-job-processor.service';
 import type { IRateLimitGateService } from '@libs/core/workflow/domain/contracts/rate-limit-gate.service.contract';
 import type { IWorkflowJobRepository } from '@libs/core/workflow/domain/contracts/workflow-job.repository.contract';
@@ -76,6 +77,53 @@ describe('CliReviewJobProcessorService review context', () => {
         for (const write of repository.update.mock.calls) {
             expect(JSON.stringify(write)).not.toContain(reviewContext.body);
         }
+    });
+
+    it('persists the filtered response without the packet or a substantial standalone echo', async () => {
+        const packet = {
+            ...reviewContext,
+            body: 'alpha beta secretalpha gamma delta epsilon',
+        };
+        const repository = {
+            findOne: jest.fn().mockResolvedValue(makeJob()),
+            update: jest.fn().mockResolvedValue(undefined),
+        } as unknown as jest.Mocked<IWorkflowJobRepository>;
+        const response = redactReviewContextFromResponse(
+            {
+                summary: 'Found one issue',
+                issues: [
+                    {
+                        file: 'src/index.ts',
+                        line: 1,
+                        severity: 'high',
+                        category: 'bug',
+                        message: 'secretalpha',
+                        ruleId: 'rule-x',
+                    },
+                ],
+                filesAnalyzed: 1,
+                duration: 1,
+            },
+            packet.body,
+        );
+        const execute = jest.fn().mockResolvedValue(response);
+        const processor = new CliReviewJobProcessorService(
+            repository,
+            { execute } as unknown as ExecuteCliReviewUseCase,
+            {
+                check: jest.fn().mockResolvedValue(undefined),
+            } as unknown as IRateLimitGateService,
+        );
+
+        await processor.process('job-cli-1', undefined, {
+            reviewContext: packet,
+        });
+
+        const writes = JSON.stringify(repository.update.mock.calls);
+        expect(writes).not.toContain(packet.body);
+        expect(writes).not.toContain('secretalpha');
+        expect(writes).toContain('[review context redacted]');
+        expect(writes).toContain('rule-x');
     });
 
     it('rejects malformed ephemeral context before use-case execution', async () => {

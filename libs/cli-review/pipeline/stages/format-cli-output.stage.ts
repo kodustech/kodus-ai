@@ -21,8 +21,7 @@ export function withReviewContextDeliveries(
 }
 
 const REVIEW_CONTEXT_REDACTION = '[review context redacted]';
-const MIN_CONTEXT_SIGNAL_LENGTH = 12;
-const MIN_CONTEXT_LINE_LENGTH = 16;
+const MIN_SUBSTANTIAL_FRAGMENT_LENGTH = 10;
 const MIN_TOKEN_SEQUENCE = 4;
 
 function normalizeContextText(value: string): string {
@@ -79,22 +78,32 @@ function hasSharedTokenSequence(
 }
 
 function isContextEcho(value: string, contextBody: string): boolean {
+    if (value === contextBody) {
+        return true;
+    }
+
+    const trimmedValue = value.trim();
+    const trimmedContext = contextBody.trim();
+    if (trimmedValue.length > 0 && trimmedValue === trimmedContext) {
+        return true;
+    }
+
     const normalizedContext = normalizeContextText(contextBody);
     const normalizedValue = normalizeContextText(value);
-    if (normalizedValue.length === 0) {
+    if (normalizedValue.length === 0 || normalizedContext.length === 0) {
         return false;
     }
     if (normalizedValue === normalizedContext) {
         return true;
     }
-    if (normalizedContext.length < MIN_CONTEXT_SIGNAL_LENGTH) {
+    if (normalizedContext.length < MIN_SUBSTANTIAL_FRAGMENT_LENGTH) {
         return false;
     }
 
     if (
         normalizedValue.includes(normalizedContext) ||
         (normalizedContext.includes(normalizedValue) &&
-            normalizedValue.length >= MIN_CONTEXT_LINE_LENGTH)
+            normalizedValue.length >= MIN_SUBSTANTIAL_FRAGMENT_LENGTH)
     ) {
         return true;
     }
@@ -102,7 +111,7 @@ function isContextEcho(value: string, contextBody: string): boolean {
     const contextLines = contextBody
         .split(/\r?\n/u)
         .map(normalizeContextText)
-        .filter((line) => line.length >= MIN_CONTEXT_LINE_LENGTH);
+        .filter((line) => line.length >= MIN_SUBSTANTIAL_FRAGMENT_LENGTH);
     if (contextLines.some((line) => normalizedValue.includes(line))) {
         return true;
     }
@@ -114,6 +123,17 @@ function redactModelText(value: string, contextBody: string): string {
     return isContextEcho(value, contextBody) ? REVIEW_CONTEXT_REDACTION : value;
 }
 
+/**
+ * Removes exact or substantial packet echoes before a response reaches durable
+ * job state or the caller. A substantial echo is a normalized standalone
+ * packet fragment of at least ten characters, a packet line of that size, or a
+ * shared run of four to eight tokens. Short overlaps remain valid review output
+ * because their provenance cannot be distinguished from identifiers in code.
+ *
+ * @param response - Server-formatted CLI review response.
+ * @param contextBody - Request-scoped packet body, when one was supplied.
+ * @returns A response with qualifying echoes replaced in model-controlled fields.
+ */
 export function redactReviewContextFromResponse(
     response: CliReviewResponse,
     contextBody: string | undefined,
@@ -126,7 +146,13 @@ export function redactReviewContextFromResponse(
         ...response,
         issues: response.issues.map((issue) => ({
             ...issue,
+            file: redactModelText(issue.file, contextBody),
             message: redactModelText(issue.message, contextBody),
+            ...(issue.category !== undefined
+                ? {
+                      category: redactModelText(issue.category, contextBody),
+                  }
+                : {}),
             ...(issue.suggestion !== undefined
                 ? {
                       suggestion: redactModelText(
@@ -142,6 +168,9 @@ export function redactReviewContextFromResponse(
                           contextBody,
                       ),
                   }
+                : {}),
+            ...(issue.ruleId !== undefined
+                ? { ruleId: redactModelText(issue.ruleId, contextBody) }
                 : {}),
             ...(issue.fix
                 ? {

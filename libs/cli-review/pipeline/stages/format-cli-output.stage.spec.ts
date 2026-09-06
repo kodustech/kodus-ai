@@ -52,14 +52,14 @@ describe('redactReviewContextFromResponse', () => {
             summary: 'Found one issue',
             issues: [
                 {
-                    file: 'src/index.ts',
+                    file: `src/${body}.ts`,
                     line: 1,
                     severity: 'critical',
-                    category: 'bug',
+                    category: `category ${body}`,
                     message: `Message ${body}`,
                     suggestion: `Suggestion ${body}`,
                     recommendation: `Recommendation ${body}`,
-                    ruleId: 'rule-1',
+                    ruleId: `rule-${body}`,
                     fixable: true,
                     fix: {
                         range: { start: 1, end: 1 },
@@ -74,8 +74,21 @@ describe('redactReviewContextFromResponse', () => {
         const redacted = redactReviewContextFromResponse(response, body);
 
         expect(JSON.stringify(redacted)).not.toContain(body);
+        expect(redacted.issues[0]).toMatchObject({
+            file: '[review context redacted]',
+            category: '[review context redacted]',
+            message: '[review context redacted]',
+            suggestion: '[review context redacted]',
+            recommendation: '[review context redacted]',
+            ruleId: '[review context redacted]',
+            severity: 'critical',
+        });
+        expect(redacted.issues[0]?.fix?.replacement).toBe(
+            '[review context redacted]',
+        );
         expect(redacted.issues[0]?.line).toBe(1);
         expect(redacted.issues[0]?.fix?.range).toEqual({ start: 1, end: 1 });
+        expect(redacted.summary).toBe(response.summary);
     });
 
     it('returns the original response when there is no review context', () => {
@@ -119,6 +132,91 @@ describe('redactReviewContextFromResponse', () => {
         expect(redacted.issues[0]?.suggestion).toBe(
             'Unrelated remediation prose.',
         );
+    });
+
+    it('redacts the demonstrated substantial standalone fragment echo', () => {
+        const body = 'alpha beta secretalpha gamma delta epsilon';
+        const value: CliReviewResponse = {
+            summary: 'Found one issue',
+            issues: [
+                {
+                    file: 'src/index.ts',
+                    line: 8,
+                    severity: 'high',
+                    category: 'bug',
+                    message: 'secretalpha',
+                    fixable: false,
+                },
+            ],
+            filesAnalyzed: 1,
+            duration: 1,
+        };
+
+        const redacted = redactReviewContextFromResponse(value, body);
+
+        expect(redacted.issues[0]?.message).toBe('[review context redacted]');
+    });
+
+    it('redacts exact symbol-only packet echoes from every model-controlled field', () => {
+        const body = '!!!';
+        const value: CliReviewResponse = {
+            summary: 'Found one issue',
+            issues: [
+                {
+                    file: body,
+                    line: 1,
+                    severity: 'high',
+                    category: body,
+                    message: body,
+                    suggestion: body,
+                    recommendation: body,
+                    ruleId: body,
+                    fixable: true,
+                    fix: {
+                        range: { start: 1, end: 1 },
+                        replacement: body,
+                    },
+                },
+            ],
+            filesAnalyzed: 1,
+            duration: 1,
+        };
+
+        const redacted = redactReviewContextFromResponse(value, body);
+
+        expect(redacted.issues[0]).toMatchObject({
+            file: '[review context redacted]',
+            category: '[review context redacted]',
+            message: '[review context redacted]',
+            suggestion: '[review context redacted]',
+            recommendation: '[review context redacted]',
+            ruleId: '[review context redacted]',
+        });
+        expect(redacted.issues[0]?.fix?.replacement).toBe(
+            '[review context redacted]',
+        );
+    });
+
+    it('preserves legitimate short values that also occur in a longer packet', () => {
+        const body = 'Review src for bug rule-x and keep id handling intact.';
+        const value: CliReviewResponse = {
+            summary: 'Found one issue in src/index.ts',
+            issues: [
+                {
+                    file: 'src',
+                    line: 1,
+                    severity: 'high',
+                    category: 'bug',
+                    message: 'id',
+                    ruleId: 'rule-x',
+                    fixable: false,
+                },
+            ],
+            filesAnalyzed: 1,
+            duration: 1,
+        };
+
+        expect(redactReviewContextFromResponse(value, body)).toEqual(value);
     });
 
     it('does not corrupt legal structural output or unrelated prose for a short context body', () => {
