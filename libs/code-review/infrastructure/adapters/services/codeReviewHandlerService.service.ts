@@ -351,6 +351,7 @@ export class CodeReviewHandlerService {
                 automaticReviewStatus: result?.automaticReviewStatus,
                 statusInfo: finalStatus,
                 orphanedBaseCommit: result?.orphanedBaseCommit,
+                businessLogicValidatedAt: result?.businessLogicValidatedAt,
                 reviewWarnings: result?.reviewWarnings,
                 linkedRepositoriesMetadata: result?.linkedRepositoriesMetadata,
                 reviewExecutionSnapshot: result?.reviewExecutionSnapshot,

@@ -9,6 +9,7 @@ import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { getPRDescriptionLimit } from '@libs/code-review/utils/fit-pr-description';
 import { buildCommentFromSuggestion } from '@libs/common/utils/comment-builder.utils';
+import { extractTaskReferenceLines } from '@libs/common/utils/codeManagement/prTaskReferences';
 import {
     BehaviourForExistingDescription,
     BehaviourForNewCommits,
@@ -533,6 +534,25 @@ You must always respond in ${languageResultPrompt}.`;
 
                 if (!isCommitRun) {
                     finalDescription = `${startMarker}\n${newSummary}\n${endMarker}`;
+
+                    const replacesDescription =
+                        summaryConfig?.behaviourForExistingDescription !==
+                        BehaviourForExistingDescription.CONCATENATE;
+
+                    // Replacing the body used to take the author's `Closes #N`
+                    // with it, which unlinks the issue on the provider (no
+                    // auto-close on merge) and leaves later runs — business
+                    // logic validation, `@kody -v business-logic` — with no
+                    // task to resolve. Carry those lines into the replacement.
+                    if (replacesDescription) {
+                        const taskReferences = extractTaskReferenceLines(
+                            updatedPR?.body ?? '',
+                        );
+
+                        if (taskReferences.length) {
+                            finalDescription = `${taskReferences.join('\n')}\n\n${finalDescription}`;
+                        }
+                    }
 
                     // Apply CONCATENATE behavior if necessary
                     if (
@@ -1068,19 +1088,49 @@ You must always respond in ${languageResultPrompt}.`;
                         createdComment?.pull_request_review_id ??
                         createdComment?.pullRequestReviewId;
 
-                    if (!commentId || !pullRequestReviewId) {
+                    // The two ids are NOT the same kind of fact, and treating
+                    // them as one made a platform difference look like a defect.
+                    //
+                    // `commentId` identifies the comment we just posted; without
+                    // it the comment is live on the pull request and untrackable,
+                    // which is a real loss on any platform.
+                    //
+                    // `pullRequestReviewId` belongs to the review OBJECT that
+                    // GitHub, GitLab and Forgejo wrap comments in. Bitbucket has
+                    // no such concept and never returns one, so requiring it
+                    // logged an error for every inline comment on every Bitbucket
+                    // pull request — 52 of them in two hours of production, all
+                    // for comments that were created perfectly well. Errors that
+                    // fire on healthy behaviour are worse than no logging: they
+                    // train everyone to scroll past the channel where the real
+                    // failure will eventually appear.
+                    if (!commentId) {
                         this.logger.error({
-                            message: `Comment created but missing critical IDs in response for PR#${prNumber}`,
+                            message: `Comment created but no id came back in the response for PR#${prNumber}`,
+                            context: CommentManagerService.name,
+                            metadata: {
+                                prNumber,
+                                repository,
+                                suggestionId: comment.suggestion?.id,
+                                pullRequestReviewId,
+                                createdCommentKeys: createdComment
+                                    ? Object.keys(createdComment)
+                                    : [],
+                                organizationAndTeamData,
+                            },
+                        });
+                    } else if (!pullRequestReviewId) {
+                        // Expected on Bitbucket. Kept at debug because it is the
+                        // trail to follow if GitHub reaction matching (which
+                        // keys on the review id) ever starts coming back empty.
+                        this.logger.debug({
+                            message: `Comment created without a review id for PR#${prNumber} (expected on platforms with no review object)`,
                             context: CommentManagerService.name,
                             metadata: {
                                 prNumber,
                                 repository,
                                 suggestionId: comment.suggestion?.id,
                                 commentId,
-                                pullRequestReviewId,
-                                createdCommentKeys: createdComment
-                                    ? Object.keys(createdComment)
-                                    : [],
                                 organizationAndTeamData,
                             },
                         });

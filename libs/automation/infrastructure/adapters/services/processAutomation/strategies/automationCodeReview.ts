@@ -328,7 +328,12 @@ export class AutomationCodeReviewService implements Omit<
                     heavy, // @kody review --heavy — extra critic pass
                 );
 
-            await this._handleExecutionCompletion(execution, result, payload);
+            await this._handleExecutionCompletion(
+                execution,
+                result,
+                payload,
+                lastExecution?.dataExecution,
+            );
 
             if (
                 !result ||
@@ -583,6 +588,7 @@ export class AutomationCodeReviewService implements Omit<
         execution: IAutomationExecution,
         result: any,
         payload: any,
+        lastExecutionData?: Record<string, any>,
     ) {
         if (!result) {
             const message =
@@ -591,7 +597,7 @@ export class AutomationCodeReviewService implements Omit<
                 execution,
                 AutomationStatus.ERROR,
                 message,
-                this._buildExecutionData(payload),
+                this._buildExecutionData(payload, undefined, lastExecutionData),
             );
             this.logger.error({
                 message,
@@ -604,7 +610,11 @@ export class AutomationCodeReviewService implements Omit<
 
         const finalStatus = this.deriveFinalStatus(result);
         const finalMessage = this.buildFinalMessage(result, finalStatus);
-        const newData = this._buildExecutionData(payload, result);
+        const newData = this._buildExecutionData(
+            payload,
+            result,
+            lastExecutionData,
+        );
 
         await this.updateAutomationExecution(
             execution,
@@ -771,7 +781,44 @@ export class AutomationCodeReviewService implements Omit<
         }
     }
 
-    private _buildExecutionData(payload: any, result?: any): any {
+    /**
+     * The one-shot business-logic markers, preferring what this run produced and
+     * otherwise inheriting the previous execution's.
+     *
+     * They have to survive executions that did not themselves validate (skipped,
+     * or failed before the stage): only the latest execution is read back, so
+     * dropping a marker would let the automatic validation fire again on the
+     * next push. `businessLogicHash` is the legacy EE marker, kept so a PR
+     * mid-flight kept its gate across the change.
+     */
+    private carriedBusinessLogicMarkers(
+        lastExecutionData?: Record<string, any>,
+        result?: any,
+    ): Record<string, string> {
+        const markers: Record<string, string> = {};
+
+        const validatedAt =
+            result?.businessLogicValidatedAt ??
+            lastExecutionData?.businessLogicValidatedAt;
+        if (validatedAt) {
+            markers.businessLogicValidatedAt = validatedAt;
+        }
+
+        const hash =
+            result?.businessLogicPrBodyHash ??
+            lastExecutionData?.businessLogicHash;
+        if (hash) {
+            markers.businessLogicHash = hash;
+        }
+
+        return markers;
+    }
+
+    private _buildExecutionData(
+        payload: any,
+        result?: any,
+        lastExecutionData?: Record<string, any>,
+    ): any {
         const {
             codeManagementEvent,
             platformType,
@@ -789,7 +836,10 @@ export class AutomationCodeReviewService implements Omit<
         };
 
         if (!result) {
-            return baseData;
+            return Object.assign(
+                baseData,
+                this.carriedBusinessLogicMarkers(lastExecutionData),
+            );
         }
 
         const validLastAnalyzedCommit =
@@ -813,11 +863,10 @@ export class AutomationCodeReviewService implements Omit<
             });
         }
 
-        if (result.businessLogicPrBodyHash) {
-            Object.assign(baseData, {
-                businessLogicHash: result.businessLogicPrBodyHash,
-            });
-        }
+        Object.assign(
+            baseData,
+            this.carriedBusinessLogicMarkers(lastExecutionData, result),
+        );
 
         // Adaptive-fit fidelity warnings — emitted by the agent pipeline
         // when a small context window forced a degraded path (compact
