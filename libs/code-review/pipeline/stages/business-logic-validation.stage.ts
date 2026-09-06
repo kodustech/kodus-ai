@@ -70,6 +70,8 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
         'githubissues',
         'gitissues',
         'atlassianrovo',
+        'azuredevops',
+        'azureboards',
     ] as const;
 
     private static readonly TASK_MANAGEMENT_HINTS = [
@@ -80,6 +82,8 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
         'googledocs',
         'atlassianrovo',
         'githubissues',
+        'azuredevops',
+        'azureboards',
     ];
 
     /** Maps task-management MCP names to URL domain patterns.
@@ -93,6 +97,8 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
         googledocs: ['docs.google.com'],
         githubissues: ['github.com'],
         atlassianrovo: ['atlassian.net'],
+        azuredevops: ['dev.azure.com', 'visualstudio.com'],
+        azureboards: ['dev.azure.com', 'visualstudio.com'],
     };
 
     constructor(
@@ -439,7 +445,7 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
             return {
                 reason: 'no_task_mcp',
                 message:
-                    'Skipped: no task-management MCP connected (Jira, Atlassian Rovo, Linear, Notion, ClickUp, etc.).',
+                    'Skipped: no task-management MCP connected (Jira, Azure DevOps, Atlassian Rovo, Linear, Notion, ClickUp, etc.).',
             };
         }
 
@@ -691,6 +697,16 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
             return true;
         }
 
+        // Azure Boards work-item references (e.g. "AB#5625", "feat(AB#5625): …").
+        if (
+            connectedMcps.some(
+                (mcp) => mcp === 'azuredevops' || mcp === 'azureboards',
+            ) &&
+            /\bAB#\d+\b/i.test(body)
+        ) {
+            return true;
+        }
+
         // URLs are valid only if they match the domain pattern of a
         // connected MCP.
         const urls = this.detectTaskLinks(body);
@@ -734,6 +750,30 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
             const num = url.match(/\/issues\/(\d+)/)?.[1];
             if (num) {
                 keys.push(`#${num}`);
+            }
+        }
+
+        // Azure Boards work-item refs ("AB#5625"). Emit both the AB# form and the
+        // bare numeric id — Azure DevOps MCP get_work_item expects the number.
+        const azureBoardsRefs = text.match(/\bAB#(\d+)\b/gi) ?? [];
+        for (const ref of azureBoardsRefs) {
+            const num = ref.match(/\d+/)?.[0];
+            if (num) {
+                keys.push(`AB#${num}`);
+                keys.push(num);
+            }
+        }
+
+        // Azure Boards / DevOps work-item URLs
+        // (…/_workitems/edit/5625, …/workitems/5625).
+        const azureWorkItemMatches = text.matchAll(
+            /https?:\/\/[^\s)>\]"']*(?:\/_workitems\/edit\/|\/workitems\/)(\d+)/gi,
+        );
+        for (const match of azureWorkItemMatches) {
+            const num = match[1];
+            if (num) {
+                keys.push(`AB#${num}`);
+                keys.push(num);
             }
         }
 

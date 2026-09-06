@@ -29,6 +29,8 @@ const TASK_MANAGEMENT_HINTS = [
     "googledocs",
     "atlassianrovo",
     "githubissues",
+    "azuredevops",
+    "azureboards",
 ];
 
 function normalizeToken(value: string): string {
