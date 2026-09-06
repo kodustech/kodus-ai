@@ -37,6 +37,10 @@ import { applyCacheBreakpoints } from '@libs/llm/prompt-cache';
 import { repairInvalidToolInput } from '@libs/llm/repair-tool-call';
 import { getLlmObservability } from '@libs/llm/llm-observability';
 import {
+    captureReviewModelCall,
+    type ReviewContextCallMetadata,
+} from '@libs/llm/review-telemetry';
+import {
     hardTimeout,
     timeoutSignal,
     AGENT_TIMEOUT_MS,
@@ -118,6 +122,8 @@ export interface AgentLoopParams {
     maxOutputTokens?: number;
     /** Override the slot's sampling temperature. */
     temperature?: number;
+    /** Body-free evidence for a context block included in this call's prompt. */
+    reviewContextDelivery?: ReviewContextCallMetadata;
 }
 
 /**
@@ -289,7 +295,20 @@ export async function runAgentLoopCall(
     //
     // Not a new ceiling: AGENT_TIMEOUT_MS was always the intended maximum. This
     // is what makes it true when the provider declines to cooperate.
-    return hardTimeout(run(), hardTimeoutMs, runName);
+    return captureReviewModelCall(
+        {
+            provider: inv.provider,
+            model: inv.modelName,
+            agent:
+                typeof attrs?.agentName === 'string'
+                    ? attrs.agentName
+                    : runName,
+            phase: typeof attrs?.phase === 'string' ? attrs.phase : 'review',
+            sdkMaxRetries: AGENT_STEP_MAX_RETRIES,
+            reviewContext: params.reviewContextDelivery,
+        },
+        () => hardTimeout(run(), hardTimeoutMs, runName),
+    );
 }
 
 // Re-export so callers can build a fixed model handle if needed (parity with

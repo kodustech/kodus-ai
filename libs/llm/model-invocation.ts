@@ -50,6 +50,8 @@ export interface ModelInvocation {
     model: LanguageModel;
     /** `provider:model` label for the telemetry span (env/managed default when no slot). */
     modelName: string;
+    /** Provider that will receive the call, resolved from the same slot/default. */
+    provider: string;
     /** Per-model tuning to spread into the SDK call (`temperature` / `maxOutputTokens`). */
     callOptions: SlotCallOptions;
     /** Provider-specific reasoning + OpenRouter routing to spread as `providerOptions`. */
@@ -112,7 +114,9 @@ export function resolveModelConfig(
     // BYOK slot) and reuse it for both the model build and the reasoning default —
     // so a failing env-LLM (e.g. a suspended Moonshot/Kimi key) reports its REAL
     // provider in the byok-error notification instead of "unknown".
-    const envDescriptor = resolvedSlot ? undefined : envManagedReasoningDescriptor();
+    const envDescriptor = resolvedSlot
+        ? undefined
+        : envManagedReasoningDescriptor();
 
     const model = resolveAgentModel(resolvedSlot, {
         ...agentModelOptions,
@@ -130,7 +134,8 @@ export function resolveModelConfig(
     // model BUILD still flows through resolveAgentModel above (it reads the env
     // itself); this descriptor only feeds the reasoning-effort default and the
     // provider-options namespace. A real BYOK slot always wins over it.
-    const reasoningSlot: NormalizedModel | { provider: string; model: string } | undefined =
+    const reasoningSlot:
+        NormalizedModel | { provider: string; model: string } | undefined =
         resolvedSlot ?? envDescriptor;
 
     // `suppressReasoning` forces reasoning OFF (effort 'none', override dropped) —
@@ -163,15 +168,25 @@ export function resolveModelConfig(
         openrouterAllowFallbacks,
     });
 
+    const modelName = getModelName(
+        resolvedSlot,
+        agentModelOptions.defaultModelOverride,
+    );
+    const modelNameSeparator = modelName.indexOf(':');
+    const providerFromModelName =
+        modelNameSeparator > 0
+            ? modelName.slice(0, modelNameSeparator)
+            : 'unknown';
     return {
         model,
         // `defaultModelOverride` (in agentModelOptions) already reached the model
         // build via resolveAgentModel; honor it here too so the env/managed-default
         // NAME matches the model actually built (no slot → the override wins).
-        modelName: getModelName(
-            resolvedSlot,
-            agentModelOptions.defaultModelOverride,
-        ),
+        modelName,
+        provider:
+            resolvedSlot?.provider ??
+            envDescriptor?.provider ??
+            providerFromModelName,
         callOptions: resolveSlotCallOptions(resolvedSlot),
         providerOptions,
     };

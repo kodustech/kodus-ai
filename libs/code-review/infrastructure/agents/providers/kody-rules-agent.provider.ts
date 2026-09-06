@@ -237,9 +237,11 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                     recordTelemetryInputs: input.reviewContext
                         ? false
                         : undefined,
+                    reviewContextDelivery: delivery,
                     attrs: {
                         prNumber: input.prNumber,
                         agentName: this.getIdentity().name,
+                        phase: delivery?.phase ?? 'rule-judge',
                         ...(filename ? { file: filename } : {}),
                         ...(delivery && {
                             reviewContextSource: delivery.source,

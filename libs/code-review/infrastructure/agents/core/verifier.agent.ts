@@ -32,6 +32,7 @@ import { createLogger } from '@libs/core/log/logger';
 import type { FinderSuggestion } from '@libs/code-review/infrastructure/agents/core/finder.agent';
 import { supportsStrictToolsForRun } from '@libs/code-review/infrastructure/agents/core/model-strictness';
 import {
+    createReviewContextDelivery,
     formatReviewContext,
     type ReviewContext,
 } from '@libs/cli-review/domain/types/review-context.types';
@@ -240,6 +241,8 @@ export interface LlmVerifierParams {
      *  buckets them to `review` (verify is part of the review cost). */
     usageRunName?: string;
     reviewContext?: ReviewContext;
+    /** Distinguishes normal verification from evidence-gate re-verification. */
+    reviewContextPhase?: 'verifier' | 'evidence-gate-verifier';
     recordTelemetryInputs?: boolean;
 }
 
@@ -327,6 +330,16 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
                         { recordInputs: this.params.recordTelemetryInputs },
                     ),
                 ),
+                telemetryPhase: this.params.reviewContextPhase ?? 'verifier',
+                ...(this.params.reviewContext
+                    ? {
+                          reviewContextDelivery: createReviewContextDelivery(
+                              this.params.reviewContext,
+                              this.params.agentName ?? 'agent',
+                              this.params.reviewContextPhase ?? 'verifier',
+                          ),
+                      }
+                    : {}),
             },
             ctx,
         );

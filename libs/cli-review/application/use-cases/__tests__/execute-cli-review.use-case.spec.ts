@@ -675,6 +675,12 @@ describe('ExecuteCliReviewUseCase', () => {
                 kodyRulesService.findByOrganizationId,
             ).not.toHaveBeenCalled();
             expect(result.issues).toHaveLength(0);
+            expect(result.reviewTelemetry).toMatchObject({
+                schemaVersion: 1,
+                modelCallCount: 0,
+                modelCalls: [],
+                contextReceipts: [],
+            });
 
             mockExecute.mockRestore();
         });
@@ -744,6 +750,12 @@ describe('ExecuteCliReviewUseCase', () => {
             });
 
             expect(result.issues).toHaveLength(1);
+            expect(result.reviewTelemetry).toMatchObject({
+                schemaVersion: 1,
+                modelCallCount: 0,
+                modelCalls: [],
+                contextReceipts: [],
+            });
             expect(
                 kodyRulesValidationService.filterKodyRules,
             ).toHaveBeenCalledWith(expect.any(Array), 'repo-555');

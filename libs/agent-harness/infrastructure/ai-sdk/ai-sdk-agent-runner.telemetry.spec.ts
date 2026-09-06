@@ -107,6 +107,43 @@ describe('AiSdkAgentRunner telemetry forwarding', () => {
         expect(mockRun.mock.calls[0][0].telemetryMetadata).toBeUndefined();
     });
 
+    it('forwards body-free review-context delivery correlation to LLM.run', async () => {
+        const runner = new AiSdkAgentRunner(undefined);
+        const delivery = {
+            source: 'cli-review-context-file',
+            contentType: 'text/plain; charset=utf-8',
+            sha256: '0123456789abcdef',
+            utf8Bytes: 22,
+            recipient: 'bug-agent',
+            phase: 'finder',
+        } as const;
+
+        await runner.run(
+            probeSpec(),
+            { prompt: 'private prompt body', reviewContextDelivery: delivery },
+            ctx,
+        );
+
+        expect(mockRun.mock.calls[0][0].reviewContextDelivery).toEqual(
+            delivery,
+        );
+        expect(
+            mockRun.mock.calls[0][0].reviewContextDelivery,
+        ).not.toHaveProperty('body');
+    });
+
+    it('uses a per-invocation phase when a shared agent spec is resampled', async () => {
+        const runner = new AiSdkAgentRunner(undefined);
+
+        await runner.run(
+            probeSpec({ phase: 'review' }),
+            { prompt: 'resample', telemetryPhase: 'heavy-resample-1' },
+            ctx,
+        );
+
+        expect(mockRun.mock.calls[0][0].attrs.phase).toBe('heavy-resample-1');
+    });
+
     it('leaves input recording unspecified when the harness option is absent', async () => {
         const runner = new AiSdkAgentRunner(undefined);
 

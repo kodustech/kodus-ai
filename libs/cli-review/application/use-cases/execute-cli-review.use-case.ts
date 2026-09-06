@@ -47,6 +47,7 @@ import {
     attachClassification,
     getClassification,
 } from '@libs/llm/error-classifier';
+import { collectReviewTelemetry } from '@libs/llm/review-telemetry';
 
 const REVIEW_CONTEXT_ERROR_MESSAGE =
     'CLI review failed while processing review context';
@@ -154,6 +155,18 @@ export class ExecuteCliReviewUseCase implements IUseCase {
     ) {}
 
     async execute(params: ExecuteCliReviewInput): Promise<CliReviewResponse> {
+        const captured = await collectReviewTelemetry(() =>
+            this.executeReview(params),
+        );
+        return {
+            ...captured.value,
+            reviewTelemetry: captured.telemetry,
+        };
+    }
+
+    private async executeReview(
+        params: ExecuteCliReviewInput,
+    ): Promise<CliReviewResponse> {
         const {
             organizationAndTeamData,
             input,

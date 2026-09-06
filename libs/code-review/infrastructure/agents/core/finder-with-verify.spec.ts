@@ -24,6 +24,7 @@ import {
     REVIEW_CONTEXT_SOURCE,
     formatReviewContext,
 } from '@libs/cli-review/domain/types/review-context.types';
+import { collectReviewTelemetry } from '@libs/llm/review-telemetry';
 
 const findings = {
     reasoning: 'two candidates',
@@ -98,6 +99,7 @@ beforeEach(() => {
         model: model(),
         callOptions: {},
         providerOptions: {},
+        provider: 'mock-provider',
         modelName: 'mock',
         usageIdentity: {},
     }));
@@ -156,31 +158,34 @@ describe('runFinderWithVerify (parity: finder + verify, same runner)', () => {
             body: 'CANARY: inspect cleanup',
         };
 
-        const result = await runFinderWithVerify(
-            {
-                runner,
-                finderSpec,
-                modelId: 'mock',
-                tools,
-                reviewContext,
-                heavy: true,
-                makeResampleSpec: () =>
-                    buildFinderAgentSpec({
-                        systemPrompt: 'find bugs',
-                        modelId: 'mock',
-                        tools,
-                        coverageLedger: {
-                            ...noCriticalLedger,
-                        },
-                    }),
-                recordTelemetryInputs: false,
-                onReviewContextPhaseDelivery,
-            },
-            {
-                prompt: `${formatReviewContext(reviewContext)}\n\n<ReviewTask>review</ReviewTask>`,
-            },
-            ctx,
+        const captured = await collectReviewTelemetry(() =>
+            runFinderWithVerify(
+                {
+                    runner,
+                    finderSpec,
+                    modelId: 'mock',
+                    tools,
+                    reviewContext,
+                    heavy: true,
+                    makeResampleSpec: () =>
+                        buildFinderAgentSpec({
+                            systemPrompt: 'find bugs',
+                            modelId: 'mock',
+                            tools,
+                            coverageLedger: {
+                                ...noCriticalLedger,
+                            },
+                        }),
+                    recordTelemetryInputs: false,
+                    onReviewContextPhaseDelivery,
+                },
+                {
+                    prompt: `${formatReviewContext(reviewContext)}\n\n<ReviewTask>review</ReviewTask>`,
+                },
+                ctx,
+            ),
         );
+        const result = captured.value;
 
         const expectedPhases = [
             'finder',
@@ -193,6 +198,26 @@ describe('runFinderWithVerify (parity: finder + verify, same runner)', () => {
         expect(result.reviewContextPhases).toEqual(expectedPhases);
         expect(onReviewContextPhaseDelivery.mock.calls).toEqual(
             expectedPhases.map((phase) => [phase]),
+        );
+        expect(
+            Array.from(
+                new Set(
+                    captured.telemetry.contextReceipts.map(
+                        (receipt) => receipt.phase,
+                    ),
+                ),
+            ),
+        ).toEqual(expectedPhases);
+        expect(
+            Array.from(
+                new Set(
+                    captured.telemetry.modelCalls.map((call) => call.phase),
+                ),
+            ),
+        ).toEqual(expectedPhases);
+        expect(captured.telemetry.contextReceipts).not.toHaveLength(0);
+        expect(JSON.stringify(captured.telemetry)).not.toContain(
+            reviewContext.body,
         );
     });
 
@@ -251,6 +276,7 @@ describe('runFinderWithVerify (parity: finder + verify, same runner)', () => {
             model: model({ reasoning: 'none', suggestions: [] }),
             callOptions: {},
             providerOptions: {},
+            provider: 'mock-provider',
             modelName: 'mock',
             usageIdentity: {},
         }));

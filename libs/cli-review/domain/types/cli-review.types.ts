@@ -2,6 +2,7 @@ import type {
     ReviewContext,
     ReviewContextDelivery,
 } from './review-context.types';
+import type { ReviewTelemetry } from '@libs/llm/review-telemetry';
 
 export interface CliReviewIssueFix {
     range: {
@@ -31,6 +32,7 @@ export interface CliReviewResponse {
     filesAnalyzed: number;
     duration: number;
     reviewContextDeliveries?: readonly ReviewContextDelivery[];
+    reviewTelemetry?: ReviewTelemetry;
 }
 
 export interface TrialCliReviewResponse extends CliReviewResponse {

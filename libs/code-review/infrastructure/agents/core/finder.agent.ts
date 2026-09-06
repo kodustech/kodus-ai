@@ -49,7 +49,10 @@ import { extractJsonFromText } from '@libs/llm/structured-output-repair';
 import { collapseNearDuplicates } from '@libs/code-review/infrastructure/agents/engine/dedup-prompt';
 import { createLogger } from '@libs/core/log/logger';
 import type { NormalizedModel } from '@libs/llm/byok-config';
-import type { ReviewContext } from '@libs/cli-review/domain/types/review-context.types';
+import {
+    createReviewContextDelivery,
+    type ReviewContext,
+} from '@libs/cli-review/domain/types/review-context.types';
 import { z } from 'zod';
 
 export const FINDER_DONE_TOOL = 'submitResult' as const;
@@ -388,6 +391,10 @@ export async function recoverFindingsFromProse(
                 ? `${usageRunName}-recovery`
                 : 'code-review-recovery',
             organizationId,
+            attrs: {
+                agentName: 'finder-recovery',
+                phase: 'prose-recovery',
+            },
             recordTelemetryInputs,
         });
         return (result.suggestions as unknown as FinderSuggestion[]) ?? [];
@@ -506,6 +513,16 @@ export async function runFinderWithVerify(
                     { recordInputs: params.recordTelemetryInputs },
                 ),
             ),
+            telemetryPhase: 'finder',
+            ...(params.reviewContext
+                ? {
+                      reviewContextDelivery: createReviewContextDelivery(
+                          params.reviewContext,
+                          params.agentName ?? 'finder',
+                          'finder',
+                      ),
+                  }
+                : {}),
         },
         ctx,
     );
@@ -538,6 +555,7 @@ export async function runFinderWithVerify(
             telemetryMetadata: params.telemetryMetadata,
             agentName: params.agentName,
             recoverProse: params.recoverProse,
+            reviewContext: params.reviewContext,
             recordTelemetryInputs: params.recordTelemetryInputs,
             onReviewContextPhaseDelivery: params.onReviewContextPhaseDelivery,
         },
@@ -643,6 +661,7 @@ export async function runFinderWithVerify(
             agentName: params.agentName,
             usageRunName: params.usageRunName,
             reviewContext: params.reviewContext,
+            reviewContextPhase: 'evidence-gate-verifier',
             recordTelemetryInputs: params.recordTelemetryInputs,
         });
         if (params.reviewContext) {
@@ -792,6 +811,7 @@ interface RecallPassesParams {
     agentName?: string;
     /** Injected prose-findings recovery (see ProseRecoverer). */
     recoverProse?: ProseRecoverer;
+    reviewContext?: ReviewContext;
     recordTelemetryInputs?: boolean;
     onReviewContextPhaseDelivery?: (phase: string) => void;
 }
@@ -834,6 +854,16 @@ export async function runRecallPasses(
                         { recordInputs: params.recordTelemetryInputs },
                     ),
                 ),
+                telemetryPhase: label,
+                ...(params.reviewContext
+                    ? {
+                          reviewContextDelivery: createReviewContextDelivery(
+                              params.reviewContext,
+                              params.agentName ?? 'finder',
+                              label,
+                          ),
+                      }
+                    : {}),
             },
             ctx,
         );

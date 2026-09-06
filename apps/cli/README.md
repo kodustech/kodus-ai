@@ -454,9 +454,108 @@ kodus review src/index.ts src/utils.ts # Specific files
 file may be outside the repository. Kodus sends its contents separately from
 the selected diff and uses them only for the current review. The request body
 is excluded from repository files, durable job and execution state, logs, and
-telemetry. Context-bearing model calls also disable telemetry input and output
-capture. The response can include delivery receipts with the SHA-256, UTF-8
-byte count, and agent phase, but not the context text.
+telemetry content capture. Context-bearing model calls disable prompt and response
+capture while retaining body-free usage accounting. The response can include
+delivery receipts with the SHA-256, UTF-8 byte count, and agent phase, but not the
+context text.
+
+#### Machine-readable review telemetry
+
+Successful reviews from servers that support schema version 1 include an
+additive `reviewTelemetry` object in JSON output. The CLI keeps the field optional
+when reading older servers. The stable shape is:
+
+```json
+{
+    "reviewTelemetry": {
+        "schemaVersion": 1,
+        "elapsedMs": 1250,
+        "modelCallCount": 1,
+        "modelCalls": [
+            {
+                "callId": "call-000001",
+                "logicalCallId": "logical-call-000001",
+                "attempt": 1,
+                "provider": "anthropic",
+                "model": "anthropic:claude-sonnet-4-6",
+                "agent": "kodus-bug-review-agent",
+                "phase": "finder",
+                "sdkMaxRetries": 3,
+                "status": "completed",
+                "elapsedMs": 1200,
+                "usage": {
+                    "inputTokens": 1000,
+                    "outputTokens": 100,
+                    "totalTokens": 1100,
+                    "reasoningTokens": 20,
+                    "cacheReadTokens": 400,
+                    "cacheWriteTokens": 50
+                }
+            }
+        ],
+        "usageTotals": {
+            "inputTokens": 1000,
+            "outputTokens": 100,
+            "totalTokens": 1100,
+            "reasoningTokens": 20,
+            "cacheReadTokens": 400,
+            "cacheWriteTokens": 50,
+            "fieldReportingCallCount": {
+                "inputTokens": 1,
+                "outputTokens": 1,
+                "totalTokens": 1,
+                "reasoningTokens": 1,
+                "cacheReadTokens": 1,
+                "cacheWriteTokens": 1
+            },
+            "callsWithUsage": 1,
+            "incompleteCallCount": 0,
+            "incompleteReasons": []
+        },
+        "contextReceipts": [
+            {
+                "callId": "call-000001",
+                "logicalCallId": "logical-call-000001",
+                "source": "cli-review-context-file",
+                "contentType": "text/plain; charset=utf-8",
+                "sha256": "<lowercase SHA-256>",
+                "utf8Bytes": 123,
+                "recipient": "kodus-bug-review-agent",
+                "phase": "finder",
+                "attemptState": "completed",
+                "deliveryState": "confirmed"
+            }
+        ]
+    }
+}
+```
+
+`modelCalls` and `contextReceipts` are ordered by request-local call start. IDs
+start at 1 for every review. `logicalCallId` groups application retries, structured
+output reissues, and model failover. Each resulting SDK invocation has its own
+`callId` and increasing `attempt`, so its usage is counted once. `sdkMaxRetries`
+is the configured SDK retry ceiling. SDK-internal transport attempts are not
+separately exposed by the SDK and are not invented by this contract.
+
+`usage` contains only fields reported by the provider through the AI SDK. Missing
+individual token fields are omitted. If a call supplies no provider usage, the
+whole `usage` object is omitted and `usageUnavailableReason` is either
+`provider-did-not-report-usage` or
+`model-call-failed-without-provider-usage`. `usageTotals` sums reported fields
+only. `fieldReportingCallCount` distinguishes a reported zero from a field that
+no call reported, while `incompleteCallCount` and `incompleteReasons` expose calls
+whose provider usage is unavailable.
+
+A context receipt is created only for a model-call attempt whose prompt contains
+the review context. `deliveryState` is `confirmed` after a provider response, or
+after a failed call that returned provider usage. It is `unknown` when the call
+failed without usage, because Kodus cannot prove that the provider processed the
+prompt. Receipts contain the context hash and byte count, never the body.
+
+The async API stores this metadata with the normal review result so polling and
+JSON output return the same audit record. The stored object contains no context
+body. Prompt and response content capture remains disabled for context-bearing
+calls; token usage accounting remains enabled.
 
 Model output is returned to the caller that supplied the packet, so Kodus does
 not claim that no response substring can occur in the packet. That would also

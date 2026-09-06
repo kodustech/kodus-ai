@@ -45,11 +45,15 @@ import {
     runWithModelFailover,
     type FailoverAttemptControl,
 } from '@libs/llm/model-failover';
+import { runAsReviewLogicalCall } from '@libs/llm/review-telemetry';
 
 /** The raw AI SDK result an agent-loop call returns (steps / usage / text). */
 export type AgentLoopResult = Awaited<ReturnType<typeof generateText>>;
 
-export interface LlmRequest extends Omit<BaseReviewCallParams, 'byokConfig' | 'user'> {
+export interface LlmRequest extends Omit<
+    BaseReviewCallParams,
+    'byokConfig' | 'user'
+> {
     /** A pre-resolved slot — the caller already routed task → slot. */
     byokConfig?: NormalizedModel;
     /** OR route here: the org's stored BYOK config + the task. Pure routing. */
@@ -174,65 +178,68 @@ export class LLM {
     static run(
         req: LlmRequest & { schema?: z.ZodType | Schema },
     ): Promise<unknown> {
-        // Resolve the routing decision ONCE. The primary slot carries its runtime
-        // fallback in `.fallback` (stamped by resolveTaskSlot), so the cascade is
-        // primary → fallback; a slot without a fallback (or the managed default,
-        // undefined) makes `runWithModelFailover` a single-attempt pass-through.
-        const slot = resolveSlot(req);
-        const attempts = [slot, slot?.fallback];
-        const failoverOpts = {
-            runName: req.runName,
-            organizationId: req.organizationId,
-        };
+        return runAsReviewLogicalCall(req.runName, () => {
+            // Resolve the routing decision ONCE. The primary slot carries its runtime
+            // fallback in `.fallback` (stamped by resolveTaskSlot), so the cascade is
+            // primary → fallback; a slot without a fallback (or the managed default,
+            // undefined) makes `runWithModelFailover` a single-attempt pass-through.
+            const slot = resolveSlot(req);
+            const attempts = [slot, slot?.fallback];
+            const failoverOpts = {
+                runName: req.runName,
+                organizationId: req.organizationId,
+            };
 
-        // Agent-loop mode: a tool-driven, multi-step call. LLM.run resolves the
-        // model + tuning + reasoning + cache + span; the runner passed only the
-        // loop seams. Returns the raw result for the runner to map onto RunState.
-        if (req.loop) {
-            const loop = req.loop;
+            // Agent-loop mode: a tool-driven, multi-step call. LLM.run resolves the
+            // model + tuning + reasoning + cache + span; the runner passed only the
+            // loop seams. Returns the raw result for the runner to map onto RunState.
+            if (req.loop) {
+                const loop = req.loop;
+                return runWithModelFailover(
+                    attempts,
+                    (attemptSlot, control) =>
+                        runAgentLoopCall({
+                            byokConfig: attemptSlot,
+                            system: req.system,
+                            messages: req.messages ?? [],
+                            loop: loopWithFailoverGuard(loop, control),
+                            runName: req.runName,
+                            spanName: req.spanName,
+                            attrs: req.attrs,
+                            organizationId: req.organizationId,
+                            reporter: req.reporter,
+                            queueTimeoutMs: req.queueTimeoutMs,
+                            provider: req.provider,
+                            providerOptions: req.providerOptions,
+                            telemetryMetadata: req.telemetryMetadata,
+                            recordTelemetryInputs: req.recordTelemetryInputs,
+                            signal: req.signal,
+                            maxOutputTokens: req.maxOutputTokens,
+                            temperature: req.temperature,
+                            reviewContextDelivery: req.reviewContextDelivery,
+                        }),
+                    failoverOpts,
+                );
+            }
+
+            // Pull the schema out first so a text call can never carry a stray
+            // `schema` prop into the text executor. One-shot calls are atomic, so they
+            // never veto failover — a primary failure re-issues cleanly on the fallback.
+            const { schema, ...rest } = req;
+            const baseParams = toExecutorParams(rest);
             return runWithModelFailover(
                 attempts,
-                (attemptSlot, control) =>
-                    runAgentLoopCall({
+                (attemptSlot) => {
+                    const params: BaseReviewCallParams = {
+                        ...baseParams,
                         byokConfig: attemptSlot,
-                        system: req.system,
-                        messages: req.messages ?? [],
-                        loop: loopWithFailoverGuard(loop, control),
-                        runName: req.runName,
-                        spanName: req.spanName,
-                        attrs: req.attrs,
-                        organizationId: req.organizationId,
-                        reporter: req.reporter,
-                        queueTimeoutMs: req.queueTimeoutMs,
-                        provider: req.provider,
-                        providerOptions: req.providerOptions,
-                        telemetryMetadata: req.telemetryMetadata,
-                        recordTelemetryInputs: req.recordTelemetryInputs,
-                        signal: req.signal,
-                        maxOutputTokens: req.maxOutputTokens,
-                        temperature: req.temperature,
-                    }),
+                    };
+                    return schema
+                        ? runStructuredReviewCall({ ...params, schema })
+                        : runTextReviewCall(params);
+                },
                 failoverOpts,
             );
-        }
-
-        // Pull the schema out first so a text call can never carry a stray
-        // `schema` prop into the text executor. One-shot calls are atomic, so they
-        // never veto failover — a primary failure re-issues cleanly on the fallback.
-        const { schema, ...rest } = req;
-        const baseParams = toExecutorParams(rest);
-        return runWithModelFailover(
-            attempts,
-            (attemptSlot) => {
-                const params: BaseReviewCallParams = {
-                    ...baseParams,
-                    byokConfig: attemptSlot,
-                };
-                return schema
-                    ? runStructuredReviewCall({ ...params, schema })
-                    : runTextReviewCall(params);
-            },
-            failoverOpts,
-        );
+        });
     }
 }
