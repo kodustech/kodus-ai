@@ -24,6 +24,18 @@ export interface IWorkflowJobRepository {
         lastError: string;
         errorClassification: unknown;
     }): Promise<StaleWorkflowJobReapResult[]>;
+    failEphemeralJob(
+        id: string,
+        params: {
+            lastError: string;
+            errorClassification: unknown;
+        },
+    ): Promise<boolean>;
+    failStaleEphemeralPending(params: {
+        olderThan: Date;
+        lastError: string;
+        errorClassification: unknown;
+    }): Promise<StaleWorkflowJobReapResult[]>;
 }
 
 export const WORKFLOW_JOB_REPOSITORY_TOKEN = Symbol.for(

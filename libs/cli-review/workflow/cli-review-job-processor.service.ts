@@ -16,8 +16,10 @@ import {
     IRateLimitGateService,
     RATE_LIMIT_GATE_SERVICE_TOKEN,
 } from '@libs/core/workflow/domain/contracts/rate-limit-gate.service.contract';
-import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { classifyGitHubError } from '@libs/core/workflow/domain/errors/classify-github-error';
+import type { WorkflowEphemeralPayload } from '@libs/core/workflow/domain/types/workflow-ephemeral-payload';
+import { isReviewContext } from '@libs/cli-review/domain/types/review-context.types';
+import type { CliReviewInput } from '@libs/cli-review/domain/types/cli-review.types';
 
 @Injectable()
 export class CliReviewJobProcessorService implements IJobProcessorService {
@@ -31,7 +33,11 @@ export class CliReviewJobProcessorService implements IJobProcessorService {
         private readonly rateLimitGate: IRateLimitGateService,
     ) {}
 
-    async process(jobId: string, signal?: AbortSignal): Promise<void> {
+    async process(
+        jobId: string,
+        signal?: AbortSignal,
+        ephemeralPayload?: WorkflowEphemeralPayload,
+    ): Promise<void> {
         const job = await this.jobRepository.findOne(jobId);
         if (!job) {
             throw new Error(`CLI review job ${jobId} not found`);
@@ -42,20 +48,31 @@ export class CliReviewJobProcessorService implements IJobProcessorService {
         }
 
         const payload = job.payload as CliReviewJobPayload;
-        if (
-            !payload?.organizationAndTeamData ||
-            !payload?.input
-        ) {
+        if (!payload?.organizationAndTeamData || !payload?.input) {
             throw new Error(
                 `Invalid CLI review payload for job ${jobId}: missing required fields`,
             );
         }
 
+        const ephemeralReviewContext = ephemeralPayload?.reviewContext;
+        let reviewInput: CliReviewInput = payload.input;
+        if (ephemeralReviewContext !== undefined) {
+            if (!isReviewContext(ephemeralReviewContext)) {
+                throw new Error(
+                    `Invalid ephemeral review context for job ${jobId}`,
+                );
+            }
+            reviewInput = {
+                ...payload.input,
+                reviewContext: ephemeralReviewContext,
+            };
+        }
+
         // Pre-check the GitHub rate-limit bucket. If exhausted, the gate
-        // throws RateLimitError(resetAt) and the consumer error handler
-        // republishes with a delay aligned to the bucket reset instead
-        // of burning the full router timeout. Non-GitHub platforms pass
-        // through silently inside the gate.
+        // throws RateLimitError(resetAt). Durable jobs are republished with a
+        // bounded delay; ephemeral context jobs become terminal and ask the
+        // client to submit again because their body cannot enter a retry/DLQ.
+        // Non-GitHub platforms pass through silently inside the gate.
         //
         // No GitHub default here: the CLI leaves this undefined for hosts it
         // cannot recognize (any self-managed instance), and claiming GitHub
@@ -75,7 +92,7 @@ export class CliReviewJobProcessorService implements IJobProcessorService {
             const result = await raceWithAbortSignal(
                 this.executeCliReviewUseCase.execute({
                     organizationAndTeamData: payload.organizationAndTeamData,
-                    input: payload.input,
+                    input: reviewInput,
                     isTrialMode: payload.isTrialMode,
                     userEmail: payload.userEmail,
                     gitContext: payload.gitContext,

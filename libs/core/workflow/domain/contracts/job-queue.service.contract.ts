@@ -1,12 +1,18 @@
 import { JobStatus } from '../enums/job-status.enum';
 import { WorkflowType } from '../enums/workflow-type.enum';
 import { IWorkflowJob } from '../interfaces/workflow-job.interface';
+import type { WorkflowEphemeralPayload } from '../types/workflow-ephemeral-payload';
 
 export const JOB_QUEUE_SERVICE_TOKEN = Symbol.for('JobQueueService');
 
 export interface IJobQueueService {
     enqueue(
         job: Omit<IWorkflowJob, 'id' | 'createdAt' | 'updatedAt'>,
+    ): Promise<string>;
+
+    enqueueEphemeral(
+        job: Omit<IWorkflowJob, 'id' | 'createdAt' | 'updatedAt'>,
+        ephemeralPayload: WorkflowEphemeralPayload,
     ): Promise<string>;
 
     getStatus(jobId: string): Promise<IWorkflowJob | null>;

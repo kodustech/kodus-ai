@@ -81,6 +81,27 @@ describe('buildOrchestratorInput — context→agent wiring', () => {
         expect(input.traceDecisions).toBe(traceDecisions);
     });
 
+    it('forwards the exact request-scoped review context reference', () => {
+        const reviewContext = {
+            source: 'cli-review-context-file' as const,
+            contentType: 'text/plain; charset=utf-8' as const,
+            body: 'CANARY: inspect abort cleanup',
+        };
+
+        const input = buildOrchestratorInput(
+            makeContext({ reviewContext }),
+            computed,
+        );
+
+        expect(input.reviewContext).toBe(reviewContext);
+    });
+
+    it('leaves review context absent for ordinary reviews', () => {
+        expect(
+            buildOrchestratorInput(makeContext(), computed).reviewContext,
+        ).toBeUndefined();
+    });
+
     it('defaults reviewMode to normal when unset', () => {
         expect(
             buildOrchestratorInput(makeContext(), computed).reviewMode,

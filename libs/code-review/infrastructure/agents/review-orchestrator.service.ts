@@ -16,6 +16,7 @@ import {
     ReviewAgentInput,
     ReviewAgentOutput,
 } from '@libs/code-review/infrastructure/agents/review-agent.contract';
+import type { ReviewContextDelivery } from '@libs/cli-review/domain/types/review-context.types';
 import {
     dedupReviewWarnings,
     type ReviewWarning,
@@ -58,6 +59,18 @@ export interface OrchestratorOutput {
      *  by (kind, modelName, contextWindowTokens). Empty array when no
      *  adaptive strategy fired. */
     warnings: ReviewWarning[];
+    reviewContextDeliveries?: ReviewContextDelivery[];
+}
+
+function reviewContextDeliveryKey(delivery: ReviewContextDelivery): string {
+    return JSON.stringify([
+        delivery.sha256,
+        delivery.recipient,
+        delivery.phase,
+        delivery.source,
+        delivery.contentType,
+        delivery.utf8Bytes,
+    ]);
 }
 
 /**
@@ -182,10 +195,21 @@ export class ReviewOrchestratorService {
             },
         });
 
+        const deliveredContext = new Map<string, ReviewContextDelivery>();
+        const recordDelivery = (delivery: ReviewContextDelivery): void => {
+            const key = reviewContextDeliveryKey(delivery);
+            if (deliveredContext.has(key)) {
+                return;
+            }
+            deliveredContext.set(key, delivery);
+            agentInput.onReviewContextDelivery?.(delivery);
+        };
+
         // Strip file bodies from changedFiles before sending to agents.
         // Agents access full source on demand via readFile in the sandbox.
         const agentInputWithoutContent: ReviewAgentInput = {
             ...agentInput,
+            onReviewContextDelivery: recordDelivery,
             changedFiles: agentInput.changedFiles.map(
                 ({ content: _content, fileContent: _fileContent, ...rest }) =>
                     rest as any,
@@ -304,6 +328,15 @@ export class ReviewOrchestratorService {
         const warnings = dedupReviewWarnings(
             agentResults.flatMap((r) => r.warnings ?? []),
         );
+        for (const result of agentResults) {
+            for (const delivery of result.reviewContextDeliveries ?? []) {
+                deliveredContext.set(
+                    reviewContextDeliveryKey(delivery),
+                    delivery,
+                );
+            }
+        }
+        const reviewContextDeliveries = [...deliveredContext.values()];
 
         return {
             suggestions: allSuggestions,
@@ -312,6 +345,9 @@ export class ReviewOrchestratorService {
             incomplete,
             totalDurationMs,
             warnings,
+            ...(reviewContextDeliveries.length > 0 && {
+                reviewContextDeliveries,
+            }),
         };
     }
 

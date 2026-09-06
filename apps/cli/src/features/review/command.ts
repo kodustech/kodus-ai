@@ -45,7 +45,12 @@ import {
 } from './hunk-context.js';
 import { ApiError } from '../../types/errors.js';
 import type { GlobalOptions } from '../../types/cli.js';
-import type { ReviewResult, TrialReviewResult } from '../../types/review.js';
+import type {
+    ReviewContext,
+    ReviewResult,
+    TrialReviewResult,
+} from '../../types/review.js';
+import { loadReviewContextFile } from './review-context-file.js';
 
 type ReviewCommandOptions = {
     staged?: boolean;
@@ -59,6 +64,7 @@ type ReviewCommandOptions = {
     fix?: boolean;
     promptOnly?: boolean;
     context?: string;
+    reviewContextFile?: string;
     failOn?: string;
     fields?: string;
     githubPat?: string;
@@ -130,6 +136,10 @@ Examples:
         )
         .option('--context <file>', 'Custom context file to include in review')
         .option(
+            '--review-context-file <path>',
+            'Send a request-scoped UTF-8 context packet to review agents (maximum 12 KiB)',
+        )
+        .option(
             '--fields <csv>',
             'Select response fields (JSON/agent mode only), e.g. summary,issues.file',
         )
@@ -159,6 +169,9 @@ async function reviewAction(
 
     try {
         validateReviewOptions(options);
+        const reviewContext = options.reviewContextFile
+            ? await loadReviewContextFile(options.reviewContextFile)
+            : undefined;
 
         assertStructuredOutputForFields({
             fields: options.fields,
@@ -233,6 +246,7 @@ async function reviewAction(
                         branch: options.branch,
                         focus: options.focus,
                         heavy: options.heavy,
+                        reviewContext,
                         quiet: globalOpts.quiet,
                         onProgress: (status) => {
                             if (globalOpts.quiet || ctx.isAgent) {
@@ -278,6 +292,7 @@ async function reviewAction(
                     ctx,
                     globalOpts,
                     githubPat: resolveTrialGithubPat(options),
+                    reviewContext,
                 });
 
                 if (!fallbackResult) {
@@ -343,6 +358,7 @@ async function reviewAction(
 
             const trialResult = await reviewService.trialAnalyze(diff, {
                 githubPat: resolveTrialGithubPat(options),
+                reviewContext,
             });
             result = trialResult;
             if (!globalOpts.quiet && !ctx.isAgent) {
@@ -578,12 +594,14 @@ async function runTrialFallback({
     ctx,
     globalOpts,
     githubPat,
+    reviewContext,
 }: {
     diff: string;
     spinner: Ora;
     ctx: ReturnType<typeof createCommandContext>;
     globalOpts: GlobalOptions;
     githubPat?: string;
+    reviewContext?: ReviewContext;
 }): Promise<TrialReviewResult | null> {
     if (!globalOpts.quiet && !ctx.isAgent) {
         spinner.start(chalk.cyan('Checking trial limit...'));
@@ -604,7 +622,10 @@ async function runTrialFallback({
         reviewService.setVerbose(true);
     }
 
-    const trialResult = await reviewService.trialAnalyze(diff, { githubPat });
+    const trialResult = await reviewService.trialAnalyze(diff, {
+        githubPat,
+        reviewContext,
+    });
 
     if (!globalOpts.quiet && !ctx.isAgent) {
         spinner.succeed(chalk.green(formatTrialCompletionMessage(trialResult)));

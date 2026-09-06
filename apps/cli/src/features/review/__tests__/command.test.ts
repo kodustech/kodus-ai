@@ -18,8 +18,22 @@ describe('createReviewCommand', () => {
                 '--prompt-only',
                 '--fail-on <severity>',
                 '--context <file>',
+                '--review-context-file <path>',
                 '--fields <csv>',
             ]),
+        );
+    });
+
+    it('parses the review context file path', () => {
+        const command = createReviewCommand();
+
+        command.parseOptions([
+            '--review-context-file',
+            '/tmp/review-context.txt',
+        ]);
+
+        expect(command.opts().reviewContextFile).toBe(
+            '/tmp/review-context.txt',
         );
     });
 

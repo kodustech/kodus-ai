@@ -1,5 +1,87 @@
 export type Severity = 'info' | 'warning' | 'error' | 'critical';
 
+export const REVIEW_CONTEXT_SOURCE = 'cli-review-context-file' as const;
+export const REVIEW_CONTEXT_CONTENT_TYPE = 'text/plain; charset=utf-8' as const;
+export const REVIEW_CONTEXT_MAX_BYTES = 12 * 1024;
+
+export interface ReviewContext {
+    readonly source: typeof REVIEW_CONTEXT_SOURCE;
+    readonly contentType: typeof REVIEW_CONTEXT_CONTENT_TYPE;
+    readonly body: string;
+}
+
+export interface ReviewContextDelivery {
+    readonly source: typeof REVIEW_CONTEXT_SOURCE;
+    readonly contentType: typeof REVIEW_CONTEXT_CONTENT_TYPE;
+    readonly sha256: string;
+    readonly utf8Bytes: number;
+    readonly recipient: string;
+    readonly phase: string;
+}
+
+export type ReviewUsageUnavailableReason =
+    | 'provider-did-not-report-usage'
+    | 'model-call-failed-without-provider-usage';
+
+export interface ReviewTelemetryModelCall {
+    readonly callId: string;
+    readonly logicalCallId: string;
+    readonly attempt: number;
+    readonly provider: string;
+    readonly model: string;
+    readonly agent: string;
+    readonly phase: string;
+    readonly sdkMaxRetries: number;
+    readonly status: 'completed' | 'failed';
+    readonly elapsedMs: number;
+    readonly usage?: {
+        readonly inputTokens?: number;
+        readonly outputTokens?: number;
+        readonly totalTokens?: number;
+        readonly reasoningTokens?: number;
+        readonly cacheReadTokens?: number;
+        readonly cacheWriteTokens?: number;
+    };
+    readonly usageUnavailableReason?: ReviewUsageUnavailableReason;
+}
+
+export interface ReviewTelemetryContextReceipt extends ReviewContextDelivery {
+    readonly callId: string;
+    readonly logicalCallId: string;
+    readonly attemptState: 'completed' | 'failed';
+    readonly deliveryState: 'confirmed' | 'unknown';
+}
+
+export interface ReviewTelemetry {
+    readonly schemaVersion: 1;
+    readonly elapsedMs: number;
+    readonly modelCallCount: number;
+    readonly modelCalls: readonly ReviewTelemetryModelCall[];
+    readonly usageTotals: {
+        readonly inputTokens: number;
+        readonly outputTokens: number;
+        readonly totalTokens: number;
+        readonly reasoningTokens: number;
+        readonly cacheReadTokens: number;
+        readonly cacheWriteTokens: number;
+        readonly fieldReportingCallCount: {
+            readonly inputTokens: number;
+            readonly outputTokens: number;
+            readonly totalTokens: number;
+            readonly reasoningTokens: number;
+            readonly cacheReadTokens: number;
+            readonly cacheWriteTokens: number;
+        };
+        readonly callsWithUsage: number;
+        readonly incompleteCallCount: number;
+        readonly incompleteReasons: readonly {
+            readonly reason: ReviewUsageUnavailableReason;
+            readonly count: number;
+        }[];
+    };
+    readonly contextReceipts: readonly ReviewTelemetryContextReceipt[];
+}
+
 /** Severity values the API may return before normalization. */
 export type ApiSeverity = Severity | 'high' | 'medium' | 'low';
 
@@ -40,6 +122,8 @@ export interface ReviewResult {
     issues: ReviewIssue[];
     filesAnalyzed: number;
     duration: number;
+    reviewContextDeliveries?: readonly ReviewContextDelivery[];
+    reviewTelemetry?: ReviewTelemetry;
 }
 
 export interface ApiFileSuggestion {

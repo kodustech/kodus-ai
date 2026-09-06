@@ -8,6 +8,7 @@ import {
     calculateBackoffInterval,
 } from '@libs/common/utils/polling';
 import { isRateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
+import { EphemeralJobReconciliationError } from '@libs/core/workflow/infrastructure/ephemeral-job-lifecycle';
 
 /**
  * Backoff configuration for consumer retries.
@@ -17,8 +18,8 @@ import { isRateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.e
  * burned ~9 min of webhook slot (or 1h45 min of code-review slot) under
  * a saturated GitHub bucket, so 5 attempts cost up to 45 min per job for
  * an error that would never succeed within that window. With the
- * RATE_LIMITED-aware delay below, retries that DO happen now wait for
- * the bucket to actually reset, so 2 attempts are enough.
+ * RATE_LIMITED-aware delay below, retries use the reset time subject to
+ * a one-hour cap, so 2 attempts are enough without parking messages indefinitely.
  */
 const DEFAULT_MAX_RETRIES_CONSUMER = 2;
 const DEFAULT_RETRY_DELAY_MS = 1000;
@@ -92,6 +93,40 @@ export class RabbitMQErrorHandler implements OnModuleInit {
         const baseExchange = this.getBaseExchange(msg.fields.exchange);
         const delayedExchange = `${baseExchange}.delayed`;
         const dlxExchange = `${baseExchange}.dlx`;
+
+        if (
+            headers['x-kodus-ephemeral'] === true &&
+            error instanceof EphemeralJobReconciliationError
+        ) {
+            this.logger.error({
+                message:
+                    'Ephemeral job reconciliation failed; leaving message recoverable',
+                context: RabbitMQErrorHandler.name,
+                metadata: {
+                    messageId,
+                    jobId: error.jobId,
+                    organizationId: headers['x-kodus-organization-id'],
+                    routingKey: msg.fields.routingKey,
+                    terminalReason: 'reconciliation-failed',
+                },
+            });
+            channel.nack(msg, false, true);
+            return;
+        }
+
+        if (headers['x-kodus-ephemeral'] === true) {
+            this.logger.warn({
+                message:
+                    'Ephemeral message processing failed; dropping without retry',
+                context: RabbitMQErrorHandler.name,
+                metadata: {
+                    messageId,
+                    routingKey: msg.fields.routingKey,
+                },
+            });
+            channel.ack(msg);
+            return;
+        }
 
         try {
             if (retryCount < this.maxRetriesConsumer) {
@@ -241,8 +276,8 @@ export class RabbitMQErrorHandler implements OnModuleInit {
     }
 
     /**
-     * Delay for RATE_LIMITED errors — wait until the bucket actually
-     * resets, with a safety buffer and a hard cap. See the module-level
+     * Delay for RATE_LIMITED errors — target the bucket reset with a safety
+     * buffer, capped at one hour. A distant reset can therefore be retried early. See the module-level
      * constants for rationale.
      *
      * Cases handled:

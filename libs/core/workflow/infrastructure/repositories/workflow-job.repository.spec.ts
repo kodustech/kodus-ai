@@ -1,3 +1,4 @@
+import type { Repository } from 'typeorm';
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
 
@@ -70,10 +71,8 @@ describe('WorkflowJobRepository.failStaleProcessing', () => {
     it('returns the reaped rows for logging', async () => {
         const reaped = [
             {
-                uuid: 'job-1',
-                workflowType: 'CODE_REVIEW',
-                organizationId: 'org-1',
-                startedAt: new Date('2026-06-26T14:00:00Z'),
+                lastError: 'Submit again',
+                errorClassification: ErrorClassification.PERMANENT,
             },
         ];
         qb.execute.mockResolvedValue({ raw: reaped, affected: 1 });
@@ -95,5 +94,91 @@ describe('WorkflowJobRepository.failStaleProcessing', () => {
         });
 
         expect(result).toEqual([]);
+    });
+});
+
+describe('WorkflowJobRepository ephemeral terminal transitions', () => {
+    function createHarness(): {
+        repo: WorkflowJobRepository;
+        qb: {
+            update: jest.Mock;
+            set: jest.Mock;
+            where: jest.Mock;
+            andWhere: jest.Mock;
+            returning: jest.Mock;
+            execute: jest.Mock;
+        };
+    } {
+        const qb = {
+            update: jest.fn().mockReturnThis(),
+            set: jest.fn().mockReturnThis(),
+            where: jest.fn().mockReturnThis(),
+            andWhere: jest.fn().mockReturnThis(),
+            returning: jest.fn().mockReturnThis(),
+            execute: jest.fn().mockResolvedValue({ raw: [], affected: 0 }),
+        };
+        const repository = {
+            createQueryBuilder: jest.fn().mockReturnValue(qb),
+        };
+        return {
+            repo: new WorkflowJobRepository(
+                repository as unknown as Repository<WorkflowJobModel>,
+            ),
+            qb,
+        };
+    }
+
+    it('reconciles only marked ephemeral jobs that are still non-terminal', async () => {
+        const { repo, qb } = createHarness();
+
+        await repo.failEphemeralJob('job-1', {
+            lastError:
+                'Review context transport failed. Submit the review again.',
+            errorClassification: ErrorClassification.PERMANENT,
+            terminalReason: 'consumer-rejected',
+        });
+
+        expect(qb.where).toHaveBeenCalledWith('uuid = :id', {
+            id: 'job-1',
+        });
+        expect(qb.andWhere).toHaveBeenCalledWith('status IN (:...statuses)', {
+            statuses: [JobStatus.PENDING, JobStatus.PROCESSING],
+        });
+        expect(qb.andWhere).toHaveBeenCalledWith(
+            "metadata ->> 'ephemeralTransport' = 'true'",
+        );
+        expect(qb.set).toHaveBeenCalledWith(
+            expect.objectContaining({
+                status: JobStatus.FAILED,
+                completedAt: expect.any(Function),
+            }),
+        );
+    });
+
+    it('reaps only stale PENDING jobs carrying the ephemeral marker', async () => {
+        const { repo, qb } = createHarness();
+        const olderThan = new Date('2026-09-05T00:00:00Z');
+
+        await repo.failStaleEphemeralPending({
+            olderThan,
+            lastError: 'Review context expired. Submit the review again.',
+            errorClassification: ErrorClassification.PERMANENT,
+        });
+
+        expect(qb.where).toHaveBeenCalledWith('status = :status', {
+            status: JobStatus.PENDING,
+        });
+        expect(qb.andWhere).toHaveBeenCalledWith(
+            "metadata ->> 'ephemeralTransport' = 'true'",
+        );
+        expect(qb.andWhere).toHaveBeenCalledWith('"updatedAt" < :olderThan', {
+            olderThan,
+        });
+        expect(qb.set).toHaveBeenCalledWith(
+            expect.objectContaining({
+                status: JobStatus.FAILED,
+                completedAt: expect.any(Function),
+            }),
+        );
     });
 });

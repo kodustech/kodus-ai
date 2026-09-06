@@ -32,6 +32,11 @@ import { createLogger } from '@libs/core/log/logger';
 import type { FinderSuggestion } from '@libs/code-review/infrastructure/agents/core/finder.agent';
 import { supportsStrictToolsForRun } from '@libs/code-review/infrastructure/agents/core/model-strictness';
 import {
+    createReviewContextDelivery,
+    formatReviewContext,
+    type ReviewContext,
+} from '@libs/cli-review/domain/types/review-context.types';
+import {
     buildLangfuseTelemetry,
     toAiSdkTelemetryArgs,
     type LangfuseTelemetryMetadata,
@@ -116,7 +121,10 @@ export function buildVerifierAgentSpec(
 }
 
 /** Format a finding into the verifier's per-run task prompt (HV2 evidence). */
-export function verifierPromptFor(finding: FinderSuggestion): string {
+export function verifierPromptFor(
+    finding: FinderSuggestion,
+    reviewContext?: ReviewContext,
+): string {
     const bundle = [
         `File: ${finding.relevantFile}`,
         finding.relevantLinesStart != null
@@ -128,7 +136,9 @@ export function verifierPromptFor(finding: FinderSuggestion): string {
     ]
         .filter(Boolean)
         .join('\n');
-    return buildVerifierPrompt(bundle, 0).prompt;
+    const prompt = buildVerifierPrompt(bundle, 0).prompt;
+    const contextBlock = formatReviewContext(reviewContext);
+    return contextBlock ? `${contextBlock}\n\n${prompt}` : prompt;
 }
 
 /** Extract the verdict from a verifier run by reading the run's materialized
@@ -230,6 +240,10 @@ export interface LlmVerifierParams {
      *  their leaf usage span under `${usageRunName}-verify` so `deriveArea`
      *  buckets them to `review` (verify is part of the review cost). */
     usageRunName?: string;
+    reviewContext?: ReviewContext;
+    /** Distinguishes normal verification from evidence-gate re-verification. */
+    reviewContextPhase?: 'verifier' | 'evidence-gate-verifier';
+    recordTelemetryInputs?: boolean;
 }
 
 /** The LLM-judge Verifier (HV2): runs a verifier AgentSpec once per finding on
@@ -308,10 +322,24 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
         const state = await this.runner.run(
             spec,
             {
-                prompt: verifierPromptFor(candidate),
+                prompt: verifierPromptFor(candidate, this.params.reviewContext),
                 ...toAiSdkTelemetryArgs(
-                    buildLangfuseTelemetry(fnId, this.params.telemetryMetadata),
+                    buildLangfuseTelemetry(
+                        fnId,
+                        this.params.telemetryMetadata,
+                        { recordInputs: this.params.recordTelemetryInputs },
+                    ),
                 ),
+                telemetryPhase: this.params.reviewContextPhase ?? 'verifier',
+                ...(this.params.reviewContext
+                    ? {
+                          reviewContextDelivery: createReviewContextDelivery(
+                              this.params.reviewContext,
+                              this.params.agentName ?? 'agent',
+                              this.params.reviewContextPhase ?? 'verifier',
+                          ),
+                      }
+                    : {}),
             },
             ctx,
         );

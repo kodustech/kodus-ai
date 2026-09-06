@@ -665,6 +665,7 @@ export class CliReviewController {
             input: {
                 diff: body.diff,
                 config: body.config,
+                reviewContext: body.reviewContext,
             },
             isTrialMode: false,
             userEmail: body.userEmail,
@@ -949,6 +950,7 @@ export class CliReviewController {
             input: {
                 diff: body.diff,
                 config: body.config,
+                reviewContext: body.reviewContext,
             },
             isTrialMode: true,
             gitContext: {

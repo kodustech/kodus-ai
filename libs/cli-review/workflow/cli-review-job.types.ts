@@ -127,7 +127,7 @@ export interface CliReviewJobPublicPrMetadata {
 
 export interface CliReviewJobPayload {
     organizationAndTeamData: OrganizationAndTeamData;
-    input: CliReviewInput;
+    input: Omit<CliReviewInput, 'reviewContext'>;
     isTrialMode?: boolean;
     userEmail?: string;
     gitContext?: CliReviewJobGitContext;

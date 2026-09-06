@@ -19,6 +19,12 @@
  * Out of scope here (later phases): the T0 regex compiler, T2 reference-file
  * inlining, hybrid regex+judge, compound-rule decomposition.
  */
+import {
+    createReviewContextDelivery,
+    formatReviewContext,
+    type ReviewContext,
+    type ReviewContextDelivery,
+} from '@libs/cli-review/domain/types/review-context.types';
 import { jsonSchema, type Schema } from 'ai';
 import { z } from 'zod';
 import { recoverRuleUuid } from './finding-mapper';
@@ -179,6 +185,7 @@ export interface ShardedJudgeInput {
     /** active, non-memory STANDARD rules already resolved for this review. */
     rules: Array<Partial<IKodyRule>>;
     runJudge: RunJudge;
+    reviewContext?: ReviewContext;
     prTitle?: string;
     prBody?: string;
     /** max concurrent shard calls (BYOK models rate-limit — keep modest). */
@@ -207,6 +214,7 @@ export interface ShardedJudgeResult {
     violations: ShardViolation[];
     shardsRun: number;
     shardsErrored: number;
+    reviewContextDeliveries?: ReviewContextDelivery[];
 }
 
 // ── prompts (aligned with the validated batched eval prompt) ─────────────────
@@ -224,10 +232,7 @@ export const SHARD_PR_SYSTEM_PROMPT = `You evaluate PULL-REQUEST-level team rule
 function ruleBlock(rules: Array<Partial<IKodyRule>>): string {
     return rules
         .map((r, i) => {
-            const parts = [
-                `[${i + 1}] ${r.title}`,
-                `  description: ${r.rule}`,
-            ];
+            const parts = [`[${i + 1}] ${r.title}`, `  description: ${r.rule}`];
             if (r.examples?.length) {
                 parts.push(`  examples:`);
                 for (const ex of r.examples) {
@@ -264,9 +269,10 @@ function fileShardUser(
     file: FileChange,
     rules: Array<Partial<IKodyRule>>,
     languageLabel?: string | null,
+    reviewContext?: ReviewContext,
 ): string {
     const diff = (file as any).patchWithLinesStr ?? file.patch ?? '';
-    return [
+    const prompt = [
         `<Rules>`,
         ruleBlock(rules),
         `</Rules>`,
@@ -282,6 +288,8 @@ function fileShardUser(
         `Return ONLY JSON (ruleId is the rule's [n] number):`,
         `{"violations":[{"ruleId":<n>,"relevantLinesStart":<line>,"relevantLinesEnd":<line>,"existingCode":"<offending code>","suggestionContent":"WHAT/WHY/HOW","oneSentenceSummary":"<short>"}]}`,
     ].join('\n');
+    const contextBlock = formatReviewContext(reviewContext);
+    return contextBlock ? `${contextBlock}\n\n${prompt}` : prompt;
 }
 
 /**
@@ -301,6 +309,7 @@ function prShardUser(
     prTitle?: string,
     prBody?: string,
     languageLabel?: string | null,
+    reviewContext?: ReviewContext,
 ): string {
     let used = 0;
     const diffs: string[] = [];
@@ -320,7 +329,7 @@ function prShardUser(
         used += diff.length;
         diffs.push(diff);
     }
-    return [
+    const prompt = [
         `<Rules>`,
         ruleBlock(rules),
         `</Rules>`,
@@ -339,6 +348,8 @@ function prShardUser(
         ...languageInstructionLines(languageLabel),
         `Return ONLY JSON (ruleId is the rule's [n] number): {"violations":[{"ruleId":<n>,"suggestionContent":"WHAT/WHY","oneSentenceSummary":"<short>"}]}`,
     ].join('\n');
+    const contextBlock = formatReviewContext(reviewContext);
+    return contextBlock ? `${contextBlock}\n\n${prompt}` : prompt;
 }
 
 export function ruleAppliesToFile(filePath: string, pattern?: string): boolean {
@@ -618,12 +629,38 @@ export async function judgeKodyRulesSharded(
         changedFiles,
         rules,
         runJudge,
+        reviewContext,
         prTitle,
         prBody,
         logger,
         languageLabel,
     } = input;
     const concurrency = input.concurrency ?? 4;
+    const safeContextFailureMetadata = (
+        err: unknown,
+        metadata: Readonly<Record<string, unknown>> = {},
+    ): Readonly<Record<string, unknown>> => {
+        const source =
+            typeof err === 'object' && err !== null
+                ? (err as Record<string, unknown>)
+                : {};
+        const errorName =
+            typeof source.name === 'string' &&
+            /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/u.test(source.name)
+                ? source.name
+                : 'Error';
+        const errorCode =
+            typeof source.code === 'string' &&
+            /^[A-Za-z0-9_.-]{1,64}$/u.test(source.code)
+                ? source.code
+                : undefined;
+        return {
+            ...metadata,
+            reason: 'Provider call failed while processing request-scoped context',
+            errorName,
+            ...(errorCode ? { errorCode } : {}),
+        };
+    };
 
     const fileRules = rules.filter((r) => !isPrLevel(r));
     const prRules = rules.filter(isPrLevel);
@@ -631,6 +668,7 @@ export async function judgeKodyRulesSharded(
     let shardsRun = 0;
     let shardsErrored = 0;
     const violations: ShardViolation[] = [];
+    const reviewContextDeliveries: ReviewContextDelivery[] = [];
 
     // ── file-scope shards: one per changed file that has applicable rules ────
     const fileShards = changedFiles
@@ -647,9 +685,23 @@ export async function judgeKodyRulesSharded(
             // the indices don't shift.
             const ruleUuids = applicable.map((r) => r.uuid ?? '');
             try {
+                if (reviewContext) {
+                    reviewContextDeliveries.push(
+                        createReviewContextDelivery(
+                            reviewContext,
+                            `kodus-rules-review-agent:${file.filename}`,
+                            'file-shard',
+                        ),
+                    );
+                }
                 const vs = await runJudge({
                     system: SHARD_SYSTEM_PROMPT,
-                    user: fileShardUser(file, applicable, languageLabel),
+                    user: fileShardUser(
+                        file,
+                        applicable,
+                        languageLabel,
+                        reviewContext,
+                    ),
                     filename: file.filename,
                     ruleUuids,
                 });
@@ -662,12 +714,16 @@ export async function judgeKodyRulesSharded(
             } catch (err) {
                 shardsErrored++;
                 logger?.warn({
-                    message: `[kody-rules-shard] file shard failed for ${file.filename} (${applicable.length} rule(s)) — degrading to zero findings: ${err instanceof Error ? err.message : String(err)}`,
+                    message: `[kody-rules-shard] file shard failed for ${file.filename} (${applicable.length} rule(s)) — degrading to zero findings${reviewContext ? '' : `: ${err instanceof Error ? err.message : String(err)}`}`,
                     // SimpleLogger silently drops entries without a context
                     // string (shouldSkipLog) — omitting it would re-swallow
                     // exactly the failure this log exists to surface.
                     context: 'kody-rules-sharded',
-                    metadata: { filename: file.filename, err },
+                    metadata: reviewContext
+                        ? safeContextFailureMetadata(err, {
+                              filename: file.filename,
+                          })
+                        : { filename: file.filename, err },
                 });
                 return [] as ShardViolation[];
             }
@@ -680,6 +736,15 @@ export async function judgeKodyRulesSharded(
         shardsRun++;
         const ruleUuids = prRules.map((r) => r.uuid ?? '');
         try {
+            if (reviewContext) {
+                reviewContextDeliveries.push(
+                    createReviewContextDelivery(
+                        reviewContext,
+                        'kodus-rules-review-agent:pull-request',
+                        'pr-shard',
+                    ),
+                );
+            }
             const vs = await runJudge({
                 system: SHARD_PR_SYSTEM_PROMPT,
                 user: prShardUser(
@@ -688,6 +753,7 @@ export async function judgeKodyRulesSharded(
                     prTitle,
                     prBody,
                     languageLabel,
+                    reviewContext,
                 ),
                 filename: null,
                 ruleUuids,
@@ -698,12 +764,21 @@ export async function judgeKodyRulesSharded(
         } catch (err) {
             shardsErrored++;
             logger?.warn({
-                message: `[kody-rules-shard] PR-scope shard failed (${prRules.length} rule(s)) — degrading to zero findings: ${err instanceof Error ? err.message : String(err)}`,
+                message: `[kody-rules-shard] PR-scope shard failed (${prRules.length} rule(s)) — degrading to zero findings${reviewContext ? '' : `: ${err instanceof Error ? err.message : String(err)}`}`,
                 context: 'kody-rules-sharded',
-                metadata: { err },
+                metadata: reviewContext
+                    ? safeContextFailureMetadata(err)
+                    : { err },
             });
         }
     }
 
-    return { violations, shardsRun, shardsErrored };
+    return {
+        violations,
+        shardsRun,
+        shardsErrored,
+        ...(reviewContextDeliveries.length > 0 && {
+            reviewContextDeliveries,
+        }),
+    };
 }

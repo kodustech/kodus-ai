@@ -27,6 +27,7 @@ export async function runAgentWithTrace<T>(
     meta: AgentTraceMeta,
     spanInput: unknown,
     fn: () => Promise<T>,
+    options?: { readonly recordOutput?: boolean },
 ): Promise<T> {
     if (!shouldTrace()) {
         return fn();
@@ -60,7 +61,9 @@ export async function runAgentWithTrace<T>(
             startActiveObservation(meta.traceName, async (span: any) => {
                 span.update({ input: spanInput });
                 const result = await fn();
-                span.update({ output: result });
+                if (options?.recordOutput !== false) {
+                    span.update({ output: result });
+                }
                 return result;
             }),
     );

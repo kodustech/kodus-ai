@@ -57,6 +57,10 @@ import type {
     ReviewAgentInput,
     AgentProgressEvent,
 } from '@libs/code-review/infrastructure/agents/review-agent.contract';
+import {
+    REVIEW_CONTEXT_CONTENT_TYPE,
+    REVIEW_CONTEXT_SOURCE,
+} from '@libs/cli-review/domain/types/review-context.types';
 
 const resolveModelMock = resolveReviewAgentModel as jest.Mock;
 const runLoopMock = runAgentLoopViaCore as jest.Mock;
@@ -982,5 +986,88 @@ describe('mixed-label reviewer', () => {
         const agent = new MixedReviewAgent({} as any, {} as any);
         const out = await agent.execute(makeInput());
         expect(out.suggestions[0].label).toBe('security');
+    });
+});
+
+describe('review context execution privacy', () => {
+    const contextBody = 'CANARY β: private review evidence';
+    const reviewContext = {
+        source: REVIEW_CONTEXT_SOURCE,
+        contentType: REVIEW_CONTEXT_CONTENT_TYPE,
+        body: contextBody,
+    };
+
+    it('returns deterministic phase receipts without exposing context in traces or progress', async () => {
+        const events: AgentProgressEvent[] = [];
+        runLoopMock.mockResolvedValue(
+            makeHarnessResult({
+                reviewContextPhases: ['finder', 'synthesis-rescue'],
+                findings: {
+                    reasoning: 'found from supplied evidence',
+                    suggestions: [
+                        {
+                            suggestionContent: contextBody,
+                            relevantFile: 'src/a.ts',
+                            oneSentenceSummary: contextBody,
+                            relevantLinesStart: 1,
+                            relevantLinesEnd: 2,
+                            severity: 'high',
+                            existingCode: 'const x',
+                            improvedCode: 'const x = 1',
+                            language: 'typescript',
+                        },
+                    ],
+                },
+                toolCalls: [
+                    {
+                        tool: 'readFile',
+                        toolName: 'readFile',
+                        args: { canary: contextBody },
+                    },
+                ],
+            }),
+        );
+
+        const output = await newAgent().execute(
+            makeInput({
+                reviewContext,
+                onAgentProgress: (event) => events.push(event),
+            }),
+        );
+
+        expect(
+            output.reviewContextDeliveries?.map(({ recipient, phase }) => ({
+                recipient,
+                phase,
+            })),
+        ).toEqual([
+            { recipient: 'kodus-bug-review-agent', phase: 'finder' },
+            {
+                recipient: 'kodus-bug-review-agent',
+                phase: 'synthesis-rescue',
+            },
+        ]);
+        expect(
+            new Set(output.reviewContextDeliveries?.map(({ sha256 }) => sha256)),
+        ).toHaveProperty('size', 1);
+        expect(JSON.stringify(runTraceMock.mock.calls[0]?.[1])).not.toContain(
+            contextBody,
+        );
+        expect(runTraceMock.mock.calls[0]?.[3]).toEqual({
+            recordOutput: false,
+        });
+        expect(JSON.stringify(events)).not.toContain(contextBody);
+    });
+
+    it('fails without fabricating receipts when no context delivery phase completed', async () => {
+        runLoopMock.mockResolvedValue(
+            makeHarnessResult({ reviewContextPhases: undefined }),
+        );
+
+        await expect(
+            newAgent().execute(makeInput({ reviewContext })),
+        ).rejects.toThrow(
+            'Review agent failed while processing request-scoped context',
+        );
     });
 });
