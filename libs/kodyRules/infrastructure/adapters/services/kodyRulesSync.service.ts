@@ -32,6 +32,7 @@ import {
     KodyRuleSeverity,
 } from '@libs/ee/kodyRules/dtos/create-kody-rule.dto';
 import {
+    IKodyRule,
     KodyRulesOrigin,
     KodyRulesScope,
     KodyRulesStatus,
@@ -285,88 +286,128 @@ export class KodyRulesSyncService {
         }
     }
 
+    /**
+     * Every rule of `repositoryId` whose source file is `sourcePath`. A
+     * multi-rule file stores `path#anchor`, so match on the path part. A
+     * sourcePath can carry SEVERAL records (duplicates from concurrent
+     * syncs — observed live: two identical rules from one merge), which is
+     * why the passes below act on the whole list and never on `.find()`.
+     */
+    private rulesBySourcePath(
+        entity: { rules?: Partial<IKodyRule>[] } | null | undefined,
+        repositoryId: string,
+        sourcePath: string,
+    ): Partial<IKodyRule>[] {
+        return (entity?.rules ?? []).filter(
+            (r) =>
+                r?.uuid &&
+                r?.repositoryId === repositoryId &&
+                (r?.sourcePath || '').split('#')[0] === sourcePath,
+        );
+    }
+
     private async deleteRuleBySourcePath(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryId: string;
         sourcePath: string;
     }): Promise<void> {
+        const { organizationAndTeamData, repositoryId, sourcePath } = params;
+        let toDelete: Partial<IKodyRule>[];
         try {
-            const { organizationAndTeamData, repositoryId, sourcePath } =
-                params;
             const entity = await this.kodyRulesService.findByOrganizationId(
                 organizationAndTeamData.organizationId,
             );
-            if (!entity) return;
-
-            const toDelete = entity.rules?.find(
-                (r) =>
-                    r?.repositoryId === repositoryId &&
-                    (r?.sourcePath || '').split('#')[0] === sourcePath,
-            );
-            if (!toDelete?.uuid) return;
-
-            // Soft-delete so the record can be restored if the source file
-            // reappears (or the @kody-ignore marker is removed).
-            await this.kodyRulesService.createOrUpdate(
-                organizationAndTeamData,
-                { ...toDelete, status: KodyRulesStatus.DELETED } as any,
-                this.systemUserInfo,
-            );
+            // Already-DELETED records are skipped: re-writing them is a
+            // no-op that only adds audit-log noise.
+            toDelete = this.rulesBySourcePath(
+                entity,
+                repositoryId,
+                sourcePath,
+            ).filter((r) => r.status !== KodyRulesStatus.DELETED);
         } catch (error) {
             this.logger.error({
-                message: 'Failed to soft-delete rule by sourcePath',
+                message: 'Failed to load rules for soft-delete by sourcePath',
                 context: KodyRulesSyncService.name,
                 error,
                 metadata: params,
             });
+            return;
+        }
+
+        // Soft-delete so the record can be restored if the source file
+        // reappears (or the @kody-ignore marker is removed). Each write has
+        // its own catch: one failure must not strand the remaining records
+        // ACTIVE for a file that no longer exists.
+        for (const rule of toDelete) {
+            try {
+                await this.kodyRulesService.createOrUpdate(
+                    organizationAndTeamData,
+                    { ...rule, status: KodyRulesStatus.DELETED } as any,
+                    this.systemUserInfo,
+                );
+            } catch (error) {
+                this.logger.error({
+                    message: 'Failed to soft-delete rule by sourcePath',
+                    context: KodyRulesSyncService.name,
+                    error,
+                    metadata: { ...params, ruleId: rule.uuid },
+                });
+            }
         }
     }
 
     /**
-     * Flips a rule's `pinnedSync` back to false. Mirrors
-     * `deleteRuleBySourcePath` but only touches the pin flag — used when
-     * the source file still exists but no longer carries `@kody-sync`
-     * (with `ideRulesSyncEnabled=false`, the force-sync path skips that
-     * file, so without this depin pass the rule would keep a stale
-     * `pinnedSync=true` and disappear from the orphan-chip count even
+     * Flips `pinnedSync` back to false on every pinned rule of the file.
+     * Used when the source file still exists but no longer carries
+     * `@kody-sync` (with `ideRulesSyncEnabled=false`, the force-sync path
+     * skips that file, so without this depin pass the rule would keep a
+     * stale `pinnedSync=true` and disappear from the orphan-chip count even
      * though the backend isn't maintaining it anymore).
      *
-     * No-op when the rule isn't found or already has `pinnedSync !== true`
-     * — avoids unnecessary writes and audit-log noise.
+     * No-op when no matching rule is still `pinnedSync === true` — avoids
+     * unnecessary writes and audit-log noise.
      */
     private async depinRuleBySourcePath(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryId: string;
         sourcePath: string;
     }): Promise<void> {
+        const { organizationAndTeamData, repositoryId, sourcePath } = params;
+        let toDepin: Partial<IKodyRule>[];
         try {
-            const { organizationAndTeamData, repositoryId, sourcePath } =
-                params;
             const entity = await this.kodyRulesService.findByOrganizationId(
                 organizationAndTeamData.organizationId,
             );
-            if (!entity) return;
-
-            const toDepin = entity.rules?.find(
-                (r) =>
-                    r?.repositoryId === repositoryId &&
-                    (r?.sourcePath || '').split('#')[0] === sourcePath,
-            );
-            if (!toDepin?.uuid) return;
-            if (toDepin.pinnedSync !== true) return;
-
-            await this.kodyRulesService.createOrUpdate(
-                organizationAndTeamData,
-                { ...toDepin, pinnedSync: false } as any,
-                this.systemUserInfo,
-            );
+            toDepin = this.rulesBySourcePath(
+                entity,
+                repositoryId,
+                sourcePath,
+            ).filter((r) => r.pinnedSync === true);
         } catch (error) {
             this.logger.error({
-                message: 'Failed to depin rule by sourcePath',
+                message: 'Failed to load rules for depin by sourcePath',
                 context: KodyRulesSyncService.name,
                 error,
                 metadata: params,
             });
+            return;
+        }
+
+        for (const rule of toDepin) {
+            try {
+                await this.kodyRulesService.createOrUpdate(
+                    organizationAndTeamData,
+                    { ...rule, pinnedSync: false } as any,
+                    this.systemUserInfo,
+                );
+            } catch (error) {
+                this.logger.error({
+                    message: 'Failed to depin rule by sourcePath',
+                    context: KodyRulesSyncService.name,
+                    error,
+                    metadata: { ...params, ruleId: rule.uuid },
+                });
+            }
         }
     }
 
