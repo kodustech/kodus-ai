@@ -645,6 +645,15 @@ export class SimpleLogger {
             logObject.error = {
                 message: sanitizeString(error.message),
                 stack: error.stack ? sanitizeString(error.stack) : undefined,
+                // #1829: BYOK provider errors carry statusCode / responseBody /
+                // url as enumerable own props of the Error subclass. pino's
+                // default `err` serializer only keeps name/message/stack, so
+                // those actionable fields were silently dropped from every log
+                // (the customer only ever saw "Unexpected error"). Merge any
+                // enumerable own props generically so subclasses — and call
+                // sites that attach extra fields — surface them, with values
+                // kept small enough for a 2KB-ish log line.
+                ...extractErrorProps(error, 2_000),
             };
         }
 
@@ -675,6 +684,34 @@ export class SimpleLogger {
         }
         return {};
     }
+}
+
+/**
+ * Collect the user-facing fields a provider error carries on itself.
+ *
+ * pino's default `err` serializer only keeps name/message/stack (which live on
+ * Error.prototype), so BYOK subclasses that attach `statusCode`, `responseBody`
+ * or `url` as own props with them were invisible in every structured log (#1829).
+ * This merges those own enumerable props generically — no need to special-case
+ * each provider — with string/Array values truncated to keep the log line sane.
+ */
+export function extractErrorProps(
+    error: Error,
+    maxStringLength: number,
+): Record<string, unknown> {
+    const props: Record<string, unknown> = {};
+    for (const key of Object.keys(error)) {
+        if (key === 'name' || key === 'message' || key === 'stack') {
+            continue;
+        }
+        const value = (error as unknown as Record<string, unknown>)[key];
+        if (typeof value === 'string' && value.length > maxStringLength) {
+            props[key] = `${value.substring(0, maxStringLength)}…`;
+        } else {
+            props[key] = deepSanitize(value);
+        }
+    }
+    return props;
 }
 
 /** Exported for testing only. */
