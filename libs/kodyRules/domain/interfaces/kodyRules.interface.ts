@@ -250,6 +250,22 @@ export interface IKodyRuleDetector {
     compiledBy?: string;
     /** short rationale from the compiler. */
     reason?: string;
+    /**
+     * File extensions the rule's OWN TEXT scopes it to, lowercase and
+     * dot-prefixed (e.g. ['.rb', '.erb']). Emitted by the compiler when the
+     * rule names a language, absent when the rule is language-agnostic.
+     *
+     * Why (issue #1831): a regex has no notion of language, so a Ruby-only
+     * rule ("Ruby does not require semicolons") compiled to `;\s*$` matched
+     * every JS/SCSS/YAML line in the PR — 93.6% of its hits on a real
+     * polyglot corpus were on files the rule does not even apply to. This is
+     * a COST filter, not the safety net: a candidate outside these extensions
+     * is dropped before it costs an LLM call. The safety net is that no
+     * candidate is published without the judge confirming it.
+     *
+     * Absent/empty = no extension filter (unchanged behavior).
+     */
+    extensions?: string[];
 }
 
 export interface IKodyRulesInheritance {

@@ -24,6 +24,18 @@ export interface BackfillDetectorsResult {
     errored: number;
     /** rules not eligible (inactive / memory / already have a detector) */
     skipped: number;
+    /**
+     * #1831 recompile accounting — only meaningful with `onlyMissing: false`,
+     * which is how the fleet-wide re-scope sweep is run.
+     */
+    /** rules that HAD a detector and came back with a language scope. */
+    rescoped: number;
+    /** rules that HAD a detector and lost it (cosmetic / no longer compiles). */
+    disabled: number;
+    /** of those, the ones declined specifically as linter-owned formatting. */
+    disabledCosmetic: number;
+    /** rules that kept a detector but STILL carry no language scope. */
+    stillUnscoped: number;
 }
 
 /**
@@ -87,6 +99,10 @@ export class BackfillRuleDetectorsUseCase {
             declined: 0,
             errored: 0,
             skipped: all.length - target.length,
+            rescoped: 0,
+            disabled: 0,
+            disabledCosmetic: 0,
+            stillUnscoped: 0,
         };
 
         const concurrency = Math.max(1, opts.concurrency ?? 3);
@@ -103,16 +119,37 @@ export class BackfillRuleDetectorsUseCase {
                             rule.uuid,
                             rule,
                         );
-                        if (r.compiled) res.compiled++;
-                        else if (r.declineReason === 'error') res.errored++;
-                        else res.declined++;
+                        // Did this rule arrive with a detector? That is what
+                        // makes it part of the #1831 fleet — the 424 unscoped
+                        // detectors already armed across 129 orgs — as opposed
+                        // to a rule being given a detector for the first time.
+                        const hadDetector = !!rule.detector;
+                        if (r.compiled) {
+                            res.compiled++;
+                            if (hadDetector && r.scoped) res.rescoped++;
+                            if (!r.scoped) res.stillUnscoped++;
+                        } else if (r.declineReason === 'error') {
+                            res.errored++;
+                        } else {
+                            res.declined++;
+                            // compileAndSave already cleared the stale detector;
+                            // count it so the sweep can report what it disarmed.
+                            if (hadDetector) {
+                                res.disabled++;
+                                if (r.declineReason === 'cosmetic') {
+                                    res.disabledCosmetic++;
+                                }
+                            }
+                        }
                     }
                 },
             ),
         );
 
         this.logger.log({
-            message: `Detector backfill complete for org`,
+            message: onlyMissing
+                ? `Detector backfill complete for org`
+                : `Detector re-scope sweep complete for org: ${res.rescoped} re-scoped, ${res.disabled} disarmed (${res.disabledCosmetic} cosmetic), ${res.stillUnscoped} still unscoped`,
             context: BackfillRuleDetectorsUseCase.name,
             metadata: { organizationAndTeamData, ...res },
         });

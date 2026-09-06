@@ -1,0 +1,35 @@
+{
+    "__doc": [
+        "T0 detectors observed in PRODUCTION, transcribed from issue #1831.",
+        "`language` is NOT a field the engine reads today — it is the ground",
+        "truth this repro scores against: the rule text itself scopes the rule",
+        "to one language, and the compiled detector carries no such scope, so",
+        "every hit on another language is a certain false positive.",
+        "",
+        "Point the repro at the real fleet with:",
+        "  MONGO_URI=… node evals/kody-rules/pull-prod-rules.js",
+        "  node evals/kody-rules/detector-fp-repro.js --rules=prod-rules",
+        "`expectedExtensions` = what the post-#1831 compiler is asked to emit for this rule; the repro uses it to measure the language-scope layer without a live compile call."
+    ],
+    "detectors": [
+        {
+            "uuid": "ruby-no-semicolons",
+            "title": "Avoid unnecessary semicolons",
+            "rule": "Avoid unnecessary semicolons at the end of statements. Ruby does not require semicolons to terminate statements, and adding them is noise.",
+            "path": "",
+            "language": "ruby",
+            "detector": {
+                "type": "regex",
+                "pattern": ";\\s*(?:#.*)?$",
+                "compiledBy": "byok"
+            },
+            "expectedExtensions": [
+                ".rb",
+                ".rake",
+                ".gemspec",
+                ".ru",
+                ".erb"
+            ]
+        }
+    ]
+}
