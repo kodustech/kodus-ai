@@ -439,6 +439,7 @@ export interface RunFinderWithVerifyParams {
     recoverProse?: ProseRecoverer;
     reviewContext?: ReviewContext;
     recordTelemetryInputs?: boolean;
+    onReviewContextPhaseDelivery?: (phase: string) => void;
 }
 
 export interface VerifyUsage {
@@ -491,6 +492,9 @@ export async function runFinderWithVerify(
     ctx: ToolContext,
 ): Promise<FinderWithVerifyResult> {
     const reviewContextPhases: string[] = [];
+    if (params.reviewContext) {
+        params.onReviewContextPhaseDelivery?.('finder');
+    }
     const finderState = await params.runner.run(
         params.finderSpec,
         {
@@ -535,6 +539,7 @@ export async function runFinderWithVerify(
             agentName: params.agentName,
             recoverProse: params.recoverProse,
             recordTelemetryInputs: params.recordTelemetryInputs,
+            onReviewContextPhaseDelivery: params.onReviewContextPhaseDelivery,
         },
         ctx,
     );
@@ -599,6 +604,9 @@ export async function runFinderWithVerify(
         reviewContext: params.reviewContext,
         recordTelemetryInputs: params.recordTelemetryInputs,
     });
+    if (params.reviewContext) {
+        params.onReviewContextPhaseDelivery?.('verifier');
+    }
     const pass = await runVerificationPass<FinderSuggestion>(
         { candidates: suggestions, verifier, concurrency: params.concurrency },
         ctx,
@@ -637,6 +645,9 @@ export async function runFinderWithVerify(
             reviewContext: params.reviewContext,
             recordTelemetryInputs: params.recordTelemetryInputs,
         });
+        if (params.reviewContext) {
+            params.onReviewContextPhaseDelivery?.('evidence-gate-verifier');
+        }
         const gate = await runVerificationPass<FinderSuggestion>(
             {
                 candidates: unevidenced,
@@ -782,6 +793,7 @@ interface RecallPassesParams {
     /** Injected prose-findings recovery (see ProseRecoverer). */
     recoverProse?: ProseRecoverer;
     recordTelemetryInputs?: boolean;
+    onReviewContextPhaseDelivery?: (phase: string) => void;
 }
 
 const ZERO_RECALL_USAGE: VerifyUsage = {
@@ -810,6 +822,7 @@ export async function runRecallPasses(
         label: string,
         spec: AgentSpec = params.finderSpec,
     ): Promise<void> => {
+        params.onReviewContextPhaseDelivery?.(label);
         const state = await params.runner.run(
             spec,
             {

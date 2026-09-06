@@ -62,8 +62,8 @@ describe('Kody Rules review context delivery', () => {
         expect(prompts).toHaveLength(2);
         for (const prompt of prompts) {
             expect(prompt.split(CONTEXT_BODY)).toHaveLength(2);
-            expect(prompt.indexOf('<ReviewContext')).toBe(0);
-            expect(prompt.indexOf('</ReviewContext>')).toBeLessThan(
+            expect(prompt.indexOf('REVIEW_CONTEXT_BOUNDARY')).toBe(0);
+            expect(prompt.indexOf('END REVIEW_CONTEXT_')).toBeLessThan(
                 prompt.indexOf('<Rules>'),
             );
         }
@@ -95,7 +95,46 @@ describe('Kody Rules review context delivery', () => {
 
         expect(prompts).toHaveLength(2);
         expect(
-            prompts.every((prompt) => !prompt.includes('<ReviewContext')),
+            prompts.every(
+                (prompt) => !prompt.includes('REVIEW_CONTEXT_BOUNDARY'),
+            ),
         ).toBe(true);
+    });
+
+    it('retains body-free receipts and safe diagnostics when every shard fails after delivery', async () => {
+        const logger = { warn: jest.fn() };
+        const error = new Error(`provider rejected ${CONTEXT_BODY}`);
+        error.name = 'ProviderRequestError';
+        Object.assign(error, { code: 'RATE_LIMITED' });
+        const runJudge: RunJudge = async () => {
+            throw error;
+        };
+
+        const result = await judgeKodyRulesSharded({
+            changedFiles,
+            rules,
+            runJudge,
+            reviewContext,
+            logger,
+        });
+
+        expect(result.shardsErrored).toBe(2);
+        expect(result.reviewContextDeliveries).toEqual([
+            createReviewContextDelivery(
+                reviewContext,
+                'kodus-rules-review-agent:src/file.ts',
+                'file-shard',
+            ),
+            createReviewContextDelivery(
+                reviewContext,
+                'kodus-rules-review-agent:pull-request',
+                'pr-shard',
+            ),
+        ]);
+        const serializedLogs = JSON.stringify(logger.warn.mock.calls);
+        expect(serializedLogs).toContain('ProviderRequestError');
+        expect(serializedLogs).toContain('RATE_LIMITED');
+        expect(serializedLogs).toContain('request-scoped context');
+        expect(serializedLogs).not.toContain(CONTEXT_BODY);
     });
 });

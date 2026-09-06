@@ -48,10 +48,7 @@ export class CliReviewJobProcessorService implements IJobProcessorService {
         }
 
         const payload = job.payload as CliReviewJobPayload;
-        if (
-            !payload?.organizationAndTeamData ||
-            !payload?.input
-        ) {
+        if (!payload?.organizationAndTeamData || !payload?.input) {
             throw new Error(
                 `Invalid CLI review payload for job ${jobId}: missing required fields`,
             );
@@ -72,10 +69,10 @@ export class CliReviewJobProcessorService implements IJobProcessorService {
         }
 
         // Pre-check the GitHub rate-limit bucket. If exhausted, the gate
-        // throws RateLimitError(resetAt) and the consumer error handler
-        // republishes with a delay aligned to the bucket reset instead
-        // of burning the full router timeout. Non-GitHub platforms pass
-        // through silently inside the gate.
+        // throws RateLimitError(resetAt). Durable jobs are republished with a
+        // bounded delay; ephemeral context jobs become terminal and ask the
+        // client to submit again because their body cannot enter a retry/DLQ.
+        // Non-GitHub platforms pass through silently inside the gate.
         //
         // No GitHub default here: the CLI leaves this undefined for hosts it
         // cannot recognize (any self-managed instance), and claiming GitHub

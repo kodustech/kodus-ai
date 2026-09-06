@@ -62,6 +62,17 @@ export interface OrchestratorOutput {
     reviewContextDeliveries?: ReviewContextDelivery[];
 }
 
+function reviewContextDeliveryKey(delivery: ReviewContextDelivery): string {
+    return JSON.stringify([
+        delivery.sha256,
+        delivery.recipient,
+        delivery.phase,
+        delivery.source,
+        delivery.contentType,
+        delivery.utf8Bytes,
+    ]);
+}
+
 /**
  * Orchestrates the code review agents.
  *
@@ -184,10 +195,21 @@ export class ReviewOrchestratorService {
             },
         });
 
+        const deliveredContext = new Map<string, ReviewContextDelivery>();
+        const recordDelivery = (delivery: ReviewContextDelivery): void => {
+            const key = reviewContextDeliveryKey(delivery);
+            if (deliveredContext.has(key)) {
+                return;
+            }
+            deliveredContext.set(key, delivery);
+            agentInput.onReviewContextDelivery?.(delivery);
+        };
+
         // Strip file bodies from changedFiles before sending to agents.
         // Agents access full source on demand via readFile in the sandbox.
         const agentInputWithoutContent: ReviewAgentInput = {
             ...agentInput,
+            onReviewContextDelivery: recordDelivery,
             changedFiles: agentInput.changedFiles.map(
                 ({ content: _content, fileContent: _fileContent, ...rest }) =>
                     rest as any,
@@ -306,9 +328,15 @@ export class ReviewOrchestratorService {
         const warnings = dedupReviewWarnings(
             agentResults.flatMap((r) => r.warnings ?? []),
         );
-        const reviewContextDeliveries = agentResults.flatMap(
-            (result) => result.reviewContextDeliveries ?? [],
-        );
+        for (const result of agentResults) {
+            for (const delivery of result.reviewContextDeliveries ?? []) {
+                deliveredContext.set(
+                    reviewContextDeliveryKey(delivery),
+                    delivery,
+                );
+            }
+        }
+        const reviewContextDeliveries = [...deliveredContext.values()];
 
         return {
             suggestions: allSuggestions,

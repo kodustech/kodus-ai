@@ -89,7 +89,29 @@ describe('AiSdkAgentRunner telemetry forwarding', () => {
 
         const req = mockRun.mock.calls[0][0];
         expect(req.telemetryMetadata).toBeUndefined();
-        // runName falls back to agentName ?? id when unset.
         expect(req.runName).toBe('finder');
+    });
+
+    it('forwards explicit input suppression without requiring telemetry metadata', async () => {
+        const runner = new AiSdkAgentRunner(undefined);
+
+        await runner.run(
+            probeSpec(),
+            { prompt: 'private', telemetry: { recordInputs: false } },
+            ctx,
+        );
+
+        expect(mockRun.mock.calls[0][0]).toMatchObject({
+            recordTelemetryInputs: false,
+        });
+        expect(mockRun.mock.calls[0][0].telemetryMetadata).toBeUndefined();
+    });
+
+    it('leaves input recording unspecified when the harness option is absent', async () => {
+        const runner = new AiSdkAgentRunner(undefined);
+
+        await runner.run(probeSpec(), { prompt: 'ordinary' }, ctx);
+
+        expect(mockRun.mock.calls[0][0].recordTelemetryInputs).toBeUndefined();
     });
 });

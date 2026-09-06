@@ -550,6 +550,20 @@ export abstract class BaseCodeReviewAgentProvider {
                     systemPrompt,
                     userPrompt,
                     reviewContext: input.reviewContext,
+                    ...(input.reviewContext && {
+                        onReviewContextPhaseDelivery: (phase: string) => {
+                            const context = input.reviewContext;
+                            if (context) {
+                                input.onReviewContextDelivery?.(
+                                    createReviewContextDelivery(
+                                        context,
+                                        identity.name,
+                                        phase,
+                                    ),
+                                );
+                            }
+                        },
+                    }),
                     agentName: identity.name,
                     // Cost-span run name for THIS category's leaf model calls.
                     // LLM.run records the ONE usage span per call under this name;
@@ -682,6 +696,25 @@ export abstract class BaseCodeReviewAgentProvider {
             // Single run against the one resolved model — no fallback provider
             // swap (removed in 04b-05).
             const agentResult = await runAttempt(mainModel);
+            const reviewContext = input.reviewContext;
+            const reviewContextDeliveries = (() => {
+                if (!reviewContext) {
+                    return undefined;
+                }
+                const phases = agentResult.reviewContextPhases;
+                if (!phases || phases.length === 0) {
+                    throw new Error(
+                        'Review context delivery completed without phase evidence',
+                    );
+                }
+                return phases.map((phase) =>
+                    createReviewContextDelivery(
+                        reviewContext,
+                        identity.name,
+                        phase,
+                    ),
+                );
+            })();
 
             // The provider run failed. Throw so the orchestrator records a real
             // failure — otherwise the harness's swallowed error (a non-throwing
@@ -800,26 +833,6 @@ export abstract class BaseCodeReviewAgentProvider {
                     anomalies: agentResult.anomalies,
                 },
             });
-
-            const reviewContext = input.reviewContext;
-            const reviewContextDeliveries = (() => {
-                if (!reviewContext) {
-                    return undefined;
-                }
-                const phases = agentResult.reviewContextPhases;
-                if (!phases || phases.length === 0) {
-                    throw new Error(
-                        'Review context delivery completed without phase evidence',
-                    );
-                }
-                return phases.map((phase) =>
-                    createReviewContextDelivery(
-                        reviewContext,
-                        identity.name,
-                        phase,
-                    ),
-                );
-            })();
 
             return {
                 suggestions,

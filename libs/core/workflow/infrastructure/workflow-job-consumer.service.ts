@@ -37,6 +37,12 @@ import {
     TASK_PROTECTION_SERVICE_TOKEN,
 } from '../domain/contracts/task-protection.service.contract';
 
+import {
+    EPHEMERAL_JOB_TERMINAL_MESSAGE,
+    EphemeralJobReconciliationError,
+} from './ephemeral-job-lifecycle';
+
+export { EphemeralJobReconciliationError } from './ephemeral-job-lifecycle';
 interface WorkflowJobMessage {
     jobId: string;
     correlationId?: string;
@@ -140,7 +146,9 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
         queueOptions: {
             channel: 'channel-cli-code-review',
             arguments:
-                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.cli_code_review.queue'],
+                WORKFLOW_JOB_QUEUE_ARGUMENTS[
+                    'workflow.jobs.cli_code_review.queue'
+                ],
         },
     })
     async handleCliCodeReviewJob(
@@ -172,12 +180,59 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
         message: WorkflowJobMessage | MessagePayload<WorkflowJobMessage>,
         amqpMsg: ConsumeMessage,
     ): Promise<void> {
-        return this.handleWorkflowJob(
-            'workflow-job-consumer.cli_code_review_ephemeral',
-            CLI_REVIEW_EPHEMERAL_QUEUE,
-            message,
-            amqpMsg,
-        );
+        const unwrappedMessage = this.isMessagePayload(message)
+            ? message.payload
+            : message;
+        try {
+            return await this.handleWorkflowJob(
+                'workflow-job-consumer.cli_code_review_ephemeral',
+                CLI_REVIEW_EPHEMERAL_QUEUE,
+                message,
+                amqpMsg,
+            );
+        } catch (error) {
+            try {
+                const reconciled = await this.jobRepository.failEphemeralJob(
+                    unwrappedMessage.jobId,
+                    {
+                        lastError: EPHEMERAL_JOB_TERMINAL_MESSAGE,
+                        errorClassification: ErrorClassification.PERMANENT,
+                    },
+                );
+                if (!reconciled) {
+                    const durableJob = await this.jobRepository.findOne(
+                        unwrappedMessage.jobId,
+                    );
+                    if (
+                        durableJob?.status === JobStatus.PENDING ||
+                        durableJob?.status === JobStatus.PROCESSING
+                    ) {
+                        throw new EphemeralJobReconciliationError(
+                            unwrappedMessage.jobId,
+                        );
+                    }
+                }
+            } catch (reconciliationError) {
+                this.logger.error({
+                    message:
+                        'Failed to reconcile dropped ephemeral workflow job',
+                    context: WorkflowJobConsumer.name,
+                    error: reconciliationError,
+                    metadata: {
+                        jobId: unwrappedMessage.jobId,
+                        organizationId:
+                            amqpMsg.properties.headers?.[
+                                'x-kodus-organization-id'
+                            ],
+                        terminalReason: 'consumer-rejected',
+                    },
+                });
+                throw new EphemeralJobReconciliationError(
+                    unwrappedMessage.jobId,
+                );
+            }
+            throw error;
+        }
     }
 
     /**
@@ -195,7 +250,9 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
         queueOptions: {
             channel: 'channel-check-implementation',
             arguments:
-                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.check_implementation.queue'],
+                WORKFLOW_JOB_QUEUE_ARGUMENTS[
+                    'workflow.jobs.check_implementation.queue'
+                ],
         },
     })
     async handleImplementationCheckJob(
@@ -243,7 +300,9 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
         queueOptions: {
             channel: 'channel-ast-graph-build',
             arguments:
-                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.ast_graph_build.queue'],
+                WORKFLOW_JOB_QUEUE_ARGUMENTS[
+                    'workflow.jobs.ast_graph_build.queue'
+                ],
         },
     })
     async handleAstGraphBuildJob(
@@ -279,7 +338,9 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
         queueOptions: {
             channel: 'channel-ast-graph-incremental',
             arguments:
-                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.ast_graph_incremental.queue'],
+                WORKFLOW_JOB_QUEUE_ARGUMENTS[
+                    'workflow.jobs.ast_graph_incremental.queue'
+                ],
         },
     })
     async handleAstGraphIncrementalJob(

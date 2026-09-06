@@ -25,6 +25,10 @@ const job = {
     priority: 0,
     retryCount: 0,
     maxRetries: 0,
+    organizationAndTeamData: {
+        organizationId: 'organization-1',
+        teamId: 'team-1',
+    },
 } satisfies Omit<IWorkflowJob, 'id' | 'createdAt' | 'updatedAt'>;
 
 const ephemeralPayload = {
@@ -141,7 +145,12 @@ describe('WorkflowJobQueueService ephemeral payloads', () => {
         ).resolves.toBe('job-1');
 
         expect(harness.jobRepository.create).toHaveBeenCalledWith(
-            job,
+            expect.objectContaining({
+                ...job,
+                metadata: expect.objectContaining({
+                    ephemeralTransport: true,
+                }),
+            }),
             expect.anything(),
         );
         expect(harness.outboxRepository.create).not.toHaveBeenCalled();
@@ -159,6 +168,12 @@ describe('WorkflowJobQueueService ephemeral payloads', () => {
             expect.objectContaining({
                 persistent: false,
                 expiration: expect.any(Number),
+                headers: {
+                    'x-kodus-ephemeral': true,
+                    'x-kodus-job-id': 'job-1',
+                    'x-kodus-organization-id': 'organization-1',
+                    'x-kodus-team-id': 'team-1',
+                },
             }),
         );
         expect(
@@ -187,7 +202,12 @@ describe('WorkflowJobQueueService ephemeral payloads', () => {
 
         expect(harness.jobRepository.update).toHaveBeenCalledWith(
             'job-1',
-            expect.objectContaining({ status: JobStatus.FAILED }),
+            expect.objectContaining({
+                status: JobStatus.FAILED,
+                lastError:
+                    'Review context could not be queued. Submit the review again.',
+                completedAt: expect.any(Date),
+            }),
         );
     });
 });

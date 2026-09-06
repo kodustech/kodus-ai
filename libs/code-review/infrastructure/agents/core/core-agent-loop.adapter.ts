@@ -230,6 +230,7 @@ export async function runAgentLoopViaCore(
             // the ProseRecoverer function.
             reviewContext: input.reviewContext,
             recordTelemetryInputs: input.reviewContext ? false : undefined,
+            onReviewContextPhaseDelivery: input.onReviewContextPhaseDelivery,
             recoverProse: (reasoning: string) =>
                 recoverFindingsFromProse(
                     reasoning,

@@ -234,7 +234,9 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                     runName: 'kodus-rules-review-agent.shard',
                     organizationId:
                         input.organizationAndTeamData?.organizationId,
-                    recordTelemetryInputs: input.reviewContext ? false : undefined,
+                    recordTelemetryInputs: input.reviewContext
+                        ? false
+                        : undefined,
                     attrs: {
                         prNumber: input.prNumber,
                         agentName: this.getIdentity().name,
@@ -321,6 +323,9 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             shardsRun = result.shardsRun;
             shardsErrored = result.shardsErrored;
             reviewContextDeliveries = result.reviewContextDeliveries;
+            for (const delivery of reviewContextDeliveries ?? []) {
+                input.onReviewContextDelivery?.(delivery);
+            }
 
             // Escalate a TOTAL shard failure. When every judge shard errored
             // (e.g. an OpenAI-strict wire-schema 400 for a BYOK org, which
@@ -634,7 +639,11 @@ If no violations found, respond with \`{"reasoning": "Checked all rules, no viol
                 });
             }
 
-            return inlineLoadedReferences(rules, referencesMap, this.shardLogger);
+            return inlineLoadedReferences(
+                rules,
+                referencesMap,
+                this.shardLogger,
+            );
         } catch (err) {
             this.shardLogger.warn({
                 message: `[kody-rules-shard] Context OS reference load failed for PR#${input.prNumber}; judging without external refs: ${err instanceof Error ? err.message : String(err)}`,

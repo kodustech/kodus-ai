@@ -6,6 +6,7 @@ import { IWorkflowJob } from '@libs/core/workflow/domain/interfaces/workflow-job
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { WorkflowType } from '@libs/core/workflow/domain/enums/workflow-type.enum';
 import type { WorkflowEphemeralPayload } from '@libs/core/workflow/domain/types/workflow-ephemeral-payload';
+import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
 import { CLI_REVIEW_EPHEMERAL_ROUTING_KEY } from './workflow-queue-arguments';
 
 import { ObservabilityService } from '@libs/core/log/observability.service';
@@ -132,9 +133,19 @@ export class WorkflowJobQueueService implements IJobQueueService {
         return this.observability.runInSpan(
             'workflow.job.enqueue_ephemeral',
             async (span) => {
+                const ephemeralJob = {
+                    ...job,
+                    metadata: {
+                        ...(job.metadata ?? {}),
+                        ephemeralTransport: true,
+                    },
+                };
                 const savedJob = await this.dataSource.transaction(
                     async (transactionManager) =>
-                        this.jobRepository.create(job, transactionManager),
+                        this.jobRepository.create(
+                            ephemeralJob,
+                            transactionManager,
+                        ),
                 );
                 const exchange = 'workflow.exchange';
                 const routingKey = CLI_REVIEW_EPHEMERAL_ROUTING_KEY;
@@ -170,12 +181,23 @@ export class WorkflowJobQueueService implements IJobQueueService {
                             expiration: 35 * 60 * 1000,
                             messageId: messagePayload.messageId,
                             correlationId: job.correlationId,
-                            headers: { 'x-kodus-ephemeral': true },
+                            headers: {
+                                'x-kodus-ephemeral': true,
+                                'x-kodus-job-id': savedJob.uuid,
+                                'x-kodus-organization-id':
+                                    job.organizationAndTeamData?.organizationId,
+                                'x-kodus-team-id':
+                                    job.organizationAndTeamData?.teamId,
+                            },
                         },
                     );
                 } catch (error) {
                     await this.jobRepository.update(savedJob.uuid, {
                         status: JobStatus.FAILED,
+                        errorClassification: ErrorClassification.PERMANENT,
+                        lastError:
+                            'Review context could not be queued. Submit the review again.',
+                        completedAt: new Date(),
                     });
                     throw error;
                 }

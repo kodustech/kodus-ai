@@ -1,3 +1,16 @@
+import type { ConsumeMessage } from 'amqplib';
+import type { IJobProcessorService } from '../domain/contracts/job-processor.service.contract';
+import type { IInboxMessageRepository } from '../domain/contracts/inbox-message.repository.contract';
+import type { ITaskProtectionService } from '../domain/contracts/task-protection.service.contract';
+import type { IWorkflowJobRepository } from '../domain/contracts/workflow-job.repository.contract';
+import type { ObservabilityService } from '@libs/core/log/observability.service';
+import { ErrorClassification } from '../domain/enums/error-classification.enum';
+import { JobStatus } from '../domain/enums/job-status.enum';
+import { EPHEMERAL_JOB_TERMINAL_MESSAGE } from './ephemeral-job-lifecycle';
+import {
+    EphemeralJobReconciliationError,
+    WorkflowJobConsumer,
+} from './workflow-job-consumer.service';
 import { runWithBoundedTimeout } from './run-with-bounded-timeout';
 
 describe('runWithBoundedTimeout (consumer cleanup bound)', () => {
@@ -59,5 +72,145 @@ describe('runWithBoundedTimeout (consumer cleanup bound)', () => {
 
         expect(clearSpy).toHaveBeenCalled();
         clearSpy.mockRestore();
+    });
+});
+
+describe('WorkflowJobConsumer ephemeral terminal reconciliation', () => {
+    function harness(options?: {
+        reconciliationError?: Error;
+        reconciliationResult?: boolean;
+        durableStatus?: JobStatus | null;
+    }) {
+        const jobProcessor = {
+            process: jest.fn(),
+        } as unknown as IJobProcessorService;
+        const inboxRepository = {
+            claim: jest.fn().mockResolvedValue(false),
+            findByConsumerAndMessageId: jest.fn().mockResolvedValue({
+                status: 'PROCESSING',
+            }),
+        } as unknown as jest.Mocked<IInboxMessageRepository>;
+        const jobRepository = {
+            failEphemeralJob: options?.reconciliationError
+                ? jest.fn().mockRejectedValue(options.reconciliationError)
+                : jest
+                      .fn()
+                      .mockResolvedValue(options?.reconciliationResult ?? true),
+            findOne: jest.fn().mockResolvedValue(
+                options?.durableStatus === null
+                    ? null
+                    : {
+                          status: options?.durableStatus ?? JobStatus.PENDING,
+                      },
+            ),
+        } as unknown as jest.Mocked<IWorkflowJobRepository>;
+        const observability = {
+            setContext: jest.fn(),
+            runInSpan: jest.fn(),
+        } as unknown as ObservabilityService;
+        const taskProtection = {
+            protectTask: jest.fn().mockResolvedValue(undefined),
+            unprotectTask: jest.fn().mockResolvedValue(undefined),
+        } as unknown as ITaskProtectionService;
+        const consumer = new WorkflowJobConsumer(
+            jobProcessor,
+            inboxRepository,
+            jobRepository,
+            observability,
+            taskProtection,
+        );
+        const message = {
+            jobId: 'job-ephemeral-1',
+            correlationId: 'correlation-1',
+            ephemeralPayload: { reviewContext: { body: 'CANARY private' } },
+        };
+        const amqpMessage = {
+            properties: {
+                messageId: 'message-1',
+                correlationId: 'correlation-1',
+                headers: { 'x-kodus-ephemeral': true },
+            },
+            fields: {
+                exchange: 'workflow.exchange',
+                routingKey: 'workflow.ephemeral.CLI_CODE_REVIEW',
+            },
+            content: Buffer.from('ephemeral'),
+        } as unknown as ConsumeMessage;
+
+        return { consumer, jobProcessor, jobRepository, message, amqpMessage };
+    }
+
+    it('marks a claim-race drop terminal before the message can be acknowledged', async () => {
+        const test = harness();
+
+        await expect(
+            test.consumer.handleEphemeralCliCodeReviewJob(
+                test.message,
+                test.amqpMessage,
+            ),
+        ).rejects.toThrow('already claimed');
+
+        expect(test.jobRepository.failEphemeralJob).toHaveBeenCalledWith(
+            'job-ephemeral-1',
+            {
+                lastError: EPHEMERAL_JOB_TERMINAL_MESSAGE,
+                errorClassification: ErrorClassification.PERMANENT,
+            },
+        );
+        expect(test.jobProcessor.process).not.toHaveBeenCalled();
+        expect(
+            JSON.stringify(test.jobRepository.failEphemeralJob.mock.calls),
+        ).not.toContain('CANARY private');
+    });
+
+    it.each([JobStatus.PENDING, JobStatus.PROCESSING])(
+        'keeps the message recoverable when reconciliation leaves the job %s',
+        async (durableStatus) => {
+            const test = harness({
+                reconciliationResult: false,
+                durableStatus,
+            });
+
+            await expect(
+                test.consumer.handleEphemeralCliCodeReviewJob(
+                    test.message,
+                    test.amqpMessage,
+                ),
+            ).rejects.toBeInstanceOf(EphemeralJobReconciliationError);
+
+            expect(test.jobRepository.findOne).toHaveBeenCalledWith(
+                'job-ephemeral-1',
+            );
+        },
+    );
+
+    it.each([JobStatus.FAILED, JobStatus.COMPLETED, null])(
+        'does not claim reconciliation failed when the durable job is already terminal or absent (%s)',
+        async (durableStatus) => {
+            const test = harness({
+                reconciliationResult: false,
+                durableStatus,
+            });
+
+            await expect(
+                test.consumer.handleEphemeralCliCodeReviewJob(
+                    test.message,
+                    test.amqpMessage,
+                ),
+            ).rejects.toThrow('already claimed');
+        },
+    );
+
+    it('signals that the message must remain recoverable when terminal reconciliation fails', async () => {
+        const test = harness({
+            reconciliationError: new Error('db unavailable'),
+        });
+
+        await expect(
+            test.consumer.handleEphemeralCliCodeReviewJob(
+                test.message,
+                test.amqpMessage,
+            ),
+        ).rejects.toBeInstanceOf(EphemeralJobReconciliationError);
     });
 });

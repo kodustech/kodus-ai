@@ -32,7 +32,10 @@ import type { NormalizedModel } from '@libs/llm/byok-config';
 import type { LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
 import type { ReasoningEffort } from '@libs/llm/reasoning-options';
 
-import { CoverageSummary, CoverageTier } from '@libs/code-review/infrastructure/agents/engine/coverage-ledger';
+import {
+    CoverageSummary,
+    CoverageTier,
+} from '@libs/code-review/infrastructure/agents/engine/coverage-ledger';
 import { type AdaptiveProfile } from '@libs/code-review/infrastructure/agents/engine/adaptive-fit';
 import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import type { DocumentationSearchAdapter } from '@libs/code-review/infrastructure/agents/engine/agent-tools.factory';
@@ -251,7 +254,8 @@ export interface RuntimeMeta {
  * cohesive slices above so a consumer can depend on just what it needs.
  */
 export interface ReviewAgentInput
-    extends PrReviewContext,
+    extends
+        PrReviewContext,
         ToolingContext,
         ReviewRuleConfig,
         ModelConfig,
@@ -281,6 +285,7 @@ export interface ReviewAgentInput
      */
     reviewDirective?: string;
     reviewContext?: ReviewContext;
+    onReviewContextDelivery?: (delivery: ReviewContextDelivery) => void;
 }
 
 /**
@@ -331,6 +336,7 @@ export interface AgentLoopInput {
     systemPrompt: string;
     userPrompt: string;
     reviewContext?: ReviewContext;
+    onReviewContextPhaseDelivery?: (phase: string) => void;
     agentName?: string; // e.g. 'kodus-bug-review-agent' — used as Langfuse observation name
     /** Cost-span run name base for THIS review category (e.g. `code-review-bug`).
      *  Threaded onto every leaf model call the review makes (finder + verify +

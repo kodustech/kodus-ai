@@ -15,7 +15,10 @@ import type { ToolContext } from '@libs/agent-harness/domain/contracts/tool.cont
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
 
-import { buildFinderAgentSpec, runFinderWithVerify } from '@libs/code-review/infrastructure/agents/core/finder.agent';
+import {
+    buildFinderAgentSpec,
+    runFinderWithVerify,
+} from '@libs/code-review/infrastructure/agents/core/finder.agent';
 import {
     REVIEW_CONTEXT_CONTENT_TYPE,
     REVIEW_CONTEXT_SOURCE,
@@ -25,8 +28,20 @@ import {
 const findings = {
     reasoning: 'two candidates',
     suggestions: [
-        { relevantFile: 'a.ts', suggestionContent: 'real bug', existingCode: 'x', improvedCode: 'y', severity: 'high' },
-        { relevantFile: 'b.ts', suggestionContent: 'false positive', existingCode: 'p', improvedCode: 'q', severity: 'low' },
+        {
+            relevantFile: 'a.ts',
+            suggestionContent: 'real bug',
+            existingCode: 'x',
+            improvedCode: 'y',
+            severity: 'high',
+        },
+        {
+            relevantFile: 'b.ts',
+            suggestionContent: 'false positive',
+            existingCode: 'p',
+            improvedCode: 'q',
+            severity: 'low',
+        },
     ],
 };
 
@@ -38,11 +53,21 @@ function model(finderFindings = findings) {
     let finderDone = false;
     const doGenerate = (async (opts: any) => {
         const sys = JSON.stringify(opts?.prompt ?? opts ?? '');
-        const isVerifier = sys.includes('verifier') || sys.includes('REFUTE') || sys.includes('verdict');
+        const isVerifier =
+            sys.includes('verifier') ||
+            sys.includes('REFUTE') ||
+            sys.includes('verdict');
         let tc: any;
         if (isVerifier) {
             const refute = sys.includes('false positive');
-            tc = { id: 'v', name: 'submitVerdict', input: { keep: !refute, rationale: refute ? 'refuted' : 'confirmed' } };
+            tc = {
+                id: 'v',
+                name: 'submitVerdict',
+                input: {
+                    keep: !refute,
+                    rationale: refute ? 'refuted' : 'confirmed',
+                },
+            };
         } else if (!finderDone) {
             finderDone = true;
             tc = { id: 'f', name: 'submitResult', input: finderFindings };
@@ -50,7 +75,14 @@ function model(finderFindings = findings) {
             tc = { id: 'f2', name: 'submitResult', input: finderFindings };
         }
         return {
-            content: [{ type: 'tool-call', toolCallId: tc.id, toolName: tc.name, input: JSON.stringify(tc.input) }],
+            content: [
+                {
+                    type: 'tool-call',
+                    toolCallId: tc.id,
+                    toolName: tc.name,
+                    input: JSON.stringify(tc.input),
+                },
+            ],
             finishReason: 'tool-calls',
             usage: { inputTokens: 5, outputTokens: 5 },
             warnings: [],
@@ -73,7 +105,12 @@ beforeEach(() => {
 
 const noCriticalLedger: ProgressLedger = {
     markFromToolCall: () => undefined,
-    summary: () => ({ totalTargets: 0, pendingTargets: 0, criticalTotal: 0, criticalPending: 0 }),
+    summary: () => ({
+        totalTargets: 0,
+        pendingTargets: 0,
+        criticalTotal: 0,
+        criticalPending: 0,
+    }),
     debtNote: () => null,
 };
 
@@ -97,7 +134,9 @@ describe('runFinderWithVerify (parity: finder + verify, same runner)', () => {
         );
 
         expect(r.kept.map((f) => f.relevantFile)).toEqual(['a.ts']);
-        expect(r.droppedByVerify.map((d) => d.finding.relevantFile)).toEqual(['b.ts']);
+        expect(r.droppedByVerify.map((d) => d.finding.relevantFile)).toEqual([
+            'b.ts',
+        ]);
         expect(r.droppedByVerify[0].evidence).toBe('refuted');
     });
 
@@ -110,6 +149,7 @@ describe('runFinderWithVerify (parity: finder + verify, same runner)', () => {
             coverageLedger: noCriticalLedger,
         });
         const runner = new AiSdkAgentRunner(undefined);
+        const onReviewContextPhaseDelivery = jest.fn();
         const reviewContext = {
             source: REVIEW_CONTEXT_SOURCE,
             contentType: REVIEW_CONTEXT_CONTENT_TYPE,
@@ -134,6 +174,7 @@ describe('runFinderWithVerify (parity: finder + verify, same runner)', () => {
                         },
                     }),
                 recordTelemetryInputs: false,
+                onReviewContextPhaseDelivery,
             },
             {
                 prompt: `${formatReviewContext(reviewContext)}\n\n<ReviewTask>review</ReviewTask>`,
@@ -141,14 +182,55 @@ describe('runFinderWithVerify (parity: finder + verify, same runner)', () => {
             ctx,
         );
 
-        expect(result.reviewContextPhases).toEqual([
+        const expectedPhases = [
             'finder',
             'synthesis-rescue',
             'heavy-resample-1',
             'heavy-resample-2',
             'verifier',
             'evidence-gate-verifier',
-        ]);
+        ];
+        expect(result.reviewContextPhases).toEqual(expectedPhases);
+        expect(onReviewContextPhaseDelivery.mock.calls).toEqual(
+            expectedPhases.map((phase) => [phase]),
+        );
+    });
+
+    it('reports finder delivery before a context-bearing invocation rejects', async () => {
+        const tools = new InMemoryToolRegistry([]);
+        const finderSpec = buildFinderAgentSpec({
+            systemPrompt: 'find bugs',
+            modelId: 'mock',
+            tools,
+            coverageLedger: noCriticalLedger,
+        });
+        const runner = {
+            run: jest.fn().mockRejectedValue(new Error('provider rejected')),
+        } as unknown as AiSdkAgentRunner;
+        const onReviewContextPhaseDelivery = jest.fn();
+        const reviewContext = {
+            source: REVIEW_CONTEXT_SOURCE,
+            contentType: REVIEW_CONTEXT_CONTENT_TYPE,
+            body: 'CANARY: rejected finder',
+        };
+
+        await expect(
+            runFinderWithVerify(
+                {
+                    runner,
+                    finderSpec,
+                    modelId: 'mock',
+                    tools,
+                    reviewContext,
+                    onReviewContextPhaseDelivery,
+                },
+                { prompt: formatReviewContext(reviewContext) },
+                ctx,
+            ),
+        ).rejects.toThrow('provider rejected');
+
+        expect(onReviewContextPhaseDelivery).toHaveBeenCalledTimes(1);
+        expect(onReviewContextPhaseDelivery).toHaveBeenCalledWith('finder');
     });
 
     it('omits verifier phases when no candidate suggestions exist', async () => {

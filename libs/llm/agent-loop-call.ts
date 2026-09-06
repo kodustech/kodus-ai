@@ -233,16 +233,27 @@ export async function runAgentLoopCall(
                 })) as any,
             // Loop seams from the runner's policies — forwarded verbatim, plus the
             // hard step ceiling the harness always wants.
-            stopWhen: [...((loop.stopWhen as any[]) ?? []), stepCountIs(loop.maxSteps)],
-            ...(loop.prepareStep ? { prepareStep: loop.prepareStep as any } : {}),
-            ...(loop.onStepFinish ? { onStepFinish: loop.onStepFinish as any } : {}),
-            ...(telemetryMetadata
+            stopWhen: [
+                ...((loop.stopWhen as any[]) ?? []),
+                stepCountIs(loop.maxSteps),
+            ],
+            ...(loop.prepareStep
+                ? { prepareStep: loop.prepareStep as any }
+                : {}),
+            ...(loop.onStepFinish
+                ? { onStepFinish: loop.onStepFinish as any }
+                : {}),
+            ...(telemetryMetadata !== undefined ||
+            recordTelemetryInputs !== undefined
                 ? toAiSdkTelemetryArgs(
                       recordTelemetryInputs === undefined
-                          ? buildLangfuseTelemetry(runName, telemetryMetadata)
+                          ? buildLangfuseTelemetry(
+                                runName,
+                                telemetryMetadata ?? { organizationId },
+                            )
                           : buildLangfuseTelemetry(
                                 runName,
-                                telemetryMetadata,
+                                telemetryMetadata ?? { organizationId },
                                 { recordInputs: recordTelemetryInputs },
                             ),
                   )
@@ -254,20 +265,20 @@ export async function runAgentLoopCall(
     const observability = getLlmObservability();
     const run = () =>
         observability
-        ? observability.runAiSdkLLMInSpan<any>({
-              spanName: spanName ?? runName,
-              runName,
-              model: inv.modelName,
-              byokModelId: identity.byokModelId,
-              credentialId: identity.credentialId,
-              // Routing task + fallback flag the slot carried down from
-              // resolveTaskSlot (route = the LlmTask, not the tier).
-              route: slot?.route,
-              usedFallback: slot?.usedFallback,
-              attrs: spanAttrs,
-              exec,
-          })
-        : exec();
+            ? observability.runAiSdkLLMInSpan<any>({
+                  spanName: spanName ?? runName,
+                  runName,
+                  model: inv.modelName,
+                  byokModelId: identity.byokModelId,
+                  credentialId: identity.credentialId,
+                  // Routing task + fallback flag the slot carried down from
+                  // resolveTaskSlot (route = the LlmTask, not the tier).
+                  route: slot?.route,
+                  usedFallback: slot?.usedFallback,
+                  attrs: spanAttrs,
+                  exec,
+              })
+            : exec();
 
     // Belt over the AbortSignal suspenders. `signal` above is a REQUEST: several
     // OpenAI-compatible proxies accept the connection, ignore the abort and

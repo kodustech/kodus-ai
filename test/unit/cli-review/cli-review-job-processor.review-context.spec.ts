@@ -38,9 +38,10 @@ function makeJob() {
 }
 
 describe('CliReviewJobProcessorService review context', () => {
-    it('merges transient context only for the current execution', async () => {
+    it('merges transient context only for the current execution without mutating or persisting it', async () => {
+        const repositoryJob = makeJob();
         const repository = {
-            findOne: jest.fn().mockResolvedValue(makeJob()),
+            findOne: jest.fn().mockResolvedValue(repositoryJob),
             update: jest.fn().mockResolvedValue(undefined),
         } as unknown as jest.Mocked<IWorkflowJobRepository>;
         const execute = jest.fn().mockResolvedValue({
@@ -71,6 +72,32 @@ describe('CliReviewJobProcessorService review context', () => {
             2,
             expect.objectContaining({ input: { diff: 'diff' } }),
         );
-        expect(JSON.stringify(makeJob())).not.toContain(reviewContext.body);
+        expect(JSON.stringify(repositoryJob)).not.toContain(reviewContext.body);
+        for (const write of repository.update.mock.calls) {
+            expect(JSON.stringify(write)).not.toContain(reviewContext.body);
+        }
+    });
+
+    it('rejects malformed ephemeral context before use-case execution', async () => {
+        const repository = {
+            findOne: jest.fn().mockResolvedValue(makeJob()),
+            update: jest.fn().mockResolvedValue(undefined),
+        } as unknown as jest.Mocked<IWorkflowJobRepository>;
+        const execute = jest.fn();
+        const processor = new CliReviewJobProcessorService(
+            repository,
+            { execute } as unknown as ExecuteCliReviewUseCase,
+            {
+                check: jest.fn().mockResolvedValue(undefined),
+            } as unknown as IRateLimitGateService,
+        );
+
+        await expect(
+            processor.process('job-cli-1', undefined, {
+                reviewContext: { ...reviewContext, body: null },
+            }),
+        ).rejects.toThrow('Invalid ephemeral review context');
+
+        expect(execute).not.toHaveBeenCalled();
     });
 });

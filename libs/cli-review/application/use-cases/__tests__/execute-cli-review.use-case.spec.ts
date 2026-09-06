@@ -1,6 +1,11 @@
 import { ExecuteCliReviewUseCase } from '../execute-cli-review.use-case';
 import { KodyRulesStatus } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import {
+    attachClassification,
+    getClassification,
+    LlmErrorCategory,
+} from '@libs/llm/error-classifier';
 
 /**
  * We test the private helpers via the public execute() path and
@@ -613,7 +618,10 @@ describe('ExecuteCliReviewUseCase', () => {
                 memoryRules: [],
             });
 
-            await (useCase as any).loadUserConfigWithRules(orgAndTeam, undefined);
+            await (useCase as any).loadUserConfigWithRules(
+                orgAndTeam,
+                undefined,
+            );
 
             expect(
                 kodyRulesService.syncRulesWithPlanLimit,
@@ -861,16 +869,28 @@ describe('ExecuteCliReviewUseCase', () => {
                 createMocks();
             parametersService.findByKey.mockResolvedValue(null);
             const contextBody = 'CANARY private context body';
+            const providerError = attachClassification(
+                Object.assign(new Error(`provider echoed ${contextBody}`), {
+                    code: 'RATE_LIMITED',
+                }),
+                {
+                    category: LlmErrorCategory.RATE_LIMIT,
+                    rawMessage: `provider echoed ${contextBody}`,
+                    httpStatus: 429,
+                    friendlyMessage: 'Provider rate limit reached.',
+                },
+            );
             const mockExecute = jest
                 .spyOn(
                     require('@libs/core/infrastructure/pipeline/services/pipeline-executor.service')
                         .PipelineExecutor.prototype,
                     'execute',
                 )
-                .mockRejectedValue(new Error(`provider echoed ${contextBody}`));
+                .mockRejectedValue(providerError);
 
-            await expect(
-                useCase.execute({
+            let thrown: unknown;
+            try {
+                await useCase.execute({
                     organizationAndTeamData: orgAndTeam,
                     input: {
                         diff: '+ hello',
@@ -880,10 +900,21 @@ describe('ExecuteCliReviewUseCase', () => {
                             body: contextBody,
                         },
                     },
-                }),
-            ).rejects.toThrow(
+                });
+            } catch (error) {
+                thrown = error;
+            }
+
+            expect(thrown).toBeInstanceOf(Error);
+            expect((thrown as Error).message).toBe(
                 'CLI review failed while processing review context',
             );
+            expect(getClassification(thrown)).toMatchObject({
+                category: LlmErrorCategory.RATE_LIMIT,
+                httpStatus: 429,
+            });
+            expect(thrown).toMatchObject({ code: 'RATE_LIMITED' });
+            expect(JSON.stringify(thrown)).not.toContain(contextBody);
 
             expect(
                 JSON.stringify(automationExecutionService.update.mock.calls),

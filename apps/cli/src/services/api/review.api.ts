@@ -34,7 +34,7 @@ interface CliReviewJobStatusResponse {
 
 const POLL_MIN_DELAY_MS = 1_000;
 const POLL_MAX_DELAY_MS = 5_000;
-const POLL_MAX_WAIT_MS = 30 * 60 * 1000;
+const POLL_MAX_WAIT_MS = 50 * 60 * 1000;
 
 // Match the API contract exactly. The DTO caps the raw diff by character
 // count (@MaxLength(20000000) — apps/api/src/dtos/cli-review.dto.ts) and the

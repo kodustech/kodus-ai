@@ -1,3 +1,4 @@
+import { ValidationPipe } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { CliReviewRequestDto } from '../cli-review.dto';
@@ -16,6 +17,23 @@ function requestWithBody(body: unknown): CliReviewRequestDto {
             body,
         },
     });
+}
+
+const productionPipe = new ValidationPipe({
+    transform: true,
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transformOptions: { enableImplicitConversion: true },
+});
+
+function transformRequest(reviewContext: unknown): Promise<unknown> {
+    return productionPipe.transform(
+        {
+            diff: 'diff --git a/file.ts b/file.ts\n+const value = 1;',
+            reviewContext,
+        },
+        { type: 'body', metatype: CliReviewRequestDto },
+    );
 }
 
 describe('CliReviewRequestDto reviewContext', () => {
@@ -72,5 +90,29 @@ describe('CliReviewRequestDto reviewContext', () => {
 
         expect(JSON.stringify(errors)).toContain(REVIEW_CONTEXT_SOURCE);
         expect(JSON.stringify(errors)).toContain(REVIEW_CONTEXT_CONTENT_TYPE);
+    });
+
+    it('uses the production pipe without coercing malformed bodies to strings', async () => {
+        for (const body of [42, true, { packet: true }, ['packet'], null]) {
+            await expect(
+                transformRequest({
+                    source: REVIEW_CONTEXT_SOURCE,
+                    contentType: REVIEW_CONTEXT_CONTENT_TYPE,
+                    body,
+                }),
+            ).rejects.toThrow();
+        }
+    });
+
+    it('accepts a valid Unicode body through the production pipe', async () => {
+        await expect(
+            transformRequest({
+                source: REVIEW_CONTEXT_SOURCE,
+                contentType: REVIEW_CONTEXT_CONTENT_TYPE,
+                body: 'inspect cleanup 😀',
+            }),
+        ).resolves.toMatchObject({
+            reviewContext: { body: 'inspect cleanup 😀' },
+        });
     });
 });

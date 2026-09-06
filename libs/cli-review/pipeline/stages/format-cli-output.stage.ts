@@ -20,8 +20,98 @@ export function withReviewContextDeliveries(
     };
 }
 
-function redactContextText(value: string, contextBody: string): string {
-    return value.replaceAll(contextBody, '[review context redacted]');
+const REVIEW_CONTEXT_REDACTION = '[review context redacted]';
+const MIN_CONTEXT_SIGNAL_LENGTH = 12;
+const MIN_CONTEXT_LINE_LENGTH = 16;
+const MIN_TOKEN_SEQUENCE = 4;
+
+function normalizeContextText(value: string): string {
+    return value
+        .normalize('NFKC')
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}_]+/gu, ' ')
+        .trim()
+        .replace(/\s+/g, ' ');
+}
+
+function tokens(value: string): readonly string[] {
+    const normalized = normalizeContextText(value);
+    return normalized.length === 0 ? [] : normalized.split(' ');
+}
+
+function hasSharedTokenSequence(
+    valueTokens: readonly string[],
+    contextTokens: readonly string[],
+): boolean {
+    if (
+        valueTokens.length < MIN_TOKEN_SEQUENCE ||
+        contextTokens.length < MIN_TOKEN_SEQUENCE
+    ) {
+        return false;
+    }
+
+    const required = Math.max(
+        MIN_TOKEN_SEQUENCE,
+        Math.min(8, Math.ceil(valueTokens.length * 0.5)),
+    );
+    if (required > contextTokens.length || required > valueTokens.length) {
+        return false;
+    }
+
+    const contextSequences = new Set<string>();
+    for (let index = 0; index <= contextTokens.length - required; index += 1) {
+        contextSequences.add(
+            contextTokens.slice(index, index + required).join(' '),
+        );
+    }
+
+    for (let index = 0; index <= valueTokens.length - required; index += 1) {
+        if (
+            contextSequences.has(
+                valueTokens.slice(index, index + required).join(' '),
+            )
+        ) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function isContextEcho(value: string, contextBody: string): boolean {
+    const normalizedContext = normalizeContextText(contextBody);
+    const normalizedValue = normalizeContextText(value);
+    if (normalizedValue.length === 0) {
+        return false;
+    }
+    if (normalizedValue === normalizedContext) {
+        return true;
+    }
+    if (normalizedContext.length < MIN_CONTEXT_SIGNAL_LENGTH) {
+        return false;
+    }
+
+    if (
+        normalizedValue.includes(normalizedContext) ||
+        (normalizedContext.includes(normalizedValue) &&
+            normalizedValue.length >= MIN_CONTEXT_LINE_LENGTH)
+    ) {
+        return true;
+    }
+
+    const contextLines = contextBody
+        .split(/\r?\n/u)
+        .map(normalizeContextText)
+        .filter((line) => line.length >= MIN_CONTEXT_LINE_LENGTH);
+    if (contextLines.some((line) => normalizedValue.includes(line))) {
+        return true;
+    }
+
+    return hasSharedTokenSequence(tokens(value), tokens(contextBody));
+}
+
+function redactModelText(value: string, contextBody: string): string {
+    return isContextEcho(value, contextBody) ? REVIEW_CONTEXT_REDACTION : value;
 }
 
 export function redactReviewContextFromResponse(
@@ -34,20 +124,12 @@ export function redactReviewContextFromResponse(
 
     return {
         ...response,
-        summary: redactContextText(response.summary, contextBody),
         issues: response.issues.map((issue) => ({
             ...issue,
-            file: redactContextText(issue.file, contextBody),
-            severity: redactContextText(issue.severity, contextBody),
-            message: redactContextText(issue.message, contextBody),
-            ...(issue.category !== undefined
-                ? {
-                      category: redactContextText(issue.category, contextBody),
-                  }
-                : {}),
+            message: redactModelText(issue.message, contextBody),
             ...(issue.suggestion !== undefined
                 ? {
-                      suggestion: redactContextText(
+                      suggestion: redactModelText(
                           issue.suggestion,
                           contextBody,
                       ),
@@ -55,20 +137,17 @@ export function redactReviewContextFromResponse(
                 : {}),
             ...(issue.recommendation !== undefined
                 ? {
-                      recommendation: redactContextText(
+                      recommendation: redactModelText(
                           issue.recommendation,
                           contextBody,
                       ),
                   }
                 : {}),
-            ...(issue.ruleId !== undefined
-                ? { ruleId: redactContextText(issue.ruleId, contextBody) }
-                : {}),
             ...(issue.fix
                 ? {
                       fix: {
                           ...issue.fix,
-                          replacement: redactContextText(
+                          replacement: redactModelText(
                               issue.fix.replacement,
                               contextBody,
                           ),

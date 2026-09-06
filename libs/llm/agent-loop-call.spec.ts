@@ -78,6 +78,13 @@ const mockCache = applyCacheBreakpoints as unknown as jest.Mock;
 const mockRepair = repairInvalidToolInput as unknown as jest.Mock;
 const mockIdentity = agentModelIdentity as unknown as jest.Mock;
 
+type RepairToolCall = (
+    input: Omit<
+        Parameters<typeof repairInvalidToolInput>[0],
+        'model' | 'abortSignal'
+    >,
+) => ReturnType<typeof repairInvalidToolInput>;
+
 // A span port that just runs the exec (records nothing) — lets us assert the
 // boundary routes through the span AND still returns the exec's result verbatim.
 let spanPort: { runAiSdkLLMInSpan: jest.Mock };
@@ -248,10 +255,7 @@ describe('row1 request assembly — the exact generateText invocation', () => {
         });
 
         expect(mockStepCountIs).toHaveBeenCalledWith(12);
-        expect(genArgs().stopWhen).toEqual([
-            extraStop,
-            { __stepCountIs: 12 },
-        ]);
+        expect(genArgs().stopWhen).toEqual([extraStop, { __stepCountIs: 12 }]);
     });
 
     it('appends only the step ceiling when the runner supplies no stopWhen', async () => {
@@ -310,7 +314,6 @@ describe('row1 request assembly — the exact generateText invocation', () => {
             ...defaultResolved(),
             model: RESOLVED_MODEL,
         });
-        (mockResolve() as any).model; // no-op keep types happy
         await runAgentLoopCall(baseParams()); // no byokConfig
         const cacheArg = mockCache.mock.calls[0][0];
         expect(cacheArg.provider).toBeUndefined(); // slot?.provider
@@ -385,11 +388,14 @@ describe('row19 tool-call repair delegation (repairToolCall → repairInvalidToo
 
     it('delegates to repairInvalidToolInput with THIS model + abort signal + the failed toolCall', async () => {
         const signal = new AbortController().signal;
-        mockRepair.mockResolvedValueOnce({ toolName: 't1', input: '{"fixed":1}' });
+        mockRepair.mockResolvedValueOnce({
+            toolName: 't1',
+            input: '{"fixed":1}',
+        });
 
         await runAgentLoopCall({ ...baseParams(), signal });
 
-        const repairFn = genArgs().repairToolCall as Function;
+        const repairFn = genArgs().repairToolCall as RepairToolCall;
         const toolCall = { toolName: 't1', input: 'not-json-args' };
         const inputSchema = jest.fn();
         const error = new Error('args failed schema');
@@ -408,7 +414,7 @@ describe('row19 tool-call repair delegation (repairToolCall → repairInvalidToo
     it('propagates the repair fail-soft result (null = SDK default "let the step fail")', async () => {
         mockRepair.mockResolvedValueOnce(null);
         await runAgentLoopCall(baseParams());
-        const repairFn = genArgs().repairToolCall as Function;
+        const repairFn = genArgs().repairToolCall as RepairToolCall;
         await expect(
             repairFn({
                 toolCall: { toolName: 'x', input: 1 },
@@ -681,6 +687,22 @@ describe('langfuse telemetry — conditional wiring', () => {
         expect(buildLangfuseTelemetry).toHaveBeenCalledWith('agent.run', {
             sessionId: 's1',
         });
+        expect(toAiSdkTelemetryArgs).toHaveBeenCalled();
+        expect(genArgs().experimental_telemetry).toEqual({ isEnabled: false });
+    });
+
+    it('suppresses recorded inputs and outputs without optional telemetry metadata', async () => {
+        await runAgentLoopCall({
+            ...baseParams(),
+            organizationId: 'org-private',
+            recordTelemetryInputs: false,
+        });
+
+        expect(buildLangfuseTelemetry).toHaveBeenCalledWith(
+            'agent.run',
+            { organizationId: 'org-private' },
+            { recordInputs: false },
+        );
         expect(toAiSdkTelemetryArgs).toHaveBeenCalled();
         expect(genArgs().experimental_telemetry).toEqual({ isEnabled: false });
     });

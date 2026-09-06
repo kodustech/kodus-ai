@@ -232,10 +232,7 @@ export const SHARD_PR_SYSTEM_PROMPT = `You evaluate PULL-REQUEST-level team rule
 function ruleBlock(rules: Array<Partial<IKodyRule>>): string {
     return rules
         .map((r, i) => {
-            const parts = [
-                `[${i + 1}] ${r.title}`,
-                `  description: ${r.rule}`,
-            ];
+            const parts = [`[${i + 1}] ${r.title}`, `  description: ${r.rule}`];
             if (r.examples?.length) {
                 parts.push(`  examples:`);
                 for (const ex of r.examples) {
@@ -639,6 +636,31 @@ export async function judgeKodyRulesSharded(
         languageLabel,
     } = input;
     const concurrency = input.concurrency ?? 4;
+    const safeContextFailureMetadata = (
+        err: unknown,
+        metadata: Readonly<Record<string, unknown>> = {},
+    ): Readonly<Record<string, unknown>> => {
+        const source =
+            typeof err === 'object' && err !== null
+                ? (err as Record<string, unknown>)
+                : {};
+        const errorName =
+            typeof source.name === 'string' &&
+            /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/u.test(source.name)
+                ? source.name
+                : 'Error';
+        const errorCode =
+            typeof source.code === 'string' &&
+            /^[A-Za-z0-9_.-]{1,64}$/u.test(source.code)
+                ? source.code
+                : undefined;
+        return {
+            ...metadata,
+            reason: 'Provider call failed while processing request-scoped context',
+            errorName,
+            ...(errorCode ? { errorCode } : {}),
+        };
+    };
 
     const fileRules = rules.filter((r) => !isPrLevel(r));
     const prRules = rules.filter(isPrLevel);
@@ -663,6 +685,15 @@ export async function judgeKodyRulesSharded(
             // the indices don't shift.
             const ruleUuids = applicable.map((r) => r.uuid ?? '');
             try {
+                if (reviewContext) {
+                    reviewContextDeliveries.push(
+                        createReviewContextDelivery(
+                            reviewContext,
+                            `kodus-rules-review-agent:${file.filename}`,
+                            'file-shard',
+                        ),
+                    );
+                }
                 const vs = await runJudge({
                     system: SHARD_SYSTEM_PROMPT,
                     user: fileShardUser(
@@ -674,15 +705,6 @@ export async function judgeKodyRulesSharded(
                     filename: file.filename,
                     ruleUuids,
                 });
-                if (reviewContext) {
-                    reviewContextDeliveries.push(
-                        createReviewContextDelivery(
-                            reviewContext,
-                            `kodus-rules-review-agent:${file.filename}`,
-                            'file-shard',
-                        ),
-                    );
-                }
                 // resolve ruleId→uuid (dropping hallucinated indices), then
                 // anchor every violation to this file
                 return resolveShardViolations(vs, ruleUuids).map((v) => ({
@@ -698,7 +720,9 @@ export async function judgeKodyRulesSharded(
                     // exactly the failure this log exists to surface.
                     context: 'kody-rules-sharded',
                     metadata: reviewContext
-                        ? { filename: file.filename }
+                        ? safeContextFailureMetadata(err, {
+                              filename: file.filename,
+                          })
                         : { filename: file.filename, err },
                 });
                 return [] as ShardViolation[];
@@ -712,6 +736,15 @@ export async function judgeKodyRulesSharded(
         shardsRun++;
         const ruleUuids = prRules.map((r) => r.uuid ?? '');
         try {
+            if (reviewContext) {
+                reviewContextDeliveries.push(
+                    createReviewContextDelivery(
+                        reviewContext,
+                        'kodus-rules-review-agent:pull-request',
+                        'pr-shard',
+                    ),
+                );
+            }
             const vs = await runJudge({
                 system: SHARD_PR_SYSTEM_PROMPT,
                 user: prShardUser(
@@ -725,15 +758,6 @@ export async function judgeKodyRulesSharded(
                 filename: null,
                 ruleUuids,
             });
-            if (reviewContext) {
-                reviewContextDeliveries.push(
-                    createReviewContextDelivery(
-                        reviewContext,
-                        'kodus-rules-review-agent:pull-request',
-                        'pr-shard',
-                    ),
-                );
-            }
             // PR-level violations carry no relevantFile by design
             for (const v of resolveShardViolations(vs, ruleUuids))
                 violations.push(v);
@@ -742,7 +766,9 @@ export async function judgeKodyRulesSharded(
             logger?.warn({
                 message: `[kody-rules-shard] PR-scope shard failed (${prRules.length} rule(s)) — degrading to zero findings${reviewContext ? '' : `: ${err instanceof Error ? err.message : String(err)}`}`,
                 context: 'kody-rules-sharded',
-                metadata: reviewContext ? undefined : { err },
+                metadata: reviewContext
+                    ? safeContextFailureMetadata(err)
+                    : { err },
             });
         }
     }

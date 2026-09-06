@@ -77,12 +77,11 @@ function makeInput(
 }
 
 function expectStableReviewContextBlock(prompt: string): void {
-    expect(prompt.match(/<ReviewContext\b/g)).toHaveLength(1);
-    expect(prompt.match(/<\/ReviewContext>/g)).toHaveLength(1);
+    expect(prompt.match(/^REVIEW_CONTEXT_BOUNDARY /gm)).toHaveLength(1);
     expect(prompt.split(CONTEXT_BODY)).toHaveLength(2);
-    expect(prompt).toContain(`source="${REVIEW_CONTEXT_SOURCE}"`);
-    expect(prompt).toContain(`content-type="${REVIEW_CONTEXT_CONTENT_TYPE}"`);
-    expect(prompt.indexOf('<ReviewContext')).toBeLessThan(
+    expect(prompt).toContain(`source=${REVIEW_CONTEXT_SOURCE}`);
+    expect(prompt).toContain(`content-type=${REVIEW_CONTEXT_CONTENT_TYPE}`);
+    expect(prompt.indexOf('REVIEW_CONTEXT_BOUNDARY')).toBeLessThan(
         prompt.indexOf('<Diffs'),
     );
 }
@@ -119,7 +118,7 @@ describe('review context prompt rendering', () => {
             makeInput({ reviewContext: undefined }),
         );
 
-        expect(prompt).not.toContain('<ReviewContext');
+        expect(prompt).not.toContain('REVIEW_CONTEXT_BOUNDARY');
         expect(prompt).not.toContain(CONTEXT_BODY);
     });
 });
