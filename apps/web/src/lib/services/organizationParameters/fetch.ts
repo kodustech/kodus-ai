@@ -77,6 +77,11 @@ export type TestBYOKResult = {
     message?: string;
     providerMessage?: string;
     httpStatus?: number;
+    /** How a PASSING result was established. `catalog` means the provider listed
+     *  the model for the org's own key — the key authenticates and the id
+     *  exists, but the model was never called, so it is the weaker claim.
+     *  `probe` means a real request was answered. */
+    verifiedBy?: "catalog" | "probe";
     /** Set on a PASSING test whose Custom reasoning override the provider's
      *  adapter ignored. The connection works; the config is not doing what was
      *  pasted. Advisory — never blocks saving. */

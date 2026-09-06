@@ -128,7 +128,7 @@ export function classifyLLMError(
         friendlyMessage:
             category === LlmErrorCategory.CONTEXT_OVERFLOW
                 ? buildContextOverflowMessage(err, provider)
-                : buildFriendlyMessage(category, provider),
+                : buildFriendlyMessage(category, provider, lower),
         providerMessage: extractProviderMessage(err),
     };
 }
@@ -389,11 +389,45 @@ function matchByMessage(lower: string): LlmErrorCategory {
     return LlmErrorCategory.UNKNOWN;
 }
 
+/**
+ * A 404 that is about ROUTING, not about the model id.
+ *
+ * Aggregators (OpenRouter today) answer a perfectly valid model with a 404 when
+ * the account's allowed-providers list has no overlap with the upstreams serving
+ * it. The status is identical to "no such model"; only the body distinguishes
+ * them, so the body is what has to be read.
+ */
+function isRoutingRefusal(providerText?: string): boolean {
+    const said = (providerText ?? '').toLowerCase();
+    if (!said) return false;
+    return (
+        said.includes('allowed-providers') ||
+        said.includes('allowed providers') ||
+        (said.includes('no allowed') && said.includes('provider'))
+    );
+}
+
 function buildFriendlyMessage(
     category: LlmErrorCategory,
     provider?: string,
+    providerText?: string,
 ): string {
     const providerLabel = provider ? ` (${provider})` : '';
+
+    // A 404 can mean the model id is wrong, or that the model is fine and there
+    // is simply nowhere to send it. Aggregators separate those, and telling them
+    // apart is the difference between a fix and a wild goose chase: a customer
+    // spent a day rewriting a model name and regenerating keys because we said
+    // "verify the model name" while OpenRouter had replied that their account's
+    // allowed-providers setting permitted no upstream serving that model. The
+    // name was right. The key was right. Only the routing was closed.
+    if (
+        category === LlmErrorCategory.MODEL_NOT_FOUND &&
+        isRoutingRefusal(providerText)
+    ) {
+        return `The model is fine, but your provider account${providerLabel} allows no upstream that serves it, so the request has nowhere to route. Allow one of the providers that serves this model, or pick a model your current ones serve.`;
+    }
+
     switch (category) {
         case LlmErrorCategory.AUTH_INVALID:
             return `The configured API key${providerLabel} appears invalid or lacks permission. Check the key in your settings.`;

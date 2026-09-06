@@ -1,7 +1,6 @@
-// @ts-nocheck
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Alert, AlertDescription } from "@components/ui/alert";
@@ -53,12 +52,17 @@ import {
 import {
     providerHasCredentials,
     providerOwnsField,
+    providerSettingDefaults,
+    seedFieldsForPick,
+    unownedStoredSettings,
 } from "../_components/_modals/edit-key/credential-config";
 import {
     buildByokBlob,
     credentialSettingsFromConfig,
     modelFieldsFromConfig,
 } from "../_components/byok-write";
+import { credentialSettingsOverride } from "../_components/credential-settings-override";
+import { SuccessClaim } from "../_components/success-claim";
 import { formatModelLabel } from "../_data/model-label";
 import { PROVIDER_LABELS } from "../_data/provider-labels";
 import type { BYOKConfig, BYOKConnectInput } from "../_types";
@@ -207,6 +211,19 @@ export function ByokManualPageClient({
     // the re-auth probe).
     const currentBaseURL = existingConfig?.baseURL ?? storedBaseURL;
 
+    // The provider-scoped settings the CREDENTIAL actually holds, seeded off the
+    // registry rather than hand-listed here.
+    //
+    // Both flows through this screen write back to the same credential: editing a
+    // model, and adding a model to an already-connected provider. So both have to
+    // OPEN with what that credential holds — the save re-sends the form, and the
+    // server replaces `settings` with what it receives, so a field that opens
+    // blank is a field the save deletes.
+    const currentSettings = providerSettingDefaults(
+        lockedProvider,
+        isEditing ? editSettings : storedSettings,
+    ) as Record<string, unknown>;
+
     // Models already enabled on this provider — hidden from the "Add model"
     // dropdown so it never offers a duplicate. The currently-edited model stays
     // visible (ByokModelSelect keeps the selected value regardless).
@@ -227,7 +244,12 @@ export function ByokManualPageClient({
     const [testState, setTestState] = useState<
         | { status: "idle" }
         | { status: "testing" }
-        | { status: "success"; latencyMs: number; warning?: string }
+        | {
+              status: "success";
+              latencyMs: number;
+              warning?: string;
+              verifiedBy?: "catalog" | "probe";
+          }
         | { status: "error"; result: TestBYOKResult }
     >({ status: "idle" });
     const [isSaving, setIsSaving] = useState(false);
@@ -258,10 +280,10 @@ export function ByokManualPageClient({
             reasoningConfigOverride:
                 existingConfig?.reasoningConfigOverride ?? null,
             openrouterProviderOrder:
-                existingConfig?.openrouterProviderOrder ?? null,
+                (currentSettings.openrouterProviderOrder as string[]) ?? null,
             openrouterAllowFallbacks:
-                existingConfig?.openrouterAllowFallbacks ?? null,
-            vertexLocation: existingConfig?.vertexLocation ?? null,
+                (currentSettings.openrouterAllowFallbacks as boolean) ?? null,
+            vertexLocation: (currentSettings.vertexLocation as string) ?? null,
             // Sensitive Bedrock creds are stored encrypted server-side and
             // returned masked, so we can't populate the inputs from
             // existingConfig — that would re-submit the masked value and
@@ -271,13 +293,66 @@ export function ByokManualPageClient({
             awsBearerToken: null,
             awsAccessKeyId: null,
             awsSecretAccessKey: null,
-            awsRegion: existingConfig?.awsRegion ?? null,
+            awsRegion: (currentSettings.awsRegion as string) ?? null,
             awsSessionToken: null,
         },
     });
 
     const { isValid } = form.formState;
     const provider = form.watch("provider");
+
+    // Fill the credential's settings into the form when the user picks its
+    // provider, so every flow reaches the save knowing the same things.
+    //
+    // Hung off the SELECTION, not off the value changing. Picking a provider
+    // runs `form.reset` in ByokProviderSelect, which blanks `baseURL` every
+    // time — including when the same provider is chosen again, where the value
+    // does not change and an effect keyed on it would never re-run. That gap
+    // erased a stored base URL on the next save: the field read as deliberately
+    // cleared because the form had been made authoritative over it.
+    //
+    // Seeding here means the reset and the refill are the same event.
+    //
+    // Three earlier revisions of this branch each tried to answer "what does an
+    // empty settings field mean?" — and sending it erased the credential,
+    // staying silent discarded what the user typed, and layering could not tell
+    // a cleared field from an unshown one. The question only exists while the
+    // fields are blank against a credential that holds values, so it is filling
+    // them, not ruling on them, that settles it.
+    // A SET, not the last pick: the rule is "filled once per provider", and a
+    // single slot only says "same as last time". Pick OpenRouter, type a pin,
+    // mis-click Bedrock, come back — the slot has forgotten OpenRouter was ever
+    // seeded, so it refills from storage and the typed pin is gone. Correcting a
+    // mis-click is the most likely way anyone reaches that sequence, which makes
+    // it exactly the wrong moment to throw an edit away.
+    const seededProvidersRef = useRef<Set<string>>(new Set());
+    const seedProviderSettings = (pickedProvider?: string) => {
+        // The picked value comes from the select itself. Reading it back out of
+        // the form would make the seed depend on the reset having already
+        // landed in RHF's store — a coupling with nothing holding it in place.
+        const picked = pickedProvider ?? form.getValues("provider");
+        if (!picked) return;
+
+        const cred = (existing?.credentials ?? []).find(
+            (c) => !c.managed && c.provider === picked,
+        );
+        const stored = (cred?.settings ?? {}) as Record<string, unknown>;
+
+        // Which fields a pick refills is a rule of its own, and asymmetric —
+        // see `seedFieldsForPick`. Keeping it out of the component is what lets
+        // it be tested; both halves of it have already been a bug here.
+        for (const [key, value] of Object.entries(
+            seedFieldsForPick(
+                picked,
+                stored,
+                seededProvidersRef.current.has(picked),
+            ),
+        )) {
+            form.setValue(key as keyof EditKeyForm, value as never);
+        }
+
+        seededProvidersRef.current.add(picked);
+    };
     const model = form.watch("model");
     const apiKey = form.watch("apiKey");
     const watchedBaseURL = form.watch("baseURL");
@@ -368,6 +443,7 @@ export function ByokManualPageClient({
                                   status: "success",
                                   latencyMs: result.latencyMs,
                                   warning: result.warning,
+                                  verifiedBy: result.verifiedBy,
                               }
                             : { status: "error", result },
                     );
@@ -431,6 +507,7 @@ export function ByokManualPageClient({
                     status: "success",
                     latencyMs: result.latencyMs,
                     warning: result.warning,
+                    verifiedBy: result.verifiedBy,
                 });
             } else {
                 setTestState({ status: "error", result });
@@ -530,18 +607,47 @@ export function ByokManualPageClient({
         const existingCred = (existing?.credentials ?? []).find(
             (c) => !c.managed && c.provider === newConfig.provider,
         );
+        // The credential this save actually writes to, resolved HERE rather than
+        // at mount: in the unlocked flow the provider is chosen inside the form,
+        // so mount-time state knows nothing about it.
+        const targetSettings = (
+            isEditing ? editSettings : (existingCred?.settings ?? {})
+        ) as Record<string, unknown>;
+        // Provider-scoped settings the form is speaking for. Keys no form owns
+        // ride along, because the server replaces this object wholesale rather
+        // than merging it.
+        const nextCredentialSettings: Record<string, unknown> = {
+            ...unownedStoredSettings(targetSettings),
+            ...(credentialSettingsFromConfig(newConfig) ?? {}),
+        };
+        const credentialSettings = credentialSettingsOverride({
+            // Authoritative exactly when the fields were filled from the
+            // credential: at mount for a known provider, or by
+            // `seedProviderSettings` when the user picked one. Every path that
+            // can reach this save does one of those — a provider can only be
+            // set by the select, and the select seeds — so the additive branch
+            // below is a floor, not a flow.
+            seeded:
+                isEditing ||
+                !!lockedProvider ||
+                seededProvidersRef.current.has(newConfig.provider),
+            storedSettings: targetSettings,
+            formSettings: nextCredentialSettings,
+        });
         const blob: BYOKConfig =
             isEditing && editModel
                 ? buildByokBlob(existing, {
                       kind: "edit-model",
                       modelId: editModel.id,
                       model: modelFields,
+                      credentialSettings,
                   })
                 : existingCred
                   ? buildByokBlob(existing, {
                         kind: "add-existing-provider",
                         credentialId: existingCred.id,
                         model: modelFields,
+                        credentialSettings,
                     })
                   : buildByokBlob(existing, {
                         kind: "add-new-provider",
@@ -732,9 +838,18 @@ export function ByokManualPageClient({
                                                     </FormControl.Root>
                                                 }>
                                                 <ByokProviderSelect
-                                                    onProviderChange={() =>
-                                                        setShowKeyInput(true)
-                                                    }
+                                                    onProviderChange={(
+                                                        picked,
+                                                    ) => {
+                                                        setShowKeyInput(true);
+                                                        // Runs after the
+                                                        // select's reset, so
+                                                        // the refill is the
+                                                        // last word.
+                                                        seedProviderSettings(
+                                                            picked,
+                                                        );
+                                                    }}
                                                 />
                                             </Suspense>
                                         </ErrorBoundary>
@@ -874,7 +989,12 @@ function TestResultBanner({
     state:
         | { status: "idle" }
         | { status: "testing" }
-        | { status: "success"; latencyMs: number; warning?: string }
+        | {
+              status: "success";
+              latencyMs: number;
+              warning?: string;
+              verifiedBy?: "catalog" | "probe";
+          }
         | { status: "error"; result: TestBYOKResult };
 }) {
     if (state.status === "idle" || state.status === "testing") return null;
@@ -890,11 +1010,10 @@ function TestResultBanner({
                     <AlertTriangleIcon />
                     <AlertDescription className="flex flex-col gap-1 text-pretty">
                         <span>
-                            Connection OK — provider responded in{" "}
-                            <span className="tabular-nums">
-                                {state.latencyMs}ms
-                            </span>
-                            .
+                            <SuccessClaim
+                                latencyMs={state.latencyMs}
+                                verifiedBy={state.verifiedBy}
+                            />
                         </span>
                         <span>{state.warning}</span>
                     </AlertDescription>
@@ -905,8 +1024,10 @@ function TestResultBanner({
             <Alert variant="success">
                 <CheckCircle2Icon />
                 <AlertDescription className="text-pretty">
-                    Connection OK — provider responded in{" "}
-                    <span className="tabular-nums">{state.latencyMs}ms</span>.
+                    <SuccessClaim
+                        latencyMs={state.latencyMs}
+                        verifiedBy={state.verifiedBy}
+                    />
                 </AlertDescription>
             </Alert>
         );
