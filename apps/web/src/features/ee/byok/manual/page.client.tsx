@@ -319,7 +319,13 @@ export function ByokManualPageClient({
     // a cleared field from an unshown one. The question only exists while the
     // fields are blank against a credential that holds values, so it is filling
     // them, not ruling on them, that settles it.
-    const seededProviderRef = useRef<string | null>(null);
+    // A SET, not the last pick: the rule is "filled once per provider", and a
+    // single slot only says "same as last time". Pick OpenRouter, type a pin,
+    // mis-click Bedrock, come back — the slot has forgotten OpenRouter was ever
+    // seeded, so it refills from storage and the typed pin is gone. Correcting a
+    // mis-click is the most likely way anyone reaches that sequence, which makes
+    // it exactly the wrong moment to throw an edit away.
+    const seededProvidersRef = useRef<Set<string>>(new Set());
     const seedProviderSettings = (pickedProvider?: string) => {
         // The picked value comes from the select itself. Reading it back out of
         // the form would make the seed depend on the reset having already
@@ -339,13 +345,13 @@ export function ByokManualPageClient({
             seedFieldsForPick(
                 picked,
                 stored,
-                seededProviderRef.current === picked,
+                seededProvidersRef.current.has(picked),
             ),
         )) {
             form.setValue(key as keyof EditKeyForm, value as never);
         }
 
-        seededProviderRef.current = picked;
+        seededProvidersRef.current.add(picked);
     };
     const model = form.watch("model");
     const apiKey = form.watch("apiKey");
@@ -624,7 +630,7 @@ export function ByokManualPageClient({
             seeded:
                 isEditing ||
                 !!lockedProvider ||
-                seededProviderRef.current === newConfig.provider,
+                seededProvidersRef.current.has(newConfig.provider),
             storedSettings: targetSettings,
             formSettings: nextCredentialSettings,
         });
