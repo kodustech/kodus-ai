@@ -17,6 +17,18 @@ import { assertSafeOpenAICompatibleUrl } from './test-byok-connection.use-case';
 export interface ModelResponse {
     provider: BYOKProvider;
     models: CatalogModel[];
+    /**
+     * Whether producing this list actually USED the organization's credential.
+     *
+     * A live listing authenticates, so its result is evidence the key works. A
+     * static catalog is never fetched, and a curated fallback is served exactly
+     * when the live call could not run — neither says anything about the key.
+     *
+     * Callers that treat "the model is listed" as "the credential is good" need
+     * this to tell those apart: without it, a hard-coded array vouches for a
+     * dead key, and a screen gated on that verdict will persist it.
+     */
+    exercisedCredential: boolean;
 }
 
 /**
@@ -70,7 +82,13 @@ export class GetModelsByProviderUseCase {
         }
 
         if (listing.kind === 'static') {
-            return { provider: byokProvider, models: listing.models };
+            // Never fetched — a hand-maintained list that proves nothing about
+            // the credential.
+            return {
+                provider: byokProvider,
+                models: listing.models,
+                exercisedCredential: false,
+            };
         }
 
         // Prefer the org's OWN saved BYOK credentials so the catalog reflects the
@@ -107,9 +125,12 @@ export class GetModelsByProviderUseCase {
         // failure and the user types the model id.
         const listingFallback = (): ModelResponse | null => {
             if (listing.fallbackModels?.length) {
+                // Reached only when the live listing could not run, so the
+                // credential was never exercised.
                 return {
                     provider: byokProvider,
                     models: listing.fallbackModels,
+                    exercisedCredential: false,
                 };
             }
             return null;
@@ -155,9 +176,11 @@ export class GetModelsByProviderUseCase {
                 },
             );
 
+            // The live call authenticated, so this list IS evidence about the key.
             return {
                 provider: byokProvider,
                 models: listing.parse(response.data),
+                exercisedCredential: true,
             };
         } catch (error) {
             // Live fetch failed (bad/expired key, provider down, parse error).
