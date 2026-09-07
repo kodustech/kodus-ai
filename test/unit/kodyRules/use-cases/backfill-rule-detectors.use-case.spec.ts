@@ -84,3 +84,116 @@ describe('BackfillRuleDetectorsUseCase (#1449 T0 activation)', () => {
         expect(res.processed).toBe(2);
     });
 });
+
+// ── #1826: the detector sweep also reports and stores the context need ───────
+// The compile call decides both, so the sweep that arms detectors across an
+// org is also the sweep that declares what every rule needs to see. Derived
+// from spec.md's KRC-10 (each rule carries an inferred contextNeed) and the
+// task's idempotency requirement.
+describe('BackfillRuleDetectorsUseCase — context-need backfill (#1826)', () => {
+    it('reports how many rules received each need', async () => {
+        const rules = [
+            rule({ uuid: 'a' }),
+            rule({ uuid: 'b' }),
+            rule({ uuid: 'c' }),
+        ];
+        const needs: Record<string, string> = {
+            a: 'symbol-references',
+            b: 'symbol-references',
+            c: 'diff-only',
+        };
+        const { uc } = make(rules, (r) => ({
+            compiled: false,
+            declineReason: 'not-mechanical',
+            contextNeed: needs[r.uuid],
+        }));
+
+        const res = await uc.execute(org, { concurrency: 1 });
+
+        expect(res.contextNeeds).toEqual({
+            'diff-only': 1,
+            'enclosing-scope': 0,
+            'symbol-references': 2,
+            'sibling-file': 0,
+            'cited-file': 0,
+        });
+    });
+
+    it('counts a rule the compile call could not classify as diff-only', async () => {
+        const rules = [rule({ uuid: 'a' })];
+        const { uc } = make(rules, () => ({
+            compiled: false,
+            declineReason: 'error',
+        }));
+
+        const res = await uc.execute(org, { concurrency: 1 });
+
+        expect(res.contextNeeds['diff-only']).toBe(1);
+        expect(res.errored).toBe(1);
+    });
+
+    it('is idempotent for unchanged rule text: a re-run reports the same needs and changes nothing', async () => {
+        // The rules already carry the need the compiler re-derives from the
+        // same text, so the second pass is a no-op that still reports.
+        const rules = [
+            rule({
+                uuid: 'a',
+                contextNeed: {
+                    need: 'symbol-references',
+                    sourceHash: 'h',
+                    source: 'compiler',
+                    inferredAt: new Date('2026-01-01T00:00:00Z'),
+                },
+            }),
+            rule({
+                uuid: 'b',
+                contextNeed: {
+                    need: 'diff-only',
+                    sourceHash: 'h',
+                    source: 'compiler',
+                    inferredAt: new Date('2026-01-01T00:00:00Z'),
+                },
+            }),
+        ];
+        const needs: Record<string, string> = {
+            a: 'symbol-references',
+            b: 'diff-only',
+        };
+        const { uc } = make(rules, (r) => ({
+            compiled: false,
+            declineReason: 'not-mechanical',
+            contextNeed: needs[r.uuid],
+        }));
+
+        const first = await uc.execute(org, { concurrency: 1 });
+        const second = await uc.execute(org, { concurrency: 1 });
+
+        expect(second.contextNeeds).toEqual(first.contextNeeds);
+        expect(second.contextNeedUnchanged).toBe(2);
+        expect(second.contextNeedUnchanged).toBe(second.processed);
+    });
+
+    it('does not count a rule whose need actually changed as unchanged', async () => {
+        const rules = [
+            rule({
+                uuid: 'a',
+                contextNeed: {
+                    need: 'diff-only',
+                    sourceHash: 'old-text-hash',
+                    source: 'compiler',
+                    inferredAt: new Date('2026-01-01T00:00:00Z'),
+                },
+            }),
+        ];
+        const { uc } = make(rules, () => ({
+            compiled: false,
+            declineReason: 'not-mechanical',
+            contextNeed: 'enclosing-scope',
+        }));
+
+        const res = await uc.execute(org, { concurrency: 1 });
+
+        expect(res.contextNeedUnchanged).toBe(0);
+        expect(res.contextNeeds['enclosing-scope']).toBe(1);
+    });
+});

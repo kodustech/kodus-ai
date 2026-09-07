@@ -9,7 +9,10 @@ import {
     IKodyRulesService,
     KODY_RULES_SERVICE_TOKEN,
 } from '../../domain/contracts/kodyRules.service.contract';
-import { KodyRulesType } from '../../domain/interfaces/kodyRules.interface';
+import {
+    KodyRuleContextNeed,
+    KodyRulesType,
+} from '../../domain/interfaces/kodyRules.interface';
 
 export interface BackfillDetectorsResult {
     /** total rules on the org */
@@ -36,6 +39,18 @@ export interface BackfillDetectorsResult {
     disabledCosmetic: number;
     /** rules that kept a detector but STILL carry no language scope. */
     stillUnscoped: number;
+    /**
+     * #1826 context-need accounting: how many processed rules ended up with
+     * each need. The compile call decides both, so the sweep that arms
+     * detectors also declares what every rule needs to see.
+     */
+    contextNeeds: Record<KodyRuleContextNeed, number>;
+    /**
+     * Of those, the ones that already carried that same need before the run.
+     * A re-run over unchanged rule text puts every processed rule here, which
+     * is what makes the sweep idempotent rather than merely repeatable.
+     */
+    contextNeedUnchanged: number;
 }
 
 /**
@@ -103,6 +118,14 @@ export class BackfillRuleDetectorsUseCase {
             disabled: 0,
             disabledCosmetic: 0,
             stillUnscoped: 0,
+            contextNeeds: {
+                'diff-only': 0,
+                'enclosing-scope': 0,
+                'symbol-references': 0,
+                'sibling-file': 0,
+                'cited-file': 0,
+            },
+            contextNeedUnchanged: 0,
         };
 
         const concurrency = Math.max(1, opts.concurrency ?? 3);
@@ -124,6 +147,13 @@ export class BackfillRuleDetectorsUseCase {
                         // detectors already armed across 129 orgs — as opposed
                         // to a rule being given a detector for the first time.
                         const hadDetector = !!rule.detector;
+                        // Absent means the compile errored before the need was
+                        // decided; `diff-only` is what review will use anyway.
+                        const need = r.contextNeed ?? 'diff-only';
+                        res.contextNeeds[need]++;
+                        if (rule.contextNeed?.need === need) {
+                            res.contextNeedUnchanged++;
+                        }
                         if (r.compiled) {
                             res.compiled++;
                             if (hadDetector && r.scoped) res.rescoped++;
@@ -149,7 +179,7 @@ export class BackfillRuleDetectorsUseCase {
         this.logger.log({
             message: onlyMissing
                 ? `Detector backfill complete for org`
-                : `Detector re-scope sweep complete for org: ${res.rescoped} re-scoped, ${res.disabled} disarmed (${res.disabledCosmetic} cosmetic), ${res.stillUnscoped} still unscoped`,
+                : `Detector re-scope sweep complete for org: ${res.rescoped} re-scoped, ${res.disabled} disarmed (${res.disabledCosmetic} cosmetic), ${res.stillUnscoped} still unscoped, ${res.processed - res.contextNeeds['diff-only']} needing context beyond the diff`,
             context: BackfillRuleDetectorsUseCase.name,
             metadata: { organizationAndTeamData, ...res },
         });
