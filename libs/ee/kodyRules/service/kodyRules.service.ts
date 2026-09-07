@@ -65,6 +65,7 @@ import {
     FindMemoriesFilters,
     FindMemoriesResult,
     IKodyRule,
+    IKodyRuleContextNeed,
     IKodyRuleDetector,
     IKodyRuleMemory,
     IKodyRules,
@@ -563,6 +564,14 @@ export class KodyRulesService implements IKodyRulesService {
                 lastContentHash: kodyRule?.lastContentHash,
                 directoryId: kodyRule?.directoryId,
                 examples: kodyRule?.examples,
+                // Issue #1826. `createOrUpdate` maps every field of a NEW rule
+                // explicitly, so a field missing from either literal is
+                // silently dropped at birth and again on the next edit that
+                // rebuilds the rule. The DTO does not declare `contextNeed`
+                // (backend-first: no form field), but the internal write paths
+                // — MCP, library import, the sync flows — hand this method
+                // plain rule objects that can carry an author's value.
+                contextNeed: (kodyRule as Partial<IKodyRule>)?.contextNeed,
                 origin: kodyRule?.origin ?? KodyRulesOrigin.MANUAL,
                 scope: kodyRule?.scope ?? KodyRulesScope.FILE,
                 inheritance: {
@@ -649,6 +658,14 @@ export class KodyRulesService implements IKodyRulesService {
                 lastContentHash: kodyRule?.lastContentHash,
                 directoryId: kodyRule?.directoryId,
                 examples: kodyRule?.examples,
+                // Issue #1826. `createOrUpdate` maps every field of a NEW rule
+                // explicitly, so a field missing from either literal is
+                // silently dropped at birth and again on the next edit that
+                // rebuilds the rule. The DTO does not declare `contextNeed`
+                // (backend-first: no form field), but the internal write paths
+                // — MCP, library import, the sync flows — hand this method
+                // plain rule objects that can carry an author's value.
+                contextNeed: (kodyRule as Partial<IKodyRule>)?.contextNeed,
                 origin: kodyRule?.origin ?? KodyRulesOrigin.MANUAL,
                 scope: kodyRule?.scope ?? KodyRulesScope.FILE,
                 inheritance: {
@@ -1028,6 +1045,67 @@ export class KodyRulesService implements IKodyRulesService {
                 metadata: { organizationId, ruleId },
             });
             throw new Error('Could not update rule detector');
+        }
+
+        const updated = updatedKodyRules.rules.find((r) => r.uuid === ruleId);
+        return updated ? (updated as IKodyRule) : null;
+    }
+
+    /**
+     * Write the rule's declared context need (issue #1826).
+     *
+     * Same shape as `updateRuleDetector`, including the deliberate `null`
+     * pass-through that clears a stale value, plus one extra rule: an
+     * author-sourced need is never overwritten by an inferred one (KRC-11).
+     * The compiler guesses about the customer's rule; the customer does not.
+     */
+    async updateRuleContextNeed(
+        organizationId: string,
+        ruleId: string,
+        contextNeed: IKodyRuleContextNeed | null,
+    ): Promise<IKodyRule | null> {
+        const existing = await this.findByOrganizationId(organizationId);
+        if (!existing) {
+            throw new NotFoundException(
+                'Kody rules not found for organization',
+            );
+        }
+
+        const existingRule = existing.rules?.find((r) => r.uuid === ruleId);
+        if (!existingRule) {
+            throw new NotFoundException('Rule not found');
+        }
+
+        if (
+            existingRule.contextNeed?.source === 'author' &&
+            contextNeed?.source !== 'author'
+        ) {
+            return existingRule as IKodyRule;
+        }
+
+        const updatedRule = {
+            ...existingRule,
+            // `null` passes through as-is: updateRule skips only `undefined`,
+            // so this writes `$set rules.$.contextNeed = null` and clears a
+            // stale inference instead of silently no-op-ing the clear.
+            contextNeed: contextNeed,
+            updatedAt: new Date(),
+        } as IKodyRule;
+
+        const updatedKodyRules = await this.updateRule(
+            existing.uuid,
+            ruleId,
+            updatedRule,
+        );
+
+        if (!updatedKodyRules) {
+            this.logger.error({
+                message: 'Could not update rule context need',
+                error: new Error('Could not update rule context need'),
+                context: KodyRulesService.name,
+                metadata: { organizationId, ruleId },
+            });
+            throw new Error('Could not update rule context need');
         }
 
         const updated = updatedKodyRules.rules.find((r) => r.uuid === ruleId);
