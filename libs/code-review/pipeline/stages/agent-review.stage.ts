@@ -79,6 +79,8 @@ import {
 import { KodyRuleSummaryService } from '@libs/kodyRules/infrastructure/adapters/services/kody-rule-summary.service';
 import {
     CodeReviewPipelineContext,
+    resolvedModel,
+    resolvedProvider,
     DedupTraceGroupSummary,
     DedupTraceSuggestionSummary,
     DedupTraceSummary,
@@ -786,15 +788,20 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             const failures = result.failures ?? [];
 
             if (failures.length > 0) {
-                const reviewProvider =
-                    typeof context.codeReviewConfig?.resolvedModelSlot
-                        ?.provider === 'string'
-                        ? (context.codeReviewConfig.resolvedModelSlot
-                              .provider as string)
-                        : undefined;
+                // Classify against the provider that ANSWERED, not the one
+                // resolved before the run. The friendly sentence names the
+                // provider inline ("the key (openai) appears invalid"), so
+                // classifying with the pre-run slot after a cascade puts one
+                // provider in the prose and another in the facts line — the
+                // same never-co-occurred pair, split across two fields.
+                // A classification already attached by byok-model-wrapper is
+                // anchored to the attempt that raised it, so it is preferred.
                 const classifyFailure = (f: (typeof failures)[number]) =>
                     getClassification(f.error) ??
-                    classifyLLMError(f.error, reviewProvider);
+                    classifyLLMError(
+                        f.error,
+                        resolvedProvider(context, f.error),
+                    );
                 const criticalFailures = failures.filter((f) =>
                     CRITICAL_AGENTS.has(f.agentName),
                 );
@@ -817,8 +824,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 context = this.updateContext(context, (draft) => {
                     draft.lastReviewError = {
                         category: classification.category,
-                        provider: classification.provider,
+                        provider:
+                            classification.provider ??
+                            resolvedProvider(context, chosen.error),
                         friendlyMessage: classification.friendlyMessage,
+                        httpStatus: classification.httpStatus,
+                        providerMessage: classification.providerMessage,
+                        model: resolvedModel(context, chosen.error),
                         agentName: chosen.agentName,
                         occurredAt: new Date(),
                     };
@@ -1447,10 +1459,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 getClassification(stageError) ??
                 classifyLLMError(
                     stageError,
-                    typeof context.codeReviewConfig?.resolvedModelSlot
-                        ?.provider === 'string'
-                        ? context.codeReviewConfig.resolvedModelSlot.provider
-                        : undefined,
+                    resolvedProvider(context, stageError),
                 );
 
             // Keep going so the end-review comment still gets posted and the
@@ -1476,8 +1485,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 if (!draft.lastReviewError) {
                     draft.lastReviewError = {
                         category: classification.category,
-                        provider: classification.provider,
+                        provider:
+                            classification.provider ??
+                            resolvedProvider(context, stageError),
                         friendlyMessage: classification.friendlyMessage,
+                        httpStatus: classification.httpStatus,
+                        providerMessage: classification.providerMessage,
+                        model: resolvedModel(context, stageError),
                         occurredAt: new Date(),
                     };
                 }
