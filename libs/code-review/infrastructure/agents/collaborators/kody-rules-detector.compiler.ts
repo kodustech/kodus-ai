@@ -27,6 +27,7 @@ import { z } from 'zod';
 import {
     IKodyRule,
     IKodyRuleDetector,
+    KodyRuleContextNeed,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { ruleAppliesToFile } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge';
@@ -57,7 +58,15 @@ LANGUAGE SCOPE (required when the rule names one): a regex cannot tell Ruby from
 
 DECLINE COSMETIC RULES. Formatting and style that a linter or formatter owns — semicolons, quote style, blank lines, trailing whitespace, indentation, line length, brace placement, statements per line — must be declined even when a regex could match them perfectly. They are mechanically detectable and still not worth a review comment: the reviewer's linter already enforces them, so a hit is at best noise and at worst wrong. Set {"mechanical": false, "cosmetic": true}.
 
-Return ONLY JSON: {"mechanical": true, "pattern": "<regex source>", "flags": "<optional>", "extensions": ["<.ext>", …], "reason": "<one sentence>"} or {"mechanical": false, "cosmetic": <true|false>, "reason": "<one sentence>"}`;
+CONTEXT NEED (answer this every time, mechanical or not). The reviewer sees one file's changed lines and about three lines around them. Say in "contextNeed" what this rule must ALSO see to be judged honestly:
+- "diff-only" — the changed lines are enough.
+- "enclosing-scope" — you must see the whole function or class the change sits in (e.g. "functions must be under 40 lines").
+- "symbol-references" — you must see where the changed symbols are used elsewhere in the repository (e.g. "no unused imports", "do not duplicate an existing helper").
+- "sibling-file" — you must know whether a related file exists (e.g. "every new endpoint has a test").
+- "cited-file" — the rule points at another file whose content IS the convention.
+Answer "diff-only" unless the rule plainly cannot be judged without more. Over-declaring is the expensive mistake: a rule needing context the reviewer cannot fetch is not judged at all, so when unsure, answer "diff-only".
+
+Return ONLY JSON: {"mechanical": true, "pattern": "<regex source>", "flags": "<optional>", "extensions": ["<.ext>", …], "contextNeed": "<diff-only|enclosing-scope|symbol-references|sibling-file|cited-file>", "reason": "<one sentence>"} or {"mechanical": false, "cosmetic": <true|false>, "contextNeed": "<diff-only|enclosing-scope|symbol-references|sibling-file|cited-file>", "reason": "<one sentence>"}`;
 
 export const compilerOutputSchema = z.object({
     mechanical: z.boolean(),
@@ -67,8 +76,37 @@ export const compilerOutputSchema = z.object({
     extensions: z.array(z.string()).optional(),
     /** the rule is linter-owned formatting; decline it (issue #1831). */
     cosmetic: z.boolean().optional(),
+    /**
+     * What the rule must see beyond the diff (issue #1826). Kept a loose
+     * string, NOT an enum: an off-vocabulary answer must degrade to
+     * `diff-only` via normalizeContextNeed, never fail the parse and take the
+     * detector decision down with it.
+     */
+    contextNeed: z.string().optional(),
     reason: z.string().optional(),
 });
+
+/**
+ * The compiler's context-need answer, normalized (issue #1826). Anything the
+ * model invented, omitted, or mangled becomes `diff-only` — today's behavior,
+ * and the safe direction: an over-declared need means the customer's rule
+ * stops being judged whenever the retrieval cannot be satisfied.
+ */
+export function normalizeContextNeed(raw: unknown): KodyRuleContextNeed {
+    if (typeof raw !== 'string') return 'diff-only';
+    const need = raw.trim().toLowerCase();
+    return (CONTEXT_NEEDS as readonly string[]).includes(need)
+        ? (need as KodyRuleContextNeed)
+        : 'diff-only';
+}
+
+const CONTEXT_NEEDS: readonly KodyRuleContextNeed[] = [
+    'diff-only',
+    'enclosing-scope',
+    'symbol-references',
+    'sibling-file',
+    'cited-file',
+];
 
 export function buildCompilerUserPrompt(rule: Partial<IKodyRule>): string {
     const parts = [
@@ -121,6 +159,8 @@ export interface CompilerOutput {
     flags?: string;
     extensions?: string[];
     cosmetic?: boolean;
+    /** raw, un-normalized context need — run it through normalizeContextNeed. */
+    contextNeed?: string;
     reason?: string;
 }
 

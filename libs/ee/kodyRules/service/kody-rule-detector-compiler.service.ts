@@ -10,6 +10,7 @@
  * fallback. The gate makes model quality safe — a weaker model just yields
  * fewer T0 rules, never a wrong detector.
  */
+import { createHash } from 'crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { LLM } from '@libs/llm/llm';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
@@ -22,11 +23,15 @@ import {
     KODY_RULES_SERVICE_TOKEN,
 } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
 import { IKodyRuleDetectorCompiler } from '@libs/kodyRules/domain/contracts/kody-rule-detector-compiler.contract';
-import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import {
+    IKodyRule,
+    KodyRuleContextNeed,
+} from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import {
     compileRuleDetector,
     compilerOutputSchema,
     makeLLMRunCompiler,
+    normalizeContextNeed,
     type CompilerOutput,
 } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler';
 
@@ -54,7 +59,18 @@ export class KodyRuleDetectorCompilerService
         organizationAndTeamData: OrganizationAndTeamData,
         ruleUuid: string,
         rule: Partial<IKodyRule>,
-    ): Promise<{ compiled: boolean; declineReason?: string; scoped?: boolean }> {
+    ): Promise<{
+        compiled: boolean;
+        declineReason?: string;
+        scoped?: boolean;
+        contextNeed?: KodyRuleContextNeed;
+    }> {
+        // The context need (issue #1826) rides on THIS call's output — the
+        // compiler already reads the whole rule to decide mechanical-vs-
+        // semantic, so asking it what the rule must see costs no second round
+        // trip. Captured from the raw response because the detector gate below
+        // only forwards the detector decision.
+        let rawOutput: CompilerOutput | null = null;
         try {
             // native: resolve the kody-rules (codeReview) task to a `{main}`
             // carrier for runStructuredReviewCall. A non-v2/managed/BLOCKED
@@ -77,7 +93,8 @@ export class KodyRuleDetectorCompilerService
                     runName: 'kody-rules.detector-compiler',
                     organizationId: organizationAndTeamData.organizationId,
                 });
-                return (parsed as CompilerOutput) ?? null;
+                rawOutput = (parsed as CompilerOutput) ?? null;
+                return rawOutput;
             });
 
             const { detector, declineReason } = await compileRuleDetector(
@@ -90,6 +107,14 @@ export class KodyRuleDetectorCompilerService
             );
 
             const orgId = organizationAndTeamData.organizationId;
+            const contextNeed = await this.saveContextNeed(
+                orgId,
+                ruleUuid,
+                rule,
+                normalizeContextNeed(rawOutput?.contextNeed),
+                taskByok ? 'byok' : 'system',
+            );
+
             if (detector) {
                 await this.kodyRulesService.updateRuleDetector(
                     orgId,
@@ -109,6 +134,7 @@ export class KodyRuleDetectorCompilerService
                 return {
                     compiled: true,
                     scoped: !!detector.extensions?.length,
+                    contextNeed,
                 };
             }
             // Edited rule that used to be mechanical but no longer is:
@@ -125,7 +151,7 @@ export class KodyRuleDetectorCompilerService
                 context: KodyRuleDetectorCompilerService.name,
                 metadata: { ruleUuid, declineReason },
             });
-            return { compiled: false, declineReason };
+            return { compiled: false, declineReason, contextNeed };
         } catch (error) {
             this.logger.warn({
                 message: `Detector compile failed for rule ${ruleUuid}; rule stays semantic`,
@@ -135,5 +161,58 @@ export class KodyRuleDetectorCompilerService
             });
             return { compiled: false, declineReason: 'error' };
         }
+    }
+
+    /**
+     * Store what the rule needs to see (issue #1826), guarded by the rule-text
+     * hash so an edited rule cannot keep a stale inference and an unchanged one
+     * costs no write.
+     *
+     * Best-effort in its own try/catch: this runs fire-and-forget after save,
+     * and a failure to record the need must never change the detector outcome
+     * the caller is waiting on.
+     */
+    private async saveContextNeed(
+        organizationId: string,
+        ruleUuid: string,
+        rule: Partial<IKodyRule>,
+        need: KodyRuleContextNeed,
+        model: string,
+    ): Promise<KodyRuleContextNeed> {
+        const sourceHash = createHash('sha256')
+            .update(rule.rule ?? '')
+            .digest('hex');
+        const stored = rule.contextNeed;
+
+        // An author outranks the compiler's guess about their own rule, and an
+        // unchanged rule text with the same verdict needs no write.
+        if (
+            stored?.source === 'author' ||
+            (stored?.sourceHash === sourceHash && stored.need === need)
+        ) {
+            return stored.need;
+        }
+
+        try {
+            await this.kodyRulesService.updateRuleContextNeed(
+                organizationId,
+                ruleUuid,
+                {
+                    need,
+                    sourceHash,
+                    source: 'compiler',
+                    inferredAt: new Date(),
+                    model,
+                },
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: `Could not store the context need for rule ${ruleUuid}; it stays diff-only`,
+                context: KodyRuleDetectorCompilerService.name,
+                error,
+                metadata: { ruleUuid, need },
+            });
+        }
+        return need;
     }
 }

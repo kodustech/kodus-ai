@@ -1,5 +1,8 @@
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { IKodyRule } from '../interfaces/kodyRules.interface';
+import {
+    IKodyRule,
+    KodyRuleContextNeed,
+} from '../interfaces/kodyRules.interface';
 
 export const KODY_RULE_DETECTOR_COMPILER_TOKEN = Symbol(
     'KODY_RULE_DETECTOR_COMPILER',
@@ -15,10 +18,20 @@ export interface IKodyRuleDetectorCompiler {
      * `scoped` reports whether the stored detector carries a language scope
      * (issue #1831), so a backfill sweep can tell a re-scoped detector from one
      * that is still unscoped without re-reading every rule.
+     *
+     * `contextNeed` is what the SAME call decided the rule must see beyond the
+     * diff (issue #1826) — reported so a backfill sweep can count needs per org
+     * without re-reading every rule. `diff-only` whenever the model was not
+     * confident, which is today's behavior.
      */
     compileAndSave(
         organizationAndTeamData: OrganizationAndTeamData,
         ruleUuid: string,
         rule: Partial<IKodyRule>,
-    ): Promise<{ compiled: boolean; declineReason?: string; scoped?: boolean }>;
+    ): Promise<{
+        compiled: boolean;
+        declineReason?: string;
+        scoped?: boolean;
+        contextNeed?: KodyRuleContextNeed;
+    }>;
 }

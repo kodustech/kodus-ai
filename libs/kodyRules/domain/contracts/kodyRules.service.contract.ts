@@ -11,6 +11,7 @@ import {
     FindMemoriesFilters,
     FindMemoriesResult,
     IKodyRule,
+    IKodyRuleContextNeed,
     IKodyRuleDetector,
     IKodyRuleMemory,
     KodyRulesStatus,
@@ -87,6 +88,17 @@ export interface IKodyRulesService extends IKodyRulesRepository {
         organizationId: string,
         ruleId: string,
         detector: IKodyRuleDetector | null,
+    ): Promise<IKodyRule | null>;
+
+    /**
+     * Persist the rule's declared context need (#1826). Passing `null` clears
+     * a stale inference. An author-set need is never overwritten by an
+     * inferred one.
+     */
+    updateRuleContextNeed(
+        organizationId: string,
+        ruleId: string,
+        contextNeed: IKodyRuleContextNeed | null,
     ): Promise<IKodyRule | null>;
 
     getRulesLimitStatus(

@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { KodyRuleDetectorCompilerService } from './kody-rule-detector-compiler.service';
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import {
@@ -109,7 +110,11 @@ describe('KodyRuleDetectorCompilerService.compileAndSave (#1449 T0)', () => {
             pattern: 'console\\.(log|warn|error)\\(',
         });
         const result = await svc.compileAndSave(org, 'r1', mechanicalRule);
-        expect(result).toEqual({ compiled: true, scoped: false });
+        expect(result).toEqual({
+            compiled: true,
+            scoped: false,
+            contextNeed: 'diff-only',
+        });
     });
 
     it('returns { compiled: false } and threads the decline reason back out', async () => {
@@ -314,7 +319,11 @@ describe('CONTRACT A: output-shape zoo — never persists a wrong detector, alwa
         const [, , detector] =
             kodyRulesService.updateRuleDetector.mock.calls[0];
         expect(detector.pattern).toBe(validD.pattern);
-        expect(res).toEqual({ compiled: true, scoped: false });
+        expect(res).toEqual({
+            compiled: true,
+            scoped: false,
+            contextNeed: 'diff-only',
+        });
     });
 
     it('A13 tolerates extra unknown keys alongside the right ones (persists, no crash)', async () => {
@@ -327,7 +336,11 @@ describe('CONTRACT A: output-shape zoo — never persists a wrong detector, alwa
         });
         const res = await svc.compileAndSave(org, 'r1', gatedRule);
         expect(kodyRulesService.updateRuleDetector).toHaveBeenCalledTimes(1);
-        expect(res).toEqual({ compiled: true, scoped: false });
+        expect(res).toEqual({
+            compiled: true,
+            scoped: false,
+            contextNeed: 'diff-only',
+        });
     });
 
     it('A17 a null model output on an edited rule CLEARS the stale detector (no silent keep)', async () => {
@@ -543,6 +556,7 @@ describe('CONTRACT D: input variants into the service boundary', () => {
         expect(res).toEqual({
             compiled: false,
             declineReason: 'no-usable-examples',
+            contextNeed: 'diff-only',
         });
     });
     it('D36 a single incorrect example is enough to gate + persist', async () => {
@@ -552,7 +566,11 @@ describe('CONTRACT D: input variants into the service boundary', () => {
             examples: [{ isCorrect: false, snippet: 'console.log(x)' }],
         });
         expect(kodyRulesService.updateRuleDetector).toHaveBeenCalledTimes(1);
-        expect(res).toEqual({ compiled: true, scoped: false });
+        expect(res).toEqual({
+            compiled: true,
+            scoped: false,
+            contextNeed: 'diff-only',
+        });
     });
     it('D38 duplicate examples do not change the compile decision (idempotent)', async () => {
         const { svc, kodyRulesService } = make(validD);
@@ -566,7 +584,11 @@ describe('CONTRACT D: input variants into the service boundary', () => {
             ],
         });
         expect(kodyRulesService.updateRuleDetector).toHaveBeenCalledTimes(1);
-        expect(res).toEqual({ compiled: true, scoped: false });
+        expect(res).toEqual({
+            compiled: true,
+            scoped: false,
+            contextNeed: 'diff-only',
+        });
     });
     it('D39 a null example entry fails safe (no throw past boundary, no persist)', async () => {
         // buildCompilerUserPrompt (compiler.ts:74, `ex.isCorrect`) crashes on a
@@ -625,6 +647,7 @@ describe('CONTRACT D: input variants into the service boundary', () => {
         expect(res).toEqual({
             compiled: false,
             declineReason: 'no-usable-examples',
+            contextNeed: 'diff-only',
         });
     });
     it('D40 a pattern with special/unicode chars still persists and round-trips', async () => {
@@ -639,7 +662,11 @@ describe('CONTRACT D: input variants into the service boundary', () => {
                 { isCorrect: true, snippet: 'const tea = 1' },
             ],
         });
-        expect(res).toEqual({ compiled: true, scoped: false });
+        expect(res).toEqual({
+            compiled: true,
+            scoped: false,
+            contextNeed: 'diff-only',
+        });
         const [, , detector] =
             kodyRulesService.updateRuleDetector.mock.calls[0];
         expect(detector.pattern).toBe('café');
@@ -728,5 +755,187 @@ describe('CONTRACT E: N-model policy — service is model-agnostic (gate lives u
         const [, , detector] =
             kodyRulesService.updateRuleDetector.mock.calls[0];
         expect(detector.compiledBy).toBe('system');
+    });
+});
+
+// ── #1826: the same compile call also decides what the rule must SEE ────────
+// Derived from spec.md's P2 story:
+//   KRC-10  the rule stores a contextNeed, inferred once at save time
+//   KRC-12  the inference is invalidated by the rule-text hash
+//   KRC-17  diff-only stays the value whenever the compiler is not confident
+// The "one call" part is a requirement, not an optimization: a second round
+// trip per rule save would double the authoring cost of every rule.
+describe('KodyRuleDetectorCompilerService — context-need inference (#1826)', () => {
+    const needRule = {
+        uuid: 'r1',
+        title: 'no unused imports',
+        rule: 'Remove imports that are not used in the file.',
+        examples: [
+            { isCorrect: false, snippet: 'console.log(x)' },
+            { isCorrect: true, snippet: 'logger.info(x)' },
+        ],
+    };
+
+    const makeWithNeed = (compilerOutput: any) => {
+        mockRun.mockReset();
+        mockRun.mockResolvedValue(compilerOutput);
+        const kodyRulesService: any = {
+            updateRuleDetector: jest.fn(async () => ({})),
+            updateRuleContextNeed: jest.fn(async () => ({})),
+        };
+        const svc = new KodyRuleDetectorCompilerService(
+            { resolveTaskSlot: jest.fn(async () => null) } as any,
+            {} as any,
+            kodyRulesService,
+        );
+        return { svc, kodyRulesService };
+    };
+
+    const storedNeed = (kodyRulesService: any) =>
+        kodyRulesService.updateRuleContextNeed.mock.calls[0][2];
+
+    it('stores the need the compile call returned, in the same round trip', async () => {
+        const { svc, kodyRulesService } = makeWithNeed({
+            mechanical: false,
+            contextNeed: 'symbol-references',
+            reason: 'needs the repository',
+        });
+
+        const res = await svc.compileAndSave({ organizationId: 'org-1' } as any, 'r1', needRule);
+
+        // one LLM call for BOTH decisions — no second round trip
+        expect(mockRun).toHaveBeenCalledTimes(1);
+        expect(kodyRulesService.updateRuleContextNeed).toHaveBeenCalledTimes(1);
+        expect(storedNeed(kodyRulesService).need).toBe('symbol-references');
+        expect(res.contextNeed).toBe('symbol-references');
+    });
+
+    it('asks the model for the need in the same prompt that asks for the detector', async () => {
+        const { svc } = makeWithNeed({ mechanical: false });
+        await svc.compileAndSave({ organizationId: 'org-1' } as any, 'r1', needRule);
+        expect(mockRun.mock.calls[0][0].system).toContain('"contextNeed"');
+        expect(mockRun.mock.calls[0][0].system).toContain('symbol-references');
+    });
+
+    it('stores diff-only when the model omits the need (KRC-17)', async () => {
+        const { svc, kodyRulesService } = makeWithNeed({ mechanical: false });
+        await svc.compileAndSave({ organizationId: 'org-1' } as any, 'r1', needRule);
+        expect(storedNeed(kodyRulesService).need).toBe('diff-only');
+    });
+
+    it('stores diff-only when the model invents a need outside the vocabulary', async () => {
+        const { svc, kodyRulesService } = makeWithNeed({
+            mechanical: false,
+            contextNeed: 'the-whole-repository',
+        });
+        await svc.compileAndSave({ organizationId: 'org-1' } as any, 'r1', needRule);
+        expect(storedNeed(kodyRulesService).need).toBe('diff-only');
+    });
+
+    it('stores the need for a MECHANICAL rule too', async () => {
+        const { svc, kodyRulesService } = makeWithNeed({
+            mechanical: true,
+            pattern: 'console\\.(log|warn|error)\\(',
+            contextNeed: 'enclosing-scope',
+        });
+        await svc.compileAndSave({ organizationId: 'org-1' } as any, 'r1', needRule);
+        expect(storedNeed(kodyRulesService).need).toBe('enclosing-scope');
+    });
+
+    it('stamps the need with the hash of the rule text it was inferred from (KRC-12)', async () => {
+        const { svc, kodyRulesService } = makeWithNeed({
+            mechanical: false,
+            contextNeed: 'sibling-file',
+        });
+        await svc.compileAndSave({ organizationId: 'org-1' } as any, 'r1', needRule);
+
+        const written = storedNeed(kodyRulesService);
+        expect(written.sourceHash).toBe(
+            createHash('sha256').update(needRule.rule).digest('hex'),
+        );
+        expect(written.source).toBe('compiler');
+        expect(written.inferredAt).toBeInstanceOf(Date);
+        expect(written.model).toBe('system');
+    });
+
+    it('does not rewrite an unchanged need for unchanged rule text (idempotent)', async () => {
+        const { svc, kodyRulesService } = makeWithNeed({
+            mechanical: false,
+            contextNeed: 'sibling-file',
+        });
+        const res = await svc.compileAndSave(
+            { organizationId: 'org-1' } as any,
+            'r1',
+            {
+                ...needRule,
+                contextNeed: {
+                    need: 'sibling-file',
+                    sourceHash: createHash('sha256')
+                        .update(needRule.rule)
+                        .digest('hex'),
+                    source: 'compiler',
+                    inferredAt: new Date('2026-01-01T00:00:00Z'),
+                },
+            } as any,
+        );
+        expect(kodyRulesService.updateRuleContextNeed).not.toHaveBeenCalled();
+        expect(res.contextNeed).toBe('sibling-file');
+    });
+
+    it('re-infers when the stored hash no longer matches the rule text (KRC-12)', async () => {
+        const { svc, kodyRulesService } = makeWithNeed({
+            mechanical: false,
+            contextNeed: 'symbol-references',
+        });
+        await svc.compileAndSave({ organizationId: 'org-1' } as any, 'r1', {
+            ...needRule,
+            contextNeed: {
+                need: 'sibling-file',
+                sourceHash: 'hash-of-the-OLD-text',
+                source: 'compiler',
+                inferredAt: new Date('2026-01-01T00:00:00Z'),
+            },
+        } as any);
+        expect(storedNeed(kodyRulesService).need).toBe('symbol-references');
+    });
+
+    it('never overwrites an author-set need', async () => {
+        const { svc, kodyRulesService } = makeWithNeed({
+            mechanical: false,
+            contextNeed: 'symbol-references',
+        });
+        const res = await svc.compileAndSave(
+            { organizationId: 'org-1' } as any,
+            'r1',
+            {
+                ...needRule,
+                contextNeed: {
+                    need: 'enclosing-scope',
+                    sourceHash: 'anything',
+                    source: 'author',
+                    inferredAt: new Date('2026-01-01T00:00:00Z'),
+                },
+            } as any,
+        );
+        expect(kodyRulesService.updateRuleContextNeed).not.toHaveBeenCalled();
+        expect(res.contextNeed).toBe('enclosing-scope');
+    });
+
+    it('still reports the detector outcome when storing the need fails', async () => {
+        // Fire-and-forget path: a failed need write must not turn a compiled
+        // detector into a failed compile.
+        const { svc, kodyRulesService } = makeWithNeed({
+            mechanical: true,
+            pattern: 'console\\.(log|warn|error)\\(',
+            contextNeed: 'diff-only',
+        });
+        kodyRulesService.updateRuleContextNeed.mockRejectedValue(
+            new Error('mongo down'),
+        );
+
+        const res = await svc.compileAndSave({ organizationId: 'org-1' } as any, 'r1', needRule);
+
+        expect(res.compiled).toBe(true);
+        expect(kodyRulesService.updateRuleDetector).toHaveBeenCalledTimes(1);
     });
 });
