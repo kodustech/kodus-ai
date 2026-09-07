@@ -94,6 +94,14 @@ export interface IKodyRule {
      * no migration).
      */
     atoms?: IKodyRuleAtoms;
+    /**
+     * What this rule must SEE to be judged honestly (issue #1826). Absent means
+     * `diff-only`, i.e. today's behavior — every rule judged against one file's
+     * hunks and about three lines of context. Inferred once at save by the same
+     * compile call that decides the detector, or set by the author; stored
+     * inline on the embedded rule, like `detector`, `summary` and `atoms`.
+     */
+    contextNeed?: IKodyRuleContextNeed;
     repositoryId: string;
     /**
      * For rules synced into the global scope (`repositoryId="global"`,
@@ -182,6 +190,39 @@ export interface IKodyRulesExtendedContext {
 export interface IKodyRulesExample {
     snippet: string;
     isCorrect: boolean;
+}
+
+/**
+ * The context a rule needs beyond the diff to be judged (issue #1826).
+ *
+ * Rules whose truth lives outside the hunk either fire wrongly ("this import is
+ * unused" when it is used twenty lines below) or cannot fire at all ("every new
+ * endpoint has a test"). Declaring the need is what lets the pipeline retrieve
+ * exactly that slice — and, when it cannot, skip the rule instead of judging it
+ * blind.
+ *
+ * `diff-only` is the safe direction and the default: an over-declared need
+ * means the customer's rule stops being judged on a sandbox-less review.
+ */
+export type KodyRuleContextNeed =
+    | 'diff-only'
+    | 'enclosing-scope'
+    | 'symbol-references'
+    | 'sibling-file'
+    | 'cited-file';
+
+export interface IKodyRuleContextNeed {
+    need: KodyRuleContextNeed;
+    /** sha256 of the exact `rule` text the inference was made from. */
+    sourceHash: string;
+    /**
+     * Who decided. An `author` value is never overwritten by inference — the
+     * rule's owner outranks the compiler's guess about their own rule.
+     */
+    source: 'compiler' | 'author';
+    inferredAt: Date;
+    /** Model id that inferred it. Absent for an author-set value. */
+    model?: string;
 }
 
 export interface IKodyRuleSummary {
