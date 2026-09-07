@@ -1242,3 +1242,136 @@ describe('#1831 — the file-shard prompt asks for a complete, applicable findin
         });
     });
 });
+
+// ── #1826: the file shard is told what the PR was trying to do ──────────────
+// The PR-scope shard has always received the title and description; the file
+// shard — the overwhelming majority of calls — never did, so it judged every
+// rule blind to the change's purpose. Derived from spec.md's P1 intent story:
+//   KRC-23  title AND description reach every file-shard prompt
+//   KRC-24  a description over the budget is truncated AND marked
+//   KRC-25  empty title + empty description -> byte-identical prompt
+describe('#1826 — the file shard receives the PR intent', () => {
+    const captureFileUser = async (over: Record<string, unknown> = {}) => {
+        let user = '';
+        const runJudge: RunJudge = async ({ filename, user: u }) => {
+            if (filename === 'src/orders/order-mapper.ts') user = u;
+            return [];
+        };
+        await judgeKodyRulesSharded({
+            changedFiles: [
+                file(
+                    'src/orders/order-mapper.ts',
+                    "3 +import { formatDate } from '../shared/date';",
+                ),
+            ],
+            rules: [
+                {
+                    uuid: 'r1',
+                    title: 'No unused imports',
+                    rule: 'Remove imports that are not used in the file.',
+                },
+            ],
+            runJudge,
+            ...over,
+        });
+        return user;
+    };
+
+    it('carries the PR title into the file-shard prompt', async () => {
+        const user = await captureFileUser({
+            prTitle: 'refactor(orders): move date formatting to the shared helper',
+            prBody: 'Drop the inline toLocaleDateString call.',
+        });
+        expect(user).toContain(
+            '<PR title="refactor(orders): move date formatting to the shared helper">',
+        );
+    });
+
+    it('carries the PR description into the file-shard prompt', async () => {
+        const user = await captureFileUser({
+            prTitle: 'fix: slider',
+            prBody: 'Drop the inline toLocaleDateString call.',
+        });
+        expect(user).toContain(
+            'Description: Drop the inline toLocaleDateString call.',
+        );
+    });
+
+    it('says the intent is context for judging the diff', async () => {
+        const user = await captureFileUser({ prTitle: 'fix: slider' });
+        expect(user).toContain(
+            'This is what the change is trying to do. Use it to judge whether the added lines break the rules above.',
+        );
+    });
+
+    it('truncates a description at the 1,000-character budget AND marks the cut', async () => {
+        const body = 'x'.repeat(3000);
+        const user = await captureFileUser({ prTitle: 'fix: slider', prBody: body });
+
+        expect(user).toContain(`Description: ${'x'.repeat(1000)}\n`);
+        expect(user).toContain('… (description truncated at 1000 characters)');
+        // exactly 1,000 body characters survive, not 1,001 and not 3,000
+        expect(user).not.toContain('x'.repeat(1001));
+    });
+
+    it('keeps a description at exactly the budget whole and unmarked', async () => {
+        const body = 'y'.repeat(1000);
+        const user = await captureFileUser({ prTitle: 'fix: slider', prBody: body });
+
+        expect(user).toContain(`Description: ${body}`);
+        expect(user).not.toContain('description truncated');
+    });
+
+    it('renders an empty description as (empty) when only the title is set', async () => {
+        const user = await captureFileUser({ prTitle: 'fix: slider' });
+        expect(user).toContain('Description: (empty)');
+    });
+
+    it('FILE-shard prompt is byte-identical when title and description are both empty', async () => {
+        const withNeither = await captureFileUser();
+        const withEmptyStrings = await captureFileUser({
+            prTitle: '',
+            prBody: '',
+        });
+        const withWhitespace = await captureFileUser({
+            prTitle: '   ',
+            prBody: '\n  \n',
+        });
+
+        expect(withNeither).not.toContain('<PR title=');
+        expect(withEmptyStrings).toBe(withNeither);
+        expect(withWhitespace).toBe(withNeither);
+    });
+
+    it('places the intent between the rules and the file, matching the PR shard', async () => {
+        const user = await captureFileUser({ prTitle: 'fix: slider' });
+        expect(user.indexOf('</Rules>')).toBeLessThan(user.indexOf('<PR title='));
+        expect(user.indexOf('<PR title=')).toBeLessThan(user.indexOf('<File path='));
+    });
+
+    it('leaves the PR-scope shard prompt unchanged', async () => {
+        let prUser = '';
+        const runJudge: RunJudge = async ({ filename, user }) => {
+            if (filename === null) prUser = user;
+            return [];
+        };
+        await judgeKodyRulesSharded({
+            changedFiles: [file('src/a.ts', '1 +x')],
+            rules: [
+                {
+                    uuid: 'pr1',
+                    title: 'must have tests',
+                    rule: 'every PR needs a test',
+                    scope: KodyRulesScope.PULL_REQUEST,
+                },
+            ],
+            runJudge,
+            prTitle: 'fix: slider',
+            prBody: 'z'.repeat(3000),
+        });
+        // The PR shard's own bound is an unmarked slice; #1826 did not touch it.
+        expect(prUser).toContain('<PR title="fix: slider">');
+        expect(prUser).toContain(`Description: ${'z'.repeat(1000)}`);
+        expect(prUser).not.toContain('description truncated');
+    });
+});

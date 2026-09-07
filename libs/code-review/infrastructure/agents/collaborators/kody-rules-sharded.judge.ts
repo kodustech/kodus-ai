@@ -317,11 +317,50 @@ function candidateLines(
     ];
 }
 
+/**
+ * The intent block for a file shard (issue #1826): the PR's title and
+ * description.
+ *
+ * The PR-scope shard has always received these; the file shard — which is the
+ * overwhelming majority of calls — never did, so it judged every rule without
+ * knowing what the change was for and flagged the exact edit the PR set out to
+ * make. External evidence puts intent context above code context for this
+ * decision (ContextCRBench), and it costs a few hundred tokens with no lookup.
+ *
+ * Same 1,000-character bound `prShardUser` already applies, so the two shards
+ * stay consistent, but the cut is MARKED here: an unmarked truncation invites
+ * the model to reason about a sentence that was severed mid-clause.
+ *
+ * Returns [] when there is no title and no description, so a shard built
+ * without intent keeps a byte-identical prompt to before this existed.
+ */
+const INTENT_BUDGET_CHARS = 1000;
+
+function intentLines(prTitle?: string, prBody?: string): string[] {
+    const title = prTitle?.trim() ?? '';
+    const body = prBody?.trim() ?? '';
+    if (!title && !body) return [];
+    const description = !body
+        ? '(empty)'
+        : body.length > INTENT_BUDGET_CHARS
+          ? `${body.slice(0, INTENT_BUDGET_CHARS)}\n… (description truncated at ${INTENT_BUDGET_CHARS} characters)`
+          : body;
+    return [
+        `<PR title=${JSON.stringify(title)}>`,
+        `Description: ${description}`,
+        `</PR>`,
+        `This is what the change is trying to do. Use it to judge whether the added lines break the rules above.`,
+        ``,
+    ];
+}
+
 function fileShardUser(
     file: FileChange,
     rules: Array<Partial<IKodyRule>>,
     languageLabel?: string | null,
     detectorHits?: DetectorHitIndex,
+    prTitle?: string,
+    prBody?: string,
 ): string {
     const diff = (file as any).patchWithLinesStr ?? file.patch ?? '';
     return [
@@ -329,6 +368,7 @@ function fileShardUser(
         ruleBlock(rules),
         `</Rules>`,
         ``,
+        ...intentLines(prTitle, prBody),
         `<File path="${file.filename}">`,
         `Each diff line is prefixed with its file line number; '+' marks a line ADDED by this PR.`,
         '```diff',
@@ -740,6 +780,8 @@ export async function judgeKodyRulesSharded(
                         applicable,
                         languageLabel,
                         detectorHits,
+                        prTitle,
+                        prBody,
                     ),
                     filename: file.filename,
                     ruleUuids,
