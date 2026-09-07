@@ -5,6 +5,11 @@ import {
     type AiSdkUsage,
     type AiSdkUsageInput,
 } from './ai-sdk-usage';
+import {
+    categorizeReviewModelCallFailure,
+    type ReviewModelCallFailureCategory,
+} from './review-telemetry-failure';
+export type { ReviewModelCallFailureCategory } from './review-telemetry-failure';
 
 export const REVIEW_TELEMETRY_SCHEMA_VERSION = 1 as const;
 
@@ -43,6 +48,7 @@ export interface ReviewTelemetryModelCall {
     readonly sdkMaxRetries: number;
     readonly status: ReviewModelCallStatus;
     readonly elapsedMs: number;
+    readonly failureCategory?: ReviewModelCallFailureCategory;
     readonly usage?: AiSdkUsage;
     readonly usageUnavailableReason?: ReviewUsageUnavailableReason;
 }
@@ -95,6 +101,7 @@ interface MutableModelCall {
     readonly startedAt: number;
     status?: ReviewModelCallStatus;
     elapsedMs?: number;
+    failureCategory?: ReviewModelCallFailureCategory;
     usage?: AiSdkUsage;
     usageUnavailableReason?: ReviewUsageUnavailableReason;
 }
@@ -193,6 +200,7 @@ class ReviewTelemetryRecorder {
     failCall(call: MutableModelCall, error: unknown): void {
         call.status = 'failed';
         call.elapsedMs = Date.now() - call.startedAt;
+        call.failureCategory = categorizeReviewModelCallFailure(error);
         const usage = readAiSdkUsageFromError(error)?.usage;
         if (usage) {
             call.usage = usage;
@@ -244,6 +252,9 @@ class ReviewTelemetryRecorder {
             sdkMaxRetries: call.metadata.sdkMaxRetries,
             status: call.status,
             elapsedMs: call.elapsedMs,
+            ...(call.failureCategory
+                ? { failureCategory: call.failureCategory }
+                : {}),
             ...(call.usage ? { usage: call.usage } : {}),
             ...(call.usageUnavailableReason
                 ? { usageUnavailableReason: call.usageUnavailableReason }

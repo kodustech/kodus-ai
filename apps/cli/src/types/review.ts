@@ -23,6 +23,18 @@ export type ReviewUsageUnavailableReason =
     | 'provider-did-not-report-usage'
     | 'model-call-failed-without-provider-usage';
 
+export type ReviewModelCallFailureCategory =
+    | 'provider_transport'
+    | 'provider_rate_limit'
+    | 'provider_timeout'
+    | 'provider_authentication'
+    | 'structured_output_parse'
+    | 'structured_output_schema'
+    | 'structured_output_conformance'
+    | 'cancellation'
+    | 'internal'
+    | 'unknown';
+
 export interface ReviewTelemetryModelCall {
     readonly callId: string;
     readonly logicalCallId: string;
@@ -34,6 +46,7 @@ export interface ReviewTelemetryModelCall {
     readonly sdkMaxRetries: number;
     readonly status: 'completed' | 'failed';
     readonly elapsedMs: number;
+    readonly failureCategory?: ReviewModelCallFailureCategory;
     readonly usage?: {
         readonly inputTokens?: number;
         readonly outputTokens?: number;

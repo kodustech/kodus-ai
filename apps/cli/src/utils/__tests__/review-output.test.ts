@@ -32,7 +32,7 @@ describe('formatReviewOutput', () => {
             reviewTelemetry: {
                 schemaVersion: 1,
                 elapsedMs: 25,
-                modelCallCount: 1,
+                modelCallCount: 2,
                 modelCalls: [
                     {
                         callId: 'call-000001',
@@ -52,6 +52,21 @@ describe('formatReviewOutput', () => {
                             cacheWriteTokens: 10,
                         },
                     },
+                    {
+                        callId: 'call-000002',
+                        logicalCallId: 'logical-call-000002',
+                        attempt: 1,
+                        provider: 'anthropic',
+                        model: 'anthropic:claude-sonnet',
+                        agent: 'bug-agent',
+                        phase: 'synthesis-rescue',
+                        sdkMaxRetries: 3,
+                        status: 'failed',
+                        elapsedMs: 5,
+                        failureCategory: 'structured_output_schema',
+                        usageUnavailableReason:
+                            'model-call-failed-without-provider-usage',
+                    },
                 ],
                 usageTotals: {
                     inputTokens: 100,
@@ -69,8 +84,13 @@ describe('formatReviewOutput', () => {
                         cacheWriteTokens: 1,
                     },
                     callsWithUsage: 1,
-                    incompleteCallCount: 0,
-                    incompleteReasons: [],
+                    incompleteCallCount: 1,
+                    incompleteReasons: [
+                        {
+                            reason: 'model-call-failed-without-provider-usage',
+                            count: 1,
+                        },
+                    ],
                 },
                 contextReceipts: [
                     {
@@ -92,6 +112,9 @@ describe('formatReviewOutput', () => {
         const serialized = formatReviewOutput(result, 'json');
 
         expect(JSON.parse(serialized)).toEqual(result);
+        expect(serialized).toContain(
+            '"failureCategory": "structured_output_schema"',
+        );
         expect(serialized).not.toContain(contextBody);
     });
 });

@@ -546,6 +546,17 @@ only. `fieldReportingCallCount` distinguishes a reported zero from a field that
 no call reported, while `incompleteCallCount` and `incompleteReasons` expose calls
 whose provider usage is unavailable.
 
+Every failed call includes one bounded `failureCategory`:
+`provider_transport`, `provider_rate_limit`, `provider_timeout`,
+`provider_authentication`, `structured_output_parse`,
+`structured_output_schema`, `structured_output_conformance`, `cancellation`,
+`internal`, or `unknown`. This field is an additive part of telemetry schema
+version 1; completed calls omit it. Failed calls retain their reported `usage`,
+`logicalCallId`, and `attempt`, including when a later attempt completes. The
+category is derived in memory from typed error attributes and bounded status/code
+checks. Exception messages, response bodies, structured-output text and values,
+credentials, and other error fields are not copied into review telemetry.
+
 A context receipt is created only for a model-call attempt whose prompt contains
 the review context. `deliveryState` is `confirmed` after a provider response, or
 after a failed call that returned provider usage. It is `unknown` when the call
