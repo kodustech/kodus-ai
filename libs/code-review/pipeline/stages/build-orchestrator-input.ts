@@ -1,5 +1,6 @@
 import type { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import type { OrchestratorInput } from '@libs/code-review/infrastructure/agents/review-orchestrator.service';
+import { buildRepoLookup } from '@libs/code-review/infrastructure/agents/collaborators/repo-lookup';
 import { trialDefaultModel } from '@libs/llm/byok-to-vercel';
 
 /**
@@ -50,6 +51,13 @@ export function buildOrchestratorInput(
         // mode). The agent loop detects the empty-tools case and switches to a
         // self-contained analysis variant.
         remoteCommands: context.sandboxHandle?.remoteCommands as any,
+        // The SAME sandbox handle, read for its capability instead of its
+        // commands (issue #1826). remoteCommands cannot say "there is no repo
+        // to look at" — the null sandbox implements it and answers '' with
+        // success — so a consumer that needs to distinguish "found nothing"
+        // from "could not look" reads this instead. Always built, so a
+        // consumer never has to guess what an absent field meant.
+        repoLookup: buildRepoLookup(context.sandboxHandle),
         prNumber: computed.prNumber,
         repositoryId: computed.repositoryId,
         repositoryFullName:
