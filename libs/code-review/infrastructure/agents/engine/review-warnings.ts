@@ -23,12 +23,18 @@ export type ReviewWarningKind =
     /** Verifier / second-chance / rescue passes skipped. */
     | 'HEAVY_PASSES_SKIPPED'
     /** The BYOK main provider failed and the review ran on the fallback. */
-    | 'PROVIDER_FALLBACK';
+    | 'PROVIDER_FALLBACK'
+    /** Kody Rules were not judged because the context they declared they need
+     *  could not be retrieved from the repository. */
+    | 'RULE_CONTEXT_UNAVAILABLE';
 
 export type ReviewWarningReason =
     | 'small_context_window'
     /** The configured main provider errored, so the review used the fallback. */
-    | 'provider_failover';
+    | 'provider_failover'
+    /** The repository could not be looked at, so a declared context need went
+     *  unmet. */
+    | 'lookup_unavailable';
 
 export interface ReviewWarning {
     kind: ReviewWarningKind;
@@ -114,4 +120,30 @@ export function dedupReviewWarnings(
     }
 
     return Array.from(byKey.values());
+}
+
+/**
+ * Build the notice for Kody Rules that were NOT judged because the repository
+ * context they declared they need could not be retrieved (issue #1826).
+ *
+ * A skipped rule has to be visible: silence here reads exactly like "your rule
+ * found nothing", which is the failure the whole feature exists to remove. Like
+ * the provider-failover notice this is a capability signal, not a
+ * context-window fidelity drop, so `contextWindowTokens` is 0 and per-agent
+ * duplicates fold to one entry.
+ */
+export function buildRuleContextUnavailableWarning(params: {
+    skippedRuleTitles: string[];
+    modelName: string;
+    agentName?: string;
+}): ReviewWarning {
+    const titles = params.skippedRuleTitles.join(', ');
+    return {
+        kind: 'RULE_CONTEXT_UNAVAILABLE',
+        reason: 'lookup_unavailable',
+        contextWindowTokens: 0,
+        modelName: params.modelName,
+        detail: `${params.skippedRuleTitles.length} Kody Rule(s) were not evaluated because the repository context they need could not be retrieved: ${titles}`,
+        agentName: params.agentName,
+    };
 }

@@ -1980,3 +1980,211 @@ describe('KodyRulesAgentProvider — claim check before publishing (#1826)', () 
         expect(out.suggestions[0].relevantLinesStart).toBe(4);
     });
 });
+
+// ── #1826: a rule we cannot judge is skipped, and said so ───────────────────
+// Derived from spec.md's P2 story:
+//   KRC-15  an unsatisfied context need means the rule is NOT judged
+//   KRC-16  skipped rules are reported with their count and titles
+//   KRC-31  an all-skipped review reports as degraded, never as a clean pass
+describe('KodyRulesAgentProvider — skipping a rule whose context is unavailable (#1826)', () => {
+    beforeEach(() => {
+        mockRunStructuredReviewCall.mockReset();
+        mockJudge.mockClear();
+    });
+
+    const needyRule = (over: any = {}) => ({
+        uuid: RULE_UUID,
+        title: 'endpoints keep their symbol usage consistent',
+        rule: 'Check every other use of a symbol this change touches.',
+        status: 'active',
+        severity: 'high',
+        path: '**/*.ts',
+        contextNeed: {
+            need: 'symbol-references',
+            sourceHash: 'h',
+            source: 'compiler',
+            inferredAt: new Date(0),
+        },
+        ...over,
+    });
+
+    const needyInput = (over: any = {}) => ({
+        prNumber: 9,
+        organizationAndTeamData: { organizationId: 'org-xyz', teamId: 'team-1' },
+        changedFiles: [
+            {
+                filename: 'src/a.ts',
+                patch: '@@ -1,1 +3,2 @@\n+export function renderInvoice(order) {}',
+                patchWithLinesStr: '3 +export function renderInvoice(order) {}',
+            },
+        ],
+        prTitle: 'p',
+        prBody: '',
+        remoteCommands: undefined,
+        kodyRules: [needyRule()],
+        ...over,
+    });
+
+    const workingLookup = (over: any = {}): any => ({
+        available: true,
+        unavailableReason: '',
+        grep: async () => 'src/b.ts:9: renderInvoice(order)',
+        read: async () => 'export function renderInvoice(order) {}',
+        exists: async () => true,
+        probe: async () => {},
+        ...over,
+    });
+
+    it('does not shard a rule whose declared context could not be retrieved (KRC-15)', async () => {
+        const provider = makeBoundaryProvider();
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [],
+        }));
+
+        // No lookup at all -> the symbol grep throws -> the need is unmet. The
+        // rule is the only one in the review, so nothing is left to judge.
+        await expect(
+            provider.execute(
+                needyInput({
+                    // a second, diff-only rule keeps this out of the
+                    // all-skipped escalation so we can observe the skip alone
+                    kodyRules: [
+                        needyRule(),
+                        {
+                            uuid: 'rule-diff-only',
+                            title: 'no any',
+                            rule: 'do not use any',
+                            status: 'active',
+                            severity: 'high',
+                            path: '**/*.ts',
+                        },
+                    ],
+                    repoLookup: undefined,
+                }) as any,
+            ),
+        ).resolves.toBeDefined();
+
+        const shardedRuleUuids = mockRunStructuredReviewCall.mock.calls
+            .map((call) => call[0]?.user as string)
+            .join('\n');
+        expect(shardedRuleUuids).toContain('no any');
+        expect(shardedRuleUuids).not.toContain(
+            'endpoints keep their symbol usage consistent',
+        );
+    });
+
+    it('judges the rule normally when the context IS retrieved', async () => {
+        const provider = makeBoundaryProvider();
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [],
+        }));
+
+        await provider.execute(
+            needyInput({ repoLookup: workingLookup() }) as any,
+        );
+
+        const user = mockRunStructuredReviewCall.mock.calls
+            .map((call) => call[0]?.user as string)
+            .join('\n');
+        expect(user).toContain('endpoints keep their symbol usage consistent');
+        expect(user).toContain('<Context>');
+        expect(user).toContain('src/b.ts:9: renderInvoice(order)');
+    });
+
+    it('reports the skipped rules as a review warning naming them (KRC-16)', async () => {
+        const provider = makeBoundaryProvider();
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [],
+        }));
+
+        const out = await provider.execute(
+            needyInput({
+                kodyRules: [
+                    needyRule(),
+                    {
+                        uuid: 'rule-diff-only',
+                        title: 'no any',
+                        rule: 'do not use any',
+                        status: 'active',
+                        severity: 'high',
+                        path: '**/*.ts',
+                    },
+                ],
+                repoLookup: undefined,
+            }) as any,
+        );
+
+        expect(out.warnings).toHaveLength(1);
+        expect(out.warnings![0].kind).toBe('RULE_CONTEXT_UNAVAILABLE');
+        expect(out.warnings![0].reason).toBe('lookup_unavailable');
+        expect(out.warnings![0].contextWindowTokens).toBe(0);
+        expect(out.warnings![0].detail).toContain('1 Kody Rule(s)');
+        expect(out.warnings![0].detail).toContain(
+            'endpoints keep their symbol usage consistent',
+        );
+    });
+
+    it('emits no warning when every rule was judged', async () => {
+        const provider = makeBoundaryProvider();
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [],
+        }));
+
+        const out = await provider.execute(
+            needyInput({ repoLookup: workingLookup() }) as any,
+        );
+
+        expect(out.warnings).toBeUndefined();
+    });
+
+    it('fails the review rather than reporting a clean pass when EVERY rule was skipped (KRC-31)', async () => {
+        const provider = makeBoundaryProvider();
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [],
+        }));
+
+        await expect(
+            provider.execute(needyInput({ repoLookup: undefined }) as any),
+        ).rejects.toThrow(
+            /all 1 rule\(s\) need repository context this review could not retrieve/,
+        );
+        // and it names what was skipped, so the PR check text is actionable
+        await expect(
+            provider.execute(needyInput({ repoLookup: undefined }) as any),
+        ).rejects.toThrow(/endpoints keep their symbol usage consistent/);
+        // nothing was judged, so no shard call was ever made
+        expect(mockRunStructuredReviewCall).not.toHaveBeenCalled();
+    });
+
+    it('leaves a review of diff-only rules completely unchanged', async () => {
+        const provider = makeBoundaryProvider();
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [],
+        }));
+        const lookup = workingLookup();
+        const grep = jest.spyOn(lookup, 'grep');
+
+        const out = await provider.execute(
+            needyInput({
+                kodyRules: [
+                    {
+                        uuid: RULE_UUID,
+                        title: 'no any',
+                        rule: 'do not use any',
+                        status: 'active',
+                        severity: 'high',
+                        path: '**/*.ts',
+                    },
+                ],
+                repoLookup: lookup,
+            }) as any,
+        );
+
+        expect(out.warnings).toBeUndefined();
+        expect(grep).not.toHaveBeenCalled();
+        expect(mockRunStructuredReviewCall).toHaveBeenCalledTimes(1);
+        expect(mockRunStructuredReviewCall.mock.calls[0][0].user).not.toContain(
+            '<Context>',
+        );
+    });
+});

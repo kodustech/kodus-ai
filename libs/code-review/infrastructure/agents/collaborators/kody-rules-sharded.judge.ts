@@ -294,6 +294,14 @@ export interface ShardedJudgeInput {
      * byte-identical to before this existed.
      */
     contextSlices?: Map<string, RetrievedSlice[]>;
+    /**
+     * Per file, the uuids of the rules whose declared context need could NOT
+     * be retrieved (issue #1826). Those rules are not sharded for that file at
+     * all: a rule that said the hunk is not enough, judged on the hunk anyway,
+     * is exactly the blind judgment this feature removes. The caller reports
+     * them on the PR — a skipped rule must never look like a satisfied one.
+     */
+    unmetRules?: Map<string, Set<string>>;
 }
 
 export interface ShardedJudgeResult {
@@ -591,9 +599,15 @@ function rulesForFile(
     file: FileChange,
     rules: Array<Partial<IKodyRule>>,
     detectorHits?: DetectorHitIndex,
+    unmetRules?: Map<string, Set<string>>,
 ): Array<Partial<IKodyRule>> {
     return rules.filter((r) => {
         if (r.path && !matchesPathPattern(file.filename, r.path)) return false;
+        // A rule whose declared context need could not be retrieved for this
+        // file is not judged here. Sits before the detector clause so it holds
+        // for mechanical rules too — a detector hit is a candidate line, not
+        // the context the rule said it needs to judge it.
+        if (r.uuid && unmetRules?.get(file.filename)?.has(r.uuid)) return false;
         // A rule carrying a compiled detector is judged only where the detector
         // fired. Without this the T0 pre-filter would buy nothing — a mechanical
         // rule would shard every file, exactly like a semantic one.
@@ -867,6 +881,7 @@ export async function judgeKodyRulesSharded(
         languageLabel,
         detectorHits,
         contextSlices,
+        unmetRules,
     } = input;
     const concurrency = input.concurrency ?? 4;
 
@@ -888,7 +903,7 @@ export async function judgeKodyRulesSharded(
     const fileShards = changedFiles
         .map((file) => ({
             file,
-            applicable: rulesForFile(file, fileRules, detectorHits),
+            applicable: rulesForFile(file, fileRules, detectorHits, unmetRules),
         }))
         .filter((s) => s.applicable.length > 0);
 

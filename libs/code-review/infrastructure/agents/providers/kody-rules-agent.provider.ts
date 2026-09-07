@@ -13,6 +13,7 @@ import { mapAgentFindings } from '@libs/code-review/infrastructure/agents/collab
 import { runAgentWithTrace } from '@libs/code-review/infrastructure/agents/collaborators/review-observability';
 import {
     judgeKodyRulesSharded,
+    ruleAppliesToFile,
     inlineRuleReferences,
     inlineLoadedReferences,
     findUnresolvedReferenceRules,
@@ -26,6 +27,15 @@ import { ExternalReferenceLoaderService } from '@libs/kodyRules/infrastructure/a
 import { buildDetectorCandidates } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler';
 import { checkClaims } from '@libs/code-review/infrastructure/agents/collaborators/claim-checker';
 import { buildRepoLookup } from '@libs/code-review/infrastructure/agents/collaborators/repo-lookup';
+import {
+    needOf,
+    retrieveForShard,
+    type RetrievedSlice,
+} from '@libs/code-review/infrastructure/agents/collaborators/rule-context.retriever';
+import {
+    buildRuleContextUnavailableWarning,
+    type ReviewWarning,
+} from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import {
     ReviewAgentIdentity,
     ReviewAgentInput,
@@ -194,6 +204,7 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
         let judgeViolations: ShardViolation[] = [];
         let shardsRun = 0;
         let shardsErrored = 0;
+        const contextWarnings: ReviewWarning[] = [];
         if (judgeRules.length > 0) {
             const { byokConfig, main } = await resolveReviewAgentModel(
                 input,
@@ -282,6 +293,108 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                 input,
             );
 
+            // Retrieve, per file, the repository slices the rules declared they
+            // need (issue #1826), and record the ones we could NOT retrieve.
+            // A rule that said the hunk is not enough, judged on the hunk
+            // anyway, is the blind judgment this feature exists to remove — so
+            // an unmet need takes that rule out of that file's shard and is
+            // reported instead of being absorbed in silence.
+            const lookup = input.repoLookup ?? buildRepoLookup(undefined);
+            const changedFilenames = (input.changedFiles ?? []).map(
+                (file) => file.filename,
+            );
+            const contextSlices = new Map<string, RetrievedSlice[]>();
+            const unmetRules = new Map<string, Set<string>>();
+            // A rule can be met in one file and unmet in another; it counts as
+            // skipped only where it was never judged at all.
+            const metSomewhere = new Set<string>();
+            const unmetSomewhere = new Map<string, Partial<IKodyRule>>();
+
+            const contextRules = rulesForJudge.filter(
+                (r) =>
+                    r.scope !== KodyRulesScope.PULL_REQUEST &&
+                    needOf(r) !== 'diff-only',
+            );
+
+            for (const file of contextRules.length
+                ? (input.changedFiles ?? [])
+                : []) {
+                const applicable = contextRules.filter((r) =>
+                    ruleAppliesToFile(file.filename, r.path),
+                );
+                if (applicable.length === 0) continue;
+
+                const retrieved = await retrieveForShard({
+                    file,
+                    rules: applicable,
+                    lookup,
+                    changedFilenames,
+                    logger: this.shardLogger,
+                });
+
+                if (retrieved.slices.length) {
+                    contextSlices.set(file.filename, retrieved.slices);
+                }
+                const unmetUuids = new Set(
+                    retrieved.unmet
+                        .map((r) => r.uuid)
+                        .filter((uuid): uuid is string => !!uuid),
+                );
+                if (unmetUuids.size) {
+                    unmetRules.set(file.filename, unmetUuids);
+                }
+                for (const rule of applicable) {
+                    if (!rule.uuid) continue;
+                    if (unmetUuids.has(rule.uuid)) {
+                        unmetSomewhere.set(rule.uuid, rule);
+                    } else {
+                        metSomewhere.add(rule.uuid);
+                    }
+                }
+            }
+
+            const skippedRules = [...unmetSomewhere.entries()]
+                .filter(([uuid]) => !metSomewhere.has(uuid))
+                .map(([, rule]) => rule);
+
+            if (skippedRules.length > 0) {
+                const skippedTitles = skippedRules.map(
+                    (rule) => rule.title || rule.uuid || 'untitled rule',
+                );
+
+                // Every rule this review had was skipped, so there is nothing
+                // left to judge. Reporting that as a completed review would
+                // hand the org a green check for a review that evaluated none
+                // of its rules — the same lie the all-shards-failed escalation
+                // below exists to prevent, so it escalates the same way and the
+                // message names what was skipped (KRC-31).
+                if (skippedRules.length === judgeRules.length) {
+                    throw new Error(
+                        `Kody Rules could not be evaluated: all ${skippedRules.length} rule(s) need repository context this review could not retrieve (${lookup.unavailableReason || 'context unavailable'}), so none was applied to this PR. Skipped: ${skippedTitles.join(', ')}.`,
+                    );
+                }
+
+                contextWarnings.push(
+                    buildRuleContextUnavailableWarning({
+                        skippedRuleTitles: skippedTitles,
+                        modelName: main.modelName,
+                        agentName: this.getIdentity().name,
+                    }),
+                );
+                this.shardLogger.warn({
+                    message: `[kody-rules] ${skippedRules.length} rule(s) were NOT judged for PR#${input.prNumber}: the repository context they declared they need could not be retrieved. Skipped: ${skippedTitles.join(', ')}.`,
+                    context: this.getIdentity().name,
+                    metadata: {
+                        organizationAndTeamData: input.organizationAndTeamData,
+                        prNumber: input.prNumber,
+                        skippedRuleUuids: skippedRules.map((r) => r.uuid),
+                        skippedRuleTitles: skippedTitles,
+                        lookupAvailable: lookup.available,
+                        unavailableReason: lookup.unavailableReason,
+                    },
+                });
+            }
+
             // Open the Langfuse root observation the sharded judge runs under.
             // Every OTHER review agent runs inside runAgentWithTrace (via the
             // base provider's agentic loop); this override bypassed super.execute
@@ -317,6 +430,8 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                         logger: this.shardLogger,
                         languageLabel,
                         detectorHits,
+                        contextSlices,
+                        unmetRules,
                     }),
             );
             judgeViolations = result.violations;
@@ -445,6 +560,7 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             agentName: this.getIdentity().name,
             turnsUsed: shardsRun,
             durationMs,
+            ...(contextWarnings.length ? { warnings: contextWarnings } : {}),
         };
     }
 

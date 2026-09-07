@@ -144,10 +144,14 @@ const isTestLikePath = (filePath: string): boolean =>
     /\.(spec|test)\.[^./]+$/.test(filePath) ||
     /_test\.[^./]+$/.test(filePath);
 
+/**
+ * The RAW unified diff, not `patchWithLinesStr`. The line-numbered variant
+ * prefixes every line with its number BEFORE the '+', which stops
+ * `extractModifiedFunctionNames` from recognizing a definition at all;
+ * `getModifiedRanges` reads the `@@` headers, which both variants keep.
+ */
 const diffOf = (file: FileChange): string =>
-    (file as { patchWithLinesStr?: string }).patchWithLinesStr ??
-    file.patch ??
-    '';
+    file.patch ?? (file as { patchWithLinesStr?: string }).patchWithLinesStr ?? '';
 
 /**
  * The enclosing function or class of each changed hunk (KRC-13), falling back

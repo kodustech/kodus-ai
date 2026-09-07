@@ -242,6 +242,28 @@ describe('retrieveForShard — symbol-references (KRC-14)', () => {
         );
     });
 
+    it('reads the raw patch, not the line-numbered one', async () => {
+        // patchWithLinesStr prefixes every line with its number BEFORE the
+        // '+', which hides the definition from the symbol extractor entirely.
+        const grep = jest.fn(async () => 'src/b.ts:9: renderInvoice(order)');
+
+        const result = await retrieveForShard({
+            file: file({
+                patch: [
+                    '@@ -1,1 +1,2 @@',
+                    '+export function renderInvoice(order) {}',
+                ].join('\n'),
+                patchWithLinesStr:
+                    '@@ -1,1 +1,2 @@\n     1 +export function renderInvoice(order) {}',
+            } as any),
+            rules: [rule('symbol-references')],
+            lookup: lookup({ grep }),
+        });
+
+        expect(grep).toHaveBeenCalledWith('renderInvoice');
+        expect(result.unmet).toEqual([]);
+    });
+
     it('reports the rule unmet when the hunk defines no symbol to search on', async () => {
         const rules = [rule('symbol-references')];
 
