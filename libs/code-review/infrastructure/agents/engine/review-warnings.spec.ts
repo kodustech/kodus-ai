@@ -1,6 +1,7 @@
 import {
     dedupReviewWarnings,
     buildProviderFallbackWarning,
+    buildRuleContextUnavailableWarning,
     type ReviewWarning,
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 
@@ -110,5 +111,48 @@ describe('buildProviderFallbackWarning', () => {
         expect(out).toHaveLength(1);
         expect(out[0].kind).toBe('PROVIDER_FALLBACK');
         expect(out[0].agentName).toBeUndefined();
+    });
+});
+
+describe('buildRuleContextUnavailableWarning', () => {
+    it('carries the skipped rule titles as structured data, not only inside `detail`', () => {
+        const warning = buildRuleContextUnavailableWarning({
+            skippedRuleTitles: ['No god objects', 'Repository per aggregate'],
+            modelName: 'gemini',
+            agentName: 'kody-rules',
+        });
+        expect(warning.kind).toBe('RULE_CONTEXT_UNAVAILABLE');
+        expect(warning.ruleTitles).toEqual([
+            'No god objects',
+            'Repository per aggregate',
+        ]);
+        expect(warning.detail).toContain('2 Kody Rule(s)');
+    });
+
+    it('unions rule titles when two emitters fold into one entry', () => {
+        const out = dedupReviewWarnings([
+            buildRuleContextUnavailableWarning({
+                skippedRuleTitles: ['A', 'B'],
+                modelName: 'gemini',
+                agentName: 'kody-rules',
+            }),
+            buildRuleContextUnavailableWarning({
+                skippedRuleTitles: ['B', 'C'],
+                modelName: 'gemini',
+                agentName: 'kody-rules-2',
+            }),
+        ]);
+        expect(out).toHaveLength(1);
+        expect(out[0].ruleTitles).toEqual(['A', 'B', 'C']);
+    });
+
+    it('does not alias the caller\'s array into the warning', () => {
+        const titles = ['A'];
+        const warning = buildRuleContextUnavailableWarning({
+            skippedRuleTitles: titles,
+            modelName: 'gemini',
+        });
+        titles.push('B');
+        expect(warning.ruleTitles).toEqual(['A']);
     });
 });

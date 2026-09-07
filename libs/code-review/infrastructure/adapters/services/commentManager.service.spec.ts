@@ -641,6 +641,158 @@ describe('CommentManagerService — pure helpers', () => {
         });
     });
 
+    describe('resolveSkippedRulesNotice (KRC-16)', () => {
+        const skipWarning = (titles: string[]) => ({
+            kind: 'RULE_CONTEXT_UNAVAILABLE' as const,
+            reason: 'lookup_unavailable' as const,
+            contextWindowTokens: 0,
+            modelName: 'gemini',
+            ruleTitles: titles,
+        });
+
+        it('renders the count and every rule title', () => {
+            const out = svc().resolveSkippedRulesNotice(
+                [skipWarning(['No god objects', 'Repository per aggregate'])],
+                LanguageValue.ENGLISH,
+            );
+            expect(out).toContain('2 Kody Rule(s)');
+            expect(out).toContain('- No god objects');
+            expect(out).toContain('- Repository per aggregate');
+            expect(out).not.toContain('{{count}}');
+            expect(out).not.toContain('{{ruleTitles}}');
+        });
+
+        it('falls back to en-US copy for a language without the key', () => {
+            const out = svc().resolveSkippedRulesNotice(
+                [skipWarning(['Only rule'])],
+                'pt-BR',
+            );
+            expect(out).toContain('1 Kody Rule(s)');
+            expect(out).toContain('- Only rule');
+        });
+
+        it('returns undefined when no warning, no rule-context warning, or no titles', () => {
+            expect(
+                svc().resolveSkippedRulesNotice(undefined, LanguageValue.ENGLISH),
+            ).toBeUndefined();
+            expect(
+                svc().resolveSkippedRulesNotice([], LanguageValue.ENGLISH),
+            ).toBeUndefined();
+            expect(
+                svc().resolveSkippedRulesNotice(
+                    [
+                        {
+                            kind: 'PROMPT_COMPACTED',
+                            reason: 'small_context_window',
+                            contextWindowTokens: 16_000,
+                            modelName: 'llama',
+                        },
+                    ],
+                    LanguageValue.ENGLISH,
+                ),
+            ).toBeUndefined();
+            expect(
+                svc().resolveSkippedRulesNotice(
+                    [skipWarning(['   '])],
+                    LanguageValue.ENGLISH,
+                ),
+            ).toBeUndefined();
+        });
+
+        it('dedups titles repeated across warnings', () => {
+            const out = svc().resolveSkippedRulesNotice(
+                [skipWarning(['Same']), skipWarning(['Same', 'Other'])],
+                LanguageValue.ENGLISH,
+            );
+            expect(out).toContain('2 Kody Rule(s)');
+            expect(out.match(/- Same/g)).toHaveLength(1);
+        });
+    });
+
+    describe('generatePullRequestFinishSummaryMarkdown — skipped rules reach the PR body (KRC-16)', () => {
+        // messageProcessor is constructor arg #2; the config block calls it.
+        const withProcessor = () =>
+            new CommentManagerService(
+                {} as any,
+                { processTemplate: async () => '' } as any,
+                {} as any,
+                {} as any,
+                {} as any,
+            ) as any;
+
+        it('names the count and the titles in the comment body', async () => {
+            const body =
+                await withProcessor().generatePullRequestFinishSummaryMarkdown(
+                    { organizationId: 'org' },
+                    42,
+                    [],
+                    { languageResultPrompt: LanguageValue.ENGLISH },
+                    [],
+                    false,
+                    undefined,
+                    false,
+                    undefined,
+                    undefined,
+                    [
+                        {
+                            kind: 'RULE_CONTEXT_UNAVAILABLE',
+                            reason: 'lookup_unavailable',
+                            contextWindowTokens: 0,
+                            modelName: 'gemini',
+                            ruleTitles: ['No god objects'],
+                        },
+                    ],
+                );
+            expect(body).toContain('1 Kody Rule(s)');
+            expect(body).toContain('- No god objects');
+        });
+
+        it('leaves the body free of the notice when no rule was skipped', async () => {
+            const body =
+                await withProcessor().generatePullRequestFinishSummaryMarkdown(
+                    { organizationId: 'org' },
+                    42,
+                    [],
+                    { languageResultPrompt: LanguageValue.ENGLISH },
+                    [],
+                    false,
+                    undefined,
+                    false,
+                    undefined,
+                    undefined,
+                    [],
+                );
+            expect(body).not.toContain('Kody Rule(s) were not evaluated');
+        });
+
+        it('does not render adaptive-fit fidelity warnings in the PR body', async () => {
+            const body =
+                await withProcessor().generatePullRequestFinishSummaryMarkdown(
+                    { organizationId: 'org' },
+                    42,
+                    [],
+                    { languageResultPrompt: LanguageValue.ENGLISH },
+                    [],
+                    false,
+                    undefined,
+                    false,
+                    undefined,
+                    undefined,
+                    [
+                        {
+                            kind: 'PROMPT_COMPACTED',
+                            reason: 'small_context_window',
+                            contextWindowTokens: 16_000,
+                            modelName: 'llama',
+                            detail: 'workflow trimmed',
+                        },
+                    ],
+                );
+            expect(body).not.toContain('workflow trimmed');
+            expect(body).not.toContain('Kody Rule(s) were not evaluated');
+        });
+    });
+
     describe('chunkChangedFilesForSummary', () => {
         const files = (n: number, size = 0) =>
             Array.from({ length: n }, (_, i) => ({

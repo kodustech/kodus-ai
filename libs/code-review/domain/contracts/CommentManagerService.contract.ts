@@ -70,6 +70,7 @@ export interface ICommentManagerService {
         reviewHasPartialErrors?: boolean,
         reviewErrorCustomMessage?: string,
         linkedRepositoriesMetadata?: import('@libs/ee/linked-repositories').LinkedRepositoriesReviewMetadata,
+        reviewWarnings?: import('@libs/code-review/infrastructure/agents/engine/review-warnings').ReviewWarning[],
     ): Promise<void>;
 
     updateSummarizationInPR(
@@ -143,5 +144,6 @@ export interface ICommentManagerService {
         reviewErrorMessage?: string,
         reviewHasPartialErrors?: boolean,
         reviewErrorCustomMessage?: string,
+        reviewWarnings?: import('@libs/code-review/infrastructure/agents/engine/review-warnings').ReviewWarning[],
     ): Promise<void>;
 }

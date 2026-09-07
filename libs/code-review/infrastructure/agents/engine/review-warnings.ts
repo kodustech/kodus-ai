@@ -45,6 +45,10 @@ export interface ReviewWarning {
     modelName: string;
     /** Optional free-form context (e.g. "3 files dropped: foo.test.ts, ..."). */
     detail?: string;
+    /** Titles of the Kody Rules this warning is about, kept structured so the
+     *  end-review PR comment can render them without parsing `detail`. Only
+     *  `RULE_CONTEXT_UNAVAILABLE` populates it. */
+    ruleTitles?: string[];
     /** Agent that emitted the warning. Cleared on dedup when multiple agents
      *  emit the same warning, since the underlying cause is pipeline-wide. */
     agentName?: string;
@@ -96,7 +100,10 @@ export function dedupReviewWarnings(
         const key = `${w.kind}::${w.modelName}::${w.contextWindowTokens}`;
         const existing = byKey.get(key);
         if (!existing) {
-            byKey.set(key, { ...w });
+            byKey.set(key, {
+                ...w,
+                ...(w.ruleTitles ? { ruleTitles: [...w.ruleTitles] } : {}),
+            });
             if (w.detail) detailsByKey.set(key, [w.detail]);
             continue;
         }
@@ -108,6 +115,15 @@ export function dedupReviewWarnings(
                 seen.push(w.detail);
                 detailsByKey.set(key, seen);
             }
+        }
+        // Titles union, not overwrite: a rule skipped by a second emitter has
+        // to stay named in the PR comment.
+        if (w.ruleTitles?.length) {
+            const merged = existing.ruleTitles ?? [];
+            for (const title of w.ruleTitles) {
+                if (!merged.includes(title)) merged.push(title);
+            }
+            existing.ruleTitles = merged;
         }
     }
 
@@ -144,6 +160,7 @@ export function buildRuleContextUnavailableWarning(params: {
         contextWindowTokens: 0,
         modelName: params.modelName,
         detail: `${params.skippedRuleTitles.length} Kody Rule(s) were not evaluated because the repository context they need could not be retrieved: ${titles}`,
+        ruleTitles: [...params.skippedRuleTitles],
         agentName: params.agentName,
     };
 }
