@@ -212,10 +212,10 @@ export default function General() {
                 <Page.HeaderActions>
                     {isGlobalGeneralView && (
                         <Button
-                            size="md"
+                            size="sm"
                             leftIcon={<Settings2Icon />}
                             onClick={() => setIsCentralizedModalOpen(true)}
-                            variant="secondary"
+                            variant="helper"
                             disabled={!canEdit}>
                             Configure centralized config
                         </Button>

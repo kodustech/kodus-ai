@@ -57,7 +57,7 @@ export const Trial = ({
                     </div>
 
                     <Button
-                        size="lg"
+                        size="md"
                         variant="primary"
                         className="h-fit"
                         disabled={!canEdit}

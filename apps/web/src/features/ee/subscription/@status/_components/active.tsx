@@ -69,7 +69,7 @@ export const Active = ({
                 </div>
 
                 <Button
-                    size="lg"
+                    size="md"
                     variant="primary"
                     className="h-fit"
                     leftIcon={<CircleDollarSign />}

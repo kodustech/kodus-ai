@@ -239,7 +239,7 @@ function FreePlan({ plan }: { plan: Plan }) {
             <CardContent className="flex-none pt-0 pb-5">
                 <Button
                     size="md"
-                    variant="secondary"
+                    variant="primary-dark"
                     className="w-full"
                     loading={loading}
                     onClick={() => handleMigrateToFree()}>

@@ -208,7 +208,7 @@ export const RoutingTab = ({
                         review, Kody Rules, chat, and more) to different models.
                     </p>
                     <Button
-                        variant="primary"
+                        variant="primary-dark"
                         size="md"
                         onClick={onGoToProviders}>
                         Connect another model

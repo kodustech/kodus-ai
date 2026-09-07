@@ -218,7 +218,7 @@ export function ConnectProviderFlow({
                         <Button
                             type="button"
                             size="sm"
-                            variant="secondary"
+                            variant="cancel"
                             onClick={onCancel}>
                             Cancel
                         </Button>

@@ -37,19 +37,18 @@ import {
     CUSTOM_MCP_SESSION_STORAGE_KEYS,
     KODUS_ISSUES_INTEGRATION_ID,
 } from "@services/mcp-manager/types";
-import { useSelectedTeamId } from "src/core/providers/selected-team-context";
-
-import { resolveConnectionRef } from "./resolve-connection-ref";
+import { useMCPPluginsLimit } from "@services/mcp-manager/use-mcp-plugins-limit";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { EditIcon, PlugIcon, RefreshCwIcon, Trash } from "lucide-react";
+import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import type { AwaitedReturnType } from "src/core/types";
-import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
-import { useMCPPluginsLimit } from "@services/mcp-manager/use-mcp-plugins-limit";
 import { countInstalledPlugins } from "src/core/utils/mcp-plugins/compute-locked-plugins";
+import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 
 import { AuthMethodConnect } from "./auth-method-connect";
 import { RequiredConfiguration } from "./required-configuration";
+import { resolveConnectionRef } from "./resolve-connection-ref";
 import { SelectTools } from "./select-tools";
 
 export const PluginModal = ({
@@ -495,7 +494,7 @@ export const PluginModal = ({
                                 {plugin.provider === "custom" && (
                                     <Button
                                         size="md"
-                                        variant="secondary"
+                                        variant="helper"
                                         leftIcon={<EditIcon />}
                                         onClick={() =>
                                             router.push(
@@ -587,7 +586,7 @@ export const PluginModal = ({
                                         )}
                                         <Button
                                             size="md"
-                                            variant="primary"
+                                            variant="helper"
                                             leftIcon={<EditIcon />}
                                             loading={isUpdateToolsLoading}
                                             onClick={() => updateTools()}

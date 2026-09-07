@@ -201,9 +201,11 @@ const RepositoryCollapsibleItem = ({
                                 // directory-level saves for it would be wrong.
                                 routes={routes.filter(
                                     (r) =>
-                                        !("repoOnly" in r &&
+                                        !(
+                                            "repoOnly" in r &&
                                             (r as { repoOnly?: boolean })
-                                                .repoOnly),
+                                                .repoOnly
+                                        ),
                                 )}
                                 configs={group.configs}
                                 customMessagesOverrideCount={
@@ -214,7 +216,6 @@ const RepositoryCollapsibleItem = ({
                             />
                         );
                     })}
-
                 </SidebarMenuSub>
             </CollapsibleContent>
         </Collapsible>
@@ -294,7 +295,7 @@ export const PerRepository = ({
 
                     <Button
                         size="icon-sm"
-                        variant="secondary"
+                        variant="helper"
                         onClick={() => {
                             magicModal.show(() => (
                                 <AddRepoModal
