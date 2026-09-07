@@ -28,6 +28,15 @@ const CODE_REVIEW_ROUTE_OVERRIDE_PATH_PREFIXES: Record<string, string[]> = {
     // sidebar rename, but the page is still there — without this entry
     // the override-count badge silently reads as 0.
     "suggestion-control": ["suggestionControl"],
+    // Tabs shell: "What to review" = categories + their prompts + filters.
+    "review-scope": [
+        "reviewOptions",
+        "v2PromptOverrides.categories",
+        "suggestionControl",
+    ],
+    // Tabs shell: "What Kody writes" = suggestion voice + PR summary (the
+    // custom messages count is added separately, see the shell header).
+    "output": ["v2PromptOverrides.generation", "summary"],
     "pr-summary": ["summary"],
     "kody-rules": [
         // `ideRulesSyncEnabled` is intentionally NOT counted: it's an

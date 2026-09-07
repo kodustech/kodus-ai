@@ -31,6 +31,7 @@ import {
     useDefaultCodeReviewConfig,
     usePlatformConfig,
 } from "../../../_components/context";
+import { useSettingsShellMode } from "../../../_components/shell-mode-context";
 import { useCodeReviewRouteParams } from "../../../_hooks";
 import { PromptEditorField } from "./_components/prompt-editor-field";
 import {
@@ -136,9 +137,17 @@ function CustomPromptsContent() {
         repositoryId,
     );
 
+    // In the tabs shell the per-category prompts live on "What to review",
+    // next to the category toggles; this page keeps only the voice.
+    const shellMode = useSettingsShellMode();
     const promptSections = useMemo(
-        () => (defaults ? buildPromptSections(defaults) : []),
-        [defaults],
+        () =>
+            (defaults ? buildPromptSections(defaults) : []).filter(
+                (section) =>
+                    shellMode !== "tabs" ||
+                    section.fieldName !== "v2PromptOverrides.categories",
+            ),
+        [defaults, shellMode],
     );
     const promptFieldConfigs = useMemo(
         () => promptSections.flatMap((section) => section.fields),

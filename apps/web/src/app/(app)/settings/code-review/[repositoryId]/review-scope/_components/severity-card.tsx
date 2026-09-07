@@ -1,26 +1,22 @@
-import { Button } from "@components/ui/button";
+"use client";
+
 import { Card, CardContent, CardHeader } from "@components/ui/card";
 import { FormControl } from "@components/ui/form-control";
 import { Heading } from "@components/ui/heading";
-import { magicModal } from "@components/ui/magic-modal";
 import { SliderWithMarkers } from "@components/ui/slider-with-markers";
-import { InfoIcon } from "lucide-react";
+import { Switch } from "@components/ui/switch";
 import { Controller, useFormContext } from "react-hook-form";
-import type { SeverityLevel } from "src/core/types";
 import { cn } from "src/core/utils/components";
 
 import { OverrideIndicatorForm } from "../../../_components/override";
 import type { CodeReviewFormType } from "../../../_types";
-import { SeverityLevelsExplanationModal } from "./security-levels-explanation-modal";
+import { severityLevelFilterOptions } from "../../suggestion-control/_components/minimum-severity-level";
 
-export const severityLevelFilterOptions = {
-    low: { label: "Low/All", value: 0 },
-    medium: { label: "Medium", value: 1 },
-    high: { label: "High", value: 2 },
-    critical: { label: "Critical", value: 3 },
-} satisfies Record<SeverityLevel, { label: string; value: number }>;
-
-export const MinimumSeverityLevel = () => {
+/**
+ * The severity threshold and whether it also applies to Kody Rules, in one
+ * card: the toggle only makes sense next to the slider it modifies.
+ */
+export const SeverityCard = () => {
     const form = useFormContext<CodeReviewFormType>();
 
     return (
@@ -28,16 +24,16 @@ export const MinimumSeverityLevel = () => {
             <CardHeader>
                 <div className="flex flex-col gap-1">
                     <div className="flex flex-row items-center gap-2">
-                        <Heading variant="h3">Minimum severity level</Heading>
+                        <Heading variant="h3">Minimum severity to post</Heading>
                         <OverrideIndicatorForm fieldName="suggestionControl.severityLevelFilter" />
                     </div>
                     <p className="text-text-secondary text-sm">
-                        Select the minimum severity level for Kody to post code
-                        review suggestions
+                        Kody still finds lower-severity issues; it just does not
+                        comment on them.
                     </p>
                 </div>
             </CardHeader>
-            <CardContent>
+            <CardContent data-field-name="suggestionControl.severityLevelFilter">
                 <Controller
                     name="suggestionControl.severityLevelFilter.value"
                     control={form.control}
@@ -48,7 +44,6 @@ export const MinimumSeverityLevel = () => {
                         const severityLevel =
                             severityLevelFilterOptions[field.value!] ??
                             severityLevelFilterOptions.low;
-                        const numberValue = severityLevel?.value;
 
                         return (
                             <FormControl.Root>
@@ -60,15 +55,16 @@ export const MinimumSeverityLevel = () => {
                                             max={3}
                                             step={1}
                                             labels={labels}
-                                            value={numberValue}
+                                            value={severityLevel.value}
                                             disabled={field.disabled}
                                             onValueChange={(value) =>
                                                 field.onChange(
                                                     Object.entries(
                                                         severityLevelFilterOptions,
                                                     ).find(
-                                                        ([, v]) =>
-                                                            v.value === value,
+                                                        ([, option]) =>
+                                                            option.value ===
+                                                            value,
                                                     )?.[0],
                                                 )
                                             }
@@ -85,24 +81,46 @@ export const MinimumSeverityLevel = () => {
                                         />
                                     </div>
                                 </FormControl.Input>
-
                                 <FormControl.Error>
                                     {fieldState.error?.message}
                                 </FormControl.Error>
-
                                 <FormControl.Helper>
-                                    Kody will provide suggestions with severity
-                                    from{" "}
-                                    <strong key={severityLevel.label}>
-                                        {severityLevel.label}
-                                    </strong>{" "}
-                                    and higher
+                                    Posting suggestions from{" "}
+                                    <strong>{severityLevel.label}</strong> and
+                                    higher.
                                 </FormControl.Helper>
                             </FormControl.Root>
                         );
                     }}
                 />
             </CardContent>
+
+            <Controller
+                name="suggestionControl.applyFiltersToKodyRules.value"
+                control={form.control}
+                render={({ field }) => (
+                    <label
+                        className="border-card-lv3/60 flex cursor-pointer items-center justify-between gap-6 border-t px-6 py-4"
+                        data-field-name="suggestionControl.applyFiltersToKodyRules">
+                        <span className="flex flex-col gap-0.5">
+                            <span className="text-text-primary flex items-center gap-2 text-sm font-medium">
+                                Apply the threshold to Kody Rules
+                                <OverrideIndicatorForm fieldName="suggestionControl.applyFiltersToKodyRules" />
+                            </span>
+                            <span className="text-text-secondary text-xs">
+                                Off means Kody Rules suggestions are posted at
+                                any severity.
+                            </span>
+                        </span>
+                        <Switch
+                            size="sm"
+                            checked={Boolean(field.value)}
+                            disabled={field.disabled}
+                            onCheckedChange={field.onChange}
+                        />
+                    </label>
+                )}
+            />
         </Card>
     );
 };
