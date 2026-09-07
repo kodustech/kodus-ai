@@ -10,6 +10,7 @@
 import type { AgentPolicy } from './policy.contract';
 import type { RunState } from './run-state.contract';
 import type { AgentTool, ToolContext, ToolRegistry } from './tool.contract';
+import type { ReviewContextCallMetadata } from '@libs/llm/review-telemetry';
 
 /** Declarative configuration of an agent role. Pure data — swap prompt or
  *  tools to get a different role on the same runtime. */
@@ -65,7 +66,10 @@ export interface AgentRunInput {
     /** Opening user message(s) that frame the task. */
     readonly prompt: string;
     /** Optional seed messages (prior context). */
-    readonly seedMessages?: readonly { role: 'user' | 'assistant'; content: string }[];
+    readonly seedMessages?: readonly {
+        role: 'user' | 'assistant';
+        content: string;
+    }[];
     /** Langfuse observation metadata (org / team / repo / provider ...). Passed
      *  to LLM.run, which builds the vendor telemetry shape — so the caller hands
      *  over the RAW metadata, not a pre-built SDK payload. Opaque here to keep the
@@ -87,6 +91,10 @@ export interface AgentRunInput {
      *  opts into — the tracer records nothing that was not opted in, and both
      *  halves are the domain's call. */
     readonly runtimeContext?: Readonly<Record<string, unknown>>;
+    /** Per-invocation phase when one AgentSpec is reused for recall/resample runs. */
+    readonly telemetryPhase?: string;
+    /** Body-free evidence for a review-context block present in this run. */
+    readonly reviewContextDelivery?: ReviewContextCallMetadata;
 }
 
 /** Adapter that exposes an AgentSpec AS A TOOL (sub-agent-as-tool pattern).

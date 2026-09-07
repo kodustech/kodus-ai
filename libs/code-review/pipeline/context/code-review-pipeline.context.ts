@@ -11,6 +11,10 @@ import { CollectCrossFileContextsResult } from '@libs/code-review/infrastructure
 import type { TraceContextDecision } from '@libs/cli-review/domain/types/trace-context.types';
 import { LlmErrorCategory } from '@libs/llm/error-classifier';
 import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
+import type {
+    ReviewContext,
+    ReviewContextDelivery,
+} from '@libs/cli-review/domain/types/review-context.types';
 import type { LinkedRepositoriesReviewMetadata } from '@libs/ee/linked-repositories';
 import { PlatformType } from '@libs/core/domain/enums';
 import {
@@ -70,6 +74,8 @@ export interface CodeReviewPipelineContext extends PipelineContext {
      * as a high-priority focus block. Empty/undefined = a normal review.
      */
     reviewDirective?: string;
+    reviewContext?: ReviewContext;
+    reviewContextDeliveries?: readonly ReviewContextDelivery[];
 
     /**
      * HEAVY mode — opt-in per review (CLI `--heavy` or PR `@kody review

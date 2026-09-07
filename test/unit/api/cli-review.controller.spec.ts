@@ -1324,6 +1324,30 @@ describe('CliReviewController', () => {
             expect(result).toEqual({ suggestions: [] });
         });
 
+        it('forwards review context to authenticated enqueue without changing the diff', async () => {
+            mockTeamCliKeyService.validateKey.mockResolvedValue(TEAM_KEY_DATA);
+            const reviewContext = {
+                source: 'cli-review-context-file' as const,
+                contentType: 'text/plain; charset=utf-8' as const,
+                body: 'CANARY: controller context',
+            };
+            const body = {
+                ...MINIMAL_BODY,
+                reviewContext,
+            };
+
+            await controller.review(body, TEAM_KEY);
+
+            expect(mockEnqueueCliReview.execute).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    input: expect.objectContaining({
+                        diff: MINIMAL_BODY.diff,
+                        reviewContext,
+                    }),
+                }),
+            );
+        });
+
         it('allows review when no userEmail is provided', async () => {
             mockTeamCliKeyService.validateKey.mockResolvedValue({
                 ...TEAM_KEY_DATA,
@@ -1471,6 +1495,32 @@ describe('CliReviewController', () => {
                         diff: 'my diff',
                         config: { language: 'typescript' },
                     },
+                }),
+            );
+        });
+
+        it('forwards review context to the in-memory trial execution', async () => {
+            mockTrialRateLimiter.checkRateLimit.mockResolvedValue({
+                allowed: true,
+                remaining: 1,
+            });
+            const reviewContext = {
+                source: 'cli-review-context-file' as const,
+                contentType: 'text/plain; charset=utf-8' as const,
+                body: 'CANARY: trial controller context',
+            };
+
+            await controller.trialReview({
+                ...TRIAL_BODY,
+                reviewContext,
+            });
+
+            expect(mockExecuteCliReview.execute).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    input: expect.objectContaining({
+                        diff: TRIAL_BODY.diff,
+                        reviewContext,
+                    }),
                 }),
             );
         });

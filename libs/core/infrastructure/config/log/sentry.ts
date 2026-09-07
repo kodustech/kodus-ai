@@ -2,6 +2,67 @@ import * as Sentry from '@sentry/nestjs';
 
 let sentryInitialized = false;
 
+type SentryBeforeSend = NonNullable<
+    NonNullable<Parameters<typeof Sentry.init>[0]>['beforeSend']
+>;
+type SentryEvent = Parameters<SentryBeforeSend>[0];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function redactReviewContextFromRecord(
+    requestData: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+    if (!isRecord(requestData.reviewContext)) {
+        return undefined;
+    }
+
+    const { body: _body, ...reviewContextMetadata } = requestData.reviewContext;
+    return {
+        ...requestData,
+        reviewContext: reviewContextMetadata,
+    };
+}
+
+function redactReviewContextData(requestData: unknown): unknown {
+    if (isRecord(requestData)) {
+        return redactReviewContextFromRecord(requestData) ?? requestData;
+    }
+
+    if (typeof requestData !== 'string') {
+        return requestData;
+    }
+
+    try {
+        const parsed: unknown = JSON.parse(requestData);
+        if (!isRecord(parsed)) {
+            return requestData;
+        }
+
+        const redacted = redactReviewContextFromRecord(parsed);
+        return redacted ? JSON.stringify(redacted) : requestData;
+    } catch {
+        return requestData;
+    }
+}
+
+function redactReviewContextBody(event: SentryEvent): SentryEvent {
+    const requestData = event.request?.data;
+    const redactedData = redactReviewContextData(requestData);
+    if (redactedData === requestData) {
+        return event;
+    }
+
+    return {
+        ...event,
+        request: {
+            ...event.request,
+            data: redactedData,
+        },
+    };
+}
+
 /**
  * `skipOpenTelemetrySetup` is intentional: Sentry's OTel setup installs a
  * `BasicTracerProvider` whose `SentrySampler` returns `NOT_RECORD` whenever
@@ -47,6 +108,7 @@ export function setupSentry(
                 },
             },
             skipOpenTelemetrySetup: true,
+            beforeSend: redactReviewContextBody,
         });
 
         sentryInitialized = true;

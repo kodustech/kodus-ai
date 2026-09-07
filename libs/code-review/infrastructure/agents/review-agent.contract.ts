@@ -22,13 +22,20 @@ import {
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import type { TraceContextDecision } from '@libs/cli-review/domain/types/trace-context.types';
+import type {
+    ReviewContext,
+    ReviewContextDelivery,
+} from '@libs/cli-review/domain/types/review-context.types';
 
 import { BYOKProvider } from '@libs/llm/model-providers';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import type { LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
 import type { ReasoningEffort } from '@libs/llm/reasoning-options';
 
-import { CoverageSummary, CoverageTier } from '@libs/code-review/infrastructure/agents/engine/coverage-ledger';
+import {
+    CoverageSummary,
+    CoverageTier,
+} from '@libs/code-review/infrastructure/agents/engine/coverage-ledger';
 import { type AdaptiveProfile } from '@libs/code-review/infrastructure/agents/engine/adaptive-fit';
 import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import type { DocumentationSearchAdapter } from '@libs/code-review/infrastructure/agents/engine/agent-tools.factory';
@@ -247,7 +254,8 @@ export interface RuntimeMeta {
  * cohesive slices above so a consumer can depend on just what it needs.
  */
 export interface ReviewAgentInput
-    extends PrReviewContext,
+    extends
+        PrReviewContext,
         ToolingContext,
         ReviewRuleConfig,
         ModelConfig,
@@ -276,6 +284,8 @@ export interface ReviewAgentInput
      * suppressing concrete issues found elsewhere. (PR #1417.)
      */
     reviewDirective?: string;
+    reviewContext?: ReviewContext;
+    onReviewContextDelivery?: (delivery: ReviewContextDelivery) => void;
 }
 
 /**
@@ -295,6 +305,7 @@ export interface ReviewAgentOutput {
      *  forced compact prompt, dropped callGraph, etc). Empty when no
      *  adaptive strategy fired. */
     warnings?: ReviewWarning[];
+    reviewContextDeliveries?: readonly ReviewContextDelivery[];
     /**
      * The agent stopped because it ran out of budget (per-agent timeout) or
      * steps, NOT because it finished investigating. Its `suggestions` are
@@ -324,6 +335,8 @@ export interface AgentLoopInput {
     // decision; nothing downstream needs a pre-built LanguageModel.
     systemPrompt: string;
     userPrompt: string;
+    reviewContext?: ReviewContext;
+    onReviewContextPhaseDelivery?: (phase: string) => void;
     agentName?: string; // e.g. 'kodus-bug-review-agent' — used as Langfuse observation name
     /** Cost-span run name base for THIS review category (e.g. `code-review-bug`).
      *  Threaded onto every leaf model call the review makes (finder + verify +
@@ -500,6 +513,7 @@ export interface AgentLoopOutput {
      *  forced compact prompt, dropped callGraph, etc). Always present;
      *  empty array when no adaptive strategy fired. */
     warnings: ReviewWarning[];
+    reviewContextPhases?: string[];
     /** Low-level harness trace. Intended for eval/debug artifacts; product
      *  callers should keep using the domain fields above. */
     debugTrace?: Array<{

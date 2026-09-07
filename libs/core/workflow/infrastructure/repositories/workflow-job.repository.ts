@@ -190,7 +190,8 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                 { operation: 'update', jobId: id },
             );
 
-            if (data.metadata !== undefined) updateData.metadata = patch.metadata;
+            if (data.metadata !== undefined)
+                updateData.metadata = patch.metadata;
             if (data.waitingForEvent !== undefined)
                 updateData.waitingForEvent = patch.waitingForEvent;
             if (data.pipelineState !== undefined)
@@ -316,6 +317,57 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
             });
             throw error;
         }
+    }
+
+    async failEphemeralJob(
+        id: string,
+        params: {
+            lastError: string;
+            errorClassification: unknown;
+        },
+    ): Promise<boolean> {
+        const result = await this.repository
+            .createQueryBuilder()
+            .update(WorkflowJobModel)
+            .set({
+                status: JobStatus.FAILED,
+                errorClassification: params.errorClassification,
+                lastError: params.lastError,
+                completedAt: () => 'NOW()',
+            })
+            .where('uuid = :id', { id })
+            .andWhere('status IN (:...statuses)', {
+                statuses: [JobStatus.PENDING, JobStatus.PROCESSING],
+            })
+            .andWhere(`metadata ->> 'ephemeralTransport' = 'true'`)
+            .execute();
+
+        return (result.affected ?? 0) > 0;
+    }
+
+    async failStaleEphemeralPending(params: {
+        olderThan: Date;
+        lastError: string;
+        errorClassification: ErrorClassification;
+    }): Promise<StaleWorkflowJobReapResult[]> {
+        const result = await this.repository
+            .createQueryBuilder()
+            .update(WorkflowJobModel)
+            .set({
+                status: JobStatus.FAILED,
+                errorClassification: params.errorClassification,
+                lastError: params.lastError,
+                completedAt: () => 'NOW()',
+            })
+            .where('status = :status', { status: JobStatus.PENDING })
+            .andWhere(`metadata ->> 'ephemeralTransport' = 'true'`)
+            .andWhere('"updatedAt" < :olderThan', {
+                olderThan: params.olderThan,
+            })
+            .returning(['uuid', 'workflowType', 'organizationId', 'startedAt'])
+            .execute();
+
+        return (result.raw ?? []) as StaleWorkflowJobReapResult[];
     }
 
     async getExecutionHistory(_jobId: string): Promise<IJobExecutionHistory[]> {

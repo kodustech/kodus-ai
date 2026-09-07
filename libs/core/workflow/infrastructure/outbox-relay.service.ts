@@ -71,6 +71,10 @@ const DEFAULT_OUTBOX_PUBLISH_TIMEOUT_MS = 15000;
 // (job-processor-router.service.ts) and the 150-min inbox claim timeout —
 // so an actively running or reclaimable job is never reaped.
 const DEFAULT_STALE_JOB_TIMEOUT_MINUTES = 180;
+// RabbitMQ drops the transient body after 35 minutes. Reaping after 36 minutes
+// leaves a one-minute clock-skew margin and, at the ten-minute cron cadence,
+// guarantees a terminal state before the CLI's 50-minute polling deadline.
+const DEFAULT_EPHEMERAL_PENDING_TIMEOUT_MINUTES = 36;
 
 // Above this many orphans reaped in a single pass, fire the incident
 // heartbeat — a spike means workers are crash-looping.
@@ -127,6 +131,10 @@ export class OutboxRelayService
     private readonly staleJobTimeoutMinutes = parsePositiveIntEnv(
         'WORKFLOW_STALE_JOB_TIMEOUT_MINUTES',
         DEFAULT_STALE_JOB_TIMEOUT_MINUTES,
+    );
+    private readonly ephemeralPendingTimeoutMinutes = parsePositiveIntEnv(
+        'WORKFLOW_EPHEMERAL_PENDING_TIMEOUT_MINUTES',
+        DEFAULT_EPHEMERAL_PENDING_TIMEOUT_MINUTES,
     );
 
     private readonly BATCH_SIZE = 50;
@@ -580,6 +588,60 @@ export class OutboxRelayService
             await this.releaseCronLock(
                 lock,
                 'Failed to release stale-job reaper lock',
+            );
+        }
+    }
+
+    @Cron(STALE_JOB_REAPER_CRON, {
+        name: 'workflow-stale-ephemeral-pending-reaper',
+    })
+    async reapStaleEphemeralPendingJobs(): Promise<void> {
+        const lock = await this.acquireCronLock(
+            'CRON:WORKFLOW:STALE_EPHEMERAL_PENDING_REAPER',
+            4 * 60 * 1000,
+        );
+        if (!lock) {
+            return;
+        }
+
+        try {
+            const olderThan = new Date(
+                Date.now() - this.ephemeralPendingTimeoutMinutes * 60 * 1000,
+            );
+            const reaped = await this.jobRepository.failStaleEphemeralPending({
+                olderThan,
+                lastError:
+                    'Review context expired before processing. Submit the review again.',
+                errorClassification: ErrorClassification.PERMANENT,
+            });
+
+            if (!reaped.length) {
+                return;
+            }
+
+            this.logger.warn({
+                message: `Failed ${reaped.length} expired ephemeral workflow jobs`,
+                context: OutboxRelayService.name,
+                metadata: {
+                    terminalReason: 'ephemeral-payload-expired',
+                    staleTimeoutMinutes: this.ephemeralPendingTimeoutMinutes,
+                    jobs: reaped.map((job) => ({
+                        jobId: job.uuid,
+                        workflowType: job.workflowType,
+                        organizationId: job.organizationId,
+                    })),
+                },
+            });
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to reap expired ephemeral workflow jobs',
+                context: OutboxRelayService.name,
+                error: error instanceof Error ? error : undefined,
+            });
+        } finally {
+            await this.releaseCronLock(
+                lock,
+                'Failed to release stale ephemeral-job reaper lock',
             );
         }
     }

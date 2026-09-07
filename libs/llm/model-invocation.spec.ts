@@ -48,6 +48,7 @@ describe('resolveModelConfig — the single slot → invocation composition', ()
 
         expect(inv.model).toEqual({ __model: true });
         expect(inv.modelName).toBe('openai:gpt-x');
+        expect(inv.provider).toBe('openai');
         expect(inv.callOptions).toEqual({
             temperature: 0.4,
             maxOutputTokens: 4096,
@@ -72,6 +73,18 @@ describe('resolveModelConfig — the single slot → invocation composition', ()
                 reporter,
                 modelOptions: { structuredOutputs: true },
             }),
+        );
+    });
+    it('reports the model slot provider rather than a limiter-only provider override', () => {
+        const inv = resolveModelConfig(slot(), {
+            runName: 'finder',
+            provider: 'anthropic',
+        });
+
+        expect(inv.provider).toBe('openai');
+        expect(resolveAgentModel).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ provider: 'anthropic' }),
         );
     });
 

@@ -210,7 +210,28 @@ describe('runAgentWithTrace — return-shape transparency (rows 1-20, 27, 31-33)
 describe('runAgentWithTrace — fail-safe behavior (rows 30, 34 + observability swallow)', () => {
     const baseMeta = { traceName: 'code-review-finder' };
 
+
+    it('returns the result without recording span output when output recording is disabled', async () => {
+        enableTracing();
+        const result = { reasoning: 'CANARY echoed by model' };
+
+        const actual = await runAgentWithTrace(
+            baseMeta,
+            { reviewContextDelivery: { sha256: 'hash' } },
+            async () => result,
+            { recordOutput: false },
+        );
+
+        expect(actual).toBe(result);
+        expect(mockState.spanUpdateArgs).toEqual([
+            { input: { reviewContextDelivery: { sha256: 'hash' } } },
+        ]);
+        expect(JSON.stringify(mockState.spanUpdateArgs)).not.toContain(
+            result.reasoning,
+        );
+    });
     describe('with tracing disabled', () => {
+
         beforeEach(disableTracing);
 
         // Row 30 — the leaf (LLM.run) throws: the review error is the caller's

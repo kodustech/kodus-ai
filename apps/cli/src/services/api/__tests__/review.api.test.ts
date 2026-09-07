@@ -115,6 +115,101 @@ describe('RealReviewApi', () => {
         );
     });
 
+    it('serializes review context as a field separate from the diff', async () => {
+        const requestWithRetry = vi.fn().mockResolvedValue({
+            summary: 'ok',
+            issues: [],
+            filesAnalyzed: 1,
+            duration: 1,
+        });
+        const reviewContext = {
+            source: 'cli-review-context-file' as const,
+            contentType: 'text/plain; charset=utf-8' as const,
+            body: 'CANARY: audit abort cleanup',
+        };
+        const diff = 'diff --git a/file.ts b/file.ts\n+const value = 1;';
+
+        const api = new RealReviewApi(requestWithRetry);
+        await api.analyzeWithMetrics(
+            diff,
+            'kodus_team_key',
+            undefined,
+            undefined,
+            undefined,
+            reviewContext,
+        );
+
+        const request = requestWithRetry.mock.calls[0]?.[1] as
+            { body?: string } | undefined;
+        expect(JSON.parse(request?.body ?? '{}')).toEqual({
+            diff,
+            reviewContext,
+        });
+        expect(diff).not.toContain(reviewContext.body);
+    });
+
+    it('serializes review context separately for a trial review', async () => {
+        const requestWithRetry = vi.fn().mockResolvedValue({
+            summary: 'ok',
+            issues: [],
+            filesAnalyzed: 1,
+            duration: 1,
+        });
+        const reviewContext = {
+            source: 'cli-review-context-file' as const,
+            contentType: 'text/plain; charset=utf-8' as const,
+            body: 'trial-only context',
+        };
+        const api = new RealReviewApi(requestWithRetry);
+
+        await api.trialAnalyze(
+            'trial diff',
+            'fingerprint',
+            undefined,
+            undefined,
+            reviewContext,
+        );
+
+        const request = requestWithRetry.mock.calls[0]?.[1] as
+            { body?: string } | undefined;
+        expect(JSON.parse(request?.body ?? '{}')).toEqual({
+            diff: 'trial diff',
+            fingerprint: 'fingerprint',
+            reviewContext,
+        });
+    });
+
+    it('does not carry context into a later review when the option is omitted', async () => {
+        const requestWithRetry = vi.fn().mockResolvedValue({
+            summary: 'ok',
+            issues: [],
+            filesAnalyzed: 1,
+            duration: 1,
+        });
+        const api = new RealReviewApi(requestWithRetry);
+        const reviewContext = {
+            source: 'cli-review-context-file' as const,
+            contentType: 'text/plain; charset=utf-8' as const,
+            body: 'first-review-only',
+        };
+
+        await api.analyzeWithMetrics(
+            'first diff',
+            'kodus_team_key',
+            undefined,
+            undefined,
+            undefined,
+            reviewContext,
+        );
+        await api.analyze('second diff', 'kodus_team_key');
+
+        const secondRequest = requestWithRetry.mock.calls[1]?.[1] as
+            { body?: string } | undefined;
+        expect(JSON.parse(secondRequest?.body ?? '{}')).toEqual({
+            diff: 'second diff',
+        });
+    });
+
     it('serializes only provided fields for business validation', async () => {
         const requestWithRetry = vi.fn().mockResolvedValue({
             status: 'ok',

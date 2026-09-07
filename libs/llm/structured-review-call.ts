@@ -70,6 +70,10 @@ import {
     sleep,
 } from '@libs/llm/retry-policy';
 import { getLlmObservability } from '@libs/llm/llm-observability';
+import {
+    captureReviewModelCall,
+    type ReviewContextCallMetadata,
+} from '@libs/llm/review-telemetry';
 
 const logger = createLogger('StructuredReviewCall');
 
@@ -95,6 +99,7 @@ export interface BaseReviewCallParams {
     /** Langfuse span metadata (org / team / PR ...). Defaults to
      *  `{ organizationId }` when omitted — the structured callers' existing shape. */
     telemetryMetadata?: LangfuseTelemetryMetadata;
+    recordTelemetryInputs?: boolean;
     /** Observability span name; defaults to `runName`. */
     spanName?: string;
     /** Override the slot's sampling temperature — a fixed value the caller wants
@@ -129,6 +134,8 @@ export interface BaseReviewCallParams {
      *  a bare `[]` for "no violations" at scale (#1786 / prod audit 2026-09) —
      *  turning a shard error (and a false "rules not applied") into a clean pass. */
     recoverEnvelopeShape?: boolean;
+    /** Body-free evidence for a context block included in this call's prompt. */
+    reviewContextDelivery?: ReviewContextCallMetadata;
 }
 
 export interface StructuredReviewCallParams<
@@ -224,11 +231,13 @@ async function runReviewCall<T>(
         timeoutMs,
         defaultModelOverride,
         telemetryMetadata,
+        recordTelemetryInputs,
         spanName,
         temperature: temperatureOverride,
         maxOutputTokens: maxOutputTokensOverride,
         providerOptions: providerOptionsOverride,
         suppressReasoning: callerSuppressReasoning,
+        reviewContextDelivery,
     } = params;
 
     const mainSlot = byokConfig;
@@ -263,7 +272,8 @@ async function runReviewCall<T>(
     // on forced tool_choice + thinking), or the caller asked because the work
     // itself does not benefit from reasoning.
     const suppressReasoning =
-        structuredPlan === 'suppress-thinking' || callerSuppressReasoning === true;
+        structuredPlan === 'suppress-thinking' ||
+        callerSuppressReasoning === true;
 
     const buildInvocation = (structuredOutputs: boolean) =>
         resolveModelConfig(mainSlot, {
@@ -289,6 +299,7 @@ async function runReviewCall<T>(
     const {
         model: mainModel,
         modelName: mainModelName,
+        provider: mainProvider,
         callOptions,
         providerOptions,
     } = buildInvocation(sentJsonSchema);
@@ -315,6 +326,7 @@ async function runReviewCall<T>(
     const call = (
         model: LanguageModel,
         modelName: string,
+        provider: string,
         systemOverride?: string,
         extraAttrs?: Record<string, unknown>,
         // The reroute-json path overrides the output channel: plain generateText
@@ -356,10 +368,16 @@ async function runReviewCall<T>(
                 // cancellation. A secondary pass may pass a shorter budget.
                 abortSignal: timeoutSignal(timeoutMs ?? LLM_CALL_TIMEOUT_MS),
                 ...toAiSdkTelemetryArgs(
-                    buildLangfuseTelemetry(
-                        runName,
-                        telemetryMetadata ?? { organizationId },
-                    ),
+                    recordTelemetryInputs === undefined
+                        ? buildLangfuseTelemetry(
+                              runName,
+                              telemetryMetadata ?? { organizationId },
+                          )
+                        : buildLangfuseTelemetry(
+                              runName,
+                              telemetryMetadata ?? { organizationId },
+                              { recordInputs: recordTelemetryInputs },
+                          ),
                 ),
             } as any);
 
@@ -368,28 +386,50 @@ async function runReviewCall<T>(
         // registers it once at bootstrap; a bare caller that never registered
         // one runs directly (still gets the limiter, reasoning, timeout and
         // retry — only the span is skipped).
-        const observability = getLlmObservability();
-        const run = observability
-            ? observability.runAiSdkLLMInSpan<any>({
-                  spanName: spanName ?? runName,
-                  runName,
-                  model: modelName,
-                  // Billing keys from the ONE identity — parity with the old
-                  // recordAgentRunUsage(agentModelIdentity(slot)) the dedup used.
-                  byokModelId: identity.byokModelId,
-                  credentialId: identity.credentialId,
-                  // Routing task + fallback flag the slot carried down from
-                  // resolveTaskSlot (route = the LlmTask, not the tier).
-                  route: mainSlot?.route,
-                  usedFallback: mainSlot?.usedFallback,
-                  attrs: extraAttrs
-                      ? { ...spanAttrs, ...extraAttrs }
-                      : spanAttrs,
-                  exec,
-              })
-            : exec();
-
-        return run.then((r: any) => (override?.extract ?? mode.extract)(r));
+        const tracked = captureReviewModelCall(
+            {
+                provider,
+                model: modelName,
+                agent:
+                    typeof (extraAttrs?.agentName ?? attrs?.agentName) ===
+                    'string'
+                        ? String(extraAttrs?.agentName ?? attrs?.agentName)
+                        : runName,
+                phase:
+                    typeof (extraAttrs?.phase ?? attrs?.phase) === 'string'
+                        ? String(extraAttrs?.phase ?? attrs?.phase)
+                        : 'review',
+                sdkMaxRetries: 0,
+                reviewContext: reviewContextDelivery,
+            },
+            () => {
+                const observability = getLlmObservability();
+                return observability
+                    ? observability.runAiSdkLLMInSpan<
+                          Awaited<ReturnType<typeof tracedGenerateText>>
+                      >({
+                          spanName: spanName ?? runName,
+                          runName,
+                          model: modelName,
+                          // Billing keys from the ONE identity — parity with the old
+                          // recordAgentRunUsage(agentModelIdentity(slot)) the dedup used.
+                          byokModelId: identity.byokModelId,
+                          credentialId: identity.credentialId,
+                          // Routing task + fallback flag the slot carried down from
+                          // resolveTaskSlot (route = the LlmTask, not the tier).
+                          route: mainSlot?.route,
+                          usedFallback: mainSlot?.usedFallback,
+                          attrs: extraAttrs
+                              ? { ...spanAttrs, ...extraAttrs }
+                              : spanAttrs,
+                          exec,
+                      })
+                    : exec();
+            },
+        );
+        return tracked.then((result) =>
+            (override?.extract ?? mode.extract)(result),
+        );
     };
 
     // ONE re-issue in json_object mode with the schema written INTO the prompt —
@@ -405,9 +445,13 @@ async function runReviewCall<T>(
         const downgradedSystem = mode.schemaForPrompt
             ? `${system ? `${system}\n\n` : ''}Return ONLY a JSON object that conforms EXACTLY to this JSON Schema (same property names, no extra keys):\n${mode.schemaForPrompt}`
             : system;
-        return call(downgraded.model, downgraded.modelName, downgradedSystem, {
-            structuredRecovery: reason,
-        });
+        return call(
+            downgraded.model,
+            downgraded.modelName,
+            downgraded.provider,
+            downgradedSystem,
+            { structuredRecovery: reason },
+        );
     };
 
     // reroute-json: the model is always-thinking + forced-tool_choice (Kimi
@@ -425,6 +469,7 @@ async function runReviewCall<T>(
         return call(
             inv.model,
             inv.modelName,
+            inv.provider,
             reroutedSystem,
             { structuredReroute: 'thinking-forced-tool_choice' },
             {
@@ -446,7 +491,7 @@ async function runReviewCall<T>(
     }
 
     try {
-        return await call(mainModel, mainModelName);
+        return await call(mainModel, mainModelName, mainProvider);
     } catch (err) {
         // json_schema → json_object fallback. A structured provider that
         // advertised support but rejected the json_schema body at runtime
@@ -535,9 +580,14 @@ async function runReviewCall<T>(
                 mode.validatingSchema != null &&
                 haveBadValue
             ) {
-                const shaped = normalizeEnvelope(badValue, mode.envelopeKey, [], {
-                    liftEmptyArray: true,
-                });
+                const shaped = normalizeEnvelope(
+                    badValue,
+                    mode.envelopeKey,
+                    [],
+                    {
+                        liftEmptyArray: true,
+                    },
+                );
                 if (shaped !== badValue) {
                     const wireSchema = asSchema(mode.validatingSchema as any);
                     const check =
@@ -599,7 +649,7 @@ async function runReviewCall<T>(
         // caused. One re-issue only; a re-issue failure still propagates.
         if (category === RETRYABLE_CATEGORY) {
             await sleep(jitteredBackoffMs(1));
-            return await call(mainModel, mainModelName);
+            return await call(mainModel, mainModelName, mainProvider);
         }
         throw err;
     }
@@ -648,7 +698,8 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
     // envelope-key derivation below.
     const jsonForm =
         wireSchema && typeof wireSchema === 'object'
-            ? ((wireSchema as { jsonSchema?: unknown }).jsonSchema ?? wireSchema)
+            ? ((wireSchema as { jsonSchema?: unknown }).jsonSchema ??
+              wireSchema)
             : undefined;
 
     // Stringify the wire JSON schema so the json_object fallback can put the
@@ -668,8 +719,7 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
     // re-ask still runs).
     let envelopeKey: string | undefined;
     const jf = jsonForm as
-        | { required?: unknown; properties?: unknown }
-        | undefined;
+        { required?: unknown; properties?: unknown } | undefined;
     if (jf && typeof jf === 'object') {
         const required = Array.isArray(jf.required) ? jf.required : [];
         if (typeof required[0] === 'string') {

@@ -424,8 +424,7 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
         changedFiles: [
             {
                 filename: 'src/a.ts',
-                patchWithLinesStr:
-                    '10 +console.log(1)\n11 +const x: any = 2',
+                patchWithLinesStr: '10 +console.log(1)\n11 +const x: any = 2',
                 patch: '10 +console.log(1)\n11 +const x: any = 2',
             },
         ],
@@ -776,7 +775,10 @@ describe('KodyRulesAgentProvider — Context OS reference loading', () => {
         const loader = {
             loadReferencesForRules: jest.fn().mockResolvedValue({
                 referencesMap: new Map([
-                    ['r1', [{ filePath: 'CLAUDE.md', content: 'the convention' }]],
+                    [
+                        'r1',
+                        [{ filePath: 'CLAUDE.md', content: 'the convention' }],
+                    ],
                 ]),
                 mcpResultsMap: new Map(),
             }),
@@ -933,9 +935,7 @@ function boundaryInput(over: any = {}) {
             organizationId: 'org-xyz',
             teamId: 'team-1',
         },
-        changedFiles: [
-            { filename: 'src/a.ts', patch: '11 +const x: any = 2' },
-        ],
+        changedFiles: [{ filename: 'src/a.ts', patch: '11 +const x: any = 2' }],
         prTitle: 'boundary',
         prBody: '',
         remoteCommands: undefined,
@@ -963,7 +963,9 @@ type CapturedRunJudge = (args: {
 // Drive the real execute() far enough to build the `runJudge` closure, capture
 // it via the (mocked) judge, and hand it back WITHOUT running the real sweep —
 // so runStructuredReviewCall is untouched until we invoke runJudge ourselves.
-async function captureRunJudge(slotProvider?: string): Promise<CapturedRunJudge> {
+async function captureRunJudge(
+    slotProvider?: string,
+): Promise<CapturedRunJudge> {
     const provider = makeBoundaryProvider(slotProvider);
     let captured: CapturedRunJudge | undefined;
     mockJudge.mockImplementationOnce(async (args: any) => {
@@ -1090,7 +1092,9 @@ describe('KodyRulesAgentProvider — LLM.run envelope extraction (matrix A/B/C)'
     it.failing(
         'row 4 — {result:{violations:[...]}} wrapper must be unwrapped',
         async () => {
-            const out = await runWith({ result: { violations: [oneViolation] } });
+            const out = await runWith({
+                result: { violations: [oneViolation] },
+            });
             expect(out).toEqual([oneViolation]); // today: []
         },
     );
@@ -1110,7 +1114,9 @@ describe('KodyRulesAgentProvider — LLM.run envelope extraction (matrix A/B/C)'
     it.failing(
         'row 6 — {content:{violations:[...]}} opaque wrap must be unwrapped',
         async () => {
-            const out = await runWith({ content: { violations: [oneViolation] } });
+            const out = await runWith({
+                content: { violations: [oneViolation] },
+            });
             expect(out).toEqual([oneViolation]); // today: []
         },
     );
@@ -1251,7 +1257,9 @@ describe('KodyRulesAgentProvider — LLM.run envelope extraction (matrix A/B/C)'
     it('row 28 — truncated JSON that downstream cannot repair rejects (propagated, never read as 0 violations)', async () => {
         const runJudge = await captureRunJudge();
         mockRunStructuredReviewCall.mockRejectedValueOnce(
-            new Error('structured output parse failed: Unexpected end of JSON input'),
+            new Error(
+                'structured output parse failed: Unexpected end of JSON input',
+            ),
         );
         await expect(invoke(runJudge)).rejects.toThrow(/JSON/i);
     });
@@ -1259,7 +1267,9 @@ describe('KodyRulesAgentProvider — LLM.run envelope extraction (matrix A/B/C)'
     it('row 29 — malformed JSON (trailing comma / single quotes) that downstream cannot repair rejects (propagated)', async () => {
         const runJudge = await captureRunJudge();
         mockRunStructuredReviewCall.mockRejectedValueOnce(
-            new Error("structured output parse failed: Unexpected token ' in JSON"),
+            new Error(
+                "structured output parse failed: Unexpected token ' in JSON",
+            ),
         );
         await expect(invoke(runJudge)).rejects.toThrow(/parse failed/i);
     });
@@ -1293,9 +1303,7 @@ describe('KodyRulesAgentProvider — LLM.run envelope extraction (matrix A/B/C)'
     });
 
     it('row 33 — refusal prose ("I cannot help…") → [] (fail-safe, no crash)', async () => {
-        expect(
-            await runWith('I cannot help with that request.'),
-        ).toEqual([]);
+        expect(await runWith('I cannot help with that request.')).toEqual([]);
     });
 
     it('row 34 — an abort/timeout rejection propagates so the shard fail-safe can count it', async () => {
@@ -1333,7 +1341,9 @@ describe('KodyRulesAgentProvider — model-policy is downstream (matrix E)', () 
         'sends the same wire schema regardless of provider (%s, %s)',
         async (provider) => {
             const runJudge = await captureRunJudge(provider);
-            mockRunStructuredReviewCall.mockResolvedValueOnce({ violations: [] });
+            mockRunStructuredReviewCall.mockResolvedValueOnce({
+                violations: [],
+            });
             await invoke(runJudge);
             expect(mockRunStructuredReviewCall.mock.calls[0][0].schema).toBe(
                 shardViolationsWireSchema,
@@ -1399,6 +1409,46 @@ describe('KodyRulesAgentProvider — input variants + return shape (matrix D)', 
         path: '**/*.ts',
     };
     const prRule = { ...fileRule, scope: KodyRulesScope.PULL_REQUEST };
+
+    it('forwards body-free file and pull-request shard receipts to their model calls', async () => {
+        const provider = makeExecProvider();
+        const reviewContext = {
+            source: 'cli-review-context-file' as const,
+            contentType: 'text/plain; charset=utf-8' as const,
+            body: 'private Kody Rules packet',
+        };
+
+        await provider.execute(
+            execInput({
+                reviewContext,
+                kodyRules: [
+                    { ...fileRule, scope: KodyRulesScope.FILE },
+                    prRule,
+                ],
+            }),
+        );
+
+        const receipts = mockRunStructuredReviewCall.mock.calls.map(
+            ([call]) => call.reviewContextDelivery,
+        );
+        expect(receipts).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    recipient: 'kodus-rules-review-agent:src/a.ts',
+                    phase: 'file-shard',
+                    utf8Bytes: Buffer.byteLength(reviewContext.body, 'utf8'),
+                }),
+                expect.objectContaining({
+                    recipient: 'kodus-rules-review-agent:pull-request',
+                    phase: 'pr-shard',
+                    utf8Bytes: Buffer.byteLength(reviewContext.body, 'utf8'),
+                }),
+            ]),
+        );
+        for (const receipt of receipts) {
+            expect(receipt).not.toHaveProperty('body');
+        }
+    });
 
     it('row 35 — file-scope rule but ZERO changed files → no shard, empty result, no LLM call', async () => {
         const provider = makeExecProvider();
@@ -1507,7 +1557,9 @@ describe('KodyRulesAgentProvider — input variants + return shape (matrix D)', 
         let provider = makeExecProvider();
         await provider.execute(
             execInput({
-                changedFiles: [{ filename: 'x.ts', patch: 'a'.repeat(150_000) }],
+                changedFiles: [
+                    { filename: 'x.ts', patch: 'a'.repeat(150_000) },
+                ],
                 kodyRules: [prRule],
             }) as any,
         );
@@ -1520,7 +1572,9 @@ describe('KodyRulesAgentProvider — input variants + return shape (matrix D)', 
         provider = makeExecProvider();
         await provider.execute(
             execInput({
-                changedFiles: [{ filename: 'x.ts', patch: 'a'.repeat(150_001) }],
+                changedFiles: [
+                    { filename: 'x.ts', patch: 'a'.repeat(150_001) },
+                ],
                 kodyRules: [prRule],
             }) as any,
         );

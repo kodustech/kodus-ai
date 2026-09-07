@@ -1,6 +1,11 @@
 import { ExecuteCliReviewUseCase } from '../execute-cli-review.use-case';
 import { KodyRulesStatus } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import {
+    attachClassification,
+    getClassification,
+    LlmErrorCategory,
+} from '@libs/llm/error-classifier';
 
 /**
  * We test the private helpers via the public execute() path and
@@ -613,7 +618,10 @@ describe('ExecuteCliReviewUseCase', () => {
                 memoryRules: [],
             });
 
-            await (useCase as any).loadUserConfigWithRules(orgAndTeam, undefined);
+            await (useCase as any).loadUserConfigWithRules(
+                orgAndTeam,
+                undefined,
+            );
 
             expect(
                 kodyRulesService.syncRulesWithPlanLimit,
@@ -638,8 +646,7 @@ describe('ExecuteCliReviewUseCase', () => {
         };
 
         it('should use global repositoryId in trial mode', async () => {
-            const { useCase, pipelineStrategy, kodyRulesService } =
-                createMocks();
+            const { useCase, kodyRulesService } = createMocks();
 
             // Mock pipeline execution to return a valid cliResponse
             const mockExecute = jest
@@ -668,6 +675,12 @@ describe('ExecuteCliReviewUseCase', () => {
                 kodyRulesService.findByOrganizationId,
             ).not.toHaveBeenCalled();
             expect(result.issues).toHaveLength(0);
+            expect(result.reviewTelemetry).toMatchObject({
+                schemaVersion: 1,
+                modelCallCount: 0,
+                modelCalls: [],
+                contextReceipts: [],
+            });
 
             mockExecute.mockRestore();
         });
@@ -737,6 +750,12 @@ describe('ExecuteCliReviewUseCase', () => {
             });
 
             expect(result.issues).toHaveLength(1);
+            expect(result.reviewTelemetry).toMatchObject({
+                schemaVersion: 1,
+                modelCallCount: 0,
+                modelCalls: [],
+                contextReceipts: [],
+            });
             expect(
                 kodyRulesValidationService.filterKodyRules,
             ).toHaveBeenCalledWith(expect.any(Array), 'repo-555');
@@ -776,7 +795,9 @@ describe('ExecuteCliReviewUseCase', () => {
                 },
             });
 
-            expect(captured.reviewDirective).toBe('the auth /ReviewFocus logic');
+            expect(captured.reviewDirective).toBe(
+                'the auth /ReviewFocus logic',
+            );
             mockExecute.mockRestore();
         });
 
@@ -809,6 +830,107 @@ describe('ExecuteCliReviewUseCase', () => {
             });
 
             expect(captured.reviewDirective).toBeUndefined();
+            mockExecute.mockRestore();
+        });
+
+        it('forwards exact review context to the in-memory pipeline without persisting the body', async () => {
+            const { useCase, parametersService, automationExecutionService } =
+                createMocks();
+            parametersService.findByKey.mockResolvedValue(null);
+            const reviewContext = {
+                source: 'cli-review-context-file' as const,
+                contentType: 'text/plain; charset=utf-8' as const,
+                body: 'CANARY: inspect cleanup',
+            };
+            let captured: unknown;
+            const mockExecute = jest
+                .spyOn(
+                    require('@libs/core/infrastructure/pipeline/services/pipeline-executor.service')
+                        .PipelineExecutor.prototype,
+                    'execute',
+                )
+                .mockImplementation(async (context: unknown) => {
+                    captured = context;
+                    return {
+                        cliResponse: {
+                            summary: 'ok',
+                            issues: [],
+                            filesAnalyzed: 1,
+                            duration: 1,
+                        },
+                    };
+                });
+
+            await useCase.execute({
+                organizationAndTeamData: orgAndTeam,
+                input: { diff: '+ hello', reviewContext },
+            });
+
+            expect(captured).toEqual(
+                expect.objectContaining({ reviewContext }),
+            );
+            expect(
+                JSON.stringify(automationExecutionService.create.mock.calls),
+            ).not.toContain(reviewContext.body);
+
+            mockExecute.mockRestore();
+        });
+
+        it('keeps context-bearing pipeline errors out of durable execution metadata', async () => {
+            const { useCase, parametersService, automationExecutionService } =
+                createMocks();
+            parametersService.findByKey.mockResolvedValue(null);
+            const contextBody = 'CANARY private context body';
+            const providerError = attachClassification(
+                Object.assign(new Error(`provider echoed ${contextBody}`), {
+                    code: 'RATE_LIMITED',
+                }),
+                {
+                    category: LlmErrorCategory.RATE_LIMIT,
+                    rawMessage: `provider echoed ${contextBody}`,
+                    httpStatus: 429,
+                    friendlyMessage: 'Provider rate limit reached.',
+                },
+            );
+            const mockExecute = jest
+                .spyOn(
+                    require('@libs/core/infrastructure/pipeline/services/pipeline-executor.service')
+                        .PipelineExecutor.prototype,
+                    'execute',
+                )
+                .mockRejectedValue(providerError);
+
+            let thrown: unknown;
+            try {
+                await useCase.execute({
+                    organizationAndTeamData: orgAndTeam,
+                    input: {
+                        diff: '+ hello',
+                        reviewContext: {
+                            source: 'cli-review-context-file',
+                            contentType: 'text/plain; charset=utf-8',
+                            body: contextBody,
+                        },
+                    },
+                });
+            } catch (error) {
+                thrown = error;
+            }
+
+            expect(thrown).toBeInstanceOf(Error);
+            expect((thrown as Error).message).toBe(
+                'CLI review failed while processing review context',
+            );
+            expect(getClassification(thrown)).toMatchObject({
+                category: LlmErrorCategory.RATE_LIMIT,
+                httpStatus: 429,
+            });
+            expect(thrown).toMatchObject({ code: 'RATE_LIMITED' });
+            expect(JSON.stringify(thrown)).not.toContain(contextBody);
+
+            expect(
+                JSON.stringify(automationExecutionService.update.mock.calls),
+            ).not.toContain(contextBody);
             mockExecute.mockRestore();
         });
     });

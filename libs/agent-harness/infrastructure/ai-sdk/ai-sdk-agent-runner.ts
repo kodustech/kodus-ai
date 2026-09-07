@@ -154,7 +154,11 @@ export class AiSdkAgentRunner implements AgentRunner {
         }: any) => {
             const active = [...allToolNames];
             const view = buildView(stepNumber, msgs ?? messages, active);
-            const merged = await this.mergeDirectives(spec.policies, view, emit);
+            const merged = await this.mergeDirectives(
+                spec.policies,
+                view,
+                emit,
+            );
             const out: Record<string, unknown> = {};
 
             if (merged.activeTools) {
@@ -234,8 +238,7 @@ export class AiSdkAgentRunner implements AgentRunner {
         // PR/team for cost attribution: the code-review finder opts these in via
         // `runtimeContext`; other callers hand over raw `telemetryMetadata`.
         const runMeta = (input.runtimeContext ?? input.telemetryMetadata) as
-            | { pullRequestId?: number; teamId?: string }
-            | undefined;
+            { pullRequestId?: number; teamId?: string } | undefined;
 
         try {
             // ── the model call: ONE door. LLM.run resolves the slot → model +
@@ -254,7 +257,9 @@ export class AiSdkAgentRunner implements AgentRunner {
                 spanName: spec.spanName,
                 attrs: {
                     agentName: spec.agentName ?? spec.id,
-                    ...(spec.phase ? { phase: spec.phase } : {}),
+                    ...((input.telemetryPhase ?? spec.phase)
+                        ? { phase: input.telemetryPhase ?? spec.phase }
+                        : {}),
                     source: 'harness',
                     // Per-PR / per-team cost attribution. organizationId reaches
                     // the span via LLM.run's own param above, but prNumber/teamId
@@ -291,6 +296,11 @@ export class AiSdkAgentRunner implements AgentRunner {
                 // Cancellation / timeout composed by the caller (parent + hard timeout).
                 signal: ctx.signal,
                 telemetryMetadata: input.telemetryMetadata as any,
+                recordTelemetryInputs:
+                    typeof input.telemetry?.recordInputs === 'boolean'
+                        ? input.telemetry.recordInputs
+                        : undefined,
+                reviewContextDelivery: input.reviewContextDelivery,
                 loop: {
                     tools: toolMap,
                     maxSteps: spec.maxSteps,

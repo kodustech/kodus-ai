@@ -43,6 +43,53 @@ import {
 } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
 import { KodyRulesValidationService } from '@libs/ee/kodyRules/service/kody-rules-validation.service';
 import { CodeReviewPipelineObserver } from '@libs/code-review/infrastructure/observers/code-review-pipeline.observer';
+import {
+    attachClassification,
+    getClassification,
+} from '@libs/llm/error-classifier';
+import { collectReviewTelemetry } from '@libs/llm/review-telemetry';
+
+const REVIEW_CONTEXT_ERROR_MESSAGE =
+    'CLI review failed while processing review context';
+
+function safeErrorIdentifier(value: unknown): string | undefined {
+    return typeof value === 'string' &&
+        /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/u.test(value)
+        ? value
+        : undefined;
+}
+
+function sanitizeReviewContextError(error: unknown): Error {
+    const safeError = new Error(REVIEW_CONTEXT_ERROR_MESSAGE);
+    if (typeof error !== 'object' || error === null) {
+        return safeError;
+    }
+
+    const source = error as Record<string, unknown>;
+    const name = safeErrorIdentifier(source.name);
+    if (name) {
+        safeError.name = name;
+    }
+
+    const code = safeErrorIdentifier(source.code);
+    if (code) {
+        Object.assign(safeError, { code });
+    }
+
+    const classification = getClassification(error);
+    if (classification) {
+        attachClassification(safeError, {
+            category: classification.category,
+            rawMessage: REVIEW_CONTEXT_ERROR_MESSAGE,
+            friendlyMessage: REVIEW_CONTEXT_ERROR_MESSAGE,
+            ...(classification.httpStatus !== undefined
+                ? { httpStatus: classification.httpStatus }
+                : {}),
+        });
+    }
+
+    return safeError;
+}
 
 interface GitContext {
     remote?: string;
@@ -108,6 +155,18 @@ export class ExecuteCliReviewUseCase implements IUseCase {
     ) {}
 
     async execute(params: ExecuteCliReviewInput): Promise<CliReviewResponse> {
+        const captured = await collectReviewTelemetry(() =>
+            this.executeReview(params),
+        );
+        return {
+            ...captured.value,
+            reviewTelemetry: captured.telemetry,
+        };
+    }
+
+    private async executeReview(
+        params: ExecuteCliReviewInput,
+    ): Promise<CliReviewResponse> {
         const {
             organizationAndTeamData,
             input,
@@ -215,6 +274,7 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 // CLI equivalent of `@kody review focus on X` — same sanitize +
                 // cap as the PR-comment path. Steers the finder when set.
                 reviewDirective: normalizeReviewDirective(input.config?.focus),
+                reviewContext: input.reviewContext,
                 // Heavy mode — extra critic pass in the finder for more recall.
                 heavy: input.config?.heavy === true,
                 validSuggestions: [],
@@ -291,7 +351,6 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                           },
                       }
                     : undefined,
-
             };
 
             // 5. Execute pipeline
@@ -347,18 +406,26 @@ export class ExecuteCliReviewUseCase implements IUseCase {
 
             return result.cliResponse;
         } catch (error) {
+            const safeError = input.reviewContext
+                ? sanitizeReviewContextError(error)
+                : error;
+            const safeErrorMessage =
+                safeError instanceof Error
+                    ? safeError.message
+                    : 'Unknown error';
+
             // Update execution as failed
             if (execution) {
                 await this.updateAutomationExecution(
                     execution,
                     AutomationStatus.ERROR,
-                    { error: error?.message || 'Unknown error' },
+                    { error: safeErrorMessage },
                 );
             }
 
             this.logger.error({
                 message: 'Error executing CLI review',
-                error,
+                error: safeError,
                 context: ExecuteCliReviewUseCase.name,
                 metadata: {
                     organizationId: organizationAndTeamData.organizationId,
@@ -366,7 +433,7 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                     correlationId,
                 },
             });
-            throw error;
+            throw safeError;
         }
     }
 
@@ -502,7 +569,8 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 config: {
                     ...normalizedConfig,
                     languageResultPrompt:
-                        typeof (normalizedConfig as any).languageResultPrompt === 'string'
+                        typeof (normalizedConfig as any)
+                            .languageResultPrompt === 'string'
                             ? (normalizedConfig as any).languageResultPrompt
                             : 'en-US',
                     kodyRules: standardRules,

@@ -9,10 +9,61 @@ import {
     ArrayMaxSize,
     IsInt,
     Min,
+    IsIn,
+    ValidateBy,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+    REVIEW_CONTEXT_CONTENT_TYPE,
+    REVIEW_CONTEXT_MAX_BYTES,
+    REVIEW_CONTEXT_SOURCE,
+    type ReviewContext,
+} from '@libs/cli-review/domain/types/review-context.types';
+
+class ReviewContextDto implements ReviewContext {
+    @IsIn([REVIEW_CONTEXT_SOURCE], {
+        message: `source must be ${REVIEW_CONTEXT_SOURCE}`,
+    })
+    source: typeof REVIEW_CONTEXT_SOURCE;
+
+    @IsIn([REVIEW_CONTEXT_CONTENT_TYPE], {
+        message: `contentType must be ${REVIEW_CONTEXT_CONTENT_TYPE}`,
+    })
+    contentType: typeof REVIEW_CONTEXT_CONTENT_TYPE;
+
+    @Transform(({ obj, value }: { obj: unknown; value: unknown }): unknown => {
+        if (typeof obj !== 'object' || obj === null || !('body' in obj)) {
+            return value;
+        }
+        return obj.body;
+    })
+    @IsString()
+    @ValidateBy({
+        name: 'reviewContextBody',
+        validator: {
+            validate: (value: unknown): boolean =>
+                typeof value === 'string' &&
+                value.length > 0 &&
+                !value.includes('\0') &&
+                Buffer.byteLength(value, 'utf8') <= REVIEW_CONTEXT_MAX_BYTES,
+            defaultMessage: ({ value }): string => {
+                if (typeof value !== 'string') {
+                    return 'body must be a string';
+                }
+                if (value.length === 0) {
+                    return 'body must not be empty';
+                }
+                if (value.includes('\0')) {
+                    return 'body must not contain NUL';
+                }
+                return `body must not exceed ${REVIEW_CONTEXT_MAX_BYTES} UTF-8 bytes`;
+            },
+        },
+    })
+    body: string;
+}
 
 class CliFileInputDto {
     @IsString()
@@ -127,6 +178,12 @@ export class CliReviewRequestDto {
     config?: CliConfigDto;
 
     @IsOptional()
+    @ValidateNested()
+    @Type(() => ReviewContextDto)
+    @ApiPropertyOptional({ type: ReviewContextDto })
+    reviewContext?: ReviewContextDto;
+
+    @IsOptional()
     @IsString()
     @MaxLength(254, { message: 'Email too long' })
     @ApiPropertyOptional({ format: 'email', example: 'dev@kodus.io' })
@@ -155,7 +212,7 @@ export class CliReviewRequestDto {
     @MaxLength(40, { message: 'Merge-base SHA too long' })
     @ApiPropertyOptional({
         description:
-            "Merge-base between HEAD and the upstream default branch (git merge-base HEAD origin/main). The sandbox checks out this commit (guaranteed to be on the remote) and applies the diff on top, so reviews work for branches not yet pushed and uncommitted changes.",
+            'Merge-base between HEAD and the upstream default branch (git merge-base HEAD origin/main). The sandbox checks out this commit (guaranteed to be on the remote) and applies the diff on top, so reviews work for branches not yet pushed and uncommitted changes.',
         example: 'a1b2c3d4e5f6g7h8i9j0',
     })
     mergeBaseSha?: string;

@@ -11,6 +11,7 @@ import {
 import { WorkflowType } from '@libs/core/workflow/domain/enums/workflow-type.enum';
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
+import type { WorkflowEphemeralPayload } from '@libs/core/workflow/domain/types/workflow-ephemeral-payload';
 
 import { WebhookProcessingJobProcessorService } from '@libs/automation/webhook-processing/webhook-processing-job.processor';
 import { CodeReviewJobProcessorService } from '@libs/code-review/workflow/code-review-job-processor.service';
@@ -50,7 +51,11 @@ export class JobProcessorRouterService
         private readonly cliReviewProcessor: CliReviewJobProcessorService,
     ) {}
 
-    async process(jobId: string): Promise<void> {
+    async process(
+        jobId: string,
+        _signal?: AbortSignal,
+        ephemeralPayload?: WorkflowEphemeralPayload,
+    ): Promise<void> {
         const job = await this.jobRepository.findOne(jobId);
 
         if (!job) {
@@ -62,7 +67,7 @@ export class JobProcessorRouterService
 
         try {
             return await runWithTimeout(
-                (signal) => processor.process(jobId, signal),
+                (signal) => processor.process(jobId, signal, ephemeralPayload),
                 timeoutMs,
                 `Workflow job ${jobId} timeout after ${timeoutMs}ms`,
             );

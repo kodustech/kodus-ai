@@ -13,6 +13,7 @@ import type {
     BusinessValidationResponse,
     PullRequestSuggestionsResponse,
     ReviewConfig,
+    ReviewContext,
     ReviewResult,
     TrialReviewResult,
 } from '../../types/review.js';
@@ -62,6 +63,7 @@ export interface IReviewApi {
         config?: ReviewConfig,
         metrics?: GitMetrics,
         onProgress?: (status: string) => void,
+        reviewContext?: ReviewContext,
     ): Promise<ReviewResult>;
     getPullRequestSuggestions(
         accessToken: string,
@@ -88,6 +90,7 @@ export interface IReviewApi {
         fingerprint: string,
         metrics?: GitMetrics,
         githubPat?: string,
+        reviewContext?: ReviewContext,
     ): Promise<TrialReviewResult>;
 }
 

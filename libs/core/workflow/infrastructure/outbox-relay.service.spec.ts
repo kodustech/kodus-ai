@@ -33,7 +33,10 @@ describe('INBOX_REAPER_CONSUMER_TIMEOUTS', () => {
 describe('OutboxRelayService.reapStaleProcessingJobs', () => {
     const DEFAULT_TIMEOUT_MIN = 180;
 
-    let jobRepository: { failStaleProcessing: jest.Mock };
+    let jobRepository: {
+        failStaleProcessing: jest.Mock;
+        failStaleEphemeralPending: jest.Mock;
+    };
     let lock: { release: jest.Mock };
     let distributedLockService: { acquire: jest.Mock };
     let incidentManager: { failHeartbeat: jest.Mock };
@@ -41,6 +44,7 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
     const build = () => {
         jobRepository = {
             failStaleProcessing: jest.fn().mockResolvedValue([]),
+            failStaleEphemeralPending: jest.fn().mockResolvedValue([]),
         };
         lock = { release: jest.fn().mockResolvedValue(undefined) };
         distributedLockService = {
@@ -85,9 +89,7 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
 
         // cutoff ~ now - 180min (allow a generous window for test slowness)
         const expected = before - DEFAULT_TIMEOUT_MIN * 60 * 1000;
-        expect(arg.olderThan.getTime()).toBeGreaterThanOrEqual(
-            expected - 5000,
-        );
+        expect(arg.olderThan.getTime()).toBeGreaterThanOrEqual(expected - 5000);
         expect(arg.olderThan.getTime()).toBeLessThanOrEqual(expected + 5000);
 
         expect(lock.release).toHaveBeenCalledTimes(1);
@@ -111,9 +113,7 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
 
         const arg = jobRepository.failStaleProcessing.mock.calls[0][0];
         const expected = before - 30 * 60 * 1000;
-        expect(arg.olderThan.getTime()).toBeGreaterThanOrEqual(
-            expected - 5000,
-        );
+        expect(arg.olderThan.getTime()).toBeGreaterThanOrEqual(expected - 5000);
         expect(arg.olderThan.getTime()).toBeLessThanOrEqual(expected + 5000);
     });
 
@@ -157,6 +157,44 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
 
         await service.reapStaleProcessingJobs();
 
+        expect(lock.release).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('OutboxRelayService.reapStaleEphemeralPendingJobs', () => {
+    it('fails only expired marked ephemeral PENDING jobs with retry guidance', async () => {
+        const failStaleEphemeralPending = jest.fn().mockResolvedValue([
+            {
+                uuid: 'job-ephemeral-1',
+                workflowType: 'CLI_CODE_REVIEW',
+                organizationId: 'organization-1',
+                startedAt: null,
+            },
+        ]);
+        const lock = { release: jest.fn().mockResolvedValue(undefined) };
+        const distributedLock = {
+            acquire: jest.fn().mockResolvedValue(lock),
+        };
+        const service = new OutboxRelayService(
+            {} as never,
+            {} as never,
+            { failStaleEphemeralPending } as never,
+            {} as never,
+            {} as never,
+            { get: jest.fn() } as never,
+            distributedLock as never,
+            {} as never,
+            { failHeartbeat: jest.fn() } as never,
+        );
+
+        await service.reapStaleEphemeralPendingJobs();
+
+        expect(failStaleEphemeralPending).toHaveBeenCalledWith({
+            olderThan: expect.any(Date),
+            lastError:
+                'Review context expired before processing. Submit the review again.',
+            errorClassification: ErrorClassification.PERMANENT,
+        });
         expect(lock.release).toHaveBeenCalledTimes(1);
     });
 });

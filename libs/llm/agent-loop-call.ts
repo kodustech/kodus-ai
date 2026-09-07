@@ -37,6 +37,10 @@ import { applyCacheBreakpoints } from '@libs/llm/prompt-cache';
 import { repairInvalidToolInput } from '@libs/llm/repair-tool-call';
 import { getLlmObservability } from '@libs/llm/llm-observability';
 import {
+    captureReviewModelCall,
+    type ReviewContextCallMetadata,
+} from '@libs/llm/review-telemetry';
+import {
     hardTimeout,
     timeoutSignal,
     AGENT_TIMEOUT_MS,
@@ -107,6 +111,7 @@ export interface AgentLoopParams {
     providerOptions?: Record<string, unknown>;
     /** Langfuse observation metadata. */
     telemetryMetadata?: LangfuseTelemetryMetadata;
+    recordTelemetryInputs?: boolean;
     /** Cancellation / hard-timeout signal (the caller composes parent + timeout). */
     signal?: AbortSignal;
     /** Wall-clock ceiling for the whole loop. Defaults to AGENT_TIMEOUT_MS.
@@ -117,6 +122,8 @@ export interface AgentLoopParams {
     maxOutputTokens?: number;
     /** Override the slot's sampling temperature. */
     temperature?: number;
+    /** Body-free evidence for a context block included in this call's prompt. */
+    reviewContextDelivery?: ReviewContextCallMetadata;
 }
 
 /**
@@ -138,6 +145,7 @@ export async function runAgentLoopCall(
         organizationId,
         reporter,
         telemetryMetadata,
+        recordTelemetryInputs,
         signal: callerSignal,
     } = params;
 
@@ -231,12 +239,29 @@ export async function runAgentLoopCall(
                 })) as any,
             // Loop seams from the runner's policies — forwarded verbatim, plus the
             // hard step ceiling the harness always wants.
-            stopWhen: [...((loop.stopWhen as any[]) ?? []), stepCountIs(loop.maxSteps)],
-            ...(loop.prepareStep ? { prepareStep: loop.prepareStep as any } : {}),
-            ...(loop.onStepFinish ? { onStepFinish: loop.onStepFinish as any } : {}),
-            ...(telemetryMetadata
+            stopWhen: [
+                ...((loop.stopWhen as any[]) ?? []),
+                stepCountIs(loop.maxSteps),
+            ],
+            ...(loop.prepareStep
+                ? { prepareStep: loop.prepareStep as any }
+                : {}),
+            ...(loop.onStepFinish
+                ? { onStepFinish: loop.onStepFinish as any }
+                : {}),
+            ...(telemetryMetadata !== undefined ||
+            recordTelemetryInputs !== undefined
                 ? toAiSdkTelemetryArgs(
-                      buildLangfuseTelemetry(runName, telemetryMetadata),
+                      recordTelemetryInputs === undefined
+                          ? buildLangfuseTelemetry(
+                                runName,
+                                telemetryMetadata ?? { organizationId },
+                            )
+                          : buildLangfuseTelemetry(
+                                runName,
+                                telemetryMetadata ?? { organizationId },
+                                { recordInputs: recordTelemetryInputs },
+                            ),
                   )
                 : {}),
         } as any);
@@ -246,20 +271,20 @@ export async function runAgentLoopCall(
     const observability = getLlmObservability();
     const run = () =>
         observability
-        ? observability.runAiSdkLLMInSpan<any>({
-              spanName: spanName ?? runName,
-              runName,
-              model: inv.modelName,
-              byokModelId: identity.byokModelId,
-              credentialId: identity.credentialId,
-              // Routing task + fallback flag the slot carried down from
-              // resolveTaskSlot (route = the LlmTask, not the tier).
-              route: slot?.route,
-              usedFallback: slot?.usedFallback,
-              attrs: spanAttrs,
-              exec,
-          })
-        : exec();
+            ? observability.runAiSdkLLMInSpan<any>({
+                  spanName: spanName ?? runName,
+                  runName,
+                  model: inv.modelName,
+                  byokModelId: identity.byokModelId,
+                  credentialId: identity.credentialId,
+                  // Routing task + fallback flag the slot carried down from
+                  // resolveTaskSlot (route = the LlmTask, not the tier).
+                  route: slot?.route,
+                  usedFallback: slot?.usedFallback,
+                  attrs: spanAttrs,
+                  exec,
+              })
+            : exec();
 
     // Belt over the AbortSignal suspenders. `signal` above is a REQUEST: several
     // OpenAI-compatible proxies accept the connection, ignore the abort and
@@ -270,7 +295,20 @@ export async function runAgentLoopCall(
     //
     // Not a new ceiling: AGENT_TIMEOUT_MS was always the intended maximum. This
     // is what makes it true when the provider declines to cooperate.
-    return hardTimeout(run(), hardTimeoutMs, runName);
+    return captureReviewModelCall(
+        {
+            provider: inv.provider,
+            model: inv.modelName,
+            agent:
+                typeof attrs?.agentName === 'string'
+                    ? attrs.agentName
+                    : runName,
+            phase: typeof attrs?.phase === 'string' ? attrs.phase : 'review',
+            sdkMaxRetries: AGENT_STEP_MAX_RETRIES,
+            reviewContext: params.reviewContextDelivery,
+        },
+        () => hardTimeout(run(), hardTimeoutMs, runName),
+    );
 }
 
 // Re-export so callers can build a fixed model handle if needed (parity with

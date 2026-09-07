@@ -683,6 +683,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 emitStageWarning('HUNK_HEADERS_ONLY');
             }
 
+            if (result.reviewContextDeliveries?.length) {
+                context = this.updateContext(context, (draft) => {
+                    draft.reviewContextDeliveries =
+                        result.reviewContextDeliveries;
+                });
+            }
+
             const durationMs = Date.now() - startTime;
 
             this.logger.debug({
