@@ -23,6 +23,10 @@ export function withReviewContextDeliveries(
 const REVIEW_CONTEXT_REDACTION = '[review context redacted]';
 const MIN_SUBSTANTIAL_FRAGMENT_LENGTH = 10;
 const MIN_TOKEN_SEQUENCE = 4;
+const SOURCE_LOCATION_PATTERN =
+    /(?:^|[\s`'"([{<])(?:[\p{L}\p{N}_$@.+-]+\/)*[\p{L}\p{N}_$@.+-]+\.[\p{L}\p{N}]{1,16}(?::\d+(?:-\d+)?)?(?=$|[\s`'",)\]}>])/u;
+const CODE_IDENTIFIER_PATTERN =
+    /^`?[\p{L}_$][\p{L}\p{N}_$]*(?:[.#][\p{L}_$][\p{L}\p{N}_$]*)*(?:\(\))?`?$/u;
 
 function normalizeContextText(value: string): string {
     return value
@@ -36,6 +40,28 @@ function normalizeContextText(value: string): string {
 function tokens(value: string): readonly string[] {
     const normalized = normalizeContextText(value);
     return normalized.length === 0 ? [] : normalized.split(' ');
+}
+
+function isSourceReference(value: string, contextBody: string): boolean {
+    const trimmedValue = value.trim();
+    if (
+        trimmedValue.length === 0 ||
+        trimmedValue.includes('\n') ||
+        (!SOURCE_LOCATION_PATTERN.test(trimmedValue) &&
+            !CODE_IDENTIFIER_PATTERN.test(trimmedValue))
+    ) {
+        return false;
+    }
+
+    const normalizedValue = normalizeContextText(trimmedValue);
+    return contextBody.split(/\r?\n/u).some((line) => {
+        if (!SOURCE_LOCATION_PATTERN.test(line)) {
+            return false;
+        }
+        return ` ${normalizeContextText(line)} `.includes(
+            ` ${normalizedValue} `,
+        );
+    });
 }
 
 function hasSharedTokenSequence(
@@ -100,19 +126,22 @@ function isContextEcho(value: string, contextBody: string): boolean {
         return false;
     }
 
-    if (
-        normalizedValue.includes(normalizedContext) ||
-        (normalizedContext.includes(normalizedValue) &&
-            normalizedValue.length >= MIN_SUBSTANTIAL_FRAGMENT_LENGTH)
-    ) {
-        return true;
-    }
-
     const contextLines = contextBody
         .split(/\r?\n/u)
         .map(normalizeContextText)
         .filter((line) => line.length >= MIN_SUBSTANTIAL_FRAGMENT_LENGTH);
     if (contextLines.some((line) => normalizedValue.includes(line))) {
+        return true;
+    }
+    if (isSourceReference(value, contextBody)) {
+        return false;
+    }
+
+    if (
+        normalizedValue.includes(normalizedContext) ||
+        (normalizedContext.includes(normalizedValue) &&
+            normalizedValue.length >= MIN_SUBSTANTIAL_FRAGMENT_LENGTH)
+    ) {
         return true;
     }
 
@@ -127,8 +156,10 @@ function redactModelText(value: string, contextBody: string): string {
  * Removes exact or substantial packet echoes before a response reaches durable
  * job state or the caller. A substantial echo is a normalized standalone
  * packet fragment of at least ten characters, a packet line of that size, or a
- * shared run of four to eight tokens. Short overlaps remain valid review output
- * because their provenance cannot be distinguished from identifiers in code.
+ * shared run of four to eight tokens. Source paths and identifiers drawn from a
+ * source-bearing context line remain valid review metadata unless they reproduce
+ * the complete body or line. Short overlaps also remain valid because their
+ * provenance cannot be distinguished from identifiers in code.
  *
  * @param response - Server-formatted CLI review response.
  * @param contextBody - Request-scoped packet body, when one was supplied.

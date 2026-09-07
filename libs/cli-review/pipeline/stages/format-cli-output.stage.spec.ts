@@ -102,6 +102,72 @@ describe('redactReviewContextFromResponse', () => {
         expect(redactReviewContextFromResponse(value, undefined)).toBe(value);
     });
 
+    it('preserves source-anchor metadata in aided mode while redacting packet prose', () => {
+        const sourcePath = 'packages/cli/src/ui/components/OAuthCodeDialog.tsx';
+        const anchorLine = `- Anchor: \`${sourcePath}:62-102\` \`OAuthCodeDialog\` \`ArrowFunction\``;
+        const body = [
+            '# Review context packet',
+            anchorLine,
+            '- Observation 1: `terminal-cleanup: 64 bounded paths expose no finally block`',
+        ].join('\n');
+        const value: CliReviewResponse = {
+            summary: 'Found one issue',
+            issues: [
+                {
+                    file: sourcePath,
+                    line: 62,
+                    endLine: 102,
+                    severity: 'high',
+                    category: 'ArrowFunction',
+                    message: `\`${sourcePath}:62-102\` \`OAuthCodeDialog\``,
+                    suggestion:
+                        'terminal-cleanup: 64 bounded paths expose no finally block',
+                    recommendation: anchorLine,
+                    ruleId: 'OAuthCodeDialog',
+                    fixable: false,
+                },
+            ],
+            filesAnalyzed: 1,
+            duration: 1,
+        };
+
+        const redacted = redactReviewContextFromResponse(value, body);
+
+        expect(redacted.issues[0]).toMatchObject({
+            file: sourcePath,
+            line: 62,
+            endLine: 102,
+            category: 'ArrowFunction',
+            message: `\`${sourcePath}:62-102\` \`OAuthCodeDialog\``,
+            suggestion: '[review context redacted]',
+            recommendation: '[review context redacted]',
+            ruleId: 'OAuthCodeDialog',
+        });
+    });
+
+    it('preserves source-anchor metadata unchanged in native mode', () => {
+        const value: CliReviewResponse = {
+            summary: 'Found one issue',
+            issues: [
+                {
+                    file: 'packages/cli/src/ui/components/OAuthCodeDialog.tsx',
+                    line: 62,
+                    endLine: 102,
+                    severity: 'high',
+                    category: 'ArrowFunction',
+                    message:
+                        '`packages/cli/src/ui/components/OAuthCodeDialog.tsx:62-102` `OAuthCodeDialog`',
+                    ruleId: 'OAuthCodeDialog',
+                    fixable: false,
+                },
+            ],
+            filesAnalyzed: 1,
+            duration: 1,
+        };
+
+        expect(redactReviewContextFromResponse(value, undefined)).toBe(value);
+    });
+
     it('redacts partial quoted and whitespace-reflowed context echoes as whole fields', () => {
         const body = [
             'Abort cleanup evidence:',
