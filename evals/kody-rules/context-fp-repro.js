@@ -43,7 +43,9 @@ const CONC = +(args.conc || 2);
 const REPS = +(args.reps || 1);
 const OUT = args.out || 'BASELINE-1826.txt';
 
-const { judgeKodyRulesSharded, shardViolationsWireSchema } = require('@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge');
+const { judgeKodyRulesSharded, shardViolationsWireSchema, ruleAppliesToFile } = require('@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge');
+const { checkClaims } = require('@libs/code-review/infrastructure/agents/collaborators/claim-checker');
+const { retrieveForShard, needOf } = require('@libs/code-review/infrastructure/agents/collaborators/rule-context.retriever');
 const { LLM } = require('@libs/llm/llm');
 const { applyModelEnv } = require('../shared/tier0-models');
 
@@ -69,7 +71,63 @@ const runJudge = async ({ system, user, filename }) => {
     return parsed?.violations ?? [];
 };
 
+/**
+ * A RepoLookup over the case's own `repoFiles` — the synthetic repository each
+ * case ships so a claim can actually be checked. Same contract as the real one
+ * (`buildRepoLookup`): grep answers `path:line:content` lines or the literal
+ * "No matches found.", and nothing ever answers with silence.
+ */
+function lookupFromRepoFiles(repoFiles) {
+    const files = repoFiles || {};
+    return {
+        available: true,
+        unavailableReason: '',
+        async grep(pattern) {
+            const hits = [];
+            for (const [file, content] of Object.entries(files)) {
+                String(content).split('\n').forEach((line, i) => {
+                    if (line.includes(pattern)) hits.push(`${file}:${i + 1}:${line}`);
+                });
+            }
+            return hits.length ? hits.join('\n') : 'No matches found.';
+        },
+        async read(file, start, end) {
+            const content = files[file];
+            if (content === undefined) return '';
+            return String(content).split('\n').slice(Math.max(0, start - 1), end).join('\n');
+        },
+        async exists(file) {
+            return Object.prototype.hasOwnProperty.call(files, file);
+        },
+        async probe() {},
+    };
+}
+
+/**
+ * The provider's own sequence, minus NestJS: retrieve the declared context per
+ * file, judge, then refute each finding's claim. Measuring only the judge would
+ * measure the prompt and none of the checks this issue actually added.
+ */
 async function runCase(c) {
+    const logger = { warn: (e) => out.push(`      warn: ${e.message}`) };
+    const lookup = lookupFromRepoFiles(c.repoFiles);
+    const changedFilenames = c.changedFiles.map((f) => f.filename);
+
+    const contextSlices = new Map();
+    const unmetRules = new Map();
+    if (needOf(c.rule) !== 'diff-only') {
+        for (const file of c.changedFiles) {
+            if (!ruleAppliesToFile(file.filename, c.rule.path)) continue;
+            const retrieved = await retrieveForShard({
+                file, rules: [c.rule], lookup, changedFilenames, logger,
+            });
+            if (retrieved.slices.length) contextSlices.set(file.filename, retrieved.slices);
+            if (retrieved.unmet.length) {
+                unmetRules.set(file.filename, new Set(retrieved.unmet.map((r) => r.uuid)));
+            }
+        }
+    }
+
     const result = await judgeKodyRulesSharded({
         changedFiles: c.changedFiles,
         rules: [c.rule],
@@ -77,9 +135,19 @@ async function runCase(c) {
         prTitle: c.prTitle,
         prBody: c.prBody,
         concurrency: CONC,
-        logger: { warn: (e) => out.push(`      warn: ${e.message}`) },
+        logger,
+        contextSlices,
+        unmetRules,
     });
-    return result;
+
+    const checked = await checkClaims({
+        violations: result.violations,
+        changedFiles: c.changedFiles,
+        lookup,
+        logger,
+    });
+
+    return { ...result, violations: checked.kept, dropped: checked.dropped, judged: result.violations.length };
 }
 
 const out = [];
@@ -125,9 +193,12 @@ const say = (line = '') => { out.push(line); console.log(line); };
             perRep.push(published.length);
             total++;
             if (published.length > c.expectedPublished) undue++;
-            say(`   rep ${rep}: published ${published.length} (expected ${c.expectedPublished})  shards ${result.shardsRun} run / ${result.shardsErrored} errored`);
+            say(`   rep ${rep}: published ${published.length} (expected ${c.expectedPublished})  judged ${result.judged}, claim-check dropped ${result.dropped.length}  shards ${result.shardsRun} run / ${result.shardsErrored} errored`);
             for (const v of published) {
                 say(`      ${v.relevantFile ?? '(PR)'}:${v.relevantLinesStart ?? '-'}  ${String(v.oneSentenceSummary || '').slice(0, 110)}`);
+            }
+            for (const d of result.dropped) {
+                say(`      dropped: ${d.reason}`);
             }
         }
         say(`   → per-replicate published: [${perRep.join(', ')}]`);
