@@ -158,9 +158,21 @@ export function attachAttemptedSlot<T extends object>(
             writable: false,
             configurable: true,
         });
-    } catch {
-        // Frozen or exotic error object — the caller falls back to the resolved
-        // slot, which is what it did before this existed.
+    } catch (error) {
+        // Frozen or exotic error object. The caller degrades to the pre-run
+        // resolved slot, which is what it did before this existed — but that is
+        // the wrong-model report this stamp exists to prevent, so a silent
+        // failure here would make a WRONG diagnostic untraceable. Debug, not
+        // warn: it changes nothing a user sees and the fallback is correct.
+        logger.debug({
+            message: `${LLM_ERROR_TAG} could not stamp the attempted slot on a failed call`,
+            context: 'attachAttemptedSlot',
+            metadata: {
+                slotModel: slot.model,
+                slotProvider: slot.provider,
+                reason: error instanceof Error ? error.message : String(error),
+            },
+        });
     }
     return err;
 }

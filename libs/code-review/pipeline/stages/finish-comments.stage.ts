@@ -256,10 +256,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     getClassification(summaryError) ??
                     classifyLLMError(
                         summaryError,
-                        typeof codeReviewConfig?.resolvedModelSlot?.provider ===
-                            'string'
-                            ? codeReviewConfig.resolvedModelSlot.provider
-                            : undefined,
+                        resolvedProvider(context, summaryError),
                     );
 
                 // The pipeline context is Immer-frozen once an earlier stage
@@ -280,8 +277,8 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                         draft.lastReviewError = {
                             category: classification.category,
                             provider:
-                                resolvedProvider(context, summaryError) ??
-                                classification.provider,
+                                classification.provider ??
+                                resolvedProvider(context, summaryError),
                             friendlyMessage: classification.friendlyMessage,
                             httpStatus: classification.httpStatus,
                             providerMessage: classification.providerMessage,

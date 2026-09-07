@@ -375,6 +375,29 @@ describe('the failed attempt is recorded ON the error', () => {
         expect(JSON.stringify(thrown)).not.toContain('only-model');
     });
 
+    it('logs when it cannot stamp, instead of failing silently', async () => {
+        // A frozen error degrades to the pre-run resolved slot — which is the
+        // wrong-model report this stamp exists to prevent. Staying silent there
+        // would make a WRONG diagnostic untraceable.
+        mockLog.debug.mockClear();
+        const frozen = Object.freeze(err('AUTH_INVALID'));
+
+        const thrown = await runWithModelFailover(
+            [providerSlot('only-model', 'anthropic')],
+            jest.fn().mockRejectedValue(frozen),
+            opts,
+        ).catch((e) => e);
+
+        expect(readAttemptedSlot(thrown)).toBeUndefined();
+        expect(
+            mockLog.debug.mock.calls.some(
+                (c) =>
+                    typeof c[0]?.message === 'string' &&
+                    c[0].message.includes('could not stamp'),
+            ),
+        ).toBe(true);
+    });
+
     it('says nothing for an error that never went through the failover', () => {
         expect(readAttemptedSlot(new Error('unrelated'))).toBeUndefined();
         expect(readAttemptedSlot(undefined)).toBeUndefined();
