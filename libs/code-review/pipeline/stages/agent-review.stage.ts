@@ -915,6 +915,29 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             const changedFilesByName = new Map(
                 changedFiles.map((f) => [f.filename, f]),
             );
+            // Rules that declared they need more than the diff (issue #1826).
+            // Only such a rule has earned the right to point at a line this PR
+            // did not change: "this function is too long" is true of the whole
+            // function, most of which is unchanged. Every other out-of-hunk
+            // finding is still dropped, exactly as before — nothing else in the
+            // pipeline can tell the two apart, which is why the snap drops both
+            // today.
+            const contextNeedingRuleUuids = new Set(
+                (context.codeReviewConfig?.kodyRules ?? [])
+                    .filter(
+                        (rule) =>
+                            !!rule.uuid &&
+                            !!(rule as Partial<IKodyRule>).contextNeed?.need &&
+                            (rule as Partial<IKodyRule>).contextNeed!.need !==
+                                'diff-only',
+                    )
+                    .map((rule) => rule.uuid!),
+            );
+            const isFileAnchored = (s: Partial<CodeSuggestion>): boolean =>
+                s.label === 'kody_rules' &&
+                (s.brokenKodyRulesIds ?? []).some((uuid) =>
+                    contextNeedingRuleUuids.has(uuid),
+                );
             const validatedSuggestions = result.suggestions
                 .map((s) => {
                     const file = changedFilesByName.get(s.relevantFile);
@@ -922,6 +945,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     const validRanges = extractValidDiffLines(file.patch);
                     const snapped = snapLinesToDiff(s, validRanges);
                     if (snapped === null) {
+                        if (isFileAnchored(s)) {
+                            this.logger.log({
+                                message: `[AGENT] File-anchored finding for ${s.relevantFile}: lines ${s.relevantLinesStart}-${s.relevantLinesEnd} sit outside every hunk, but the rule declared it needs context beyond the diff — delivering it as a PR-level comment`,
+                                context: this.stageName,
+                            });
+                            return { ...s, fileAnchored: true };
+                        }
                         this.logger.log({
                             message: `[AGENT] Dropped out-of-diff suggestion for ${s.relevantFile}: lines ${s.relevantLinesStart}-${s.relevantLinesEnd} do not overlap any changed hunk`,
                             context: this.stageName,
@@ -1291,19 +1321,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
 
             // Separate PR-level kody rules (no file/lines) from file-level suggestions.
             // PR-level suggestions go to validSuggestionsByPR → CreatePrLevelCommentsStage.
-            const prLevelSuggestions = deduped.filter(
-                (s) =>
-                    s.label === 'kody_rules' &&
-                    !s.relevantFile &&
-                    !s.relevantLinesStart,
-            );
+            // A file-anchored finding takes the same route: it is about the
+            // file, so there is no line in the diff to hang it on.
+            const isPrLevelSuggestion = (s: Partial<CodeSuggestion>): boolean =>
+                s.label === 'kody_rules' &&
+                ((!s.relevantFile && !s.relevantLinesStart) ||
+                    s.fileAnchored === true);
+            const prLevelSuggestions = deduped.filter(isPrLevelSuggestion);
             const fileLevelSuggestions = deduped.filter(
-                (s) =>
-                    !(
-                        s.label === 'kody_rules' &&
-                        !s.relevantFile &&
-                        !s.relevantLinesStart
-                    ),
+                (s) => !isPrLevelSuggestion(s),
             );
 
             // Sort file-level suggestions: kody_rules first, then by severity
@@ -1422,7 +1448,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             id:
                                 s.brokenKodyRulesIds?.[0] ||
                                 crypto.randomUUID(),
-                            suggestionContent: s.suggestionContent || '',
+                            // A file-anchored finding has to say WHERE, since
+                            // a PR-level comment carries no anchor of its own.
+                            suggestionContent: s.fileAnchored
+                                ? `\`${s.relevantFile}:${s.relevantLinesStart ?? 1}\` — ${s.suggestionContent || ''}`
+                                : s.suggestionContent || '',
                             oneSentenceSummary: s.oneSentenceSummary || '',
                             label: (s.label as any) || 'kody_rules',
                             severity: this.normalizeSeverity(

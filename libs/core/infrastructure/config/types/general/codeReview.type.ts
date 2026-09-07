@@ -178,6 +178,14 @@ export type CodeSuggestion = {
     updatedAt?: string;
     action?: string;
 
+    /**
+     * The finding is about the whole file, not a line inside the diff: it comes
+     * from a Kody Rule that declared it needs context beyond the hunk, and its
+     * cited lines fall outside every changed hunk (issue #1826). Delivered as a
+     * PR-level comment citing `file:line` instead of an inline one, which is
+     * where a rule like "this function is too long" has always died silently.
+     */
+    fileAnchored?: boolean;
     isCommittable?: boolean;
     validatedData?: {
         code: string;
