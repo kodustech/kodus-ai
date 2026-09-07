@@ -3902,6 +3902,9 @@ export class ForgejoService implements Omit<
             const webhookUrl = this.configService.get<string>(
                 'API_FORGEJO_CODE_MANAGEMENT_WEBHOOK',
             );
+            const webhookSignatureSecret = this.configService.get<string>(
+                'CODE_MANAGEMENT_WEBHOOK_SIGNATURE_SECRET',
+            );
 
             if (!webhookUrl) {
                 this.logger.warn({
@@ -3947,6 +3950,9 @@ export class ForgejoService implements Omit<
                                 config: {
                                     url: webhookUrl,
                                     content_type: 'json',
+                                    ...(webhookSignatureSecret
+                                        ? { secret: webhookSignatureSecret }
+                                        : {}),
                                 },
                                 events: desiredEvents,
                                 active: true,
@@ -3965,7 +3971,7 @@ export class ForgejoService implements Omit<
                         (eventName) => !existingEvents.has(eventName),
                     );
 
-                    if (missingEvents.length === 0) {
+                    if (missingEvents.length === 0 && !webhookSignatureSecret) {
                         continue;
                     }
 
@@ -3980,6 +3986,9 @@ export class ForgejoService implements Omit<
                             config: {
                                 url: webhookUrl,
                                 content_type: 'json',
+                                ...(webhookSignatureSecret
+                                    ? { secret: webhookSignatureSecret }
+                                    : {}),
                             },
                             events: desiredEvents,
                             active: existingHook.active ?? true,
@@ -3989,7 +3998,12 @@ export class ForgejoService implements Omit<
                     this.logger.log({
                         message: `Webhook updated for repository ${repo.name}`,
                         context: ForgejoService.name,
-                        metadata: { missingEvents },
+                        metadata: {
+                            missingEvents,
+                            signatureSecretSynchronized: Boolean(
+                                webhookSignatureSecret,
+                            ),
+                        },
                     });
                 } catch (error) {
                     this.logger.error({

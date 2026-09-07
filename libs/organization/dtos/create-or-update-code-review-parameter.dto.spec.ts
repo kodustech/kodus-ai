@@ -60,4 +60,26 @@ describe('CreateOrUpdateCodeReviewParameterDto — byokModelId', () => {
         });
         expect(JSON.stringify(errors)).toContain('byokModelId');
     });
+
+    it('rejects an unsupported review policy version at the API boundary', async () => {
+        const dto = buildDto({ reviewPolicy: { version: '2' } });
+        const errors = await validate(dto, {
+            whitelist: false,
+            forbidUnknownValues: false,
+        });
+
+        expect(JSON.stringify(errors)).toContain('version');
+    });
+
+    it('rejects an unsupported review planner strategy at the API boundary', async () => {
+        const dto = buildDto({
+            reviewPolicy: { planner: { strategy: 'unknown' } },
+        });
+        const errors = await validate(dto, {
+            whitelist: false,
+            forbidUnknownValues: false,
+        });
+
+        expect(JSON.stringify(errors)).toContain('strategy');
+    });
 });

@@ -14,7 +14,9 @@ describe('BitbucketController', () => {
             execute: jest.fn().mockResolvedValue(undefined),
         } as any;
 
-        controller = new BitbucketController(enqueueWebhookUseCase);
+        controller = new BitbucketController(enqueueWebhookUseCase, {
+            validate: jest.fn().mockReturnValue({ valid: true }),
+        } as any);
 
         mockResponse = {
             status: jest.fn().mockReturnThis(),
@@ -29,7 +31,7 @@ describe('BitbucketController', () => {
                 body: { pullrequest: { id: 1 } },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -52,7 +54,7 @@ describe('BitbucketController', () => {
                 body: { pullrequest: { id: 1 } },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -72,7 +74,7 @@ describe('BitbucketController', () => {
                 body: { pullrequest: { id: 1 } },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -88,7 +90,7 @@ describe('BitbucketController', () => {
                 body: { pullrequest: { id: 1 } },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -107,7 +109,7 @@ describe('BitbucketController', () => {
                 },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -150,7 +152,7 @@ describe('BitbucketController', () => {
                 body: dataCenterBody,
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -181,7 +183,7 @@ describe('BitbucketController', () => {
                 body: { ...dataCenterBody, eventKey: event },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -203,7 +205,7 @@ describe('BitbucketController', () => {
                 body: { eventKey: 'pr:opened' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -228,7 +230,7 @@ describe('BitbucketController', () => {
                 },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -249,7 +251,7 @@ describe('BitbucketController', () => {
                 body: { push: { changes: [] } },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -270,7 +272,7 @@ describe('BitbucketController', () => {
                 body: { fork: {} },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -290,7 +292,7 @@ describe('BitbucketController', () => {
                 body: { issue: {} },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -310,7 +312,7 @@ describe('BitbucketController', () => {
                 body: { pullrequest: { id: 1 } },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -330,7 +332,7 @@ describe('BitbucketController', () => {
                 body: { pullrequest: { id: 1 } },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -352,7 +354,7 @@ describe('BitbucketController', () => {
                 body: { pullrequest: { id: 1 } },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );

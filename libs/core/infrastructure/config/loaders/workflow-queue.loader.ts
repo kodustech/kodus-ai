@@ -1,5 +1,6 @@
 import { registerAs } from '@nestjs/config';
 import { WorkflowQueueConfig } from '../types/general/workflow-queue.type';
+import { DEFAULT_WORKFLOW_QUEUE_MAX_RETRIES } from '../../queue/config/workflow-queue.config';
 
 function parseIntOrDefault(raw: string | undefined, defaultValue: number) {
     const parsed = Number.parseInt(raw ?? '', 10);
@@ -35,7 +36,7 @@ export const WorkflowQueueLoader = registerAs(
         ),
         WORKFLOW_QUEUE_WORKER_MAX_RETRIES: parseIntOrDefault(
             process.env.WORKFLOW_QUEUE_WORKER_MAX_RETRIES,
-            5,
+            DEFAULT_WORKFLOW_QUEUE_MAX_RETRIES,
         ),
         WORKFLOW_QUEUE_WORKER_RETRY_DELAY_MS: parseIntOrDefault(
             process.env.WORKFLOW_QUEUE_WORKER_RETRY_DELAY_MS,

@@ -17,7 +17,7 @@ export class AzureReposController {
     ) {}
 
     @Post('/webhook')
-    handleWebhook(@Req() req: Request, @Res() res: Response) {
+    async handleWebhook(@Req() req: Request, @Res() res: Response) {
         const encrypted = req.query.token as string;
 
         if (!validateWebhookToken(encrypted)) {
@@ -57,38 +57,38 @@ export class AzureReposController {
                 .send('Webhook ignored (event not supported)');
         }
 
-        res.status(HttpStatus.OK).send('Webhook received');
-
-        setImmediate(() => {
-            void this.enqueueWebhookUseCase
-                .execute({
-                    platformType: PlatformType.AZURE_REPOS,
+        try {
+            const jobId = await this.enqueueWebhookUseCase.execute({
+                platformType: PlatformType.AZURE_REPOS,
+                event: eventType,
+                payload,
+                deliveryId: payload?.id,
+            });
+            this.logger.log({
+                message: `Webhook durably enqueued, ${eventType}`,
+                context: AzureReposController.name,
+                metadata: {
+                    jobId,
                     event: eventType,
-                    payload,
-                })
-                .then(() => {
-                    this.logger.log({
-                        message: `Webhook enqueued, ${eventType}`,
-                        context: AzureReposController.name,
-                        metadata: {
-                            event: eventType,
-                            repositoryName: payload?.resource?.repository?.name,
-                            pullRequestId: payload?.resource?.pullRequestId,
-                            projectId: payload?.resourceContainers?.project?.id,
-                        },
-                    });
-                })
-                .catch((error) => {
-                    this.logger.error({
-                        message: 'Error enqueuing webhook',
-                        context: AzureReposController.name,
-                        error,
-                        metadata: {
-                            event: eventType,
-                            platformType: PlatformType.AZURE_REPOS,
-                        },
-                    });
-                });
-        });
+                    repositoryName: payload?.resource?.repository?.name,
+                    pullRequestId: payload?.resource?.pullRequestId,
+                    projectId: payload?.resourceContainers?.project?.id,
+                },
+            });
+            return res.status(HttpStatus.OK).send('Webhook received');
+        } catch (error) {
+            this.logger.error({
+                message: 'Error durably enqueuing webhook',
+                context: AzureReposController.name,
+                error,
+                metadata: {
+                    event: eventType,
+                    platformType: PlatformType.AZURE_REPOS,
+                },
+            });
+            return res
+                .status(HttpStatus.SERVICE_UNAVAILABLE)
+                .send('Webhook persistence unavailable');
+        }
     }
 }

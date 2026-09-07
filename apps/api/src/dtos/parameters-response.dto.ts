@@ -191,6 +191,14 @@ export class CodeReviewConfigDataDto {
     v2PromptOverrides: Record<string, unknown>;
 
     @ApiProperty({
+        type: Object,
+        required: false,
+        description: 'Versioned agent planning and budget policy.',
+        additionalProperties: true,
+    })
+    reviewPolicy?: Record<string, unknown>;
+
+    @ApiProperty({
         type: 'array',
         required: false,
         description:

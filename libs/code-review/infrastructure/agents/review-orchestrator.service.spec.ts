@@ -8,6 +8,8 @@
  */
 import { ReviewOrchestratorService } from '@libs/code-review/infrastructure/agents/review-orchestrator.service';
 import type { ReviewOptions } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import { ReviewAgentCatalog } from './review-agent.catalog';
+import { ReviewRiskPlanner } from '../../domain/review-policy/review-risk-planner';
 
 type ExecutedInput = { requestedCategories?: string[] };
 
@@ -30,11 +32,15 @@ function setup() {
     const security = makeAgent(calls, 'security');
     const performance = makeAgent(calls, 'performance');
     const generalist = makeAgent(calls, 'generalist');
-    const service = new ReviewOrchestratorService(
+    const catalog = new ReviewAgentCatalog(
         bug,
         security,
         performance,
         generalist,
+    );
+    const service = new ReviewOrchestratorService(
+        catalog,
+        new ReviewRiskPlanner(),
     );
     return { service, calls, bug, security, performance, generalist };
 }
@@ -58,14 +64,14 @@ function inputFor(
 }
 
 describe('ReviewOrchestratorService dispatch', () => {
-    // PENDING the Security Review milestone: outside deep mode, security is still
-    // a lens inside the single generalist pass — the dedicated-agent dispatch it
-    // describes below isn't wired yet. Skipped (not deleted) so the intended
-    // contract stays documented and these flip to active when the milestone lands.
-    it.skip('runs a dedicated security agent in normal mode, alongside the generalist', async () => {
+    it('runs a dedicated security agent for risky changes in normal mode, alongside the generalist', async () => {
         const { service, security, generalist, calls } = setup();
+        const input = inputFor(ALL_ON);
+        input.changedFiles = [
+            { filename: 'src/auth/token.guard.ts', changes: 30 },
+        ];
 
-        await service.execute(inputFor(ALL_ON));
+        await service.execute(input);
 
         expect(security.execute).toHaveBeenCalledTimes(1);
         expect(generalist.execute).toHaveBeenCalledTimes(1);
@@ -77,27 +83,37 @@ describe('ReviewOrchestratorService dispatch', () => {
         ]);
     });
 
-    it.skip('runs the dedicated security agent in fast mode too', async () => {
+    it('runs the dedicated security agent for risky changes in fast mode too', async () => {
         const { service, security } = setup();
+        const input = inputFor(ALL_ON, 'fast');
+        input.changedFiles = [
+            { filename: 'src/auth/token.guard.ts', changes: 30 },
+        ];
 
-        await service.execute(inputFor(ALL_ON, 'fast'));
+        await service.execute(input);
 
         expect(security.execute).toHaveBeenCalledTimes(1);
     });
 
-    it.skip('skips the generalist entirely when security is the only enabled category', async () => {
+    it('skips the generalist when a security specialist covers the only enabled category', async () => {
         const { service, security, generalist } = setup();
+        const input = inputFor({
+            bug: false,
+            performance: false,
+            security: true,
+        });
+        input.changedFiles = [
+            { filename: 'src/auth/token.guard.ts', changes: 30 },
+        ];
 
-        await service.execute(
-            inputFor({ bug: false, performance: false, security: true }),
-        );
+        await service.execute(input);
 
         expect(security.execute).toHaveBeenCalledTimes(1);
         expect(generalist.execute).not.toHaveBeenCalled();
     });
 
     it('does not run the security agent when security is disabled', async () => {
-        const { service, security, generalist, calls } = setup();
+        const { service, security, calls } = setup();
 
         await service.execute(
             inputFor({ bug: true, performance: true, security: false }),
@@ -121,6 +137,28 @@ describe('ReviewOrchestratorService dispatch', () => {
         expect(generalist.execute).not.toHaveBeenCalled();
     });
 
+    it('routes security-sensitive changes to a dedicated specialist', async () => {
+        const { service, security, generalist, calls } = setup();
+        const input = inputFor(ALL_ON);
+        input.changedFiles = [
+            { filename: 'src/auth/token.guard.ts', changes: 30 },
+        ];
+
+        const output = await service.execute(input);
+
+        expect(security.execute).toHaveBeenCalledTimes(1);
+        expect(generalist.execute).toHaveBeenCalledTimes(1);
+        expect(calls.get('generalist')?.requestedCategories).toEqual([
+            'bug',
+            'performance',
+        ]);
+        expect(output.executionPlan.agents).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ agentId: 'security' }),
+            ]),
+        );
+    });
+
     it('dispatches nothing when every category is disabled', async () => {
         const { service, security, generalist } = setup();
 
@@ -131,5 +169,17 @@ describe('ReviewOrchestratorService dispatch', () => {
         expect(security.execute).not.toHaveBeenCalled();
         expect(generalist.execute).not.toHaveBeenCalled();
         expect(out.suggestions).toEqual([]);
+    });
+
+    it('falls back to the default policy when stored config is unsupported', async () => {
+        const { service } = setup();
+
+        const output = await service.execute({
+            ...inputFor(ALL_ON),
+            reviewPolicy: { version: '2' },
+        });
+
+        expect(output.reviewPolicy?.version).toBe('1');
+        expect(output.reviewPolicy?.planner.strategy).toBe('risk-based');
     });
 });

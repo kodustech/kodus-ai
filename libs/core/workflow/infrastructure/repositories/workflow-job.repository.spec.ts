@@ -22,7 +22,7 @@ describe('WorkflowJobRepository.failStaleProcessing', () => {
         returning: jest.Mock;
         execute: jest.Mock;
     };
-    let repository: { createQueryBuilder: jest.Mock };
+    let repository: { createQueryBuilder: jest.Mock; findOne: jest.Mock };
     let repo: WorkflowJobRepository;
 
     const olderThan = new Date('2026-07-01T00:00:00Z');
@@ -37,7 +37,10 @@ describe('WorkflowJobRepository.failStaleProcessing', () => {
             returning: jest.fn().mockReturnThis(),
             execute: jest.fn().mockResolvedValue({ raw: [], affected: 0 }),
         };
-        repository = { createQueryBuilder: jest.fn().mockReturnValue(qb) };
+        repository = {
+            createQueryBuilder: jest.fn().mockReturnValue(qb),
+            findOne: jest.fn(),
+        };
         repo = new WorkflowJobRepository(repository as any);
     });
 
@@ -95,5 +98,17 @@ describe('WorkflowJobRepository.failStaleProcessing', () => {
         });
 
         expect(result).toEqual([]);
+    });
+
+    it('selects only the id for an idempotency lookup', async () => {
+        repository.findOne.mockResolvedValue({ uuid: 'job-1' });
+
+        const result = await repo.findIdByIdempotencyKey('delivery-1');
+
+        expect(repository.findOne).toHaveBeenCalledWith({
+            where: { idempotencyKey: 'delivery-1' },
+            select: { uuid: true },
+        });
+        expect(result).toBe('job-1');
     });
 });

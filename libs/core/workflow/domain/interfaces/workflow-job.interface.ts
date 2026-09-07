@@ -8,6 +8,8 @@ import { WorkflowType } from '../enums/workflow-type.enum';
 export interface IWorkflowJob {
     id: string;
     correlationId: string;
+    /** Stable producer key used to collapse duplicate workflow submissions. */
+    idempotencyKey?: string;
     workflowType: WorkflowType;
     handlerType: HandlerType;
     payload: Record<string, unknown>;

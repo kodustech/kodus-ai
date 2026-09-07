@@ -320,6 +320,15 @@ export class CodeReviewPipelineObserver implements IPipelineObserver {
             additionalMetadata.dedupTrace = context.dedupTrace;
         }
 
+        if (
+            stageName === 'AgentReviewStage' &&
+            context.reviewExecutionSnapshot
+        ) {
+            additionalMetadata = additionalMetadata || {};
+            additionalMetadata.reviewExecutionSnapshot =
+                context.reviewExecutionSnapshot;
+        }
+
         // Stage status respects error severity (matches deriveFinalStatus
         // in automationCodeReview.ts so the per-stage badge and the
         // automation rollup agree). Before this, a critical agent failure

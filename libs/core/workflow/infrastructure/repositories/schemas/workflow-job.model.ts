@@ -13,6 +13,10 @@ import type { InboxMessageModel } from './inbox-message.model';
 @Index('IDX_workflow_jobs_status', ['status'])
 @Index('IDX_workflow_jobs_workflow_type', ['workflowType'])
 @Index('IDX_workflow_jobs_correlation_id', ['correlationId'])
+@Index('UQ_workflow_jobs_idempotency_key', ['idempotencyKey'], {
+    unique: true,
+    where: '"idempotencyKey" IS NOT NULL',
+})
 @Index('IDX_workflow_jobs_organization_team', ['organizationId', 'teamId'])
 @Index('idx_workflow_jobs_type_updated', ['workflowType', 'updatedAt'])
 // Partial covering index for the WebhookFailureMonitorService cron —
@@ -27,6 +31,9 @@ import type { InboxMessageModel } from './inbox-message.model';
 export class WorkflowJobModel extends CoreModel {
     @Column({ type: 'varchar', length: 255 })
     correlationId: string;
+
+    @Column({ type: 'varchar', length: 255, nullable: true })
+    idempotencyKey?: string;
 
     @Column({
         type: 'enum',

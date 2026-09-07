@@ -14,7 +14,9 @@ describe('GithubController', () => {
             execute: jest.fn().mockResolvedValue(undefined),
         } as any;
 
-        controller = new GithubController(enqueueWebhookUseCase);
+        controller = new GithubController(enqueueWebhookUseCase, {
+            validate: jest.fn().mockReturnValue({ valid: true }),
+        } as any);
 
         mockResponse = {
             status: jest.fn().mockReturnThis(),
@@ -29,7 +31,7 @@ describe('GithubController', () => {
                 body: { action: 'opened', pull_request: { number: 1 } },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -53,7 +55,7 @@ describe('GithubController', () => {
                 body: { action: 'synchronize' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -69,7 +71,7 @@ describe('GithubController', () => {
                 body: { action: 'closed' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -85,7 +87,7 @@ describe('GithubController', () => {
                 body: { action: 'reopened' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -101,7 +103,7 @@ describe('GithubController', () => {
                 body: { action: 'ready_for_review' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -117,7 +119,7 @@ describe('GithubController', () => {
                 body: { action: 'created', comment: { body: '@kody review' } },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -140,7 +142,7 @@ describe('GithubController', () => {
                 body: { action: 'created', comment: { body: 'test' } },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -162,7 +164,7 @@ describe('GithubController', () => {
                 body: { forkee: {} },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -183,7 +185,7 @@ describe('GithubController', () => {
                 body: { action: 'completed' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -203,7 +205,7 @@ describe('GithubController', () => {
                 body: { action: 'opened' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -223,7 +225,7 @@ describe('GithubController', () => {
                 body: { action: 'published' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -245,7 +247,7 @@ describe('GithubController', () => {
                 body: { action: 'labeled' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -265,7 +267,7 @@ describe('GithubController', () => {
                 body: { action: 'assigned' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -285,7 +287,7 @@ describe('GithubController', () => {
                 body: { action: 'converted_to_draft' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -305,7 +307,7 @@ describe('GithubController', () => {
                 body: { action: 'review_requested' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );

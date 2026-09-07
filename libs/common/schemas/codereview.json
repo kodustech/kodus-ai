@@ -254,6 +254,42 @@
             "default": true,
             "description": "Indicates whether the review should run on draft pull requests."
         },
+        "reviewPolicy": {
+            "type": "object",
+            "description": "Versioned agent planning policy. Runtime validation applies safe bounds and rejects unsupported versions.",
+            "properties": {
+                "version": {
+                    "type": "string",
+                    "enum": ["1"]
+                },
+                "planner": {
+                    "type": "object",
+                    "properties": {
+                        "strategy": {
+                            "type": "string",
+                            "enum": ["mode-compatible", "risk-based"]
+                        },
+                        "specialistRiskThreshold": {
+                            "type": "number",
+                            "minimum": 0
+                        },
+                        "largeChangeFiles": { "type": "integer", "minimum": 1 },
+                        "largeChangeLines": { "type": "integer", "minimum": 1 }
+                    },
+                    "additionalProperties": false
+                },
+                "modes": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "fast": { "$ref": "#/definitions/reviewModePolicy" },
+                        "normal": { "$ref": "#/definitions/reviewModePolicy" },
+                        "deep": { "$ref": "#/definitions/reviewModePolicy" }
+                    }
+                }
+            },
+            "additionalProperties": false
+        },
         "linkedRepositories": {
             "type": "array",
             "default": [],
@@ -279,6 +315,51 @@
                 "required": ["repository"],
                 "additionalProperties": false
             }
+        }
+    },
+    "definitions": {
+        "reviewAgentBudget": {
+            "type": "object",
+            "properties": {
+                "enabled": { "type": "boolean" },
+                "maxSteps": { "type": "integer", "minimum": 1 }
+            },
+            "additionalProperties": false
+        },
+        "reviewModePolicy": {
+            "type": "object",
+            "properties": {
+                "maxParallelAgents": { "type": "integer", "minimum": 1 },
+                "agents": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "generalist": {
+                            "$ref": "#/definitions/reviewAgentBudget"
+                        },
+                        "bug": { "$ref": "#/definitions/reviewAgentBudget" },
+                        "security": {
+                            "$ref": "#/definitions/reviewAgentBudget"
+                        },
+                        "performance": {
+                            "$ref": "#/definitions/reviewAgentBudget"
+                        },
+                        "kody-rules": {
+                            "$ref": "#/definitions/reviewAgentBudget"
+                        }
+                    }
+                },
+                "adaptiveBudget": {
+                    "type": "object",
+                    "properties": {
+                        "baselineFiles": { "type": "integer", "minimum": 0 },
+                        "stepsPerExtraFile": { "type": "number", "minimum": 0 },
+                        "maxSteps": { "type": "integer", "minimum": 1 }
+                    },
+                    "additionalProperties": false
+                }
+            },
+            "additionalProperties": false
         }
     },
     "required": [

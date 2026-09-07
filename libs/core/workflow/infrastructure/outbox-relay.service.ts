@@ -106,6 +106,7 @@ interface MessagePayloadContent {
     correlationId?: string;
     workflowType?: string;
     jobId?: string;
+    maxRetries?: number;
     [key: string]: unknown;
 }
 
@@ -701,6 +702,7 @@ export class OutboxRelayService
                 const correlationId = payloadContent?.correlationId;
                 const workflowType = payloadContent?.workflowType;
                 const jobId = payloadContent?.jobId;
+                const maxRetries = payloadContent?.maxRetries;
 
                 try {
                     // Note: message.job is not populated by RETURNING * (only job_id column)
@@ -727,6 +729,7 @@ export class OutboxRelayService
                                 'x-job-id': jobId,
                                 'x-outbox-id': message.uuid,
                                 'x-attempts': message.attempts,
+                                'x-job-max-retries': maxRetries,
                             },
                         },
                     );
