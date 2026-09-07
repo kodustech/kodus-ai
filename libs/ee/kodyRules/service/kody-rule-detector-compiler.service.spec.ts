@@ -109,7 +109,7 @@ describe('KodyRuleDetectorCompilerService.compileAndSave (#1449 T0)', () => {
             pattern: 'console\\.(log|warn|error)\\(',
         });
         const result = await svc.compileAndSave(org, 'r1', mechanicalRule);
-        expect(result).toEqual({ compiled: true });
+        expect(result).toEqual({ compiled: true, scoped: false });
     });
 
     it('returns { compiled: false } and threads the decline reason back out', async () => {
@@ -314,7 +314,7 @@ describe('CONTRACT A: output-shape zoo — never persists a wrong detector, alwa
         const [, , detector] =
             kodyRulesService.updateRuleDetector.mock.calls[0];
         expect(detector.pattern).toBe(validD.pattern);
-        expect(res).toEqual({ compiled: true });
+        expect(res).toEqual({ compiled: true, scoped: false });
     });
 
     it('A13 tolerates extra unknown keys alongside the right ones (persists, no crash)', async () => {
@@ -327,7 +327,7 @@ describe('CONTRACT A: output-shape zoo — never persists a wrong detector, alwa
         });
         const res = await svc.compileAndSave(org, 'r1', gatedRule);
         expect(kodyRulesService.updateRuleDetector).toHaveBeenCalledTimes(1);
-        expect(res).toEqual({ compiled: true });
+        expect(res).toEqual({ compiled: true, scoped: false });
     });
 
     it('A17 a null model output on an edited rule CLEARS the stale detector (no silent keep)', async () => {
@@ -355,13 +355,13 @@ describe('CONTRACT A: recoverable payloads the service silently drops (#1786 kno
         const { svc, kodyRulesService } = make({ result: validD });
         const res = await svc.compileAndSave(org, 'r1', gatedRule);
         expect(kodyRulesService.updateRuleDetector).toHaveBeenCalledTimes(1);
-        expect(res).toEqual({ compiled: true });
+        expect(res).toEqual({ compiled: true, scoped: false });
     });
     it.failing('A7 repairs a stringified-JSON envelope and persists', async () => {
         const { svc, kodyRulesService } = make(JSON.stringify(validD));
         const res = await svc.compileAndSave(org, 'r1', gatedRule);
         expect(kodyRulesService.updateRuleDetector).toHaveBeenCalledTimes(1);
-        expect(res).toEqual({ compiled: true });
+        expect(res).toEqual({ compiled: true, scoped: false });
     });
     it.failing('A8 repairs markdown-fenced JSON and persists', async () => {
         const { svc, kodyRulesService } = make(
@@ -369,7 +369,7 @@ describe('CONTRACT A: recoverable payloads the service silently drops (#1786 kno
         );
         const res = await svc.compileAndSave(org, 'r1', gatedRule);
         expect(kodyRulesService.updateRuleDetector).toHaveBeenCalledTimes(1);
-        expect(res).toEqual({ compiled: true });
+        expect(res).toEqual({ compiled: true, scoped: false });
     });
     it.failing(
         'A11 aliases case/convention-mismatched keys and persists',
@@ -382,7 +382,7 @@ describe('CONTRACT A: recoverable payloads the service silently drops (#1786 kno
             expect(kodyRulesService.updateRuleDetector).toHaveBeenCalledTimes(
                 1,
             );
-            expect(res).toEqual({ compiled: true });
+            expect(res).toEqual({ compiled: true, scoped: false });
         },
     );
     it.failing(
@@ -552,7 +552,7 @@ describe('CONTRACT D: input variants into the service boundary', () => {
             examples: [{ isCorrect: false, snippet: 'console.log(x)' }],
         });
         expect(kodyRulesService.updateRuleDetector).toHaveBeenCalledTimes(1);
-        expect(res).toEqual({ compiled: true });
+        expect(res).toEqual({ compiled: true, scoped: false });
     });
     it('D38 duplicate examples do not change the compile decision (idempotent)', async () => {
         const { svc, kodyRulesService } = make(validD);
@@ -566,7 +566,7 @@ describe('CONTRACT D: input variants into the service boundary', () => {
             ],
         });
         expect(kodyRulesService.updateRuleDetector).toHaveBeenCalledTimes(1);
-        expect(res).toEqual({ compiled: true });
+        expect(res).toEqual({ compiled: true, scoped: false });
     });
     it('D39 a null example entry fails safe (no throw past boundary, no persist)', async () => {
         // buildCompilerUserPrompt (compiler.ts:74, `ex.isCorrect`) crashes on a
@@ -612,7 +612,7 @@ describe('CONTRACT D: input variants into the service boundary', () => {
             expect(kodyRulesService.updateRuleDetector).toHaveBeenCalledTimes(
                 1,
             );
-            expect(res).toEqual({ compiled: true });
+            expect(res).toEqual({ compiled: true, scoped: false });
         },
     );
     it('D39 undefined examples array is treated as no labeled signal, not a crash', async () => {
@@ -639,7 +639,7 @@ describe('CONTRACT D: input variants into the service boundary', () => {
                 { isCorrect: true, snippet: 'const tea = 1' },
             ],
         });
-        expect(res).toEqual({ compiled: true });
+        expect(res).toEqual({ compiled: true, scoped: false });
         const [, , detector] =
             kodyRulesService.updateRuleDetector.mock.calls[0];
         expect(detector.pattern).toBe('café');

@@ -7,7 +7,8 @@ import {
     makeLLMRunCompiler,
     buildCompilerUserPrompt,
     COMPILER_SYSTEM_PROMPT,
-    buildDetectorViolations,
+    buildDetectorCandidates,
+    normalizeDetectorExtensions,
 } from './kody-rules-detector.compiler';
 
 const rule = (over: any = {}): any => ({
@@ -550,8 +551,8 @@ describe('CONTRACT D: input variants into the boundary', () => {
     it('D35 runDetector over zero changed files returns []', () => {
         expect(runDetector({ type: 'regex', pattern: 'x' }, [])).toEqual([]);
     });
-    it('D35 buildDetectorViolations over zero rules / zero files returns []', () => {
-        expect(buildDetectorViolations([], [])).toEqual([]);
+    it('D35 buildDetectorCandidates over zero rules / zero files returns an empty index', () => {
+        expect(buildDetectorCandidates([], []).size).toBe(0);
     });
 
     // D36 — single item.
@@ -660,15 +661,20 @@ describe('CONTRACT D: input variants into the boundary', () => {
         );
         expect(forward).toEqual(reversed);
     });
-    it('D42 changed-file order does not change the set of detector violations', () => {
+    it('D42 changed-file order does not change the set of detector candidates', () => {
         const plan: DetectorPlan = { type: 'regex', pattern: 'console\\.log\\(' };
         const rules = [{ uuid: 'r1', title: 't', rule: 'no console', detector: plan }];
         const fA = { filename: 'a.ts', patchWithLinesStr: '1 +console.log(1)' } as any;
         const fB = { filename: 'b.ts', patchWithLinesStr: '2 +console.log(2)' } as any;
-        const forward = buildDetectorViolations(rules as any, [fA, fB]);
-        const reversed = buildDetectorViolations(rules as any, [fB, fA]);
-        const key = (v: any) => `${v.relevantFile}:${v.relevantLinesStart}`;
-        expect(new Set(forward.map(key))).toEqual(new Set(reversed.map(key)));
+        const key = (idx: any) =>
+            new Set(
+                [...idx.get('r1')!].flatMap(([f, lines]: any) =>
+                    lines.map((l: number) => `${f}:${l}`),
+                ),
+            );
+        expect(key(buildDetectorCandidates(rules as any, [fA, fB]))).toEqual(
+            key(buildDetectorCandidates(rules as any, [fB, fA])),
+        );
     });
 });
 
@@ -698,5 +704,205 @@ describe('CONTRACT E: N-model policy — boundary is model-agnostic (gate lives 
         const res = await compileRuleDetector(rule(), compiler(validD), { modelName });
         expect(res.detector).not.toBeNull();
         expect(res.detector!.compiledBy).toBe(expected);
+    });
+});
+
+// ── issue #1831 acceptance criteria ─────────────────────────────────────────
+// Every case below is a shape the incident actually produced, measured against
+// 40 real merged PRs from polyglot Ruby repos (evals/kody-rules/
+// detector-fp-repro.js). The rule is the real one: a Ruby-scoped "avoid
+// unnecessary semicolons" whose compiled detector was `;\s*(?:#.*)?$` with an
+// empty `path`. It published 614 comments over that corpus; not one was a true
+// violation.
+describe('#1831 — a detector cannot publish, and cannot leave its language', () => {
+    const semicolonRule = {
+        uuid: 'ruby-no-semicolons',
+        title: 'Avoid unnecessary semicolons',
+        rule: 'Avoid unnecessary semicolons at the end of statements. Ruby does not require semicolons to terminate statements.',
+        path: '',
+    };
+    const file = (filename: string, lines: string[]) => ({
+        filename,
+        patchWithLinesStr: lines
+            .map((l, i) => `${i + 1} +${l}`)
+            .join('\n'),
+    });
+
+    it('AC: a cosmetic rule never compiles into a detector at all', async () => {
+        // Layer 1. Formatting a linter owns is not worth a review comment even
+        // when a regex matches it perfectly, so the gate declines it BEFORE the
+        // compile call — no model opinion required.
+        const runCompiler = jest.fn();
+        const res = await compileRuleDetector(
+            semicolonRule as any,
+            runCompiler as any,
+        );
+        expect(res.detector).toBeNull();
+        expect(res.declineReason).toBe('cosmetic');
+        expect(runCompiler).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['quote style', 'Always use double-quoted strings for attribute values'],
+        ['blank lines', 'Do not leave two consecutive blank lines'],
+        ['indentation', 'Use two spaces for indentation, never tabs'],
+        ['line length', 'Keep line length under 120 characters'],
+        ['statements per line', 'Write one statement per line'],
+    ])('AC: the compiler declines the %s rule as cosmetic', async (_label, text) => {
+        const res = await compileRuleDetector(
+            { uuid: 'x', title: text, rule: text } as any,
+            jest.fn() as any,
+        );
+        expect(res.declineReason).toBe('cosmetic');
+    });
+
+    it('AC: a rule whose text names a language produces no candidate on another language', () => {
+        // Layer 2. The exact regression the issue asks for: the Ruby semicolon
+        // rule against a diff of .js / .md / .scss / .yml lines ending in ';'.
+        const scoped = {
+            ...semicolonRule,
+            detector: {
+                type: 'regex' as const,
+                pattern: ';\\s*(?:#.*)?$',
+                extensions: ['.rb', '.rake', '.erb'],
+            },
+        };
+        const files = [
+            file('app/assets/app.js', ['const x = 1;']),
+            file('README.md', ['Run the migration;']),
+            file('app/assets/app.scss', ['color: red;']),
+            file('config/deploy.yml', ['cmd: "run;"']),
+            file('app/models/user.rb', ['x = 1;']),
+        ];
+        const index = buildDetectorCandidates([scoped] as any, files as any);
+        const hitFiles = [...(index.get('ruby-no-semicolons') ?? new Map()).keys()];
+        expect(hitFiles).toEqual(['app/models/user.rb']);
+    });
+
+    it('AC: an unscoped detector still leaks across languages — which is why the judge is the safety net', () => {
+        // The 424 detectors already in the fleet carry no `extensions` until
+        // they are recompiled, so this documents what layer 2 does NOT cover:
+        // the leak is still there, and only confirmation stops it shipping.
+        const unscoped = {
+            ...semicolonRule,
+            detector: { type: 'regex' as const, pattern: ';\\s*(?:#.*)?$' },
+        };
+        const index = buildDetectorCandidates(
+            [unscoped] as any,
+            [file('app/assets/app.scss', ['color: red;'])] as any,
+        );
+        expect([...(index.get('ruby-no-semicolons') ?? new Map()).keys()]).toEqual([
+            'app/assets/app.scss',
+        ]);
+    });
+
+    it('AC: hits inside a SQL heredoc and an embedded-JS template are candidates, never findings', () => {
+        // Layer 3's job. Both shapes are real: `WHERE (published = true);` inside
+        // a `<<~SQL` heredoc in a Rails migration, and a `const url = new
+        // URL(...);` inside an .erb view. Extension scope cannot see either —
+        // the .rb and .erb files ARE Ruby. buildDetectorCandidates returns
+        // candidates, and the ONLY thing it can return is candidates: there is
+        // no code path from a regex hit to a published suggestion.
+        const scoped = {
+            ...semicolonRule,
+            detector: {
+                type: 'regex' as const,
+                pattern: ';\\s*(?:#.*)?$',
+                extensions: ['.rb', '.erb'],
+            },
+        };
+        const files = [
+            file('db/migrate/20260101_add_index.rb', [
+                'conn.exec(<<~SQL.squish)',
+                '  CREATE INDEX CONCURRENTLY index_articles_on_score',
+                '  ON articles (score)',
+                '  WHERE (published = true);',
+                'SQL',
+            ]),
+            file('app/views/events/show.html.erb', [
+                '<script>',
+                '  const url = new URL(chatFrame.src);',
+                '</script>',
+            ]),
+        ];
+        const index = buildDetectorCandidates([scoped] as any, files as any);
+        const perFile = index.get('ruby-no-semicolons')!;
+        expect(perFile.get('db/migrate/20260101_add_index.rb')).toEqual([4]);
+        expect(perFile.get('app/views/events/show.html.erb')).toEqual([2]);
+        // A DetectorHitIndex carries line numbers and nothing else — no
+        // suggestion text, no severity, nothing shaped like a finding. Keeping
+        // it that way is what makes "cannot publish" structural rather than a
+        // convention someone has to remember.
+        for (const lines of perFile.values()) {
+            expect(lines.every((l) => typeof l === 'number')).toBe(true);
+        }
+    });
+
+    it('AC: extensions are normalized, and a garbage scope never silences the rule', () => {
+        expect(normalizeDetectorExtensions(['RB', '.Erb', 'rake'])).toEqual([
+            '.rb',
+            '.erb',
+            '.rake',
+        ]);
+        // Globs / paths / prose are not extensions. If NOTHING survives, the
+        // result is undefined (no scope) rather than an empty list — an empty
+        // list would match no file and silently disable the rule.
+        expect(normalizeDetectorExtensions(['*.rb', 'app/models/', 'ruby files'])).toBeUndefined();
+        expect(normalizeDetectorExtensions([])).toBeUndefined();
+        expect(normalizeDetectorExtensions(undefined)).toBeUndefined();
+    });
+
+    it('a scoped detector still covers extensionless files (Rakefile, Gemfile, Dockerfile)', () => {
+        // Review feedback on #1864. The extension check is a COST filter, so
+        // when it cannot determine a language it must abstain, not exclude:
+        // excluding would be a silent enforcement loss, because the judge only
+        // shards files where a detector fired, so nothing downstream would ever
+        // look at a Rakefile a Ruby rule genuinely applies to.
+        const scoped = {
+            uuid: 'ruby-rule',
+            title: 't',
+            rule: 'ruby only',
+            detector: {
+                type: 'regex' as const,
+                pattern: 'puts ',
+                extensions: ['.rb'],
+            },
+        };
+        const files = [
+            file('Rakefile', ['puts "hi"']),
+            file('Gemfile', ['puts "hi"']),
+            file('Dockerfile', ['puts "hi"']),
+            file('app/assets/app.scss', ['puts "hi"']),
+        ];
+        const hit = [...buildDetectorCandidates([scoped] as any, files as any)
+            .get('ruby-rule')!
+            .keys()].sort();
+        // .scss is excluded (known extension, not in scope); the extensionless
+        // files are kept and left for the judge to rule on.
+        expect(hit).toEqual(['Dockerfile', 'Gemfile', 'Rakefile']);
+    });
+
+    it('AC: a language-agnostic rule keeps running everywhere', () => {
+        // The scope must not become a silent narrowing. A rule that names no
+        // language compiles with no extensions and behaves exactly as before.
+        const anyLang = {
+            uuid: 'no-todo',
+            title: 'No TODO comments',
+            rule: 'Do not leave TODO comments in committed code.',
+            detector: { type: 'regex' as const, pattern: 'TODO' },
+        };
+        const index = buildDetectorCandidates(
+            [anyLang] as any,
+            [
+                file('a.rb', ['# TODO fix']),
+                file('b.tsx', ['// TODO fix']),
+                file('c.md', ['TODO fix']),
+            ] as any,
+        );
+        expect([...index.get('no-todo')!.keys()].sort()).toEqual([
+            'a.rb',
+            'b.tsx',
+            'c.md',
+        ]);
     });
 });

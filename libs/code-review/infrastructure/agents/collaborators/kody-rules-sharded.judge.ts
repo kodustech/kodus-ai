@@ -28,6 +28,9 @@ import {
     IKodyRule,
     KodyRulesScope,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+// Type-only: the compiler imports `ruleAppliesToFile` from THIS module, so a
+// value import back would close a runtime require cycle.
+import type { DetectorHitIndex } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler';
 
 /**
  * Parser schema for a shard's JSON output. The provider passes this to
@@ -201,6 +204,21 @@ export interface ShardedJudgeInput {
      * field existed.
      */
     languageLabel?: string | null;
+    /**
+     * Where each compiled T0 detector fired (issue #1831). Two effects:
+     *
+     *   1. ROUTING — a rule that carries a detector is judged ONLY in the files
+     *      its regex hit. A precise detector therefore still costs almost
+     *      nothing (most files never reach a model), while a noisy one costs in
+     *      proportion to its noise.
+     *   2. HINTING — the hit lines are shown to the judge as candidates to
+     *      confirm or reject, so recall does not rest on the model
+     *      independently rediscovering what the regex already found.
+     *
+     * Absent = no detector rules in this review; every rule shards by `path`
+     * exactly as before.
+     */
+    detectorHits?: DetectorHitIndex;
 }
 
 export interface ShardedJudgeResult {
@@ -260,10 +278,50 @@ function languageInstructionLines(languageLabel?: string | null): string[] {
     ];
 }
 
+/**
+ * The candidate block for a file shard (issue #1831): the lines a compiled
+ * regex detector already flagged, presented as questions rather than findings.
+ *
+ * The wording is the load-bearing part. Handing a model a list of pre-flagged
+ * lines invites it to rubber-stamp them, which would reproduce the very bug
+ * this replaces — so the block states plainly what the pre-filter is blind to
+ * (language, comments, embedded languages, heredocs) and names rejection as the
+ * expected outcome, not a failure. Those are not hypotheticals: they are the
+ * three shapes the incident's false positives actually took — a Ruby rule
+ * firing on .tsx/.scss, on JavaScript embedded in .erb, and on SQL inside a
+ * `<<~SQL` heredoc in a migration.
+ *
+ * Returns [] when this shard has no candidates, so a shard of purely semantic
+ * rules keeps a byte-identical prompt to before this existed.
+ */
+function candidateLines(
+    file: FileChange,
+    rules: Array<Partial<IKodyRule>>,
+    detectorHits?: DetectorHitIndex,
+): string[] {
+    if (!detectorHits?.size) return [];
+    const entries: string[] = [];
+    rules.forEach((r, i) => {
+        if (!r.uuid) return;
+        const lines = detectorHits.get(r.uuid)?.get(file.filename);
+        if (lines?.length) entries.push(`- rule [${i + 1}] -> line(s) ${lines.join(', ')}`);
+    });
+    if (!entries.length) return [];
+    return [
+        `<Candidates>`,
+        `A cheap regex pre-filter flagged these lines. It matches raw text one line at a time and knows NOTHING else — not the file's language, not whether the line is a comment, not whether it sits inside a string, a heredoc, or a block of another language embedded in this file.`,
+        ...entries,
+        `Treat every candidate as a QUESTION, not a finding. Report it only if that line genuinely violates that rule in THIS file, judged in its real language and context; otherwise say nothing about it. Rejecting candidates is the normal outcome and needs no explanation. Violations the pre-filter missed are still yours to report.`,
+        `</Candidates>`,
+        ``,
+    ];
+}
+
 function fileShardUser(
     file: FileChange,
     rules: Array<Partial<IKodyRule>>,
     languageLabel?: string | null,
+    detectorHits?: DetectorHitIndex,
 ): string {
     const diff = (file as any).patchWithLinesStr ?? file.patch ?? '';
     return [
@@ -278,9 +336,18 @@ function fileShardUser(
         '```',
         `</File>`,
         ``,
+        ...candidateLines(file, rules, detectorHits),
         ...languageInstructionLines(languageLabel),
-        `Return ONLY JSON (ruleId is the rule's [n] number):`,
-        `{"violations":[{"ruleId":<n>,"relevantLinesStart":<line>,"relevantLinesEnd":<line>,"existingCode":"<offending code>","suggestionContent":"WHAT/WHY/HOW","oneSentenceSummary":"<short>"}]}`,
+        // `improvedCode` and `language` are REQUIRED by the wire schema but were
+        // missing from this template, so models filled them with null and every
+        // sharded kody-rules finding shipped without a fix to apply and without
+        // a language for the diff block. Issue #1831 requires a detector-derived
+        // finding to carry an applicable `improvedCode`; since detector findings
+        // now come through this same shard, asking for it here fixes the whole
+        // stream at once. `existingCode` is called out explicitly because models
+        // otherwise copy the line WITH its `<n> +` diff prefix.
+        `Return ONLY JSON (ruleId is the rule's [n] number). "existingCode" is the offending code EXACTLY as it appears in the file — strip the line-number and '+' prefix the diff adds. "improvedCode" is that same code rewritten to satisfy the rule, ready to apply; use null only when the fix cannot be expressed as a replacement for those lines. "language" is the file's language (e.g. "ruby", "typescript").`,
+        `{"violations":[{"ruleId":<n>,"relevantLinesStart":<line>,"relevantLinesEnd":<line>,"language":"<lang>","existingCode":"<offending code>","improvedCode":"<fixed code or null>","suggestionContent":"WHAT/WHY/HOW","oneSentenceSummary":"<short>"}]}`,
     ].join('\n');
 }
 
@@ -355,10 +422,18 @@ function matchesPathPattern(filePath: string, pattern: string): boolean {
 function rulesForFile(
     file: FileChange,
     rules: Array<Partial<IKodyRule>>,
+    detectorHits?: DetectorHitIndex,
 ): Array<Partial<IKodyRule>> {
-    return rules.filter(
-        (r) => !r.path || matchesPathPattern(file.filename, r.path),
-    );
+    return rules.filter((r) => {
+        if (r.path && !matchesPathPattern(file.filename, r.path)) return false;
+        // A rule carrying a compiled detector is judged only where the detector
+        // fired. Without this the T0 pre-filter would buy nothing — a mechanical
+        // rule would shard every file, exactly like a semantic one.
+        if (r.detector && r.uuid) {
+            return !!detectorHits?.get(r.uuid)?.has(file.filename);
+        }
+        return true;
+    });
 }
 
 const isPrLevel = (r: Partial<IKodyRule>) =>
@@ -622,11 +697,19 @@ export async function judgeKodyRulesSharded(
         prBody,
         logger,
         languageLabel,
+        detectorHits,
     } = input;
     const concurrency = input.concurrency ?? 4;
 
-    const fileRules = rules.filter((r) => !isPrLevel(r));
-    const prRules = rules.filter(isPrLevel);
+    // A rule whose detector fired NOWHERE in this PR is not judged at all —
+    // that is the entire cost saving of the T0 pre-filter (issue #1831), and it
+    // covers PR-scope detector rules too, which `rulesForFile` never sees.
+    const judgeable = rules.filter(
+        (r) => !r.detector || !r.uuid || !!detectorHits?.get(r.uuid)?.size,
+    );
+
+    const fileRules = judgeable.filter((r) => !isPrLevel(r));
+    const prRules = judgeable.filter(isPrLevel);
 
     let shardsRun = 0;
     let shardsErrored = 0;
@@ -634,7 +717,10 @@ export async function judgeKodyRulesSharded(
 
     // ── file-scope shards: one per changed file that has applicable rules ────
     const fileShards = changedFiles
-        .map((file) => ({ file, applicable: rulesForFile(file, fileRules) }))
+        .map((file) => ({
+            file,
+            applicable: rulesForFile(file, fileRules, detectorHits),
+        }))
         .filter((s) => s.applicable.length > 0);
 
     const perFile = await mapLimit(
@@ -649,7 +735,12 @@ export async function judgeKodyRulesSharded(
             try {
                 const vs = await runJudge({
                     system: SHARD_SYSTEM_PROMPT,
-                    user: fileShardUser(file, applicable, languageLabel),
+                    user: fileShardUser(
+                        file,
+                        applicable,
+                        languageLabel,
+                        detectorHits,
+                    ),
                     filename: file.filename,
                     ruleUuids,
                 });

@@ -521,27 +521,43 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
         expect(call.user).not.toContain('Respond in');
     });
 
-    it('mechanical path: detector regex fires with ZERO LLM calls', async () => {
-        const { provider, judge } = makeProvider([]);
-        const out = await provider.execute(
-            input({
-                kodyRules: [
+    // ── #1831: the detector routes, it does not publish ──────────────────────
+    // It used to emit a finding per regex hit with no LLM anywhere in the path.
+    // Measured on 40 real polyglot PRs, one Ruby-scoped rule published 614
+    // comments that way and not one was a true violation; in production the
+    // path rejected at 44.6% thumbs-down against the judge's 6.2%.
+
+    const mechanicalRule = {
+        uuid: 'no-console',
+        title: 'no console',
+        rule: 'no console.log',
+        status: 'active',
+        severity: 'high',
+        path: '**/*.ts',
+        detector: {
+            type: 'regex',
+            pattern: 'console\\.(log|warn|error)\\(',
+        },
+    };
+
+    it('mechanical path: a detector hit is CONFIRMED by the judge before it ships', async () => {
+        const { provider, judge } = makeProvider([
+            {
+                violations: [
                     {
-                        uuid: 'no-console',
-                        title: 'no console',
-                        rule: 'no console.log',
-                        status: 'active',
-                        severity: 'high',
-                        path: '**/*.ts',
-                        detector: {
-                            type: 'regex',
-                            pattern: 'console\\.(log|warn|error)\\(',
-                        },
+                        ruleId: 1,
+                        relevantLinesStart: 10,
+                        existingCode: 'console.log(1)',
+                        suggestionContent: 'use the logger',
+                        oneSentenceSummary: 'no console',
                     },
                 ],
-            }) as any,
+            },
+        ]);
+        const out = await provider.execute(
+            input({ kodyRules: [mechanicalRule] }) as any,
         );
-        expect(judge).not.toHaveBeenCalled();
+        expect(judge).toHaveBeenCalledTimes(1);
         expect(out.suggestions).toHaveLength(1);
         expect((out.suggestions[0] as any).brokenKodyRulesIds).toEqual([
             'no-console',
@@ -549,15 +565,67 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
         expect(out.suggestions[0].relevantLinesStart).toBe(10);
     });
 
-    it('mixed: detector + judge merge into one output (one LLM call)', async () => {
+    it('mechanical path: a detector hit the judge REJECTS never reaches the PR', async () => {
+        // The whole point. The regex matched, the judge looked at the file and
+        // said no — e.g. the line is a comment, or JS embedded in an .erb, or
+        // SQL inside a heredoc. Before #1831 this shipped regardless.
+        const { provider, judge } = makeProvider([{ violations: [] }]);
+        const out = await provider.execute(
+            input({ kodyRules: [mechanicalRule] }) as any,
+        );
+        expect(judge).toHaveBeenCalledTimes(1);
+        expect(out.suggestions).toHaveLength(0);
+    });
+
+    it('mechanical path: the shard prompt offers the hit as a candidate to reject, not as a finding', async () => {
+        const { provider, judge } = makeProvider([{ violations: [] }]);
+        await provider.execute(input({ kodyRules: [mechanicalRule] }) as any);
+        const user = judge.mock.calls[0][0].user as string;
+        expect(user).toContain('<Candidates>');
+        expect(user).toContain('rule [1] -> line(s) 10');
+        // Anti-rubber-stamp: the model must be told the pre-filter is blind and
+        // that rejecting is a normal outcome. Without this the confirmation
+        // step degrades into a confirmation bias.
+        expect(user).toContain('QUESTION, not a finding');
+        expect(user).toMatch(/Rejecting candidates is the normal outcome/);
+    });
+
+    it('mechanical path: a detector that matches nothing costs no LLM call at all', async () => {
+        // The cost argument for T0 survives the fix: files the regex did not hit
+        // never reach a model, so a precise detector is still nearly free.
+        const { provider, judge } = makeProvider([]);
+        const out = await provider.execute(
+            input({
+                kodyRules: [
+                    {
+                        ...mechanicalRule,
+                        detector: { type: 'regex', pattern: 'debugger' },
+                    },
+                ],
+            }) as any,
+        );
+        expect(judge).not.toHaveBeenCalled();
+        expect(out.suggestions).toHaveLength(0);
+    });
+
+    it('mixed: mechanical and semantic rules share ONE shard for the file', async () => {
+        // Both rules apply to src/a.ts and the detector fired there, so they are
+        // batched into a single call — the mechanical rule rides along on a
+        // shard the semantic rule was paying for anyway.
         const { provider, judge } = makeProvider([
             {
                 violations: [
                     {
-                        ruleId: 1, // semantic shard's only rule: no-any (detector rule is not sharded)
+                        ruleId: 2, // no-any
                         relevantLinesStart: 11,
                         suggestionContent: 'avoid any',
                         oneSentenceSummary: 'no any',
+                    },
+                    {
+                        ruleId: 1, // no-console, confirmed from the candidate
+                        relevantLinesStart: 10,
+                        suggestionContent: 'use the logger',
+                        oneSentenceSummary: 'no console',
                     },
                 ],
             },
@@ -588,7 +656,7 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
                 ],
             }) as any,
         );
-        expect(judge).toHaveBeenCalledTimes(1); // only the semantic rule
+        expect(judge).toHaveBeenCalledTimes(1); // one shard, both rules
         const ids = out.suggestions
             .map((s: any) => s.brokenKodyRulesIds?.[0])
             .sort();

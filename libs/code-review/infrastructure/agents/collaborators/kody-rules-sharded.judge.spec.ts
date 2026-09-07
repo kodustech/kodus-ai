@@ -1186,3 +1186,59 @@ describe('CONTRACT — boundary ALWAYS returns its declared shape', () => {
         expect(res.shardsErrored).toBe(2);
     });
 });
+
+// ── #1831: what the shard ASKS FOR determines what a finding looks like ─────
+describe('#1831 — the file-shard prompt asks for a complete, applicable finding', () => {
+    const captureUser = async (rules: any[], detectorHits?: any) => {
+        let user = '';
+        const runJudge: RunJudge = async (args) => {
+            user = args.user;
+            return [];
+        };
+        await judgeKodyRulesSharded({
+            changedFiles: [
+                {
+                    filename: 'app/models/user.rb',
+                    patchWithLinesStr: '3 +    return false if x == nil',
+                } as any,
+            ],
+            rules,
+            runJudge,
+            detectorHits,
+        });
+        return user;
+    };
+
+    it('asks for improvedCode and language, which the wire schema has always required', () => {
+        // Both keys are REQUIRED by shardViolationsWireSchema, but the return
+        // template never showed them, so models filled them with null and every
+        // sharded kody-rules finding shipped with no fix to apply and no
+        // language for the diff block. #1831 needs a detector-derived finding to
+        // carry an applicable improvedCode; those now come through this shard,
+        // so asking here fixes the whole stream.
+        return captureUser([{ uuid: 'r1', title: 't', rule: 'no nil compare' }]).then((user) => {
+            expect(user).toContain('"improvedCode"');
+            expect(user).toContain('"language"');
+            // null stays legal: a rule like "use the structured logger" has no
+            // line-level replacement the model can write without knowing the
+            // project's logger, and inventing one is worse than omitting it.
+            expect(user).toMatch(/use null only when the fix cannot be expressed/);
+        });
+    });
+
+    it('tells the model to strip the diff prefix from existingCode', () => {
+        // Without this, models copy the shard line verbatim — `266 +  console.log(`
+        // — and the '+' leaks into the published comment and into anchoring.
+        return captureUser([{ uuid: 'r1', title: 't', rule: 'no nil compare' }]).then((user) => {
+            expect(user).toMatch(/strip the line-number and '\+' prefix/);
+        });
+    });
+
+    it('keeps the candidate block out of a purely semantic shard', () => {
+        // No detector rules in the review = byte-identical prompt to before
+        // #1831, so nothing regresses for the orgs that have no T0 rules.
+        return captureUser([{ uuid: 'r1', title: 't', rule: 'no nil compare' }]).then((user) => {
+            expect(user).not.toContain('<Candidates>');
+        });
+    });
+});

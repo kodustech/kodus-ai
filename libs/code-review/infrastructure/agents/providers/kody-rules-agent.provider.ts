@@ -23,7 +23,7 @@ import {
 } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge';
 import { resolveLanguageLabel } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
 import { ExternalReferenceLoaderService } from '@libs/kodyRules/infrastructure/adapters/services/externalReferenceLoader.service';
-import { buildDetectorViolations } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler';
+import { buildDetectorCandidates } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler';
 import {
     ReviewAgentIdentity,
     ReviewAgentInput,
@@ -144,25 +144,55 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
         // gpt-5.4-mini / kimi at ~same-or-lower cost.
         const startTime = Date.now();
 
-        // Route each rule by its compiled shape (issue #1449):
-        //   T0 mechanical (has a `detector`) → deterministic regex over added
-        //     lines, ZERO LLM (the only part that stays free under any BYOK).
-        //   T1/T2 semantic (no detector) → the sharded single-shot LLM judge.
+        // Route each rule by its compiled shape (issue #1449, reshaped by #1831):
+        //   T0 mechanical (has a `detector`) → the regex runs in code and
+        //     ROUTES: it decides which (rule, file) pairs are worth an LLM
+        //     call. It no longer publishes anything on its own.
+        //   T1/T2 semantic (no detector) → the sharded single-shot LLM judge,
+        //     over every path-applicable file, exactly as before.
+        //
+        // Both streams then meet in the SAME judge, so a mechanical rule gets
+        // the same "does this really violate the rule, in this file's language
+        // and context?" question a semantic one gets. The detector publishing
+        // straight to the PR is what produced a 44.6% thumbs-down rate against
+        // the judge's 6.2% (issue #1831): a regex cannot see that the line it
+        // matched is JavaScript inside an .erb template, SQL inside a heredoc,
+        // or simply a language the rule was never about.
         const mechanicalRules = rules.filter((r) => r.detector);
-        const semanticRules = rules.filter((r) => !r.detector);
 
-        // T0 — run compiled detectors in code.
-        const detectorViolations = buildDetectorViolations(
+        // T0 — run compiled detectors in code. Pure code, no LLM: this is still
+        // the cheap part, it just yields candidates instead of comments.
+        const detectorHits = buildDetectorCandidates(
             mechanicalRules,
             input.changedFiles,
         );
+        const rulesWithHits = mechanicalRules.filter(
+            (r) => r.uuid && detectorHits.get(r.uuid)?.size,
+        ).length;
+        const candidateCount = [...detectorHits.values()].reduce(
+            (n, perFile) =>
+                n +
+                [...perFile.values()].reduce((m, lines) => m + lines.length, 0),
+            0,
+        );
 
-        // T1/T2 — semantic rules via the LLM judge (skip the model entirely when
-        // every applicable rule is mechanical — pure-T0 reviews cost nothing).
+        const semanticRules = rules.filter((r) => !r.detector);
+
+        // Every rule the judge could have something to say about: the semantic
+        // ones always, plus the mechanical ones whose detector actually fired.
+        // A mechanical rule that matched nothing costs nothing — no shard is
+        // created for it — which is what keeps T0's cost argument intact.
+        const judgeRules = [
+            ...semanticRules,
+            ...mechanicalRules.filter(
+                (r) => r.uuid && detectorHits.get(r.uuid)?.size,
+            ),
+        ];
+
         let judgeViolations: ShardViolation[] = [];
         let shardsRun = 0;
         let shardsErrored = 0;
-        if (semanticRules.length > 0) {
+        if (judgeRules.length > 0) {
             const { byokConfig, main } = await resolveReviewAgentModel(
                 input,
                 this.permissionValidationService,
@@ -187,7 +217,7 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                 input.languageResultPrompt,
             );
             this.shardLogger.log({
-                message: `[AGENT] ${this.getIdentity().name} (sharded) using model: ${main.modelName} for PR#${input.prNumber} (${semanticRules.length} semantic, ${mechanicalRules.length} mechanical rules)`,
+                message: `[AGENT] ${this.getIdentity().name} (sharded) using model: ${main.modelName} for PR#${input.prNumber} (${semanticRules.length} semantic, ${mechanicalRules.length} mechanical rules; ${rulesWithHits} with detector hits -> ${candidateCount} candidate line(s) to confirm)`,
                 context: this.getIdentity().name,
             });
 
@@ -233,7 +263,7 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             // T2a — inline the rule's own `sourcePath` (IDE-sync / centralized)
             // via the sandbox read so the judge sees the full convention.
             let rulesForJudge = await inlineRuleReferences(
-                semanticRules,
+                judgeRules,
                 input.remoteCommands?.read?.bind(input.remoteCommands),
                 this.shardLogger,
             );
@@ -270,8 +300,9 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                 // Sanitized span input: shape only, never the file patches.
                 {
                     prNumber: input.prNumber,
-                    semanticRules: rulesForJudge.length,
+                    semanticRules: semanticRules.length,
                     mechanicalRules: mechanicalRules.length,
+                    detectorCandidates: candidateCount,
                     changedFiles: input.changedFiles?.length ?? 0,
                 },
                 () =>
@@ -283,6 +314,7 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                         prBody: input.prBody,
                         logger: this.shardLogger,
                         languageLabel,
+                        detectorHits,
                     }),
             );
             judgeViolations = result.violations;
@@ -305,8 +337,16 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             // (wire-schema 400 / provider outage / model unavailability) are in
             // the shard warn logs.
             if (shardsRun > 0 && shardsErrored === shardsRun) {
+                // Since #1831 a mechanical rule is confirmed by this same judge,
+                // so a T0-only org reaches this escalation for the first time.
+                // That is correct — the judge failing now genuinely means those
+                // rules were NOT applied, where before the regex had already
+                // decided — but the message must not claim "semantic" rules the
+                // org may not have.
+                const kind =
+                    semanticRules.length > 0 ? 'Kody Rules' : 'mechanical Kody Rules';
                 throw new Error(
-                    `Kody Rules could not be evaluated: all ${shardsRun} rule check(s) failed to run. Your semantic Kody Rules were not applied to this PR.`,
+                    `Kody Rules could not be evaluated: all ${shardsRun} rule check(s) failed to run. Your ${kind} were not applied to this PR.`,
                 );
             }
 
@@ -333,11 +373,10 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             }
         }
 
-        // Merge both streams; downstream mapping/verify/dedup are identical.
-        const allViolations: ShardViolation[] = [
-            ...detectorViolations,
-            ...judgeViolations,
-        ];
+        // One stream now: everything the judge confirmed. Detector hits reach
+        // the PR only through it (issue #1831), so downstream mapping / verify /
+        // dedup see a single, uniformly-confirmed set of findings.
+        const allViolations: ShardViolation[] = [...judgeViolations];
 
         // Reuse the shared finding→CodeSuggestion mapping (ruleUuid
         // reconciliation, path canonicalization, kody-rule severity) so verify
@@ -361,7 +400,7 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
 
         const durationMs = Date.now() - startTime;
         this.shardLogger.log({
-            message: `[AGENT] ${this.getIdentity().name} (sharded) done for PR#${input.prNumber}: ${mapped.suggestions.length} suggestions (${detectorViolations.length} from ${mechanicalRules.length} detectors, ${judgeViolations.length} from ${shardsRun} shards${shardsErrored ? `, ${shardsErrored} errored` : ''}) in ${durationMs}ms`,
+            message: `[AGENT] ${this.getIdentity().name} (sharded) done for PR#${input.prNumber}: ${mapped.suggestions.length} suggestions (${judgeViolations.length} confirmed across ${shardsRun} shards${shardsErrored ? `, ${shardsErrored} errored` : ''}; ${candidateCount} detector candidate(s) offered) in ${durationMs}ms`,
             context: this.getIdentity().name,
         });
 
