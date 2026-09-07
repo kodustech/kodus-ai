@@ -24,6 +24,8 @@ import {
 import { resolveLanguageLabel } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
 import { ExternalReferenceLoaderService } from '@libs/kodyRules/infrastructure/adapters/services/externalReferenceLoader.service';
 import { buildDetectorCandidates } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler';
+import { checkClaims } from '@libs/code-review/infrastructure/agents/collaborators/claim-checker';
+import { buildRepoLookup } from '@libs/code-review/infrastructure/agents/collaborators/repo-lookup';
 import {
     ReviewAgentIdentity,
     ReviewAgentInput,
@@ -375,8 +377,42 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
 
         // One stream now: everything the judge confirmed. Detector hits reach
         // the PR only through it (issue #1831), so downstream mapping / verify /
-        // dedup see a single, uniformly-confirmed set of findings.
-        const allViolations: ShardViolation[] = [...judgeViolations];
+        // dedup see a single, uniformly-confirmed set of findings — which also
+        // means the claim check below covers BOTH streams for free.
+        //
+        // This is the only merit check this path has: it bypasses super.execute
+        // and with it the agentic finder's `verify` gate, so between the model's
+        // word and the published comment nothing else looks. A finding that
+        // asserts something about the repository gets that assertion refuted
+        // here, before mapping, and is dropped when the repository disagrees or
+        // when we could not look at all (issue #1826).
+        const claimCheck = await checkClaims({
+            violations: judgeViolations,
+            changedFiles: input.changedFiles ?? [],
+            // Absent means unavailable, never "assume a lookup": buildRepoLookup
+            // (undefined) is the fail-closed lookup whose accessors all throw.
+            lookup: input.repoLookup ?? buildRepoLookup(undefined),
+            logger: this.shardLogger,
+        });
+
+        for (const { violation, reason } of claimCheck.dropped) {
+            this.shardLogger.warn({
+                message: `[kody-rules] discarded a finding for PR#${input.prNumber}: ${reason}`,
+                context: this.getIdentity().name,
+                metadata: {
+                    // Without the org/team the discard log cannot be attributed
+                    // to a customer, which is the whole point of keeping it.
+                    organizationAndTeamData: input.organizationAndTeamData,
+                    prNumber: input.prNumber,
+                    ruleUuid: violation.ruleUuid,
+                    filename: violation.relevantFile,
+                    claimKind: violation.claimKind,
+                    reason,
+                },
+            });
+        }
+
+        const allViolations: ShardViolation[] = [...claimCheck.kept];
 
         // Reuse the shared finding→CodeSuggestion mapping (ruleUuid
         // reconciliation, path canonicalization, kody-rule severity) so verify
@@ -400,7 +436,7 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
 
         const durationMs = Date.now() - startTime;
         this.shardLogger.log({
-            message: `[AGENT] ${this.getIdentity().name} (sharded) done for PR#${input.prNumber}: ${mapped.suggestions.length} suggestions (${judgeViolations.length} confirmed across ${shardsRun} shards${shardsErrored ? `, ${shardsErrored} errored` : ''}; ${candidateCount} detector candidate(s) offered) in ${durationMs}ms`,
+            message: `[AGENT] ${this.getIdentity().name} (sharded) done for PR#${input.prNumber}: ${mapped.suggestions.length} suggestions (${judgeViolations.length} confirmed across ${shardsRun} shards${shardsErrored ? `, ${shardsErrored} errored` : ''}${claimCheck.dropped.length ? `, ${claimCheck.dropped.length} discarded by the claim check` : ''}; ${candidateCount} detector candidate(s) offered) in ${durationMs}ms`,
             context: this.getIdentity().name,
         });
 

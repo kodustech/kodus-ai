@@ -1770,3 +1770,213 @@ describe('KodyRulesAgentProvider — input variants + return shape (matrix D)', 
         );
     });
 });
+
+// ── #1826: the claim checker sits between the judge and the mapper ───────────
+// This path bypasses super.execute and with it the agentic finder's `verify`
+// gate, so the claim check is the only thing between the model's word and a
+// published comment. Derived from spec.md's P1 claim story:
+//   KRC-04  a refuted claim never reaches mapAgentFindings
+//   KRC-05  a verifiable claim with no lookup is discarded
+//   KRC-06  every discard is logged with rule uuid, file and reason
+//   KRC-09  a finding with no claim publishes exactly as before
+// Plus the #1864 consequence: detector-derived findings now come out of the
+// same judge, so they are claim-checked too.
+describe('KodyRulesAgentProvider — claim check before publishing (#1826)', () => {
+    beforeEach(() => {
+        mockRunStructuredReviewCall.mockReset();
+        mockJudge.mockClear();
+    });
+
+    const claimRule = {
+        uuid: RULE_UUID,
+        title: 'no unused imports',
+        rule: 'Remove imports that are not used in the file.',
+        status: 'active',
+        severity: 'high',
+        path: '**/*.ts',
+    };
+
+    const claimInput = (over: any = {}) => ({
+        prNumber: 7,
+        organizationAndTeamData: { organizationId: 'org-xyz', teamId: 'team-1' },
+        changedFiles: [
+            {
+                filename: 'src/a.ts',
+                patch: "3 +import { formatDate } from '../shared/date';",
+                patchWithLinesStr:
+                    "3 +import { formatDate } from '../shared/date';",
+            },
+        ],
+        prTitle: 'p',
+        prBody: '',
+        remoteCommands: undefined,
+        kodyRules: [claimRule],
+        ...over,
+    });
+
+    const lookup = (over: any = {}): any => ({
+        available: true,
+        unavailableReason: '',
+        grep: async () => 'No matches found.',
+        read: async () => '',
+        exists: async () => false,
+        probe: async () => {},
+        ...over,
+    });
+
+    const unusedFinding = {
+        ruleId: 1,
+        relevantLinesStart: 3,
+        relevantLinesEnd: 3,
+        existingCode: "import { formatDate } from '../shared/date';",
+        suggestionContent: 'this import is unused',
+        oneSentenceSummary: 'unused import',
+        claimKind: 'unused',
+        claimSymbol: 'formatDate',
+    };
+
+    it('never maps a finding whose claim the repository refutes', async () => {
+        // The #1724 shape: the symbol IS used, twenty lines below the window.
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [unusedFinding],
+        }));
+        const provider = makeBoundaryProvider();
+        const out = await provider.execute(
+            claimInput({
+                repoLookup: lookup({
+                    grep: async () => 'src/a.ts:24:  return formatDate(x);',
+                }),
+            }) as any,
+        );
+        expect(out.suggestions).toEqual([]);
+    });
+
+    it('publishes the same finding when the repository confirms the claim', async () => {
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [unusedFinding],
+        }));
+        const provider = makeBoundaryProvider();
+        const out = await provider.execute(
+            claimInput({ repoLookup: lookup() }) as any,
+        );
+        expect(out.suggestions).toHaveLength(1);
+        expect((out.suggestions[0] as any).brokenKodyRulesIds).toEqual([
+            RULE_UUID,
+        ]);
+    });
+
+    it('publishes a claim-free finding untouched, exactly as before', async () => {
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [
+                {
+                    ruleId: 1,
+                    relevantLinesStart: 3,
+                    relevantLinesEnd: 3,
+                    existingCode: 'x',
+                    suggestionContent: 'avoid this',
+                    oneSentenceSummary: 's',
+                },
+            ],
+        }));
+        const provider = makeBoundaryProvider();
+        const out = await provider.execute(
+            claimInput({
+                // even with no lookup at all — a finding that claims nothing is
+                // not the checker's business
+                repoLookup: undefined,
+            }) as any,
+        );
+        expect(out.suggestions).toHaveLength(1);
+    });
+
+    it('discards a verifiable claim when the review has no repository lookup (KRC-05)', async () => {
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [unusedFinding],
+        }));
+        const provider = makeBoundaryProvider();
+        const out = await provider.execute(
+            claimInput({ repoLookup: undefined }) as any,
+        );
+        expect(out.suggestions).toEqual([]);
+    });
+
+    it('claim-checks a detector-derived finding too — one stream since #1864', async () => {
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [unusedFinding],
+        }));
+        const provider = makeBoundaryProvider();
+        const out = await provider.execute(
+            claimInput({
+                kodyRules: [
+                    {
+                        ...claimRule,
+                        detector: { type: 'regex', pattern: 'formatDate' },
+                    },
+                ],
+                repoLookup: lookup({
+                    grep: async () => 'src/a.ts:24:  return formatDate(x);',
+                }),
+            }) as any,
+        );
+        // the detector fired, the judge ran, and the claim check still dropped it
+        expect(mockRunStructuredReviewCall).toHaveBeenCalledTimes(1);
+        expect(out.suggestions).toEqual([]);
+    });
+
+    it('logs every discard with the org/team, the rule uuid, the file and a reason', async () => {
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [unusedFinding],
+        }));
+        const provider = makeBoundaryProvider();
+        const warn = jest
+            .spyOn((provider as any).shardLogger, 'warn')
+            .mockImplementation(() => {});
+
+        await provider.execute(
+            claimInput({
+                repoLookup: lookup({
+                    grep: async () => 'src/a.ts:24:  return formatDate(x);',
+                }),
+            }) as any,
+        );
+
+        const discard = warn.mock.calls
+            .map((c) => c[0] as any)
+            .find((e) => e?.metadata?.ruleUuid === RULE_UUID);
+        expect(discard).toBeDefined();
+        expect(discard.metadata.organizationAndTeamData).toEqual({
+            organizationId: 'org-xyz',
+            teamId: 'team-1',
+        });
+        expect(discard.metadata.filename).toBe('src/a.ts');
+        expect(discard.metadata.claimKind).toBe('unused');
+        expect(discard.metadata.reason).toContain('formatDate');
+        expect(discard.message).toContain('discarded a finding');
+    });
+
+    it('drops only the refuted finding and keeps the rest of the shard', async () => {
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [
+                unusedFinding,
+                {
+                    ruleId: 1,
+                    relevantLinesStart: 4,
+                    relevantLinesEnd: 4,
+                    existingCode: 'y',
+                    suggestionContent: 'unrelated finding',
+                    oneSentenceSummary: 's',
+                },
+            ],
+        }));
+        const provider = makeBoundaryProvider();
+        const out = await provider.execute(
+            claimInput({
+                repoLookup: lookup({
+                    grep: async () => 'src/a.ts:24:  return formatDate(x);',
+                }),
+            }) as any,
+        );
+        expect(out.suggestions).toHaveLength(1);
+        expect(out.suggestions[0].relevantLinesStart).toBe(4);
+    });
+});
