@@ -90,7 +90,7 @@ const NAME_PATTERNS: RegExp[] = [
     /export\s+(?:default\s+)?(?:function|class|const)\s+(\w+)/,
 ];
 
-const DEFINITION_PATTERN =
+export const DEFINITION_PATTERN =
     /^\s*(def |func |fn |function |class |public |private |protected |interface |abstract |override |export (function|class|const))/;
 
 export function extractContentWindow(
@@ -129,7 +129,7 @@ function getExtension(filePath: string): string {
     return dot >= 0 ? filePath.substring(dot) : '';
 }
 
-function getModifiedRanges(patch?: string): Array<[number, number]> {
+export function getModifiedRanges(patch?: string): Array<[number, number]> {
     if (!patch) return [];
 
     const ranges: Array<[number, number]> = [];
