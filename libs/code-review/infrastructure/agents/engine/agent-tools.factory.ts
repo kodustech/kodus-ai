@@ -708,7 +708,16 @@ export function buildAgentTools(
                     }
                 }
 
-                let result = await remoteCommands.listDir(dirPath, depth);
+                let result: string;
+                try {
+                    result = await remoteCommands.listDir(dirPath, depth);
+                } catch (err) {
+                    // Same contract as grep/readFile above: a failed listing is
+                    // reported to the model as a tool error, never thrown past
+                    // the tool boundary. Reachable since the null sandbox stopped
+                    // answering '' for a repository it cannot see (#1826).
+                    return `Error listing ${dirPath}: ${err instanceof Error ? err.message : String(err)}`;
+                }
                 // Filter out common noise directories
                 const IGNORE_DIRS = [
                     'node_modules',
@@ -825,10 +834,14 @@ export function buildAgentTools(
                     }
 
                     // Fallback: listDir + filter (slower, no .gitignore)
-                    const allFiles = await remoteCommands.listDir(
-                        searchPath,
-                        4,
-                    );
+                    let allFiles: string;
+                    try {
+                        allFiles = await remoteCommands.listDir(searchPath, 4);
+                    } catch (err) {
+                        // See the listDir tool above: tool errors are reported,
+                        // not thrown past the boundary (#1826).
+                        return `Error searching for files under ${searchPath}: ${err instanceof Error ? err.message : String(err)}`;
+                    }
                     const matching = allFiles
                         .split('\n')
                         .filter(
