@@ -1,15 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { GateCtaLink } from "@components/system/gate-cta-link";
+import { SelectRepositories } from "@components/system/select-repositories";
 import { Button } from "@components/ui/button";
 import { Card, CardHeader } from "@components/ui/card";
+import { ConfirmModal } from "@components/ui/confirm-modal";
 import { Section } from "@components/ui/section";
 import { toast } from "@components/ui/toaster/use-toast";
-import { ConfirmModal } from "@components/ui/confirm-modal";
 import { useAsyncAction } from "@hooks/use-async-action";
 import { useReactQueryInvalidateQueries } from "@hooks/use-invalidate-queries";
-import { SelectRepositories } from "@components/system/select-repositories";
-import { GateCtaLink } from "@components/system/gate-cta-link";
 import { useGetRepositories } from "@services/codeManagement/hooks";
 import type { Repository } from "@services/codeManagement/types";
 import { KODY_RULES_PATHS } from "@services/kodyRules";
@@ -68,9 +68,7 @@ export const GlobalRulesSourceSetting = () => {
         const ids = new Set(savedSources.map((r) => String(r.id)));
         setSelected((prev) => {
             const saved = repositories.filter((r) => ids.has(String(r.id)));
-            const pendingAdditions = prev.filter(
-                (r) => !ids.has(String(r.id)),
-            );
+            const pendingAdditions = prev.filter((r) => !ids.has(String(r.id)));
             return [...saved, ...pendingAdditions];
         });
     }, [repositories, savedSources]);
@@ -123,19 +121,21 @@ export const GlobalRulesSourceSetting = () => {
         }
     });
 
-    const [handleResync, { loading: isResyncing }] = useAsyncAction(async () => {
-        try {
-            await resyncGlobalRules({ teamId });
-            toast({
-                variant: "success",
-                title: "Resync started",
-                description:
-                    "Re-scanning the selected repositories for global rules.",
-            });
-        } catch {
-            toast({ variant: "danger", title: "Could not start resync" });
-        }
-    });
+    const [handleResync, { loading: isResyncing }] = useAsyncAction(
+        async () => {
+            try {
+                await resyncGlobalRules({ teamId });
+                toast({
+                    variant: "success",
+                    title: "Resync started",
+                    description:
+                        "Re-scanning the selected repositories for global rules.",
+                });
+            } catch {
+                toast({ variant: "danger", title: "Could not start resync" });
+            }
+        },
+    );
 
     // Persist a removal on its own (not via Save): drops the repo from the
     // saved list, which the backend reconciles by soft-deleting that repo's
@@ -163,8 +163,7 @@ export const GlobalRulesSourceSetting = () => {
                 toast({
                     variant: "success",
                     title: "Repository removed",
-                    description:
-                        "Its imported global rules have been deleted.",
+                    description: "Its imported global rules have been deleted.",
                 });
             } catch {
                 toast({
@@ -199,7 +198,7 @@ export const GlobalRulesSourceSetting = () => {
     };
 
     const header = (
-        <Section.Header>
+        <Section.Header className="flex-col items-start gap-1">
             <Section.Title>Global rule sources</Section.Title>
             <Section.Description>
                 Select connected repositories to import their rule files as
@@ -220,7 +219,7 @@ export const GlobalRulesSourceSetting = () => {
                         <Section.Content className="flex flex-col gap-4">
                             <div
                                 aria-disabled
-                                className="pointer-events-none flex select-none flex-col gap-4 opacity-50">
+                                className="pointer-events-none flex flex-col gap-4 opacity-50 select-none">
                                 <SelectRepositories
                                     id="global-rules-source-picker"
                                     open={false}
@@ -228,7 +227,9 @@ export const GlobalRulesSourceSetting = () => {
                                     selectedRepositories={[]}
                                     onChangeSelectedRepositories={() => {}}
                                     teamId={teamId}
-                                    filterRepository={(r) => r.selected === true}
+                                    filterRepository={(r) =>
+                                        r.selected === true
+                                    }
                                 />
                                 <Button size="md" variant="primary" disabled>
                                     Save changes
@@ -249,7 +250,9 @@ export const GlobalRulesSourceSetting = () => {
                                 <GateCtaLink
                                     feature="kody_rules"
                                     plan="free"
-                                    metadata={{ surface: "global_rules_source" }}
+                                    metadata={{
+                                        surface: "global_rules_source",
+                                    }}
                                     size="sm"
                                     className="self-start"
                                 />
@@ -331,7 +334,8 @@ export const GlobalRulesSourceSetting = () => {
                                             className="flex items-center justify-between px-3 py-2">
                                             <span className="flex items-center gap-2 text-sm">
                                                 <span className="text-text-primary">
-                                                    {repo.full_name || repo.name}
+                                                    {repo.full_name ||
+                                                        repo.name}
                                                 </span>
                                                 {isPending && (
                                                     <span className="text-warning border-warning/40 rounded border px-1.5 py-0.5 text-[11px]">

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useMemo } from "react";
+import { useMemo } from "react";
 import NextLink from "next/link";
 import { usePathname } from "next/navigation";
 import { SvgKodus } from "@components/ui/icons/SvgKodus";
@@ -10,18 +10,16 @@ import {
     NavigationMenuLink,
     NavigationMenuList,
 } from "@components/ui/navigation-menu";
-import { Spinner } from "@components/ui/spinner";
+import { useMCPAvailability } from "@services/mcp-manager/hooks";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+    BlocksIcon,
     GaugeIcon,
     GitPullRequestIcon,
-    InfoIcon,
-    LibraryBig,
     LockIcon,
     SlidersHorizontalIcon,
-    TerminalIcon,
 } from "lucide-react";
 import { ErrorBoundary } from "react-error-boundary";
 import { UserNav } from "src/core/layout/navbar/_components/user-nav";
@@ -31,7 +29,6 @@ import { SubscriptionBadge } from "src/features/ee/subscription/_components/subs
 import { useSubscriptionContext } from "src/features/ee/subscription/_providers/subscription-context";
 
 import { GithubStars } from "./_components/github-stars";
-import { IssuesCount } from "./_components/issues-count";
 import { NotificationBell } from "./_components/notification-bell";
 import { VERSION_QUERY } from "./_components/version-info";
 
@@ -41,7 +38,6 @@ export const NavMenu = () => {
     const queryClient = useQueryClient();
     queryClient.prefetchQuery(VERSION_QUERY);
 
-    const canReadIssues = usePermission(Action.Read, ResourceType.Issues);
     const canReadPullRequests = usePermission(
         Action.Read,
         ResourceType.PullRequests,
@@ -63,7 +59,11 @@ export const NavMenu = () => {
         Action.Read,
         ResourceType.PluginSettings,
     );
+    const { data: isMCPAvailable = true } = useMCPAvailability(canReadPlugins);
 
+    // Four destinations. Reviews folds Pull Requests + CLI Reviews (tabs on
+    // the page); Issues lives inside the Cockpit; Library is reached from
+    // Kody Rules; Git Settings + Subscription sit in the avatar menu.
     const items = useMemo(() => {
         const items: Array<{
             label: string;
@@ -74,6 +74,15 @@ export const NavMenu = () => {
             matcher?: (pathname: string) => boolean;
         }> = [
             {
+                label: "Reviews",
+                href: "/pull-requests",
+                visible: canReadPullRequests || canReadCliReviews,
+                icon: <GitPullRequestIcon className="size-5" />,
+                matcher: (path) =>
+                    path.startsWith("/pull-requests") ||
+                    path.startsWith("/cli-reviews"),
+            },
+            {
                 label: "Cockpit",
                 href: "/cockpit",
                 // Always visible: below the allowed tier the route renders a
@@ -81,68 +90,39 @@ export const NavMenu = () => {
                 // layout.tsx), so the nav item shows a lock instead of hiding.
                 visible: true,
                 icon: <GaugeIcon className="size-6" />,
-                badge: isCockpitTierAllowed(subscription.license) ? undefined : (
+                badge: isCockpitTierAllowed(
+                    subscription.license,
+                ) ? undefined : (
                     <LockIcon className="size-3.5" />
                 ),
             },
 
             {
-                label: "Code Review Settings",
+                label: "Settings",
                 icon: <SlidersHorizontalIcon className="size-5" />,
                 href: "/settings",
                 visible:
                     canReadCodeReviewSettings ||
                     canReadGitSettings ||
-                    canReadBilling ||
-                    canReadPlugins,
+                    canReadBilling,
+                // Plugins has its own entry below; keep it out of Settings'
+                // active state.
+                matcher: (path) =>
+                    path.startsWith("/settings") &&
+                    !path.startsWith("/settings/plugins"),
             },
-
             {
-                label: "Library",
-                icon: <LibraryBig className="size-5" />,
-                href: "/library/kody-rules",
-                visible: canReadCodeReviewSettings,
+                label: "Plugins",
+                icon: <BlocksIcon className="size-5" />,
+                href: "/settings/plugins",
+                visible: canReadPlugins && isMCPAvailable,
+                badge: (
+                    <span className="bg-secondary-light/15 text-secondary-light rounded-full px-1.5 py-px text-[10px] font-semibold tracking-wide uppercase">
+                        Beta
+                    </span>
+                ),
             },
         ];
-
-        if (canReadIssues) {
-            items.push({
-                label: "Issues",
-                href: "/issues",
-                visible: canReadIssues,
-                icon: <InfoIcon className="size-5" />,
-                badge: (
-                    <div className="h-5 min-h-auto min-w-8">
-                        <Suspense
-                            fallback={
-                                <div className="flex size-full items-center justify-center">
-                                    <Spinner className="size-4" />
-                                </div>
-                            }>
-                            <IssuesCount />
-                        </Suspense>
-                    </div>
-                ),
-            });
-        }
-
-        if (canReadPullRequests) {
-            items.push({
-                label: "Pull Requests",
-                href: "/pull-requests",
-                visible: canReadPullRequests,
-                icon: <GitPullRequestIcon className="size-5" />,
-            });
-        }
-
-        if (canReadCliReviews) {
-            items.push({
-                label: "CLI Reviews",
-                href: "/cli-reviews",
-                visible: canReadCliReviews,
-                icon: <TerminalIcon className="size-5" />,
-            });
-        }
 
         return items;
     }, [
@@ -155,7 +135,7 @@ export const NavMenu = () => {
         canReadGitSettings,
         canReadBilling,
         canReadPlugins,
-        canReadIssues,
+        isMCPAvailable,
         canReadPullRequests,
         canReadCliReviews,
     ]);
@@ -224,7 +204,7 @@ export const NavMenu = () => {
                     <GithubStars />
                 </ErrorBoundary>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
                     <SubscriptionBadge />
                     <NotificationBell />
                 </div>

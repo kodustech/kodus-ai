@@ -19,7 +19,6 @@ import { SubscriptionProvider } from "src/features/ee/subscription/_providers/su
 
 import { getLayoutData, getTeamsCached } from "./_helpers/get-layout-data";
 import { Providers } from "./providers";
-import { AppRightSidebar } from "./right-sidebar";
 
 // Team-scoped layout fetches (platform config + layout data), run in parallel.
 // getLayoutData is React-cache()'d on teamId, so calling this twice with the
@@ -173,8 +172,6 @@ export default async function Layout({ children }: React.PropsWithChildren) {
                 {showBYOKMissingKeyTopbar && <BYOKMissingKeyTopbar />}
 
                 {children}
-
-                <AppRightSidebar />
             </SubscriptionProvider>
         </Providers>
     );

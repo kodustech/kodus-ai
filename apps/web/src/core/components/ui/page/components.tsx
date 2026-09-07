@@ -19,8 +19,13 @@ export const PageWithSidebar = (props: React.PropsWithChildren) => {
     );
 };
 
-const WITH_SIDEBAR_CONTAINER = "max-w-(--breakpoint-lg)";
-const WITHOUT_SIDEBAR_CONTAINER = "max-w-(--breakpoint-lg)";
+// Every page is a centered column with the SAME cap: 80rem (1280px). Wide
+// enough for the data tables (Kody Rules, Reviews, Issues, Cockpit), which
+// used to opt out with `max-w-full` and made forms and tables start at
+// different x positions. Don't override the cap per page.
+const PAGE_CONTAINER = "mx-auto w-full max-w-7xl";
+const WITH_SIDEBAR_CONTAINER = PAGE_CONTAINER;
+const WITHOUT_SIDEBAR_CONTAINER = PAGE_CONTAINER;
 
 export const PageRoot = ({
     scrollable,
@@ -61,7 +66,7 @@ export const PageContent = forwardRef<
             {...props}
             ref={ref}
             className={cn(
-                "container flex flex-1 flex-col gap-6",
+                "flex flex-1 flex-col gap-6 px-8",
                 hasSidebar && "flex-1",
                 !hasParentScrollable && hasSidebar && "overflow-auto",
                 hasSidebar ? WITH_SIDEBAR_CONTAINER : WITHOUT_SIDEBAR_CONTAINER,
@@ -79,7 +84,10 @@ export const PageHeader = (props: React.ComponentProps<"div">) => {
         <div
             {...props}
             className={cn(
-                "container flex min-h-12 shrink-0 items-center justify-between gap-6",
+                "flex min-h-12 shrink-0 items-center justify-between gap-6 px-8",
+                // A header whose only child rendered null (e.g. the code-review
+                // breadcrumb under the tabs shell) must not keep its 48px.
+                "empty:hidden",
                 hasSidebar ? WITH_SIDEBAR_CONTAINER : WITHOUT_SIDEBAR_CONTAINER,
                 props.className,
             )}>
@@ -126,7 +134,7 @@ export const PageFooter = (props: React.ComponentProps<"div">) => {
         <div
             {...props}
             className={cn(
-                "container flex shrink-0 items-center justify-between gap-6",
+                "flex shrink-0 items-center justify-between gap-6 px-8",
                 hasSidebar ? WITH_SIDEBAR_CONTAINER : WITHOUT_SIDEBAR_CONTAINER,
                 props.className,
             )}>

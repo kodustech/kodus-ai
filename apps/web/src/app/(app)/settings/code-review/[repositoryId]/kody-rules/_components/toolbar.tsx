@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Button } from "@components/ui/button";
 import { Checkbox } from "@components/ui/checkbox";
 import { Input } from "@components/ui/input";
@@ -25,6 +25,8 @@ type Repository = {
 };
 
 type KodyRulesToolbarProps = {
+    /** Extra controls rendered after the Filters button (e.g. view switcher). */
+    trailing?: ReactNode;
     filterQuery: string;
     onFilterQueryChange: (query: string) => void;
     isDisabled: boolean;
@@ -46,14 +48,15 @@ export const KodyRulesToolbar = ({
     onSortOptionChange,
     isRepoView,
     isGlobalView,
+    trailing,
 }: KodyRulesToolbarProps) => {
     const activeFilterCount =
         entityLabel === "rules"
             ? listFilters.origins.size +
-            listFilters.severities.size +
-            (listFilters.kodySync ? 1 : 0) +
-            (listFilters.withSyncErrors ? 1 : 0) +
-            (listFilters.pausedOnly ? 1 : 0)
+              listFilters.severities.size +
+              (listFilters.kodySync ? 1 : 0) +
+              (listFilters.withSyncErrors ? 1 : 0) +
+              (listFilters.pausedOnly ? 1 : 0)
             : 0;
 
     // Global "/" shortcut focuses the search input (skips when the user is
@@ -108,13 +111,12 @@ export const KodyRulesToolbar = ({
                 <PopoverTrigger asChild>
                     <Button
                         size="md"
-                        variant="secondary"
+                        variant="helper"
+                        className="ring-1"
                         decorative
                         aria-label={
                             activeFilterCount > 0
-                                ? "Filters (" +
-                                activeFilterCount +
-                                " active)"
+                                ? "Filters (" + activeFilterCount + " active)"
                                 : "Filters"
                         }
                         leftIcon={<Filter aria-hidden />}>
@@ -142,6 +144,7 @@ export const KodyRulesToolbar = ({
                     />
                 </PopoverContent>
             </Popover>
+            {trailing}
         </div>
     );
 };

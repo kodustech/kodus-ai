@@ -5,7 +5,7 @@ import type { FeaturesSnapshot } from '../domain/snapshot.types';
 
 export const FEATURES_SNAPSHOT: FeaturesSnapshot = {
     "schema_version": 1,
-    "generated_at": "2026-08-11T19:06:02.620Z",
+    "generated_at": "2026-09-05T15:51:48.144Z",
     "source": "manual",
     "features": {
         "github-enterprise-server-pat": {
@@ -32,6 +32,15 @@ export const FEATURES_SNAPSHOT: FeaturesSnapshot = {
             "description": "Use sanitized decisions distilled from local coding-agent sessions as repository-scoped context for Kody code reviews.",
             "audience": [
                 "cloud"
+            ]
+        },
+        "settings-tabs-shell": {
+            "name": "Settings without the side rail",
+            "stage": "alpha",
+            "description": "Code review settings with a scope switcher and page tabs in the header instead of the side rail, so dense screens like Kody Rules get the full width.",
+            "audience": [
+                "cloud",
+                "self-hosted"
             ]
         }
     }

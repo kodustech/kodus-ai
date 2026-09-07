@@ -71,7 +71,7 @@ const GithubStarsContent = () => {
             <Link target="_blank" href={repositoryUrl}>
                 <Button
                     decorative
-                    size="sm"
+                    size="xs"
                     variant="helper"
                     className="rounded-r-none"
                     leftIcon={<SvgGithub />}>
@@ -84,7 +84,7 @@ const GithubStarsContent = () => {
                     <Button
                         active
                         decorative
-                        size="sm"
+                        size="xs"
                         variant="helper"
                         className={cn(
                             "button-focused:text-primary-light",

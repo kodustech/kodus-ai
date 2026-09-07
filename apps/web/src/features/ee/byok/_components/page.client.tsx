@@ -158,7 +158,7 @@ export const ByokPageClient = ({
 
     return (
         <Page.Root>
-            <Page.Header className="max-w-full px-6">
+            <Page.Header>
                 <Page.TitleContainer>
                     <Page.Title className="text-balance">
                         Bring your own key
@@ -189,7 +189,7 @@ export const ByokPageClient = ({
                 </Page.TitleContainer>
             </Page.Header>
 
-            <Page.Content className="max-w-full px-6">
+            <Page.Content>
                 {showEnvNotice && llmConfigStatus && (
                     <EnvConfigNotice env={llmConfigStatus.env} />
                 )}

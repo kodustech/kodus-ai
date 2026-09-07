@@ -1,7 +1,7 @@
 "use client";
 
-import { KodyRulesLimitPopover } from "@components/system/kody-rules-limit-popover";
 import { IssueSeverityLevelBadge } from "@components/system/issue-severity-level-badge";
+import { KodyRulesLimitPopover } from "@components/system/kody-rules-limit-popover";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import { Card, CardContent, CardHeader } from "@components/ui/card";
@@ -10,14 +10,18 @@ import { magicModal } from "@components/ui/magic-modal";
 import { PopoverTrigger } from "@components/ui/popover";
 import { Section } from "@components/ui/section";
 import { Separator } from "@components/ui/separator";
+import { toast } from "@components/ui/toaster/use-toast";
 import {
     Tooltip,
     TooltipContent,
     TooltipPortal,
     TooltipTrigger,
 } from "@components/ui/tooltip";
+import { useAsyncAction } from "@hooks/use-async-action";
+import { changeStatusKodyRules } from "@services/kodyRules/fetch";
 import {
     KodyRuleCentralizedStatus,
+    KodyRulesStatus,
     KodyRulesType,
     resolveKodyRuleDisplaySeverity,
     type KodyRuleWithInheritanceDetails,
@@ -26,23 +30,21 @@ import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { EditIcon, EyeIcon, LockIcon, PlayIcon, TrashIcon } from "lucide-react";
 import { SuggestionsModal } from "src/app/(app)/library/kody-rules/_components/suggestions-modal";
-
-import { OriginBadge } from "./origin-badge";
+import { resolveKodyRuleBadgeState } from "src/core/utils/kody-rules/resolve-badge-state";
+import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
 
 import { DeleteKodyRuleConfirmationModal } from "../../../_components/delete-confirmation-modal";
 import { KodyRuleAddOrUpdateItemModal } from "../../../_components/modal";
 import { useFullCodeReviewConfig } from "../../../../_components/context";
 import { useCodeReviewRouteParams } from "../../../../_hooks";
 import { ExternalReferencesDisplay } from "../../pr-summary/_components/external-references-display";
-import { changeStatusKodyRules } from "@services/kodyRules/fetch";
-import { KodyRulesStatus } from "@services/kodyRules/types";
-import { toast } from "@components/ui/toaster/use-toast";
-import { useAsyncAction } from "@hooks/use-async-action";
-import { resolveKodyRuleBadgeState } from "src/core/utils/kody-rules/resolve-badge-state";
-import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
+import { OriginBadge } from "./origin-badge";
 
 function showLastPaths(path: string, max = 3): string {
-    const items = path.split(",").map((g) => g.trim()).filter((g) => g.length > 0);
+    const items = path
+        .split(",")
+        .map((g) => g.trim())
+        .filter((g) => g.length > 0);
     if (items.length <= max) return path;
     return "..." + items.slice(-max).join(", ");
 }
@@ -183,7 +185,7 @@ export const KodyRuleItem = ({
                                     " " +
                                     (rule.title ?? "")
                                 }
-                                className="border-card-lv3 bg-card-lv2 size-4 cursor-pointer rounded border accent-primary-light"
+                                className="border-card-lv3 bg-card-lv2 accent-primary-light size-4 cursor-pointer rounded border"
                             />
                         )}
 
@@ -225,8 +227,8 @@ export const KodyRuleItem = ({
                                     <TooltipContent>
                                         <p>
                                             This {entityLabel} is paused. It
-                                            stays in your list but is skipped
-                                            on every new PR.
+                                            stays in your list but is skipped on
+                                            every new PR.
                                         </p>
                                         <p>Click the play icon to resume it.</p>
                                     </TooltipContent>
@@ -316,7 +318,7 @@ export const KodyRuleItem = ({
                     {isPaused && !isInherited && (
                         <Button
                             size="icon-md"
-                            variant="secondary"
+                            variant="helper"
                             aria-label={"Resume " + entityLabel}
                             className="size-9"
                             disabled={!canEdit || isResuming}
@@ -327,7 +329,7 @@ export const KodyRuleItem = ({
 
                     <Button
                         size="icon-md"
-                        variant="secondary"
+                        variant="helper"
                         aria-label={
                             !canEdit || isInherited
                                 ? "View " + entityLabel + " details"
@@ -344,7 +346,7 @@ export const KodyRuleItem = ({
 
                     <Button
                         size="icon-md"
-                        variant="secondary"
+                        variant="helper"
                         aria-label={"Delete " + entityLabel}
                         className="size-9 [--button-foreground:var(--color-danger)]"
                         disabled={!canDelete || isInherited}
@@ -390,7 +392,9 @@ export const KodyRuleItem = ({
                                                 </code>
                                             </TooltipTrigger>
                                             <TooltipPortal>
-                                                <TooltipContent side="right" className="max-w-96">
+                                                <TooltipContent
+                                                    side="right"
+                                                    className="max-w-96">
                                                     <code className="font-mono text-xs break-all">
                                                         {rule.path}
                                                     </code>

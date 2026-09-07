@@ -296,10 +296,10 @@ export const KodyRulesLibrary = ({
 
     const initialBrowseResultsAlreadyLoadedRef = useRef(
         Boolean(initialSelectedBucket) &&
-        initialSelectedBucket === selectedBucket &&
-        !debouncedNameFilter.trim() &&
-        !filters.severity &&
-        !filters.language,
+            initialSelectedBucket === selectedBucket &&
+            !debouncedNameFilter.trim() &&
+            !filters.severity &&
+            !filters.language,
     );
 
     const fetchResultsPage = useCallback(
@@ -397,9 +397,9 @@ export const KodyRulesLibrary = ({
             setFilters(
                 nextMode === "browse" && autoLanguage
                     ? {
-                        name: "",
-                        language: autoLanguage,
-                    }
+                          name: "",
+                          language: autoLanguage,
+                      }
                     : { name: "" },
             );
             setSelectedBucket(null);
@@ -779,10 +779,10 @@ export const KodyRulesLibrary = ({
                                             {selectedBucketMeta?.title
                                                 ? selectedBucketMeta.title
                                                 : hasUserFilters
-                                                    ? "Results"
-                                                    : autoLanguage
-                                                        ? `${ProgrammingLanguage[autoLanguage]} rules`
-                                                        : "All rules"}
+                                                  ? "Results"
+                                                  : autoLanguage
+                                                    ? `${ProgrammingLanguage[autoLanguage]} rules`
+                                                    : "All rules"}
                                         </Heading>
                                         <div className="text-text-secondary text-sm">
                                             {pagination.total > 0
@@ -799,8 +799,7 @@ export const KodyRulesLibrary = ({
 
                                 <Separator className="opacity-60" />
 
-                                {results.length === 0 &&
-                                    !isResultsLoading ? (
+                                {results.length === 0 && !isResultsLoading ? (
                                     <div className="text-text-secondary py-12 text-sm">
                                         {hasUserFilters
                                             ? "No rules found with your current filters."
@@ -823,16 +822,16 @@ export const KodyRulesLibrary = ({
 
                                         {pagination.page <
                                             pagination.totalPages && (
-                                                <div className="flex justify-center pt-2">
-                                                    <Button
-                                                        size="md"
-                                                        variant="secondary"
-                                                        loading={isResultsLoading}
-                                                        onClick={loadMoreResults}>
-                                                        Load more
-                                                    </Button>
-                                                </div>
-                                            )}
+                                            <div className="flex justify-center pt-2">
+                                                <Button
+                                                    size="md"
+                                                    variant="helper"
+                                                    loading={isResultsLoading}
+                                                    onClick={loadMoreResults}>
+                                                    Load more
+                                                </Button>
+                                            </div>
+                                        )}
                                     </>
                                 )}
                             </section>
@@ -840,46 +839,46 @@ export const KodyRulesLibrary = ({
                             <>
                                 {(recommendedRules.length > 0 ||
                                     isRecommendedLoading) && (
-                                        <section className="border-card-lv3 bg-card-lv1 rounded-xl border p-6">
-                                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                                <div className="flex items-start gap-3">
-                                                    <div className="bg-card-lv3 rounded-lg p-3">
-                                                        <SparklesIcon className="text-primary-light size-5" />
-                                                    </div>
-                                                    <div className="flex flex-col gap-1">
-                                                        <Heading variant="h2">
-                                                            Recommended for you
-                                                        </Heading>
-                                                        <p className="text-text-secondary text-sm">
-                                                            Personalized rules based
-                                                            on your preferences.
-                                                        </p>
-                                                    </div>
+                                    <section className="border-card-lv3 bg-card-lv1 rounded-xl border p-6">
+                                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                            <div className="flex items-start gap-3">
+                                                <div className="bg-card-lv3 rounded-lg p-3">
+                                                    <SparklesIcon className="text-primary-light size-5" />
                                                 </div>
-
-                                                <Button
-                                                    size="sm"
-                                                    variant="cancel"
-                                                    loading={isRecommendedLoading}
-                                                    onClick={fetchRecommended}>
-                                                    Refresh
-                                                </Button>
+                                                <div className="flex flex-col gap-1">
+                                                    <Heading variant="h2">
+                                                        Recommended for you
+                                                    </Heading>
+                                                    <p className="text-text-secondary text-sm">
+                                                        Personalized rules based
+                                                        on your preferences.
+                                                    </p>
+                                                </div>
                                             </div>
 
-                                            <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                                                {recommendedRules.map((rule) => (
-                                                    <KodyRuleLibraryItem
-                                                        key={rule.uuid}
-                                                        rule={rule}
-                                                        showLikeButton
-                                                        showSuggestionsButton={
-                                                            showSuggestionsButton
-                                                        }
-                                                    />
-                                                ))}
-                                            </div>
-                                        </section>
-                                    )}
+                                            <Button
+                                                size="sm"
+                                                variant="cancel"
+                                                loading={isRecommendedLoading}
+                                                onClick={fetchRecommended}>
+                                                Refresh
+                                            </Button>
+                                        </div>
+
+                                        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                            {recommendedRules.map((rule) => (
+                                                <KodyRuleLibraryItem
+                                                    key={rule.uuid}
+                                                    rule={rule}
+                                                    showLikeButton
+                                                    showSuggestionsButton={
+                                                        showSuggestionsButton
+                                                    }
+                                                />
+                                            ))}
+                                        </div>
+                                    </section>
+                                )}
 
                                 {featuredCollections?.map((collection) => (
                                     <section
@@ -900,7 +899,7 @@ export const KodyRulesLibrary = ({
                                                 noHoverUnderline>
                                                 <Button
                                                     size="sm"
-                                                    variant="secondary"
+                                                    variant="cancel"
                                                     decorative>
                                                     View all
                                                 </Button>
@@ -952,7 +951,7 @@ export const KodyRulesLibrary = ({
                                                 noHoverUnderline>
                                                 <Button
                                                     size="sm"
-                                                    variant="secondary"
+                                                    variant="cancel"
                                                     decorative>
                                                     View all
                                                 </Button>

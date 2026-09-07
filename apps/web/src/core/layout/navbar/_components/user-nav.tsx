@@ -1,19 +1,25 @@
 "use client";
 
+import NextLink from "next/link";
+import { SvgDiscord } from "@components/ui/icons/SvgDiscord";
+import { SvgFounder } from "@components/ui/icons/SvgFounder";
 import { Link } from "@components/ui/link";
 import { toast } from "@components/ui/toaster/use-toast";
+import { useConfig } from "@providers/ConfigProvider";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import {
     ActivityIcon,
+    Building2Icon,
     ChartColumn,
+    CreditCardIcon,
+    FileTextIcon,
+    GitBranchIcon,
+    Headset,
     KeyRoundIcon,
     LogOutIcon,
-    SettingsIcon,
     UserIcon,
 } from "lucide-react";
-import { useAllTeams } from "src/core/providers/all-teams-context";
-import { useAuth } from "src/core/providers/auth.provider";
 import { Avatar, AvatarFallback } from "src/core/components/ui/avatar";
 import { Button } from "src/core/components/ui/button";
 import {
@@ -26,6 +32,8 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "src/core/components/ui/dropdown-menu";
+import { useAllTeams } from "src/core/providers/all-teams-context";
+import { useAuth } from "src/core/providers/auth.provider";
 import { useSubscriptionStatus } from "src/core/providers/byok.provider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { TEAM_STATUS } from "src/core/types";
@@ -42,11 +50,19 @@ export function UserNav() {
         ResourceType.OrganizationSettings,
     );
     const canReadLogs = usePermission(Action.Read, ResourceType.Logs);
+    const canReadGitSettings = usePermission(
+        Action.Read,
+        ResourceType.GitSettings,
+    );
+    const canReadBilling = usePermission(Action.Read, ResourceType.Billing);
     const canReadTokenUsage = usePermission(
         Action.Read,
         ResourceType.TokenUsage,
     );
     const { isBYOK, isTrial, isEnterprise } = useSubscriptionStatus();
+    const cfg = useConfig();
+    // Helpdesk is an enterprise-cloud channel; the other links are public.
+    const showHelpdesk = !isSelfHosted && isEnterprise;
 
     const handleChangeWorkspace = (teamId: string) => {
         setTeamId(teamId);
@@ -111,8 +127,24 @@ export function UserNav() {
 
                 {canEditOrg && (
                     <Link href="/organization/general">
-                        <DropdownMenuItem leftIcon={<SettingsIcon />}>
-                            Settings
+                        <DropdownMenuItem leftIcon={<Building2Icon />}>
+                            Organization
+                        </DropdownMenuItem>
+                    </Link>
+                )}
+
+                {canReadGitSettings && (
+                    <Link href="/settings/git">
+                        <DropdownMenuItem leftIcon={<GitBranchIcon />}>
+                            Git Settings
+                        </DropdownMenuItem>
+                    </Link>
+                )}
+
+                {canReadBilling && (
+                    <Link href="/settings/subscription">
+                        <DropdownMenuItem leftIcon={<CreditCardIcon />}>
+                            Subscription
                         </DropdownMenuItem>
                     </Link>
                 )}
@@ -134,14 +166,50 @@ export function UserNav() {
                 )}
 
                 {canReadTokenUsage && (
-                        <Link href="/token-usage">
-                            <DropdownMenuItem
-                                data-testid="nav-token-usage"
-                                leftIcon={<ChartColumn />}>
-                                Token Usage
-                            </DropdownMenuItem>
-                        </Link>
-                    )}
+                    <Link href="/token-usage">
+                        <DropdownMenuItem
+                            data-testid="nav-token-usage"
+                            leftIcon={<ChartColumn />}>
+                            Token Usage
+                        </DropdownMenuItem>
+                    </Link>
+                )}
+
+                <DropdownMenuSeparator />
+
+                <DropdownMenuLabel>Help</DropdownMenuLabel>
+
+                {showHelpdesk && (
+                    <NextLink href="/helpdesk">
+                        <DropdownMenuItem leftIcon={<Headset />}>
+                            Helpdesk
+                        </DropdownMenuItem>
+                    </NextLink>
+                )}
+
+                <NextLink target="_blank" href={cfg.supportDocsUrl || ""}>
+                    <DropdownMenuItem leftIcon={<FileTextIcon />}>
+                        View docs
+                    </DropdownMenuItem>
+                </NextLink>
+
+                <NextLink
+                    target="_blank"
+                    href={cfg.supportDiscordInviteUrl || ""}>
+                    <DropdownMenuItem leftIcon={<SvgDiscord />}>
+                        Our Discord
+                    </DropdownMenuItem>
+                </NextLink>
+
+                <NextLink
+                    target="_blank"
+                    href={cfg.supportTalkToFounderUrl || ""}>
+                    <DropdownMenuItem leftIcon={<SvgFounder />}>
+                        Talk to a Founder
+                    </DropdownMenuItem>
+                </NextLink>
+
+                <DropdownMenuSeparator />
 
                 <Link href="/sign-out" replace>
                     <DropdownMenuItem leftIcon={<LogOutIcon />}>

@@ -16,45 +16,53 @@ import {
  * Uses React's cache() to deduplicate calls within the same request.
  * All API calls are made in parallel to minimize latency.
  */
-export const getLayoutData = cache(
-    async (teamId: string) => {
-        const releaseTrackPromise = getOrganizationReleaseTrack();
+export const getLayoutData = cache(async (teamId: string) => {
+    const releaseTrackPromise = getOrganizationReleaseTrack();
 
-        const [
-            permissions,
-            organizationName,
-            organizationLicense,
-            usersWithAssignedLicense,
-            llmConfigStatus,
-            githubEnterpriseServerPatFeatureFlag,
-        ] = await Promise.all([
-            getPermissions().catch(() => ({})),
-            getOrganizationName().catch(() => ""),
-            validateOrganizationLicense({ teamId }).catch(() => null),
-            getUsersWithLicense({ teamId }).catch(() => []),
-            getLLMConfigStatus().catch(() => null),
-            releaseTrackPromise
-                .then((releaseTrack) =>
-                    isFeatureEnabled({
-                        feature: FEATURE_FLAGS.githubEnterpriseServerPat,
-                        releaseTrack,
-                    }),
-                )
-                .catch(() => false),
-        ]);
+    const [
+        permissions,
+        organizationName,
+        organizationLicense,
+        usersWithAssignedLicense,
+        llmConfigStatus,
+        githubEnterpriseServerPatFeatureFlag,
+        settingsTabsShellFeatureFlag,
+    ] = await Promise.all([
+        getPermissions().catch(() => ({})),
+        getOrganizationName().catch(() => ""),
+        validateOrganizationLicense({ teamId }).catch(() => null),
+        getUsersWithLicense({ teamId }).catch(() => []),
+        getLLMConfigStatus().catch(() => null),
+        releaseTrackPromise
+            .then((releaseTrack) =>
+                isFeatureEnabled({
+                    feature: FEATURE_FLAGS.githubEnterpriseServerPat,
+                    releaseTrack,
+                }),
+            )
+            .catch(() => false),
+        releaseTrackPromise
+            .then((releaseTrack) =>
+                isFeatureEnabled({
+                    feature: FEATURE_FLAGS.settingsTabsShell,
+                    releaseTrack,
+                }),
+            )
+            .catch(() => false),
+    ]);
 
-        return {
-            permissions,
-            organizationName,
-            organizationLicense,
-            usersWithAssignedLicense,
-            llmConfigStatus,
-            featureFlags: {
-                githubEnterpriseServerPat: githubEnterpriseServerPatFeatureFlag,
-            },
-        };
-    },
-);
+    return {
+        permissions,
+        organizationName,
+        organizationLicense,
+        usersWithAssignedLicense,
+        llmConfigStatus,
+        featureFlags: {
+            githubEnterpriseServerPat: githubEnterpriseServerPatFeatureFlag,
+            settingsTabsShell: settingsTabsShellFeatureFlag,
+        },
+    };
+});
 
 /**
  * Fetches teams with request-level caching.

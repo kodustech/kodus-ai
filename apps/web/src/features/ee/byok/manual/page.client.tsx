@@ -583,7 +583,7 @@ export function ByokManualPageClient({
 
     return (
         <Page.Root>
-            <Page.Header className="max-w-full px-6">
+            <Page.Header>
                 <Page.TitleContainer>
                     <div className="flex items-center gap-3">
                         <Link href="/byok">
@@ -612,7 +612,7 @@ export function ByokManualPageClient({
                 </Page.TitleContainer>
             </Page.Header>
 
-            <Page.Content className="max-w-full px-6">
+            <Page.Content>
                 {envIsActiveSource && !isEditing && (
                     <Alert variant="info">
                         <InfoIcon />

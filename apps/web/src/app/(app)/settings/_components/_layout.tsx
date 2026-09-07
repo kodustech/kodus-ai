@@ -10,7 +10,6 @@ import {
     CollapsibleIndicator,
     CollapsibleTrigger,
 } from "@components/ui/collapsible";
-import { Link } from "@components/ui/link";
 import { Page } from "@components/ui/page";
 import {
     Sidebar,
@@ -23,7 +22,6 @@ import {
     SidebarMenuSubItem,
 } from "@components/ui/sidebar";
 import { Skeleton } from "@components/ui/skeleton";
-import { useMCPAvailability } from "@services/mcp-manager/hooks";
 import {
     useCodeReviewSettingsShell,
     useSuspenseGetDefaultCodeReviewParameter,
@@ -33,8 +31,6 @@ import {
     ParametersConfigKey,
     type PlatformConfigValue,
 } from "@services/parameters/types";
-import { usePermission } from "@services/permissions/hooks";
-import { Action, ResourceType } from "@services/permissions/types";
 import type { CustomMessageConfig } from "@services/pull-request-messages/types";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { safeArray } from "src/core/utils/safe-array";
@@ -47,6 +43,7 @@ import {
     type FormattedGlobalCodeReviewConfig,
 } from "../code-review/_types";
 import { resolveCodeReviewConfigForScope } from "./code-review-config-scope";
+import { CodeReviewShellHeader } from "./code-review-shell-header";
 import {
     AutomationCodeReviewConfigProvider,
     CodeReviewConfigFetchStateProvider,
@@ -55,6 +52,7 @@ import {
     InitialParametersProvider,
     PlatformConfigProvider,
     ScopedCodeReviewConfigProvider,
+    useFeatureFlags,
     type CodeReviewModelData,
 } from "./context";
 import { PerRepository } from "./per-repository/repository";
@@ -62,28 +60,65 @@ import {
     RouteButtonWithOverrideCount,
     useCustomMessagesOverrideCount,
 } from "./route-button-with-override-count";
+import {
+    SettingsShellModeProvider,
+    type SettingsShellMode,
+} from "./shell-mode-context";
 
+// `shortLabel` is what the tabs shell shows: eight tabs plus the scope must
+// fit one row without horizontal scroll, and inside Settings the "Review"
+// and "Custom" prefixes carry no information.
 const routes = [
     { label: "General", href: "general" },
-    { label: "Review Categories", href: "review-categories" },
-    { label: "Review Filters", href: "suggestion-control" },
-    { label: "Custom Prompts", href: "custom-prompts" },
-    { label: "PR Summary", href: "pr-summary" },
+    {
+        label: "Review Categories",
+        shortLabel: "Categories",
+        href: "review-categories",
+    },
+    {
+        label: "Review Filters",
+        shortLabel: "Filters",
+        href: "suggestion-control",
+    },
+    { label: "Custom Prompts", shortLabel: "Prompts", href: "custom-prompts" },
+    { label: "PR Summary", shortLabel: "Summary", href: "pr-summary" },
     { label: "Kody Rules", href: "kody-rules" },
-    { label: "Custom Messages", href: "custom-messages" },
+    {
+        label: "Custom Messages",
+        shortLabel: "Messages",
+        href: "custom-messages",
+    },
     // Cross-repo context (#1576): relationships are directional and
     // repo-scoped by design (a global default would link EVERY repo to the
     // same siblings), so the item only renders in repository submenus.
     {
         label: "Linked Repositories",
+        shortLabel: "Linked repos",
         href: "linked-repositories",
         repoOnly: true,
     },
 ] satisfies Array<{
     label: string;
+    shortLabel?: string;
     href: string;
     repoOnly?: boolean;
 }>;
+
+// Tabs shell (alpha): one tab per question the user brings. Categories,
+// filters and the per-category prompts collapse into "What to review"; the
+// rail keeps the original pages so nothing moves for everyone else.
+const tabsRoutes = [
+    { label: "General", href: "general" },
+    { label: "What to review", href: "review-scope" },
+    { label: "Kody Rules", href: "kody-rules" },
+    { label: "What Kody writes", href: "output" },
+    {
+        label: "Linked Repositories",
+        shortLabel: "Linked repos",
+        href: "linked-repositories",
+        repoOnly: true,
+    },
+] satisfies typeof routes;
 
 // Global scope never shows repo-only routes (see `repoOnly` on `routes`).
 const globalSettingsRoutes = routes.filter(
@@ -139,11 +174,6 @@ export const SettingsLayout = ({
                     : undefined,
         },
     );
-    const canReadPlugins = usePermission(
-        Action.Read,
-        ResourceType.PluginSettings,
-    );
-    const { data: isMCPAvailable = true } = useMCPAvailability(canReadPlugins);
 
     const initialShellQueryData = useMemo<
         | {
@@ -190,8 +220,9 @@ export const SettingsLayout = ({
                             liveShellQuery?.configValue ?? initialConfigValue
                         }
                         defaultConfig={defaultConfig ?? initialDefaultConfig}
-                        platformConfig={platformConfig ?? initialPlatformConfig}
-                        isMCPAvailable={isMCPAvailable}>
+                        platformConfig={
+                            platformConfig ?? initialPlatformConfig
+                        }>
                         {children}
                     </SettingsLayoutShell>
                 </InitialParametersProvider>
@@ -206,15 +237,18 @@ function SettingsLayoutShell({
     configValue,
     defaultConfig,
     platformConfig,
-    isMCPAvailable,
 }: React.PropsWithChildren<{
     teamId: string;
     configValue: FormattedGlobalCodeReviewConfig | undefined;
     defaultConfig: InitialDefaultConfig;
     platformConfig: InitialPlatformConfig;
-    isMCPAvailable: boolean;
 }>) {
     const pathname = usePathname();
+    // Alpha flag `settings-tabs-shell`: scope switcher + page tabs in a
+    // header band instead of the side rail. Everyone else keeps the rail.
+    const shellMode: SettingsShellMode = useFeatureFlags().settingsTabsShell
+        ? "tabs"
+        : "rail";
     const { repositoryId, pageName, directoryId } = useCodeReviewRouteParams();
     const globalConfigOverrideCount = configValue
         ? countConfigOverridesForRoutes(
@@ -230,54 +264,6 @@ function SettingsLayoutShell({
     });
     const globalOverrideCount =
         globalConfigOverrideCount + globalCustomMessagesOverrideCount;
-
-    const canReadGitSettings = usePermission(
-        Action.Read,
-        ResourceType.GitSettings,
-    );
-    const canReadBilling = usePermission(Action.Read, ResourceType.Billing);
-    const canReadPlugins = usePermission(
-        Action.Read,
-        ResourceType.PluginSettings,
-    );
-
-    const mainRoutes = useMemo(() => {
-        const nextRoutes: Array<{
-            label: string;
-            href: string;
-            badge?: React.ReactNode;
-        }> = [];
-
-        if (canReadGitSettings) {
-            nextRoutes.push({
-                label: "Git Settings",
-                href: "/settings/git",
-            });
-        }
-
-        if (canReadBilling) {
-            nextRoutes.push({
-                label: "Subscription",
-                href: "/settings/subscription",
-            });
-        }
-
-        if (canReadPlugins && isMCPAvailable) {
-            nextRoutes.push({
-                label: "Plugins",
-                href: "/settings/plugins",
-                badge: (
-                    <Badge
-                        variant="secondary"
-                        className="pointer-events-none -my-1 h-6 min-h-auto px-2.5">
-                        Beta
-                    </Badge>
-                ),
-            });
-        }
-
-        return nextRoutes;
-    }, [canReadGitSettings, canReadBilling, canReadPlugins, isMCPAvailable]);
 
     const settingsRoutes = routes;
 
@@ -315,155 +301,158 @@ function SettingsLayoutShell({
         }
     }
 
+    const content = configValue ? (
+        <DefaultCodeReviewConfigProvider config={defaultConfig}>
+            <AutomationCodeReviewConfigProvider config={configValue}>
+                <ScopedCodeReviewConfigProvider config={scopedConfig}>
+                    <PlatformConfigProvider config={platformConfig.configValue}>
+                        {shellMode === "tabs" &&
+                            pathname.startsWith("/settings/code-review") && (
+                                <CodeReviewShellHeader
+                                    configValue={configValue}
+                                    platformConfigValue={
+                                        platformConfig.configValue
+                                    }
+                                    routes={tabsRoutes}
+                                    globalOverrideCount={globalOverrideCount}
+                                />
+                            )}
+                        {children}
+                    </PlatformConfigProvider>
+                </ScopedCodeReviewConfigProvider>
+            </AutomationCodeReviewConfigProvider>
+        </DefaultCodeReviewConfigProvider>
+    ) : (
+        <SettingsShellContentSkeleton />
+    );
+
+    if (shellMode === "tabs") {
+        // No rail: scope + page nav live in a header band and the page owns
+        // the full width below it.
+        return (
+            <SettingsShellModeProvider value={shellMode}>
+                <div className="flex flex-1 flex-col overflow-hidden">
+                    {content}
+                </div>
+            </SettingsShellModeProvider>
+        );
+    }
+
     return (
-        <div className="flex flex-1 flex-row overflow-hidden">
-            <Sidebar className="bg-card-lv1 px-0 py-0">
-                <SidebarContent className="gap-4 px-6 py-6">
-                    <SidebarGroup>
-                        <SidebarGroupContent>
-                            <SidebarMenu>
-                                {mainRoutes.map((route) => (
-                                    <SidebarMenuItem key={route.href}>
-                                        <Link
-                                            href={route.href}
-                                            className="w-full">
-                                            <Button
-                                                size="md"
-                                                decorative
-                                                className="w-full justify-start"
-                                                active={pathname === route.href}
-                                                rightIcon={route.badge}
-                                                variant={
-                                                    pathname.startsWith(
-                                                        route.href,
-                                                    )
-                                                        ? "helper"
-                                                        : "cancel"
-                                                }>
-                                                {route.label}
-                                            </Button>
-                                        </Link>
-                                    </SidebarMenuItem>
-                                ))}
-                            </SidebarMenu>
-                        </SidebarGroupContent>
-                    </SidebarGroup>
+        <SettingsShellModeProvider value={shellMode}>
+            <div className="flex flex-1 flex-row overflow-hidden">
+                {/* 256px rail (was 320) with tighter padding: Git Settings,
+                    Subscription and Plugins moved to the avatar menu / navbar,
+                    so the rail is only the scope tree now. */}
+                <Sidebar className="bg-card-lv1 w-64 px-0 py-0">
+                    <SidebarContent className="gap-4 px-4 py-5">
+                        <SidebarGroup>
+                            <SidebarGroupContent>
+                                <SidebarMenu className="gap-6">
+                                    {!isShellLoading ? (
+                                        <Collapsible
+                                            defaultOpen={
+                                                repositoryId === "global" ||
+                                                !repositoryId
+                                            }>
+                                            <CollapsibleTrigger asChild>
+                                                <Button
+                                                    size="md"
+                                                    variant="helper"
+                                                    className="h-fit w-full justify-start py-2"
+                                                    leftIcon={
+                                                        <CollapsibleIndicator className="-ml-1 group-data-[state=closed]/collapsible:rotate-[-90deg] group-data-[state=open]/collapsible:rotate-0" />
+                                                    }
+                                                    rightIcon={
+                                                        globalOverrideCount >
+                                                            0 && (
+                                                            <Badge
+                                                                variant="primary-dark"
+                                                                className="h-5 min-w-5 rounded-full px-1.5 text-[10px] font-medium">
+                                                                {
+                                                                    globalOverrideCount
+                                                                }
+                                                            </Badge>
+                                                        )
+                                                    }>
+                                                    Global
+                                                </Button>
+                                            </CollapsibleTrigger>
 
-                    <SidebarGroup>
-                        <SidebarGroupContent>
-                            <SidebarMenu className="gap-6">
-                                {!isShellLoading ? (
-                                    <Collapsible
-                                        defaultOpen={
-                                            repositoryId === "global" ||
-                                            !repositoryId
-                                        }>
-                                        <CollapsibleTrigger asChild>
-                                            <Button
-                                                size="md"
-                                                variant="helper"
-                                                className="h-fit w-full justify-start py-2"
-                                                leftIcon={
-                                                    <CollapsibleIndicator className="-ml-1 group-data-[state=closed]/collapsible:rotate-[-90deg] group-data-[state=open]/collapsible:rotate-0" />
-                                                }
-                                                rightIcon={
-                                                    globalOverrideCount > 0 && (
-                                                        <Badge
-                                                            variant="primary-dark"
-                                                            className="h-5 min-w-5 rounded-full px-1.5 text-[10px] font-medium">
-                                                            {
-                                                                globalOverrideCount
-                                                            }
-                                                        </Badge>
-                                                    )
-                                                }>
-                                                Global
-                                            </Button>
-                                        </CollapsibleTrigger>
+                                            <CollapsibleContent>
+                                                <SidebarMenuItem>
+                                                    <SidebarMenuSub>
+                                                        {globalSettingsRoutes.map(
+                                                            ({
+                                                                label,
+                                                                href,
+                                                            }) => {
+                                                                const active =
+                                                                    repositoryId ===
+                                                                        "global" &&
+                                                                    pageName ===
+                                                                        href;
 
-                                        <CollapsibleContent>
-                                            <SidebarMenuItem>
-                                                <SidebarMenuSub>
-                                                    {globalSettingsRoutes.map(
-                                                        ({ label, href }) => {
-                                                            const active =
-                                                                repositoryId ===
-                                                                    "global" &&
-                                                                pageName ===
-                                                                    href;
-
-                                                            return (
-                                                                <SidebarMenuSubItem
-                                                                    key={label}>
-                                                                    <RouteButtonWithOverrideCount
-                                                                        label={
+                                                                return (
+                                                                    <SidebarMenuSubItem
+                                                                        key={
                                                                             label
-                                                                        }
-                                                                        href={
-                                                                            href
-                                                                        }
-                                                                        to={`/settings/code-review/global/${href}`}
-                                                                        active={
-                                                                            active
-                                                                        }
-                                                                        level={
-                                                                            FormattedConfigLevel.GLOBAL
-                                                                        }
-                                                                        config={
-                                                                            configValue.configs
-                                                                        }
-                                                                        customMessagesOverrideCount={
-                                                                            globalCustomMessagesOverrideCount
-                                                                        }
-                                                                    />
-                                                                </SidebarMenuSubItem>
-                                                            );
-                                                        },
-                                                    )}
-                                                </SidebarMenuSub>
-                                            </SidebarMenuItem>
-                                        </CollapsibleContent>
-                                    </Collapsible>
-                                ) : (
-                                    <SettingsGlobalSidebarSkeleton
-                                        settingsRoutes={globalSettingsRoutes}
-                                    />
-                                )}
+                                                                        }>
+                                                                        <RouteButtonWithOverrideCount
+                                                                            label={
+                                                                                label
+                                                                            }
+                                                                            href={
+                                                                                href
+                                                                            }
+                                                                            to={`/settings/code-review/global/${href}`}
+                                                                            active={
+                                                                                active
+                                                                            }
+                                                                            level={
+                                                                                FormattedConfigLevel.GLOBAL
+                                                                            }
+                                                                            config={
+                                                                                configValue.configs
+                                                                            }
+                                                                            customMessagesOverrideCount={
+                                                                                globalCustomMessagesOverrideCount
+                                                                            }
+                                                                        />
+                                                                    </SidebarMenuSubItem>
+                                                                );
+                                                            },
+                                                        )}
+                                                    </SidebarMenuSub>
+                                                </SidebarMenuItem>
+                                            </CollapsibleContent>
+                                        </Collapsible>
+                                    ) : (
+                                        <SettingsGlobalSidebarSkeleton
+                                            settingsRoutes={
+                                                globalSettingsRoutes
+                                            }
+                                        />
+                                    )}
 
-                                {configValue ? (
-                                    <PerRepository
-                                        routes={settingsRoutes}
-                                        configValue={configValue}
-                                        platformConfig={platformConfig}
-                                    />
-                                ) : (
-                                    <SettingsPerRepositorySkeleton />
-                                )}
-                            </SidebarMenu>
-                        </SidebarGroupContent>
-                    </SidebarGroup>
-                </SidebarContent>
-            </Sidebar>
+                                    {configValue ? (
+                                        <PerRepository
+                                            routes={settingsRoutes}
+                                            configValue={configValue}
+                                            platformConfig={platformConfig}
+                                        />
+                                    ) : (
+                                        <SettingsPerRepositorySkeleton />
+                                    )}
+                                </SidebarMenu>
+                            </SidebarGroupContent>
+                        </SidebarGroup>
+                    </SidebarContent>
+                </Sidebar>
 
-            <Page.WithSidebar>
-                {configValue ? (
-                    <DefaultCodeReviewConfigProvider config={defaultConfig}>
-                        <AutomationCodeReviewConfigProvider
-                            config={configValue}>
-                            <ScopedCodeReviewConfigProvider
-                                config={scopedConfig}>
-                                <PlatformConfigProvider
-                                    config={platformConfig.configValue}>
-                                    {children}
-                                </PlatformConfigProvider>
-                            </ScopedCodeReviewConfigProvider>
-                        </AutomationCodeReviewConfigProvider>
-                    </DefaultCodeReviewConfigProvider>
-                ) : (
-                    <SettingsShellContentSkeleton />
-                )}
-            </Page.WithSidebar>
-        </div>
+                <Page.WithSidebar>{content}</Page.WithSidebar>
+            </div>
+        </SettingsShellModeProvider>
     );
 }
 

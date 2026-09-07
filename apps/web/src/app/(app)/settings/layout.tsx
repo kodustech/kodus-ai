@@ -118,7 +118,8 @@ export default async function Layout({ children }: React.PropsWithChildren) {
                 initialDefaultConfig={initialDefaultConfig ?? undefined}
                 initialPlatformConfig={initialPlatformConfig ?? undefined}
                 initialParameters={{
-                    [ParametersConfigKey.LANGUAGE_CONFIG]: initialLanguageConfig,
+                    [ParametersConfigKey.LANGUAGE_CONFIG]:
+                        initialLanguageConfig,
                 }}
                 initialModelData={{
                     llmConfigStatus: initialLLMConfigStatus,

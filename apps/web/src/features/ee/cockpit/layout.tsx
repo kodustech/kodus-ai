@@ -9,10 +9,11 @@ import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team
 import { greeting } from "src/core/utils/helpers";
 
 import { validateOrganizationLicense } from "../subscription/_services/billing/fetch";
+import { IssuesTabLink } from "./_components/cockpit-nav-tabs";
 import { CockpitTabs } from "./_components/cockpit-tabs";
-import { CockpitLockedPreview } from "./_components/locked-preview";
 import { DateRangePicker } from "./_components/date-range-picker";
 import { ExpandableCardsLayout } from "./_components/expandable-cards-layout";
+import { CockpitLockedPreview } from "./_components/locked-preview";
 import { CockpitNoDataBanner } from "./_components/no-data-banner";
 import { RepositoryPicker } from "./_components/repository-picker";
 import { ShareViewButton } from "./_components/share-view-button";
@@ -139,7 +140,7 @@ export default async function Layout({
         <Page.Root>
             {!hasAnalyticsData && <CockpitNoDataBanner />}
 
-            <Page.Header className="max-w-full px-6">
+            <Page.Header>
                 <Page.Title>{greeting()}</Page.Title>
                 <div className="ml-auto flex items-center gap-2">
                     <RepositoryPicker
@@ -151,7 +152,7 @@ export default async function Layout({
                 </div>
             </Page.Header>
 
-            <Page.Content className="max-w-full px-6">
+            <Page.Content>
                 <div>
                     <CockpitTabs
                         defaultTab={defaultTab}
@@ -169,6 +170,9 @@ export default async function Layout({
                                     </TabsTrigger>
                                 );
                             })}
+                            {/* Issues is a route, not a panel: it joins the
+                                strip as a link so it reads as the third tab. */}
+                            <IssuesTabLink active={false} />
                         </TabsList>
 
                         {tabsVisibility.productivity && (

@@ -18,7 +18,7 @@ const SAMPLE_BARS = [35, 55, 42, 68, 50, 74, 61, 80];
 export const CockpitLockedPreview = () => {
     return (
         <Page.Root>
-            <Page.Header className="max-w-full px-6">
+            <Page.Header>
                 <Page.Title>{greeting()}</Page.Title>
                 <div className="ml-auto flex items-center gap-2">
                     <div className="bg-card-lv2 h-8 w-40 rounded-lg" />
@@ -26,7 +26,7 @@ export const CockpitLockedPreview = () => {
                 </div>
             </Page.Header>
 
-            <Page.Content className="max-w-full px-6">
+            <Page.Content>
                 <div className="flex flex-col gap-4">
                     <div className="flex gap-2">
                         <div className="bg-card-lv2 h-9 w-32 rounded-lg" />

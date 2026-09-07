@@ -11,6 +11,7 @@ import { usePermissions } from "src/core/providers/permissions.provider";
 import { filterArray, type FilterValueGroup } from "src/core/utils/filtering";
 import { hasPermission } from "src/core/utils/permission-map";
 import { safeArray } from "src/core/utils/safe-array";
+import { CockpitNavTabs } from "src/features/ee/cockpit/_components/cockpit-nav-tabs";
 
 import { IssuesDataTable } from "./_components/data-table";
 import { IssuesFilters } from "./_components/filters";
@@ -106,7 +107,10 @@ export default function IssuesPage() {
 
     return (
         <Page.Root className="overflow-hidden pb-0">
-            <Page.Header className="max-w-full">
+            <Page.Header>
+                <CockpitNavTabs />
+            </Page.Header>
+            <Page.Header>
                 <div className="flex items-center gap-5">
                     <Page.Title>Issues</Page.Title>
 
@@ -138,7 +142,7 @@ export default function IssuesPage() {
             </Page.Header>
 
             {/* 'overflow-auto' is required to virtualizing table */}
-            <Page.Content className="max-w-full overflow-auto px-0">
+            <Page.Content className="overflow-auto px-0">
                 <IssuesDataTable
                     peek={peek}
                     data={filteredData}
