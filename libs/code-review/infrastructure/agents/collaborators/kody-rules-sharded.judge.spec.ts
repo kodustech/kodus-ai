@@ -1588,3 +1588,167 @@ describe('#1826 — a shard finding carries a checkable claim', () => {
         expect(user).toMatch(/strip the line-number and '\+' prefix/);
     });
 });
+
+// ── #1826: the shard is shown the context a rule declared it needs ──────────
+// Retrieved slices are evidence for judging the diff, never a place to hunt
+// for violations — every line in them sits OUTSIDE the hunks. Derived from
+// spec.md's P2 story:
+//   KRC-18  evidence outside the diff hunks must not be reported as a violation
+//   KRC-30  the block states what the retrieval cannot see and names
+//           "no violation here" as a normal outcome
+describe('#1826 — the file shard is shown the retrieved context', () => {
+    const slice = (over: Record<string, unknown> = {}) => ({
+        kind: 'symbol-references' as const,
+        label: 'repository occurrences of `formatDate`',
+        content: 'src/reports/pdf.ts:44:  formatDate(order.createdAt)',
+        truncated: false,
+        ...over,
+    });
+
+    const captureFileUser = async (over: Record<string, unknown> = {}) => {
+        let user = '';
+        const runJudge: RunJudge = async ({ filename, user: u }) => {
+            if (filename === 'src/orders/order-mapper.ts') user = u;
+            return [];
+        };
+        await judgeKodyRulesSharded({
+            changedFiles: [
+                file(
+                    'src/orders/order-mapper.ts',
+                    "3 +import { formatDate } from '../shared/date';",
+                ),
+            ],
+            rules: [
+                {
+                    uuid: 'r1',
+                    title: 'No unused imports',
+                    rule: 'Remove imports that are not used in the file.',
+                },
+            ],
+            runJudge,
+            ...over,
+        });
+        return user;
+    };
+
+    it('renders each slice with its label and content', async () => {
+        const user = await captureFileUser({
+            contextSlices: new Map([
+                ['src/orders/order-mapper.ts', [slice()]],
+            ]),
+        });
+
+        expect(user).toContain('<Context>');
+        expect(user).toContain('- repository occurrences of `formatDate`:');
+        expect(user).toContain(
+            'src/reports/pdf.ts:44:  formatDate(order.createdAt)',
+        );
+        expect(user).toContain('</Context>');
+    });
+
+    it('states what the retrieval could not see, so absence is not read as proof (KRC-30)', async () => {
+        const user = await captureFileUser({
+            contextSlices: new Map([
+                ['src/orders/order-mapper.ts', [slice()]],
+            ]),
+        });
+
+        expect(user).toContain(
+            'It cannot see dynamic or generated references, other branches, or the same thing under another name',
+        );
+        expect(user).toMatch(
+            /what is missing here is weak evidence, while what is present is reliable/,
+        );
+    });
+
+    it('names "no violation here" as a normal outcome (KRC-30)', async () => {
+        const user = await captureFileUser({
+            contextSlices: new Map([
+                ['src/orders/order-mapper.ts', [slice()]],
+            ]),
+        });
+
+        expect(user).toContain(
+            'Concluding "no violation here" is the normal outcome and needs no explanation.',
+        );
+    });
+
+    it('forbids reporting a violation whose evidence lies outside the diff hunks (KRC-18)', async () => {
+        const user = await captureFileUser({
+            contextSlices: new Map([
+                ['src/orders/order-mapper.ts', [slice()]],
+            ]),
+        });
+
+        expect(user).toContain('These lines are NOT part of this pull request.');
+        expect(user).toContain(
+            'Never report a violation whose evidence lies outside the diff hunks',
+        );
+    });
+
+    it('marks a slice the retrieval budget cut short', async () => {
+        const user = await captureFileUser({
+            contextSlices: new Map([
+                ['src/orders/order-mapper.ts', [slice({ truncated: true })]],
+            ]),
+        });
+
+        expect(user).toContain(
+            '- repository occurrences of `formatDate` (cut short at the context budget — there may be more):',
+        );
+    });
+
+    it('places the context between the file and the candidates', async () => {
+        const user = await captureFileUser({
+            contextSlices: new Map([
+                ['src/orders/order-mapper.ts', [slice()]],
+            ]),
+            rules: [
+                {
+                    uuid: 'r1',
+                    title: 'No unused imports',
+                    rule: 'Remove imports that are not used in the file.',
+                    detector: { source: 'x' },
+                },
+            ],
+            detectorHits: new Map([
+                ['r1', new Map([['src/orders/order-mapper.ts', [3]]])],
+            ]),
+            languageLabel: 'Portuguese (Brazil)',
+        });
+
+        expect(user.indexOf('</Rules>')).toBeLessThan(
+            user.indexOf('<File path='),
+        );
+        expect(user.indexOf('<File path=')).toBeLessThan(
+            user.indexOf('<Context>'),
+        );
+        expect(user.indexOf('<Context>')).toBeLessThan(
+            user.indexOf('<Candidates>'),
+        );
+        expect(user.indexOf('<Candidates>')).toBeLessThan(
+            user.indexOf('Respond in Portuguese (Brazil)'),
+        );
+        expect(user.indexOf('Respond in Portuguese (Brazil)')).toBeLessThan(
+            user.indexOf('Return ONLY JSON'),
+        );
+    });
+
+    it('FILE-shard prompt is byte-identical when no slice was retrieved', async () => {
+        const withNothing = await captureFileUser();
+        const withEmptyMap = await captureFileUser({
+            contextSlices: new Map(),
+        });
+        const withEmptyList = await captureFileUser({
+            contextSlices: new Map([['src/orders/order-mapper.ts', []]]),
+        });
+        const withAnotherFilesSlices = await captureFileUser({
+            contextSlices: new Map([['src/other.ts', [slice()]]]),
+        });
+
+        expect(withNothing).not.toContain('<Context>');
+        expect(withEmptyMap).toBe(withNothing);
+        expect(withEmptyList).toBe(withNothing);
+        expect(withAnotherFilesSlices).toBe(withNothing);
+    });
+});

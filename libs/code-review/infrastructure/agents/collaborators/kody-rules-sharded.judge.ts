@@ -31,6 +31,7 @@ import {
 // Type-only: the compiler imports `ruleAppliesToFile` from THIS module, so a
 // value import back would close a runtime require cycle.
 import type { DetectorHitIndex } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler';
+import type { RetrievedSlice } from '@libs/code-review/infrastructure/agents/collaborators/rule-context.retriever';
 
 /**
  * Parser schema for a shard's JSON output. The provider passes this to
@@ -284,6 +285,15 @@ export interface ShardedJudgeInput {
      * exactly as before.
      */
     detectorHits?: DetectorHitIndex;
+    /**
+     * Repository slices retrieved for each file because one of its rules
+     * declared it needs more than the hunk (issue #1826), keyed by filename the
+     * same way `detectorHits` is keyed by rule.
+     *
+     * Absent = no rule in this review asked for context; every shard prompt is
+     * byte-identical to before this existed.
+     */
+    contextSlices?: Map<string, RetrievedSlice[]>;
 }
 
 export interface ShardedJudgeResult {
@@ -419,6 +429,49 @@ function intentLines(prTitle?: string, prBody?: string): string[] {
     ];
 }
 
+/**
+ * The retrieved-context block for a file shard (issue #1826): the repository
+ * slices a rule declared it needs in order to be judged at all.
+ *
+ * Same hazard as `candidateLines`, in mirror image. Showing a model
+ * occurrences of a symbol invites it to comment on THEM — and every one of
+ * those lines sits outside the diff, where a comment cannot be acted on and
+ * was never asked for. So the block does two things beyond carrying the text:
+ * it says what the retrieval could not see, so absence is not read as proof
+ * (KRC-30), and it forbids reporting a violation whose evidence lies outside
+ * the hunks (KRC-18). Rejection is named as the normal outcome for the same
+ * reason it is named in the candidate block.
+ *
+ * Returns [] when this file has no slices, so a shard of purely diff-only
+ * rules keeps a byte-identical prompt to before this existed.
+ */
+function contextLines(
+    file: FileChange,
+    contextSlices?: Map<string, RetrievedSlice[]>,
+): string[] {
+    const slices = contextSlices?.get(file.filename);
+    if (!slices?.length) return [];
+
+    const rendered: string[] = [];
+    for (const slice of slices) {
+        rendered.push(
+            `- ${slice.label}${slice.truncated ? ' (cut short at the context budget — there may be more)' : ''}:`,
+        );
+        rendered.push('```');
+        rendered.push(slice.content);
+        rendered.push('```');
+    }
+
+    return [
+        `<Context>`,
+        `Slices of the repository outside this diff, retrieved by code because one of the rules above says the hunk alone is not enough to judge it. Retrieval is deterministic and narrow: it followed only the paths and symbols this diff names. It cannot see dynamic or generated references, other branches, or the same thing under another name — so what is missing here is weak evidence, while what is present is reliable.`,
+        ...rendered,
+        `These lines are NOT part of this pull request. Use them only to decide whether the lines ADDED in the diff above break the rules. Never report a violation whose evidence lies outside the diff hunks, however wrong those lines look — they are not this PR's to fix. Concluding "no violation here" is the normal outcome and needs no explanation.`,
+        `</Context>`,
+        ``,
+    ];
+}
+
 function fileShardUser(
     file: FileChange,
     rules: Array<Partial<IKodyRule>>,
@@ -426,6 +479,7 @@ function fileShardUser(
     detectorHits?: DetectorHitIndex,
     prTitle?: string,
     prBody?: string,
+    contextSlices?: Map<string, RetrievedSlice[]>,
 ): string {
     const diff = (file as any).patchWithLinesStr ?? file.patch ?? '';
     return [
@@ -441,6 +495,9 @@ function fileShardUser(
         '```',
         `</File>`,
         ``,
+        // Context BEFORE candidates: the candidates are questions to be judged
+        // using the context, so the evidence has to be on the page first.
+        ...contextLines(file, contextSlices),
         ...candidateLines(file, rules, detectorHits),
         ...languageInstructionLines(languageLabel),
         // `improvedCode` and `language` are REQUIRED by the wire schema but were
@@ -809,6 +866,7 @@ export async function judgeKodyRulesSharded(
         logger,
         languageLabel,
         detectorHits,
+        contextSlices,
     } = input;
     const concurrency = input.concurrency ?? 4;
 
@@ -853,6 +911,7 @@ export async function judgeKodyRulesSharded(
                         detectorHits,
                         prTitle,
                         prBody,
+                        contextSlices,
                     ),
                     filename: file.filename,
                     ruleUuids,
