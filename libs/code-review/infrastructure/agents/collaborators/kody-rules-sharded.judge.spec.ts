@@ -1375,3 +1375,216 @@ describe('#1826 — the file shard receives the PR intent', () => {
         expect(prUser).not.toContain('description truncated');
     });
 });
+
+// ── #1826: a shard finding carries a checkable claim ────────────────────────
+// The judge is the only place a finding can declare WHAT it asserts about the
+// repository; without that declaration the claim checker has nothing to
+// refute. Derived from spec.md's P1 claim story:
+//   KRC-03  a violation carrying a verifiable claim reaches the checker typed
+//   KRC-09  a malformed or empty claim degrades to `none` (publish unchanged)
+//   KRC-21  a claim naming an empty/whitespace target names nothing
+// The wire-shape assertions exist because a nested claim object or a
+// non-required key 400s EVERY shard for BYOK-OpenAI orgs (#1523/#1526).
+describe('#1826 — a shard finding carries a checkable claim', () => {
+    const claimKeys = ['claimKind', 'claimSymbol', 'claimPath'];
+
+    it('keeps every claim key in the wire schema required array', () => {
+        const wire = (shardViolationsWireSchema as any).jsonSchema;
+        const items = wire.properties.violations.items;
+        for (const key of claimKeys) {
+            expect(items.properties[key]).toBeDefined();
+            expect(items.required).toContain(key);
+        }
+    });
+
+    it('makes every claim key nullable via anyOf, not optional', () => {
+        const wire = (shardViolationsWireSchema as any).jsonSchema;
+        const items = wire.properties.violations.items;
+        for (const key of claimKeys) {
+            const branches = items.properties[key].anyOf;
+            expect(Array.isArray(branches)).toBe(true);
+            expect(branches).toContainEqual({ type: 'null' });
+        }
+    });
+
+    it('carries the claim vocabulary on the wire so a strict provider can only emit it', () => {
+        const wire = (shardViolationsWireSchema as any).jsonSchema;
+        const kind = wire.properties.violations.items.properties.claimKind;
+        const enumBranch = kind.anyOf.find((b: any) => b.enum);
+        expect(enumBranch.enum.slice().sort()).toEqual(
+            ['duplicate', 'missing', 'none', 'unused'].sort(),
+        );
+    });
+
+    it('keeps the claim fields flat — no nested claim object', () => {
+        const wire = (shardViolationsWireSchema as any).jsonSchema;
+        const items = wire.properties.violations.items;
+        expect(items.properties.claim).toBeUndefined();
+        expect(items.properties.claimKind.type).not.toBe('object');
+    });
+
+    it('parses a well-formed claim through to the typed value', () => {
+        const r = shardViolationsSchema.parse({
+            violations: [
+                {
+                    ruleId: 1,
+                    suggestionContent: 'x',
+                    claimKind: 'unused',
+                    claimSymbol: 'formatDate',
+                    claimPath: 'src/shared/date.ts',
+                },
+            ],
+        });
+        expect(r.violations[0].claimKind).toBe('unused');
+        expect(r.violations[0].claimSymbol).toBe('formatDate');
+        expect(r.violations[0].claimPath).toBe('src/shared/date.ts');
+    });
+
+    it('parses an off-vocabulary claim kind as none instead of failing the shard', () => {
+        const r = shardViolationsSchema.parse({
+            violations: [
+                { ruleId: 1, suggestionContent: 'x', claimKind: 'shadowed' },
+                { ruleId: 1, suggestionContent: 'y', claimKind: 42 as any },
+            ],
+        });
+        expect(r.violations).toHaveLength(2);
+        expect(r.violations[0].claimKind).toBe('none');
+        // a non-string is not a claim at all — same absent semantics as every
+        // other nullable key on this schema
+        expect(r.violations[1].claimKind).toBeNull();
+    });
+
+    it('parses an empty or whitespace-only claim kind as none', () => {
+        const r = shardViolationsSchema.parse({
+            violations: [
+                { ruleId: 1, suggestionContent: 'x', claimKind: '' },
+                { ruleId: 1, suggestionContent: 'y', claimKind: '   ' },
+            ],
+        });
+        expect(r.violations[0].claimKind).toBe('none');
+        expect(r.violations[1].claimKind).toBe('none');
+    });
+
+    it('normalizes a claim kind the model cased or padded differently', () => {
+        const r = shardViolationsSchema.parse({
+            violations: [
+                { ruleId: 1, suggestionContent: 'x', claimKind: ' Unused ' },
+            ],
+        });
+        expect(r.violations[0].claimKind).toBe('unused');
+    });
+
+    it('collapses an empty or whitespace-only claim target to null', () => {
+        const r = shardViolationsSchema.parse({
+            violations: [
+                {
+                    ruleId: 1,
+                    suggestionContent: 'x',
+                    claimKind: 'unused',
+                    claimSymbol: '   ',
+                    claimPath: '',
+                },
+            ],
+        });
+        expect(r.violations[0].claimSymbol).toBeNull();
+        expect(r.violations[0].claimPath).toBeNull();
+    });
+
+    it('trims a padded claim target so grep gets the bare symbol', () => {
+        const r = shardViolationsSchema.parse({
+            violations: [
+                {
+                    ruleId: 1,
+                    suggestionContent: 'x',
+                    claimKind: 'unused',
+                    claimSymbol: '  formatDate  ',
+                },
+            ],
+        });
+        expect(r.violations[0].claimSymbol).toBe('formatDate');
+    });
+
+    it('still parses a shard whose findings carry no claim at all', () => {
+        const r = shardViolationsSchema.parse({
+            violations: [{ ruleId: 1, suggestionContent: 'x' }],
+        });
+        expect(r.violations[0].claimKind).toBeNull();
+        expect(r.violations[0].claimSymbol).toBeNull();
+        expect(r.violations[0].claimPath).toBeNull();
+    });
+
+    it('resolves the claim onto the returned violation', async () => {
+        const runJudge: RunJudge = async () => [
+            {
+                ruleId: 1,
+                suggestionContent: 'x',
+                claimKind: 'unused',
+                claimSymbol: 'formatDate',
+            } as RawShardViolation,
+        ];
+        const res = await judgeKodyRulesSharded({
+            changedFiles: [file('src/a.ts', '1 +x')],
+            rules: [{ uuid: 'r1', title: 't', rule: 'no unused imports' }],
+            runJudge,
+        });
+        expect(res.violations[0].claimKind).toBe('unused');
+        expect(res.violations[0].claimSymbol).toBe('formatDate');
+    });
+
+    it('drops null claim keys from the resolved violation (strict-provider output)', async () => {
+        const runJudge: RunJudge = async () => [
+            {
+                ruleId: 1,
+                suggestionContent: 'x',
+                claimKind: null,
+                claimSymbol: null,
+                claimPath: null,
+            } as RawShardViolation,
+        ];
+        const res = await judgeKodyRulesSharded({
+            changedFiles: [file('src/a.ts', '1 +x')],
+            rules: [{ uuid: 'r1', title: 't', rule: 'r' }],
+            runJudge,
+        });
+        expect(res.violations[0]).not.toHaveProperty('claimKind');
+        expect(res.violations[0]).not.toHaveProperty('claimSymbol');
+        expect(res.violations[0]).not.toHaveProperty('claimPath');
+    });
+
+    it('asks the file shard for the claim, its vocabulary and its target', async () => {
+        let user = '';
+        const runJudge: RunJudge = async (args) => {
+            user = args.user;
+            return [];
+        };
+        await judgeKodyRulesSharded({
+            changedFiles: [file('src/a.ts', '1 +x')],
+            rules: [{ uuid: 'r1', title: 't', rule: 'r' }],
+            runJudge,
+        });
+        expect(user).toContain('"claimKind"');
+        expect(user).toContain('"claimSymbol"');
+        expect(user).toContain('"claimPath"');
+        expect(user).toMatch(/"unused".+"missing".+"duplicate".+"none"/);
+        // the deterrent: an unchecked claim is worse than no claim
+        expect(user).toMatch(
+            /CHECKED against the repository and the finding is dropped/,
+        );
+    });
+
+    it('keeps the pre-#1826 return template intact', async () => {
+        let user = '';
+        const runJudge: RunJudge = async (args) => {
+            user = args.user;
+            return [];
+        };
+        await judgeKodyRulesSharded({
+            changedFiles: [file('src/a.ts', '1 +x')],
+            rules: [{ uuid: 'r1', title: 't', rule: 'r' }],
+            runJudge,
+        });
+        expect(user).toContain('"improvedCode"');
+        expect(user).toContain('"language"');
+        expect(user).toMatch(/strip the line-number and '\+' prefix/);
+    });
+});

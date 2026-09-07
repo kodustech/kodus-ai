@@ -72,6 +72,55 @@ const nullableWireLine = z.preprocess(
     z.union([z.number(), z.null()]),
 );
 
+/**
+ * The assertion families a deterministic repository check can actually refute
+ * (issue #1826). `none` is the everything-else bucket: published unchanged,
+ * exactly as today.
+ */
+export const SHARD_CLAIM_KINDS = [
+    'unused',
+    'missing',
+    'duplicate',
+    'none',
+] as const;
+
+export type ShardClaimKind = (typeof SHARD_CLAIM_KINDS)[number];
+
+/**
+ * Claim-kind wire field. Same required-but-nullable shape as `nullableWire`,
+ * plus one extra guarantee: an off-vocabulary value NEVER fails the shard
+ * parse. A single invented kind ("removed", "shadowed") would otherwise take
+ * the whole file's findings down with it, which is a far worse trade than
+ * publishing that one finding unchecked — so anything that is a string but not
+ * in the vocabulary (including '' and whitespace) normalizes to `none`, i.e.
+ * "no claim, publish unchanged" (KRC-09). A non-string stays null, the same
+ * absent-key semantics every other nullable field on this schema has.
+ */
+const nullableWireClaimKind = z.preprocess(
+    (v) => {
+        if (typeof v !== 'string') return null;
+        const kind = v.trim().toLowerCase();
+        return (SHARD_CLAIM_KINDS as readonly string[]).includes(kind)
+            ? kind
+            : 'none';
+    },
+    z.union([z.enum(SHARD_CLAIM_KINDS), z.null()]),
+);
+
+/**
+ * Claim-target wire field (`claimSymbol` / `claimPath`). A claim naming an
+ * empty or whitespace-only target names nothing, so it collapses to null and
+ * the checker has nothing to verify (KRC-21).
+ */
+const nullableWireClaimTarget = z.preprocess(
+    (v) => {
+        if (typeof v !== 'string') return v === undefined ? null : v;
+        const trimmed = v.trim();
+        return trimmed === '' ? null : trimmed;
+    },
+    z.union([z.string(), z.null()]),
+);
+
 export const shardViolationsSchema = z.object({
     violations: z
         .array(
@@ -94,6 +143,12 @@ export const shardViolationsSchema = z.object({
                 improvedCode: nullableWire(z.string()),
                 suggestionContent: z.string(),
                 oneSentenceSummary: nullableWire(z.string()),
+                // Flat, never nested (issue #1826). A nested `claim` object
+                // multiplies the strict-mode `required` surface that already
+                // 400-ed every shard twice (#1523/#1526) for zero gain.
+                claimKind: nullableWireClaimKind,
+                claimSymbol: nullableWireClaimTarget,
+                claimPath: nullableWireClaimTarget,
             }),
         )
         .default([]),
@@ -143,6 +198,9 @@ export interface RawShardViolation {
     existingCode?: string | null;
     improvedCode?: string | null;
     oneSentenceSummary?: string | null;
+    claimKind?: ShardClaimKind | null;
+    claimSymbol?: string | null;
+    claimPath?: string | null;
 }
 
 /** A resolved violation for a (file, rule) pair — `ruleId` mapped to a UUID. */
@@ -156,6 +214,13 @@ export interface ShardViolation {
     existingCode?: string;
     improvedCode?: string;
     oneSentenceSummary?: string;
+    /**
+     * What this finding asserts about the repository, if anything the claim
+     * checker can refute (issue #1826). Absent or `none` = nothing to check.
+     */
+    claimKind?: ShardClaimKind;
+    claimSymbol?: string;
+    claimPath?: string;
 }
 
 /**
@@ -387,7 +452,13 @@ function fileShardUser(
         // stream at once. `existingCode` is called out explicitly because models
         // otherwise copy the line WITH its `<n> +` diff prefix.
         `Return ONLY JSON (ruleId is the rule's [n] number). "existingCode" is the offending code EXACTLY as it appears in the file — strip the line-number and '+' prefix the diff adds. "improvedCode" is that same code rewritten to satisfy the rule, ready to apply; use null only when the fix cannot be expressed as a replacement for those lines. "language" is the file's language (e.g. "ruby", "typescript").`,
-        `{"violations":[{"ruleId":<n>,"relevantLinesStart":<line>,"relevantLinesEnd":<line>,"language":"<lang>","existingCode":"<offending code>","improvedCode":"<fixed code or null>","suggestionContent":"WHAT/WHY/HOW","oneSentenceSummary":"<short>"}]}`,
+        // The claim fields (issue #1826). You only see one file's hunks, so an
+        // assertion about the rest of the repository is a guess; naming it
+        // lets the pipeline check it against the real repository and drop the
+        // finding when the repository says otherwise. Under-claiming is safe —
+        // "none" publishes the finding unchanged, exactly as today.
+        `State what your finding ASSERTS about the repository in "claimKind": "unused" (this symbol is used nowhere else), "missing" (this file or path does not exist), "duplicate" (this already exists elsewhere), or "none" for everything else. Name the target: "claimSymbol" is the identifier the claim is about, "claimPath" the file path; use null for whichever does not apply. A claim is CHECKED against the repository and the finding is dropped if the repository contradicts it, so claim only what you mean.`,
+        `{"violations":[{"ruleId":<n>,"relevantLinesStart":<line>,"relevantLinesEnd":<line>,"language":"<lang>","existingCode":"<offending code>","improvedCode":"<fixed code or null>","suggestionContent":"WHAT/WHY/HOW","oneSentenceSummary":"<short>","claimKind":"<unused|missing|duplicate|none>","claimSymbol":"<symbol or null>","claimPath":"<path or null>"}]}`,
     ].join('\n');
 }
 
