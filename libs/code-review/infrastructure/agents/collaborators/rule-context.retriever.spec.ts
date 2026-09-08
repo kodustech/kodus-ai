@@ -116,15 +116,14 @@ describe('retrieveForShard — diff-only', () => {
 
 describe('retrieveForShard — enclosing-scope (KRC-13)', () => {
     it('returns the scope the change sits inside', async () => {
-        const read = jest.fn(
-            async () =>
-                [
-                    'const unrelated = 1;',
-                    'export function total(items) {',
-                    '  const a = 1;',
-                    '  total += 1;',
-                    '}',
-                ].join('\n'),
+        const read = jest.fn(async () =>
+            [
+                'const unrelated = 1;',
+                'export function total(items) {',
+                '  const a = 1;',
+                '  total += 1;',
+                '}',
+            ].join('\n'),
         );
 
         const result = await retrieveForShard({

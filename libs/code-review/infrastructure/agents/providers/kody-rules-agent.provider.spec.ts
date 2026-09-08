@@ -1,3 +1,4 @@
+import { AgentDegradedError } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import { KodyRulesAgentProvider } from '@libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider';
 import {
     KodyRulesScope,
@@ -425,8 +426,7 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
         changedFiles: [
             {
                 filename: 'src/a.ts',
-                patchWithLinesStr:
-                    '10 +console.log(1)\n11 +const x: any = 2',
+                patchWithLinesStr: '10 +console.log(1)\n11 +const x: any = 2',
                 patch: '10 +console.log(1)\n11 +const x: any = 2',
             },
         ],
@@ -845,7 +845,10 @@ describe('KodyRulesAgentProvider — Context OS reference loading', () => {
         const loader = {
             loadReferencesForRules: jest.fn().mockResolvedValue({
                 referencesMap: new Map([
-                    ['r1', [{ filePath: 'CLAUDE.md', content: 'the convention' }]],
+                    [
+                        'r1',
+                        [{ filePath: 'CLAUDE.md', content: 'the convention' }],
+                    ],
                 ]),
                 mcpResultsMap: new Map(),
             }),
@@ -1002,9 +1005,7 @@ function boundaryInput(over: any = {}) {
             organizationId: 'org-xyz',
             teamId: 'team-1',
         },
-        changedFiles: [
-            { filename: 'src/a.ts', patch: '11 +const x: any = 2' },
-        ],
+        changedFiles: [{ filename: 'src/a.ts', patch: '11 +const x: any = 2' }],
         prTitle: 'boundary',
         prBody: '',
         remoteCommands: undefined,
@@ -1032,7 +1033,9 @@ type CapturedRunJudge = (args: {
 // Drive the real execute() far enough to build the `runJudge` closure, capture
 // it via the (mocked) judge, and hand it back WITHOUT running the real sweep —
 // so runStructuredReviewCall is untouched until we invoke runJudge ourselves.
-async function captureRunJudge(slotProvider?: string): Promise<CapturedRunJudge> {
+async function captureRunJudge(
+    slotProvider?: string,
+): Promise<CapturedRunJudge> {
     const provider = makeBoundaryProvider(slotProvider);
     let captured: CapturedRunJudge | undefined;
     mockJudge.mockImplementationOnce(async (args: any) => {
@@ -1159,7 +1162,9 @@ describe('KodyRulesAgentProvider — LLM.run envelope extraction (matrix A/B/C)'
     it.failing(
         'row 4 — {result:{violations:[...]}} wrapper must be unwrapped',
         async () => {
-            const out = await runWith({ result: { violations: [oneViolation] } });
+            const out = await runWith({
+                result: { violations: [oneViolation] },
+            });
             expect(out).toEqual([oneViolation]); // today: []
         },
     );
@@ -1179,7 +1184,9 @@ describe('KodyRulesAgentProvider — LLM.run envelope extraction (matrix A/B/C)'
     it.failing(
         'row 6 — {content:{violations:[...]}} opaque wrap must be unwrapped',
         async () => {
-            const out = await runWith({ content: { violations: [oneViolation] } });
+            const out = await runWith({
+                content: { violations: [oneViolation] },
+            });
             expect(out).toEqual([oneViolation]); // today: []
         },
     );
@@ -1320,7 +1327,9 @@ describe('KodyRulesAgentProvider — LLM.run envelope extraction (matrix A/B/C)'
     it('row 28 — truncated JSON that downstream cannot repair rejects (propagated, never read as 0 violations)', async () => {
         const runJudge = await captureRunJudge();
         mockRunStructuredReviewCall.mockRejectedValueOnce(
-            new Error('structured output parse failed: Unexpected end of JSON input'),
+            new Error(
+                'structured output parse failed: Unexpected end of JSON input',
+            ),
         );
         await expect(invoke(runJudge)).rejects.toThrow(/JSON/i);
     });
@@ -1328,7 +1337,9 @@ describe('KodyRulesAgentProvider — LLM.run envelope extraction (matrix A/B/C)'
     it('row 29 — malformed JSON (trailing comma / single quotes) that downstream cannot repair rejects (propagated)', async () => {
         const runJudge = await captureRunJudge();
         mockRunStructuredReviewCall.mockRejectedValueOnce(
-            new Error("structured output parse failed: Unexpected token ' in JSON"),
+            new Error(
+                "structured output parse failed: Unexpected token ' in JSON",
+            ),
         );
         await expect(invoke(runJudge)).rejects.toThrow(/parse failed/i);
     });
@@ -1362,9 +1373,7 @@ describe('KodyRulesAgentProvider — LLM.run envelope extraction (matrix A/B/C)'
     });
 
     it('row 33 — refusal prose ("I cannot help…") → [] (fail-safe, no crash)', async () => {
-        expect(
-            await runWith('I cannot help with that request.'),
-        ).toEqual([]);
+        expect(await runWith('I cannot help with that request.')).toEqual([]);
     });
 
     it('row 34 — an abort/timeout rejection propagates so the shard fail-safe can count it', async () => {
@@ -1402,7 +1411,9 @@ describe('KodyRulesAgentProvider — model-policy is downstream (matrix E)', () 
         'sends the same wire schema regardless of provider (%s, %s)',
         async (provider) => {
             const runJudge = await captureRunJudge(provider);
-            mockRunStructuredReviewCall.mockResolvedValueOnce({ violations: [] });
+            mockRunStructuredReviewCall.mockResolvedValueOnce({
+                violations: [],
+            });
             await invoke(runJudge);
             expect(mockRunStructuredReviewCall.mock.calls[0][0].schema).toBe(
                 shardViolationsWireSchema,
@@ -1576,7 +1587,9 @@ describe('KodyRulesAgentProvider — input variants + return shape (matrix D)', 
         let provider = makeExecProvider();
         await provider.execute(
             execInput({
-                changedFiles: [{ filename: 'x.ts', patch: 'a'.repeat(150_000) }],
+                changedFiles: [
+                    { filename: 'x.ts', patch: 'a'.repeat(150_000) },
+                ],
                 kodyRules: [prRule],
             }) as any,
         );
@@ -1589,7 +1602,9 @@ describe('KodyRulesAgentProvider — input variants + return shape (matrix D)', 
         provider = makeExecProvider();
         await provider.execute(
             execInput({
-                changedFiles: [{ filename: 'x.ts', patch: 'a'.repeat(150_001) }],
+                changedFiles: [
+                    { filename: 'x.ts', patch: 'a'.repeat(150_001) },
+                ],
                 kodyRules: [prRule],
             }) as any,
         );
@@ -1799,7 +1814,10 @@ describe('KodyRulesAgentProvider — claim check before publishing (#1826)', () 
 
     const claimInput = (over: any = {}) => ({
         prNumber: 7,
-        organizationAndTeamData: { organizationId: 'org-xyz', teamId: 'team-1' },
+        organizationAndTeamData: {
+            organizationId: 'org-xyz',
+            teamId: 'team-1',
+        },
         changedFiles: [
             {
                 filename: 'src/a.ts',
@@ -2011,7 +2029,10 @@ describe('KodyRulesAgentProvider — skipping a rule whose context is unavailabl
 
     const needyInput = (over: any = {}) => ({
         prNumber: 9,
-        organizationAndTeamData: { organizationId: 'org-xyz', teamId: 'team-1' },
+        organizationAndTeamData: {
+            organizationId: 'org-xyz',
+            teamId: 'team-1',
+        },
         changedFiles: [
             {
                 filename: 'src/a.ts',
@@ -2153,6 +2174,29 @@ describe('KodyRulesAgentProvider — skipping a rule whose context is unavailabl
         await expect(
             provider.execute(needyInput({ repoLookup: undefined }) as any),
         ).rejects.toThrow(/endpoints keep their symbol usage consistent/);
+
+        // The message alone never reaches the PR: it renders only for a FAILED
+        // review, and kody-rules is not a critical agent, so this one is
+        // partial. The names travel on the error, which the orchestrator
+        // harvests on rejection — so the PRODUCER half needs its own guard.
+        // Without it, throwing with an empty warning list left the whole gate
+        // green (Verifier round 3, gap 1).
+        const thrown = await provider
+            .execute(needyInput({ repoLookup: undefined }) as any)
+            .then(
+                () => null,
+                (err) => err,
+            );
+        expect(thrown).toBeInstanceOf(AgentDegradedError);
+        expect(thrown.warnings).toHaveLength(1);
+        expect(thrown.warnings[0]).toMatchObject({
+            kind: 'RULE_CONTEXT_UNAVAILABLE',
+            reason: 'lookup_unavailable',
+        });
+        expect(thrown.warnings[0].detail).toContain(
+            'endpoints keep their symbol usage consistent',
+        );
+
         // nothing was judged, so no shard call was ever made
         expect(mockRunStructuredReviewCall).not.toHaveBeenCalled();
     });
@@ -2235,7 +2279,10 @@ describe('KodyRulesAgentProvider — probing the lookup before trusting it (#182
 
     const input = (over: any = {}) => ({
         prNumber: 7,
-        organizationAndTeamData: { organizationId: 'org-xyz', teamId: 'team-1' },
+        organizationAndTeamData: {
+            organizationId: 'org-xyz',
+            teamId: 'team-1',
+        },
         changedFiles: [
             {
                 filename: 'src/a.ts',
@@ -2261,13 +2308,14 @@ describe('KodyRulesAgentProvider — probing the lookup before trusting it (#182
             violations: [unusedFinding],
         }));
         const warn = jest.fn();
-        const lookup = buildRepoLookup(
-            handle({ read: async () => '' }),
-            { warn } as any,
-        );
+        const lookup = buildRepoLookup(handle({ read: async () => '' }), {
+            warn,
+        } as any);
         const provider = makeBoundaryProvider();
 
-        const out = await provider.execute(input({ repoLookup: lookup }) as any);
+        const out = await provider.execute(
+            input({ repoLookup: lookup }) as any,
+        );
 
         expect(lookup.available).toBe(false);
         expect(out.suggestions).toEqual([]);
@@ -2287,7 +2335,9 @@ describe('KodyRulesAgentProvider — probing the lookup before trusting it (#182
         const lookup = buildRepoLookup(handle());
         const provider = makeBoundaryProvider();
 
-        const out = await provider.execute(input({ repoLookup: lookup }) as any);
+        const out = await provider.execute(
+            input({ repoLookup: lookup }) as any,
+        );
 
         expect(lookup.available).toBe(true);
         expect(out.suggestions).toHaveLength(1);
@@ -2297,7 +2347,9 @@ describe('KodyRulesAgentProvider — probing the lookup before trusting it (#182
         mockRunStructuredReviewCall.mockImplementation(async () => ({
             violations: [],
         }));
-        const read = jest.fn(async (_path: string, _start: number, _end: number) => 'content');
+        const read = jest.fn(
+            async (_path: string, _start: number, _end: number) => 'content',
+        );
         const lookup = buildRepoLookup(handle({ read }));
         const provider = makeBoundaryProvider();
 
@@ -2305,9 +2357,17 @@ describe('KodyRulesAgentProvider — probing the lookup before trusting it (#182
             input({
                 repoLookup: lookup,
                 changedFiles: [
-                    { filename: 'gone.ts', status: 'removed', patch: 'x'.repeat(500) },
+                    {
+                        filename: 'gone.ts',
+                        status: 'removed',
+                        patch: 'x'.repeat(500),
+                    },
                     { filename: 'tiny.ts', status: 'modified', patch: 'y' },
-                    { filename: 'big.ts', status: 'modified', patch: 'z'.repeat(200) },
+                    {
+                        filename: 'big.ts',
+                        status: 'modified',
+                        patch: 'z'.repeat(200),
+                    },
                 ],
             }) as any,
         );

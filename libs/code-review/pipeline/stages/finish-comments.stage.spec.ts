@@ -118,11 +118,10 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
 
         await (stage as any).executeStage(context);
 
-        expect(commentManagerService.updateOverallComment).toHaveBeenCalledTimes(
-            1,
-        );
-        const args =
-            commentManagerService.updateOverallComment.mock.calls[0];
+        expect(
+            commentManagerService.updateOverallComment,
+        ).toHaveBeenCalledTimes(1);
+        const args = commentManagerService.updateOverallComment.mock.calls[0];
         expect(args[args.length - 1]).toEqual(reviewWarnings);
     });
 
@@ -154,8 +153,7 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
 
         await (stage as any).executeStage(context);
 
-        const args =
-            commentManagerService.updateOverallComment.mock.calls[0];
+        const args = commentManagerService.updateOverallComment.mock.calls[0];
         expect(args[args.length - 1]).toEqual(reviewWarnings);
     });
 
