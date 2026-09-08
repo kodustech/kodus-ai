@@ -3,6 +3,7 @@ import {
     KodyRulesScope,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { buildRepoLookup } from '@libs/code-review/infrastructure/agents/collaborators/repo-lookup';
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import {
     judgeKodyRulesSharded,
@@ -2186,5 +2187,201 @@ describe('KodyRulesAgentProvider — skipping a rule whose context is unavailabl
         expect(mockRunStructuredReviewCall.mock.calls[0][0].user).not.toContain(
             '<Context>',
         );
+    });
+});
+
+// ── #1826 KRC-22: the empty-read protection has to fire IN a review ─────────
+// `probe()` existed and was unit-tested but had no production call site, so a
+// lookup answering with silence stayed "available" for the whole review and
+// every claim check read that silence as evidence. These tests drive the real
+// `buildRepoLookup` through `provider.execute`, which is the only place the
+// protection can be observed end to end.
+describe('KodyRulesAgentProvider — probing the lookup before trusting it (#1826, KRC-22)', () => {
+    beforeEach(() => {
+        mockRunStructuredReviewCall.mockReset();
+        mockJudge.mockClear();
+    });
+
+    const RULE = {
+        uuid: RULE_UUID,
+        title: 'no unused imports',
+        rule: 'Remove imports that are not used in the file.',
+        status: 'active',
+        severity: 'high',
+        path: '**/*.ts',
+    };
+
+    const unusedFinding = {
+        ruleId: 1,
+        relevantLinesStart: 3,
+        relevantLinesEnd: 3,
+        existingCode: "import { formatDate } from '../shared/date';",
+        suggestionContent: 'this import is unused',
+        oneSentenceSummary: 'unused import',
+        claimKind: 'unused',
+        claimSymbol: 'formatDate',
+    };
+
+    /** A sandbox handle the real buildRepoLookup reports as available. */
+    const handle = (remote: any = {}): any => ({
+        type: 'e2b',
+        remoteCommands: {
+            grep: async () => 'No matches found.',
+            read: async () => 'export const a = 1;\n',
+            listDir: async () => '',
+            ...remote,
+        },
+    });
+
+    const input = (over: any = {}) => ({
+        prNumber: 7,
+        organizationAndTeamData: { organizationId: 'org-xyz', teamId: 'team-1' },
+        changedFiles: [
+            {
+                filename: 'src/a.ts',
+                status: 'modified',
+                patch: "3 +import { formatDate } from '../shared/date';",
+                patchWithLinesStr:
+                    "3 +import { formatDate } from '../shared/date';",
+            },
+        ],
+        prTitle: 'p',
+        prBody: '',
+        remoteCommands: undefined,
+        kodyRules: [RULE],
+        ...over,
+    });
+
+    it('drops a claim the lookup only "confirmed" with silence, and records the flip', async () => {
+        // The lookup says it is available, but every read comes back empty:
+        // NULL_SANDBOX_INSTANCE's exact signature. Its grep answers "No
+        // matches found.", which would CONFIRM the unused claim and publish
+        // the finding — the silence-as-evidence bug KRC-22 exists to stop.
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [unusedFinding],
+        }));
+        const warn = jest.fn();
+        const lookup = buildRepoLookup(
+            handle({ read: async () => '' }),
+            { warn } as any,
+        );
+        const provider = makeBoundaryProvider();
+
+        const out = await provider.execute(input({ repoLookup: lookup }) as any);
+
+        expect(lookup.available).toBe(false);
+        expect(out.suggestions).toEqual([]);
+        const flip = warn.mock.calls
+            .map((c) => c[0] as any)
+            .find((e) => e?.message?.includes('[repo-lookup] disabled'));
+        expect(flip).toBeDefined();
+        expect(flip.metadata.file).toBe('src/a.ts');
+    });
+
+    it('publishes that same finding when the probe reads real content', async () => {
+        // Same review, same "No matches found." grep — the ONLY difference is
+        // that the lookup can actually read the repository.
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [unusedFinding],
+        }));
+        const lookup = buildRepoLookup(handle());
+        const provider = makeBoundaryProvider();
+
+        const out = await provider.execute(input({ repoLookup: lookup }) as any);
+
+        expect(lookup.available).toBe(true);
+        expect(out.suggestions).toHaveLength(1);
+    });
+
+    it('probes the largest surviving patch, never a removed file', async () => {
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [],
+        }));
+        const read = jest.fn(async () => 'content');
+        const lookup = buildRepoLookup(handle({ read }));
+        const provider = makeBoundaryProvider();
+
+        await provider.execute(
+            input({
+                repoLookup: lookup,
+                changedFiles: [
+                    { filename: 'gone.ts', status: 'removed', patch: 'x'.repeat(500) },
+                    { filename: 'tiny.ts', status: 'modified', patch: 'y' },
+                    { filename: 'big.ts', status: 'modified', patch: 'z'.repeat(200) },
+                ],
+            }) as any,
+        );
+
+        expect(read).toHaveBeenCalled();
+        expect(read.mock.calls[0][0]).toBe('big.ts');
+    });
+
+    it('does not probe when the PR carries no readable changed file', async () => {
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [],
+        }));
+        const read = jest.fn(async () => '');
+        const lookup = buildRepoLookup(handle({ read }));
+        const provider = makeBoundaryProvider();
+
+        await provider.execute(
+            input({
+                repoLookup: lookup,
+                changedFiles: [
+                    { filename: 'gone.ts', status: 'removed', patch: 'x' },
+                ],
+            }) as any,
+        );
+
+        expect(read).not.toHaveBeenCalled();
+        expect(lookup.available).toBe(true);
+    });
+
+    it('shares one lookup instance: a flip reaches the retrieval AND the claim check', async () => {
+        // A needy rule plus a claim-carrying finding in the SAME review. The
+        // provider used to build two independent RepoLookups, so a flip caught
+        // by one could not reach the other.
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [unusedFinding],
+        }));
+        const lookup = buildRepoLookup(handle({ read: async () => '' }));
+        const provider = makeBoundaryProvider();
+
+        const out = await provider.execute(
+            input({
+                repoLookup: lookup,
+                kodyRules: [
+                    RULE,
+                    {
+                        uuid: 'rule-needy',
+                        title: 'symbol usage stays consistent',
+                        rule: 'Check every other use of a symbol this change touches.',
+                        status: 'active',
+                        severity: 'high',
+                        path: '**/*.ts',
+                        contextNeed: {
+                            need: 'symbol-references',
+                            sourceHash: 'h',
+                            source: 'compiler',
+                            inferredAt: new Date(0),
+                        },
+                    },
+                ],
+            }) as any,
+        );
+
+        // retrieval side: the needy rule was never sharded
+        const sharded = mockRunStructuredReviewCall.mock.calls
+            .map((call) => call[0]?.user as string)
+            .join('\n');
+        expect(sharded).not.toContain('symbol usage stays consistent');
+        // and it is reported
+        expect(
+            out.warnings?.some(
+                (w: any) => w.kind === 'RULE_CONTEXT_UNAVAILABLE',
+            ),
+        ).toBe(true);
+        // claim-check side: the same flipped instance dropped the finding
+        expect(out.suggestions).toEqual([]);
     });
 });

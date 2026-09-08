@@ -201,6 +201,37 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             ),
         ];
 
+        // ONE lookup for the whole review (issue #1826, KRC-22). The empty-read
+        // protection flips `available` on the instance itself, so a second
+        // instance built later would go on reading silence as evidence after
+        // the first had already caught the lookup lying. Absent means
+        // unavailable, never "assume a lookup": buildRepoLookup(undefined) is
+        // the fail-closed lookup whose accessors all throw.
+        const lookup = input.repoLookup ?? buildRepoLookup(undefined);
+
+        // Positive control, before anything trusts that lookup (KRC-22). Read a
+        // file this PR is known to have changed: empty content back from an
+        // allegedly available lookup means it is answering with silence, and
+        // every retrieval and claim check below would take that silence for
+        // evidence. Target the biggest patch among the files that still exist —
+        // a deleted file, or one with no patch, could legitimately read empty
+        // and would disable the lookup for a whole review on a false signal.
+        if (lookup.available) {
+            const probeTarget = (input.changedFiles ?? [])
+                .filter(
+                    (file) =>
+                        !!file?.filename &&
+                        file.status !== 'removed' &&
+                        (file.patch?.length ?? 0) > 0,
+                )
+                .sort(
+                    (a, b) => (b.patch?.length ?? 0) - (a.patch?.length ?? 0),
+                )[0]?.filename;
+            if (probeTarget) {
+                await lookup.probe(probeTarget);
+            }
+        }
+
         let judgeViolations: ShardViolation[] = [];
         let shardsRun = 0;
         let shardsErrored = 0;
@@ -299,7 +330,6 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             // anyway, is the blind judgment this feature exists to remove — so
             // an unmet need takes that rule out of that file's shard and is
             // reported instead of being absorbed in silence.
-            const lookup = input.repoLookup ?? buildRepoLookup(undefined);
             const changedFilenames = (input.changedFiles ?? []).map(
                 (file) => file.filename,
             );
@@ -504,9 +534,9 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
         const claimCheck = await checkClaims({
             violations: judgeViolations,
             changedFiles: input.changedFiles ?? [],
-            // Absent means unavailable, never "assume a lookup": buildRepoLookup
-            // (undefined) is the fail-closed lookup whose accessors all throw.
-            lookup: input.repoLookup ?? buildRepoLookup(undefined),
+            // The same instance the retrieval above used, so a mid-review flip
+            // reaches the claim check too (KRC-22).
+            lookup,
             logger: this.shardLogger,
         });
 
