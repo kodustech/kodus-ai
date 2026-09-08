@@ -6,6 +6,7 @@ import { ObservabilityService } from '@libs/core/log/observability.service';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { CommentResult } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 
 // Mock logger
 jest.mock('@libs/core/log/logger', () => ({
@@ -23,8 +24,10 @@ function finding(
     relevantFile: string,
     relevantLinesStart: number,
     oneSentenceSummary: string,
+    deliveryStatus: string = DeliveryStatus.SENT,
 ): CommentResult {
     return {
+        deliveryStatus,
         comment: {
             suggestion: {
                 severity,
@@ -104,6 +107,28 @@ describe('CommentManagerService – buildReviewFindingsBlock', () => {
         );
     });
 
+    // Both arrays retain FAILED entries for auditing. Counting them would
+    // describe comments that were never posted to the PR as review findings.
+    it('ignores findings whose comment was never delivered', () => {
+        const block: string = serviceAny.buildReviewFindingsBlock([
+            finding('high', 'src/a.ts', 1, 'Delivered'),
+            finding('critical', 'src/b.ts', 2, 'Never posted', DeliveryStatus.FAILED),
+        ]);
+
+        expect(block).toContain('produced 1 finding(s)');
+        expect(block).toContain('Delivered');
+        expect(block).not.toContain('Never posted');
+        expect(block).not.toContain('critical');
+    });
+
+    it('reports no issues when every finding failed to post', () => {
+        const block: string = serviceAny.buildReviewFindingsBlock([
+            finding('high', 'src/a.ts', 1, 'Never posted', DeliveryStatus.FAILED),
+        ]);
+
+        expect(block).toContain('found no issues');
+    });
+
     it('caps the listed findings so the block cannot blow the token budget', () => {
         const many = Array.from({ length: 40 }, (_, i) =>
             finding('medium', `src/f${i}.ts`, i + 1, `Finding number ${i}`),
@@ -171,6 +196,7 @@ describe('CommentManagerService – buildReviewFindingsBlock', () => {
     it('defaults a finding with no severity to medium instead of dropping it', () => {
         const block: string = serviceAny.buildReviewFindingsBlock([
             {
+                deliveryStatus: DeliveryStatus.SENT,
                 comment: {
                     suggestion: {
                         relevantFile: 'src/x.ts',
@@ -186,7 +212,10 @@ describe('CommentManagerService – buildReviewFindingsBlock', () => {
 
     it('ignores entries that carry no suggestion payload', () => {
         const block: string = serviceAny.buildReviewFindingsBlock([
-            { comment: {} } as unknown as CommentResult,
+            {
+                deliveryStatus: DeliveryStatus.SENT,
+                comment: {},
+            } as unknown as CommentResult,
             finding('high', 'src/a.ts', 1, 'Real finding'),
         ]);
 

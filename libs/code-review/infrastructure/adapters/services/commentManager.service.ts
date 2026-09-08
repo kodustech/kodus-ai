@@ -185,6 +185,11 @@ export class CommentManagerService implements ICommentManagerService {
             ...(lineComments ?? []),
             ...(prLevelCommentResults ?? []),
         ]
+            // Both arrays retain FAILED entries for persistence/auditing, so a
+            // comment that was never posted would otherwise be described here
+            // as a finding of the review. Mirrors the SENT filter the sibling
+            // consumer applies to these same arrays.
+            .filter((entry) => entry?.deliveryStatus === DeliveryStatus.SENT)
             .map((entry) => entry?.comment?.suggestion)
             .filter(Boolean);
 
@@ -417,15 +422,29 @@ export class CommentManagerService implements ICommentManagerService {
                 // --- Chunk changedFiles if maxInputTokens is configured ---
                 const maxInputTokens = byokConfigValue?.maxInputTokens;
 
-                const fileChunks = this.chunkChangedFilesForSummary(
+                // Per-chunk calls carry promptBase only, so size the split
+                // against that — folding the findings block in would over-count
+                // their real cost and could split further than necessary.
+                let fileChunks = this.chunkChangedFilesForSummary(
                     changedFiles,
-                    // Budget against the real fixed cost of the single-chunk call —
-                    // the only file-carrying call that also sends the findings
-                    // block. Under-counting here would risk an overflow.
-                    promptBase + findingsBlock,
+                    promptBase,
                     '',
                     maxInputTokens,
                 );
+
+                // The single-chunk call is the one path that also sends the
+                // findings block, so re-size against its real cost before
+                // committing to it. If that no longer fits in one call the
+                // result splits, and the chunk calls are then sized
+                // conservatively — which is safe, since they send less.
+                if (fileChunks?.length === 1 && findingsBlock) {
+                    fileChunks = this.chunkChangedFilesForSummary(
+                        changedFiles,
+                        promptBase + findingsBlock,
+                        '',
+                        maxInputTokens,
+                    );
+                }
 
                 // More than 4 chunks → skip summary generation
                 if (!fileChunks) {
