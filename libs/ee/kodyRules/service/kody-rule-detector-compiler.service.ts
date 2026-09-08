@@ -185,11 +185,13 @@ export class KodyRuleDetectorCompilerService
         const stored = rule.contextNeed;
 
         // An author outranks the compiler's guess about their own rule, and an
-        // unchanged rule text with the same verdict needs no write.
-        if (
-            stored?.source === 'author' ||
-            (stored?.sourceHash === sourceHash && stored.need === need)
-        ) {
+        // unchanged rule text REUSES what is stored — whatever this run inferred.
+        // KRC-12 makes the hash the sole trigger for re-inference: keying on the
+        // verdict instead let a second, differently-inferred run overwrite a
+        // settled need for a rule nobody had edited, so the same text could flip
+        // between reviews and take the customer's rule in and out of scope with
+        // no author action.
+        if (stored?.source === 'author' || stored?.sourceHash === sourceHash) {
             return stored.need;
         }
 

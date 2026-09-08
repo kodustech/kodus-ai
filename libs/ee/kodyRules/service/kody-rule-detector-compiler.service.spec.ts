@@ -882,6 +882,34 @@ describe('KodyRuleDetectorCompilerService — context-need inference (#1826)', (
         expect(res.contextNeed).toBe('sibling-file');
     });
 
+    it('reuses the stored need for unchanged rule text even when this run infers a different one (KRC-12)', async () => {
+        // The hash is the SOLE trigger for re-inference. Keying on the verdict
+        // instead let a second run overwrite a settled need on a rule nobody
+        // edited, so the same text could flip between reviews and take the
+        // customer's rule in and out of scope with no author action.
+        const { svc, kodyRulesService } = makeWithNeed({
+            mechanical: false,
+            contextNeed: 'symbol-references',
+        });
+        const res = await svc.compileAndSave(
+            { organizationId: 'org-1' } as any,
+            'r1',
+            {
+                ...needRule,
+                contextNeed: {
+                    need: 'sibling-file',
+                    sourceHash: createHash('sha256')
+                        .update(needRule.rule)
+                        .digest('hex'),
+                    source: 'compiler',
+                    inferredAt: new Date('2026-01-01T00:00:00Z'),
+                },
+            } as any,
+        );
+        expect(kodyRulesService.updateRuleContextNeed).not.toHaveBeenCalled();
+        expect(res.contextNeed).toBe('sibling-file');
+    });
+
     it('re-infers when the stored hash no longer matches the rule text (KRC-12)', async () => {
         const { svc, kodyRulesService } = makeWithNeed({
             mechanical: false,
