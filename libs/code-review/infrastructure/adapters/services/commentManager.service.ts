@@ -167,19 +167,31 @@ export class CommentManagerService implements ICommentManagerService {
      * An empty list is reported explicitly rather than omitted, so the model can
      * distinguish "the review found nothing" from "no findings were given to me".
      */
-    private buildReviewFindingsBlock(lineComments?: CommentResult[]): string {
-        // undefined => caller has no findings to offer (e.g. the preview use
-        // case, which runs before any review). Say nothing at all.
-        if (!lineComments) {
+    private buildReviewFindingsBlock(
+        lineComments?: CommentResult[],
+        prLevelCommentResults?: CommentResult[],
+    ): string {
+        // Both undefined => the caller has no findings to offer (e.g. the
+        // preview use case, which runs before any review). Say nothing at all.
+        if (!lineComments && !prLevelCommentResults) {
             return '';
         }
 
-        const suggestions = lineComments
+        // PR-level findings live in a separate array on the pipeline context
+        // and are just as real as file-level ones. A review whose findings are
+        // all PR-level would otherwise report "no issues" while its comments
+        // are visible on the PR.
+        const suggestions = [
+            ...(lineComments ?? []),
+            ...(prLevelCommentResults ?? []),
+        ]
             .map((entry) => entry?.comment?.suggestion)
             .filter(Boolean);
 
         if (suggestions.length === 0) {
-            return `\n\n**Code Review Findings**:\nThe automated code review completed and found no issues in these changes.`;
+            // Scoped wording: on a commit run only the current commit's files
+            // are reviewed, so earlier findings can still stand on the PR.
+            return `\n\n**Code Review Findings**:\nThe automated code review completed and found no issues in the changes it reviewed.`;
         }
 
         const order = ['critical', 'high', 'medium', 'low'];
@@ -197,10 +209,18 @@ export class CommentManagerService implements ICommentManagerService {
             .map((severity) => `${severity}: ${counts[severity]}`)
             .join(', ');
 
-        const lines = [...suggestions]
-            .sort(
-                (a, b) => order.indexOf(severityOf(a)) - order.indexOf(severityOf(b)),
-            )
+        // Hard cap: this block is part of the summary prompt's fixed cost and is
+        // subtracted from the per-chunk token budget, so an unbounded list could
+        // push a large diff past the chunk ceiling and skip the summary
+        // entirely. Worst offenders first; the rest acknowledged as a count.
+        const MAX_LISTED_FINDINGS = 25;
+        const sorted = [...suggestions].sort(
+            (a, b) => order.indexOf(severityOf(a)) - order.indexOf(severityOf(b)),
+        );
+        const omitted = Math.max(0, sorted.length - MAX_LISTED_FINDINGS);
+
+        const lines = sorted
+            .slice(0, MAX_LISTED_FINDINGS)
             .map((s) => {
                 const where = s.relevantLinesStart
                     ? `${s.relevantFile}:${s.relevantLinesStart}`
@@ -213,7 +233,9 @@ export class CommentManagerService implements ICommentManagerService {
             })
             .join('\n');
 
-        return `\n\n**Code Review Findings**:\nThe automated code review of this pull request produced ${suggestions.length} finding(s) (${tally}).\nThese are the authoritative results of the review. Describe them as findings of the review; do not re-derive them from the diff.\n\n${lines}`;
+        const more = omitted > 0 ? `\n- ...and ${omitted} more finding(s)` : '';
+
+        return `\n\n**Code Review Findings**:\nThe automated code review of this pull request produced ${suggestions.length} finding(s) (${tally}).\nThese are the authoritative results of the review. Describe them as findings of the review; do not re-derive them from the diff.\n\n${lines}${more}`;
     }
 
     async generateSummaryPR(
@@ -228,6 +250,7 @@ export class CommentManagerService implements ICommentManagerService {
         externalPromptContext?: any,
         platformType?: PlatformType,
         lineComments?: CommentResult[],
+        prLevelCommentResults?: CommentResult[],
     ): Promise<string> {
         if (!summaryConfig?.generatePRSummary) {
             return null;
@@ -307,7 +330,13 @@ export class CommentManagerService implements ICommentManagerService {
 
                 // The review's own findings, so custom instructions can act on
                 // the actual review rather than a second read of the diff.
-                promptBase += this.buildReviewFindingsBlock(lineComments);
+                // Kept out of promptBase: the per-chunk calls each summarise a
+                // subset of files and don't need it, so folding it in would
+                // multiply its token cost by the chunk count.
+                const findingsBlock = this.buildReviewFindingsBlock(
+                    lineComments,
+                    prLevelCommentResults,
+                );
 
                 // Adds custom instructions if provided
                 if (summaryConfig?.customInstructions) {
@@ -390,7 +419,10 @@ export class CommentManagerService implements ICommentManagerService {
 
                 const fileChunks = this.chunkChangedFilesForSummary(
                     changedFiles,
-                    promptBase,
+                    // Budget against the real fixed cost of the single-chunk call —
+                    // the only file-carrying call that also sends the findings
+                    // block. Under-counting here would risk an overflow.
+                    promptBase + findingsBlock,
                     '',
                     maxInputTokens,
                 );
@@ -417,7 +449,7 @@ export class CommentManagerService implements ICommentManagerService {
 
                     result = await this.runSummaryPromptV5({
                         slot: byokConfigValue ?? null,
-                        systemPrompt: promptBase,
+                        systemPrompt: promptBase + findingsBlock,
                         userPrompt,
                         runName,
                         spanName,
@@ -506,7 +538,7 @@ export class CommentManagerService implements ICommentManagerService {
 
                     const consolidationPrompt = `You are given ${partialSummaries.length} partial pull request summaries generated from different subsets of the changed files.
 Merge them into a single, cohesive pull request description. Remove duplicate information and organize the content logically.
-You must always respond in ${languageResultPrompt}.`;
+You must always respond in ${languageResultPrompt}.${findingsBlock}`;
 
                     const consolidationUserPrompt = partialSummaries
                         .map(

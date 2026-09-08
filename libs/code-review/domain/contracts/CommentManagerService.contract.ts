@@ -53,6 +53,7 @@ export interface ICommentManagerService {
         externalPromptContext?: any,
         platformType?: PlatformType,
         lineComments?: CommentResult[],
+        prLevelCommentResults?: CommentResult[],
     ): Promise<string>;
 
     updateOverallComment(

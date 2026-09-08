@@ -69,6 +69,53 @@ describe('CommentManagerService – buildReviewFindingsBlock', () => {
         // The preview use case generates a summary before any review has run.
         // It must not claim the review found nothing — it has no review at all.
         expect(serviceAny.buildReviewFindingsBlock(undefined)).toBe('');
+        expect(serviceAny.buildReviewFindingsBlock(undefined, undefined)).toBe(
+            '',
+        );
+    });
+
+    // PR-level findings are carried in their own array on the pipeline
+    // context. Reading only the file-level one made a review whose findings
+    // were all PR-level report "no issues" while its comments were visible
+    // on the PR.
+    it('counts PR-level findings, not just file-level ones', () => {
+        const block: string = serviceAny.buildReviewFindingsBlock(
+            [],
+            [finding('high', 'src/a.ts', 1, 'PR-level finding')],
+        );
+
+        expect(block).toContain('produced 1 finding(s)');
+        expect(block).toContain('PR-level finding');
+        expect(block).not.toContain('found no issues');
+    });
+
+    it('merges file-level and PR-level findings into one tally', () => {
+        const block: string = serviceAny.buildReviewFindingsBlock(
+            [finding('high', 'src/a.ts', 1, 'File-level')],
+            [finding('critical', 'src/b.ts', 2, 'PR-level')],
+        );
+
+        expect(block).toContain('produced 2 finding(s)');
+        expect(block).toContain('critical: 1');
+        expect(block).toContain('high: 1');
+        // Ordering still holds across the merged set.
+        expect(block.indexOf('[critical]')).toBeLessThan(
+            block.indexOf('[high]'),
+        );
+    });
+
+    it('caps the listed findings so the block cannot blow the token budget', () => {
+        const many = Array.from({ length: 40 }, (_, i) =>
+            finding('medium', `src/f${i}.ts`, i + 1, `Finding number ${i}`),
+        );
+
+        const block: string = serviceAny.buildReviewFindingsBlock(many);
+
+        // Full count is still reported honestly...
+        expect(block).toContain('produced 40 finding(s)');
+        // ...but only 25 are listed, with the remainder acknowledged.
+        expect((block.match(/^- \[/gm) || []).length).toBe(25);
+        expect(block).toContain('...and 15 more finding(s)');
     });
 
     it('states explicitly that the review found nothing for an empty list', () => {
