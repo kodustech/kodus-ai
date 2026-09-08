@@ -2297,7 +2297,7 @@ describe('KodyRulesAgentProvider — probing the lookup before trusting it (#182
         mockRunStructuredReviewCall.mockImplementation(async () => ({
             violations: [],
         }));
-        const read = jest.fn(async () => 'content');
+        const read = jest.fn(async (_path: string, _start: number, _end: number) => 'content');
         const lookup = buildRepoLookup(handle({ read }));
         const provider = makeBoundaryProvider();
 
