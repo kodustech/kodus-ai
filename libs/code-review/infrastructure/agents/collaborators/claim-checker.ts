@@ -26,6 +26,7 @@
  * Pure orchestration over an injected `RepoLookup`, so it is unit-testable
  * without a sandbox.
  */
+import type { LogArguments } from '@libs/core/log/logger';
 import type { RepoLookup } from './repo-lookup';
 import type { ShardViolation } from './kody-rules-sharded.judge';
 
@@ -37,12 +38,14 @@ export interface Claim {
     path?: string;
 }
 
+/**
+ * Structurally what `createLogger()` hands back, so the real `SimpleLogger` is
+ * assignable without a cast. The hand-rolled shape this replaced declared
+ * `context` optional while `LogArguments` requires it, which made every
+ * production call site a type error.
+ */
 export interface ClaimCheckLogger {
-    warn: (entry: {
-        message: string;
-        context?: string;
-        metadata?: Record<string, unknown>;
-    }) => void;
+    warn: (entry: LogArguments) => void;
 }
 
 export interface ClaimCheckInput {

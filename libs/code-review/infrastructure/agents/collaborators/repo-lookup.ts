@@ -23,6 +23,7 @@
  * this feature needs.
  */
 import type { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
+import type { LogArguments } from '@libs/core/log/logger';
 import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 
 /** Thrown by every accessor when the repository cannot be looked at. */
@@ -61,12 +62,13 @@ export interface RepoLookup {
     probe(knownChangedFile: string): Promise<void>;
 }
 
+/**
+ * Structurally what `createLogger()` hands back. Same latent shape mismatch the
+ * claim checker had: `LogArguments.context` is required, so declaring it
+ * optional here made a real `SimpleLogger` unassignable.
+ */
 export interface RepoLookupLogger {
-    warn: (entry: {
-        message: string;
-        context?: string;
-        metadata?: Record<string, unknown>;
-    }) => void;
+    warn: (entry: LogArguments) => void;
 }
 
 const parentDirOf = (filePath: string): string => {
