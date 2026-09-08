@@ -102,7 +102,7 @@ const CategoryRow = ({
     return (
         <Collapsible
             className={cn("group/collapsible", !enabled && "opacity-70")}>
-            <div className="flex items-start gap-4 px-4 py-3">
+            <div className="flex flex-wrap items-start gap-x-4 gap-y-2 px-4 py-3">
                 <Switch
                     id={switchId}
                     size="sm"
@@ -111,7 +111,7 @@ const CategoryRow = ({
                     disabled={disabled}
                     onCheckedChange={onToggle}
                 />
-                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <div className="flex min-w-[10rem] flex-1 flex-col gap-0.5">
                     <div className="flex flex-wrap items-center gap-2">
                         <label
                             htmlFor={switchId}
@@ -136,7 +136,7 @@ const CategoryRow = ({
                     <CollapsibleTrigger asChild>
                         <button
                             type="button"
-                            className="text-text-secondary hover:text-text-primary flex shrink-0 items-center gap-2 self-center text-xs">
+                            className="text-text-secondary hover:text-text-primary ml-auto flex shrink-0 items-center gap-2 self-center text-xs">
                             Instructions
                             <InstructionsChip
                                 fieldName={fieldName}

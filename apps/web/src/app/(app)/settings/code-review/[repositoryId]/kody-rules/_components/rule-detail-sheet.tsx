@@ -3,7 +3,6 @@
 import { IssueSeverityLevelBadge } from "@components/system/issue-severity-level-badge";
 import { Button } from "@components/ui/button";
 import { Keycap } from "@components/ui/keycap";
-import { ScrollArea } from "@components/ui/scroll-area";
 import {
     Sheet,
     SheetContent,
@@ -111,7 +110,7 @@ export const KodyRuleDetailSheet = ({
     return (
         <Sheet modal={false} open>
             <SheetContent
-                className="gap-0 py-0 sm:max-w-2xl"
+                className="w-full gap-0 py-0 sm:max-w-2xl"
                 onEscapeKeyDown={onClose}
                 // Non-modal: clicks on the table must reach the rows.
                 onInteractOutside={(event) => event.preventDefault()}>
@@ -239,11 +238,11 @@ export const KodyRuleDetailSheet = ({
                     </div>
                 </SheetHeader>
 
-                <ScrollArea className="min-h-0 flex-1">
+                <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
                     <div className="flex flex-col gap-8 px-6 py-6">
                         {/* The instructions ARE the rule: body copy, readable
                             measure, no label — the title above names it. */}
-                        <p className="text-text-primary max-w-prose text-[15px] leading-relaxed whitespace-pre-wrap">
+                        <p className="text-text-primary max-w-prose text-[15px] leading-relaxed break-words whitespace-pre-wrap">
                             {rule.rule}
                         </p>
 
@@ -318,7 +317,7 @@ export const KodyRuleDetailSheet = ({
                             </p>
                         )}
                     </div>
-                </ScrollArea>
+                </div>
 
                 <SheetFooter className="border-card-lv3/60 mt-0 flex-row items-center justify-end gap-3 border-t px-6 py-4">
                     <div className="flex items-center gap-2">

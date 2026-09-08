@@ -83,30 +83,32 @@ export const KodyRulesToolbar = ({
     }, []);
 
     return (
-        <div className="flex items-center gap-2">
-            <Input
-                ref={searchRef}
-                size="md"
-                type="search"
-                name="kody-rules-search"
-                autoComplete="off"
-                spellCheck={false}
-                value={filterQuery}
-                leftIcon={<SearchIcon aria-hidden />}
-                onChange={(e) => onFilterQueryChange(e.target.value)}
-                aria-label={
-                    entityLabel === "memories"
-                        ? "Search memories"
-                        : "Search rules"
-                }
-                placeholder={
-                    entityLabel === "memories"
-                        ? "Search for titles or instructions… (press /)"
-                        : "Search for titles, paths, content… (press /)"
-                }
-                disabled={isDisabled}
-                className="grow"
-            />
+        <div className="flex flex-wrap items-center gap-2">
+            <div className="min-w-56 flex-1">
+                <Input
+                    ref={searchRef}
+                    size="md"
+                    type="search"
+                    name="kody-rules-search"
+                    autoComplete="off"
+                    spellCheck={false}
+                    value={filterQuery}
+                    leftIcon={<SearchIcon aria-hidden />}
+                    onChange={(e) => onFilterQueryChange(e.target.value)}
+                    aria-label={
+                        entityLabel === "memories"
+                            ? "Search memories"
+                            : "Search rules"
+                    }
+                    placeholder={
+                        entityLabel === "memories"
+                            ? "Search for titles or instructions… (press /)"
+                            : "Search for titles, paths, content… (press /)"
+                    }
+                    disabled={isDisabled}
+                    className="grow"
+                />
+            </div>
             <Popover>
                 <PopoverTrigger asChild>
                     <Button

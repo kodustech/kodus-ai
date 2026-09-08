@@ -140,137 +140,159 @@ export const KodyRulesDataTable = ({
         // would crush the title column, so Origin/Updated fold into the row
         // below 56rem (see getKodyRulesRowGrid).
         <div className="border-card-lv3/60 bg-card-lv1 @container overflow-clip rounded-xl border">
-            {/* Sticky header — sticks to the page scroller (overflow-clip
+            {/* Narrow containers scroll the grid sideways; wide ones keep the
+                page-level sticky header (no scroll container in between). */}
+            <div className="@max-2xl:overflow-x-auto">
+                <div className="@max-2xl:min-w-[40rem]">
+                    {/* Sticky header — sticks to the page scroller (overflow-clip
                 above does not create a scroll container, so `top-0` still
                 means the top of the page). Labels the aligned columns each
                 row lays out via getKodyRulesRowGrid. Fully opaque on
                 purpose: rows scroll underneath it, and a translucent
                 surface let their text bleed through the labels. */}
-            <div className="border-card-lv3/40 bg-card-lv1 sticky top-0 z-10 border-b">
-                {showBulkToolbar ? (
-                    bulkToolbar
-                ) : (
-                    <div
-                        className={cn(
-                            grid,
-                            "text-text-secondary text-2xs px-4 py-2.5 font-medium tracking-wide uppercase",
-                        )}>
-                        {withSelection && (
-                            <div className="flex items-center">
-                                <input
-                                    ref={headerCheckboxRef}
-                                    type="checkbox"
-                                    checked={allSelected}
-                                    disabled={eligibleCount === 0}
-                                    onChange={() =>
-                                        allSelected
-                                            ? bulkSelection?.onClear()
-                                            : bulkSelection?.onSelectAll()
-                                    }
-                                    aria-label={
-                                        allSelected
-                                            ? "Clear selection"
-                                            : `Select all ${eligibleCount} selectable ${plural}`
-                                    }
-                                    className="border-card-lv3 bg-card-lv2 accent-primary-light size-4 cursor-pointer rounded border disabled:cursor-not-allowed disabled:opacity-40"
-                                />
-                            </div>
-                        )}
-                        <HeaderCell
-                            label={variant === "memories" ? "Memory" : "Rule"}
-                            hint="Title, target path, source file and where it is inherited from. Click a row to open the rule."
-                            sort={{
-                                active: sortOption === "alphabetical",
-                                onSort: () =>
-                                    onSortOptionChange("alphabetical"),
-                            }}
-                        />
-                        {variant === "rules" && (
-                            <HeaderCell
-                                label="Severity"
-                                hint="How loud Kody is when this rule is broken."
-                                sort={{
-                                    active: sortOption === "severity-desc",
-                                    onSort: () =>
-                                        onSortOptionChange("severity-desc"),
-                                }}
-                            />
-                        )}
-                        {variant === "rules" && (
-                            <div className="hidden @4xl:block">
+                    <div className="border-card-lv3/40 bg-card-lv1 sticky top-0 z-10 border-b">
+                        {showBulkToolbar ? (
+                            bulkToolbar
+                        ) : (
+                            <div
+                                className={cn(
+                                    grid,
+                                    "text-text-secondary text-2xs px-4 py-2.5 font-medium tracking-wide uppercase",
+                                )}>
+                                {withSelection && (
+                                    <div className="flex items-center">
+                                        <input
+                                            ref={headerCheckboxRef}
+                                            type="checkbox"
+                                            checked={allSelected}
+                                            disabled={eligibleCount === 0}
+                                            onChange={() =>
+                                                allSelected
+                                                    ? bulkSelection?.onClear()
+                                                    : bulkSelection?.onSelectAll()
+                                            }
+                                            aria-label={
+                                                allSelected
+                                                    ? "Clear selection"
+                                                    : `Select all ${eligibleCount} selectable ${plural}`
+                                            }
+                                            className="border-card-lv3 bg-card-lv2 accent-primary-light size-4 cursor-pointer rounded border disabled:cursor-not-allowed disabled:opacity-40"
+                                        />
+                                    </div>
+                                )}
                                 <HeaderCell
-                                    label="Origin"
-                                    hint="Where the rule came from: written by hand, the rule library, onboarding analysis, IDE auto-sync, Kody-generated, CLI or an MCP agent."
+                                    label={
+                                        variant === "memories"
+                                            ? "Memory"
+                                            : "Rule"
+                                    }
+                                    hint="Title, target path, source file and where it is inherited from. Click a row to open the rule."
+                                    sort={{
+                                        active: sortOption === "alphabetical",
+                                        onSort: () =>
+                                            onSortOptionChange("alphabetical"),
+                                    }}
                                 />
+                                {variant === "rules" && (
+                                    <HeaderCell
+                                        label="Severity"
+                                        hint="How loud Kody is when this rule is broken."
+                                        sort={{
+                                            active:
+                                                sortOption === "severity-desc",
+                                            onSort: () =>
+                                                onSortOptionChange(
+                                                    "severity-desc",
+                                                ),
+                                        }}
+                                    />
+                                )}
+                                {variant === "rules" && (
+                                    <div className="hidden @4xl:block">
+                                        <HeaderCell
+                                            label="Origin"
+                                            hint="Where the rule came from: written by hand, the rule library, onboarding analysis, IDE auto-sync, Kody-generated, CLI or an MCP agent."
+                                        />
+                                    </div>
+                                )}
+                                {withUsage && (
+                                    <HeaderCell
+                                        label="Usage"
+                                        hint="Times the rule fired in the last 30 days and when it last did. Noisy, ignored and stale rules get a chip; healthy ones stay quiet."
+                                    />
+                                )}
+                                <HeaderCell
+                                    label="Status"
+                                    hint="Active rules run on every new PR. Paused, locked and disabled rules stay listed but are skipped."
+                                />
+                                <div
+                                    className={cn(
+                                        variant === "rules" &&
+                                            "hidden @4xl:block",
+                                    )}>
+                                    <HeaderCell
+                                        label="Updated"
+                                        hint="Last time the rule changed."
+                                        sort={{
+                                            active: sortOption === "recent",
+                                            onSort: () =>
+                                                onSortOptionChange("recent"),
+                                        }}
+                                    />
+                                </div>
+                                <span aria-hidden />
                             </div>
                         )}
-                        {withUsage && (
-                            <HeaderCell
-                                label="Usage"
-                                hint="Times the rule fired in the last 30 days and when it last did. Noisy, ignored and stale rules get a chip; healthy ones stay quiet."
-                            />
-                        )}
-                        <HeaderCell
-                            label="Status"
-                            hint="Active rules run on every new PR. Paused, locked and disabled rules stay listed but are skipped."
-                        />
-                        <div
-                            className={cn(
-                                variant === "rules" && "hidden @4xl:block",
-                            )}>
-                            <HeaderCell
-                                label="Updated"
-                                hint="Last time the rule changed."
-                                sort={{
-                                    active: sortOption === "recent",
-                                    onSort: () => onSortOptionChange("recent"),
-                                }}
-                            />
-                        </div>
-                        <span aria-hidden />
                     </div>
-                )}
-            </div>
 
-            <div>
-                {rules.map((rule, index) => (
-                    <KodyRuleRow
-                        key={rule.uuid ?? index}
-                        rule={rule}
-                        variant={variant}
-                        withSelection={withSelection}
-                        selection={
-                            bulkSelection && rule.uuid
-                                ? {
-                                      isSelected: bulkSelection.selection.has(
-                                          rule.uuid,
-                                      ),
-                                      eligible: bulkSelection.isEligible(rule),
-                                      onToggle: () =>
-                                          bulkSelection.onToggle(
-                                              rule.uuid as string,
-                                          ),
-                                  }
-                                : undefined
-                        }
-                        syncEnabledForRepo={syncEnabledForRepo}
-                        active={!!rule.uuid && rule.uuid === activeRuleId}
-                        onSelect={() => onSelectRule(rule)}
-                        context={context}
-                    />
-                ))}
-            </div>
+                    <div>
+                        {rules.map((rule, index) => (
+                            <KodyRuleRow
+                                key={rule.uuid ?? index}
+                                rule={rule}
+                                variant={variant}
+                                withSelection={withSelection}
+                                selection={
+                                    bulkSelection && rule.uuid
+                                        ? {
+                                              isSelected:
+                                                  bulkSelection.selection.has(
+                                                      rule.uuid,
+                                                  ),
+                                              eligible:
+                                                  bulkSelection.isEligible(
+                                                      rule,
+                                                  ),
+                                              onToggle: () =>
+                                                  bulkSelection.onToggle(
+                                                      rule.uuid as string,
+                                                  ),
+                                          }
+                                        : undefined
+                                }
+                                syncEnabledForRepo={syncEnabledForRepo}
+                                active={
+                                    !!rule.uuid && rule.uuid === activeRuleId
+                                }
+                                onSelect={() => onSelectRule(rule)}
+                                context={context}
+                            />
+                        ))}
+                    </div>
 
-            <div className="text-text-tertiary flex items-center gap-3 px-4 py-2 text-xs tabular-nums">
-                <span>
-                    {rules.length} {rules.length === 1 ? singular : plural}
-                </span>
-                {pausedCount > 0 && (
-                    <>
-                        <span aria-hidden>·</span>
-                        <span>{pausedCount} paused</span>
-                    </>
-                )}
+                    <div className="text-text-tertiary flex items-center gap-3 px-4 py-2 text-xs tabular-nums">
+                        <span>
+                            {rules.length}{" "}
+                            {rules.length === 1 ? singular : plural}
+                        </span>
+                        {pausedCount > 0 && (
+                            <>
+                                <span aria-hidden>·</span>
+                                <span>{pausedCount} paused</span>
+                            </>
+                        )}
+                    </div>
+                </div>
             </div>
         </div>
     );

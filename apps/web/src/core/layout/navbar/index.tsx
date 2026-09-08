@@ -160,7 +160,7 @@ export const NavMenu = () => {
                 overflow-hidden, clipped every page's content on the right at
                 widths below ~1230px. overflow-x-auto keeps the links reachable
                 by scrolling within the bar. */}
-            <div className="-mb-1 h-full min-w-0 flex-1 overflow-x-auto">
+            <div className="-mb-1 h-full min-w-0 flex-1 [scrollbar-width:none] overflow-x-auto [&::-webkit-scrollbar]:hidden">
                 <NavigationMenu className="h-full *:h-full">
                     <NavigationMenuList className="h-full gap-0">
                         {items.map(
@@ -200,12 +200,16 @@ export const NavMenu = () => {
             </div>
 
             <div className="flex items-center gap-4">
-                <ErrorBoundary fallback={null}>
-                    <GithubStars />
-                </ErrorBoundary>
+                <div className="hidden md:flex">
+                    <ErrorBoundary fallback={null}>
+                        <GithubStars />
+                    </ErrorBoundary>
+                </div>
 
                 <div className="flex items-center gap-1">
-                    <SubscriptionBadge />
+                    <div className="hidden sm:flex">
+                        <SubscriptionBadge />
+                    </div>
                     <NotificationBell />
                 </div>
 

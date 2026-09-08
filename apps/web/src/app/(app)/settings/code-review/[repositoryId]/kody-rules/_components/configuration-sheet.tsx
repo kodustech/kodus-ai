@@ -1,7 +1,6 @@
 "use client";
 
 import { Suspense } from "react";
-import { ScrollArea } from "@components/ui/scroll-area";
 import {
     Sheet,
     SheetContent,
@@ -32,7 +31,7 @@ export const KodyRulesConfigurationSheet = ({
     isGlobalView: boolean;
 }) => (
     <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="gap-0 py-0 sm:max-w-xl">
+        <SheetContent className="w-full gap-0 py-0 sm:max-w-xl">
             <SheetHeader className="border-card-lv3/60 border-b px-6 pt-5 pb-4">
                 <SheetTitle>Configuration</SheetTitle>
                 <SheetDescription>
@@ -41,7 +40,7 @@ export const KodyRulesConfigurationSheet = ({
                 </SheetDescription>
             </SheetHeader>
 
-            <ScrollArea className="min-h-0 flex-1">
+            <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
                 <div className="flex flex-col gap-3 px-6 py-5">
                     <KodyKnowledgeApprovalSetting />
 
@@ -57,7 +56,7 @@ export const KodyRulesConfigurationSheet = ({
                         </Suspense>
                     )}
                 </div>
-            </ScrollArea>
+            </div>
         </SheetContent>
     </Sheet>
 );

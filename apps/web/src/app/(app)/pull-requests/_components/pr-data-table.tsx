@@ -123,92 +123,101 @@ export const PrDataTable = ({
     return (
         <div
             ref={scrollRef}
-            className="border-card-lv3/60 bg-card-lv1 min-h-0 flex-1 overflow-y-auto rounded-xl border">
-            {/* Sticky table header — labels the aligned columns each row lays
+            className="border-card-lv3/60 bg-card-lv1 min-h-0 flex-1 overflow-auto rounded-xl border">
+            {/* Below 40rem the grid scrolls sideways inside this container
+                instead of crushing the title column. */}
+            <div className="min-w-[40rem]">
+                {/* Sticky table header — labels the aligned columns each row lays
                 out via PR_ROW_GRID, so the signals (reviews / suggestions /
                 status) read as a table while each row keeps its card richness
                 and expandable timeline. */}
-            <div
-                className={cn(
-                    PR_ROW_GRID,
-                    "border-card-lv3/40 bg-card-lv1/95 text-text-secondary sticky top-0 z-10 border-b px-5 py-2.5 text-2xs font-medium tracking-wide uppercase backdrop-blur",
-                )}>
-                {/* Column explanations. side="bottom" opens into the list (the
+                <div
+                    className={cn(
+                        PR_ROW_GRID,
+                        "border-card-lv3/40 bg-card-lv1/95 text-text-secondary text-2xs sticky top-0 z-10 border-b px-5 py-2.5 font-medium tracking-wide uppercase backdrop-blur",
+                    )}>
+                    {/* Column explanations. side="bottom" opens into the list (the
                     header sits at the top of the scroll container); the shared
                     TooltipContent portals to <body> so it never clips. */}
-                <span aria-hidden />
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <span className="w-fit cursor-help">Pull request</span>
-                    </TooltipTrigger>
-                    <TooltipContent
-                        side="bottom"
-                        className="text-xs normal-case">
-                        The PR — number, title, repository, branch, author and
-                        when it was opened.
-                    </TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <span className="w-fit cursor-help">Reviews</span>
-                    </TooltipTrigger>
-                    <TooltipContent
-                        side="bottom"
-                        className="text-xs normal-case">
-                        How many times Kody reviewed this PR and how recently.
-                    </TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <span className="w-fit cursor-help">Suggestions</span>
-                    </TooltipTrigger>
-                    <TooltipContent
-                        side="bottom"
-                        className="text-xs normal-case">
-                        Two counts: delivered on the PR (check icon) vs held back
-                        by your review configuration (filter icon).
-                    </TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <span className="w-fit cursor-help">Status</span>
-                    </TooltipTrigger>
-                    <TooltipContent
-                        side="bottom"
-                        className="text-xs normal-case">
-                        Status of the latest review execution.
-                    </TooltipContent>
-                </Tooltip>
-            </div>
-            {/* Virtualized body — rows align to the header via PR_ROW_GRID. */}
-            <div
-                style={{
-                    height: `${virtualizer.getTotalSize()}px`,
-                    position: "relative",
-                }}>
-                {items.map((virtualRow) => (
-                    <div
-                        key={virtualRow.key}
-                        data-index={virtualRow.index}
-                        ref={virtualizer.measureElement}
-                        style={{
-                            position: "absolute",
-                            top: 0,
-                            left: 0,
-                            width: "100%",
-                            transform: `translateY(${virtualRow.start}px)`,
-                        }}>
-                        <PrListItem group={data[virtualRow.index]} />
-                    </div>
-                ))}
-            </div>
-
-            <div ref={loadMoreRef} className="h-1 w-full" aria-hidden />
-            {isFetchingNextPage && (
-                <div className="flex justify-center py-4">
-                    <Spinner className="size-5" />
+                    <span aria-hidden />
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <span className="w-fit cursor-help">
+                                Pull request
+                            </span>
+                        </TooltipTrigger>
+                        <TooltipContent
+                            side="bottom"
+                            className="text-xs normal-case">
+                            The PR — number, title, repository, branch, author
+                            and when it was opened.
+                        </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <span className="w-fit cursor-help">Reviews</span>
+                        </TooltipTrigger>
+                        <TooltipContent
+                            side="bottom"
+                            className="text-xs normal-case">
+                            How many times Kody reviewed this PR and how
+                            recently.
+                        </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <span className="w-fit cursor-help">
+                                Suggestions
+                            </span>
+                        </TooltipTrigger>
+                        <TooltipContent
+                            side="bottom"
+                            className="text-xs normal-case">
+                            Two counts: delivered on the PR (check icon) vs held
+                            back by your review configuration (filter icon).
+                        </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <span className="w-fit cursor-help">Status</span>
+                        </TooltipTrigger>
+                        <TooltipContent
+                            side="bottom"
+                            className="text-xs normal-case">
+                            Status of the latest review execution.
+                        </TooltipContent>
+                    </Tooltip>
                 </div>
-            )}
+                {/* Virtualized body — rows align to the header via PR_ROW_GRID. */}
+                <div
+                    style={{
+                        height: `${virtualizer.getTotalSize()}px`,
+                        position: "relative",
+                    }}>
+                    {items.map((virtualRow) => (
+                        <div
+                            key={virtualRow.key}
+                            data-index={virtualRow.index}
+                            ref={virtualizer.measureElement}
+                            style={{
+                                position: "absolute",
+                                top: 0,
+                                left: 0,
+                                width: "100%",
+                                transform: `translateY(${virtualRow.start}px)`,
+                            }}>
+                            <PrListItem group={data[virtualRow.index]} />
+                        </div>
+                    ))}
+                </div>
+
+                <div ref={loadMoreRef} className="h-1 w-full" aria-hidden />
+                {isFetchingNextPage && (
+                    <div className="flex justify-center py-4">
+                        <Spinner className="size-5" />
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

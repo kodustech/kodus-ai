@@ -84,7 +84,7 @@ export const PageHeader = (props: React.ComponentProps<"div">) => {
         <div
             {...props}
             className={cn(
-                "flex min-h-12 shrink-0 items-center justify-between gap-6 px-8",
+                "flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-x-6 gap-y-3 px-8",
                 // A header whose only child rendered null (e.g. the code-review
                 // breadcrumb under the tabs shell) must not keep its 48px.
                 "empty:hidden",
@@ -99,10 +99,7 @@ export const PageHeader = (props: React.ComponentProps<"div">) => {
 export const PageHeaderActions = (props: React.ComponentProps<"div">) => (
     <div
         data-header-actions
-        className={cn(
-            "flex items-center justify-between gap-2",
-            props.className,
-        )}>
+        className={cn("flex flex-wrap items-center gap-2", props.className)}>
         {props.children}
     </div>
 );
@@ -116,7 +113,12 @@ export const PageDescription = (props: React.ComponentProps<"div">) => (
 );
 
 export const PageTitleContainer = (props: React.ComponentProps<"div">) => (
-    <div {...props} className={cn("flex flex-1 flex-col", props.className)}>
+    <div
+        {...props}
+        className={cn(
+            "flex min-w-[min(100%,22rem)] flex-1 flex-col",
+            props.className,
+        )}>
         {props.children}
     </div>
 );

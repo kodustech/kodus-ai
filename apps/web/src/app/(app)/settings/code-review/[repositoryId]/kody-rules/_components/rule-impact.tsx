@@ -34,7 +34,7 @@ const Stat = ({
     locked?: boolean;
 }) => (
     <div
-        className="flex min-w-0 flex-col gap-0.5 px-4 py-3"
+        className="bg-card-lv1 flex min-w-0 flex-col gap-0.5 px-4 py-3"
         title={
             locked
                 ? "Available with the Cockpit (Teams and Enterprise plans)"
@@ -136,13 +136,13 @@ export const RuleImpact = ({
             </header>
 
             {isLoading ? (
-                <div className="grid grid-cols-4 gap-px px-4 py-3">
+                <div className="grid grid-cols-2 gap-px px-4 py-3 sm:grid-cols-4">
                     {Array.from({ length: 4 }).map((_, i) => (
                         <Skeleton key={i} className="h-9 w-20" />
                     ))}
                 </div>
             ) : (
-                <div className="divide-card-lv3/60 grid grid-cols-4 divide-x">
+                <div className="bg-card-lv3/60 grid grid-cols-2 gap-px sm:grid-cols-4">
                     <Stat
                         value={healthRow?.triggers ?? list.length}
                         label="triggers"
@@ -199,7 +199,7 @@ export const RuleImpact = ({
                             </span>
                             <span
                                 title={item.relevantFile}
-                                className="text-text-tertiary max-w-[11rem] truncate font-mono">
+                                className="text-text-tertiary hidden max-w-[11rem] truncate font-mono sm:inline">
                                 {item.relevantFile}
                             </span>
                             <span className="text-text-tertiary shrink-0">
