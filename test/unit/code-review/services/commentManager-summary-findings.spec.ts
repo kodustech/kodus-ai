@@ -109,16 +109,18 @@ describe('CommentManagerService – buildReviewFindingsBlock', () => {
 
     // Both arrays retain FAILED entries for auditing. Counting them would
     // describe comments that were never posted to the PR as review findings.
-    it('ignores findings whose comment was never delivered', () => {
+    it('never lists a finding whose comment was not delivered', () => {
         const block: string = serviceAny.buildReviewFindingsBlock([
             finding('high', 'src/a.ts', 1, 'Delivered'),
             finding('critical', 'src/b.ts', 2, 'Never posted', DeliveryStatus.FAILED),
         ]);
 
-        expect(block).toContain('produced 1 finding(s)');
-        expect(block).toContain('Delivered');
+        // The listing describes what is actually on the PR, so undelivered
+        // content must not appear in it. (Counting is covered separately by
+        // 'counts every finding produced, listing only the delivered ones'.)
+        expect(block).toContain('- [high] src/a.ts:1 - Delivered');
         expect(block).not.toContain('Never posted');
-        expect(block).not.toContain('critical');
+        expect(block).not.toContain('src/b.ts');
     });
 
     // "Nothing was delivered" must not be reported as "nothing was found":
@@ -139,6 +141,37 @@ describe('CommentManagerService – buildReviewFindingsBlock', () => {
 
         expect(block).toContain('found no issues');
         expect(block).not.toContain('could be posted');
+    });
+
+    // Both branches must count the same population: the all-failed branch
+    // reports everything produced, so the success branch must too, or a
+    // partially-delivered review silently under-reports.
+    it('counts every finding produced, listing only the delivered ones', () => {
+        const block: string = serviceAny.buildReviewFindingsBlock([
+            finding('high', 'src/a.ts', 1, 'Posted finding'),
+            finding('critical', 'src/b.ts', 2, 'Undelivered', DeliveryStatus.FAILED),
+        ]);
+
+        // Total and tally cover both...
+        expect(block).toContain('produced 2 finding(s)');
+        expect(block).toContain('critical: 1');
+        expect(block).toContain('high: 1');
+        // ...the gap is stated explicitly...
+        expect(block).toContain(
+            '1 of them could not be posted to the pull request',
+        );
+        // ...and only the delivered one is listed.
+        expect(block).toContain('Posted finding');
+        expect(block).not.toContain('- [critical]');
+    });
+
+    it('adds no undelivered note when everything was posted', () => {
+        const block: string = serviceAny.buildReviewFindingsBlock([
+            finding('high', 'src/a.ts', 1, 'Posted finding'),
+        ]);
+
+        expect(block).toContain('produced 1 finding(s)');
+        expect(block).not.toContain('could not be posted');
     });
 
     it('caps the listed findings so the block cannot blow the token budget', () => {

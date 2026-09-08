@@ -212,7 +212,14 @@ export class CommentManagerService implements ICommentManagerService {
         const severityOf = (s: { severity?: string }) =>
             (s.severity ?? 'medium').toLowerCase();
 
-        const counts = suggestions.reduce<Record<string, number>>((acc, s) => {
+        // Count over everything the review produced, not just what reached the
+        // PR: the empty branch above reports merged.length, so using the
+        // delivered subset here would make the two branches describe different
+        // populations and under-report a partially-delivered review.
+        const produced = merged.map((entry) => entry.comment.suggestion);
+        const undelivered = produced.length - suggestions.length;
+
+        const counts = produced.reduce<Record<string, number>>((acc, s) => {
             const severity = severityOf(s);
             acc[severity] = (acc[severity] ?? 0) + 1;
             return acc;
@@ -249,7 +256,14 @@ export class CommentManagerService implements ICommentManagerService {
 
         const more = omitted > 0 ? `\n- ...and ${omitted} more finding(s)` : '';
 
-        return `\n\n**Code Review Findings**:\nThe automated code review of this pull request produced ${suggestions.length} finding(s) (${tally}).\nThese are the authoritative results of the review. Describe them as findings of the review; do not re-derive them from the diff.\n\n${lines}${more}`;
+        // Only delivered findings are listed, so say plainly when the list is
+        // shorter than the count rather than letting the two silently disagree.
+        const undeliveredNote =
+            undelivered > 0
+                ? `\n${undelivered} of them could not be posted to the pull request and are not listed below.`
+                : '';
+
+        return `\n\n**Code Review Findings**:\nThe automated code review of this pull request produced ${produced.length} finding(s) (${tally}).${undeliveredNote}\nThese are the authoritative results of the review. Describe them as findings of the review; do not re-derive them from the diff.\n\n${lines}${more}`;
     }
 
     async generateSummaryPR(
