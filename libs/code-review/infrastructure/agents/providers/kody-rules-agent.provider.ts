@@ -33,6 +33,7 @@ import {
     type RetrievedSlice,
 } from '@libs/code-review/infrastructure/agents/collaborators/rule-context.retriever';
 import {
+    AgentDegradedError,
     buildRuleContextUnavailableWarning,
     type ReviewWarning,
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
@@ -399,8 +400,20 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                 // below exists to prevent, so it escalates the same way and the
                 // message names what was skipped (KRC-31).
                 if (skippedRules.length === judgeRules.length) {
-                    throw new Error(
+                    // Carry the notice on the error: a thrown agent is dropped
+                    // by allSettled, and the escalation message itself renders
+                    // only for a FAILED review — kody-rules is not critical, so
+                    // this review is partial and the message alone would never
+                    // reach the PR (Verifier round 2, gap 2).
+                    throw new AgentDegradedError(
                         `Kody Rules could not be evaluated: all ${skippedRules.length} rule(s) need repository context this review could not retrieve (${lookup.unavailableReason || 'context unavailable'}), so none was applied to this PR. Skipped: ${skippedTitles.join(', ')}.`,
+                        [
+                            buildRuleContextUnavailableWarning({
+                                skippedRuleTitles: skippedTitles,
+                                modelName: main.modelName,
+                                agentName: this.getIdentity().name,
+                            }),
+                        ],
                     );
                 }
 

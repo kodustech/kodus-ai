@@ -164,3 +164,29 @@ export function buildRuleContextUnavailableWarning(params: {
         agentName: params.agentName,
     };
 }
+
+/**
+ * An agent that degrades so badly it cannot report a result still has something
+ * the PR must say. `Promise.allSettled` keeps only a fulfilled agent's
+ * `warnings`, so a thrown agent used to lose them: the Kody Rules all-skipped
+ * escalation named every skipped rule in its message, and that message is
+ * rendered only for a FAILED review — kody-rules is not critical, so the review
+ * is partial and the names never reached the PR (Verifier round 2, gap 2).
+ * Carrying them on the error lets the orchestrator harvest them on rejection,
+ * so the escalation and the notice say the same thing.
+ */
+export class AgentDegradedError extends Error {
+    constructor(
+        message: string,
+        readonly warnings: ReviewWarning[],
+    ) {
+        super(message);
+        this.name = 'AgentDegradedError';
+    }
+}
+
+/** The warnings an agent attached to whatever it threw, if any. */
+export function warningsFromError(err: unknown): ReviewWarning[] {
+    const carried = (err as { warnings?: unknown } | null)?.warnings;
+    return Array.isArray(carried) ? (carried as ReviewWarning[]) : [];
+}
