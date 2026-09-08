@@ -243,6 +243,14 @@ export type RunJudge = (args: {
     ruleUuids: string[];
 }) => Promise<RawShardViolation[]>;
 
+/**
+ * Max concurrent shard calls, and the single source for anything that must not
+ * outpace the shards — the claim checker imports it rather than repeating the
+ * number, so the two cannot drift apart (KRC-07). BYOK models rate-limit, so
+ * keep it modest.
+ */
+export const SHARD_CONCURRENCY_DEFAULT = 4;
+
 export interface ShardedJudgeInput {
     changedFiles: FileChange[];
     /** active, non-memory STANDARD rules already resolved for this review. */
@@ -250,7 +258,8 @@ export interface ShardedJudgeInput {
     runJudge: RunJudge;
     prTitle?: string;
     prBody?: string;
-    /** max concurrent shard calls (BYOK models rate-limit — keep modest). */
+    /** max concurrent shard calls (BYOK models rate-limit — keep modest).
+     *  Defaults to SHARD_CONCURRENCY_DEFAULT. */
     concurrency?: number;
     /** Errored shards degrade to zero findings; log WHY so a systemic
      *  failure (e.g. a provider rejecting the response schema) is visible
@@ -883,7 +892,7 @@ export async function judgeKodyRulesSharded(
         contextSlices,
         unmetRules,
     } = input;
-    const concurrency = input.concurrency ?? 4;
+    const concurrency = input.concurrency ?? SHARD_CONCURRENCY_DEFAULT;
 
     // A rule whose detector fired NOWHERE in this PR is not judged at all —
     // that is the entire cost saving of the T0 pre-filter (issue #1831), and it

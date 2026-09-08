@@ -28,6 +28,7 @@
  */
 import type { LogArguments } from '@libs/core/log/logger';
 import type { RepoLookup } from './repo-lookup';
+import { SHARD_CONCURRENCY_DEFAULT } from './kody-rules-sharded.judge';
 import type { ShardViolation } from './kody-rules-sharded.judge';
 
 export type ClaimKind = 'unused' | 'missing' | 'duplicate' | 'none';
@@ -69,9 +70,6 @@ export interface ClaimCheckResult {
     kept: ShardViolation[];
     dropped: DroppedClaim[];
 }
-
-/** Same default the sharded judge uses, so checks never outpace the shards. */
-const DEFAULT_CONCURRENCY = 4;
 
 /**
  * Per-check time budget. Neither spec nor design fixes a number, so this is the
@@ -239,7 +237,7 @@ export async function checkClaims(
     input: ClaimCheckInput,
 ): Promise<ClaimCheckResult> {
     const { violations, lookup, logger } = input;
-    const concurrency = input.concurrency ?? DEFAULT_CONCURRENCY;
+    const concurrency = input.concurrency ?? SHARD_CONCURRENCY_DEFAULT;
     const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
     const verdicts = await mapLimit(

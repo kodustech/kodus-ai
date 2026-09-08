@@ -1,3 +1,4 @@
+import { SHARD_CONCURRENCY_DEFAULT } from './kody-rules-sharded.judge';
 import { checkClaims, readClaim } from './claim-checker';
 import { RepoLookupUnavailableError, type RepoLookup } from './repo-lookup';
 import type { ShardViolation } from './kody-rules-sharded.judge';
@@ -495,6 +496,29 @@ describe('checkClaims — batch behavior (KRC-07)', () => {
 
         expect(peak).toBeLessThanOrEqual(2);
         expect(lookup.grepCalls).toHaveLength(10);
+    });
+
+    it('defaults to the shard concurrency limit, not a number of its own', async () => {
+        let inFlight = 0;
+        let peak = 0;
+        const lookup = fakeLookup({
+            grep: async () => {
+                inFlight++;
+                peak = Math.max(peak, inFlight);
+                await new Promise((r) => setImmediate(r));
+                inFlight--;
+                return 'No matches found.';
+            },
+        });
+        const violations = Array.from({ length: 12 }, (_, i) =>
+            violation({ ruleUuid: `r${i}`, claimKind: 'unused', claimSymbol: 's' }),
+        );
+
+        // No `concurrency` passed: the default must BE the shard's limit, not a
+        // literal that happens to match it today and drifts tomorrow (KRC-07).
+        await checkClaims({ violations, changedFiles: [], lookup });
+
+        expect(peak).toBe(SHARD_CONCURRENCY_DEFAULT);
     });
 
     it('preserves the order of the findings it keeps', async () => {
