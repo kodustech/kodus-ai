@@ -154,6 +154,68 @@ export class CommentManagerService implements ICommentManagerService {
         });
     }
 
+    /**
+     * Renders the review's own findings into the PR-summary prompt.
+     *
+     * The summary stage runs after the review has aggregated its results, so the
+     * findings already exist in the pipeline context by the time the summary is
+     * generated. Without this block the summary model only ever sees the diff, so
+     * a custom instruction that asks it to reason about the review (a risk score,
+     * a "what did the review find" paragraph) has nothing to reason about and
+     * invents an answer instead.
+     *
+     * An empty list is reported explicitly rather than omitted, so the model can
+     * distinguish "the review found nothing" from "no findings were given to me".
+     */
+    private buildReviewFindingsBlock(lineComments?: CommentResult[]): string {
+        // undefined => caller has no findings to offer (e.g. the preview use
+        // case, which runs before any review). Say nothing at all.
+        if (!lineComments) {
+            return '';
+        }
+
+        const suggestions = lineComments
+            .map((entry) => entry?.comment?.suggestion)
+            .filter(Boolean);
+
+        if (suggestions.length === 0) {
+            return `\n\n**Code Review Findings**:\nThe automated code review completed and found no issues in these changes.`;
+        }
+
+        const order = ['critical', 'high', 'medium', 'low'];
+        const severityOf = (s: { severity?: string }) =>
+            (s.severity ?? 'medium').toLowerCase();
+
+        const counts = suggestions.reduce<Record<string, number>>((acc, s) => {
+            const severity = severityOf(s);
+            acc[severity] = (acc[severity] ?? 0) + 1;
+            return acc;
+        }, {});
+
+        const tally = order
+            .filter((severity) => counts[severity])
+            .map((severity) => `${severity}: ${counts[severity]}`)
+            .join(', ');
+
+        const lines = [...suggestions]
+            .sort(
+                (a, b) => order.indexOf(severityOf(a)) - order.indexOf(severityOf(b)),
+            )
+            .map((s) => {
+                const where = s.relevantLinesStart
+                    ? `${s.relevantFile}:${s.relevantLinesStart}`
+                    : s.relevantFile;
+                const what =
+                    s.oneSentenceSummary?.trim() ||
+                    s.suggestionContent?.trim() ||
+                    s.label;
+                return `- [${severityOf(s)}] ${where} - ${what}`;
+            })
+            .join('\n');
+
+        return `\n\n**Code Review Findings**:\nThe automated code review of this pull request produced ${suggestions.length} finding(s) (${tally}).\nThese are the authoritative results of the review. Describe them as findings of the review; do not re-derive them from the diff.\n\n${lines}`;
+    }
+
     async generateSummaryPR(
         pullRequest: any,
         repository: { name: string; id: string },
@@ -165,6 +227,7 @@ export class CommentManagerService implements ICommentManagerService {
         prPreview?: boolean,
         externalPromptContext?: any,
         platformType?: PlatformType,
+        lineComments?: CommentResult[],
     ): Promise<string> {
         if (!summaryConfig?.generatePRSummary) {
             return null;
@@ -241,6 +304,10 @@ export class CommentManagerService implements ICommentManagerService {
                     **Existing Description**:
                     ${updatedPR.body}`;
                 }
+
+                // The review's own findings, so custom instructions can act on
+                // the actual review rather than a second read of the diff.
+                promptBase += this.buildReviewFindingsBlock(lineComments);
 
                 // Adds custom instructions if provided
                 if (summaryConfig?.customInstructions) {
