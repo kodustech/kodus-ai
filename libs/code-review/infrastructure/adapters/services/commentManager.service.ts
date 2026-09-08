@@ -181,19 +181,28 @@ export class CommentManagerService implements ICommentManagerService {
         // and are just as real as file-level ones. A review whose findings are
         // all PR-level would otherwise report "no issues" while its comments
         // are visible on the PR.
-        const suggestions = [
+        const merged = [
             ...(lineComments ?? []),
             ...(prLevelCommentResults ?? []),
-        ]
-            // Both arrays retain FAILED entries for persistence/auditing, so a
-            // comment that was never posted would otherwise be described here
-            // as a finding of the review. Mirrors the SENT filter the sibling
-            // consumer applies to these same arrays.
+        ].filter((entry) => entry?.comment?.suggestion);
+
+        // Both arrays retain FAILED entries for persistence/auditing, so a
+        // comment that was never posted would otherwise be described here as a
+        // finding of the review. Mirrors the SENT filter the sibling consumer
+        // applies to these same arrays.
+        const suggestions = merged
             .filter((entry) => entry?.deliveryStatus === DeliveryStatus.SENT)
-            .map((entry) => entry?.comment?.suggestion)
-            .filter(Boolean);
+            .map((entry) => entry.comment.suggestion);
 
         if (suggestions.length === 0) {
+            // "Nothing was delivered" is not the same as "nothing was found".
+            // If the review produced findings but none reached the PR (e.g. the
+            // host returned 503 on every post), calling the review clean would
+            // be exactly the false negative this block exists to prevent.
+            if (merged.length > 0) {
+                return `\n\n**Code Review Findings**:\nThe automated code review produced ${merged.length} finding(s), but none could be posted to the pull request. Do not describe this pull request as having passed review.`;
+            }
+
             // Scoped wording: on a commit run only the current commit's files
             // are reviewed, so earlier findings can still stand on the PR.
             return `\n\n**Code Review Findings**:\nThe automated code review completed and found no issues in the changes it reviewed.`;

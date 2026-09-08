@@ -121,12 +121,24 @@ describe('CommentManagerService – buildReviewFindingsBlock', () => {
         expect(block).not.toContain('critical');
     });
 
-    it('reports no issues when every finding failed to post', () => {
+    // "Nothing was delivered" must not be reported as "nothing was found":
+    // a host outage that fails every post would otherwise be summarised as a
+    // clean review.
+    it('does not call the review clean when every finding failed to post', () => {
         const block: string = serviceAny.buildReviewFindingsBlock([
             finding('high', 'src/a.ts', 1, 'Never posted', DeliveryStatus.FAILED),
         ]);
 
+        expect(block).not.toContain('found no issues');
+        expect(block).toContain('produced 1 finding(s)');
+        expect(block).toContain('none could be posted');
+    });
+
+    it('still reports a clean review when no findings were produced at all', () => {
+        const block: string = serviceAny.buildReviewFindingsBlock([]);
+
         expect(block).toContain('found no issues');
+        expect(block).not.toContain('could be posted');
     });
 
     it('caps the listed findings so the block cannot blow the token budget', () => {
