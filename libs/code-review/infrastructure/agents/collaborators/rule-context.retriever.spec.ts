@@ -374,6 +374,35 @@ describe('retrieveForShard — budget (KRC-28, KRC-29)', () => {
         expect(SHARD_CONTEXT_BUDGET_CHARS).toBe(6000);
     });
 
+    // The second half of KRC-28 — "prefer retrieved slices over whole-file
+    // content" — held only because no code path happened to read a whole file,
+    // which nothing asserted (Verifier round 2, gap 6). This pins it: every
+    // read the retriever issues is a bounded line range, so a future "just read
+    // the file" shortcut fails here instead of quietly tripling every shard.
+    it('never reads a whole file: every read is a bounded line range (KRC-28)', async () => {
+        const read = jest.fn(async () => 'const x = 1;');
+        const hunkStart = 400;
+        const patch = [
+            `@@ -${hunkStart},1 +${hunkStart},2 @@`,
+            '+export function renderInvoice(order) {}',
+        ].join('\n');
+
+        await retrieveForShard({
+            file: file({ patch }),
+            rules: [rule('enclosing-scope')],
+            lookup: lookup({ read }),
+        });
+
+        expect(read).toHaveBeenCalled();
+        for (const [, from, to] of read.mock.calls as unknown as Array<
+            [string, number, number]
+        >) {
+            expect(from).toBeGreaterThan(1);
+            expect(Number.isFinite(to)).toBe(true);
+            expect(to - from).toBeLessThan(200);
+        }
+    });
+
     it('truncates an oversized slice, marks it, and keeps the rule judged', async () => {
         const oversized = 'x'.repeat(SHARD_CONTEXT_BUDGET_CHARS + 500);
         const rules = [rule('symbol-references')];
