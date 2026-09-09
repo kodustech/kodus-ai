@@ -627,6 +627,17 @@
     }
   },
   {
+    "key": "kodusCredits.controller.ts#charges",
+    "httpMethod": "GET",
+    "urlPath": "/credits/charges",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "kodyRules.controller.ts#addLibraryKodyRules",
     "httpMethod": "POST",
     "urlPath": "/kody-rules/add-library-kody-rules",

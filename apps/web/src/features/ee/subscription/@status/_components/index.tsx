@@ -8,6 +8,7 @@ import {
 } from "src/features/ee/subscription/_providers/subscription-context";
 import type { OrganizationLicenseTrial } from "src/features/ee/subscription/_services/billing/types";
 
+import { CreditsCard } from "../../_components/credits-card";
 import { Active } from "./active";
 import { Canceled } from "./canceled";
 import { Expired } from "./expired";
@@ -80,19 +81,34 @@ const RedirectContent = ({
             subscriptionStatus.stripeCustomerId.trim().length > 0;
 
         if (hasStripeCustomerId) {
-            return <Expired members={members} />;
+            return (
+                <div className="flex flex-col gap-4">
+                    <Expired members={members} />
+                    <CreditsCard />
+                </div>
+            );
         }
 
-        return <Trial members={members} forceShow />;
+        return (
+            <div className="flex flex-col gap-4">
+                <Trial members={members} forceShow />
+                <CreditsCard />
+            </div>
+        );
     }
 
     const Component = components[status];
 
     if (!Component) return null;
     return (
-        <Component
-            members={members}
-            codeHostMembersCount={codeHostMembersCount}
-        />
+        <div className="flex flex-col gap-4">
+            <Component
+                members={members}
+                codeHostMembersCount={codeHostMembersCount}
+            />
+            {/* Prepaid credits ("Kodus as the provider") — renders nothing
+                for an org that neither routes through Kodus nor bought any. */}
+            <CreditsCard />
+        </div>
     );
 };

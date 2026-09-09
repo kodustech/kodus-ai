@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@components/ui/alert";
 import { Badge } from "@components/ui/badge";
 import { Page } from "@components/ui/page";
 import { type LLMConfigStatus } from "@services/organizationParameters/fetch";
 import type { ByokModelCost } from "@services/usage/byok-cost";
 import {
+    CoinsIcon,
     ExternalLinkIcon,
     GitBranchIcon,
     InfoIcon,
@@ -20,10 +22,12 @@ import {
     TabsTrigger,
 } from "src/core/components/ui/tabs";
 
+import { isPlatformFundedProvider } from "../_data/platform-funded";
 import type { BYOKConfig } from "../_types";
 import { groupModelsByProvider, hasVisibleModels } from "../_utils";
 import { ModelOverridesBanner } from "./model-overrides-banner";
 import { SpendLimitSection } from "./spend-limit-section";
+import { CreditsTab } from "./tabs/credits-tab";
 import { ModelsTab } from "./tabs/models-tab";
 import { RoutingTab } from "./tabs/routing-tab";
 
@@ -145,9 +149,23 @@ export const ByokPageClient = ({
     // Nag about an env-based LLM only when no BYOK model is configured at all.
     const showEnvNotice = !!llmConfigStatus?.env.configured && firstRun;
 
+    // The Credits tab only makes sense once a Kodus-routed model exists (the
+    // balance is otherwise irrelevant). Deep-linkable via ?tab=credits.
+    const usesKodusProvider = (config?.credentials ?? []).some((c) =>
+        isPlatformFundedProvider(c.provider),
+    );
+    const searchParams = useSearchParams();
+    const requestedTab = searchParams.get("tab");
+
     // Controlled tab value so cross-tab affordances (e.g. Routing's empty-state
     // "Go to Providers") can switch tabs via a callback — no DOM scraping.
-    const [tab, setTab] = useState("providers");
+    const [tab, setTab] = useState(
+        requestedTab === "credits" && usesKodusProvider
+            ? "credits"
+            : requestedTab === "routing" || requestedTab === "budget"
+              ? requestedTab
+              : "providers",
+    );
 
     // Deep-link target for the Providers-tab "Used in" chips: clicking one
     // switches to Routing and scrolls to the matching row. RoutingTab consumes
@@ -224,6 +242,14 @@ export const ByokPageClient = ({
                                 Budget
                             </span>
                         </TabsTrigger>
+                        {usesKodusProvider && (
+                            <TabsTrigger value="credits">
+                                <span className="flex items-center gap-2">
+                                    <CoinsIcon size={15} />
+                                    Credits
+                                </span>
+                            </TabsTrigger>
+                        )}
                     </TabsList>
 
                     <TabsContent value="providers">
@@ -252,6 +278,12 @@ export const ByokPageClient = ({
                     <TabsContent value="budget">
                         <SpendLimitSection teamId={teamId} />
                     </TabsContent>
+
+                    {usesKodusProvider && (
+                        <TabsContent value="credits">
+                            <CreditsTab />
+                        </TabsContent>
+                    )}
                 </Tabs>
             </Page.Content>
         </Page.Root>

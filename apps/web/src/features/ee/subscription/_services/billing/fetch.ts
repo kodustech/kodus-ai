@@ -4,6 +4,9 @@ import { pathToApiUrl } from "src/core/utils/helpers";
 import { isSelfHosted } from "src/core/utils/self-hosted";
 
 import type {
+    CreditBalance,
+    CreditCheckoutResult,
+    CreditLedgerEntry,
     OrganizationLicense,
     Plan,
     PlanType,
@@ -354,6 +357,54 @@ export const migrateToFree = async (params: {
         body: JSON.stringify({
             organizationId: params.organizationId,
             teamId: params.teamId,
+        }),
+    });
+};
+
+// ── Prepaid credits ("Kodus as the provider") ────────────────────────────
+
+export const getCreditBalance = async (params: {
+    teamId: string;
+}): Promise<CreditBalance | null> => {
+    const organizationId = await getOrganizationId();
+    return billingFetch<CreditBalance | null>(`credits/balance`, {
+        method: "GET",
+        params: { organizationId, teamId: params.teamId },
+    });
+};
+
+export const listCreditLedger = async (params: {
+    teamId: string;
+    limit?: number;
+    before?: string;
+}): Promise<CreditLedgerEntry[]> => {
+    const organizationId = await getOrganizationId();
+    const page = await billingFetch<{ entries: CreditLedgerEntry[] } | null>(
+        `credits/ledger`,
+        {
+            method: "GET",
+            params: {
+                organizationId,
+                teamId: params.teamId,
+                limit: params.limit ?? 25,
+                ...(params.before ? { before: params.before } : {}),
+            },
+        },
+    );
+    return page?.entries ?? [];
+};
+
+export const createCreditCheckout = async (params: {
+    teamId: string;
+    creditUsd: number;
+}): Promise<CreditCheckoutResult> => {
+    const organizationId = await getOrganizationId();
+    return billingFetch<CreditCheckoutResult>(`credits/checkout`, {
+        method: "POST",
+        body: JSON.stringify({
+            organizationId,
+            teamId: params.teamId,
+            creditUsd: params.creditUsd,
         }),
     });
 };
