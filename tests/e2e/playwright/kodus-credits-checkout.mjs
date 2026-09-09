@@ -270,7 +270,8 @@ try {
     // Subscription page: a pointer to the wallet, not a second wallet.
     await page.goto(`${WEB}/settings/subscription`, { waitUntil: "load", timeout: 240_000 });
     await page.getByText("Kodus credits", { exact: false }).first().waitFor({ timeout: 180_000 });
-    await page.getByRole("button", { name: /manage credits|top up/i }).first().waitFor({ timeout: 60_000 });
+    // Decorative buttons render as <span> inside the link, so look for the link.
+    await page.getByRole("link", { name: /manage credits|top up/i }).first().waitFor({ timeout: 60_000 });
     const topUpButtons = await page.getByRole("button", { name: /^\+\$/ }).count();
     if (topUpButtons !== 0) fail(`subscription page still renders ${topUpButtons} pack buttons — the wallet must live in BYOK only`);
     await page.screenshot({ path: `${KODUS_E2E_SHOTS}/04-subscription-pointer.png`, fullPage: true });

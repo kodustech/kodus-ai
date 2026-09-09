@@ -189,7 +189,7 @@ export const CreditsWallet = () => {
                     <div className="flex items-center gap-2">
                         <Input
                             size="md"
-                            className="w-32"
+                            className="w-44"
                             inputMode="decimal"
                             placeholder={`Custom (${usd(min, 0)}–${usd(max, 0)})`}
                             value={customAmount}

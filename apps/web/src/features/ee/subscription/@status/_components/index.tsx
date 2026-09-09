@@ -43,9 +43,24 @@ export const Redirect = ({
     const subscriptionContext = useSubscriptionContext();
 
     if (trialLicense) {
+        // The recalculated trial license comes from the unlock endpoint,
+        // which does not carry the prepaid balance; keep the app-level
+        // snapshot so the credits pointer never shows "—" before the live
+        // balance lands.
+        const outerBalance = (
+            subscriptionContext.license as { creditBalanceUsd?: number }
+        ).creditBalanceUsd;
+        const license =
+            typeof (trialLicense as { creditBalanceUsd?: number })
+                .creditBalanceUsd === "number"
+                ? trialLicense
+                : ({
+                      ...trialLicense,
+                      creditBalanceUsd: outerBalance,
+                  } as typeof trialLicense);
         return (
             <SubscriptionProvider
-                license={trialLicense}
+                license={license}
                 usersWithAssignedLicense={
                     subscriptionContext.usersWithAssignedLicense
                 }
