@@ -3,6 +3,7 @@ import { KodyRulesService } from '@libs/ee/kodyRules/service/kodyRules.service';
 import {
     IKodyRule,
     IKodyRuleContextNeed,
+    IKodyRuleFileScope,
     KodyRulesScope,
     KodyRulesStatus,
     KodyRulesType,
@@ -259,7 +260,7 @@ describe('KodyRulesService — contextNeed persistence', () => {
             ]);
             const replacement: IKodyRuleContextNeed = {
                 ...authorNeed,
-                need: 'enclosing-scope',
+                need: 'sibling-file',
             };
 
             await service.updateRuleContextNeed(
@@ -278,6 +279,159 @@ describe('KodyRulesService — contextNeed persistence', () => {
 
             await expect(
                 service.updateRuleContextNeed('org-1', 'nope', compilerNeed),
+            ).rejects.toThrow('Rule not found');
+        });
+    });
+
+    /**
+     * The same silent failure, one field over. `fileScope` REMOVES files from
+     * review, so losing it un-narrows a rule and losing it the other way
+     * (keeping a stale one) stops enforcing it — both are invisible to the
+     * customer, which is why they are pinned here and not left to the compiler
+     * service's own tests.
+     */
+    describe('fileScope persistence', () => {
+        const compilerScope: IKodyRuleFileScope = {
+            extensions: ['.rb', '.rake'],
+            sourceHash: 'hash-of-original-body',
+            source: 'compiler',
+            inferredAt: new Date('2026-09-01T00:00:00Z'),
+            model: 'kimi-k2.7',
+        };
+
+        const authorScope: IKodyRuleFileScope = {
+            extensions: ['.rb'],
+            sourceHash: 'hash-of-original-body',
+            source: 'author',
+            inferredAt: new Date('2026-09-02T00:00:00Z'),
+        };
+
+        it('preserves an existing fileScope across an unrelated edit', async () => {
+            const { service, updateRule } = buildService([
+                storedRule({ fileScope: compilerScope }),
+            ]);
+
+            await service.createOrUpdate(
+                organizationAndTeamData,
+                {
+                    uuid: 'rule-1',
+                    title: 'A new title',
+                    rule: 'original body text',
+                    path: '**/*.ts',
+                    severity: 'high',
+                    repositoryId: 'repo-1',
+                } as any,
+                userInfo,
+            );
+
+            expect(capturedUpdate(updateRule).fileScope).toEqual(compilerScope);
+        });
+
+        it('carries an author-supplied scope onto a rule created in an existing document', async () => {
+            const { service, addRule } = buildService([storedRule()]);
+
+            await service.createOrUpdate(
+                organizationAndTeamData,
+                {
+                    title: 'New rule',
+                    rule: 'body',
+                    severity: 'high',
+                    repositoryId: 'repo-1',
+                    fileScope: authorScope,
+                } as any,
+                userInfo,
+            );
+
+            expect(addRule.mock.calls[0][1].fileScope).toEqual(authorScope);
+        });
+
+        it('carries an author-supplied scope onto the first rule of a new document', async () => {
+            const { service, create } = buildService([]);
+
+            await service.createOrUpdate(
+                organizationAndTeamData,
+                {
+                    title: 'New rule',
+                    rule: 'body',
+                    severity: 'high',
+                    repositoryId: 'repo-1',
+                    fileScope: authorScope,
+                } as any,
+                userInfo,
+            );
+
+            expect(create.mock.calls[0][0].rules[0].fileScope).toEqual(
+                authorScope,
+            );
+        });
+
+        it('stores a compiler-inferred scope', async () => {
+            const { service, updateRule } = buildService([storedRule()]);
+
+            await service.updateRuleFileScope(
+                'org-1',
+                'rule-1',
+                compilerScope,
+            );
+
+            expect(capturedUpdate(updateRule).fileScope).toEqual(compilerScope);
+        });
+
+        it('clears a stale scope when passed null', async () => {
+            const { service, updateRule } = buildService([
+                storedRule({ fileScope: compilerScope }),
+            ]);
+
+            await service.updateRuleFileScope('org-1', 'rule-1', null);
+
+            // `null`, not `undefined`: updateRule skips undefined, so a rule
+            // edited to drop its language would keep a narrowing forever.
+            expect(capturedUpdate(updateRule).fileScope).toBeNull();
+        });
+
+        it('never overwrites an author-set scope with an inferred one', async () => {
+            const { service, updateRule } = buildService([
+                storedRule({ fileScope: authorScope }),
+            ]);
+
+            await service.updateRuleFileScope(
+                'org-1',
+                'rule-1',
+                compilerScope,
+            );
+
+            expect(updateRule).not.toHaveBeenCalled();
+        });
+
+        it('never clears an author-set scope on a compiler-driven clear', async () => {
+            const { service, updateRule } = buildService([
+                storedRule({ fileScope: authorScope }),
+            ]);
+
+            await service.updateRuleFileScope('org-1', 'rule-1', null);
+
+            expect(updateRule).not.toHaveBeenCalled();
+        });
+
+        it('lets an author replace their own value', async () => {
+            const { service, updateRule } = buildService([
+                storedRule({ fileScope: authorScope }),
+            ]);
+            const replacement: IKodyRuleFileScope = {
+                ...authorScope,
+                extensions: ['.rb', '.erb'],
+            };
+
+            await service.updateRuleFileScope('org-1', 'rule-1', replacement);
+
+            expect(capturedUpdate(updateRule).fileScope).toEqual(replacement);
+        });
+
+        it('raises when the rule does not exist', async () => {
+            const { service } = buildService([storedRule()]);
+
+            await expect(
+                service.updateRuleFileScope('org-1', 'nope', compilerScope),
             ).rejects.toThrow('Rule not found');
         });
     });
