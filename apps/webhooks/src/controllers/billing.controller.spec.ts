@@ -271,7 +271,7 @@ describe('BillingController', () => {
             expect(res.status).toHaveBeenCalledWith(HttpStatus.OK);
             expect(notify.emit).toHaveBeenCalledWith({
                 event: NotificationEvent.CREDITS_LOW,
-                payload: expect.objectContaining({ balanceUsd: 4.2, thresholdUsd: 5, topUpUrl: expect.stringContaining('/settings/subscription') }),
+                payload: expect.objectContaining({ balanceUsd: 4.2, thresholdUsd: 5, topUpUrl: expect.stringContaining('/byok?tab=credits') }),
                 organizationId: 'org-1',
             });
         });

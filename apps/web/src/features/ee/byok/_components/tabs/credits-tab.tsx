@@ -9,13 +9,12 @@ import {
     CardHeader,
     CardTitle,
 } from "@components/ui/card";
-import { Link } from "@components/ui/link";
 import { listKodusCreditCharges } from "@services/kodus-credits/fetch";
 import type { KodusCreditCharge } from "@services/kodus-credits/types";
 import { formatUsd } from "@services/usage/format";
 import { useQuery } from "@tanstack/react-query";
-import { CoinsIcon } from "lucide-react";
-import { useKodusCredits } from "src/features/ee/subscription/_hooks/use-kodus-credits";
+
+import { CreditsWallet } from "../credits-wallet";
 
 const INITIAL = 12;
 const CAP = 200;
@@ -48,12 +47,12 @@ type RunRow = {
 };
 
 /**
- * The per-PR view of Kodus credits: charges from the API's metering journal,
- * grouped by review run, so a debit on the balance can be traced to the PR
- * and model that produced it. Top-up lives on the subscription page.
+ * The wallet's home. The money (balance, top-up, ledger) on top; below it the
+ * per-review view — charges from the API's metering journal grouped by review
+ * run, so a debit on the balance can be traced to the PR and model that
+ * produced it.
  */
 export const CreditsTab = () => {
-    const credits = useKodusCredits();
     const [expanded, setExpanded] = useState(false);
 
     const chargesQuery = useQuery<KodusCreditCharge[]>({
@@ -99,32 +98,7 @@ export const CreditsTab = () => {
 
     return (
         <div className="flex flex-col gap-4">
-            <Card color="lv1">
-                <CardHeader className="flex flex-row items-start justify-between gap-4">
-                    <div className="flex flex-col gap-1">
-                        <CardDescription className="flex items-center gap-2 text-sm">
-                            <CoinsIcon size={14} />
-                            Kodus credits
-                        </CardDescription>
-                        <CardTitle className="text-2xl tabular-nums">
-                            {typeof credits.balanceUsd === "number"
-                                ? formatUsd(credits.balanceUsd)
-                                : "—"}
-                        </CardTitle>
-                        <p className="text-text-secondary text-sm text-pretty">
-                            Models routed by Kodus are billed to this balance at
-                            the provider&apos;s list price, per token.
-                            {credits.exhausted &&
-                                " Balance is used up — reviews on these models are paused."}
-                        </p>
-                    </div>
-                    <Link href="/settings/subscription" noHoverUnderline>
-                        <Button decorative size="md" variant="primary">
-                            Top up credits
-                        </Button>
-                    </Link>
-                </CardHeader>
-            </Card>
+            <CreditsWallet />
 
             <Card color="lv1">
                 <CardHeader>

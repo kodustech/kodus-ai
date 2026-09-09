@@ -107,7 +107,7 @@ CreditsEmail.PreviewProps = {
     kind: 'low',
     balanceLabel: '$4.20',
     thresholdLabel: '$5.00',
-    topUpUrl: 'https://app.kodus.io/settings/subscription',
+    topUpUrl: 'https://app.kodus.io/byok?tab=credits',
 } satisfies CreditsEmailProps;
 
 export default CreditsEmail;

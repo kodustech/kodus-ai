@@ -8,10 +8,12 @@ import {
     CollapsibleIndicator,
     CollapsibleTrigger,
 } from "@components/ui/collapsible";
-import { KeyRoundIcon, PencilIcon } from "lucide-react";
+import { formatUsd } from "@services/usage/format";
+import { CoinsIcon, KeyRoundIcon, PencilIcon } from "lucide-react";
 
 import { isPlatformFundedProvider } from "../_data/platform-funded";
 import { PROVIDER_LABELS } from "../_data/provider-labels";
+import { useKodusCreditBalance } from "../_hooks/use-kodus-credit-balance";
 import type { BYOKCredential } from "../_types";
 import { maskKey } from "../_utils";
 import { ProviderLogo } from "./provider-logo";
@@ -31,12 +33,15 @@ export function ProviderGroupHeader({
     modelCount,
     defaultOpen,
     onRotate,
+    onOpenCredits,
     children,
 }: {
     credential: BYOKCredential;
     modelCount: number;
     defaultOpen?: boolean;
     onRotate?: () => void;
+    /** Kodus group only: open the wallet (Credits tab) to top up. */
+    onOpenCredits?: () => void;
     children: React.ReactNode;
 }) {
     const providerLabel =
@@ -45,6 +50,18 @@ export function ProviderGroupHeader({
     // A platform-funded credential (Kodus) carries no key: there is nothing
     // to mask and nothing to rotate — usage is billed to the org's credits.
     const platformFunded = isPlatformFundedProvider(credential.provider);
+    // The Kodus group is the thing the balance pays for, so the balance sits
+    // on it — where a key would sit for any other provider.
+    const credits = useKodusCreditBalance();
+    const balanceLabel =
+        typeof credits.balanceUsd === "number"
+            ? formatUsd(credits.balanceUsd)
+            : "—";
+    const balanceTone = credits.exhausted
+        ? "text-danger"
+        : credits.low
+          ? "text-warning"
+          : "text-text-tertiary";
 
     return (
         <Card color="lv1">
@@ -66,9 +83,13 @@ export function ProviderGroupHeader({
                                 </span>
                                 <span className="text-text-tertiary flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
                                     {platformFunded ? (
-                                        <span className="flex items-center gap-1.5">
-                                            <KeyRoundIcon size={12} />
-                                            Billed to Kodus credits · no key
+                                        <span
+                                            className={`flex items-center gap-1.5 tabular-nums ${balanceTone}`}
+                                            data-testid="kodus-provider-balance">
+                                            <CoinsIcon size={12} />
+                                            {credits.exhausted
+                                                ? `Credits used up · reviews paused`
+                                                : `${balanceLabel} credits · no key needed`}
                                         </span>
                                     ) : (
                                         <span className="flex items-center gap-1.5 font-mono">
@@ -85,6 +106,16 @@ export function ProviderGroupHeader({
                             </span>
                         </button>
                     </CollapsibleTrigger>
+
+                    {platformFunded && onOpenCredits && (
+                        <Button
+                            size="xs"
+                            variant={credits.exhausted ? "primary" : "helper"}
+                            leftIcon={<CoinsIcon />}
+                            onClick={onOpenCredits}>
+                            Top up
+                        </Button>
+                    )}
 
                     {onRotate && !platformFunded && (
                         <Button

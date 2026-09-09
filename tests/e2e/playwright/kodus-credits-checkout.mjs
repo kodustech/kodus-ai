@@ -6,8 +6,10 @@
 //   3. Stripe → `checkout.session.completed` → billing ledger `purchase`
 //      (delivered by `stripe listen` when the billing service isn't public);
 //   4. balance == pack through the proxy; the license carries it;
-//   5. the web UI (logged in) shows the credits card with the new balance and
-//      the top-up entry — screenshotted as evidence.
+//   5. the web UI (logged in) lands on the wallet (BYOK → Credits) with the
+//      new balance and the top-up entry, the navbar wallet chip shows the
+//      balance, the Kodus provider card shows it, and the subscription page
+//      only points at the wallet — screenshotted as evidence.
 //
 // Env: KODUS_WEB_URL (default http://localhost:3000), KODUS_API_URL
 // (default http://localhost:3001), KODUS_E2E_EMAIL,
@@ -188,8 +190,8 @@ try {
     const page = await ctx.newPage();
 
     // Log the BROWSER in first so the post-checkout redirect lands on the
-    // subscription page (an anonymous context is bounced to /sign-in and the
-    // success query is lost).
+    // wallet (an anonymous context is bounced to /sign-in and the success
+    // query is lost).
     // Two-step form: email → Continue → password → submit.
     await page.goto(`${WEB}/sign-in`, { waitUntil: "load", timeout: 240_000 });
     await page.locator('input[type="email"], input[name="email"]').first().fill(KODUS_E2E_EMAIL);
@@ -235,19 +237,44 @@ try {
     if (lic.body?.creditBalanceUsd !== after.balanceUsd) fail(`license creditBalanceUsd=${lic.body?.creditBalanceUsd} != ${after.balanceUsd}`);
     log(`PASS validate-org-license carries creditBalanceUsd=${lic.body.creditBalanceUsd}`);
 
-    // The page we were redirected to: the credits card with the new balance.
+    // The page we were redirected to: the wallet (BYOK → Credits) with the
+    // new balance and the top-up entry.
+    if (!/\/byok\?tab=credits/.test(page.url())) fail(`expected the wallet (/byok?tab=credits), got ${page.url()}`);
     await page.waitForLoadState("load", { timeout: 240_000 }).catch(() => {});
-    const card = page.getByText("Kodus credits", { exact: false }).first();
-    await card.waitFor({ timeout: 180_000 });
-    await page.getByText(`$${after.balanceUsd.toFixed(2)}`, { exact: false }).first().waitFor({ timeout: 120_000 });
+    const balanceText = `$${after.balanceUsd.toFixed(2)}`;
+    const wallet = page.getByTestId("kodus-credits-balance");
+    await wallet.waitFor({ timeout: 180_000 });
+    await page.getByTestId("kodus-credits-balance").getByText(balanceText, { exact: false }).waitFor({ timeout: 120_000 });
     await page.getByText("Top-up", { exact: false }).first().waitFor({ timeout: 60_000 });
-    await page.screenshot({ path: `${KODUS_E2E_SHOTS}/02-subscription-credits-card.png`, fullPage: true });
-    log(`PASS subscription page shows the credits card with $${after.balanceUsd.toFixed(2)} and the top-up entry (screenshot 02)`);
+    await page.getByText("Charges by review", { exact: false }).first().waitFor({ timeout: 60_000 });
+    await page.screenshot({ path: `${KODUS_E2E_SHOTS}/02-byok-wallet.png`, fullPage: true });
+    log(`PASS wallet shows ${balanceText}, the top-up entry and charges by review (screenshot 02)`);
 
-    await page.goto(`${WEB}/byok?tab=credits`, { waitUntil: "load", timeout: 240_000 });
-    await page.getByText("Charges by review", { exact: false }).first().waitFor({ timeout: 180_000 });
-    await page.screenshot({ path: `${KODUS_E2E_SHOTS}/03-byok-credits-tab.png`, fullPage: true });
-    log(`PASS BYOK Credits tab renders (screenshot 03)`);
+    // Navbar wallet chip: balance, linking to the wallet.
+    const chip = page.getByTestId("kodus-credits-badge");
+    await chip.waitFor({ timeout: 60_000 });
+    const chipText = (await chip.textContent()) ?? "";
+    if (!chipText.includes(balanceText)) fail(`navbar credits chip shows "${chipText}", expected ${balanceText}`);
+    log(`PASS navbar wallet chip shows ${balanceText}`);
+
+    // Providers tab: the Kodus provider card carries the balance + Top up.
+    await page.goto(`${WEB}/byok`, { waitUntil: "load", timeout: 240_000 });
+    const providerBalance = page.getByTestId("kodus-provider-balance");
+    await providerBalance.waitFor({ timeout: 180_000 });
+    const providerText = (await providerBalance.textContent()) ?? "";
+    if (!providerText.includes(balanceText)) fail(`Kodus provider card shows "${providerText}", expected ${balanceText}`);
+    await page.getByRole("button", { name: /top up/i }).first().waitFor({ timeout: 30_000 });
+    await page.screenshot({ path: `${KODUS_E2E_SHOTS}/03-byok-providers-balance.png`, fullPage: true });
+    log(`PASS Kodus provider card shows ${balanceText} + Top up (screenshot 03)`);
+
+    // Subscription page: a pointer to the wallet, not a second wallet.
+    await page.goto(`${WEB}/settings/subscription`, { waitUntil: "load", timeout: 240_000 });
+    await page.getByText("Kodus credits", { exact: false }).first().waitFor({ timeout: 180_000 });
+    await page.getByRole("button", { name: /manage credits|top up/i }).first().waitFor({ timeout: 60_000 });
+    const topUpButtons = await page.getByRole("button", { name: /^\+\$/ }).count();
+    if (topUpButtons !== 0) fail(`subscription page still renders ${topUpButtons} pack buttons — the wallet must live in BYOK only`);
+    await page.screenshot({ path: `${KODUS_E2E_SHOTS}/04-subscription-pointer.png`, fullPage: true });
+    log(`PASS subscription page points at the wallet without duplicating it (screenshot 04)`);
     await ctx.close();
 } finally {
     await browser.close();

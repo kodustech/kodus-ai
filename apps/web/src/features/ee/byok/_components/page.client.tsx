@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@components/ui/alert";
 import { Badge } from "@components/ui/badge";
@@ -167,6 +167,19 @@ export const ByokPageClient = ({
               : "providers",
     );
 
+    // A later navigation to ?tab=… (navbar wallet chip, banners) while the
+    // page is already mounted must still switch tabs — the initializer above
+    // only runs once.
+    useEffect(() => {
+        if (!requestedTab) return;
+        if (requestedTab === "credits" && !usesKodusProvider) return;
+        if (
+            ["providers", "routing", "budget", "credits"].includes(requestedTab)
+        ) {
+            setTab(requestedTab);
+        }
+    }, [requestedTab, usesKodusProvider]);
+
     // Deep-link target for the Providers-tab "Used in" chips: clicking one
     // switches to Routing and scrolls to the matching row. RoutingTab consumes
     // `routingAnchor` on mount, then clears it via `onScrolled`.
@@ -190,11 +203,25 @@ export const ByokPageClient = ({
                         </span>
                         <span className="flex items-center gap-2">
                             <span>
-                                You pay your provider directly —{" "}
-                                <strong className="text-text-primary font-medium">
-                                    Kodus never sees your key
-                                </strong>
-                                .
+                                {usesKodusProvider ? (
+                                    <>
+                                        Your own keys are billed by your
+                                        provider —{" "}
+                                        <strong className="text-text-primary font-medium">
+                                            Kodus never sees them
+                                        </strong>
+                                        . Models routed by Kodus are paid from
+                                        your credits.
+                                    </>
+                                ) : (
+                                    <>
+                                        You pay your provider directly —{" "}
+                                        <strong className="text-text-primary font-medium">
+                                            Kodus never sees your key
+                                        </strong>
+                                        .
+                                    </>
+                                )}
                                 <a
                                     href="https://docs.kodus.io/how_to_use/en/byok"
                                     target="_blank"
@@ -261,6 +288,7 @@ export const ByokPageClient = ({
                             costRangeQuery={costRangeQuery}
                             llmConfigStatus={llmConfigStatus}
                             onOpenRouting={openRouting}
+                            onOpenCredits={() => setTab("credits")}
                         />
                     </TabsContent>
 

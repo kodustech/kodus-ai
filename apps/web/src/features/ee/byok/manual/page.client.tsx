@@ -20,6 +20,7 @@ import {
     type TestBYOKResult,
 } from "@services/organizationParameters/fetch";
 import { OrganizationParametersConfigKey } from "@services/parameters/types";
+import { formatUsd } from "@services/usage/format";
 import { QueryErrorResetBoundary } from "@tanstack/react-query";
 import {
     AlertTriangleIcon,
@@ -66,6 +67,10 @@ import { SuccessClaim } from "../_components/success-claim";
 import { formatModelLabel } from "../_data/model-label";
 import { isPlatformFundedProvider } from "../_data/platform-funded";
 import { PROVIDER_LABELS } from "../_data/provider-labels";
+import {
+    KODUS_CREDITS_PATH,
+    useKodusCreditBalance,
+} from "../_hooks/use-kodus-credit-balance";
 import type { BYOKConfig, BYOKConnectInput } from "../_types";
 import { maskKey } from "../_utils";
 import { planAccountChanged } from "./plan-account";
@@ -114,6 +119,9 @@ export function ByokManualPageClient({
         ? existing?.credentials.find((c) => c.id === editModel.credentialId)
         : undefined;
     const isEditing = !!editModel && !!editCredential;
+    // Kodus provider: the balance the model will draw from (shown in the
+    // Billing card in place of a key field).
+    const kodusCredits = useKodusCreditBalance();
     const editSettings = (editCredential?.settings ?? {}) as Record<
         string,
         unknown
@@ -754,6 +762,23 @@ export function ByokManualPageClient({
                                         on its own provider accounts and bills
                                         your Kodus credits at the list price
                                         shown next to each model.
+                                    </p>
+                                    <p className="text-text-primary text-sm tabular-nums">
+                                        Balance:{" "}
+                                        {typeof kodusCredits.balanceUsd ===
+                                        "number"
+                                            ? formatUsd(kodusCredits.balanceUsd)
+                                            : "—"}
+                                        {kodusCredits.exhausted && " · used up"}
+                                        {" · "}
+                                        <Link
+                                            href={KODUS_CREDITS_PATH}
+                                            className="text-primary-light font-medium">
+                                            {kodusCredits.exhausted ||
+                                            kodusCredits.low
+                                                ? "Top up"
+                                                : "Manage credits"}
+                                        </Link>
                                     </p>
                                     <p className="text-text-tertiary text-xs text-pretty">
                                         Prompt caching, retries and routing are

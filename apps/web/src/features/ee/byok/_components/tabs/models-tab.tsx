@@ -25,6 +25,8 @@ type ModelsTabProps = {
     llmConfigStatus: LLMConfigStatus | null;
     /** Deep-link a model's "Used in" chip to its Routing-tab row. */
     onOpenRouting?: (anchor: string) => void;
+    /** Kodus provider group → the wallet (Credits tab). */
+    onOpenCredits?: () => void;
 };
 
 type View =
@@ -45,6 +47,7 @@ export const ModelsTab = ({
     periodLabel,
     costRangeQuery,
     onOpenRouting,
+    onOpenCredits,
 }: ModelsTabProps) => {
     const router = useRouter();
     const [view, setView] = useState<View>({ mode: "list" });
@@ -136,6 +139,7 @@ export const ModelsTab = ({
                     credential={credential}
                     modelCount={models.length}
                     defaultOpen={groups.length <= 1 || models.length <= 3}
+                    onOpenCredits={onOpenCredits}
                     onRotate={() =>
                         router.push(
                             `/byok/provider?credentialId=${encodeURIComponent(credential.id)}`,
