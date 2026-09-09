@@ -734,7 +734,7 @@ describe('ValidatePrerequisitesStage', () => {
                 mockCodeManagementService.createIssueComment.mock.calls[0][0]
                     .body;
             expect(body).toContain('Kodus credits');
-            expect(body).toContain('/byok?tab=credits');
+            expect(body).toContain('/byok#kodus');
             expect(body).not.toContain('BYOK Configuration Required');
             expect(body).not.toContain('trial has ended');
         });

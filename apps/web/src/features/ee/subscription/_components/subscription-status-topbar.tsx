@@ -64,7 +64,7 @@ const CreditsExhausted = () => {
         <div className="bg-danger/30 py-2 text-center text-sm">
             Your Kodus credits are used up — reviews on Kodus-routed models are
             paused.{" "}
-            <Link href="/byok?tab=credits" className="font-bold">
+            <Link href="/byok#kodus" className="font-bold">
                 Top up credits
             </Link>{" "}
             or{" "}

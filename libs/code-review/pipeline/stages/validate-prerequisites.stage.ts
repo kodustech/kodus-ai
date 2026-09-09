@@ -1016,7 +1016,7 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             '## Your Kodus credits are used up 💳\n\n' +
             'This repository reviews with a model routed by Kodus, and your ' +
             "organization's prepaid credit balance is at zero.\n\n" +
-            '**[Top up credits](https://app.kodus.io/byok?tab=credits)** ' +
+            '**[Top up credits](https://app.kodus.io/byok#kodus)** ' +
             'and re-run the review (or push a new commit) — or ' +
             '[connect your own AI key](https://app.kodus.io/byok) to review ' +
             'on your provider account instead.\n\n' +

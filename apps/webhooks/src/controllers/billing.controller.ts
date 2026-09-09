@@ -63,7 +63,7 @@ interface CreditsLowBody {
     exhausted?: boolean;
 }
 
-const TOP_UP_URL = 'https://app.kodus.io/byok?tab=credits';
+const TOP_UP_URL = 'https://app.kodus.io/byok#kodus';
 
 /**
  * Receives outbound notifications from kodus-service-billing.

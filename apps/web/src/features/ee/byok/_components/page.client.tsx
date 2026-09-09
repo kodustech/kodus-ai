@@ -8,7 +8,6 @@ import { Page } from "@components/ui/page";
 import { type LLMConfigStatus } from "@services/organizationParameters/fetch";
 import type { ByokModelCost } from "@services/usage/byok-cost";
 import {
-    CoinsIcon,
     ExternalLinkIcon,
     GitBranchIcon,
     InfoIcon,
@@ -27,7 +26,6 @@ import type { BYOKConfig } from "../_types";
 import { groupModelsByProvider, hasVisibleModels } from "../_utils";
 import { ModelOverridesBanner } from "./model-overrides-banner";
 import { SpendLimitSection } from "./spend-limit-section";
-import { CreditsTab } from "./tabs/credits-tab";
 import { ModelsTab } from "./tabs/models-tab";
 import { RoutingTab } from "./tabs/routing-tab";
 
@@ -149,8 +147,8 @@ export const ByokPageClient = ({
     // Nag about an env-based LLM only when no BYOK model is configured at all.
     const showEnvNotice = !!llmConfigStatus?.env.configured && firstRun;
 
-    // The Credits tab only makes sense once a Kodus-routed model exists (the
-    // balance is otherwise irrelevant). Deep-linkable via ?tab=credits.
+    // A Kodus-routed model makes the prepaid balance load-bearing: the page
+    // header says so, and the wallet lives on the Kodus provider card.
     const usesKodusProvider = (config?.credentials ?? []).some((c) =>
         isPlatformFundedProvider(c.provider),
     );
@@ -160,25 +158,38 @@ export const ByokPageClient = ({
     // Controlled tab value so cross-tab affordances (e.g. Routing's empty-state
     // "Go to Providers") can switch tabs via a callback — no DOM scraping.
     const [tab, setTab] = useState(
-        requestedTab === "credits" && usesKodusProvider
-            ? "credits"
-            : requestedTab === "routing" || requestedTab === "budget"
-              ? requestedTab
-              : "providers",
+        requestedTab === "routing" || requestedTab === "budget"
+            ? requestedTab
+            : "providers",
     );
 
-    // A later navigation to ?tab=… (navbar wallet chip, banners) while the
-    // page is already mounted must still switch tabs — the initializer above
-    // only runs once.
+    // A later navigation to ?tab=… while the page is already mounted must
+    // still switch tabs — the initializer above only runs once.
     useEffect(() => {
         if (!requestedTab) return;
-        if (requestedTab === "credits" && !usesKodusProvider) return;
-        if (
-            ["providers", "routing", "budget", "credits"].includes(requestedTab)
-        ) {
+        if (["providers", "routing", "budget"].includes(requestedTab)) {
             setTab(requestedTab);
         }
-    }, [requestedTab, usesKodusProvider]);
+    }, [requestedTab]);
+
+    // /byok#kodus (navbar wallet chip, banners, emails, Stripe's return URL)
+    // lands on the Kodus provider card. Hash changes do not re-render, so
+    // listen for them too — the chip can be clicked while already here.
+    useEffect(() => {
+        const jump = () => {
+            if (window.location.hash !== "#kodus") return;
+            setTab("providers");
+            // After the tab content mounts.
+            requestAnimationFrame(() =>
+                document
+                    .getElementById("kodus")
+                    ?.scrollIntoView({ block: "start", behavior: "smooth" }),
+            );
+        };
+        jump();
+        window.addEventListener("hashchange", jump);
+        return () => window.removeEventListener("hashchange", jump);
+    }, []);
 
     // Deep-link target for the Providers-tab "Used in" chips: clicking one
     // switches to Routing and scrolls to the matching row. RoutingTab consumes
@@ -269,14 +280,6 @@ export const ByokPageClient = ({
                                 Budget
                             </span>
                         </TabsTrigger>
-                        {usesKodusProvider && (
-                            <TabsTrigger value="credits">
-                                <span className="flex items-center gap-2">
-                                    <CoinsIcon size={15} />
-                                    Credits
-                                </span>
-                            </TabsTrigger>
-                        )}
                     </TabsList>
 
                     <TabsContent value="providers">
@@ -288,7 +291,6 @@ export const ByokPageClient = ({
                             costRangeQuery={costRangeQuery}
                             llmConfigStatus={llmConfigStatus}
                             onOpenRouting={openRouting}
-                            onOpenCredits={() => setTab("credits")}
                         />
                     </TabsContent>
 
@@ -306,12 +308,6 @@ export const ByokPageClient = ({
                     <TabsContent value="budget">
                         <SpendLimitSection teamId={teamId} />
                     </TabsContent>
-
-                    {usesKodusProvider && (
-                        <TabsContent value="credits">
-                            <CreditsTab />
-                        </TabsContent>
-                    )}
                 </Tabs>
             </Page.Content>
         </Page.Root>

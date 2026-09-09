@@ -1,23 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "@components/ui/card";
 import { Input } from "@components/ui/input";
+import {
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
+} from "@components/ui/sheet";
 import { toast } from "@components/ui/toaster/use-toast";
 import { useAsyncAction } from "@hooks/use-async-action";
+import { listKodusCreditCharges } from "@services/kodus-credits/fetch";
+import type { KodusCreditCharge } from "@services/kodus-credits/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
+import { formatUsd } from "@services/usage/format";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CoinsIcon, SparklesIcon } from "lucide-react";
+import { CoinsIcon, ReceiptTextIcon, SparklesIcon } from "lucide-react";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import {
     createCreditCheckoutAction,
@@ -44,6 +47,13 @@ const formatWhen = (iso?: string) => {
         hour: "2-digit",
         minute: "2-digit",
     });
+};
+
+const formatTokens = (t: number) => {
+    if (t === 0) return "0";
+    if (t < 1000) return t.toString();
+    if (t < 1_000_000) return `${(t / 1000).toFixed(1)}K`;
+    return `${(t / 1_000_000).toFixed(1)}M`;
 };
 
 const ENTRY_LABEL: Record<CreditLedgerEntry["type"], string> = {
@@ -74,12 +84,13 @@ const describeEntry = (entry: CreditLedgerEntry): string => {
 };
 
 /**
- * The wallet for "Kodus as the provider": balance, top-up, and the money
- * ledger. Lives with the provider it funds (BYOK → Credits) — a Kodus model
- * is the only thing this balance pays for, so the money is managed where the
- * model is. Stripe sends the user back here after checkout.
+ * The wallet, inside the Kodus provider card: one strip with the balance on
+ * the left and the ways to add money on the right. The balance is an
+ * attribute of this provider — it pays for nothing else — so it lives on the
+ * card, not on a tab of its own. Stripe sends the user back to this card.
+ * History (money ledger + charges by review) opens in a drawer.
  */
-export const CreditsWallet = () => {
+export const CreditsWalletStrip = () => {
     const { teamId } = useSelectedTeamId();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -87,13 +98,7 @@ export const CreditsWallet = () => {
     const credits = useKodusCreditBalance();
     const canEdit = usePermission(Action.Update, ResourceType.Billing);
     const [customAmount, setCustomAmount] = useState("");
-
-    const ledgerQuery = useQuery<CreditLedgerEntry[]>({
-        queryKey: ["kodus-credits", "ledger", teamId],
-        queryFn: () => listCreditLedgerAction({ teamId, limit: 15 }),
-        enabled: !!teamId,
-        staleTime: 30_000,
-    });
+    const [ledgerOpen, setLedgerOpen] = useState(false);
 
     // Back from Stripe: the webhook lands a moment after the redirect, so
     // refetch once and tell the user what happened.
@@ -143,11 +148,14 @@ export const CreditsWallet = () => {
         custom <= max;
 
     return (
-        <Card color="lv1" className="w-full">
-            <CardHeader className="flex flex-row items-start justify-between gap-4">
-                <div className="flex flex-col gap-1">
-                    <CardDescription className="flex items-center gap-2 text-sm">
-                        <CoinsIcon size={14} />
+        <div
+            id="kodus-credits"
+            data-testid="kodus-credits-wallet"
+            className="bg-card-lv2/60 mb-3 flex flex-col gap-3 rounded-lg px-4 py-3">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="flex min-w-0 flex-col gap-1">
+                    <span className="text-text-secondary flex items-center gap-2 text-xs">
+                        <CoinsIcon size={13} />
                         Kodus credits
                         {credits.exhausted ? (
                             <Badge variant="error" size="xs">
@@ -158,18 +166,19 @@ export const CreditsWallet = () => {
                                 Running low
                             </Badge>
                         ) : null}
-                    </CardDescription>
-                    <CardTitle
-                        className="text-3xl tabular-nums"
+                    </span>
+                    <span
+                        className="text-text-primary text-2xl font-semibold tabular-nums"
                         data-testid="kodus-credits-balance">
                         {credits.loading ? "…" : usd(balanceUsd)}
-                    </CardTitle>
-                    <p className="text-text-secondary text-sm text-pretty">
-                        Pays for the models Kodus routes for you, per token at
-                        the provider&apos;s list price. A {markup}% platform fee
-                        is added when you top up.
-                    </p>
+                    </span>
+                    <span className="text-text-tertiary max-w-md text-xs text-pretty">
+                        Pays for the models below, per token at the
+                        provider&apos;s list price. A {markup}% platform fee is
+                        added when you top up.
+                    </span>
                 </div>
+
                 <div className="flex shrink-0 flex-col items-end gap-2">
                     <div className="flex flex-wrap justify-end gap-2">
                         {packs.map((pack) => (
@@ -189,7 +198,7 @@ export const CreditsWallet = () => {
                     <div className="flex items-center gap-2">
                         <Input
                             size="md"
-                            className="w-44"
+                            className="w-40"
                             inputMode="decimal"
                             placeholder={`Custom (${usd(min, 0)}–${usd(max, 0)})`}
                             value={customAmount}
@@ -204,6 +213,13 @@ export const CreditsWallet = () => {
                             }>
                             Top up
                         </Button>
+                        <Button
+                            size="md"
+                            variant="cancel"
+                            leftIcon={<ReceiptTextIcon />}
+                            onClick={() => setLedgerOpen(true)}>
+                            History
+                        </Button>
                     </div>
                     {customValid && (
                         <span className="text-text-tertiary text-xs tabular-nums">
@@ -211,71 +227,278 @@ export const CreditsWallet = () => {
                         </span>
                     )}
                 </div>
-            </CardHeader>
+            </div>
 
             {credits.exhausted && (
-                <CardContent className="pt-0">
-                    <div className="bg-danger/10 text-text-primary flex items-start gap-2 rounded-md px-3 py-2 text-sm">
-                        <SparklesIcon size={16} className="mt-0.5 shrink-0" />
-                        <span>
-                            Reviews on models routed by Kodus are paused until
-                            you top up. Your own provider keys keep working.
-                        </span>
-                    </div>
-                </CardContent>
+                <div className="bg-danger/10 text-text-primary flex items-start gap-2 rounded-md px-3 py-2 text-xs">
+                    <SparklesIcon size={14} className="mt-0.5 shrink-0" />
+                    <span>
+                        Reviews on the models below are paused until you top up.
+                        Your own provider keys keep working.
+                    </span>
+                </div>
             )}
 
-            {(ledgerQuery.data?.length ?? 0) > 0 && (
-                <CardContent className="pt-0">
-                    <table className="w-full text-xs">
-                        <thead>
-                            <tr className="text-text-tertiary border-card-lv3 border-b text-left">
-                                <th className="py-2 pr-4 font-medium">When</th>
-                                <th className="py-2 pr-4 font-medium">Type</th>
-                                <th className="py-2 pr-4 font-medium">
-                                    Detail
-                                </th>
-                                <th className="py-2 pr-4 text-right font-medium">
-                                    Amount
-                                </th>
-                                <th className="py-2 text-right font-medium">
-                                    Balance
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-card-lv3/60 divide-y">
-                            {ledgerQuery.data!.map((entry) => (
-                                <tr key={entry.id}>
-                                    <td className="text-text-secondary py-2 pr-4 whitespace-nowrap tabular-nums">
-                                        {formatWhen(entry.createdAt)}
-                                    </td>
-                                    <td className="text-text-primary py-2 pr-4">
-                                        {ENTRY_LABEL[entry.type] ?? entry.type}
-                                    </td>
-                                    <td className="text-text-secondary max-w-72 truncate py-2 pr-4">
-                                        {describeEntry(entry)}
-                                    </td>
-                                    <td
-                                        className={`py-2 pr-4 text-right font-mono ${entry.amountUsd < 0 ? "text-text-primary" : "text-success"}`}>
-                                        {entry.amountUsd < 0 ? "−" : "+"}
-                                        {usd(
-                                            Math.abs(entry.amountUsd),
-                                            entry.type === "debit" ? 4 : 2,
-                                        )}
-                                    </td>
-                                    <td className="text-text-secondary py-2 text-right font-mono">
-                                        {usd(entry.balanceAfterUsd)}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                    <p className="text-text-tertiary mt-2 text-xs">
-                        Latest {ledgerQuery.data!.length} money movements.
-                        Per-review charges are below.
-                    </p>
-                </CardContent>
-            )}
-        </Card>
+            <CreditsLedgerDrawer
+                open={ledgerOpen}
+                onOpenChange={setLedgerOpen}
+            />
+        </div>
+    );
+};
+
+type RunRow = {
+    key: string;
+    prNumber?: number;
+    startedAt: string;
+    models: string[];
+    tokens: number;
+    cost: number;
+    pending: boolean;
+};
+
+const INITIAL_RUNS = 12;
+const RUN_CAP = 200;
+
+/**
+ * History drawer: the money ledger (top-ups, debits, adjustments) and the
+ * per-review charges from the API's metering journal grouped by review run,
+ * so a debit can be traced to the PR and model that produced it.
+ */
+export const CreditsLedgerDrawer = ({
+    open,
+    onOpenChange,
+}: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+}) => {
+    const { teamId } = useSelectedTeamId();
+    const credits = useKodusCreditBalance();
+    const [expanded, setExpanded] = useState(false);
+
+    const ledgerQuery = useQuery<CreditLedgerEntry[]>({
+        queryKey: ["kodus-credits", "ledger", teamId],
+        queryFn: () => listCreditLedgerAction({ teamId, limit: 25 }),
+        enabled: open && !!teamId,
+        staleTime: 30_000,
+    });
+    const chargesQuery = useQuery<KodusCreditCharge[]>({
+        queryKey: ["kodus-credits", "charges"],
+        queryFn: () => listKodusCreditCharges({ limit: 500 }),
+        enabled: open,
+        staleTime: 30_000,
+    });
+
+    const runs = useMemo<RunRow[]>(() => {
+        const byRun = new Map<string, RunRow>();
+        for (const c of chargesQuery.data ?? []) {
+            const key = c.correlationId ?? c.spanId;
+            const existing = byRun.get(key);
+            const tokens = c.tokens.input + c.tokens.output;
+            if (!existing) {
+                byRun.set(key, {
+                    key,
+                    prNumber: c.prNumber,
+                    startedAt: c.spanAt,
+                    models: [c.model],
+                    tokens,
+                    cost: c.amountUsd,
+                    pending: c.status === "pending",
+                });
+            } else {
+                existing.tokens += tokens;
+                existing.cost += c.amountUsd;
+                existing.pending = existing.pending || c.status === "pending";
+                if (!existing.models.includes(c.model))
+                    existing.models.push(c.model);
+                if (c.spanAt < existing.startedAt)
+                    existing.startedAt = c.spanAt;
+            }
+        }
+        return Array.from(byRun.values()).sort((a, b) =>
+            b.startedAt.localeCompare(a.startedAt),
+        );
+    }, [chargesQuery.data]);
+
+    const total = runs.reduce((s, r) => s + r.cost, 0);
+    const visibleRuns = runs.slice(0, expanded ? RUN_CAP : INITIAL_RUNS);
+    const ledger = ledgerQuery.data ?? [];
+
+    return (
+        <Sheet open={open} onOpenChange={onOpenChange}>
+            <SheetContent
+                side="right"
+                className="bg-card-lv1 flex w-full max-w-2xl flex-col gap-0 p-0">
+                <SheetHeader className="border-card-lv3 flex flex-col gap-1 border-b px-6 py-4">
+                    <SheetTitle className="text-text-primary flex items-center gap-2 text-base">
+                        <CoinsIcon size={16} />
+                        Kodus credits · history
+                    </SheetTitle>
+                    <SheetDescription className="text-text-secondary text-xs">
+                        Balance{" "}
+                        <span className="text-text-primary font-medium tabular-nums">
+                            {typeof credits.balanceUsd === "number"
+                                ? formatUsd(credits.balanceUsd)
+                                : "—"}
+                        </span>
+                        . Debits are per token at the provider&apos;s list
+                        price; top-ups include the {credits.markupPct}% platform
+                        fee.
+                    </SheetDescription>
+                </SheetHeader>
+
+                <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-5">
+                    <section className="flex flex-col gap-2">
+                        <h3 className="text-text-primary text-sm font-semibold">
+                            Money movements
+                        </h3>
+                        {ledgerQuery.isLoading ? (
+                            <p className="text-text-tertiary text-xs">
+                                Loading…
+                            </p>
+                        ) : ledger.length === 0 ? (
+                            <p className="text-text-tertiary text-xs">
+                                No top-ups or debits yet.
+                            </p>
+                        ) : (
+                            <table className="w-full text-xs">
+                                <thead>
+                                    <tr className="text-text-tertiary border-card-lv3 border-b text-left">
+                                        <th className="py-2 pr-4 font-medium">
+                                            When
+                                        </th>
+                                        <th className="py-2 pr-4 font-medium">
+                                            Type
+                                        </th>
+                                        <th className="py-2 pr-4 font-medium">
+                                            Detail
+                                        </th>
+                                        <th className="py-2 pr-4 text-right font-medium">
+                                            Amount
+                                        </th>
+                                        <th className="py-2 text-right font-medium">
+                                            Balance
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-card-lv3/60 divide-y">
+                                    {ledger.map((entry) => (
+                                        <tr key={entry.id}>
+                                            <td className="text-text-secondary py-2 pr-4 whitespace-nowrap tabular-nums">
+                                                {formatWhen(entry.createdAt)}
+                                            </td>
+                                            <td className="text-text-primary py-2 pr-4">
+                                                {ENTRY_LABEL[entry.type] ??
+                                                    entry.type}
+                                            </td>
+                                            <td className="text-text-secondary max-w-56 truncate py-2 pr-4">
+                                                {describeEntry(entry)}
+                                            </td>
+                                            <td
+                                                className={`py-2 pr-4 text-right font-mono ${entry.amountUsd < 0 ? "text-text-primary" : "text-success"}`}>
+                                                {entry.amountUsd < 0
+                                                    ? "−"
+                                                    : "+"}
+                                                {usd(
+                                                    Math.abs(entry.amountUsd),
+                                                    entry.type === "debit"
+                                                        ? 4
+                                                        : 2,
+                                                )}
+                                            </td>
+                                            <td className="text-text-secondary py-2 text-right font-mono">
+                                                {usd(entry.balanceAfterUsd)}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </section>
+
+                    <section className="flex flex-col gap-2">
+                        <h3 className="text-text-primary text-sm font-semibold">
+                            Charges by review
+                        </h3>
+                        <p className="text-text-tertiary text-xs">
+                            {chargesQuery.isLoading
+                                ? "Loading…"
+                                : runs.length === 0
+                                  ? "No Kodus-routed usage metered yet."
+                                  : `${runs.length} run${runs.length === 1 ? "" : "s"} · ${formatUsd(total)} in the last ${chargesQuery.data?.length ?? 0} charges, newest first.`}
+                        </p>
+                        {runs.length > 0 && (
+                            <>
+                                <table className="w-full text-xs">
+                                    <thead>
+                                        <tr className="text-text-tertiary border-card-lv3 border-b text-left">
+                                            <th className="py-2 pr-4 font-medium">
+                                                PR
+                                            </th>
+                                            <th className="py-2 pr-4 font-medium">
+                                                Started
+                                            </th>
+                                            <th className="py-2 pr-4 font-medium">
+                                                Models
+                                            </th>
+                                            <th className="py-2 pr-4 text-right font-medium">
+                                                Tokens
+                                            </th>
+                                            <th className="py-2 text-right font-medium">
+                                                Cost
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-card-lv3/60 divide-y">
+                                        {visibleRuns.map((run) => (
+                                            <tr key={run.key}>
+                                                <td className="text-text-primary py-2 pr-4 tabular-nums">
+                                                    {run.prNumber != null
+                                                        ? `#${run.prNumber}`
+                                                        : "—"}
+                                                </td>
+                                                <td className="text-text-secondary py-2 pr-4 whitespace-nowrap tabular-nums">
+                                                    {formatWhen(run.startedAt)}
+                                                </td>
+                                                <td className="text-text-secondary max-w-48 truncate py-2 pr-4">
+                                                    {run.models.join(", ")}
+                                                </td>
+                                                <td className="text-text-primary py-2 pr-4 text-right font-mono">
+                                                    {formatTokens(run.tokens)}
+                                                </td>
+                                                <td className="text-text-primary py-2 text-right font-mono">
+                                                    {formatUsd(run.cost)}
+                                                    {run.pending && (
+                                                        <span
+                                                            className="text-text-tertiary ml-1"
+                                                            title="Not yet debited from the balance">
+                                                            ·
+                                                        </span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                {runs.length > INITIAL_RUNS && (
+                                    <div className="flex items-center justify-center">
+                                        <Button
+                                            size="xs"
+                                            variant="helper"
+                                            onClick={() =>
+                                                setExpanded((e) => !e)
+                                            }>
+                                            {expanded
+                                                ? "Show less"
+                                                : `Show all (${Math.min(runs.length, RUN_CAP)})`}
+                                        </Button>
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </section>
+                </div>
+            </SheetContent>
+        </Sheet>
     );
 };

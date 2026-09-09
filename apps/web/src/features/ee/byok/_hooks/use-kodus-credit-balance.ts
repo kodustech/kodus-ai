@@ -84,5 +84,5 @@ export const useKodusCreditBalance = (): KodusCreditBalanceView => {
     };
 };
 
-/** The wallet's home: the Credits tab of the BYOK page. */
-export const KODUS_CREDITS_PATH = "/byok?tab=credits";
+/** The wallet's home: the Kodus provider card on the BYOK page. */
+export const KODUS_CREDITS_PATH = "/byok#kodus";
