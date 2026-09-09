@@ -53,6 +53,10 @@ import {
     TagsIcon,
 } from "lucide-react";
 import { cn } from "src/core/utils/components";
+import {
+    hasUnsavedChanges,
+    triggerNavigationBlock,
+} from "src/core/utils/navigation-guard";
 import { safeArray } from "src/core/utils/safe-array";
 
 import { useCodeReviewRouteParams } from "../_hooks";
@@ -164,6 +168,18 @@ const SettingsTab = ({
     return (
         <NextLink
             href={href}
+            // Full-route prefetch: the tab pages are client components over
+            // the shared shell, so a switch is instant instead of a
+            // round-trip.
+            prefetch
+            // Same guard as the DS Link: a tab switch with unsaved changes
+            // scrolls to the dirty field instead of navigating.
+            onClick={(event) => {
+                if (hasUnsavedChanges()) {
+                    event.preventDefault();
+                    triggerNavigationBlock();
+                }
+            }}
             aria-current={active ? "page" : undefined}
             data-active={active ? "true" : undefined}
             className={TAB_CLASS}>
@@ -533,6 +549,10 @@ export const CodeReviewShellHeader = ({
     };
     const goTo = (target: ScopeTarget) => {
         setOpen(false);
+        if (hasUnsavedChanges()) {
+            triggerNavigationBlock();
+            return;
+        }
         router.push(hrefFor(target));
     };
 

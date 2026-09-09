@@ -3,6 +3,10 @@
 import type { ComponentProps, ReactNode } from "react";
 import NextLink from "next/link";
 import { cn } from "src/core/utils/components";
+import {
+    hasUnsavedChanges,
+    triggerNavigationBlock,
+} from "src/core/utils/navigation-guard";
 
 /**
  * Navigation-flavoured tabs: the same underline voice as the DS `Tabs`, but
@@ -18,7 +22,12 @@ export const LinkTabs = ({
     <nav
         {...props}
         className={cn(
-            "flex h-10 items-center gap-1 overflow-x-auto border-b-2",
+            // The baseline is an inset shadow rather than a border: the active
+            // tab's underline then sits on the same 2px without a negative
+            // margin, and the strip can scroll sideways on narrow screens
+            // without those 2px turning into a vertical scrollbar.
+            "flex h-10 [scrollbar-width:none] items-center gap-1 overflow-x-auto",
+            "shadow-[inset_0_-2px_0_0_var(--color-gray-200)]",
             className,
         )}>
         {children}
@@ -41,10 +50,20 @@ export const LinkTab = ({
     <NextLink
         {...props}
         href={href}
+        // Same guard as the DS Link: leaving a dirty form scrolls to the
+        // unsaved field instead of navigating.
+        onClick={(event) => {
+            if (hasUnsavedChanges()) {
+                event.preventDefault();
+                triggerNavigationBlock();
+                return;
+            }
+            props.onClick?.(event);
+        }}
         aria-current={active ? "page" : undefined}
         data-active={active ? "true" : undefined}
         className={cn(
-            "group text-text-secondary hover:text-text-primary focus-visible:ring-ring -mb-0.5 inline-flex h-10 shrink-0 items-center border-b-2 border-transparent text-sm font-medium whitespace-nowrap transition focus-visible:ring-2 focus-visible:outline-none",
+            "group text-text-secondary hover:text-text-primary focus-visible:ring-ring inline-flex h-10 shrink-0 items-center border-b-2 border-transparent text-sm font-medium whitespace-nowrap transition focus-visible:ring-2 focus-visible:outline-none",
             "data-[active=true]:border-primary-light data-[active=true]:text-text-primary",
             className,
         )}>

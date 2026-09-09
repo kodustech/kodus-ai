@@ -22,10 +22,11 @@ export const ReviewsSourceTabs = () => {
     );
 
     return (
-        <LinkTabs aria-label="Review sources" className="-ml-4 border-b-0">
+        <LinkTabs aria-label="Review sources" className="-ml-4 shadow-none">
             {canReadPullRequests && (
                 <LinkTab
                     href="/pull-requests"
+                    prefetch
                     active={pathname.startsWith("/pull-requests")}
                     className="text-base">
                     Pull requests
@@ -34,6 +35,7 @@ export const ReviewsSourceTabs = () => {
             {canReadCliReviews && (
                 <LinkTab
                     href="/cli-reviews"
+                    prefetch
                     active={pathname.startsWith("/cli-reviews")}
                     className="text-base">
                     CLI

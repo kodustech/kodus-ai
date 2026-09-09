@@ -32,6 +32,7 @@ import {
     type PlatformConfigValue,
 } from "@services/parameters/types";
 import type { CustomMessageConfig } from "@services/pull-request-messages/types";
+import { SettingsPageSkeleton } from "src/core/components/system/page-skeletons";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { safeArray } from "src/core/utils/safe-array";
 
@@ -60,6 +61,7 @@ import {
     RouteButtonWithOverrideCount,
     useCustomMessagesOverrideCount,
 } from "./route-button-with-override-count";
+import { SettingsShellHeaderSkeleton } from "./settings-shell-skeleton";
 import {
     SettingsShellModeProvider,
     type SettingsShellMode,
@@ -323,7 +325,13 @@ function SettingsLayoutShell({
             </AutomationCodeReviewConfigProvider>
         </DefaultCodeReviewConfigProvider>
     ) : (
-        <SettingsShellContentSkeleton />
+        <>
+            {shellMode === "tabs" &&
+                pathname.startsWith("/settings/code-review") && (
+                    <SettingsShellHeaderSkeleton />
+                )}
+            <SettingsPageSkeleton />
+        </>
     );
 
     if (shellMode === "tabs") {
@@ -497,21 +505,5 @@ function SettingsPerRepositorySkeleton() {
                 <Skeleton className="h-10 w-full rounded-md" />
             </div>
         </div>
-    );
-}
-
-function SettingsShellContentSkeleton() {
-    return (
-        <Page.Root>
-            <Page.Header>
-                <Skeleton className="h-6 w-48" />
-            </Page.Header>
-
-            <Page.Content>
-                <Skeleton className="h-12 w-64" />
-                <Skeleton className="h-56 w-full rounded-xl" />
-                <Skeleton className="h-56 w-full rounded-xl" />
-            </Page.Content>
-        </Page.Root>
     );
 }

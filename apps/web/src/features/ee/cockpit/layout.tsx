@@ -1,5 +1,7 @@
+import { Suspense } from "react";
 import { cookies } from "next/headers";
 import { LockedFeatureOverlay } from "@components/system/locked-feature-overlay";
+import { CockpitPageSkeleton } from "@components/system/page-skeletons";
 import { Page } from "@components/ui/page";
 import { TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
 import { getCockpitMetricsVisibility } from "@services/organizationParameters/fetch";
@@ -22,7 +24,18 @@ import { extractApiData } from "./_helpers/api-data-extractor";
 import { isCockpitTierAllowed } from "./_helpers/tier-policy";
 import { getAnalyticsStatus } from "./_services/analytics/fetch";
 
-export default async function Layout({
+export default function Layout(props: Parameters<typeof CockpitLayoutBody>[0]) {
+    // The license check and the analytics status are awaited inside the
+    // boundary, so the page paints its skeleton (and a client navigation
+    // commits) at once instead of freezing until billing answers.
+    return (
+        <Suspense fallback={<CockpitPageSkeleton />}>
+            <CockpitLayoutBody {...props} />
+        </Suspense>
+    );
+}
+
+async function CockpitLayoutBody({
     bugRatioAnalytics,
     deployFrequencyAnalytics,
     kodusReviewTab,
