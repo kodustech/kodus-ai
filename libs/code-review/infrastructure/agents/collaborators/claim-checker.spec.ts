@@ -579,6 +579,51 @@ describe('claim check groups by (rule, file), not by finding', () => {
             }),
         );
 
+    // The fixture above gives every sibling the SAME text, which is the one
+    // shape that cannot exercise a text-keyed grouping. The model does not
+    // behave that way: asked for "one entry per violating line", it phrases
+    // each entry around its own line. This is that run, reproduced from a real
+    // E2B result where eight per-line findings split into eight groups and the
+    // seven undeclared ones published an assertion the repository had already
+    // refuted.
+    it('drops undeclared siblings even when each phrases it differently', async () => {
+        const declared = violation({
+            ruleUuid: 'rule-no-reimplemented-helper',
+            relevantFile: 'src/blog/slug.ts',
+            relevantLinesStart: 1,
+            relevantLinesEnd: 1,
+            suggestionContent:
+                'Reimplemented a `slugify` helper instead of using the existing one in `src/shared`.',
+            claimKind: 'duplicate',
+            claimSymbol: 'slugify',
+            claimPath: 'src/shared',
+        });
+
+        const differentlyWorded = [2, 3, 4, 5, 6, 7, 8].map((line) =>
+            violation({
+                ruleUuid: 'rule-no-reimplemented-helper',
+                relevantFile: 'src/blog/slug.ts',
+                relevantLinesStart: line,
+                relevantLinesEnd: line,
+                // Each sibling says the same thing in its own words, and none
+                // of them declares a claim.
+                suggestionContent: `Line ${line} belongs to a reimplemented slugify helper that already exists in src/shared.`,
+                oneSentenceSummary: `Line ${line} duplicates an existing shared helper.`,
+            }),
+        );
+
+        const lookup = fakeLookup({ grep: () => 'No matches found.' });
+
+        const res = await checkClaims({
+            violations: [declared, ...differentlyWorded],
+            changedFiles: [{ filename: 'src/blog/slug.ts' }],
+            lookup,
+        });
+
+        expect(res.kept).toHaveLength(0);
+        expect(res.dropped).toHaveLength(8);
+    });
+
     it('drops undeclared siblings when the group\'s claim is refuted', async () => {
         const declared = violation({
             ruleUuid: 'rule-no-reimplemented-helper',
