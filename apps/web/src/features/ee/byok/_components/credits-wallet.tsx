@@ -328,7 +328,7 @@ export const CreditsLedgerDrawer = ({
         <Sheet open={open} onOpenChange={onOpenChange}>
             <SheetContent
                 side="right"
-                className="bg-card-lv1 flex w-full max-w-2xl flex-col gap-0 p-0">
+                className="bg-card-lv1 flex w-full flex-col gap-0 p-0 sm:max-w-2xl">
                 <SheetHeader className="border-card-lv3 flex flex-col gap-1 border-b px-6 py-4">
                     <SheetTitle className="text-text-primary flex items-center gap-2 text-base">
                         <CoinsIcon size={16} />

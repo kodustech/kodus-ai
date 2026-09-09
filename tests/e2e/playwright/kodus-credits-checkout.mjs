@@ -253,9 +253,12 @@ try {
 
     // History drawer: the money ledger with the top-up + charges by review.
     await card.getByRole("button", { name: /history/i }).click();
-    await page.getByText("Money movements", { exact: false }).waitFor({ timeout: 60_000 });
-    await page.getByText("Top-up", { exact: false }).first().waitFor({ timeout: 60_000 });
-    await page.getByText("Charges by review", { exact: false }).first().waitFor({ timeout: 60_000 });
+    const drawer = page.getByRole("dialog");
+    await drawer.getByText("Money movements", { exact: true }).waitFor({ timeout: 60_000 });
+    // The ledger row for the pack we just bought (not the "top-ups" copy).
+    await drawer.getByRole("cell", { name: /credit pack/i }).first().waitFor({ timeout: 60_000 });
+    await drawer.getByText("Charges by review", { exact: true }).waitFor({ timeout: 60_000 });
+    await page.waitForTimeout(700); // slide-in animation
     await page.screenshot({ path: `${KODUS_E2E_SHOTS}/03-history-drawer.png`, fullPage: false });
     log(`PASS History drawer lists the top-up and charges by review (screenshot 03)`);
     await page.keyboard.press("Escape");
