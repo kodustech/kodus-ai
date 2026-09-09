@@ -15,6 +15,14 @@ import {
 
 const CLEANUP_CONCURRENCY = 5;
 
+// Caps the reaper's "leave it for the next tick" retry on a real kill
+// failure (timeout, upstream error). Without a bound, an outage that keeps
+// Sandbox.kill failing pins the same lease doc forever — findExpired/
+// findReadyToKill return it every tick with unbounded kill fan-out and it
+// never gets reconciled. After this many failed attempts, force-delete the
+// doc and log an error instead of retrying indefinitely.
+const MAX_KILL_RETRIES = 3;
+
 const E2B_ALREADY_GONE_RE =
     /not found|does not exist|404|already (been )?(deleted|killed|terminated)/i;
 
@@ -111,8 +119,14 @@ export class SandboxLeaseReaperService {
                                         sandboxId: lease.sandboxId,
                                     },
                                 });
-                            } else {
+                            } else if (
+                                (lease.killRetryCount ?? 0) <
+                                MAX_KILL_RETRIES
+                            ) {
                                 sandboxGone = false;
+                                await this.leaseRepository.bumpKillRetry(
+                                    lease._id,
+                                );
                                 this.logger.warn({
                                     message:
                                         '[SANDBOX-REAPER] Failed to kill sandbox — leaving lease for retry next tick',
@@ -120,6 +134,19 @@ export class SandboxLeaseReaperService {
                                     metadata: {
                                         sandboxId: lease.sandboxId,
                                         error: String(err),
+                                        killRetryCount:
+                                            (lease.killRetryCount ?? 0) + 1,
+                                    },
+                                });
+                            } else {
+                                this.logger.error({
+                                    message:
+                                        '[SANDBOX-REAPER] Giving up on Sandbox.kill after max retries — deleting lease, sandbox may be orphaned',
+                                    context: SandboxLeaseReaperService.name,
+                                    metadata: {
+                                        sandboxId: lease.sandboxId,
+                                        error: String(err),
+                                        killRetryCount: lease.killRetryCount,
                                     },
                                 });
                             }
@@ -207,8 +234,14 @@ export class SandboxLeaseReaperService {
                                         sandboxId: lease.sandboxId,
                                     },
                                 });
-                            } else {
+                            } else if (
+                                (lease.killRetryCount ?? 0) <
+                                MAX_KILL_RETRIES
+                            ) {
                                 sandboxGone = false;
+                                await this.leaseRepository.bumpKillRetry(
+                                    lease._id,
+                                );
                                 this.logger.warn({
                                     message:
                                         '[SANDBOX-IDLE-KILL] Failed to kill sandbox — leaving lease for retry next tick',
@@ -216,6 +249,19 @@ export class SandboxLeaseReaperService {
                                     metadata: {
                                         sandboxId: lease.sandboxId,
                                         error: String(err),
+                                        killRetryCount:
+                                            (lease.killRetryCount ?? 0) + 1,
+                                    },
+                                });
+                            } else {
+                                this.logger.error({
+                                    message:
+                                        '[SANDBOX-IDLE-KILL] Giving up on Sandbox.kill after max retries — deleting lease, sandbox may be orphaned',
+                                    context: SandboxLeaseReaperService.name,
+                                    metadata: {
+                                        sandboxId: lease.sandboxId,
+                                        error: String(err),
+                                        killRetryCount: lease.killRetryCount,
                                     },
                                 });
                             }

@@ -126,7 +126,11 @@ describe('AstGraphBuildJobProcessor — sandbox creation via lease manager', () 
 
         expect(prKey).toBe('org-uuid:repo-1:graph:job-1');
         expect(consumer).toBe('graph-build');
-        expect(ttl).toBeUndefined();
+        // Explicit, well past the lease manager's own 30-min default: a
+        // full-repo AST build can legitimately run long, and the reaper
+        // kills any lease past its expiresAt regardless of leaseCount, so
+        // the default would kill an actively building sandbox mid-index.
+        expect(ttl).toBe(2 * 60 * 60 * 1000);
         expect(cloneParams).toMatchObject({
             cloneUrl: 'https://x/r.git',
             authToken: 'tok',

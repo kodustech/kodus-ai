@@ -24,6 +24,14 @@ import { AstGraphStatus } from '@libs/code-review/infrastructure/adapters/reposi
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { raceWithAbortSignal } from '@libs/core/workflow/infrastructure/abort-signal-race';
 
+// The lease manager's own default (30 min) is sized for a PR-review
+// sandbox. A full-repo AST build on a large repo can legitimately run
+// longer than that, and the reaper kills any lease past its expiresAt
+// regardless of leaseCount — so the default would kill an actively
+// building sandbox mid-index, not just a crash orphan. Give this consumer
+// a ceiling well past any realistic build instead.
+const GRAPH_BUILD_LEASE_TTL_MS = 2 * 60 * 60 * 1000; // 2h
+
 interface AstGraphBuildJobPayload {
     repositoryId: string;
     cloneUrl: string;
@@ -150,8 +158,8 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
             const branch = branchRaw.replace(/^refs\/heads\//, '');
 
             // Routed through the lease manager (not the raw provider) so a
-            // worker crash mid-build leaves a lease doc the existing 30min
-            // TTL + 5min reaper cron already cleans up. The prKey is unique
+            // worker crash mid-build leaves a lease doc the GRAPH_BUILD_LEASE_TTL_MS
+            // + 5min reaper cron already cleans up. The prKey is unique
             // per job (jobId), so this always takes the creator path — never
             // joins another job's sandbox, same as the direct-create call it
             // replaces. No PR is involved here (repo-level graph build), so
@@ -160,7 +168,7 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
             const acquired = await this.leaseManager.acquire(
                 prKey,
                 'graph-build',
-                undefined,
+                GRAPH_BUILD_LEASE_TTL_MS,
                 {
                     cloneUrl: cloneParams.url || payload.cloneUrl,
                     authToken: cloneParams.auth?.token || '',

@@ -69,6 +69,15 @@ interface SafeguardPipelineParams {
 
 const MAX_AGENT_TURNS = 6;
 
+// The lease manager's own default (30 min) is sized for a PR-review
+// sandbox, but this renewal happens mid-pipeline and its lease must
+// outlive the REST of the safeguard run, not just its own creation — the
+// reaper kills any lease past its expiresAt regardless of leaseCount, so
+// the default risks killing the renewed sandbox mid-verification on a
+// long-running safeguard pass. Give it the same ceiling as the graph-build
+// consumers.
+const SAFEGUARD_RENEWAL_LEASE_TTL_MS = 2 * 60 * 60 * 1000; // 2h
+
 // Boolean feature matrix extracted per suggestion in `extractFeatures`. Hoisted
 // to module scope so the strict-wire governance suite can assert it stays
 // OpenAI-strict compatible.
@@ -279,7 +288,7 @@ export class SafeguardPipelineService {
                         const acquired = await this.leaseManager.acquire(
                             renewPrKey,
                             'safeguard-renewal',
-                            undefined,
+                            SAFEGUARD_RENEWAL_LEASE_TTL_MS,
                             freshCloneParams,
                         );
                         newSandbox = acquired.sandbox;

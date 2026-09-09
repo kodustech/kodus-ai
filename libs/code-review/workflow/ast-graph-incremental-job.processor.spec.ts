@@ -121,7 +121,12 @@ describe('AstGraphIncrementalJobProcessor — sandbox creation via lease manager
 
         expect(prKey).toBe('org-uuid:repo-1:graph:job-2');
         expect(consumer).toBe('graph-incremental');
-        expect(ttl).toBeUndefined();
+        // Explicit, well past the lease manager's own 30-min default: an
+        // incremental AST update on a large changeset can legitimately run
+        // long, and the reaper kills any lease past its expiresAt
+        // regardless of leaseCount, so the default would kill an actively
+        // updating sandbox mid-index.
+        expect(ttl).toBe(2 * 60 * 60 * 1000);
         expect(cloneParams).toMatchObject({
             cloneUrl: 'https://x/r.git',
             authToken: 'tok',

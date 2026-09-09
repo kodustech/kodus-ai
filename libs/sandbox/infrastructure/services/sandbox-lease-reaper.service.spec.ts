@@ -29,6 +29,7 @@ describe('SandboxLeaseReaperService', () => {
         claimCleanup: jest.fn(),
         completeCleanup: jest.fn(),
         failCleanup: jest.fn(),
+        bumpKillRetry: jest.fn().mockResolvedValue(undefined),
     };
 
     const distributedLockService = {
@@ -45,6 +46,7 @@ describe('SandboxLeaseReaperService', () => {
             release: jest.fn(),
         });
         configService.get.mockReturnValue('fake-api-key');
+        leaseRepository.bumpKillRetry.mockResolvedValue(undefined);
         service = new SandboxLeaseReaperService(
             leaseRepository as any,
             distributedLockService as any,
@@ -96,6 +98,45 @@ describe('SandboxLeaseReaperService', () => {
             await service.reapExpiredLeases();
 
             expect(leaseRepository.delete).not.toHaveBeenCalled();
+        });
+
+        it('bumps the kill-retry counter on a real failure under the retry cap', async () => {
+            leaseRepository.findExpired.mockResolvedValue([
+                {
+                    _id: 'org:repo:1',
+                    sandboxId: 'sbx-1',
+                    state: 'READY',
+                    killRetryCount: 1,
+                },
+            ]);
+            mockKill.mockRejectedValue(new Error('TimeoutError'));
+
+            await service.reapExpiredLeases();
+
+            expect(leaseRepository.bumpKillRetry).toHaveBeenCalledWith(
+                'org:repo:1',
+            );
+            expect(leaseRepository.delete).not.toHaveBeenCalled();
+        });
+
+        // Without this cap, an outage that keeps Sandbox.kill failing pins
+        // the lease doc forever: findExpired returns it every tick, with
+        // unbounded kill fan-out and no reconciliation.
+        it('force-deletes the lease once the kill-retry cap is exceeded, without bumping further', async () => {
+            leaseRepository.findExpired.mockResolvedValue([
+                {
+                    _id: 'org:repo:1',
+                    sandboxId: 'sbx-1',
+                    state: 'READY',
+                    killRetryCount: 3,
+                },
+            ]);
+            mockKill.mockRejectedValue(new Error('TimeoutError'));
+
+            await service.reapExpiredLeases();
+
+            expect(leaseRepository.bumpKillRetry).not.toHaveBeenCalled();
+            expect(leaseRepository.delete).toHaveBeenCalledWith('org:repo:1');
         });
 
         it('does not call Sandbox.kill for an INVALIDATED lease, but still deletes it', async () => {
@@ -151,6 +192,23 @@ describe('SandboxLeaseReaperService', () => {
             await service.killIdleSandboxes();
 
             expect(leaseRepository.delete).not.toHaveBeenCalled();
+        });
+
+        it('force-deletes the lease once the kill-retry cap is exceeded', async () => {
+            leaseRepository.findReadyToKill.mockResolvedValue([
+                {
+                    _id: 'org:repo:1',
+                    sandboxId: 'sbx-1',
+                    killAt: new Date(),
+                    killRetryCount: 3,
+                },
+            ]);
+            mockKill.mockRejectedValue(new Error('503: no healthy upstream'));
+
+            await service.killIdleSandboxes();
+
+            expect(leaseRepository.bumpKillRetry).not.toHaveBeenCalled();
+            expect(leaseRepository.delete).toHaveBeenCalledWith('org:repo:1');
         });
 
         it('deletes the lease when the sandbox is already gone', async () => {
