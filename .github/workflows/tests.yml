@@ -147,6 +147,16 @@ jobs:
               # run normally; prod runs Mongo migrations for real on boot.
               run: SKIP_MONGO_MIGRATIONS=true pnpm run migration:run
 
+            # `repo-lookup.contract.spec.ts` drives the REAL LocalSandbox, which
+            # shells out to ripgrep the same way it does in production - the
+            # product image installs it (docker/Dockerfile). This full-suite job
+            # runs that spec too (contract-tests.yml only covers its own subset),
+            # and a runner without rg fails it with `spawn rg ENOENT`, which says
+            # nothing about the contract under test.
+            - name: Install ripgrep (the local sandbox shells out to it)
+              if: always()
+              run: sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep
+
             - name: Run tests
               # TEST_MONGODB_URI un-skips test/integration/platformData/* —
               # those suites gate themselves on it and were silently skipped in

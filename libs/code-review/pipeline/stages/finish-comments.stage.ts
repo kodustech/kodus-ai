@@ -326,6 +326,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 reviewHasPartialErrors,
                 reviewErrorCustomMessage,
                 context.linkedRepositoriesMetadata,
+                context.reviewWarnings,
             );
             return context;
         }
@@ -396,6 +397,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 reviewHasPartialErrors,
                 reviewErrorCustomMessage,
                 context.linkedRepositoriesMetadata,
+                context.reviewWarnings,
             );
             return context;
         }
@@ -433,6 +435,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 reviewErrorMessage,
                 reviewHasPartialErrors,
                 reviewErrorCustomMessage,
+                context.reviewWarnings,
             );
         }
 

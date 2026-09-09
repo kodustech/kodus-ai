@@ -10,6 +10,7 @@ import {
     type OrchestratorInputComputed,
 } from './build-orchestrator-input';
 import type { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
+import { NULL_SANDBOX_INSTANCE } from '@libs/sandbox/infrastructure/providers/null-sandbox.service';
 
 const computed: OrchestratorInputComputed = {
     changedFiles: [],
@@ -116,5 +117,65 @@ describe('buildOrchestratorInput — context→agent wiring', () => {
             computed,
         );
         expect(input.kodyRules).toBe(configRules);
+    });
+
+    // ── repository-lookup capability (issue #1826, KRC-01) ──────────────────
+    // The signal exists on the sandbox handle (`type`) and was discarded here.
+    // remoteCommands cannot carry it: the null sandbox implements grep/read and
+    // answers '' successfully, so `remoteCommands !== undefined` is true even
+    // when there is nothing to look at.
+    describe('repoLookup — the capability signal derived from the sandbox handle', () => {
+        it('reports available for a real sandbox handle', () => {
+            const input = buildOrchestratorInput(
+                makeContext({
+                    sandboxHandle: {
+                        type: 'e2b',
+                        remoteCommands: {
+                            grep: async () => '',
+                            read: async () => '',
+                            listDir: async () => '',
+                        },
+                    },
+                }),
+                computed,
+            );
+            expect(input.repoLookup?.available).toBe(true);
+        });
+
+        it('reports unavailable end to end for the NULL sandbox', () => {
+            const input = buildOrchestratorInput(
+                makeContext({ sandboxHandle: NULL_SANDBOX_INSTANCE }),
+                computed,
+            );
+            expect(input.repoLookup?.available).toBe(false);
+            expect(input.repoLookup?.unavailableReason).toBe('null sandbox');
+            // remoteCommands is NOT undefined here — that is exactly why it
+            // could never have been the capability signal.
+            expect(input.remoteCommands).toBeDefined();
+        });
+
+        it('reports unavailable when there is no sandbox at all (trial flow)', () => {
+            const input = buildOrchestratorInput(makeContext(), computed);
+            expect(input.repoLookup?.available).toBe(false);
+            expect(input.repoLookup?.unavailableReason).toBe(
+                'no sandbox handle',
+            );
+        });
+
+        it('is always populated, so an absent field never has to be interpreted', () => {
+            expect(
+                buildOrchestratorInput(makeContext(), computed).repoLookup,
+            ).toBeDefined();
+        });
+
+        it('an unavailable lookup raises from grep instead of answering empty', async () => {
+            const input = buildOrchestratorInput(
+                makeContext({ sandboxHandle: NULL_SANDBOX_INSTANCE }),
+                computed,
+            );
+            await expect(input.repoLookup!.grep('formatDate')).rejects.toThrow(
+                /repo lookup unavailable/,
+            );
+        });
     });
 });

@@ -160,10 +160,15 @@ export class SandboxLeaseRepository {
      */
     async findExpired(
         now: Date,
-    ): Promise<Pick<SandboxLeaseModel, '_id' | 'sandboxId' | 'state'>[]> {
+    ): Promise<
+        Pick<
+            SandboxLeaseModel,
+            '_id' | 'sandboxId' | 'state' | 'killRetryCount' | 'organizationId'
+        >[]
+    > {
         return this.leaseModel
             .find({ expiresAt: { $lt: now } })
-            .select('_id sandboxId state')
+            .select('_id sandboxId state killRetryCount organizationId')
             .lean();
     }
 
@@ -216,14 +221,36 @@ export class SandboxLeaseRepository {
      */
     async findReadyToKill(
         now: Date,
-    ): Promise<Pick<SandboxLeaseModel, '_id' | 'sandboxId' | 'killAt'>[]> {
+    ): Promise<
+        Pick<
+            SandboxLeaseModel,
+            | '_id'
+            | 'sandboxId'
+            | 'killAt'
+            | 'killRetryCount'
+            | 'organizationId'
+        >[]
+    > {
         return this.leaseModel
             .find({
                 killAt: { $lte: now },
                 sandboxId: { $exists: true, $ne: '' },
             })
-            .select('_id sandboxId killAt')
+            .select('_id sandboxId killAt killRetryCount organizationId')
             .lean();
+    }
+
+    /**
+     * Atomically increment the reaper's kill-retry counter after a real
+     * `Sandbox.kill` failure (never on "already gone" — that deletes the
+     * doc immediately). Bounds the reaper's infinite-retry window (see
+     * MAX_KILL_RETRIES in sandbox-lease-reaper.service.ts).
+     */
+    async bumpKillRetry(prKey: string): Promise<void> {
+        await this.leaseModel.updateOne(
+            { _id: prKey },
+            { $inc: { killRetryCount: 1 } },
+        );
     }
 
     /**

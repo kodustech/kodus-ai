@@ -1,0 +1,83 @@
+reproduce: node evals/kody-rules/context-fp-repro.js --model=kimi-k2.7-code@fireworks --reps=5 --out=NEED-1826-kimi.txt
+corpus: cases-1826-need.json — 5 case(s), 5 replicate(s)
+model:  kimi-k2.7-code@fireworks
+Every case's CORRECT published count is 0. A non-zero count is a rule
+firing on a claim the diff window cannot support.
+
+══ sibling-file-no-test-anywhere  [claim: missing]
+   rule: Every new HTTP route handler ships with a test
+   file: src/routes/payments.controller.ts
+   why 0 is correct: The PR adds a new route handler and NO companion test exists — not in the PR, not in the repository. The rule is supposed to fire. Only a sibling-path existence check can establish that; the hunk shows the controller alone.
+   rep 1: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/routes/payments.controller.ts:8  New GET /payments/:id handler lacks a companion payments.controller.spec.ts test file.
+   rep 2: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/routes/payments.controller.ts:8  New route handler GET /payments/:id is missing its companion test file.
+   rep 3: published 1 (expected 1)  judged 4, claim-check dropped 0, kept 4 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/routes/payments.controller.ts:8  The new @Get(':id') route handler has no accompanying payments.controller.spec.ts test file.
+   rep 4: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/routes/payments.controller.ts:8  New GET /payments/:id route handler is not accompanied by a required spec file.
+   rep 5: published 1 (expected 1)  judged 4, claim-check dropped 0, kept 4 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/routes/payments.controller.ts:8  New GET /payments/:id handler lacks an accompanying spec file.
+   → per-replicate published: [1, 1, 1, 1, 1]
+
+══ sibling-file-no-test-anywhere-CONTROL  [claim: missing]
+   rule: Every new HTTP route handler ships with a test
+   file: src/routes/payments.controller.ts
+   why 0 is correct: The PR adds a new route handler and NO companion test exists — not in the PR, not in the repository. The rule is supposed to fire. Only a sibling-path existence check can establish that; the hunk shows the controller alone.
+   rep 1: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/routes/payments.controller.ts:4  New GET route handler in PaymentsController lacks an adjacent .spec.ts test.
+   rep 2: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/routes/payments.controller.ts:1  New PaymentsController route handler lacks a co-located `.spec.ts` test file.
+   rep 3: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/routes/payments.controller.ts:8  New GET /payments/:id handler is missing an adjacent payments.controller.spec.ts test file.
+   rep 4: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/routes/payments.controller.ts:1  New payments route handler is missing the required payments.controller.spec.ts test file.
+   rep 5: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/routes/payments.controller.ts:8  New GET /payments/:id route handler is missing a corresponding .spec.ts test file.
+   → per-replicate published: [1, 1, 1, 1, 1]
+
+══ symbol-references-helper-really-exists  [claim: duplicate]
+   rule: Do not reimplement a helper that already exists
+   file: src/blog/slug.ts
+   why 0 is correct: src/shared/strings.ts ALREADY exports `slugify`. The PR adds a second copy in src/blog/slug.ts, which is exactly what the rule forbids. Nothing in the hunk says so: only a repository grep does. The claim checker cannot help here — it can drop a finding, never create one.
+   rep 1: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/blog/slug.ts:1  Reimplements slugify(), which already exists in src/shared/strings.ts.
+   rep 2: published 1 (expected 1)  judged 8, claim-check dropped 0, kept 8 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/blog/slug.ts:1  Reimplements the existing slugify helper from src/shared/strings.ts.
+   rep 3: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/blog/slug.ts:1  Re-export slugify from src/shared/strings.ts instead of reimplementing it.
+   rep 4: published 1 (expected 1)  judged 8, claim-check dropped 0, kept 8 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/blog/slug.ts:1  Re-export the existing `slugify` from `src/shared/strings.ts` instead of duplicating it.
+   rep 5: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/blog/slug.ts:1  Reimplements the `slugify` helper that already exists in `src/shared/strings.ts`.
+   → per-replicate published: [1, 1, 1, 1, 1]
+
+══ symbol-references-helper-really-exists-CONTROL  [claim: duplicate]
+   rule: Do not reimplement a helper that already exists
+   file: src/blog/slug.ts
+   why 0 is correct: src/shared/strings.ts ALREADY exports `slugify`. The PR adds a second copy in src/blog/slug.ts, which is exactly what the rule forbids. Nothing in the hunk says so: only a repository grep does. The claim checker cannot help here — it can drop a finding, never create one.
+   rep 1: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/blog/slug.ts:1  Reimplements the shared slugify helper instead of reusing the one in src/shared.
+   rep 2: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/blog/slug.ts:1  Reimplements a generic slugify helper that already exists in `src/shared`.
+   rep 3: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/blog/slug.ts:1  Reimplements a generic slugify helper that should be reused from src/shared.
+   rep 4: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/blog/slug.ts:1  Reimplements an existing `slugify` helper from `src/shared` instead of reusing it.
+   rep 5: published 1 (expected 1)  judged 8, claim-check dropped 0, kept 8 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/blog/slug.ts:1  Reimplements an existing shared slugify helper.
+   → per-replicate published: [1, 1, 1, 1, 1]
+
+══ sibling-file-test-already-in-repo  [claim: missing]
+   rule: Every new HTTP route handler ships with a test
+   file: src/routes/refunds.controller.ts
+   why 0 is correct: The companion spec ALREADY exists in the repository and this PR does not touch it. Correct output is 0. This guards the positive cases: a fix that makes the rule fire must not make it fire here.
+   rep 1: published 0 (expected 0)  judged 0, claim-check dropped 0, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored
+   rep 2: published 0 (expected 0)  judged 0, claim-check dropped 0, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored
+   rep 3: published 0 (expected 0)  judged 0, claim-check dropped 0, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored
+   rep 4: published 0 (expected 0)  judged 0, claim-check dropped 0, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored
+   rep 5: published 0 (expected 0)  judged 0, claim-check dropped 0, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored
+   → per-replicate published: [0, 0, 0, 0, 0]
+
+TOTAL: 0 of 25 case-runs published a comment that should not exist.
+       0 of 25 case-runs FAILED TO PUBLISH one the rule should have caught.

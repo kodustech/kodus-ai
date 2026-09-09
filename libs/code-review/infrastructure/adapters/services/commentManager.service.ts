@@ -55,6 +55,7 @@ import { prompt_repeated_suggestion_clustering_system } from '@libs/common/utils
 import { createLogger } from '@libs/core/log/logger';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
+import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import { estimateTokens, tokensToChars } from './utils/token-estimator';
 
 interface ClusteredSuggestion {
@@ -881,6 +882,7 @@ You must always respond in ${languageResultPrompt}.`;
         reviewHasPartialErrors?: boolean,
         reviewErrorCustomMessage?: string,
         linkedRepositoriesMetadata?: LinkedRepositoriesReviewMetadata,
+        reviewWarnings?: ReviewWarning[],
     ): Promise<void> {
         try {
             // When the review failed, we cannot honor a customer-configured
@@ -902,22 +904,34 @@ You must always respond in ${languageResultPrompt}.`;
                     reviewHasPartialErrors,
                     reviewErrorCustomMessage,
                     linkedRepositoriesMetadata,
+                    reviewWarnings,
                 );
-            } else if (reviewHasPartialErrors) {
+            } else {
                 // Custom end-review template is rendering — the default
                 // path's suffix wiring doesn't run here, so we append the
-                // partial-errors notice ourselves. Without this the user
+                // suffixes ourselves. Without this the user
                 // sees their template's "all good" message + no approval
                 // and assumes auto-approve is broken. Adaptive-fit
                 // fidelity warnings are intentionally NOT rendered in
                 // the PR comment — they surface in the web app's Pull
                 // Requests admin dashboard via dataExecution.reviewWarnings.
-                const notice = this.resolvePartialErrorsNotice(
+                // Skipped Kody Rules are the exception: they are reported on
+                // the PR itself (issue #1826, KRC-16).
+                const language =
                     codeReviewConfig?.languageResultPrompt ??
-                        LanguageValue.ENGLISH,
+                    LanguageValue.ENGLISH;
+                if (reviewHasPartialErrors) {
+                    const notice = this.resolvePartialErrorsNotice(language);
+                    if (notice) {
+                        commentBody = `${commentBody}${notice}`;
+                    }
+                }
+                const skippedNotice = this.resolveSkippedRulesNotice(
+                    reviewWarnings,
+                    language,
                 );
-                if (notice) {
-                    commentBody = `${commentBody}${notice}`;
+                if (skippedNotice) {
+                    commentBody = `${commentBody}${skippedNotice}`;
                 }
             }
 
@@ -973,6 +987,7 @@ You must always respond in ${languageResultPrompt}.`;
         reviewHasPartialErrors?: boolean,
         reviewErrorCustomMessage?: string,
         linkedRepositoriesMetadata?: LinkedRepositoriesReviewMetadata,
+        reviewWarnings?: ReviewWarning[],
     ): Promise<string> {
         let commentBody = await this.generatePullRequestFinishSummaryMarkdown(
             organizationAndTeamData,
@@ -985,6 +1000,7 @@ You must always respond in ${languageResultPrompt}.`;
             reviewHasPartialErrors,
             reviewErrorCustomMessage,
             linkedRepositoriesMetadata,
+            reviewWarnings,
         );
 
         commentBody = this.sanitizeBitbucketMarkdown(commentBody, platformType);
@@ -1561,6 +1577,58 @@ You must always respond in ${languageResultPrompt}.`;
         );
     }
 
+    /**
+     * Build the localized collapsible notice naming the Kody Rules that were
+     * NOT judged because the repository context they declared they need could
+     * not be retrieved (issue #1826, KRC-16).
+     *
+     * This is the one warning kind that DOES belong on the pull request:
+     * adaptive-fit fidelity warnings tell the PR author nothing actionable, but
+     * a rule that was silently not applied reads exactly like "your rule found
+     * nothing" — the false clean bill of health this feature exists to remove.
+     * So it is filtered by kind rather than rendering `reviewWarnings` wholesale.
+     *
+     * Returns undefined when no such warning fired, when it names no rule, or
+     * when neither the requested language nor en-US carries the copy.
+     */
+    private resolveSkippedRulesNotice(
+        reviewWarnings: ReviewWarning[] | undefined,
+        language: string,
+    ): string | undefined {
+        const titles: string[] = [];
+        for (const warning of reviewWarnings ?? []) {
+            if (warning?.kind !== 'RULE_CONTEXT_UNAVAILABLE') continue;
+            for (const title of warning.ruleTitles ?? []) {
+                const trimmed = title?.trim();
+                if (trimmed && !titles.includes(trimmed)) titles.push(trimmed);
+            }
+        }
+        if (titles.length === 0) {
+            return undefined;
+        }
+
+        const translation = getTranslationsForLanguageByCategory(
+            language as LanguageValue,
+            TranslationsCategory.PullRequestFinishSummaryMarkdown,
+        );
+        const notice =
+            translation?.skippedRulesNotice ??
+            getTranslationsForLanguageByCategory(
+                LanguageValue.ENGLISH,
+                TranslationsCategory.PullRequestFinishSummaryMarkdown,
+            )?.skippedRulesNotice;
+        if (!notice) {
+            return undefined;
+        }
+
+        return notice
+            .replace(/\{\{count\}\}/g, String(titles.length))
+            .replace(
+                /\{\{ruleTitles\}\}/g,
+                titles.map((title) => `- ${title}`).join('\n'),
+            );
+    }
+
     private async generatePullRequestFinishSummaryMarkdown(
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
@@ -1572,6 +1640,7 @@ You must always respond in ${languageResultPrompt}.`;
         reviewHasPartialErrors?: boolean,
         reviewErrorCustomMessage?: string,
         linkedRepositoriesMetadata?: LinkedRepositoriesReviewMetadata,
+        reviewWarnings?: ReviewWarning[],
     ): Promise<string> {
         try {
             const language =
@@ -1671,6 +1740,18 @@ You must always respond in ${languageResultPrompt}.`;
             // friendlyMessage). The warnings ARE persisted to
             // automation_execution.dataExecution.reviewWarnings for the
             // admin-facing Pull Requests dashboard in the Kodus web app.
+            //
+            // RULE_CONTEXT_UNAVAILABLE is the one exception (issue #1826,
+            // KRC-16): a Kody Rule that was never judged has to be named on
+            // the PR, otherwise its silence is indistinguishable from a clean
+            // pass. Both the count and the rule titles are rendered.
+            const skippedRulesNotice = this.resolveSkippedRulesNotice(
+                reviewWarnings,
+                language,
+            );
+            if (skippedRulesNotice) {
+                resultText = `${resultText}${skippedRulesNotice}`;
+            }
 
             // Cross-repo transparency (#1576): CodeRabbit-style line listing
             // which linked repos/refs were actually cloned and consulted.
@@ -2435,6 +2516,7 @@ ${reviewOptions}
         reviewErrorMessage?: string,
         reviewHasPartialErrors?: boolean,
         reviewErrorCustomMessage?: string,
+        reviewWarnings?: ReviewWarning[],
     ): Promise<void> {
         let commentBody: string;
 
@@ -2472,7 +2554,15 @@ ${reviewOptions}
                 }
             }
             // Adaptive-fit fidelity warnings are NOT appended to the PR
-            // comment (admin-only signal — see updateOverallComment).
+            // comment (admin-only signal — see updateOverallComment); skipped
+            // Kody Rules are, because they change what the review means.
+            const skippedNotice = this.resolveSkippedRulesNotice(
+                reviewWarnings,
+                language ?? LanguageValue.ENGLISH,
+            );
+            if (skippedNotice) {
+                commentBody = `${commentBody}${skippedNotice}`;
+            }
         } else {
             commentBody = await this.generateLastReviewCommenBody(
                 organizationAndTeamData,
@@ -2485,6 +2575,8 @@ ${reviewOptions}
                 reviewErrorMessage,
                 reviewHasPartialErrors,
                 reviewErrorCustomMessage,
+                undefined,
+                reviewWarnings,
             );
         }
 

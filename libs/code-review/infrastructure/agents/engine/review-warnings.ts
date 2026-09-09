@@ -23,12 +23,18 @@ export type ReviewWarningKind =
     /** Verifier / second-chance / rescue passes skipped. */
     | 'HEAVY_PASSES_SKIPPED'
     /** The BYOK main provider failed and the review ran on the fallback. */
-    | 'PROVIDER_FALLBACK';
+    | 'PROVIDER_FALLBACK'
+    /** Kody Rules were not judged because the context they declared they need
+     *  could not be retrieved from the repository. */
+    | 'RULE_CONTEXT_UNAVAILABLE';
 
 export type ReviewWarningReason =
     | 'small_context_window'
     /** The configured main provider errored, so the review used the fallback. */
-    | 'provider_failover';
+    | 'provider_failover'
+    /** The repository could not be looked at, so a declared context need went
+     *  unmet. */
+    | 'lookup_unavailable';
 
 export interface ReviewWarning {
     kind: ReviewWarningKind;
@@ -39,6 +45,10 @@ export interface ReviewWarning {
     modelName: string;
     /** Optional free-form context (e.g. "3 files dropped: foo.test.ts, ..."). */
     detail?: string;
+    /** Titles of the Kody Rules this warning is about, kept structured so the
+     *  end-review PR comment can render them without parsing `detail`. Only
+     *  `RULE_CONTEXT_UNAVAILABLE` populates it. */
+    ruleTitles?: string[];
     /** Agent that emitted the warning. Cleared on dedup when multiple agents
      *  emit the same warning, since the underlying cause is pipeline-wide. */
     agentName?: string;
@@ -90,7 +100,10 @@ export function dedupReviewWarnings(
         const key = `${w.kind}::${w.modelName}::${w.contextWindowTokens}`;
         const existing = byKey.get(key);
         if (!existing) {
-            byKey.set(key, { ...w });
+            byKey.set(key, {
+                ...w,
+                ...(w.ruleTitles ? { ruleTitles: [...w.ruleTitles] } : {}),
+            });
             if (w.detail) detailsByKey.set(key, [w.detail]);
             continue;
         }
@@ -103,6 +116,15 @@ export function dedupReviewWarnings(
                 detailsByKey.set(key, seen);
             }
         }
+        // Titles union, not overwrite: a rule skipped by a second emitter has
+        // to stay named in the PR comment.
+        if (w.ruleTitles?.length) {
+            const merged = existing.ruleTitles ?? [];
+            for (const title of w.ruleTitles) {
+                if (!merged.includes(title)) merged.push(title);
+            }
+            existing.ruleTitles = merged;
+        }
     }
 
     // Stitch comma-joined details back onto the surviving entries.
@@ -114,4 +136,57 @@ export function dedupReviewWarnings(
     }
 
     return Array.from(byKey.values());
+}
+
+/**
+ * Build the notice for Kody Rules that were NOT judged because the repository
+ * context they declared they need could not be retrieved (issue #1826).
+ *
+ * A skipped rule has to be visible: silence here reads exactly like "your rule
+ * found nothing", which is the failure the whole feature exists to remove. Like
+ * the provider-failover notice this is a capability signal, not a
+ * context-window fidelity drop, so `contextWindowTokens` is 0 and per-agent
+ * duplicates fold to one entry.
+ */
+export function buildRuleContextUnavailableWarning(params: {
+    skippedRuleTitles: string[];
+    modelName: string;
+    agentName?: string;
+}): ReviewWarning {
+    const titles = params.skippedRuleTitles.join(', ');
+    return {
+        kind: 'RULE_CONTEXT_UNAVAILABLE',
+        reason: 'lookup_unavailable',
+        contextWindowTokens: 0,
+        modelName: params.modelName,
+        detail: `${params.skippedRuleTitles.length} Kody Rule(s) were not evaluated because the repository context they need could not be retrieved: ${titles}`,
+        ruleTitles: [...params.skippedRuleTitles],
+        agentName: params.agentName,
+    };
+}
+
+/**
+ * An agent that degrades so badly it cannot report a result still has something
+ * the PR must say. `Promise.allSettled` keeps only a fulfilled agent's
+ * `warnings`, so a thrown agent used to lose them: the Kody Rules all-skipped
+ * escalation named every skipped rule in its message, and that message is
+ * rendered only for a FAILED review — kody-rules is not critical, so the review
+ * is partial and the names never reached the PR (Verifier round 2, gap 2).
+ * Carrying them on the error lets the orchestrator harvest them on rejection,
+ * so the escalation and the notice say the same thing.
+ */
+export class AgentDegradedError extends Error {
+    constructor(
+        message: string,
+        readonly warnings: ReviewWarning[],
+    ) {
+        super(message);
+        this.name = 'AgentDegradedError';
+    }
+}
+
+/** The warnings an agent attached to whatever it threw, if any. */
+export function warningsFromError(err: unknown): ReviewWarning[] {
+    const carried = (err as { warnings?: unknown } | null)?.warnings;
+    return Array.isArray(carried) ? (carried as ReviewWarning[]) : [];
 }

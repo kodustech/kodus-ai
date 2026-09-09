@@ -1,5 +1,4 @@
 import type { ContextLayer, ContextPack } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
-import { LLMModelProvider } from '@libs/llm/model-providers';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
@@ -178,6 +177,14 @@ export type CodeSuggestion = {
     updatedAt?: string;
     action?: string;
 
+    /**
+     * The finding is about the whole file, not a line inside the diff: it comes
+     * from a Kody Rule that declared it needs context beyond the hunk, and its
+     * cited lines fall outside every changed hunk (issue #1826). Delivered as a
+     * PR-level comment citing `file:line` instead of an inline one, which is
+     * where a rule like "this function is too long" has always died silently.
+     */
+    fileAnchored?: boolean;
     isCommittable?: boolean;
     validatedData?: {
         code: string;
@@ -319,7 +326,6 @@ export type CodeReviewConfig = {
     reviewCadence: ReviewCadence;
     summary: SummaryConfig;
     languageResultPrompt: string;
-    llmProvider?: LLMModelProvider;
     kodyRules?: Partial<IKodyRule>[];
     kodyMemoryRules?: Partial<IKodyRule>[];
     suggestionControl?: SuggestionControlConfig;
@@ -450,12 +456,12 @@ export type LinkedRepositoryConfig = {
 
 export type CodeReviewConfigWithoutLLMProvider = Omit<
     CodeReviewConfig,
-    'llmProvider' | 'languageResultPrompt'
+    'languageResultPrompt'
 >;
 
 export type CodeReviewConfigWithRepositoryInfo = Omit<
     CodeReviewConfig,
-    'llmProvider' | 'languageResultPrompt'
+    'languageResultPrompt'
 > & {
     id: string;
     name: string;
@@ -464,7 +470,7 @@ export type CodeReviewConfigWithRepositoryInfo = Omit<
 
 // Omit every configuration that isn't present on the kodus configuration file.
 export type KodusConfigFile = DeepPartial<
-    Omit<CodeReviewConfig, 'llmProvider' | 'languageResultPrompt' | 'kodyRules'>
+    Omit<CodeReviewConfig, 'languageResultPrompt' | 'kodyRules'>
 > & {
     version: string;
     customMessages?: Pick<

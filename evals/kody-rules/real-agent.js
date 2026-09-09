@@ -125,7 +125,21 @@ class ReplayRemoteCommands {
 
 function buildProvider() {
     const { KodyRulesAgentProvider } = require(path.join(__dirname, '../../libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider.ts'));
-    const permissionValidationService = { getBYOKConfig: async () => null };
+    // The provider routes its model through `permissionService.resolveTaskSlot`
+    // (the single task->slot entry point, model-factory.ts:76). This stub used
+    // to expose only `getBYOKConfig`, which the BYOK refactor replaced — so
+    // every case died with "resolveTaskSlot is not a function" and the eval
+    // reported 0/0 sites. It did NOT silently pass (the INFRA guard caught it),
+    // but the gate had been un-runnable since that refactor.
+    //
+    // Returning `null` is the honest stub: it is exactly the "no BYOK / managed
+    // verdict" answer the real service gives, which degrades to the env default
+    // — which is how the eval is meant to drive the model (API_LLM_PROVIDER_MODEL
+    // + API_OPEN_AI_API_KEY, see the header).
+    const permissionValidationService = {
+        resolveTaskSlot: async () => null,
+        getBYOKConfig: async () => null,
+    };
     const observabilityService = {
         runInSpan: async (_n, fn) => (typeof fn === 'function' ? fn() : undefined),
         runLLMInSpan: async ({ exec }) => exec([]),
@@ -142,7 +156,15 @@ function buildProvider() {
             global.__EVAL_TOK.cacheWrite += u.cacheWriteTokens ?? 0;
         },
     };
-    return new KodyRulesAgentProvider({}, permissionValidationService, observabilityService);
+    // Positional, and the positions moved: the constructor is
+    // (permissionValidationService, observabilityService, ...). This call passed
+    // a leading `{}` from an older signature, so the permission service landed
+    // in the observability slot and `permissionService.resolveTaskSlot` was
+    // called on `{}` — every case threw and the run reported 0/0 sites.
+    return new KodyRulesAgentProvider(
+        permissionValidationService,
+        observabilityService,
+    );
 }
 
 // Normalize a real-diff case into the pieces the runner needs: the changedFiles
@@ -182,6 +204,18 @@ function caseTargets(c) {
 
 async function runCase(provider, c, changedFiles, replay) {
     const remoteCommands = new ReplayRemoteCommands(replay);
+    // Issue #1826 step 1 loads each changed file whole, and it does that ONLY
+    // when `repoLookup.available`. Handing the provider `remoteCommands` alone
+    // leaves the lookup at its fail-closed default, so the eval would measure a
+    // pipeline with step 1 switched off — and report a number for a feature it
+    // never exercised, which is worse than not measuring it.
+    //
+    // The replay already carries the real file bodies at the PR head (the
+    // `readFile` fixtures the harvester fetched), so this is the same content
+    // production would read from the sandbox, not a stand-in. Any `type` other
+    // than 'null' means available; the lookup only ever touches remoteCommands.
+    const { buildRepoLookup } = require(path.join(__dirname, '../../libs/code-review/infrastructure/agents/collaborators/repo-lookup.ts'));
+    const repoLookup = buildRepoLookup({ type: 'eval-replay', remoteCommands });
     // v2 cases carry their full rule set; v1 keeps the single-rule (or
     // --all-rules) behavior.
     const rulesForRun = c.rules ? c.rules : (ALL_RULES ? UNIQUE_RULES : [c.rule]);
@@ -189,6 +223,7 @@ async function runCase(provider, c, changedFiles, replay) {
         organizationAndTeamData: { organizationId: 'eval-org', teamId: 'eval-team' },
         changedFiles,
         remoteCommands,
+        repoLookup,
         prNumber: 1,
         repositoryId: 'eval-repo',
         repositoryFullName: 'eval/repo',

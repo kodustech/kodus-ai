@@ -55,6 +55,13 @@ const TIER0 = {
     // Kimi k2.7-code served via NOVITA (openai_compatible transport) — the host
     // an org may pick instead of Moonshot-native. Different wrapping than the
     // Anthropic-protocol Moonshot endpoint, useful for the return-shape corpus.
+    // Fireworks route for the fleet's kimi. The Novita key is AUTH_INVALID and
+    // Moonshot direct was unreachable, so this is how the #1826 measurement
+    // reaches a real fleet model. Fireworks is on the strict-json_schema
+    // allowlist in structured-output-gate.ts, so the shard's wire schema is
+    // honored here exactly as in production rather than degrading to
+    // json_object — which is what makes the number comparable.
+    'kimi-k2.7-code@fireworks': { provider: 'openai_compatible', doModel: 'accounts/fireworks/models/kimi-k2p7-code', keyEnvs: ['API_FIREWORKS_API_KEY', 'FIREWORKS_API_KEY'], baseURL: 'https://api.fireworks.ai/inference/v1' },
     'kimi-k2.7-code@novita': { provider: 'openai_compatible', doModel: 'moonshotai/kimi-k2.7-code', keyEnvs: ['API_NOVITA_AI_API_KEY'], baseURL: 'https://api.novita.ai/v3/openai' },
 
     // NVIDIA NIM (integrate.api.nvidia.com) — gateway OpenAI-compatible. Usado

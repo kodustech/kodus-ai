@@ -20,6 +20,7 @@ import {
     FileChange,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
+import type { RepoLookup } from '@libs/code-review/infrastructure/agents/collaborators/repo-lookup';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import type { TraceContextDecision } from '@libs/cli-review/domain/types/trace-context.types';
 
@@ -124,6 +125,20 @@ export interface ToolingContext {
      * is no sandbox available.
      */
     remoteCommands: RemoteCommands | undefined;
+    /**
+     * Repository lookup WITH an explicit capability signal (issue #1826).
+     *
+     * `remoteCommands` cannot answer "can I look?": the null sandbox implements
+     * it and returns '' successfully, so a consumer reads silence as evidence.
+     * `repoLookup.available` is that missing signal, derived from the sandbox
+     * handle's own `type`, and every accessor throws rather than answering
+     * empty when it is false.
+     *
+     * Absent means the same thing as unavailable — a consumer must fail closed,
+     * never assume a lookup it was not given. `buildOrchestratorInput` always
+     * populates it, including for a null sandbox.
+     */
+    repoLookup?: RepoLookup;
     gitHubToken?: string;
     /** Pre-computed call graph for changed functions. Generated once, shared across agents. */
     callGraph?: string;

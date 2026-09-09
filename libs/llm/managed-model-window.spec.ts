@@ -10,7 +10,6 @@
  * 64k default — including models that hold a million tokens.
  */
 import { managedModelMaxInputTokens } from './managed-model-window';
-import { LLMModelProvider } from './model-providers';
 
 describe('managedModelMaxInputTokens', () => {
     it('resolves the managed Gemini window, stripping our vendor prefix', () => {
@@ -18,7 +17,7 @@ describe('managedModelMaxInputTokens', () => {
         // hand-typed and already stale, and the BYOK path had the right one all
         // along. That disagreement is what this change removes.
         expect(
-            managedModelMaxInputTokens(LLMModelProvider.GEMINI_2_5_PRO),
+            managedModelMaxInputTokens('google:gemini-2.5-pro'),
         ).toBe(1_048_576);
         expect(managedModelMaxInputTokens('google:gemini-2.5-pro')).toBe(
             1_048_576,
@@ -28,7 +27,7 @@ describe('managedModelMaxInputTokens', () => {
     it('resolves the Gemini 3.1 flash-lite window', () => {
         expect(
             managedModelMaxInputTokens(
-                LLMModelProvider.GEMINI_3_1_FLASH_LITE_PREVIEW,
+                'google:gemini-3.1-flash-lite-preview',
             ),
         ).toBe(1_048_576);
     });
@@ -36,7 +35,7 @@ describe('managedModelMaxInputTokens', () => {
     it('resolves the legacy Claude-on-Vertex window (vertex → google_vertex)', () => {
         expect(
             managedModelMaxInputTokens(
-                LLMModelProvider.VERTEX_CLAUDE_3_5_SONNET,
+                'vertex:claude-3-5-sonnet-v2@20241022',
             ),
         ).toBe(200_000);
     });
@@ -46,7 +45,7 @@ describe('managedModelMaxInputTokens', () => {
         // but because nobody had typed it into the registry. It holds 1,048,576,
         // and the managed chunker was budgeting 64k for it.
         expect(
-            managedModelMaxInputTokens(LLMModelProvider.GEMINI_2_0_FLASH),
+            managedModelMaxInputTokens('google:gemini-2.0-flash'),
         ).toBe(1_048_576);
     });
 

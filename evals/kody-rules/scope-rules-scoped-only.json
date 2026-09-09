@@ -1,0 +1,51 @@
+{
+  "__doc": [
+    "Scoped-only variant: no language-agnostic rule, so the shard COUNT can move."
+  ],
+  "rules": [
+    {
+      "uuid": "scope-ruby-service",
+      "title": "Keep business logic out of Rails controllers",
+      "rule": "In our Ruby on Rails controllers, actions must not contain business logic. Move it into a service object or a model method and have the action call it.",
+      "language": "ruby",
+      "extensions": [
+        ".rb",
+        ".rake",
+        ".gemspec",
+        ".ru",
+        ".erb"
+      ]
+    },
+    {
+      "uuid": "scope-scss-tokens",
+      "title": "Use design tokens, never raw colour literals",
+      "rule": "In our stylesheets, never hardcode a colour value. Reference the design-token variable instead so a theme change lands everywhere at once.",
+      "language": "css",
+      "extensions": [
+        ".css",
+        ".scss",
+        ".sass",
+        ".less"
+      ]
+    },
+    {
+      "uuid": "scope-yaml-secrets",
+      "title": "No inline secrets in configuration",
+      "rule": "Our YAML configuration must not carry a literal credential, token or password. Reference an environment variable or the secret store.",
+      "language": "yaml",
+      "extensions": [
+        ".yml",
+        ".yaml"
+      ]
+    },
+    {
+      "uuid": "scope-vue-props",
+      "title": "Vue props must declare a type and a default",
+      "rule": "Every prop on a Vue single-file component declares an explicit type and, unless it is required, a default value.",
+      "language": "vue",
+      "extensions": [
+        ".vue"
+      ]
+    }
+  ]
+}

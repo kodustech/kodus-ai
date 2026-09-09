@@ -11,6 +11,7 @@ import { PULL_REQUESTS_SERVICE_TOKEN } from '@/platformData/domain/pullRequests/
 import { COMMENT_MANAGER_SERVICE_TOKEN } from '@/code-review/domain/contracts/CommentManagerService.contract';
 import { CodeManagementService } from '@/platform/infrastructure/adapters/services/codeManagement.service';
 import { CacheService } from '@libs/core/cache/cache.service';
+import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import {
     ClusteringType,
     CodeSuggestion,
@@ -48,6 +49,10 @@ describe('Map-based Lookup Optimizations - Integration Tests', () => {
         markReviewCommentAsResolved: jest.fn(),
     };
 
+    const mockPermissionValidationService = {
+        resolveTaskSlot: jest.fn().mockResolvedValue(undefined),
+    };
+
     beforeEach(async () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -74,6 +79,10 @@ describe('Map-based Lookup Optimizations - Integration Tests', () => {
                         getFromCache: jest.fn(),
                         addToCache: jest.fn(),
                     },
+                },
+                {
+                    provide: PermissionValidationService,
+                    useValue: mockPermissionValidationService,
                 },
             ],
         }).compile();
