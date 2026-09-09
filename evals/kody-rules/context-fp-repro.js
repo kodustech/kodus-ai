@@ -54,7 +54,7 @@ const OUT = args.out || 'BASELINE-1826.txt';
 // that depends on how the repository actually answers.
 const SANDBOX = args.sandbox || '';
 
-const { judgeKodyRulesSharded, shardViolationsWireSchema, ruleAppliesToFile } = require('@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge');
+const { judgeKodyRulesSharded, shardViolationsWireSchema, ruleAppliesToFile, FILE_CONTENT_MAX_LINES } = require('@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge');
 const { checkClaims } = require('@libs/code-review/infrastructure/agents/collaborators/claim-checker');
 const { retrieveForShard, needOf } = require('@libs/code-review/infrastructure/agents/collaborators/rule-context.retriever');
 const { LLM } = require('@libs/llm/llm');
@@ -215,6 +215,25 @@ async function runCase(c) {
     try {
     const changedFilenames = c.changedFiles.map((f) => f.filename);
 
+    // Step 1 of the provider's sequence, and the one this harness used to skip:
+    // the shard carries its file WHOLE, unconditionally, with no contextNeed
+    // gate. Leaving it out measured a prompt production never sends — and it
+    // is the block this issue is mostly about, so its absence biased every
+    // full-file number taken before this.
+    const fileContents = new Map();
+    if (lookup.available) {
+        for (const file of c.changedFiles) {
+            if (file.status === 'added' || file.status === 'removed') continue;
+            if (!ruleAppliesToFile(file.filename, c.rule.path)) continue;
+            try {
+                const text = await lookup.read(file.filename, 1, FILE_CONTENT_MAX_LINES);
+                if (text && text.trim()) fileContents.set(file.filename, text);
+            } catch (err) {
+                logger.warn({ message: `could not read ${file.filename}: ${err.message}` });
+            }
+        }
+    }
+
     const contextSlices = new Map();
     const unmetRules = new Map();
     if (needOf(c.rule) !== 'diff-only') {
@@ -222,6 +241,7 @@ async function runCase(c) {
             if (!ruleAppliesToFile(file.filename, c.rule.path)) continue;
             const retrieved = await retrieveForShard({
                 file, rules: [c.rule], lookup, changedFilenames, logger,
+                wholeFileAlreadyOnPage: fileContents.has(file.filename),
             });
             if (retrieved.slices.length) contextSlices.set(file.filename, retrieved.slices);
             if (retrieved.unmet.length) {
@@ -240,6 +260,7 @@ async function runCase(c) {
         logger,
         contextSlices,
         unmetRules,
+        fileContents,
     });
 
     const checked = await checkClaims({
@@ -264,7 +285,11 @@ async function runCase(c) {
     }
     const published = [...unkeyed, ...byRule.values()];
 
-    return { ...result, violations: published, kept: checked.kept.length, dropped: checked.dropped, judged: result.violations.length };
+    return { ...result, violations: published, kept: checked.kept.length, dropped: checked.dropped, judged: result.violations.length,
+        // What the harness actually PUT ON THE PAGE. Reported because the
+        // absence of this number is what let the whole-file block go missing
+        // from every measurement without anyone noticing.
+        sentWholeFile: fileContents.size, sentSlices: contextSlices.size };
     } finally {
         await real?.dispose();
     }
@@ -319,7 +344,7 @@ const say = (line = '') => { out.push(line); console.log(line); };
             total++;
             if (published.length > c.expectedPublished) undue++;
             else if (published.length < c.expectedPublished) missed++;
-            say(`   rep ${rep}: published ${published.length} (expected ${c.expectedPublished})  judged ${result.judged}, claim-check dropped ${result.dropped.length}, kept ${result.kept} → ${published.length} after rule-dedup  shards ${result.shardsRun} run / ${result.shardsErrored} errored`);
+            say(`   rep ${rep}: published ${published.length} (expected ${c.expectedPublished})  judged ${result.judged}, claim-check dropped ${result.dropped.length}, kept ${result.kept} → ${published.length} after rule-dedup  shards ${result.shardsRun} run / ${result.shardsErrored} errored  SENT whole-file:${result.sentWholeFile} slices:${result.sentSlices}`);
             for (const v of published) {
                 say(`      ${v.relevantFile ?? '(PR)'}:${v.relevantLinesStart ?? '-'}  ${String(v.oneSentenceSummary || '').slice(0, 110)}`);
             }

@@ -35,6 +35,10 @@ import {
 // value import back would close a runtime require cycle.
 import type { DetectorHitIndex } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler';
 import type { RetrievedSlice } from '@libs/code-review/infrastructure/agents/collaborators/rule-context.retriever';
+// Value import, and safe: rule-context.retriever imports nothing from this
+// module, so this edge does not close a require cycle the way the compiler's
+// would.
+import { needOf } from '@libs/code-review/infrastructure/agents/collaborators/rule-context.retriever';
 
 /**
  * Parser schema for a shard's JSON output. The provider passes this to
@@ -506,7 +510,34 @@ export const FILE_CONTENT_MAX_LINES = 4000;
  * Returns [] when there is no content, so a shard without it keeps a
  * byte-identical prompt to before this existed.
  */
-function fileContentLines(file: FileChange, content?: string): string[] {
+/**
+ * What the whole file is FOR, in the two mutually exclusive readings a shard
+ * can have. Exactly one of these closes the `<FileContent>` block.
+ *
+ * They are opposites, and before #1826 the prompt could carry BOTH at once:
+ * the restrictive one inside `<FileContent>` (unconditional, from step 1) and
+ * the permissive one inside `<Context>` (from a retrieved `full-file` slice).
+ * A model told "never report a violation whose evidence lies outside the diff"
+ * and, four blocks later, "the evidence for such a violation may well sit
+ * outside the hunk — report it" is being asked to pick, and the measurement
+ * showed it picking silence.
+ */
+const WHOLE_FILE_CONTEXT_ONLY = `Use this to decide whether the ADDED lines break the rules — for example whether a symbol the diff introduces is used elsewhere in this file. These lines are NOT part of this pull request: never report a violation whose evidence lies outside the diff hunks, however wrong those lines look.`;
+
+export const WHOLE_FILE_JUDGED_AS_A_WHOLE = `The file content above is the REST OF THE FILE this diff edits — the same functions and classes, not another author's code. A rule about a property of a whole function, class or file (how long it is, a block repeated inside it, whether something declared here is used further down) is judged against ALL of it, so the evidence for such a violation may well sit outside the hunk. When one holds, report it and anchor it on a line this PR ADDED. Do NOT raise separate findings about pre-existing lines the PR did not touch.`;
+
+function fileContentLines(
+    file: FileChange,
+    content: string | undefined,
+    /**
+     * True when a rule in this shard declared `full-file`. It changes nothing
+     * about WHAT is on the page — the file is here either way, unconditionally
+     * — only what the shard is allowed to conclude from it. That is the whole
+     * job `full-file` does once the file is already present: it authorizes,
+     * it does not fetch.
+     */
+    judgedAsAWhole: boolean,
+): string[] {
     const text = content?.trim();
     if (!text || text.length > FILE_CONTENT_BUDGET_CHARS) return [];
     return [
@@ -515,7 +546,7 @@ function fileContentLines(file: FileChange, content?: string): string[] {
         '```',
         text,
         '```',
-        `Use this to decide whether the ADDED lines break the rules — for example whether a symbol the diff introduces is used elsewhere in this file. These lines are NOT part of this pull request: never report a violation whose evidence lies outside the diff hunks, however wrong those lines look.`,
+        judgedAsAWhole ? WHOLE_FILE_JUDGED_AS_A_WHOLE : WHOLE_FILE_CONTEXT_ONLY,
         `</FileContent>`,
         ``,
     ];
@@ -574,9 +605,11 @@ function contextLines(
 
     const closing: string[] = [];
     if (hasWholeFile) {
-        closing.push(
-            `The file content above is the REST OF THE FILE this diff edits — the same functions and classes, not another author's code. A rule about a property of a whole function, class or file (how long it is, a block repeated inside it, whether something declared here is used further down) is judged against ALL of it, so the evidence for such a violation may well sit outside the hunk. When one holds, report it and anchor it on a line this PR ADDED. Do NOT raise separate findings about pre-existing lines the PR did not touch.`,
-        );
+        // Reached only on the fallback path: step 1 could not put the file on
+        // the page (over FILE_CONTENT_BUDGET_CHARS, or unreadable), so the
+        // retriever narrowed to the scope around each hunk and THAT is the
+        // whole-file evidence this shard has.
+        closing.push(WHOLE_FILE_JUDGED_AS_A_WHOLE);
     }
     if (hasExternal) {
         closing.push(
@@ -616,7 +649,16 @@ function fileShardUser(
         ...intentLines(prTitle, prBody),
         // The whole file BEFORE the diff: the reader needs the world before
         // the change to it.
-        ...fileContentLines(file, fileContents?.get(file.filename)),
+        //
+        // `full-file` is read here as an AUTHORIZATION, not a request for
+        // content. The file arrives unconditionally from step 1, so a rule
+        // declaring the need adds no bytes to this prompt — it only decides
+        // which of the two closing instructions the block carries.
+        ...fileContentLines(
+            file,
+            fileContents?.get(file.filename),
+            rules.some((rule) => needOf(rule) === 'full-file'),
+        ),
         `<File path="${file.filename}">`,
         `Each diff line is prefixed with its file line number; '+' marks a line ADDED by this PR.`,
         '```diff',

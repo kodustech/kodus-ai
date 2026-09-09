@@ -66,6 +66,8 @@ import {
     FindMemoriesResult,
     IKodyRule,
     IKodyRuleContextNeed,
+    IKodyRuleFileScope,
+    IKodyRuleCompileAttempt,
     IKodyRuleDetector,
     IKodyRuleMemory,
     IKodyRules,
@@ -572,6 +574,12 @@ export class KodyRulesService implements IKodyRulesService {
                 // — MCP, library import, the sync flows — hand this method
                 // plain rule objects that can carry an author's value.
                 contextNeed: (kodyRule as Partial<IKodyRule>)?.contextNeed,
+                // Same reason, same failure mode: dropping the inferred
+                // language scope here would un-narrow the rule at the next
+                // edit and nothing anywhere would say so.
+                fileScope: (kodyRule as Partial<IKodyRule>)?.fileScope,
+                compileAttempt: (kodyRule as Partial<IKodyRule>)
+                    ?.compileAttempt,
                 origin: kodyRule?.origin ?? KodyRulesOrigin.MANUAL,
                 scope: kodyRule?.scope ?? KodyRulesScope.FILE,
                 inheritance: {
@@ -666,6 +674,12 @@ export class KodyRulesService implements IKodyRulesService {
                 // — MCP, library import, the sync flows — hand this method
                 // plain rule objects that can carry an author's value.
                 contextNeed: (kodyRule as Partial<IKodyRule>)?.contextNeed,
+                // Same reason, same failure mode: dropping the inferred
+                // language scope here would un-narrow the rule at the next
+                // edit and nothing anywhere would say so.
+                fileScope: (kodyRule as Partial<IKodyRule>)?.fileScope,
+                compileAttempt: (kodyRule as Partial<IKodyRule>)
+                    ?.compileAttempt,
                 origin: kodyRule?.origin ?? KodyRulesOrigin.MANUAL,
                 scope: kodyRule?.scope ?? KodyRulesScope.FILE,
                 inheritance: {
@@ -1110,6 +1124,121 @@ export class KodyRulesService implements IKodyRulesService {
 
         const updated = updatedKodyRules.rules.find((r) => r.uuid === ruleId);
         return updated ? (updated as IKodyRule) : null;
+    }
+
+    /**
+     * Write the rule's inferred language scope (issue #1826).
+     *
+     * Same contract as `updateRuleContextNeed`: `null` passes through to clear
+     * a stale value, and an author-sourced scope is never overwritten by an
+     * inferred one. Kept as its own method rather than folded into that one
+     * because the two are independent — a rule can go stale on its scope while
+     * its context need is still correct, and vice versa.
+     */
+    async updateRuleFileScope(
+        organizationId: string,
+        ruleId: string,
+        fileScope: IKodyRuleFileScope | null,
+    ): Promise<IKodyRule | null> {
+        const existing = await this.findByOrganizationId(organizationId);
+        if (!existing) {
+            throw new NotFoundException(
+                'Kody rules not found for organization',
+            );
+        }
+
+        const existingRule = existing.rules?.find((r) => r.uuid === ruleId);
+        if (!existingRule) {
+            throw new NotFoundException('Rule not found');
+        }
+
+        if (
+            existingRule.fileScope?.source === 'author' &&
+            fileScope?.source !== 'author'
+        ) {
+            return existingRule as IKodyRule;
+        }
+
+        const updatedRule = {
+            ...existingRule,
+            // `null` passes through as-is (updateRule skips only `undefined`),
+            // so an edited rule that no longer names a language gets its scope
+            // CLEARED instead of keeping a narrowing nobody can see.
+            fileScope: fileScope,
+            updatedAt: new Date(),
+        } as IKodyRule;
+
+        const updatedKodyRules = await this.updateRule(
+            existing.uuid,
+            ruleId,
+            updatedRule,
+        );
+
+        if (!updatedKodyRules) {
+            this.logger.error({
+                message: 'Could not update rule file scope',
+                error: new Error('Could not update rule file scope'),
+                context: KodyRulesService.name,
+                metadata: { organizationId, ruleId },
+            });
+            throw new Error('Could not update rule file scope');
+        }
+
+        const updatedFileScopeRule = updatedKodyRules.rules.find(
+            (r) => r.uuid === ruleId,
+        );
+        return updatedFileScopeRule ? (updatedFileScopeRule as IKodyRule) : null;
+    }
+
+    /**
+     * Record a compiler attempt. Simpler than its two siblings on purpose:
+     * there is no author-owned variant to protect, because an attempt is a fact
+     * about what the system did, not a preference about the rule. `null` clears
+     * it and forces a recompile on the next sweep.
+     */
+    async updateRuleCompileAttempt(
+        organizationId: string,
+        ruleId: string,
+        compileAttempt: IKodyRuleCompileAttempt | null,
+    ): Promise<IKodyRule | null> {
+        const existing = await this.findByOrganizationId(organizationId);
+        if (!existing) {
+            throw new NotFoundException(
+                'Kody rules not found for organization',
+            );
+        }
+
+        const existingRule = existing.rules?.find((r) => r.uuid === ruleId);
+        if (!existingRule) {
+            throw new NotFoundException('Rule not found');
+        }
+
+        const updatedRule = {
+            ...existingRule,
+            compileAttempt: compileAttempt,
+            updatedAt: new Date(),
+        } as IKodyRule;
+
+        const updatedKodyRules = await this.updateRule(
+            existing.uuid,
+            ruleId,
+            updatedRule,
+        );
+
+        if (!updatedKodyRules) {
+            this.logger.error({
+                message: 'Could not update rule compile attempt',
+                error: new Error('Could not update rule compile attempt'),
+                context: KodyRulesService.name,
+                metadata: { organizationId, ruleId },
+            });
+            throw new Error('Could not update rule compile attempt');
+        }
+
+        const updatedAttemptRule = updatedKodyRules.rules.find(
+            (r) => r.uuid === ruleId,
+        );
+        return updatedAttemptRule ? (updatedAttemptRule as IKodyRule) : null;
     }
 
     async updateRuleWithLogging(

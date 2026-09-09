@@ -9,6 +9,8 @@ import {
     CliSessionDecisionType,
 } from '@libs/cli-review/domain/types/cli-session-capture.types';
 import { CliSessionCaptureRepository } from '@libs/cli-review/infrastructure/repositories/cli-session-capture.repository';
+import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
+import { LLM_TASK } from '@libs/llm/byok-config';
 
 const LLMDecisionSchema = z.object({
     type: z.enum([
@@ -39,6 +41,7 @@ export class ClassifyCliSessionCaptureUseCase {
     constructor(
         private readonly cliSessionCaptureRepository: CliSessionCaptureRepository,
         private readonly observabilityService: ObservabilityService,
+        private readonly permissionValidationService: PermissionValidationService,
     ) {}
 
     async execute(captureId: string): Promise<void> {
@@ -126,6 +129,7 @@ export class ClassifyCliSessionCaptureUseCase {
 
     private async extractWithLLM(capture: {
         organizationId?: string;
+        teamId?: string;
         summary?: string;
         signals?: {
             prompt?: string;
@@ -173,21 +177,31 @@ export class ClassifyCliSessionCaptureUseCase {
             toolUses: capture.signals?.toolUses || [],
         };
 
-        // Migrated off the legacy LangChain BYOKPromptRunner path onto the
-        // AI SDK path (REQ-NOLC-01), mirroring the tracer (03-01). byokConfig is
-        // undefined here → runStructuredReviewCall resolves the managed review
-        // default; the previous GEMINI_3_FLASH_PREVIEW pin is
-        // intentionally dropped (per-task model routing is Phase 4).
-        // runStructuredReviewCall owns the single observability span path (Q4).
-        // setTemperature(0) is likewise dropped (not threaded by
-        // runStructuredReviewCall). Parity is on the parsed decisions[] mapping.
+        // Migrated off the legacy LangChain BYOKPromptRunner path onto the AI
+        // SDK path (REQ-NOLC-01), mirroring the tracer (03-01). Routed through
+        // the org's own BYOK slot for LLM_TASK.prSummary (falls back to the
+        // managed default when the org has none) — this used to hardcode
+        // `byokConfig: undefined` regardless of BYOK, a leftover of the
+        // migration off LangChain. prSummary is reused rather than a dedicated
+        // task: same "structured extraction over a session/PR" workload as the
+        // module's other prSummary callers (public-pr-ai-summary/
+        // public-pr-grouping), not a primary review workload like
+        // codeReview/kodyRulesReview. runStructuredReviewCall owns the single
+        // observability span path (Q4). setTemperature(0) is likewise dropped
+        // (not threaded by runStructuredReviewCall). Parity is on the parsed
+        // decisions[] mapping.
+        const byokConfig = await this.permissionValidationService.resolveTaskSlot(
+            { organizationId: capture.organizationId, teamId: capture.teamId },
+            LLM_TASK.prSummary,
+        );
+
         const result = await LLM.run({
             schema: LLMDecisionExtractionSchema,
             system: prompt,
             user: JSON.stringify(userPayload),
             runName: 'ClassifyCliSessionCaptureUseCase::classifyCliSessionCapture',
             organizationId: capture.organizationId,
-            byokConfig: undefined,
+            byokConfig,
         });
 
         const rawDecisions = result?.decisions ?? [];

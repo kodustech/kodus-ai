@@ -25,6 +25,7 @@ const svc = () =>
         {} as any,
         {} as any,
         {} as any,
+        {} as any,
     ) as any;
 
 describe('SuggestionService — pure logic', () => {

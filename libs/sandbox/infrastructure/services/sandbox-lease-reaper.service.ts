@@ -83,6 +83,17 @@ export class SandboxLeaseReaperService {
                         await this.cleanupLocalLease(lease, false);
                         return;
                     }
+
+                    // Only delete the lease doc when the sandbox is actually
+                    // gone (kill succeeded, or E2B already reports it gone) —
+                    // or when there was never anything to kill. A REAL kill
+                    // failure (timeout, upstream error, etc.) must NOT delete
+                    // the doc: expiresAt is already in the past, so leaving
+                    // it in place means the next 5min tick retries the kill
+                    // instead of permanently orphaning the E2B sandbox with
+                    // no remaining Mongo trace to reconcile against.
+                    let sandboxGone = true;
+
                     if (
                         lease.sandboxId &&
                         lease.state !== 'INVALIDATED' &&
@@ -101,9 +112,10 @@ export class SandboxLeaseReaperService {
                                     },
                                 });
                             } else {
+                                sandboxGone = false;
                                 this.logger.warn({
                                     message:
-                                        '[SANDBOX-REAPER] Failed to kill sandbox — continuing',
+                                        '[SANDBOX-REAPER] Failed to kill sandbox — leaving lease for retry next tick',
                                     context: SandboxLeaseReaperService.name,
                                     metadata: {
                                         sandboxId: lease.sandboxId,
@@ -112,6 +124,10 @@ export class SandboxLeaseReaperService {
                                 });
                             }
                         }
+                    }
+
+                    if (!sandboxGone) {
+                        return;
                     }
 
                     await this.leaseRepository.delete(lease._id);
@@ -170,6 +186,14 @@ export class SandboxLeaseReaperService {
                         await this.cleanupLocalLease(lease, true);
                         return;
                     }
+
+                    // Same rationale as reapExpiredLeases: only delete the
+                    // lease doc once the sandbox is confirmed gone. A real
+                    // kill failure leaves killAt untouched (still <= now), so
+                    // the next 30s tick retries instead of orphaning the E2B
+                    // sandbox with no lease left to reconcile against.
+                    let sandboxGone = true;
+
                     if (lease.sandboxId && apiKey) {
                         try {
                             await Sandbox.kill(lease.sandboxId, { apiKey });
@@ -184,9 +208,10 @@ export class SandboxLeaseReaperService {
                                     },
                                 });
                             } else {
+                                sandboxGone = false;
                                 this.logger.warn({
                                     message:
-                                        '[SANDBOX-IDLE-KILL] Failed to kill sandbox — continuing',
+                                        '[SANDBOX-IDLE-KILL] Failed to kill sandbox — leaving lease for retry next tick',
                                     context: SandboxLeaseReaperService.name,
                                     metadata: {
                                         sandboxId: lease.sandboxId,
@@ -195,6 +220,10 @@ export class SandboxLeaseReaperService {
                                 });
                             }
                         }
+                    }
+
+                    if (!sandboxGone) {
+                        return;
                     }
 
                     await this.leaseRepository.delete(lease._id);

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { LLM } from '@libs/llm/llm';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { llmErrorLogLevel } from '@libs/llm/error-classifier';
 import { createLogger } from '@libs/core/log/logger';
 import {
@@ -33,18 +34,18 @@ export class SuggestionLLMValidator {
         },
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
+        byokConfig?: NormalizedModel,
     ): Promise<ValidateCodeSemanticsResult | null> {
         const runName = `${SuggestionLLMValidator.name}::validateWithLLM`;
 
         try {
             // Migrated off the legacy LangChain PromptRunner path onto the
-            // AI SDK path (REQ-NOLC-01). byokConfig is undefined here →
-            // runStructuredReviewCall resolves the managed review default; the
-            // previous GROQ_GPT_OSS_120B/OPENAI_GPT_4O_MINI provider pin is
-            // intentionally dropped (RESEARCH Pattern 1 — consolidation to the
-            // managed default; per-task routing is Phase 4). The outer LangChain
-            // span wrapper is dropped — runStructuredReviewCall owns the single
-            // span path (Q4). setTemperature(0) is likewise dropped (not threaded).
+            // AI SDK path (REQ-NOLC-01). byokConfig is threaded from the pipeline's
+            // resolved model slot (falls back to the managed default when the org
+            // has none) — this used to hardcode `byokConfig: undefined` regardless
+            // of BYOK, a leftover of the migration off LangChain. The outer
+            // LangChain span wrapper is dropped — runStructuredReviewCall owns the
+            // single span path (Q4). setTemperature(0) is likewise dropped (not threaded).
             const result = await LLM.run({
                 schema: validateCodeSemanticsSchema,
                 system: '',
@@ -56,7 +57,7 @@ export class SuggestionLLMValidator {
                     filePath: payload.filePath,
                     teamId: organizationAndTeamData?.teamId,
                 },
-                byokConfig: undefined,
+                byokConfig,
             });
 
             return result;
@@ -82,16 +83,18 @@ export class SuggestionLLMValidator {
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
         suggestion: Partial<CodeSuggestion>,
+        byokConfig?: NormalizedModel,
     ): Promise<{ isSimple: boolean; reason?: string }> {
         const runName = `${SuggestionLLMValidator.name}::checkSuggestionSimplicity`;
 
         try {
             // Migrated off the legacy LangChain PromptRunner path onto the
-            // AI SDK path (REQ-NOLC-01). byokConfig undefined → managed default;
-            // the previous GEMINI_2_5_FLASH/OPENAI_GPT_4O_MINI provider pin
-            // is intentionally dropped (RESEARCH Pattern 1 — consolidation; routing
-            // is Phase 4). Outer LangChain span wrapper dropped — one span path via
-            // runStructuredReviewCall (Q4). setTemperature(0) dropped (not threaded).
+            // AI SDK path (REQ-NOLC-01). byokConfig is threaded from the pipeline's
+            // resolved model slot (falls back to the managed default when the org
+            // has none) — this used to hardcode `byokConfig: undefined` regardless
+            // of BYOK, a leftover of the migration off LangChain. Outer LangChain
+            // span wrapper dropped — one span path via runStructuredReviewCall (Q4).
+            // setTemperature(0) dropped (not threaded).
             const result = await LLM.run({
                 schema: checkSuggestionSimplicitySchema,
                 system: prompt_checkSuggestionSimplicity_system(),
@@ -107,7 +110,7 @@ export class SuggestionLLMValidator {
                     teamId: organizationAndTeamData?.teamId,
                     suggestionId: suggestion.id,
                 },
-                byokConfig: undefined,
+                byokConfig,
             });
 
             if (!result) {

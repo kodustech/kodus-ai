@@ -1,18 +1,10 @@
-import { type ContextPack } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import { LLM } from '@libs/llm/llm';
 import { LLM_ERROR_TAG } from '@libs/llm/log-tags';
 import { createLogger } from '@libs/core/log/logger';
-import { LLMModelProvider } from '@libs/llm/model-providers';
-import { getModelName } from '@libs/llm/byok-to-vercel';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 
-import {
-    getAugmentationsFromPack,
-    getOverridesFromPack,
-} from '@libs/ai-engine/infrastructure/adapters/services/context/code-review-context.utils';
-import { ContextAugmentationsMap } from '@libs/ai-engine/infrastructure/adapters/services/context/interfaces/code-review-context-pack.interface';
 import { LLMResponseProcessor } from '@libs/ai-engine/infrastructure/adapters/services/llmResponseProcessor.transform';
 import { IAIAnalysisService } from '@libs/code-review/domain/contracts/AIAnalysisService.contract';
 import { CreateSandboxParams } from '@libs/sandbox/domain/contracts/sandbox.provider';
@@ -21,20 +13,10 @@ import {
     RemoteCommands,
 } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import { prompt_validateImplementedSuggestions } from '@libs/common/utils/prompts';
-import {
-    prompt_codereview_system_gemini,
-    prompt_codereview_system_gemini_v2,
-    prompt_codereview_user_gemini,
-    prompt_codereview_user_gemini_v2,
-} from '@libs/common/utils/prompts/configuration/codeReview';
 import { prompt_severity_analysis_user } from '@libs/common/utils/prompts/severityAnalysis';
 import {
-    AIAnalysisResult,
-    AnalysisContext,
     CodeSuggestion,
     DocumentationContextItem,
-    FileChange,
-    FileChangeContext,
     ISafeguardResponse,
     ReviewModeResponse,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
@@ -44,33 +26,6 @@ import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface
 import { SafeguardPipelineService } from './safeguardPipeline.service';
 
 export const LLM_ANALYSIS_SERVICE_TOKEN = Symbol.for('LLMAnalysisService');
-
-/**
- * Structured-output schema for the code-review analyzers. Mirrors the shape the
- * `prompt_codereview_*` prompts already declare in their Output Format section,
- * so migrating from the STRING/JSON parser to a structured call does not force
- * the model to fabricate fields. Optional fields match the prompt's optional
- * output (id/severity/rankScore/oneSentenceSummary/lines/llmPrompt).
- */
-export const codeReviewAnalysisSchema = z.object({
-    codeSuggestions: z.array(
-        z.object({
-            id: z.string().optional(),
-            relevantFile: z.string(),
-            language: z.string(),
-            suggestionContent: z.string(),
-            existingCode: z.string().optional(),
-            improvedCode: z.string(),
-            oneSentenceSummary: z.string().optional(),
-            relevantLinesStart: z.coerce.number().int().positive().optional(),
-            relevantLinesEnd: z.coerce.number().int().positive().optional(),
-            label: z.string(),
-            severity: z.string().optional(),
-            rankScore: z.number().optional(),
-            llmPrompt: z.string().optional(),
-        }),
-    ),
-});
 
 /**
  * Severity analyzer output — the `prompt_severity_analysis_user` prompt returns
@@ -116,281 +71,10 @@ export class LLMAnalysisService implements IAIAnalysisService {
     //#region Helper Functions
     //#endregion
 
-    //#region Analyze Code with AI
-    async analyzeCodeWithAI(
-        organizationAndTeamData: OrganizationAndTeamData,
-        prNumber: number,
-        fileContext: FileChangeContext,
-        reviewModeResponse: ReviewModeResponse,
-        context: AnalysisContext,
-    ): Promise<AIAnalysisResult> {
-        const provider = LLMModelProvider.GEMINI_2_5_PRO;
-        const runName = 'analyzeCodeWithAI';
-
-        const baseContext = await this.prepareAnalysisContext(
-            fileContext,
-            context,
-        );
-        const byokConfigRef = context?.codeReviewConfig?.byokConfig;
-
-        try {
-            // Migrated off the legacy LangChain PromptRunner onto the AI SDK
-            // path (REQ-NOLC-01). Single span via runStructuredReviewCall — the
-            // outer runLLMInSpan wrapper is dropped (Q4). The BYOK org keeps its
-            // own model. The structured result is re-serialized and fed through
-            // LLMResponseProcessor exactly as the STRING/JSON path did, preserving
-            // the downstream codeSuggestions mapping.
-            const analysis = await LLM.run({
-                schema: codeReviewAnalysisSchema,
-                system: prompt_codereview_system_gemini(baseContext),
-                user: prompt_codereview_user_gemini(baseContext),
-                runName,
-                organizationId: organizationAndTeamData?.organizationId,
-                byokConfig: byokConfigRef,
-                attrs: {
-                    organizationId: organizationAndTeamData?.organizationId,
-                    prNumber,
-                    file: { filePath: fileContext?.file?.filename },
-                },
-            });
-
-            if (!analysis) {
-                const message = `No analysis result for PR#${prNumber}`;
-                this.logger.warn({
-                    message,
-                    context: LLMAnalysisService.name,
-                    metadata: {
-                        organizationAndTeamData:
-                            baseContext?.organizationAndTeamData,
-                        prNumber: baseContext?.pullRequest?.number,
-                    },
-                });
-                throw new Error(message);
-            }
-
-            const analysisResult = this.llmResponseProcessor.processResponse(
-                organizationAndTeamData,
-                prNumber,
-                JSON.stringify(analysis),
-            );
-
-            if (!analysisResult) {
-                return null;
-            }
-
-            analysisResult.codeReviewModelUsed = {
-                generateSuggestions: provider,
-            };
-
-            return analysisResult;
-        } catch (error) {
-            this.logger.error({
-                message: `${LLM_ERROR_TAG} Error during LLM code analysis for PR#${prNumber}`,
-                context: LLMAnalysisService.name,
-                metadata: {
-                    organizationAndTeamData: context?.organizationAndTeamData,
-                    prNumber: context?.pullRequest?.number,
-                },
-                error,
-            });
-            throw error;
-        }
-    }
-
-    async analyzeCodeWithAI_v2(
-        organizationAndTeamData: OrganizationAndTeamData,
-        prNumber: number,
-        fileContext: FileChangeContext,
-        reviewModeResponse: ReviewModeResponse,
-        context: AnalysisContext,
-        byokConfig: NormalizedModel,
-    ): Promise<AIAnalysisResult> {
-        const runName = 'analyzeCodeWithAI_v2';
-
-        const baseContext = await this.prepareAnalysisContext(
-            fileContext,
-            context,
-        );
-
-        try {
-            // Migrated off the legacy LangChain PromptRunner onto the AI SDK
-            // path (REQ-NOLC-01). Single span via runStructuredReviewCall — the
-            // outer runLLMInSpan wrapper is dropped (Q4). The BYOK org keeps its
-            // own model; the structured `codeSuggestions` map through unchanged.
-            // The previous ZOD parser-correction provider (OPENAI_GPT_4O_MINI /
-            // GPT_4O) is intentionally dropped — that was the LangChain parser
-            // repair path (D-03/REQ-SEC-01). `setTemperature(0)` /
-            // `setMaxReasoningTokens(3000)` are not threaded by
-            // runStructuredReviewCall (per the phase's tracer decision).
-            const analysis = await LLM.run({
-                schema: codeReviewAnalysisSchema,
-                system: prompt_codereview_system_gemini_v2(baseContext),
-                user: prompt_codereview_user_gemini_v2(baseContext),
-                runName,
-                organizationId: organizationAndTeamData?.organizationId,
-                byokConfig,
-                attrs: {
-                    organizationId: organizationAndTeamData?.organizationId,
-                    prNumber,
-                    file: { filePath: fileContext?.file?.filename },
-                },
-            });
-
-            if (!analysis) {
-                const message = `No analysis result for PR#${prNumber}`;
-                this.logger.warn({
-                    message,
-                    context: LLMAnalysisService.name,
-                    metadata: {
-                        organizationAndTeamData:
-                            baseContext?.organizationAndTeamData,
-                        prNumber: baseContext?.pullRequest?.number,
-                    },
-                });
-                throw new Error(message);
-            }
-
-            const analysisResult: AIAnalysisResult = {
-                codeSuggestions: analysis.codeSuggestions,
-                // Record the model that ACTUALLY ran — the same name
-                // runStructuredReviewCall traces (getModelName(slot)): the org's
-                // BYOK model, or the managed default (DeepSeek) when no BYOK. The
-                // old `byokConfig?.provider || GEMINI_2_5_PRO` label lied for the
-                // no-BYOK path (reported Gemini, ran DeepSeek).
-                codeReviewModelUsed: {
-                    generateSuggestions: getModelName(byokConfig),
-                },
-            };
-
-            return analysisResult;
-        } catch (error) {
-            this.logger.error({
-                message: `${LLM_ERROR_TAG} Error during LLM code analysis for PR#${prNumber}`,
-                context: LLMAnalysisService.name,
-                metadata: {
-                    organizationAndTeamData: context?.organizationAndTeamData,
-                    prNumber: context?.pullRequest?.number,
-                },
-                error,
-            });
-            throw error;
-        }
-    }
-
-    private async prepareAnalysisContext(
-        fileContext: FileChangeContext,
-        context: AnalysisContext,
-    ) {
-        const baseContext = {
-            pullRequest: context?.pullRequest,
-            patchWithLinesStr: fileContext?.patchWithLinesStr,
-            maxSuggestionsParams:
-                context.codeReviewConfig?.suggestionControl?.maxSuggestions,
-            language: context?.repository?.language,
-            filePath: fileContext?.file?.filename,
-            languageResultPrompt:
-                context?.codeReviewConfig?.languageResultPrompt,
-            reviewOptions: context?.codeReviewConfig?.reviewOptions,
-            fileContent: fileContext?.file?.fileContent,
-            limitationType:
-                context?.codeReviewConfig?.suggestionControl?.limitationType,
-            severityLevelFilter:
-                context?.codeReviewConfig?.suggestionControl
-                    ?.severityLevelFilter,
-            groupingMode:
-                context?.codeReviewConfig?.suggestionControl?.groupingMode,
-            organizationAndTeamData: context?.organizationAndTeamData,
-            relevantContent: fileContext?.relevantContent,
-            hasRelevantContent: fileContext?.hasRelevantContent,
-            prSummary: context?.pullRequest?.body,
-            // v2-only prompt customization (categories and severity guidance)
-            v2PromptOverrides:
-                context?.activeOverrides ??
-                getOverridesFromPack(context?.sharedContextPack) ??
-                context?.codeReviewConfig?.v2PromptOverrides,
-            // External prompt context (referenced files)
-            externalPromptContext: context?.externalPromptContext,
-            externalPromptLayers: context?.externalPromptLayers,
-            contextAugmentations: {
-                ...(getAugmentationsFromPack(context?.sharedContextPack) ?? {}),
-                ...(context?.fileAugmentations ?? {}),
-            } as ContextAugmentationsMap,
-            contextPack: context?.sharedContextPack as ContextPack | undefined,
-            crossFileSnippets: context?.crossFileSnippets,
-            memories: context?.codeReviewConfig?.kodyMemoryRules || [],
-            traceDecisions: context?.traceDecisions,
-            documentationContext: context?.documentationContext || [],
-        };
-
-        return baseContext;
-    }
-    //#endregion
-
-    //#region Generate Code Suggestions
-    async generateCodeSuggestions(
-        organizationAndTeamData: OrganizationAndTeamData,
-        sessionId: string,
-        question: string,
-        parameters: any,
-        reviewMode: ReviewModeResponse = ReviewModeResponse.HEAVY_MODE,
-    ) {
-        const runName = 'generateCodeSuggestions';
-
-        try {
-            // Migrated off the legacy LangChain PromptRunner onto the AI SDK
-            // path (REQ-NOLC-01), single span (Q4). This is a system-provider path
-            // (no BYOK): per the phase's tracer decision the previous
-            // GEMINI_2_5_PRO/OPENAI_GPT_4O pin is dropped in favour of the managed
-            // review default; per-task model routing is deferred to Phase 4. The
-            // structured result is re-serialized so the string return contract is
-            // preserved for any legacy caller.
-            const structured = await LLM.run({
-                schema: codeReviewAnalysisSchema,
-                system: prompt_codereview_system_gemini({}),
-                user: `${prompt_codereview_user_gemini({})}\n\n## Question\n${question ?? ''}`,
-                runName,
-                organizationId: organizationAndTeamData?.organizationId,
-                byokConfig: undefined,
-                attrs: {
-                    organizationId: organizationAndTeamData?.organizationId,
-                    sessionId,
-                },
-            });
-
-            const result = structured ? JSON.stringify(structured) : null;
-
-            if (!result) {
-                const message = `No code suggestions generated for session ${sessionId}`;
-                this.logger.warn({
-                    message,
-                    context: LLMAnalysisService.name,
-                    metadata: {
-                        organizationAndTeamData,
-                        sessionId,
-                        parameters,
-                    },
-                });
-                throw new Error(message);
-            }
-
-            return result;
-        } catch (error) {
-            this.logger.error({
-                message: `${LLM_ERROR_TAG} Error generating code suggestions`,
-                error,
-                context: LLMAnalysisService.name,
-                metadata: { organizationAndTeamData, sessionId, parameters },
-            });
-            throw error;
-        }
-    }
-    //#endregion
-
     //#region Severity Analysis
     async severityAnalysisAssignment(
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
-        provider: LLMModelProvider,
         codeSuggestions: CodeSuggestion[],
         byokConfig: NormalizedModel,
     ): Promise<Partial<CodeSuggestion>[]> {
@@ -441,14 +125,12 @@ export class LLMAnalysisService implements IAIAnalysisService {
             return suggestionsWithSeverity;
         } catch (error) {
             this.logger.error({
-                message:
-                    `${LLM_ERROR_TAG} Error executing validate implemented suggestions chain:`,
+                message: `${LLM_ERROR_TAG} Error executing validate implemented suggestions chain:`,
                 error,
                 context: LLMAnalysisService.name,
                 metadata: {
                     organizationAndTeamData,
                     prNumber,
-                    provider,
                 },
             });
         }
@@ -527,7 +209,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
     async validateImplementedSuggestions(
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
-        provider: LLMModelProvider,
+        byokConfig: NormalizedModel | undefined,
         codePatch: string,
         codeSuggestions: Partial<CodeSuggestion>[],
     ): Promise<Partial<CodeSuggestion>[]> {
@@ -537,20 +219,20 @@ export class LLMAnalysisService implements IAIAnalysisService {
 
         try {
             // Migrated off the legacy LangChain PromptRunner onto the AI SDK
-            // path (REQ-NOLC-01), single span (Q4). System-provider path (no BYOK):
-            // per the phase's tracer decision the previous provider/fallback pin is
-            // dropped in favour of the managed review default; per-task model routing
-            // is deferred to Phase 4. The prompt returns
-            // `{ id, relevantFile, implementationStatus }` per suggestion; the
-            // structured result is re-serialized and fed through LLMResponseProcessor
-            // exactly as the STRING/JSON path did, preserving the downstream mapping.
+            // path (REQ-NOLC-01), single span (Q4). Routed through the org's own
+            // BYOK slot (resolveTaskSlot at the caller) — falls back to the
+            // managed default when the org has none configured for this task.
+            // The prompt returns `{ id, relevantFile, implementationStatus }` per
+            // suggestion; the structured result is re-serialized and fed through
+            // LLMResponseProcessor exactly as the STRING/JSON path did, preserving
+            // the downstream mapping.
             const result = await LLM.run({
                 schema: validateImplementedSchema,
                 system: '',
                 user: prompt_validateImplementedSuggestions(payload),
                 runName,
                 organizationId: organizationAndTeamData?.organizationId,
-                byokConfig: undefined,
+                byokConfig,
                 attrs: {
                     organizationId: organizationAndTeamData?.organizationId,
                     prNumber,
@@ -565,7 +247,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
                     metadata: {
                         organizationAndTeamData,
                         prNumber,
-                        provider,
+                        usingByok: !!byokConfig,
                     },
                 });
                 throw new Error(message);
@@ -584,30 +266,17 @@ export class LLMAnalysisService implements IAIAnalysisService {
             return implementedSuggestions;
         } catch (error) {
             this.logger.error({
-                message:
-                    `${LLM_ERROR_TAG} Error executing validate implemented suggestions chain:`,
+                message: `${LLM_ERROR_TAG} Error executing validate implemented suggestions chain:`,
                 error,
                 context: LLMAnalysisService.name,
                 metadata: {
                     organizationAndTeamData,
                     prNumber,
-                    provider,
+                    usingByok: !!byokConfig,
                 },
             });
         }
         return codeSuggestions;
-    }
-    //#endregion
-
-    //#region Select Review Mode
-    async selectReviewMode(
-        organizationAndTeamData: OrganizationAndTeamData,
-        prNumber: number,
-        provider: LLMModelProvider,
-        file: FileChange,
-        codeDiff: string,
-    ): Promise<ReviewModeResponse> {
-        return ReviewModeResponse.HEAVY_MODE;
     }
     //#endregion
 }

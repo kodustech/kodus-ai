@@ -448,6 +448,21 @@ export interface RetrieveForShardArgs {
     changedFilenames?: string[];
     budgetChars?: number;
     logger?: { warn: (entry: any) => void };
+    /**
+     * True when the caller has ALREADY put this file's full text on the shard
+     * prompt (issue #1826, step 1 — which is unconditional and ungated).
+     *
+     * When it is, retrieving `full-file` here is pure duplication: under the
+     * shard budget the slice is a byte-identical second copy of the file, and
+     * over it the narrowed scope is a strict subset of text already on the
+     * page. Measured before this flag existed: a 40-line file appeared 81
+     * times as its own marker in one prompt — two whole copies plus the diff.
+     *
+     * So the need is satisfied by the file already being there. It still
+     * changes the prompt, via the authorization the judge derives from the
+     * rule itself; it just stops costing a lookup and a second copy.
+     */
+    wholeFileAlreadyOnPage?: boolean;
 }
 
 /**
@@ -468,6 +483,7 @@ export async function retrieveForShard(
         changedFilenames = [],
         budgetChars = SHARD_CONTEXT_BUDGET_CHARS,
         logger,
+        wholeFileAlreadyOnPage = false,
     } = args;
 
     const declared = new Set(rules.map(needOf));
@@ -484,6 +500,9 @@ export async function retrieveForShard(
     for (const need of wanted) {
         try {
             if (need === 'full-file') {
+                // Already satisfied — the caller put the file on the page.
+                // Not `unmet`: the need is MET, by cheaper means.
+                if (wholeFileAlreadyOnPage) continue;
                 collected.push(
                     ...(await retrieveFullFile(file, lookup, budgetChars)),
                 );

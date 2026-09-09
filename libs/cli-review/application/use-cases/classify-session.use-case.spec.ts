@@ -6,12 +6,17 @@ jest.mock('@libs/llm/llm', () => ({
 }));
 
 import { LLM } from '@libs/llm/llm';
+import { LLM_TASK } from '@libs/llm/byok-config';
 import {
     ClassifySessionUseCase,
     LLMDecisionExtractionSchema,
 } from './classify-session.use-case';
 
 const llmRun = LLM.run as jest.Mock;
+
+const mockPermissionValidationService = {
+    resolveTaskSlot: jest.fn().mockResolvedValue(undefined),
+};
 
 /**
  * The deterministic core of CLI-session classification: it turns a raw event
@@ -20,7 +25,7 @@ const llmRun = LLM.run as jest.Mock;
  * decision). These are pure — no repo, no model — so they are exercised directly.
  */
 describe('ClassifySessionUseCase — pure aggregation & normalization', () => {
-    const uc = new ClassifySessionUseCase({} as any, {} as any);
+    const uc = new ClassifySessionUseCase({} as any, {} as any, mockPermissionValidationService as any);
     const call = (m: string, ...args: any[]) => (uc as any)[m](...args);
 
     describe('aggregateEvents', () => {
@@ -205,9 +210,16 @@ describe('ClassifySessionUseCase — pure aggregation & normalization', () => {
  * shape. It never asserts whether a classification is *correct* (eval track).
  */
 describe('ClassifySessionUseCase.extractWithLLM — LLM.run I/O contract', () => {
-    const uc = new ClassifySessionUseCase({} as any, {} as any);
+    const uc = new ClassifySessionUseCase({} as any, {} as any, mockPermissionValidationService as any);
     const extract = (agg: any, orgId?: string) =>
-        (uc as any).extractWithLLM(agg, orgId);
+        (uc as any).extractWithLLM(agg, { organizationId: orgId });
+
+    afterEach(() => {
+        mockPermissionValidationService.resolveTaskSlot.mockReset();
+        mockPermissionValidationService.resolveTaskSlot.mockResolvedValue(
+            undefined,
+        );
+    });
 
     // A minimal aggregated session that assembly walks over.
     const agg = (over: any = {}) => ({
@@ -277,6 +289,12 @@ describe('ClassifySessionUseCase.extractWithLLM — LLM.run I/O contract', () =>
             expect(req.system).toContain(
                 'classifying a complete coding session',
             );
+            expect(
+                mockPermissionValidationService.resolveTaskSlot,
+            ).toHaveBeenCalledWith(
+                { organizationId: 'org-42' },
+                LLM_TASK.prSummary,
+            );
             // user is the JSON-encoded, capped payload
             const payload = JSON.parse(req.user);
             expect(payload).toMatchObject({
@@ -292,6 +310,18 @@ describe('ClassifySessionUseCase.extractWithLLM — LLM.run I/O contract', () =>
                 ],
                 filesModified: ['src/a.ts'],
             });
+        });
+
+        it("forwards the org's resolved BYOK slot to LLM.run", async () => {
+            const byokConfig = { provider: 'openai', model: 'gpt-4o' } as any;
+            mockPermissionValidationService.resolveTaskSlot.mockResolvedValueOnce(
+                byokConfig,
+            );
+            llmRun.mockResolvedValue({ decisions: [] });
+
+            await extract(agg(), 'org-42');
+
+            expect(llmRun.mock.calls[0][0].byokConfig).toBe(byokConfig);
         });
     });
 
@@ -708,7 +738,7 @@ describe('ClassifySessionUseCase.execute — fail-safe (C)', () => {
     // heuristics, marks completed with 'heuristic-fallback', never re-throws.
     it('[30] LLM.run throws → heuristic fallback, no throw past execute', async () => {
         const repo = makeRepo();
-        const uc = new ClassifySessionUseCase(repo as any, {} as any);
+        const uc = new ClassifySessionUseCase(repo as any, {} as any, mockPermissionValidationService as any);
         llmRun.mockRejectedValue(new Error('network down'));
 
         await expect(uc.execute('u1')).resolves.toBeUndefined();
@@ -726,7 +756,7 @@ describe('ClassifySessionUseCase.execute — fail-safe (C)', () => {
     // fail-safe path as row 30.
     it('[28/29] truncated/malformed surfaces as a throw → heuristic fallback', async () => {
         const repo = makeRepo();
-        const uc = new ClassifySessionUseCase(repo as any, {} as any);
+        const uc = new ClassifySessionUseCase(repo as any, {} as any, mockPermissionValidationService as any);
         llmRun.mockRejectedValue(new SyntaxError('Unexpected end of JSON input'));
 
         await expect(uc.execute('u1')).resolves.toBeUndefined();
@@ -740,7 +770,7 @@ describe('ClassifySessionUseCase.execute — fail-safe (C)', () => {
     // and, with a prompt present, complete as 'heuristic' (safe degrade).
     it('[31] {error} object return → empty decisions → heuristic completion', async () => {
         const repo = makeRepo();
-        const uc = new ClassifySessionUseCase(repo as any, {} as any);
+        const uc = new ClassifySessionUseCase(repo as any, {} as any, mockPermissionValidationService as any);
         llmRun.mockResolvedValue({ error: 'model_error' } as any);
 
         await uc.execute('u1');
@@ -757,7 +787,7 @@ describe('ClassifySessionUseCase.execute — fail-safe (C)', () => {
         ['[33] refusal prose', 'I cannot help with that.'],
     ])('%s → heuristic completion, no throw', async (_label, raw) => {
         const repo = makeRepo();
-        const uc = new ClassifySessionUseCase(repo as any, {} as any);
+        const uc = new ClassifySessionUseCase(repo as any, {} as any, mockPermissionValidationService as any);
         llmRun.mockResolvedValue(raw as any);
 
         await expect(uc.execute('u1')).resolves.toBeUndefined();
@@ -771,7 +801,7 @@ describe('ClassifySessionUseCase.execute — fail-safe (C)', () => {
     // 'llm' source (the boundary trusts a valid parsed envelope).
     it('[1] valid LLM decisions → completes with source "llm"', async () => {
         const repo = makeRepo();
-        const uc = new ClassifySessionUseCase(repo as any, {} as any);
+        const uc = new ClassifySessionUseCase(repo as any, {} as any, mockPermissionValidationService as any);
         llmRun.mockResolvedValue({
             decisions: [
                 {

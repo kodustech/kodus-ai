@@ -10,6 +10,9 @@ import {
 } from '@libs/cli-review/domain/types/cli-session-capture.types';
 import { SessionEventRepository } from '@libs/cli-review/infrastructure/repositories/session-event.repository';
 import { SessionEventModel } from '@libs/cli-review/infrastructure/repositories/schemas/session-event.model';
+import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
+import { LLM_TASK } from '@libs/llm/byok-config';
 
 const LLMDecisionSchema = z.object({
     type: z.enum([
@@ -59,6 +62,7 @@ export class ClassifySessionUseCase {
     constructor(
         private readonly sessionEventRepository: SessionEventRepository,
         private readonly observabilityService: ObservabilityService,
+        private readonly permissionValidationService: PermissionValidationService,
     ) {}
 
     async execute(sessionEndEventUuid: string): Promise<void> {
@@ -102,10 +106,10 @@ export class ClassifySessionUseCase {
         );
 
         try {
-            const decisions = await this.extractWithLLM(
-                aggregated,
-                sessionEndEvent.organizationId,
-            );
+            const decisions = await this.extractWithLLM(aggregated, {
+                organizationId: sessionEndEvent.organizationId,
+                teamId: sessionEndEvent.teamId,
+            });
             if (decisions.length > 0) {
                 await this.sessionEventRepository.markClassificationCompleted(
                     sessionEndEventUuid,
@@ -290,7 +294,7 @@ export class ClassifySessionUseCase {
 
     private async extractWithLLM(
         aggregated: AggregatedSession,
-        organizationId?: string,
+        organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<CliSessionClassifiedDecision[]> {
         const systemPrompt = [
             'You are classifying a complete coding session into reusable decisions.',
@@ -343,20 +347,30 @@ export class ClassifySessionUseCase {
             subagents: aggregated.subagents.slice(0, 10),
         };
 
-        // Migrated off the legacy LangChain PromptRunner path onto the AI
-        // SDK path (REQ-NOLC-01). byokConfig is undefined here → runStructuredReviewCall
-        // resolves the managed review default (Kimi via Moonshot); the previous
-        // GEMINI_3_FLASH_PREVIEW pin is intentionally dropped
-        // (per-task model routing is Phase 4). `.setTemperature(0)` is likewise
-        // dropped — runStructuredReviewCall does not thread temperature; acceptable
-        // for this structured extraction. Parity is on the parsed decisions[] mapping.
+        // Migrated off the legacy LangChain PromptRunner path onto the AI SDK
+        // path (REQ-NOLC-01). Routed through the org's own BYOK slot for
+        // LLM_TASK.prSummary (falls back to the managed default when the org
+        // has none) — this used to hardcode `byokConfig: undefined` regardless
+        // of BYOK, a leftover of the migration off LangChain. prSummary is
+        // reused rather than a dedicated task: this is the same "structured
+        // extraction over a session/PR" workload as the module's other
+        // prSummary callers (public-pr-ai-summary/public-pr-grouping), not a
+        // primary review workload like codeReview/kodyRulesReview.
+        // `.setTemperature(0)` is likewise dropped — runStructuredReviewCall
+        // does not thread temperature; acceptable for this structured
+        // extraction. Parity is on the parsed decisions[] mapping.
+        const byokConfig = await this.permissionValidationService.resolveTaskSlot(
+            organizationAndTeamData,
+            LLM_TASK.prSummary,
+        );
+
         const result = await LLM.run({
             schema: LLMDecisionExtractionSchema,
             system: systemPrompt,
             user: JSON.stringify(userPayload),
             runName: 'ClassifySessionUseCase::classifySession',
-            organizationId,
-            byokConfig: undefined,
+            organizationId: organizationAndTeamData?.organizationId,
+            byokConfig,
         });
 
         const rawDecisions = result?.decisions ?? [];
