@@ -143,27 +143,28 @@ export class KodyRuleDetectorCompilerService
 
             const orgId = organizationAndTeamData.organizationId;
             const model = taskByok ? 'byok' : 'system';
-            const contextNeed = await this.saveContextNeed(
-                orgId,
-                ruleUuid,
-                rule,
-                normalizeContextNeed(rawOutput?.contextNeed),
-                model,
-            );
-
             // The language scope is saved from the RAW output, before the
             // detector gate — so it lands on semantic rules too. It used to be
             // written only as part of a surviving detector, which meant the
             // 92,5% of the fleet with no detector had no scope at all and were
             // judged against every file in the PR regardless of the language
             // the rule names.
-            const fileScope = await this.saveFileScope(
-                orgId,
-                ruleUuid,
-                rule,
-                normalizeDetectorExtensions(rawOutput?.extensions),
-                model,
-            );
+            const [contextNeed, fileScope] = await Promise.all([
+                this.saveContextNeed(
+                    orgId,
+                    ruleUuid,
+                    rule,
+                    normalizeContextNeed(rawOutput?.contextNeed),
+                    model,
+                ),
+                this.saveFileScope(
+                    orgId,
+                    ruleUuid,
+                    rule,
+                    normalizeDetectorExtensions(rawOutput?.extensions),
+                    model,
+                ),
+            ]);
 
             if (detector) {
                 await this.kodyRulesService.updateRuleDetector(

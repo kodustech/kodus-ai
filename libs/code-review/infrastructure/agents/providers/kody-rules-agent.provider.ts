@@ -16,6 +16,7 @@ import {
     ruleAppliesToFile,
     SHARD_CONCURRENCY_DEFAULT,
     FILE_CONTENT_MAX_LINES,
+    FILE_CONTENT_BUDGET_CHARS,
     inlineRuleReferences,
     inlineLoadedReferences,
     findUnresolvedReferenceRules,
@@ -386,7 +387,11 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                                         1,
                                         FILE_CONTENT_MAX_LINES,
                                     );
-                                    if (text?.trim()) {
+                                    if (
+                                        text?.trim() &&
+                                        text.length <=
+                                            FILE_CONTENT_BUDGET_CHARS
+                                    ) {
                                         fileContents.set(file.filename, text);
                                     }
                                 } catch (err) {
