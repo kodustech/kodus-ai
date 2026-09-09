@@ -13,7 +13,12 @@
 // observability usage span; a bare `generateText` here would spend tokens no
 // billing dataset ever sees.
 //
-// The corpus is NEGATIVE: every case's correct published count is 0. That only
+// A corpus may be negative (cases-1826: every correct count is 0) or positive
+// (cases-1826-need: a rule that cannot fire without repository context). Both
+// directions are scored, because step 2 can only DROP a finding and step 3 can
+// only ADD one, so a harness blind to misses cannot tell them apart.
+//
+// The cases-1826 corpus is NEGATIVE: every case's correct published count is 0. That only
 // means something alongside the positive control, which is a separate command
 // and is NOT re-run here:
 //
@@ -42,11 +47,22 @@ const MODELKEY = args.model || 'gpt-5.4-mini';
 const CONC = +(args.conc || 2);
 const REPS = +(args.reps || 1);
 const OUT = args.out || 'BASELINE-1826.txt';
+// --sandbox=local|e2b swaps the in-memory lookup for a REAL one: a real git
+// repository built from the case's repoFiles, cloned by the production sandbox
+// provider, wrapped by the production buildRepoLookup. Without it the harness
+// keeps the fast fake, which is fine for prompt work and useless for anything
+// that depends on how the repository actually answers.
+const SANDBOX = args.sandbox || '';
 
 const { judgeKodyRulesSharded, shardViolationsWireSchema, ruleAppliesToFile } = require('@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge');
 const { checkClaims } = require('@libs/code-review/infrastructure/agents/collaborators/claim-checker');
 const { retrieveForShard, needOf } = require('@libs/code-review/infrastructure/agents/collaborators/rule-context.retriever');
 const { LLM } = require('@libs/llm/llm');
+const os = require('os');
+const { execFileSync } = require('child_process');
+const { LocalSandboxService } = require('@libs/sandbox/infrastructure/providers/local-sandbox.service');
+const { E2BSandboxService } = require('@libs/sandbox/infrastructure/providers/e2b-sandbox.service');
+const { buildRepoLookup } = require('@libs/code-review/infrastructure/agents/collaborators/repo-lookup');
 const { applyModelEnv } = require('../shared/tier0-models');
 
 const seed = require('./' + CASES + '.json');
@@ -104,13 +120,99 @@ function lookupFromRepoFiles(repoFiles) {
 }
 
 /**
+ * A REAL repository lookup for one case: the fixture files become a real git
+ * repository, the production provider clones it into a real sandbox, and the
+ * production wrapper goes on top. `git fetch <local path>` is an ordinary
+ * fetch, so the provider's clone path runs unchanged without a network remote.
+ *
+ * Returns a disposer alongside the lookup; the caller must call it.
+ */
+async function realLookupFor(repoFiles) {
+    const files = Object.entries(repoFiles || {});
+    const cfg = { get: (k) => process.env[k] };
+    const cleanups = [];
+
+    // LOCAL: `git fetch <path>` is an ordinary fetch, so a fixture repository on
+    // disk drives the provider's real clone path.
+    //
+    // E2B: the clone runs INSIDE the remote sandbox, where a path on this
+    // machine does not exist (git exits 128). So the sandbox is created from a
+    // tiny public repo and the fixture is written into it through the sandbox's
+    // own writeFile. Either way `rg` and `find` afterwards run on real files in
+    // a real sandbox, which is the whole point.
+    let sandbox;
+    if (SANDBOX === 'e2b') {
+        sandbox = await new E2BSandboxService(cfg).createSandboxWithRepo({
+            cloneUrl: 'https://github.com/octocat/Hello-World.git',
+            authToken: '', branch: 'master', platform: 'github',
+            sandboxMetadata: { stage: 'review', probe: `kody-rules-eval-${CASES}` },
+        });
+        // Remove the seed repo's own files so the fixture is the whole world,
+        // exactly as it is under the local provider.
+        await sandbox.run(
+            `cd ${sandbox.repoDir} && git rm -rq --ignore-unmatch . || true`,
+        );
+        for (const [rel, content] of files) {
+            // ABSOLUTE on purpose. SandboxInstance.writeFile/readFile hand the
+            // path straight to E2B's files API, which resolves against the
+            // sandbox HOME (/home/user) — while grep/read/listDir in
+            // buildE2BRemoteCommands resolve against REPO_DIR (/home/user/repo).
+            // Writing "src/a.ts" therefore lands outside the repo and every
+            // later lookup misses it.
+            await sandbox.writeFile(`${sandbox.repoDir}/${rel}`, content);
+        }
+    } else {
+        const origin = fs.mkdtempSync(path.join(os.tmpdir(), 'kodus-eval-origin-'));
+        cleanups.push(() => fs.rmSync(origin, { recursive: true, force: true }));
+        const git = (...a) => execFileSync('git', ['-C', origin, ...a], { stdio: 'pipe' });
+        execFileSync('git', ['init', '-q', '-b', 'main', origin], { stdio: 'pipe' });
+        git('config', 'user.email', 'eval@kodus.io');
+        git('config', 'user.name', 'eval');
+        for (const [rel, content] of files) {
+            const abs = path.join(origin, rel);
+            fs.mkdirSync(path.dirname(abs), { recursive: true });
+            fs.writeFileSync(abs, content);
+        }
+        git('add', '-A');
+        git('commit', '-q', '-m', 'fixture');
+        sandbox = await new LocalSandboxService(cfg).createSandboxWithRepo({
+            cloneUrl: origin, authToken: '', branch: 'main', platform: 'github',
+            sandboxMetadata: { stage: 'review', probe: `kody-rules-eval-${CASES}` },
+        });
+    }
+
+    const lookup = buildRepoLookup(sandbox);
+    // Positive control BEFORE measuring: if the fixture did not land, every
+    // grep answers "nothing" and the run would score as a clean corpus.
+    if (files.length) {
+        const [firstPath] = files[0];
+        const seen = await lookup.read(firstPath, 1, 1);
+        if (!seen.trim()) {
+            throw new Error(
+                `fixture did not land in the ${SANDBOX} sandbox: ${firstPath} reads back empty`,
+            );
+        }
+    }
+
+    return {
+        lookup,
+        dispose: async () => {
+            try { await sandbox.cleanup(); } catch {}
+            for (const c of cleanups) c();
+        },
+    };
+}
+
+/**
  * The provider's own sequence, minus NestJS: retrieve the declared context per
  * file, judge, then refute each finding's claim. Measuring only the judge would
  * measure the prompt and none of the checks this issue actually added.
  */
 async function runCase(c) {
     const logger = { warn: (e) => out.push(`      warn: ${e.message}`) };
-    const lookup = lookupFromRepoFiles(c.repoFiles);
+    const real = SANDBOX ? await realLookupFor(c.repoFiles) : null;
+    const lookup = real ? real.lookup : lookupFromRepoFiles(c.repoFiles);
+    try {
     const changedFilenames = c.changedFiles.map((f) => f.filename);
 
     const contextSlices = new Map();
@@ -147,7 +249,25 @@ async function runCase(c) {
         logger,
     });
 
-    return { ...result, violations: checked.kept, dropped: checked.dropped, judged: result.violations.length };
+    // What the customer actually SEES. agent-review.stage.ts collapses every
+    // finding that carries the same ruleUuid into ONE comment ("Also found in:"
+    // carries the rest), so a harness that counts raw findings scores a single
+    // true violation reported per-line as eight false positives. Mirrored here
+    // rather than imported: the pipeline's copy is a private method on a Nest
+    // stage. `judged` and `kept` stay visible beside it so the collapse never
+    // hides a real difference.
+    const byRule = new Map();
+    const unkeyed = [];
+    for (const v of checked.kept) {
+        if (!v.ruleUuid) { unkeyed.push(v); continue; }
+        if (!byRule.has(v.ruleUuid)) byRule.set(v.ruleUuid, v);
+    }
+    const published = [...unkeyed, ...byRule.values()];
+
+    return { ...result, violations: published, kept: checked.kept.length, dropped: checked.dropped, judged: result.violations.length };
+    } finally {
+        await real?.dispose();
+    }
 }
 
 const out = [];
@@ -159,11 +279,16 @@ const say = (line = '') => { out.push(line); console.log(line); };
     say(`reproduce: node evals/kody-rules/context-fp-repro.js --model=${MODELKEY} --reps=${REPS} --out=${OUT}`);
     say(`corpus: ${CASES}.json — ${cases.length} case(s), ${REPS} replicate(s)`);
     say(`model:  ${MODELKEY}`);
+    say(`lookup: ${SANDBOX ? `REAL sandbox (${SANDBOX}) via buildRepoLookup` : 'in-memory fake — grep is String.includes, exists is hasOwnProperty'}`);
     say(`Every case's CORRECT published count is 0. A non-zero count is a rule`);
     say(`firing on a claim the diff window cannot support.`);
     say();
 
     let undue = 0;
+    // A negative corpus can only be failed by firing. A corpus whose correct
+    // answer is non-zero is failed the OTHER way too, and a harness that counts
+    // only one of them scores silence as a perfect run.
+    let missed = 0;
     let total = 0;
     for (const c of cases) {
         say(`══ ${c.caseId}  [claim: ${c.claimFamily}]`);
@@ -193,7 +318,8 @@ const say = (line = '') => { out.push(line); console.log(line); };
             perRep.push(published.length);
             total++;
             if (published.length > c.expectedPublished) undue++;
-            say(`   rep ${rep}: published ${published.length} (expected ${c.expectedPublished})  judged ${result.judged}, claim-check dropped ${result.dropped.length}  shards ${result.shardsRun} run / ${result.shardsErrored} errored`);
+            else if (published.length < c.expectedPublished) missed++;
+            say(`   rep ${rep}: published ${published.length} (expected ${c.expectedPublished})  judged ${result.judged}, claim-check dropped ${result.dropped.length}, kept ${result.kept} → ${published.length} after rule-dedup  shards ${result.shardsRun} run / ${result.shardsErrored} errored`);
             for (const v of published) {
                 say(`      ${v.relevantFile ?? '(PR)'}:${v.relevantLinesStart ?? '-'}  ${String(v.oneSentenceSummary || '').slice(0, 110)}`);
             }
@@ -207,6 +333,7 @@ const say = (line = '') => { out.push(line); console.log(line); };
 
     const expected = cases.length * REPS;
     say(`TOTAL: ${undue} of ${total} case-runs published a comment that should not exist.`);
+    say(`       ${missed} of ${total} case-runs FAILED TO PUBLISH one the rule should have caught.`);
     if (total < expected) {
         say(`WARNING: only ${total} of ${expected} case-runs produced a measurement; the rest errored.`);
     }

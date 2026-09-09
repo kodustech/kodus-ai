@@ -1,0 +1,74 @@
+Issue #1826 — closing measurement, all changes in place
+═══════════════════════════════════════════════════════
+
+Ran 2026-09-09, kimi-k2.7-code@fireworks, 5 replicates, REAL sandbox via
+buildRepoLookup. 90 case-runs across three corpora.
+
+    node evals/kody-rules/context-fp-repro.js --cases=<corpus> \
+      --model=kimi-k2.7-code@fireworks --reps=5 --sandbox=<local|e2b>
+
+1. THE FALSE POSITIVE THE ISSUE WAS OPENED FOR  (cases-1826, local)
+──────────────────────────────────────────────────────────────────
+    0 of 20 published a comment that should not exist   (baseline: 15 of 20)
+    0 of 20 failed to publish one that should exist
+
+Unchanged by the claim-path check added in this pass — it drops fabricated
+addresses without touching a true finding.
+
+2. DOES A DECLARED NEED CHANGE WHETHER A RULE FIRES  (cases-1826-need, local)
+────────────────────────────────────────────────────────────────────────────
+                                          need declared   diff-only
+  endpoint with no test anywhere              5/5            5/5
+  helper duplicated (guessable location)      5/5            2/5
+  helper duplicated (unguessable)             5/5            0/5
+  guard: sibling exists, must stay silent      0              0
+
+    need arm 15/15 · diff-only arm 7/15 · 0 of 40 undue
+
+3. THE ROW THE ISSUE CALLS THE MAJORITY  (cases-1826-fullfile, E2B — PRODUCTION)
+───────────────────────────────────────────────────────────────────────────────
+                                          need declared   diff-only
+  function is 58 lines, limit is 40           5/5            1/5
+  block duplicated inside the same file       4/5            0/5
+  guard: function is 6 lines, must be silent   0              0
+
+    need arm 9/10 · diff-only arm 1/10 · 0 of 30 undue
+
+Before any of this work the same corpus scored 20 of 30 MISSED: every
+should-fire case was 0/5 in both arms. The rule could not fire at all.
+
+WHAT MOVED IT, IN ORDER
+───────────────────────
+  20/30 missed   baseline, no `full-file` need exists
+  14/30 missed   `full-file` retrieval added (whole file under budget, the
+                 enclosing scope over it). The duplicate-block case went
+                 0/5 -> 5/5; the length case barely moved.
+  10/30 missed   the <Context> instruction split by slice kind. The length case
+                 went 1/5 -> 5/5.
+
+The middle step is the one worth remembering. The retrieval was delivering the
+whole file correctly the entire time — verified directly against the retriever
+— while the prompt said "never report a violation whose evidence lies outside
+the diff hunks". For a `full-file` rule the evidence IS outside the hunk, so the
+instruction forbade exactly the finding the rule exists to make. The remaining
+misses are the diff-only control arms, which is the demonstration, not a defect.
+
+NO REGRESSION, BY CONSTRUCTION
+──────────────────────────────
+Re-classifying the fleet moves rules out of `diff-only`, and a need that fails
+to retrieve used to take its rules out of the review entirely. That would let a
+single sandbox hiccup silence rules that work today.
+
+`full-file` now DEGRADES instead: the hunk is already part of the file, so
+judging without the slice is exactly the pre-feature behaviour, and the claim
+checker still guards whatever is asserted. The outward-reaching needs keep
+skipping — judging THEM blind is the #1724 bug. Four specs pin this, and
+reverting the split fails two of them.
+
+LIMITS
+──────
+One model, five replicates, synthetic corpora of 4/8/6 cases. Nothing here ran
+through NestJS, the pipeline stages, the lease manager, the queue or the
+platform integration — the harness imports the production collaborators and
+calls them directly. The fleet models named in the issue (gpt-5.4,
+gpt-5.4-mini) still need working keys.

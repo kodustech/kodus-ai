@@ -1,0 +1,57 @@
+{
+  "__doc": [
+    "Language-scoped SEMANTIC rules for the fan-out measurement (#1826 step 1b).",
+    "",
+    "These are FIXTURES standing in for customer rules, not a table the engine",
+    "consults — the engine enumerates no language anywhere. They exist here for",
+    "the same reason detector-fp-repro.js carries LANG_BY_EXT: scoring a",
+    "cross-language corpus requires knowing, outside the engine, which language",
+    "each file is.",
+    "",
+    "Every rule below is SEMANTIC on purpose: none of them compiles to a regex,",
+    "so none would ever carry a detector. That is the whole population this",
+    "measurement is about — 10.102 of 10.918 active rules in production (92,5%)",
+    "had nowhere to record their language scope before the scope moved onto the",
+    "rule itself.",
+    "",
+    "`extensions` is what the compiler infers from the rule text at save time.",
+    "`language` is used ONLY to score a reached file as right- or wrong-language."
+  ],
+  "rules": [
+    {
+      "uuid": "scope-ruby-service",
+      "title": "Keep business logic out of Rails controllers",
+      "rule": "In our Ruby on Rails controllers, actions must not contain business logic. Move it into a service object or a model method and have the action call it.",
+      "language": "ruby",
+      "extensions": [".rb", ".rake", ".gemspec", ".ru", ".erb"]
+    },
+    {
+      "uuid": "scope-scss-tokens",
+      "title": "Use design tokens, never raw colour literals",
+      "rule": "In our stylesheets, never hardcode a colour value. Reference the design-token variable instead so a theme change lands everywhere at once.",
+      "language": "css",
+      "extensions": [".css", ".scss", ".sass", ".less"]
+    },
+    {
+      "uuid": "scope-yaml-secrets",
+      "title": "No inline secrets in configuration",
+      "rule": "Our YAML configuration must not carry a literal credential, token or password. Reference an environment variable or the secret store.",
+      "language": "yaml",
+      "extensions": [".yml", ".yaml"]
+    },
+    {
+      "uuid": "scope-vue-props",
+      "title": "Vue props must declare a type and a default",
+      "rule": "Every prop on a Vue single-file component declares an explicit type and, unless it is required, a default value.",
+      "language": "vue",
+      "extensions": [".vue"]
+    },
+    {
+      "uuid": "scope-agnostic-control",
+      "title": "No commented-out code",
+      "rule": "Do not leave commented-out code behind. Delete it; version control remembers it.",
+      "language": null,
+      "extensions": null
+    }
+  ]
+}
