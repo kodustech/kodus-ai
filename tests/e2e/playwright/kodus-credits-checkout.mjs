@@ -8,7 +8,7 @@
 //   4. balance == pack through the proxy; the license carries it;
 //   5. the web UI (logged in) lands on the Kodus provider card (/byok#kodus)
 //      whose wallet strip shows the new balance, the History drawer lists
-//      the top-up, the navbar wallet chip shows the balance, and the
+//      the top-up, the avatar menu hints the balance on BYOK, and the
 //      subscription page only points at the wallet — screenshotted.
 //
 // Env: KODUS_WEB_URL (default http://localhost:3000), KODUS_API_URL
@@ -263,12 +263,15 @@ try {
     log(`PASS History drawer lists the top-up and charges by review (screenshot 03)`);
     await page.keyboard.press("Escape");
 
-    // Navbar wallet chip: balance, linking to the card.
-    const chip = page.getByTestId("kodus-credits-badge");
-    await chip.waitFor({ timeout: 60_000 });
-    const chipText = (await chip.textContent()) ?? "";
-    if (!chipText.includes(balanceText)) fail(`navbar credits chip shows "${chipText}", expected ${balanceText}`);
-    log(`PASS navbar wallet chip shows ${balanceText}`);
+    // Avatar menu: the BYOK entry carries the balance as a quiet hint.
+    await page.getByTestId("user-nav-trigger").click();
+    const hint = page.getByTestId("user-nav-credits");
+    await hint.waitFor({ timeout: 60_000 });
+    const hintText = (await hint.textContent()) ?? "";
+    if (!hintText.includes(balanceText)) fail(`avatar menu BYOK hint shows "${hintText}", expected ${balanceText}`);
+    await page.screenshot({ path: `${KODUS_E2E_SHOTS}/04-avatar-menu.png`, clip: { x: 900, y: 0, width: 500, height: 420 } });
+    await page.keyboard.press("Escape");
+    log(`PASS avatar menu BYOK entry shows ${balanceText} (screenshot 04)`);
 
     // Subscription page: a pointer to the wallet, not a second wallet.
     await page.goto(`${WEB}/settings/subscription`, { waitUntil: "load", timeout: 240_000 });
@@ -277,8 +280,8 @@ try {
     await page.getByRole("link", { name: /manage credits|top up/i }).first().waitFor({ timeout: 60_000 });
     const topUpButtons = await page.getByRole("button", { name: /^\+\$/ }).count();
     if (topUpButtons !== 0) fail(`subscription page still renders ${topUpButtons} pack buttons — the wallet must live in BYOK only`);
-    await page.screenshot({ path: `${KODUS_E2E_SHOTS}/04-subscription-pointer.png`, fullPage: true });
-    log(`PASS subscription page points at the wallet without duplicating it (screenshot 04)`);
+    await page.screenshot({ path: `${KODUS_E2E_SHOTS}/05-subscription-pointer.png`, fullPage: true });
+    log(`PASS subscription page points at the wallet without duplicating it (screenshot 05)`);
     await ctx.close();
 } finally {
     await browser.close();

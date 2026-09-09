@@ -26,7 +26,6 @@ import {
 import { ErrorBoundary } from "react-error-boundary";
 import { UserNav } from "src/core/layout/navbar/_components/user-nav";
 import { cn } from "src/core/utils/components";
-import { CreditsBadge } from "src/features/ee/byok/_components/credits-badge";
 import { isCockpitTierAllowed } from "src/features/ee/cockpit/_helpers/tier-policy";
 import { SubscriptionBadge } from "src/features/ee/subscription/_components/subscription-badge";
 import { useSubscriptionContext } from "src/features/ee/subscription/_providers/subscription-context";
@@ -228,9 +227,6 @@ export const NavMenu = () => {
                 </ErrorBoundary>
 
                 <div className="flex items-center gap-2">
-                    <ErrorBoundary fallback={null}>
-                        <CreditsBadge />
-                    </ErrorBoundary>
                     <SubscriptionBadge />
                     <NotificationBell />
                 </div>
