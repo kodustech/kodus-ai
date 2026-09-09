@@ -1,0 +1,133 @@
+{
+  "__doc": "Issue #1826 — the FALSE-POSITIVE corpus, with `full-file` declared on every rule.\n\nThe census over 808 real library rules put 65.8% of them in `full-file`, and the\nreasons hold up: framework-convention rules genuinely cannot be judged from one\nline (\"is this a client component\", \"does the surrounding handler validate\").\nSo attaching the file is not the exception, it is the common case.\n\nThat is the same shape as the unconditional whole-file attachment measured at\n-14pp recall, and the question this corpus answers is whether the cost is the\nsame. It is the negative corpus: every correct answer is 0. If showing the file\nbrings the false positives back, the rate matters and the design has to change.\nIf it stays at 0, the cost of a full-file rule is tokens and nothing else.\n\nSame four cases as cases-1826.json, byte for byte, with contextNeed added.",
+  "cases": [
+    {
+      "caseId": "1724-scss-import-used-below-the-hunk-FULLFILE",
+      "source": "https://github.com/kodustech/kodus-ai/issues/1724",
+      "claimFamily": "unused",
+      "why": "The `@use '../variables' as v` the PR adds IS used, at line 23 (`v.$text-muted`). The hunk stops at line 7, so the only evidence of the usage sits outside everything the shard can see. Removing the import as suggested breaks the build.",
+      "expectedPublished": 0,
+      "prTitle": "fix(ui): pull the card's muted text colour from the shared palette",
+      "prBody": "The card body colour was hardcoded. Import the palette and use $text-muted so it follows the theme.",
+      "rule": {
+        "uuid": "rule-no-unused-imports",
+        "title": "No unused imports",
+        "rule": "Remove imports that are not used in the file. An unused import is dead weight, slows the build and misleads the next reader.",
+        "path": "",
+        "severity": "low",
+        "contextNeed": {
+          "need": "full-file",
+          "sourceHash": "eval-fixture",
+          "source": "author",
+          "inferredAt": "2026-09-09T00:00:00.000Z"
+        }
+      },
+      "changedFiles": [
+        {
+          "filename": "app/assets/stylesheets/components/_card.scss",
+          "patchWithLinesStr": "## file: 'app/assets/stylesheets/components/_card.scss'\n\n@@ -1,6 +1,7 @@\n__new hunk__\n1  @use 'sass:color';\n2 +@use '../variables' as v;\n3  \n4  .card {\n5    padding: 12px;\n6    border-radius: 4px;\n7    background: #fff;"
+        }
+      ],
+      "repoFiles": {
+        "app/assets/stylesheets/components/_card.scss": "@use 'sass:color';\n@use '../variables' as v;\n\n.card {\n  padding: 12px;\n  border-radius: 4px;\n  background: #fff;\n  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);\n}\n\n.card__header {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n}\n\n.card__title {\n  font-size: 16px;\n  font-weight: 600;\n}\n\n.card__body {\n  color: v.$text-muted;\n  line-height: 1.5;\n}\n"
+      }
+    },
+    {
+      "caseId": "unused-symbol-used-in-a-later-method-FULLFILE",
+      "claimFamily": "unused",
+      "why": "`formatDate` is imported in the hunk and called at line 41, in a method the diff never shows. This is the RULE_OVERAPPLIED shape in TypeScript: same blindness, different language, so a fix that only special-cases SCSS does not cover it.",
+      "expectedPublished": 0,
+      "prTitle": "refactor(orders): move date formatting to the shared helper",
+      "prBody": "Drop the inline toLocaleDateString call in favour of the shared formatDate, so every surface renders dates the same way.",
+      "rule": {
+        "uuid": "rule-no-unused-imports",
+        "title": "No unused imports",
+        "rule": "Remove imports that are not used in the file. An unused import is dead weight, slows the build and misleads the next reader.",
+        "path": "",
+        "severity": "low",
+        "contextNeed": {
+          "need": "full-file",
+          "sourceHash": "eval-fixture",
+          "source": "author",
+          "inferredAt": "2026-09-09T00:00:00.000Z"
+        }
+      },
+      "changedFiles": [
+        {
+          "filename": "src/orders/order-mapper.ts",
+          "patchWithLinesStr": "## file: 'src/orders/order-mapper.ts'\n\n@@ -1,5 +1,6 @@\n__new hunk__\n1  import { Order } from './order.entity';\n2  import { OrderDto } from './order.dto';\n3 +import { formatDate } from '../shared/date';\n4  \n5  export class OrderMapper {\n6      constructor(private readonly locale: string) {}"
+        }
+      ],
+      "repoFiles": {
+        "src/orders/order-mapper.ts": "import { Order } from './order.entity';\nimport { OrderDto } from './order.dto';\nimport { formatDate } from '../shared/date';\n\nexport class OrderMapper {\n    constructor(private readonly locale: string) {}\n\n    toDto(order: Order): OrderDto {\n        return {\n            id: order.id,\n            reference: order.reference,\n            total: order.total,\n            currency: order.currency,\n            status: order.status,\n            placedAt: this.renderPlacedAt(order),\n        };\n    }\n\n    toDtoList(orders: Order[]): OrderDto[] {\n        return orders.map((order) => this.toDto(order));\n    }\n\n    private renderPlacedAt(order: Order): string {\n        if (!order.placedAt) {\n            return '';\n        }\n\n        return formatDate(order.placedAt, this.locale);\n    }\n}\n",
+        "src/shared/date.ts": "export function formatDate(value: Date, locale: string): string {\n    return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(value);\n}\n"
+      }
+    },
+    {
+      "caseId": "missing-test-that-this-pr-adds-FULLFILE",
+      "claimFamily": "missing",
+      "why": "The rule's sibling test DOES exist: this same PR adds `orders.controller.spec.ts`. The shard judging the controller is never told the other file, so 'no test was added' is asserted from an empty window.",
+      "expectedPublished": 0,
+      "prTitle": "feat(orders): expose GET /orders/:id",
+      "prBody": "Adds the read endpoint plus its controller test.",
+      "rule": {
+        "uuid": "rule-endpoint-needs-a-test",
+        "title": "Every new HTTP route handler ships with a test",
+        "rule": "A new HTTP route handler must be accompanied by a test file next to it (`<name>.spec.ts`). Untested endpoints are the most common source of regressions.",
+        "path": "",
+        "severity": "medium",
+        "contextNeed": {
+          "need": "full-file",
+          "sourceHash": "eval-fixture",
+          "source": "author",
+          "inferredAt": "2026-09-09T00:00:00.000Z"
+        }
+      },
+      "changedFiles": [
+        {
+          "filename": "src/routes/orders.controller.ts",
+          "patchWithLinesStr": "## file: 'src/routes/orders.controller.ts'\n\n@@ -3,6 +3,12 @@\n__new hunk__\n3  @Controller('orders')\n4  export class OrdersController {\n5      constructor(private readonly orders: OrdersService) {}\n6 +\n7 +    @Get(':id')\n8 +    async findOne(@Param('id') id: string) {\n9 +        return this.orders.findOne(id);\n10 +    }\n11  }"
+        },
+        {
+          "filename": "src/routes/orders.controller.spec.ts",
+          "patchWithLinesStr": "## file: 'src/routes/orders.controller.spec.ts'\n\n@@ -0,0 +1,12 @@\n__new hunk__\n1 +import { OrdersController } from './orders.controller';\n2 +\n3 +describe('OrdersController', () => {\n4 +    it('returns the order the service resolves', async () => {\n5 +        const orders = { findOne: jest.fn().mockResolvedValue({ id: 'o1' }) };\n6 +        const controller = new OrdersController(orders as any);\n7 +\n8 +        await expect(controller.findOne('o1')).resolves.toEqual({ id: 'o1' });\n9 +        expect(orders.findOne).toHaveBeenCalledWith('o1');\n10 +    });\n11 +});"
+        }
+      ],
+      "repoFiles": {
+        "src/routes/orders.controller.ts": "import { Controller, Get, Param } from '@nestjs/common';\nimport { OrdersService } from './orders.service';\n\n@Controller('orders')\nexport class OrdersController {\n    constructor(private readonly orders: OrdersService) {}\n\n    @Get(':id')\n    async findOne(@Param('id') id: string) {\n        return this.orders.findOne(id);\n    }\n}\n",
+        "src/routes/orders.controller.spec.ts": "import { OrdersController } from './orders.controller';\n\ndescribe('OrdersController', () => {\n    it('returns the order the service resolves', async () => {\n        const orders = { findOne: jest.fn().mockResolvedValue({ id: 'o1' }) };\n        const controller = new OrdersController(orders as any);\n\n        await expect(controller.findOne('o1')).resolves.toEqual({ id: 'o1' });\n        expect(orders.findOne).toHaveBeenCalledWith('o1');\n    });\n});\n"
+      }
+    },
+    {
+      "caseId": "duplicate-helper-that-does-not-exist-FULLFILE",
+      "claimFamily": "duplicate",
+      "why": "There is no `slugify` anywhere in `src/shared` — the only helpers there are `titleCase` and `truncate`. 'this already exists in shared' is an invention the shard cannot check, and applying it points the author at a symbol that is not there.",
+      "expectedPublished": 0,
+      "prTitle": "feat(blog): slugify post titles for the public URL",
+      "prBody": "Post URLs used the numeric id. Derive a slug from the title instead.",
+      "rule": {
+        "uuid": "rule-no-duplicate-helpers",
+        "title": "Do not reimplement a helper that already exists",
+        "rule": "Before adding a small utility function, use the one already published in `src/shared`. Duplicated helpers drift apart and the two behaviours diverge silently.",
+        "path": "",
+        "severity": "medium",
+        "contextNeed": {
+          "need": "full-file",
+          "sourceHash": "eval-fixture",
+          "source": "author",
+          "inferredAt": "2026-09-09T00:00:00.000Z"
+        }
+      },
+      "changedFiles": [
+        {
+          "filename": "src/blog/slug.ts",
+          "patchWithLinesStr": "## file: 'src/blog/slug.ts'\n\n@@ -0,0 +1,8 @@\n__new hunk__\n1 +export function slugify(title: string): string {\n2 +    return title\n3 +        .toLowerCase()\n4 +        .normalize('NFD')\n5 +        .replace(/[\\u0300-\\u036f]/g, '')\n6 +        .replace(/[^a-z0-9]+/g, '-')\n7 +        .replace(/^-|-$/g, '');\n8 +}"
+        }
+      ],
+      "repoFiles": {
+        "src/blog/slug.ts": "export function slugify(title: string): string {\n    return title\n        .toLowerCase()\n        .normalize('NFD')\n        .replace(/[\\u0300-\\u036f]/g, '')\n        .replace(/[^a-z0-9]+/g, '-')\n        .replace(/^-|-$/g, '');\n}\n",
+        "src/shared/strings.ts": "export function titleCase(value: string): string {\n    return value.replace(/\\b\\w/g, (c) => c.toUpperCase());\n}\n\nexport function truncate(value: string, max: number): string {\n    return value.length <= max ? value : `${value.slice(0, max - 1)}\\u2026`;\n}\n"
+      }
+    }
+  ]
+}
