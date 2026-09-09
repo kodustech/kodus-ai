@@ -15,13 +15,22 @@ import {
 
 const CLEANUP_CONCURRENCY = 5;
 
-// Caps the reaper's "leave it for the next tick" retry on a real kill
-// failure (timeout, upstream error). Without a bound, an outage that keeps
-// Sandbox.kill failing pins the same lease doc forever — findExpired/
-// findReadyToKill return it every tick with unbounded kill fan-out and it
-// never gets reconciled. After this many failed attempts, force-delete the
-// doc and log an error instead of retrying indefinitely.
+// After this many failed Sandbox.kill attempts on a real failure (timeout,
+// upstream error), escalate the log from warn to error ONCE — a sustained
+// outage needs a human, not more silent retries — but keep retrying:
+// deleting the doc here would risk losing the trace of a still-running
+// (still billing) sandbox while the outage may just be transient.
 const MAX_KILL_RETRIES = 3;
+
+// After THIS many failed attempts, stop retrying altogether and force-delete
+// the doc anyway. Without this second, higher cap, a kill that never
+// recovers pins the same lease doc forever: findExpired (5min) /
+// findReadyToKill (30s) return it every tick with unbounded kill fan-out
+// and an identical error log forever, and reconciliation never happens.
+// This accepts a small risk of an orphaned E2B sandbox (rare — confirmed
+// prod failures are transient: TimeoutError/503) in exchange for a
+// guaranteed-bounded retry window.
+const HARD_KILL_RETRY_LIMIT = 20;
 
 const E2B_ALREADY_GONE_RE =
     /not found|does not exist|404|already (been )?(deleted|killed|terminated)/i;
@@ -119,50 +128,78 @@ export class SandboxLeaseReaperService {
                                         sandboxId: lease.sandboxId,
                                     },
                                 });
-                            } else if (
-                                (lease.killRetryCount ?? 0) <
-                                MAX_KILL_RETRIES
-                            ) {
-                                sandboxGone = false;
-                                await this.leaseRepository.bumpKillRetry(
-                                    lease._id,
-                                );
-                                this.logger.warn({
-                                    message:
-                                        '[SANDBOX-REAPER] Failed to kill sandbox — leaving lease for retry next tick',
-                                    context: SandboxLeaseReaperService.name,
-                                    metadata: {
-                                        sandboxId: lease.sandboxId,
-                                        error: String(err),
-                                        killRetryCount:
-                                            (lease.killRetryCount ?? 0) + 1,
-                                    },
-                                });
                             } else {
-                                // Past the retry cap: an outage this
-                                // sustained needs a human, not another
-                                // silent retry — escalate to error for
-                                // alerting. The doc still must NOT be
-                                // deleted (same invariant as the retry
-                                // branch above): the sandbox may still be
-                                // running and billing, and deleting now
-                                // would lose the only trace of it. The
-                                // reaper keeps retrying the kill on future
-                                // ticks; once E2B recovers (kill succeeds,
-                                // or reports already-gone), the branches
-                                // above clean it up normally.
-                                sandboxGone = false;
-                                this.logger.error({
-                                    message:
-                                        '[SANDBOX-REAPER] Sandbox.kill still failing past max retries — still retrying, sandbox may be orphaned',
-                                    context: SandboxLeaseReaperService.name,
-                                    metadata: {
-                                        sandboxId: lease.sandboxId,
-                                        error: String(err),
-                                        killRetryCount: lease.killRetryCount,
-                                        organizationId: lease.organizationId,
-                                    },
-                                });
+                                const attempts =
+                                    (lease.killRetryCount ?? 0) + 1;
+
+                                if (attempts > HARD_KILL_RETRY_LIMIT) {
+                                    // Bounded loop: stop retrying and let
+                                    // this fall through to the delete
+                                    // below (sandboxGone stays true). No
+                                    // bump needed — the doc is about to
+                                    // be removed. Accepts a small risk of
+                                    // an orphaned sandbox in exchange for
+                                    // guaranteed eventual reconciliation
+                                    // instead of pinning the doc forever.
+                                    this.logger.error({
+                                        message:
+                                            '[SANDBOX-REAPER] Giving up on Sandbox.kill after the hard retry limit — deleting lease, sandbox may be orphaned',
+                                        context:
+                                            SandboxLeaseReaperService.name,
+                                        metadata: {
+                                            sandboxId: lease.sandboxId,
+                                            error: String(err),
+                                            killRetryCount: attempts,
+                                            organizationId:
+                                                lease.organizationId,
+                                        },
+                                    });
+                                } else {
+                                    sandboxGone = false;
+                                    // Only bump when the doc survives —
+                                    // the counter must keep moving past
+                                    // MAX_KILL_RETRIES or the hard cap
+                                    // above is never reached, which pins
+                                    // this doc (and repeats an identical
+                                    // error log every tick) forever.
+                                    await this.leaseRepository.bumpKillRetry(
+                                        lease._id,
+                                    );
+
+                                    if (attempts === MAX_KILL_RETRIES) {
+                                        // Transition into the capped
+                                        // state — escalate once so a
+                                        // sustained outage pages instead
+                                        // of retrying silently forever,
+                                        // without re-alerting every tick
+                                        // up to the hard cap above.
+                                        this.logger.error({
+                                            message:
+                                                '[SANDBOX-REAPER] Sandbox.kill still failing past the retry cap — still retrying, sandbox may be orphaned',
+                                            context:
+                                                SandboxLeaseReaperService.name,
+                                            metadata: {
+                                                sandboxId: lease.sandboxId,
+                                                error: String(err),
+                                                killRetryCount: attempts,
+                                                organizationId:
+                                                    lease.organizationId,
+                                            },
+                                        });
+                                    } else {
+                                        this.logger.warn({
+                                            message:
+                                                '[SANDBOX-REAPER] Failed to kill sandbox — leaving lease for retry next tick',
+                                            context:
+                                                SandboxLeaseReaperService.name,
+                                            metadata: {
+                                                sandboxId: lease.sandboxId,
+                                                error: String(err),
+                                                killRetryCount: attempts,
+                                            },
+                                        });
+                                    }
+                                }
                             }
                         }
                     }
@@ -248,45 +285,60 @@ export class SandboxLeaseReaperService {
                                         sandboxId: lease.sandboxId,
                                     },
                                 });
-                            } else if (
-                                (lease.killRetryCount ?? 0) <
-                                MAX_KILL_RETRIES
-                            ) {
-                                sandboxGone = false;
-                                await this.leaseRepository.bumpKillRetry(
-                                    lease._id,
-                                );
-                                this.logger.warn({
-                                    message:
-                                        '[SANDBOX-IDLE-KILL] Failed to kill sandbox — leaving lease for retry next tick',
-                                    context: SandboxLeaseReaperService.name,
-                                    metadata: {
-                                        sandboxId: lease.sandboxId,
-                                        error: String(err),
-                                        killRetryCount:
-                                            (lease.killRetryCount ?? 0) + 1,
-                                    },
-                                });
                             } else {
-                                // Same invariant as the retry branch above:
-                                // past the cap, escalate to error for
-                                // alerting but do NOT delete — the sandbox
-                                // may still be running and billing. Keeps
-                                // retrying on future ticks; a later
-                                // success or already-gone result cleans it
-                                // up normally.
-                                sandboxGone = false;
-                                this.logger.error({
-                                    message:
-                                        '[SANDBOX-IDLE-KILL] Sandbox.kill still failing past max retries — still retrying, sandbox may be orphaned',
-                                    context: SandboxLeaseReaperService.name,
-                                    metadata: {
-                                        sandboxId: lease.sandboxId,
-                                        error: String(err),
-                                        killRetryCount: lease.killRetryCount,
-                                        organizationId: lease.organizationId,
-                                    },
-                                });
+                                // See the identical comment in
+                                // reapExpiredLeases above.
+                                const attempts =
+                                    (lease.killRetryCount ?? 0) + 1;
+
+                                if (attempts > HARD_KILL_RETRY_LIMIT) {
+                                    this.logger.error({
+                                        message:
+                                            '[SANDBOX-IDLE-KILL] Giving up on Sandbox.kill after the hard retry limit — deleting lease, sandbox may be orphaned',
+                                        context:
+                                            SandboxLeaseReaperService.name,
+                                        metadata: {
+                                            sandboxId: lease.sandboxId,
+                                            error: String(err),
+                                            killRetryCount: attempts,
+                                            organizationId:
+                                                lease.organizationId,
+                                        },
+                                    });
+                                } else {
+                                    sandboxGone = false;
+                                    await this.leaseRepository.bumpKillRetry(
+                                        lease._id,
+                                    );
+
+                                    if (attempts === MAX_KILL_RETRIES) {
+                                        this.logger.error({
+                                            message:
+                                                '[SANDBOX-IDLE-KILL] Sandbox.kill still failing past the retry cap — still retrying, sandbox may be orphaned',
+                                            context:
+                                                SandboxLeaseReaperService.name,
+                                            metadata: {
+                                                sandboxId: lease.sandboxId,
+                                                error: String(err),
+                                                killRetryCount: attempts,
+                                                organizationId:
+                                                    lease.organizationId,
+                                            },
+                                        });
+                                    } else {
+                                        this.logger.warn({
+                                            message:
+                                                '[SANDBOX-IDLE-KILL] Failed to kill sandbox — leaving lease for retry next tick',
+                                            context:
+                                                SandboxLeaseReaperService.name,
+                                            metadata: {
+                                                sandboxId: lease.sandboxId,
+                                                error: String(err),
+                                                killRetryCount: attempts,
+                                            },
+                                        });
+                                    }
+                                }
                             }
                         }
                     }
