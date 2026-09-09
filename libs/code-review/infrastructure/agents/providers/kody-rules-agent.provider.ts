@@ -349,6 +349,33 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                     needOf(r) !== 'diff-only',
             );
 
+            // A PR-scope rule that declares a need is served by NOTHING: the
+            // whole-PR pass is one call over the diff, and retrieval here is
+            // per changed file. Silence is the wrong answer to that — the
+            // author asked for context and would never learn it was ignored.
+            // The classifier is told to answer `diff-only` for PR scope, so
+            // reaching here means it did not, and that is worth seeing.
+            const prScopeWithNeed = rulesForJudge.filter(
+                (r) =>
+                    r.scope === KodyRulesScope.PULL_REQUEST &&
+                    needOf(r) !== 'diff-only',
+            );
+            if (prScopeWithNeed.length) {
+                this.shardLogger.warn({
+                    message: `[kody-rules] ${prScopeWithNeed.length} PR-scope rule(s) declare a context need that the whole-PR pass cannot serve for PR#${input.prNumber}; they are judged on the PR diff alone`,
+                    context: this.getIdentity().name,
+                    metadata: {
+                        organizationAndTeamData: input.organizationAndTeamData,
+                        prNumber: input.prNumber,
+                        rules: prScopeWithNeed.map((r) => ({
+                            uuid: r.uuid,
+                            title: r.title,
+                            need: needOf(r),
+                        })),
+                    },
+                });
+            }
+
             for (const file of contextRules.length
                 ? (input.changedFiles ?? [])
                 : []) {

@@ -90,8 +90,17 @@ const NAME_PATTERNS: RegExp[] = [
     /export\s+(?:default\s+)?(?:function|class|const)\s+(\w+)/,
 ];
 
+/**
+ * Start-of-definition keywords, across languages.
+ *
+ * `fun ` (Kotlin) was missing while `.kt` sat in the retriever's list of
+ * recognised extensions — so a Kotlin file was promised an enclosing scope and
+ * handed an arbitrary offset instead. Anything added here must be a keyword
+ * that STARTS a definition in some language; a return type (`int `, `void `)
+ * cannot go in without matching ordinary statements too.
+ */
 export const DEFINITION_PATTERN =
-    /^\s*(def |func |fn |function |class |public |private |protected |interface |abstract |override |export (function|class|const))/;
+    /^\s*(def |func |fun |fn |function |sub |class |public |private |protected |internal |interface |abstract |override |export (function|class|const))/;
 
 export function extractContentWindow(
     content: string,

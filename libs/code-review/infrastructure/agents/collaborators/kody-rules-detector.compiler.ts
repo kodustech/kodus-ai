@@ -65,6 +65,7 @@ CONTEXT NEED (answer this every time, mechanical or not). The reviewer sees ONLY
 - "symbol-references" — you must see where the changed symbols are used ELSEWHERE in the repository (e.g. "do not duplicate an existing helper", "an exported symbol nobody imports").
 - "sibling-file" — you must know whether a related file exists (e.g. "every new endpoint has a test").
 - "cited-file" — the rule points at another file whose content IS the convention.
+A PR-SCOPE rule (one judged against the pull request as a whole, not a file) is always "diff-only": the whole-PR pass is not served by per-file retrieval, so any other answer silently buys it nothing.
 Answer "diff-only" unless the rule plainly cannot be judged without more. Over-declaring is the expensive mistake: a rule needing context the reviewer cannot fetch is not judged at all, so when unsure, answer "diff-only".
 
 Return ONLY JSON: {"mechanical": true, "pattern": "<regex source>", "flags": "<optional>", "extensions": ["<.ext>", …], "contextNeed": "<diff-only|full-file|symbol-references|sibling-file|cited-file>", "reason": "<one sentence>"} or {"mechanical": false, "cosmetic": <true|false>, "extensions": ["<.ext>", …], "contextNeed": "<diff-only|full-file|symbol-references|sibling-file|cited-file>", "reason": "<one sentence>"}`;

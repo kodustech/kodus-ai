@@ -70,29 +70,69 @@ const MAX_SYMBOLS_PER_FILE = 3;
 const WHOLE_FILE_MAX_LINES = 4000;
 
 /**
- * Extensions whose definitions `DEFINITION_PATTERN` actually recognizes. A file
- * outside this set gets the bounded window instead of a wrong "enclosing scope"
- * — the fallback KRC-27 requires.
+ * Where the scope around a hunk begins.
+ *
+ * NOT by keyword. This used to walk back to a line matching DEFINITION_PATTERN,
+ * gated on an allowlist of extensions "whose definitions the pattern
+ * recognises" — a per-language table in product code, and it was wrong the
+ * moment a language declared functions with a word nobody had added. Kotlin's
+ * `fun` was missing while `.kt` sat in the allowlist, so a Kotlin file was
+ * PROMISED an enclosing scope and handed 120 arbitrary lines. Every language
+ * outside the list had the same problem by construction, and the list can never
+ * be finished: the product is language- and framework-agnostic.
+ *
+ * Indentation is the signal that is not per-language. A scope opens on the
+ * nearest preceding line indented LESS than the hunk — in Python, in Go, in HCL
+ * alike — because that is what indenting a body means. No table to maintain,
+ * and a language nobody anticipated works the day someone reviews it.
+ *
+ * DEFINITION_PATTERN survives as a tie-breaker only: among the candidate lines
+ * it prefers one that also reads like a definition, which sharpens the common
+ * case without being required for the uncommon one.
+ *
+ * Returns null when there is nothing shallower to find — a hunk at top level,
+ * or a file with no indentation at all (minified, generated, single-line). The
+ * caller then says "window", not "scope": claiming a scope it did not find is
+ * how a "this function is too long" rule gets a confident wrong answer.
  */
-const ENCLOSING_SCOPE_EXTENSIONS = new Set([
-    '.c',
-    '.cc',
-    '.cpp',
-    '.cs',
-    '.go',
-    '.java',
-    '.js',
-    '.jsx',
-    '.kt',
-    '.php',
-    '.py',
-    '.rb',
-    '.rs',
-    '.scala',
-    '.swift',
-    '.ts',
-    '.tsx',
-]);
+const indentWidthOf = (line: string): number => {
+    const m = /^[ \t]*/.exec(line);
+    return m ? m[0].length : 0;
+};
+
+function enclosingScopeStart(
+    lines: string[],
+    hunkStart: number,
+    lookback: number,
+): number | null {
+    if (hunkStart < 1 || hunkStart > lines.length) return null;
+
+    // The hunk's own depth, from its first non-blank line: a blank first line
+    // would otherwise report depth 0 and swallow the whole file.
+    let hunkIndent: number | null = null;
+    for (
+        let i = hunkStart;
+        i <= Math.min(lines.length, hunkStart + 4);
+        i++
+    ) {
+        if ((lines[i - 1] ?? '').trim()) {
+            hunkIndent = indentWidthOf(lines[i - 1]);
+            break;
+        }
+    }
+    // Depth 0 means the change is already at top level; there is no enclosing
+    // scope to show, and every line above would qualify.
+    if (hunkIndent === null || hunkIndent === 0) return null;
+
+    const floor = Math.max(1, hunkStart - lookback);
+    for (let line = hunkStart - 1; line >= floor; line--) {
+        const text = lines[line - 1] ?? '';
+        if (!text.trim()) continue;
+        if (indentWidthOf(text) >= hunkIndent) continue;
+        return line;
+    }
+    return null;
+}
 
 /**
  * Needs this module retrieves, narrowest first. `diff-only` needs nothing and
@@ -280,34 +320,38 @@ async function retrieveFullFile(
         );
     }
 
-    const ext = extensionOf(file.filename);
-    const canResolveScope = !!ext && ENCLOSING_SCOPE_EXTENSIONS.has(ext);
     const slices: RetrievedSlice[] = [];
 
     for (const [start, end] of ranges) {
         let from: number;
         let to: number;
-        if (canResolveScope) {
-            // Walk back to the nearest definition line. `start` is 1-based.
-            from = Math.max(1, start - ENCLOSING_LOOKBACK_LINES);
-            for (let i = start - 1; i >= from; i--) {
-                if (DEFINITION_PATTERN.test(lines[i - 1] ?? '')) {
-                    from = i;
-                    break;
-                }
-            }
+        const scopeStart = enclosingScopeStart(
+            lines,
+            start,
+            ENCLOSING_LOOKBACK_LINES,
+        );
+        const foundScope = scopeStart !== null;
+        if (foundScope) {
+            from = scopeStart;
             to = Math.min(lines.length, end + ENCLOSING_TRAILING_LINES);
         } else {
-            // KRC-27: a language whose definitions DEFINITION_PATTERN does not
-            // recognise gets an honest bounded window rather than a confident
-            // wrong "enclosing scope".
+            // KRC-27: nothing shallower to anchor on, so an honest bounded
+            // window rather than a confident wrong "enclosing scope".
             from = Math.max(1, start - FALLBACK_WINDOW_RADIUS);
             to = Math.min(lines.length, end + FALLBACK_WINDOW_RADIUS);
         }
 
+        // Say which of the two this actually is. Calling a window "the scope"
+        // tells the model it is looking at a whole function when it is looking
+        // at 120 arbitrary lines — precisely how a "this function is too long"
+        // rule gets a confidently wrong answer.
+        const label = foundScope
+            ? `${file.filename}, lines ${from}-${to} of ${lines.length} (the scope enclosing one hunk; the file is too large to show whole)`
+            : `${file.filename}, lines ${from}-${to} of ${lines.length} (a window around one hunk — no enclosing definition was found, so this may start mid-scope; the file is too large to show whole)`;
+
         slices.push({
             kind: 'full-file',
-            label: `${file.filename}, lines ${from}-${to} of ${lines.length} (the scope around one hunk; the file is too large to show whole)`,
+            label,
             content: lines.slice(from - 1, to).join('\n'),
             truncated: true,
         });
