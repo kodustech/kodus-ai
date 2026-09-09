@@ -228,6 +228,7 @@
         "sentry:sourcemaps": "sentry-cli sourcemaps inject --org kodus --project kodus-orchestrator ./dist && sentry-cli sourcemaps upload --org kodus --project kodus-orchestrator ./dist",
         "typecheck": "node --max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit --skipLibCheck",
         "typecheck:libs-gate": "bash scripts/typecheck-libs-gate.sh",
+        "kodus:catalog:check": "TS_NODE_PROJECT=tsconfig.json node -r ts-node/register/transpile-only -r tsconfig-paths/register scripts/check-kodus-catalog-prices.ts",
         "ci:validate-di-graph": "TS_NODE_PROJECT=tsconfig.json node -r ts-node/register/transpile-only -r tsconfig-paths/register scripts/ci/validate-di-graph.ts",
         "prepare": "husky || true",
         "tunnel": "node scripts/dev/tunnel.js",

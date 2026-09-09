@@ -42,12 +42,15 @@ import type {
     ReasoningEffort,
 } from '../kernel/types';
 import { normalizeSdkResult, normalizeSdkUsage } from '../kernel/usage';
+import { isKodusCatalogModel, kodusModelListing } from './catalog';
 import {
-    isKodusCatalogModel,
-    kodusModelListing,
     KODUS_UPSTREAMS,
+    splitKodusModelId,
+    type KodusModelRef,
     type KodusUpstream,
-} from './catalog';
+} from './model-id';
+
+export { KODUS_UPSTREAMS, splitKodusModelId, type KodusModelRef };
 // Side-effect imports so the upstream modules are registered before the first
 // dispatch — the barrel (../index.ts) imports them too, but a direct consumer of
 // this module (a spec) must not depend on import order.
@@ -65,26 +68,6 @@ export const KODUS_UPSTREAM_KEY_ENV: Record<KodusUpstream, string> = {
     openai: 'API_KODUS_PROVIDER_OPENAI_API_KEY',
     google: 'API_KODUS_PROVIDER_GOOGLE_API_KEY',
 };
-
-export interface KodusModelRef {
-    upstream: KodusUpstream;
-    /** Registered provider id whose module serves this upstream. */
-    providerId: string;
-    /** The upstream's own model id (the part after the slash). */
-    model: string;
-}
-
-/** Split `<upstream>/<model>` into its parts, or null when the prefix is not
- *  one Kodus routes to (or the id has no slash). Pure, never throws. */
-export function splitKodusModelId(id: string | undefined): KodusModelRef | null {
-    if (!id) return null;
-    const slash = id.indexOf('/');
-    if (slash <= 0 || slash === id.length - 1) return null;
-    const upstream = id.slice(0, slash) as KodusUpstream;
-    const providerId = KODUS_UPSTREAMS[upstream];
-    if (!providerId) return null;
-    return { upstream, providerId, model: id.slice(slash + 1) };
-}
 
 /** The platform key for an upstream, or '' when the env var is unset. */
 export function kodusUpstreamKey(upstream: KodusUpstream): string {

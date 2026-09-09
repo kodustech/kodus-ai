@@ -14,16 +14,9 @@
  */
 import type { CatalogModel, ModelListing } from '../kernel/types';
 import { catalogWithReasoning } from '../kernel/listing-helpers';
+import type { KodusUpstream } from './model-id';
 
-/** Upstream accounts the Kodus provider can route to. The value is the
- *  registered provider id whose module builds the model. */
-export const KODUS_UPSTREAMS = {
-    anthropic: 'anthropic',
-    openai: 'openai',
-    google: 'google_gemini',
-} as const;
-
-export type KodusUpstream = keyof typeof KODUS_UPSTREAMS;
+export { KODUS_UPSTREAMS, type KodusUpstream } from './model-id';
 
 /** Date the list prices below were copied from models.dev. */
 export const KODUS_CATALOG_PRICES_AS_OF = '2026-09-09';

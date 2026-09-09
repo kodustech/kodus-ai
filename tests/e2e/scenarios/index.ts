@@ -9,6 +9,7 @@ import conversationAnthropicByok from './conversation-anthropic-byok.js';
 import commandReview from './command-review.js';
 import commandReviewFocus from './command-review-focus.js';
 import commandReviewWhileBusy from './command-review-while-busy.js';
+import kodusCreditsGate from './kodus-credits-gate.js';
 import kodyRulesCreateAndApply from './kody-rules.js';
 import kodyRulesFileSync from './kody-rules-file-sync.js';
 import kodyRulesLifecycle from './kody-rules-lifecycle.js';
@@ -59,6 +60,7 @@ export const allScenarios: Record<string, Scenario> = {
     [ssoCookieDomain.id]: ssoCookieDomain,
     [ssoMultiUser.id]: ssoMultiUser,
     [stripeBilling.id]: stripeBilling,
+    [kodusCreditsGate.id]: kodusCreditsGate,
     [trialCreditsConsume.id]: trialCreditsConsume,
     [trialEntitlementGate.id]: trialEntitlementGate,
     [trialManagedReview.id]: trialManagedReview,
@@ -104,6 +106,7 @@ export {
     ssoCookieDomain,
     ssoMultiUser,
     stripeBilling,
+    kodusCreditsGate,
     trialCreditsConsume,
     trialEntitlementGate,
     trialManagedReview,
