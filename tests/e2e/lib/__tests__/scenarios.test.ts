@@ -17,6 +17,7 @@ test("allScenarios: includes the registered release-gate scenarios", () => {
         "cross-repo-config",
         "finish-onboarding-slo",
         "kodus-credits-gate",
+        "kodus-credits-review",
         "kody-rules-coverage",
         "kody-rules-create-and-apply",
         "kody-rules-file-sync",

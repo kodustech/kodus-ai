@@ -37,5 +37,6 @@ export const { GET, POST, PUT, PATCH, DELETE } = createProxyHandler({
         "/metrics",
         "/debug",
         "/credits/debit",
+        "/credits/adjust",
     ],
 });

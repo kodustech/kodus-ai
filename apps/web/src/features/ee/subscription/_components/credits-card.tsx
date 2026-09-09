@@ -290,7 +290,10 @@ export const CreditsCard = () => {
                                     <td
                                         className={`py-2 pr-4 text-right font-mono ${entry.amountUsd < 0 ? "text-text-primary" : "text-success"}`}>
                                         {entry.amountUsd < 0 ? "−" : "+"}
-                                        {usd(Math.abs(entry.amountUsd), 4)}
+                                        {usd(
+                                            Math.abs(entry.amountUsd),
+                                            entry.type === "debit" ? 4 : 2,
+                                        )}
                                     </td>
                                     <td className="text-text-secondary py-2 text-right font-mono">
                                         {usd(entry.balanceAfterUsd)}

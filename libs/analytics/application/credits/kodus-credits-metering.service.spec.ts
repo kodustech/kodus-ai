@@ -200,7 +200,13 @@ describe('sweepOrganization — journaling', () => {
         // Query shape: org + settled window + kodus prefix + non-empty usage.
         const filter = (telemetryModel.find.mock.calls[0] as any[])[0];
         expect(filter['attributes.organizationId']).toBe('org-1');
-        expect(filter['attributes.gen_ai.response.model']).toEqual(/^kodus:/);
+        // The model lives under a dotted key inside `attributes`, so the filter
+        // must read it with $getField (a dot path silently matches nothing).
+        expect(filter.$expr.$regexMatch.regex).toBe('^kodus:');
+        expect(filter.$expr.$regexMatch.input.$ifNull[0].$getField).toEqual({
+            field: 'gen_ai.response.model',
+            input: '$attributes',
+        });
         expect(filter['attributes.tu.total']).toEqual({ $gt: 0 });
         expect(filter.timestamp.$lte.getTime()).toBe(NOW.getTime() - SWEEP_SETTLE_MS);
         expect(filter.timestamp.$gt.getTime()).toBe(NOW.getTime() - SWEEP_INITIAL_LOOKBACK_MS);

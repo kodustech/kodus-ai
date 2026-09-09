@@ -1,14 +1,10 @@
 import { http } from "../lib/http.js";
+import { auth, saveKodusByok } from "../lib/kodus-credits.js";
 import {
     fetchOrgLicense,
     provisionFreshTrialOrg,
 } from "../lib/trial-provision.js";
-import type {
-    KodusSession,
-    RunContext,
-    Scenario,
-    TargetContext,
-} from "../lib/types.js";
+import type { RunContext, Scenario, TargetContext } from "../lib/types.js";
 
 // "Kodus as the provider" — the API-level contract that the review gate and
 // the web rely on, exercised on a FRESH org (no platform keys needed: nothing
@@ -30,46 +26,6 @@ type Balance = {
     lifetimePurchasedUsd: number;
     lifetimeDebitedUsd: number;
 };
-
-const auth = (session: KodusSession) => ({
-    Authorization: `Bearer ${session.accessToken}`,
-});
-
-async function saveKodusByok(
-    ctx: RunContext,
-    session: KodusSession,
-): Promise<void> {
-    const target = ctx.target as TargetContext;
-    const configValue = {
-        version: 2,
-        credentials: [{ id: "e2e-kodus-cred", provider: "kodus" }],
-        models: [
-            {
-                id: "e2e-kodus-model",
-                credentialId: "e2e-kodus-cred",
-                model: "anthropic/claude-sonnet-5",
-            },
-        ],
-        routing: {
-            mode: "manual",
-            defaultModelId: "e2e-kodus-model",
-            taskOverrides: {},
-        },
-    };
-    const save = await http(
-        `${target.apiBaseUrl}/organization-parameters/create-or-update`,
-        {
-            method: "POST",
-            headers: auth(session),
-            body: { key: "byok_config", configValue },
-            timeoutMs: 25_000,
-        },
-    );
-    ctx.assert(
-        save.status >= 200 && save.status < 300,
-        `Saving a keyless kodus credential must succeed on cloud (HTTP ${save.status}): ${save.raw.slice(0, 250)}`,
-    );
-}
 
 export const kodusCreditsGate: Scenario = {
     id: "kodus-credits-gate",

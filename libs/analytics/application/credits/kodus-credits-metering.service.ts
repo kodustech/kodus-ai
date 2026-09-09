@@ -56,7 +56,24 @@ export const SWEEP_INITIAL_LOOKBACK_MS = 24 * 60 * 60 * 1000;
 export const SWEEP_SPAN_CAP = 2000;
 export const DEBIT_BATCH_SIZE = 500;
 
-const KODUS_MODEL_PREFIX = /^kodus:/;
+/**
+ * The usage span stores the model under the literal key `gen_ai.response.model`
+ * INSIDE `attributes` — a key that contains dots. Mongo dot-notation cannot
+ * address such a key (`attributes.gen_ai.response.model` walks nested docs
+ * and matches nothing), so the filter reads it with `$getField` under `$expr`.
+ * Verified live on 2026-09-09: the dot path matched 0 of 10 Kodus spans.
+ */
+const KODUS_ROUTED_SPAN_EXPR = {
+    $regexMatch: {
+        input: {
+            $ifNull: [
+                { $getField: { field: 'gen_ai.response.model', input: '$attributes' } },
+                '',
+            ],
+        },
+        regex: '^kodus:',
+    },
+};
 
 export interface SweepSummary {
     organizationId: string;
@@ -145,8 +162,8 @@ export class KodusCreditsMeteringService {
                 {
                     'attributes.organizationId': organizationId,
                     'timestamp': { $gt: cursor, $lte: upper },
-                    'attributes.gen_ai.response.model': KODUS_MODEL_PREFIX,
                     'attributes.tu.total': { $gt: 0 },
+                    '$expr': KODUS_ROUTED_SPAN_EXPR,
                 },
                 {
                     '_id': 1,

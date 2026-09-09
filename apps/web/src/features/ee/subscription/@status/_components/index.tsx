@@ -48,7 +48,10 @@ export const Redirect = ({
                 license={trialLicense}
                 usersWithAssignedLicense={
                     subscriptionContext.usersWithAssignedLicense
-                }>
+                }
+                // The nested provider must carry the app-level flag, or the
+                // credits card on a trial org forgets it routes through Kodus.
+                usesKodusProvider={subscriptionContext.usesKodusProvider}>
                 <RedirectContent
                     members={members}
                     codeHostMembersCount={codeHostMembersCount}
