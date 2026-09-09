@@ -28,7 +28,7 @@ import type { RunContext, Scenario, TargetContext } from "../lib/types.js";
 import { makeProvider } from "../providers/index.js";
 
 // "Kodus as the provider" — the WHOLE loop, live:
-//   fresh trial org → keyless `kodus` credential (claude-sonnet-5 routed on
+//   fresh trial org → keyless `kodus` credential (DeepSeek V4 Flash routed on Fireworks with
 //   Kodus's own account) → seed $5 of credits (admin adjust) → real PR review
 //   on a throwaway repo → the metering sweep journals the run's spans and
 //   debits them → balance drops, ledger shows the PR → drain the balance to 0

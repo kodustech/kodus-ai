@@ -4,13 +4,18 @@
  * pulling in the provider modules.
  *
  * `<upstream>/<model>`: the prefix picks the upstream account Kodus routes to
- * (`anthropic` | `openai` | `google`), the remainder is the upstream's own
- * model id, passed through verbatim. Only the FIRST slash splits.
+ * (`fireworks` today; `anthropic` | `openai` | `google` stay wired for a later
+ * catalog), the remainder is the upstream's own model id, passed through
+ * verbatim. Only the FIRST slash splits — a Fireworks id carries several
+ * (`fireworks/accounts/fireworks/models/deepseek-v4-flash-0731`).
  */
 
 /** Upstream accounts the Kodus provider can route to. The value is the
  *  registered provider id whose module builds the model. */
 export const KODUS_UPSTREAMS = {
+    // Fireworks serves open models (DeepSeek, Kimi, GLM) over the OpenAI
+    // protocol; the kodus module pins the endpoint (see asUpstream).
+    fireworks: 'openai_compatible',
     anthropic: 'anthropic',
     openai: 'openai',
     google: 'google_gemini',

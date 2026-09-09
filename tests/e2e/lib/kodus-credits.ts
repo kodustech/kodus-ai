@@ -11,7 +11,8 @@ export const auth = (session: KodusSession) => ({
     Authorization: `Bearer ${session.accessToken}`,
 });
 
-export const KODUS_E2E_MODEL = "anthropic/claude-sonnet-5";
+export const KODUS_E2E_MODEL =
+    "fireworks/accounts/fireworks/models/deepseek-v4-flash-0731";
 
 /** Persist a v2 BYOK config whose only model is routed by Kodus (no key). */
 export async function saveKodusByok(

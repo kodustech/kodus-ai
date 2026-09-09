@@ -45,9 +45,9 @@ const PROBED_IDS = REGISTRY.ids()
 // it) and routes with a platform key from env — the probe must use a listed
 // id, and the key must exist for the offline build to construct.
 const MODEL_FOR: Record<string, string> = {
-    kodus: 'anthropic/claude-sonnet-5',
+    kodus: 'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731',
 };
-process.env.API_KODUS_PROVIDER_ANTHROPIC_API_KEY = 'sk-kodus-platform-test';
+process.env.API_KODUS_PROVIDER_FIREWORKS_API_KEY = 'sk-kodus-platform-test';
 
 describe('connection probe covers every registered provider', () => {
     beforeEach(() => {

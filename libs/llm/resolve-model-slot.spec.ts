@@ -289,7 +289,7 @@ describe('resolveModelSlot — platform-funded (`kodus`) credential', () => {
     const v2: BYOKConfig = {
         version: 2,
         credentials: [{ id: 'kd', provider: 'kodus' }],
-        models: [{ id: 'm-kodus', credentialId: 'kd', model: 'anthropic/claude-sonnet-5' }],
+        models: [{ id: 'm-kodus', credentialId: 'kd', model: 'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731' }],
         routing: { defaultModelId: 'm-kodus' },
     };
 
@@ -298,7 +298,7 @@ describe('resolveModelSlot — platform-funded (`kodus`) credential', () => {
         expect(slot).toMatchObject({
             provider: 'kodus',
             apiKey: '',
-            model: 'anthropic/claude-sonnet-5',
+            model: 'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731',
             byokModelId: 'm-kodus',
             credentialId: 'kd',
         });

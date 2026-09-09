@@ -39,7 +39,7 @@ import kodusPlainFixture from '../kodus/__fixtures__/plain.json';
 
 // The kodus module builds through the upstream modules with PLATFORM keys read
 // from env — give it one so the offline build() constructs (no request is made).
-process.env.API_KODUS_PROVIDER_ANTHROPIC_API_KEY = 'sk-kodus-platform-not-real';
+process.env.API_KODUS_PROVIDER_FIREWORKS_API_KEY = 'sk-kodus-platform-not-real';
 
 /** The eleven BYOKProvider ids the registry must fully cover (azure added). */
 const ALL_IDS = [
@@ -213,8 +213,8 @@ describe('01-02 ported modules — static conformance', () => {
     // kodus routes over the upstream modules with a platform key (env, above).
     runStaticConformance(kodusModule, {
         provider: 'kodus',
-        model: 'anthropic/claude-sonnet-5',
-        reasoningModel: 'anthropic/claude-sonnet-5',
+        model: 'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731',
+        reasoningModel: 'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731',
     });
 });
 
@@ -322,7 +322,7 @@ const CONFORMANCE_SAMPLES: Record<
         // Kodus-routed Claude — the slot carries NO key (apiKey ''); build()
         // reads the platform key from env (set at the top of this spec) and
         // dispatches to the native anthropic module offline.
-        cfg: { ...sampleConfig('kodus', 'anthropic/claude-sonnet-5'), apiKey: '' },
+        cfg: { ...sampleConfig('kodus', 'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731'), apiKey: '' },
         fixture: kodusPlainFixture as ProviderFixture,
     },
 };

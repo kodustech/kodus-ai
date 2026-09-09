@@ -27,7 +27,7 @@ describe('PermissionValidationService — Kodus credits gate', () => {
         version: 2,
         credentials: [{ id: 'kd', provider: 'kodus' }],
         models: [
-            { id: 'm1', credentialId: 'kd', model: 'anthropic/claude-sonnet-5' },
+            { id: 'm1', credentialId: 'kd', model: 'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731' },
         ],
         routing: { mode: 'manual', defaultModelId: 'm1', taskOverrides: {} },
     };
@@ -72,7 +72,7 @@ describe('PermissionValidationService — Kodus credits gate', () => {
         expect(res.metadata).toMatchObject({
             creditsExhausted: true,
             creditBalanceUsd: 0,
-            model: 'anthropic/claude-sonnet-5',
+            model: 'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731',
         });
     });
 

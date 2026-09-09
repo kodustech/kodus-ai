@@ -703,7 +703,7 @@ describe('platform-funded (`kodus`) credential — keyless by design, cloud-only
             {
                 id: 'model-k',
                 credentialId: 'cred-kodus',
-                model: 'anthropic/claude-sonnet-5',
+                model: 'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731',
             },
         ],
         routing: { defaultModelId: 'model-k' },

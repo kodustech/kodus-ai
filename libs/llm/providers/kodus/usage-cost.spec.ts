@@ -45,9 +45,11 @@ describe('kodusUsageCostUsd — the one billing formula', () => {
 
     it('prices only catalog ids; anything else is null (never silently free)', () => {
         expect(
-            kodusModelUsageCostUsd('anthropic/claude-sonnet-5', { input: 1_000_000, output: 0 }),
-        ).toBeCloseTo(2, 6);
-        expect(kodusModelUsageCostUsd('claude-sonnet-5', { input: 1, output: 1 })).toBeNull();
-        expect(kodusModelUsageCostUsd('openai/gpt-4o', { input: 1, output: 1 })).toBeNull();
+            kodusModelUsageCostUsd('fireworks/accounts/fireworks/models/deepseek-v4-flash-0731', { input: 1_000_000, output: 0 }),
+        ).toBeCloseTo(0.22, 6);
+        expect(
+            kodusModelUsageCostUsd('accounts/fireworks/models/deepseek-v4-flash-0731', { input: 1, output: 1 }),
+        ).toBeNull();
+        expect(kodusModelUsageCostUsd('anthropic/claude-sonnet-5', { input: 1, output: 1 })).toBeNull();
     });
 });

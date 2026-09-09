@@ -1,16 +1,18 @@
 /**
  * The Kodus provider's model catalog — curated AND a price list.
  *
- * Every entry here is a model Kodus routes on its own upstream account, priced
- * at the upstream's public list rate (USD per 1M tokens). The org is billed for
+ * Every entry here is a model Kodus routes on its own upstream account —
+ * Fireworks, for now: a curated set of open models (DeepSeek, Kimi, GLM), none
+ * of the frontier closed ones — priced at the upstream's public list rate
+ * (USD per 1M tokens). The org is billed for
  * exactly these numbers from its Kodus credits, so the catalog is the billing
  * price list, not a hint: a price change is a code change (reviewed, versioned),
  * never a runtime catalog fetch. `models.dev` is the source the numbers were
  * copied from; the `asOf` date says when.
  *
  * Model ids are `<upstream>/<model>`: the prefix picks the upstream account
- * (`anthropic` | `openai` | `google`), the remainder is the upstream's own model
- * id, passed through verbatim. See `splitKodusModelId` in ./index.ts.
+ * (`fireworks`), the remainder is the upstream's own model id, passed through
+ * verbatim (Fireworks ids carry their own slashes). See `splitKodusModelId`.
  */
 import type { CatalogModel, ModelListing } from '../kernel/types';
 import { catalogWithReasoning } from '../kernel/listing-helpers';
@@ -31,89 +33,56 @@ type KodusCatalogEntry = {
 
 const ENTRIES: KodusCatalogEntry[] = [
     {
-        id: 'anthropic/claude-sonnet-5',
-        name: 'Claude Sonnet 5',
-        description: 'Best balance of review quality and cost. Our default pick.',
+        id: 'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731',
+        name: 'DeepSeek V4 Flash',
+        description:
+            'Fast, cheap, 1M context. The model Kodus runs trials on — our default pick.',
         recommended: true,
         pricing: {
-            inputPerMillion: 2,
-            outputPerMillion: 10,
-            cacheReadPerMillion: 0.2,
-            cacheWritePerMillion: 2.5,
+            inputPerMillion: 0.22,
+            outputPerMillion: 0.66,
+            cacheReadPerMillion: 0.007,
         },
     },
     {
-        id: 'anthropic/claude-opus-5',
-        name: 'Claude Opus 5',
-        description: 'Deepest reasoning for large or tricky PRs. Premium price.',
-        pricing: {
-            inputPerMillion: 5,
-            outputPerMillion: 25,
-            cacheReadPerMillion: 0.5,
-            cacheWritePerMillion: 6.25,
-        },
-    },
-    {
-        id: 'anthropic/claude-haiku-4-5',
-        name: 'Claude Haiku 4.5',
-        description: 'Fast and cheap for small PRs and summaries.',
-        pricing: {
-            inputPerMillion: 1,
-            outputPerMillion: 5,
-            cacheReadPerMillion: 0.1,
-            cacheWritePerMillion: 1.25,
-        },
-    },
-    {
-        id: 'openai/gpt-5.4',
-        name: 'GPT-5.4',
-        description: 'Strong reviewer, follows review focus instructions well.',
+        id: 'fireworks/accounts/fireworks/models/deepseek-v4-pro-0813',
+        name: 'DeepSeek V4 Pro',
+        description: 'Deeper reasoning for large or tricky PRs, still 1M context.',
         recommended: true,
         pricing: {
-            inputPerMillion: 2.5,
-            outputPerMillion: 15,
-            cacheReadPerMillion: 0.25,
+            inputPerMillion: 1.32,
+            outputPerMillion: 3.96,
+            cacheReadPerMillion: 0.044,
         },
     },
     {
-        id: 'openai/gpt-5.4-mini',
-        name: 'GPT-5.4 mini',
-        description: 'Budget option with solid reasoning.',
+        id: 'fireworks/accounts/fireworks/models/kimi-k2p7-code',
+        name: 'Kimi K2.7 Code',
+        description: 'Code-tuned, always thinks. Strong on refactors; 262K context.',
         pricing: {
-            inputPerMillion: 0.75,
-            outputPerMillion: 4.5,
-            cacheReadPerMillion: 0.075,
+            inputPerMillion: 0.95,
+            outputPerMillion: 4,
+            cacheReadPerMillion: 0.19,
         },
     },
     {
-        id: 'openai/gpt-5.6',
-        name: 'GPT-5.6',
-        description: 'Latest OpenAI flagship.',
+        id: 'fireworks/accounts/fireworks/models/glm-5p2',
+        name: 'GLM 5.2',
+        description: 'Solid all-rounder with 1M context.',
         pricing: {
-            inputPerMillion: 4,
-            outputPerMillion: 20,
-            cacheReadPerMillion: 0.4,
-            cacheWritePerMillion: 5,
+            inputPerMillion: 1.4,
+            outputPerMillion: 4.4,
+            cacheReadPerMillion: 0.14,
         },
     },
     {
-        id: 'google/gemini-3.1-pro-preview',
-        name: 'Gemini 3.1 Pro',
-        description: 'Large context, good on big diffs.',
+        id: 'fireworks/accounts/fireworks/models/glm-5p3-flash',
+        name: 'GLM 5.3 Flash',
+        description: 'Cheapest option; quick reviews on small PRs.',
         pricing: {
-            inputPerMillion: 2,
-            outputPerMillion: 12,
-            cacheReadPerMillion: 0.2,
-        },
-    },
-    {
-        id: 'google/gemini-3.7-flash',
-        name: 'Gemini 3.7 Flash',
-        description: 'Cheapest option that still reasons.',
-        pricing: {
-            inputPerMillion: 0.75,
-            outputPerMillion: 3.75,
-            cacheReadPerMillion: 0.075,
+            inputPerMillion: 0.15,
+            outputPerMillion: 0.5,
+            cacheReadPerMillion: 0.03,
         },
     },
 ];

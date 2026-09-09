@@ -143,7 +143,7 @@ const span = (
         teamId: over.teamId ?? 'team-1',
         prNumber: over.prNumber ?? 42,
         tu: {
-            model: over.model ?? 'anthropic/claude-sonnet-5',
+            model: over.model ?? 'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731',
             input: over.input ?? 1_000_000,
             output: over.output ?? 100_000,
             reasoning: 0,
@@ -191,7 +191,7 @@ describe('sweepOrganization — journaling', () => {
         const { service, charges, telemetryModel, debit } = harness({
             spans: [
                 span('s1', { input: 1_000_000, output: 100_000, cacheRead: 400_000, cacheWrite: 100_000 }),
-                span('s2', { model: 'openai/gpt-5.4', input: 1_000_000, output: 0 }),
+                span('s2', { model: 'fireworks/accounts/fireworks/models/deepseek-v4-pro-0813', input: 1_000_000, output: 0 }),
             ],
         });
 
@@ -216,17 +216,18 @@ describe('sweepOrganization — journaling', () => {
         expect(summary.journaled).toBe(2);
         const s1 = charges.find((c) => c.spanId === 's1')!;
         // uncached 500K×$2 + read 400K×$0.2 + write 100K×$2.5 + out 100K×$10
-        expect(s1.amountUsd).toBeCloseTo(2.33, 6);
+        // flash: uncached 500K×0.22 + read 400K×0.007 + write 100K×0.22 (no write rate) + out 100K×0.66
+        expect(s1.amountUsd).toBeCloseTo(0.2008, 6);
         expect(s1).toMatchObject({
             organizationId: 'org-1',
             teamId: 'team-1',
             correlationId: 'run-s1',
             prNumber: 42,
-            modelId: 'anthropic/claude-sonnet-5',
+            modelId: 'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731',
             status: 'debited',
         });
         const s2 = charges.find((c) => c.spanId === 's2')!;
-        expect(s2.amountUsd).toBeCloseTo(2.5, 6);
+        expect(s2.amountUsd).toBeCloseTo(1.32, 6);
 
         // Debited in one batch for the team, usageKey = span:<id>.
         expect(debit).toHaveBeenCalledTimes(1);
@@ -234,7 +235,7 @@ describe('sweepOrganization — journaling', () => {
         expect(org).toEqual({ organizationId: 'org-1', teamId: 'team-1' });
         expect(entries.map((e: any) => e.usageKey)).toEqual(['span:s1', 'span:s2']);
         expect(summary.debited).toBe(2);
-        expect(summary.debitedUsd).toBeCloseTo(4.83, 6);
+        expect(summary.debitedUsd).toBeCloseTo(1.5208, 6);
         expect(summary.balanceUsd).toBe(10);
     });
 
@@ -243,7 +244,7 @@ describe('sweepOrganization — journaling', () => {
             spanId: 's1',
             organizationId: 'org-1',
             teamId: 'team-1',
-            modelId: 'anthropic/claude-sonnet-5',
+            modelId: 'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731',
             amountUsd: 1,
             status: 'debited',
             spanAt: minutesAgo(30),
@@ -306,7 +307,7 @@ describe('sweepOrganization — debiting', () => {
                 spanId: `a${i}`,
                 organizationId: 'org-1',
                 teamId: 'team-A',
-                modelId: 'anthropic/claude-sonnet-5',
+                modelId: 'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731',
                 amountUsd: 0.01,
                 status: 'pending',
                 spanAt: minutesAgo(30),
@@ -316,7 +317,7 @@ describe('sweepOrganization — debiting', () => {
             spanId: 'b0',
             organizationId: 'org-1',
             teamId: 'team-B',
-            modelId: 'anthropic/claude-sonnet-5',
+            modelId: 'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731',
             amountUsd: 0.5,
             status: 'pending',
             spanAt: minutesAgo(30),
@@ -346,7 +347,7 @@ describe('sweepOrganization — debiting', () => {
             spanId: 'p1',
             organizationId: 'org-1',
             teamId: 'team-1',
-            modelId: 'anthropic/claude-sonnet-5',
+            modelId: 'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731',
             amountUsd: 0.2,
             status: 'pending',
             spanAt: minutesAgo(30),

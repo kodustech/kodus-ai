@@ -23,6 +23,7 @@ type Cost = { input?: number; output?: number; cache_read?: number; cache_write?
 type ModelsDev = Record<string, { models?: Record<string, { cost?: Cost }> }>;
 
 const UPSTREAM_TO_MODELS_DEV: Record<string, string> = {
+    fireworks: 'fireworks-ai',
     anthropic: 'anthropic',
     openai: 'openai',
     google: 'google',
