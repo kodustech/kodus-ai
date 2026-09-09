@@ -60,13 +60,15 @@ LANGUAGE SCOPE (answer this every time, mechanical or not). If the rule's text i
 DECLINE COSMETIC RULES. Formatting and style that a linter or formatter owns — semicolons, quote style, blank lines, trailing whitespace, indentation, line length, brace placement, statements per line — must be declined even when a regex could match them perfectly. They are mechanically detectable and still not worth a review comment: the reviewer's linter already enforces them, so a hit is at best noise and at worst wrong. Set {"mechanical": false, "cosmetic": true}.
 
 CONTEXT NEED (answer this every time, mechanical or not). The reviewer sees ONLY the changed lines — a few lines of context around each hunk, nothing else. Say in "contextNeed" what this rule must ALSO see to be judged at all:
-- "diff-only" — the changed lines are enough. A rule about the shape of a line (naming, a forbidden call, a magic number, a missing await) is judged where it is written.
-- "full-file" — you must see the rest of THIS file (e.g. "no unused imports", "a function must not exceed N lines", "every exported class has a docstring", "do not repeat a block inside a file"). Anything about a property of a whole function, class or file belongs here: the hunk shows a fragment, and the property lives in the whole.
+THE TEST, applied before anything else: can you point at ONE changed line and say "this line breaks the rule"? If yes, the answer is "diff-only", whatever the rule is about. Only when the verdict depends on something the line cannot carry — a count, a comparison with another part of the file, the ABSENCE of something — does it need more.
+- "diff-only" — one line carries the verdict. This is the answer for the great majority of rules: a forbidden API or import, a required argument or option, a wrong call, a naming convention, a magic number, a missing await, a secret in the wrong place, "use X instead of Y". Seeing more of the file would not change the answer, so asking for it buys nothing and costs the whole file on every shard.
+- "full-file" — the verdict needs the rest of THIS file because it is a COUNT, a COMPARISON or an ABSENCE. Count: "a function must not exceed N lines", "no more than N parameters". Comparison: "do not repeat a block inside a file". Absence: "no unused imports" (the symbol appears nowhere else), "every exported class has a docstring" (the line above is missing). If you cannot name which of those three it is, it is not "full-file".
+  NOT full-file, however file-ish it sounds: "use next/image instead of <img>", "never expose secrets to the client", "validate input with zod", "prefer Server Components". Each is decided by looking at the offending line. A rule naming a framework, a directory or a file kind is still diff-only — that tells you WHERE it applies, not what you must see to judge it.
 - "symbol-references" — you must see where the changed symbols are used ELSEWHERE in the repository (e.g. "do not duplicate an existing helper", "an exported symbol nobody imports").
 - "sibling-file" — you must know whether a related file exists (e.g. "every new endpoint has a test").
 - "cited-file" — the rule points at another file whose content IS the convention.
 A PR-SCOPE rule (one judged against the pull request as a whole, not a file) is always "diff-only": the whole-PR pass is not served by per-file retrieval, so any other answer silently buys it nothing.
-Answer "diff-only" unless the rule plainly cannot be judged without more. Over-declaring is the expensive mistake: a rule needing context the reviewer cannot fetch is not judged at all, so when unsure, answer "diff-only".
+Answer "diff-only" unless the rule plainly cannot be judged without more. Over-declaring is the expensive mistake, twice over: a rule asking for context the reviewer cannot fetch is not judged at all, and "full-file" makes every shard carrying that rule haul the whole file — which measurably costs recall as well as tokens. When unsure, answer "diff-only".
 
 Return ONLY JSON: {"mechanical": true, "pattern": "<regex source>", "flags": "<optional>", "extensions": ["<.ext>", …], "contextNeed": "<diff-only|full-file|symbol-references|sibling-file|cited-file>", "reason": "<one sentence>"} or {"mechanical": false, "cosmetic": <true|false>, "extensions": ["<.ext>", …], "contextNeed": "<diff-only|full-file|symbol-references|sibling-file|cited-file>", "reason": "<one sentence>"}`;
 
@@ -102,7 +104,13 @@ export function normalizeContextNeed(raw: unknown): KodyRuleContextNeed {
         : 'diff-only';
 }
 
-const CONTEXT_NEEDS: readonly KodyRuleContextNeed[] = [
+/**
+ * Exported so a spec can assert the classifier PROMPT offers every need the
+ * domain accepts. A value added here and forgotten in the prompt can never be
+ * produced: the feature would be unreachable and every rule would quietly fall
+ * back to diff-only.
+ */
+export const CONTEXT_NEEDS: readonly KodyRuleContextNeed[] = [
     'diff-only',
     'full-file',
     'symbol-references',
