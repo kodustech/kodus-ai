@@ -157,29 +157,43 @@ export class KodusCreditsMeteringService {
             return summary;
         }
 
+        // An aggregation, not `find()`: the pipeline is handed to the driver
+        // untouched (no schema casting of `$expr` / the undeclared `timestamp`
+        // path), which is also how every other telemetry read in libs/analytics
+        // is written.
         const spans = (await this.telemetryModel
-            .find(
+            .aggregate([
                 {
-                    'attributes.organizationId': organizationId,
-                    'timestamp': { $gt: cursor, $lte: upper },
-                    'attributes.tu.total': { $gt: 0 },
-                    '$expr': KODUS_ROUTED_SPAN_EXPR,
+                    $match: {
+                        'attributes.organizationId': organizationId,
+                        'timestamp': { $gt: cursor, $lte: upper },
+                        'attributes.tu.total': { $gt: 0 },
+                        '$expr': KODUS_ROUTED_SPAN_EXPR,
+                    },
                 },
+                { $sort: { timestamp: 1 } },
+                { $limit: SWEEP_SPAN_CAP },
                 {
-                    '_id': 1,
-                    'correlationId': 1,
-                    'timestamp': 1,
-                    'attributes.teamId': 1,
-                    'attributes.prNumber': 1,
-                    'attributes.tu': 1,
+                    $project: {
+                        '_id': 1,
+                        'correlationId': 1,
+                        'timestamp': 1,
+                        'attributes.teamId': 1,
+                        'attributes.prNumber': 1,
+                        'attributes.tu': 1,
+                    },
                 },
-            )
-            .sort({ timestamp: 1 })
-            .limit(SWEEP_SPAN_CAP)
-            .lean()
+            ])
             .exec()) as TelemetrySpan[];
 
         summary.spansSeen = spans.length;
+        if (spans.length > 0) {
+            this.logger.log({
+                message: 'Kodus credits sweep: spans found',
+                context: KodusCreditsMeteringService.name,
+                metadata: { organizationId, spans: spans.length, cursor, upper },
+            });
+        }
         let maxTimestamp = cursor;
 
         for (const span of spans) {

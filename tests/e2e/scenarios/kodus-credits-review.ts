@@ -177,12 +177,20 @@ export const kodusCreditsReview: Scenario = {
                     `The review must have a positive list-price cost, got ${chargedUsd}`,
                 );
 
+                // Onboarding itself spends on the provider too (kody-rules
+                // generation, summaries) — those spans carry no prNumber but
+                // are billed all the same, so the balance equation uses EVERY
+                // debited charge of the org, not just the PR's.
+                const allCharges = await fetchCreditCharges(ctx, session);
+                const allDebitedUsd = allCharges
+                    .filter((c) => c.status === "debited")
+                    .reduce((s, c) => s + c.amountUsd, 0);
                 const balance = await fetchCreditBalance(ctx, session);
                 balanceAfterReview = balance.balanceUsd;
                 ctx.assert(
                     balance.balanceUsd < SEED_USD &&
-                        Math.abs(SEED_USD - balance.balanceUsd - chargedUsd) < 0.000_01,
-                    `Balance must equal seed − charges: seed=${SEED_USD} charges=${chargedUsd} balance=${balance.balanceUsd}`,
+                        Math.abs(SEED_USD - balance.balanceUsd - allDebitedUsd) < 0.000_01,
+                    `Balance must equal seed − all debited charges: seed=${SEED_USD} pr=${chargedUsd} all=${allDebitedUsd} balance=${balance.balanceUsd}`,
                 );
                 const ledger = await fetchCreditLedger(ctx, session);
                 const debits = ledger.filter(

@@ -59,7 +59,7 @@ function harness(opts: {
 }) {
     const charges: Charge[] = opts.charges ?? [];
     const telemetryModel = {
-        find: jest.fn(() => chain(opts.spans ?? [])),
+        aggregate: jest.fn(() => chain(opts.spans ?? [])),
     };
     const chargeModel = {
         updateOne: jest.fn(async (filter: any, update: any) => {
@@ -198,7 +198,8 @@ describe('sweepOrganization — journaling', () => {
         const summary = await service.sweepOrganization('org-1', NOW);
 
         // Query shape: org + settled window + kodus prefix + non-empty usage.
-        const filter = (telemetryModel.find.mock.calls[0] as any[])[0];
+        const pipeline = (telemetryModel.aggregate.mock.calls[0] as any[])[0];
+        const filter = pipeline[0].$match;
         expect(filter['attributes.organizationId']).toBe('org-1');
         // The model lives under a dotted key inside `attributes`, so the filter
         // must read it with $getField (a dot path silently matches nothing).
@@ -267,7 +268,7 @@ describe('sweepOrganization — journaling', () => {
 
         await service.sweepOrganization('org-1', NOW);
 
-        const filter = (telemetryModel.find.mock.calls[0] as any[])[0];
+        const filter = (telemetryModel.aggregate.mock.calls[0] as any[])[0][0].$match;
         expect(filter.timestamp.$gt.getTime()).toBe(cursor.getTime() - SWEEP_OVERLAP_MS);
         expect(sweepState.cursor!.getTime()).toBe(NOW.getTime() - SWEEP_SETTLE_MS);
     });
