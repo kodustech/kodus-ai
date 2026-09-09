@@ -202,4 +202,76 @@ describe('CodeManagementService – countReactions & getPullRequestReviewComment
             expect(integrationService.findOne).not.toHaveBeenCalled();
         });
     });
+
+    describe('updateSingleIssueComment routing (#1721)', () => {
+        let mockPlatformServiceWithUpdateSingleIssueComment: jest.Mocked<
+            Pick<
+                ICodeManagementService,
+                'updateIssueComment' | 'updateSingleIssueComment'
+            >
+        >;
+
+        beforeEach(() => {
+            mockPlatformServiceWithUpdateSingleIssueComment = {
+                updateIssueComment: jest.fn().mockResolvedValue({}),
+                updateSingleIssueComment: jest.fn().mockResolvedValue({}),
+            };
+        });
+
+        it('GitLab status-note updates go to updateSingleIssueComment (non-blocking MR note)', async () => {
+            factory.registerCodeManagementService(
+                PlatformType.GITLAB,
+                mockPlatformServiceWithUpdateSingleIssueComment as unknown as ICodeManagementService,
+            );
+
+            const params = {
+                organizationAndTeamData: orgAndTeam,
+                repository: { name: 'repo', id: 'repo-1' },
+                prNumber: 1,
+                body: 'summary',
+                commentId: 7,
+                noteId: 9,
+            };
+
+            await service.updateSingleIssueComment(params, PlatformType.GITLAB);
+
+            expect(
+                mockPlatformServiceWithUpdateSingleIssueComment
+                    .updateIssueComment,
+            ).not.toHaveBeenCalled();
+            expect(
+                mockPlatformServiceWithUpdateSingleIssueComment
+                    .updateSingleIssueComment,
+            ).toHaveBeenCalledWith(params);
+        });
+
+        it('non-GitLab platforms fall back to updateIssueComment', async () => {
+            factory.registerCodeManagementService(
+                PlatformType.GITHUB,
+                mockPlatformServiceWithUpdateSingleIssueComment as unknown as ICodeManagementService,
+            );
+
+            const params = {
+                organizationAndTeamData: orgAndTeam,
+                repository: { name: 'repo', id: 'repo-1' },
+                prNumber: 1,
+                body: 'summary',
+                commentId: 7,
+            };
+
+            await service.updateSingleIssueComment(
+                params,
+                PlatformType.GITHUB,
+            );
+
+            expect(
+                mockPlatformServiceWithUpdateSingleIssueComment
+                    .updateSingleIssueComment,
+            ).not.toHaveBeenCalled();
+            expect(
+                mockPlatformServiceWithUpdateSingleIssueComment
+                    .updateIssueComment,
+            ).toHaveBeenCalledWith(params);
+        });
+    });
 });

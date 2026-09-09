@@ -119,6 +119,16 @@ export class InitialCommentStage extends BasePipelineStage<CodeReviewPipelineCon
             context.platformType,
             context.codeReviewConfig,
             pullRequestMessagesConfig,
+            // #1721: on a GitLab re-run the previous start-of-review note id is
+            // reused so the status note is edited in place instead of opening a
+            // new resolvable discussion on every push.
+            context.lastExecution
+                ? {
+                      commentId: context.lastExecution.commentId,
+                      noteId: context.lastExecution.noteId,
+                      threadId: context.lastExecution.threadId,
+                  }
+                : undefined,
         );
 
         return this.updateContext(context, (draft) => {
