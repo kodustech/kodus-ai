@@ -26,6 +26,13 @@ export enum BYOKProvider {
     MOONSHOT = 'moonshot',
     ZAI = 'zai',
     AZURE = 'azure',
+    /**
+     * Kodus as the provider: the org picks a model and Kodus routes the call
+     * over ITS OWN upstream accounts (Anthropic / OpenAI / Google). The
+     * credential carries no key — usage is billed to the org's Kodus credits.
+     * Cloud-only; see libs/llm/providers/kodus.
+     */
+    KODUS = 'kodus',
 }
 
 export enum LLMModelProvider {

@@ -29,6 +29,8 @@ import { RoutingTab } from "./tabs/routing-tab";
 
 const providerLabel = (providerId?: string) => {
     switch (providerId) {
+        case "kodus":
+            return "Kodus";
         case "openai":
             return "OpenAI";
         case "openai_compatible":

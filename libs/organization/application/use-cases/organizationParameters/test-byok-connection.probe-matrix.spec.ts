@@ -41,6 +41,14 @@ const PROBED_IDS = REGISTRY.ids()
     .filter((id) => !AUTH_PREFLIGHT_IDS.has(id))
     .sort();
 
+// Kodus is a CLOSED catalog (an unlisted id has no price, so build() refuses
+// it) and routes with a platform key from env — the probe must use a listed
+// id, and the key must exist for the offline build to construct.
+const MODEL_FOR: Record<string, string> = {
+    kodus: 'anthropic/claude-sonnet-5',
+};
+process.env.API_KODUS_PROVIDER_ANTHROPIC_API_KEY = 'sk-kodus-platform-test';
+
 describe('connection probe covers every registered provider', () => {
     beforeEach(() => {
         generateText.mockReset();
@@ -52,7 +60,7 @@ describe('connection probe covers every registered provider', () => {
             provider: id,
             apiKey: 'sk-test',
             baseURL: 'https://example.com/v1',
-            model: 'some-model',
+            model: MODEL_FOR[id] ?? 'some-model',
         });
 
         expect(result.ok).toBe(true);

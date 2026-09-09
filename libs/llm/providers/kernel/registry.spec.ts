@@ -21,6 +21,7 @@ import { openRouterModule } from '../openrouter/index';
 import { bedrockModule } from '../bedrock/index';
 import { novitaModule } from '../novita/index';
 import { moonshotModule } from '../moonshot/index';
+import { kodusModule } from '../kodus/index';
 // D-05 registry-wide sweep (03-13): drive each module's real normalize boundary
 // through the 03-01 conformance harness against its committed fixture.
 import { runConformance, type ProviderFixture } from './conformance';
@@ -34,6 +35,11 @@ import bedrockPlainFixture from '../bedrock/__fixtures__/plain.json';
 import novitaPlainFixture from '../novita/__fixtures__/plain.json';
 import moonshotPlainFixture from '../moonshot/__fixtures__/plain.json';
 import azurePlainFixture from '../azure/__fixtures__/plain.json';
+import kodusPlainFixture from '../kodus/__fixtures__/plain.json';
+
+// The kodus module builds through the upstream modules with PLATFORM keys read
+// from env — give it one so the offline build() constructs (no request is made).
+process.env.API_KODUS_PROVIDER_ANTHROPIC_API_KEY = 'sk-kodus-platform-not-real';
 
 /** The eleven BYOKProvider ids the registry must fully cover (azure added). */
 const ALL_IDS = [
@@ -49,6 +55,7 @@ const ALL_IDS = [
     'moonshot',
     'azure',
     'zai',
+    'kodus',
 ];
 
 const EFFORTS: ReasoningEffort[] = ['none', 'low', 'medium', 'high'];
@@ -203,17 +210,23 @@ describe('01-02 ported modules — static conformance', () => {
         provider: 'amazon_bedrock',
         model: 'anthropic.claude-sonnet-4-20250514-v1:0',
     });
+    // kodus routes over the upstream modules with a platform key (env, above).
+    runStaticConformance(kodusModule, {
+        provider: 'kodus',
+        model: 'anthropic/claude-sonnet-5',
+        reasoningModel: 'anthropic/claude-sonnet-5',
+    });
 });
 
-describe('registry covers all twelve BYOKProvider ids', () => {
+describe('registry covers all thirteen BYOKProvider ids', () => {
     it('every id resolves to a registered module', () => {
         for (const id of ALL_IDS) {
             expect(REGISTRY.has(id)).toBe(true);
             expect(REGISTRY.get(id)).toBeDefined();
         }
     });
-    it('registers exactly 10 distinct module objects for the 12 ids', () => {
-        expect(REGISTRY.all().length).toBe(10);
+    it('registers exactly 11 distinct module objects for the 13 ids', () => {
+        expect(REGISTRY.all().length).toBe(11);
         expect(new Set(REGISTRY.ids())).toEqual(new Set(ALL_IDS));
     });
 });
@@ -305,6 +318,13 @@ const CONFORMANCE_SAMPLES: Record<
         cfg: sampleConfig('zai', 'glm-5.2', 'https://api.z.ai/api/anthropic'),
         fixture: anthropicReasoningFixture as ProviderFixture,
     },
+    kodus: {
+        // Kodus-routed Claude — the slot carries NO key (apiKey ''); build()
+        // reads the platform key from env (set at the top of this spec) and
+        // dispatches to the native anthropic module offline.
+        cfg: { ...sampleConfig('kodus', 'anthropic/claude-sonnet-5'), apiKey: '' },
+        fixture: kodusPlainFixture as ProviderFixture,
+    },
 };
 
 describe('registry-wide conformance sweep (D-05): no module regresses to the zero stub', () => {
@@ -316,8 +336,8 @@ describe('registry-wide conformance sweep (D-05): no module regresses to the zer
         }
     });
 
-    it('covers all 10 distinct registered modules', () => {
-        expect(modules.length).toBe(10);
+    it('covers all 11 distinct registered modules', () => {
+        expect(modules.length).toBe(11);
     });
 
     for (const module of modules) {

@@ -7,6 +7,8 @@ import {
 } from '@libs/llm/byok-config';
 import { validateByokConfigRefs } from '@libs/llm/validate-byok-config-refs';
 import { BYOKProvider } from '@libs/llm/model-providers';
+import { isPlatformFundedProvider } from '@libs/llm/platform-funded-provider';
+import { isProviderAvailableHere } from '@libs/core/infrastructure/services/providers/kodus-provider-availability';
 import { assertSafeOpenAICompatibleUrl } from './test-byok-connection.use-case';
 import { describeProtocolMismatch } from '@libs/llm/base-url-hygiene';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
@@ -471,6 +473,17 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
      */
     private validateCredentialAuth(cred: BYOKCredential): void {
         if (cred?.managed) {
+            return;
+        }
+        // Platform-funded (`kodus`): no secret by design — Kodus's own upstream
+        // key is read at build time. Cloud-only, so a self-hosted save of one
+        // is refused here rather than persisted as a credential nothing can run.
+        if (isPlatformFundedProvider(cred?.provider)) {
+            if (!isProviderAvailableHere(cred.provider)) {
+                throw new BadRequestException(
+                    'The Kodus provider is only available on Kodus Cloud',
+                );
+            }
             return;
         }
         const has = (v: unknown): boolean =>

@@ -32,9 +32,11 @@ export function FirstRunCard() {
                             Connect your first provider
                         </h3>
                         <p className="text-text-secondary text-sm text-pretty">
-                            Add your key once — then enable as many of that
-                            provider’s models as you want. You pay your provider
-                            directly, and Kodus never sees your key.
+                            Pick Kodus to start with no key at all — usage is
+                            billed to your Kodus credits. Or add your own
+                            provider key once and enable as many of its models
+                            as you want; you pay that provider directly, and
+                            Kodus never sees your key.
                         </p>
                     </div>
                 </>

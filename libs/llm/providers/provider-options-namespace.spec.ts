@@ -84,13 +84,22 @@ const BUILDABLE: Record<string, { model: string; extra?: Record<string, any> }> 
         extra: { baseURL: 'https://placeholder.openai.azure.com/openai' },
     },
     google_vertex: { model: 'gemini-3.7-flash', extra: { apiKey: FAKE_SA_JSON } },
+    // Kodus routes over the upstream modules with a platform key from env (set
+    // below); the slot itself carries no key.
+    kodus: { model: 'anthropic/claude-sonnet-5', extra: { apiKey: '' } },
 };
+process.env.API_KODUS_PROVIDER_ANTHROPIC_API_KEY = 'placeholder-platform-key';
+process.env.API_KODUS_PROVIDER_OPENAI_API_KEY = 'placeholder-platform-key';
+process.env.API_KODUS_PROVIDER_GOOGLE_API_KEY = 'placeholder-platform-key';
 
 /** One provider id, two SDK models: Vertex builds a Gemini client for a Gemini
  *  id and an ANTHROPIC client for a Claude id, and they read different keys. The
  *  namespace is therefore per (id, model), so it needs its own case. */
 const MODEL_SPECIFIC: Array<{ id: string; model: string; extra?: Record<string, any> }> = [
     { id: 'google_vertex', model: 'claude-opus-4-7', extra: { apiKey: FAKE_SA_JSON } },
+    // Kodus: one id, three SDK clients — the namespace must follow the upstream.
+    { id: 'kodus', model: 'openai/gpt-5.4', extra: { apiKey: '' } },
+    { id: 'kodus', model: 'google/gemini-3.7-flash', extra: { apiKey: '' } },
 ];
 
 /** Every provider builds here, so nothing is deferred to the live tier. */

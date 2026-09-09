@@ -10,6 +10,7 @@ import {
 } from "@components/ui/collapsible";
 import { KeyRoundIcon, PencilIcon } from "lucide-react";
 
+import { isPlatformFundedProvider } from "../_data/platform-funded";
 import { PROVIDER_LABELS } from "../_data/provider-labels";
 import type { BYOKCredential } from "../_types";
 import { maskKey } from "../_utils";
@@ -41,6 +42,9 @@ export function ProviderGroupHeader({
     const providerLabel =
         PROVIDER_LABELS[credential.provider] ?? credential.provider;
     const open = defaultOpen ?? modelCount <= 3;
+    // A platform-funded credential (Kodus) carries no key: there is nothing
+    // to mask and nothing to rotate — usage is billed to the org's credits.
+    const platformFunded = isPlatformFundedProvider(credential.provider);
 
     return (
         <Card color="lv1">
@@ -61,10 +65,17 @@ export function ProviderGroupHeader({
                                     {providerLabel}
                                 </span>
                                 <span className="text-text-tertiary flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-                                    <span className="flex items-center gap-1.5 font-mono">
-                                        <KeyRoundIcon size={12} />
-                                        {maskKey(credential.apiKey)}
-                                    </span>
+                                    {platformFunded ? (
+                                        <span className="flex items-center gap-1.5">
+                                            <KeyRoundIcon size={12} />
+                                            Billed to Kodus credits · no key
+                                        </span>
+                                    ) : (
+                                        <span className="flex items-center gap-1.5 font-mono">
+                                            <KeyRoundIcon size={12} />
+                                            {maskKey(credential.apiKey)}
+                                        </span>
+                                    )}
                                     <span aria-hidden>·</span>
                                     <span className="tabular-nums">
                                         {modelCount}{" "}
@@ -75,7 +86,7 @@ export function ProviderGroupHeader({
                         </button>
                     </CollapsibleTrigger>
 
-                    {onRotate && (
+                    {onRotate && !platformFunded && (
                         <Button
                             size="xs"
                             variant="helper"

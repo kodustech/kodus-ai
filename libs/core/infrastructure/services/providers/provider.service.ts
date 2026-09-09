@@ -8,6 +8,7 @@ import { Injectable } from '@nestjs/common';
 // is exactly ONE place that decides key/base-URL/listing behavior.
 import { REGISTRY } from '@libs/llm/providers';
 import { describeAllProviderIds } from '@libs/llm/providers/provider-ui-descriptor';
+import { isProviderAvailableHere } from './kodus-provider-availability';
 
 export interface ProviderInfo {
     id: string;
@@ -43,6 +44,10 @@ export class ProviderService {
     private static buildFromRegistry(): Record<string, ProviderInfo> {
         const out: Record<string, ProviderInfo> = {};
         for (const d of describeAllProviderIds(REGISTRY.all())) {
+            // Deployment-gated ids (the cloud-only `kodus` provider) are left
+            // out entirely, so `isProviderSupported` says no and every use-case
+            // behind it (listing, probe, save) refuses them on self-hosted.
+            if (!isProviderAvailableHere(d.id)) continue;
             out[d.id] = {
                 id: d.id,
                 name: d.label,

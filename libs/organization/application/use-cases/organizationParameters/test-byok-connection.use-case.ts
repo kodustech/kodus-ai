@@ -3,6 +3,7 @@ import {
     describeProtocolMismatch,
 } from '@libs/llm/base-url-hygiene';
 import { BYOKProvider } from '@libs/llm/model-providers';
+import { isPlatformFundedProvider } from '@libs/llm/platform-funded-provider';
 import { REGISTRY } from '@libs/llm/providers';
 import { probeSlotCall } from '@libs/llm/probe-slot-call';
 import {
@@ -369,7 +370,9 @@ export class TestByokConnectionUseCase {
             });
         }
 
-        if (!apiKey?.trim()) {
+        // A platform-funded (`kodus`) slot has no key to type — the probe still
+        // runs the real call, with the platform key resolved inside build().
+        if (!apiKey?.trim() && !isPlatformFundedProvider(byokProvider)) {
             throw new BadRequestException('apiKey is required');
         }
 

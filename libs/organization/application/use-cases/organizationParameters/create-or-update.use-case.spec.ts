@@ -5,6 +5,14 @@ import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import type { BYOKConfig } from '@libs/llm/byok-config';
 import { CreateOrUpdateOrganizationParametersUseCase } from './create-or-update.use-case';
 
+// The `kodus` (platform-funded) credential is cloud-only; the gate reads the
+// compiled-in EE environment, mocked here so the save path can be exercised
+// in both deployment modes.
+jest.mock('@libs/ee/configs/environment', () => ({
+    environment: { API_CLOUD_MODE: true },
+}));
+import { environment } from '@libs/ee/configs/environment';
+
 const orgAndTeam = { organizationId: 'org-1', teamId: 'team-1' } as any;
 
 /**
@@ -680,5 +688,54 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
                 'sk-should-never-be-logged',
             );
         });
+    });
+});
+
+describe('platform-funded (`kodus`) credential — keyless by design, cloud-only', () => {
+    afterEach(() => {
+        (environment as { API_CLOUD_MODE: boolean }).API_CLOUD_MODE = true;
+    });
+
+    const kodusConfig = (): BYOKConfig => ({
+        version: 2,
+        credentials: [{ id: 'cred-kodus', provider: BYOKProvider.KODUS }],
+        models: [
+            {
+                id: 'model-k',
+                credentialId: 'cred-kodus',
+                model: 'anthropic/claude-sonnet-5',
+            },
+        ],
+        routing: { defaultModelId: 'model-k' },
+    });
+
+    it('saves without an apiKey and persists NO secret on the credential', async () => {
+        const { useCase, persisted, createOrUpdateConfig } = buildUseCase();
+        await saveByok(useCase, kodusConfig());
+
+        expect(createOrUpdateConfig).toHaveBeenCalled();
+        const cred = persisted.value.credentials[0];
+        expect(cred.provider).toBe('kodus');
+        expect(cred.apiKey).toBeUndefined();
+        expect(cred.managed).toBeUndefined();
+    });
+
+    it('is refused on a self-hosted install (no platform accounts, no ledger)', async () => {
+        (environment as { API_CLOUD_MODE: boolean }).API_CLOUD_MODE = false;
+        const { useCase, createOrUpdateConfig } = buildUseCase();
+        await expect(saveByok(useCase, kodusConfig())).rejects.toThrow(
+            /only available on Kodus Cloud/,
+        );
+        expect(createOrUpdateConfig).not.toHaveBeenCalled();
+    });
+
+    it('a keyless credential on any OTHER provider is still rejected', async () => {
+        const { useCase } = buildUseCase();
+        await expect(
+            saveByok(
+                useCase,
+                v2({ credentials: [{ id: 'cred-openai', provider: 'openai' }] }),
+            ),
+        ).rejects.toThrow(BadRequestException);
     });
 });

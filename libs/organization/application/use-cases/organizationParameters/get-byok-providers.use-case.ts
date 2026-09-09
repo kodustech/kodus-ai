@@ -4,6 +4,7 @@ import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 // source of truth for the connectable-provider LIST the web picker renders.
 import { REGISTRY } from '@libs/llm/providers';
 import { describeProviderId } from '@libs/llm/providers/provider-ui-descriptor';
+import { isProviderAvailableHere } from '@libs/core/infrastructure/services/providers/kodus-provider-availability';
 import { Injectable } from '@nestjs/common';
 
 /**
@@ -42,7 +43,10 @@ export interface ByokProvidersResult {
 export class GetByokProvidersUseCase implements IUseCase {
     async execute(): Promise<ByokProvidersResult> {
         return {
-            providers: REGISTRY.all().map((m) => ({
+            providers: REGISTRY.all()
+                // The cloud-only `kodus` provider is hidden on self-hosted.
+                .filter((m) => isProviderAvailableHere(m.id))
+                .map((m) => ({
                 id: m.id,
                 label: m.label,
                 aliases: m.aliases ?? [],
