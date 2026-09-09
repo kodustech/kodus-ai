@@ -1,0 +1,43 @@
+reproduce: node evals/kody-rules/context-fp-repro.js --model=gpt-5.6-luna@sub --reps=1 --out=PROBE-auth.txt
+corpus: cases-1826.json — 4 case(s), 1 replicate(s)
+model:  gpt-5.6-luna@sub
+lookup: in-memory fake — grep is String.includes, exists is hasOwnProperty
+Every case's CORRECT published count is 0. A non-zero count is a rule
+firing on a claim the diff window cannot support.
+
+══ 1724-scss-import-used-below-the-hunk  [claim: unused]
+   rule: No unused imports
+   file: app/assets/stylesheets/components/_card.scss
+   why 0 is correct: The `@use '../variables' as v` the PR adds IS used, at line 23 (`v.$text-muted`). The hunk stops at line 7, so the only evidence of the usage sits outside everything the shard can see. Removing the import as suggested breaks the build.
+      warn: [kody-rules-shard] file shard failed for app/assets/stylesheets/components/_card.scss (1 rule(s)) — degrading to zero findings: Your account org-9d538e70d4174e9ea212524191f494b3 <ak-f94t17z98fwi11bxfo6i> is suspended due to insufficient balance, please recharge your account or check your plan and billing details
+   rep 1: ALL 1 shard(s) ERRORED — not a measurement, see the warn above
+   → per-replicate published: [err]
+
+══ unused-symbol-used-in-a-later-method  [claim: unused]
+   rule: No unused imports
+   file: src/orders/order-mapper.ts
+   why 0 is correct: `formatDate` is imported in the hunk and called at line 41, in a method the diff never shows. This is the RULE_OVERAPPLIED shape in TypeScript: same blindness, different language, so a fix that only special-cases SCSS does not cover it.
+      warn: [kody-rules-shard] file shard failed for src/orders/order-mapper.ts (1 rule(s)) — degrading to zero findings: Your account org-9d538e70d4174e9ea212524191f494b3 <ak-f94t17z98fwi11bxfo6i> is suspended due to insufficient balance, please recharge your account or check your plan and billing details
+   rep 1: ALL 1 shard(s) ERRORED — not a measurement, see the warn above
+   → per-replicate published: [err]
+
+══ missing-test-that-this-pr-adds  [claim: missing]
+   rule: Every new HTTP route handler ships with a test
+   file: src/routes/orders.controller.ts, src/routes/orders.controller.spec.ts
+   why 0 is correct: The rule's sibling test DOES exist: this same PR adds `orders.controller.spec.ts`. The shard judging the controller is never told the other file, so 'no test was added' is asserted from an empty window.
+      warn: [kody-rules-shard] file shard failed for src/routes/orders.controller.ts (1 rule(s)) — degrading to zero findings: Your account org-9d538e70d4174e9ea212524191f494b3 <ak-f94t17z98fwi11bxfo6i> is suspended due to insufficient balance, please recharge your account or check your plan and billing details
+      warn: [kody-rules-shard] file shard failed for src/routes/orders.controller.spec.ts (1 rule(s)) — degrading to zero findings: Your account org-9d538e70d4174e9ea212524191f494b3 <ak-f94t17z98fwi11bxfo6i> is suspended due to insufficient balance, please recharge your account or check your plan and billing details
+   rep 1: ALL 2 shard(s) ERRORED — not a measurement, see the warn above
+   → per-replicate published: [err]
+
+══ duplicate-helper-that-does-not-exist  [claim: duplicate]
+   rule: Do not reimplement a helper that already exists
+   file: src/blog/slug.ts
+   why 0 is correct: There is no `slugify` anywhere in `src/shared` — the only helpers there are `titleCase` and `truncate`. 'this already exists in shared' is an invention the shard cannot check, and applying it points the author at a symbol that is not there.
+      warn: [kody-rules-shard] file shard failed for src/blog/slug.ts (1 rule(s)) — degrading to zero findings: Your account org-9d538e70d4174e9ea212524191f494b3 <ak-f94t17z98fwi11bxfo6i> is suspended due to insufficient balance, please recharge your account or check your plan and billing details
+   rep 1: ALL 1 shard(s) ERRORED — not a measurement, see the warn above
+   → per-replicate published: [err]
+
+TOTAL: 0 of 0 case-runs published a comment that should not exist.
+       0 of 0 case-runs FAILED TO PUBLISH one the rule should have caught.
+WARNING: only 0 of 4 case-runs produced a measurement; the rest errored.
