@@ -139,14 +139,28 @@ export class SandboxLeaseReaperService {
                                     },
                                 });
                             } else {
+                                // Past the retry cap: an outage this
+                                // sustained needs a human, not another
+                                // silent retry — escalate to error for
+                                // alerting. The doc still must NOT be
+                                // deleted (same invariant as the retry
+                                // branch above): the sandbox may still be
+                                // running and billing, and deleting now
+                                // would lose the only trace of it. The
+                                // reaper keeps retrying the kill on future
+                                // ticks; once E2B recovers (kill succeeds,
+                                // or reports already-gone), the branches
+                                // above clean it up normally.
+                                sandboxGone = false;
                                 this.logger.error({
                                     message:
-                                        '[SANDBOX-REAPER] Giving up on Sandbox.kill after max retries — deleting lease, sandbox may be orphaned',
+                                        '[SANDBOX-REAPER] Sandbox.kill still failing past max retries — still retrying, sandbox may be orphaned',
                                     context: SandboxLeaseReaperService.name,
                                     metadata: {
                                         sandboxId: lease.sandboxId,
                                         error: String(err),
                                         killRetryCount: lease.killRetryCount,
+                                        organizationId: lease.organizationId,
                                     },
                                 });
                             }
@@ -254,14 +268,23 @@ export class SandboxLeaseReaperService {
                                     },
                                 });
                             } else {
+                                // Same invariant as the retry branch above:
+                                // past the cap, escalate to error for
+                                // alerting but do NOT delete — the sandbox
+                                // may still be running and billing. Keeps
+                                // retrying on future ticks; a later
+                                // success or already-gone result cleans it
+                                // up normally.
+                                sandboxGone = false;
                                 this.logger.error({
                                     message:
-                                        '[SANDBOX-IDLE-KILL] Giving up on Sandbox.kill after max retries — deleting lease, sandbox may be orphaned',
+                                        '[SANDBOX-IDLE-KILL] Sandbox.kill still failing past max retries — still retrying, sandbox may be orphaned',
                                     context: SandboxLeaseReaperService.name,
                                     metadata: {
                                         sandboxId: lease.sandboxId,
                                         error: String(err),
                                         killRetryCount: lease.killRetryCount,
+                                        organizationId: lease.organizationId,
                                     },
                                 });
                             }

@@ -163,12 +163,12 @@ export class SandboxLeaseRepository {
     ): Promise<
         Pick<
             SandboxLeaseModel,
-            '_id' | 'sandboxId' | 'state' | 'killRetryCount'
+            '_id' | 'sandboxId' | 'state' | 'killRetryCount' | 'organizationId'
         >[]
     > {
         return this.leaseModel
             .find({ expiresAt: { $lt: now } })
-            .select('_id sandboxId state killRetryCount')
+            .select('_id sandboxId state killRetryCount organizationId')
             .lean();
     }
 
@@ -224,7 +224,11 @@ export class SandboxLeaseRepository {
     ): Promise<
         Pick<
             SandboxLeaseModel,
-            '_id' | 'sandboxId' | 'killAt' | 'killRetryCount'
+            | '_id'
+            | 'sandboxId'
+            | 'killAt'
+            | 'killRetryCount'
+            | 'organizationId'
         >[]
     > {
         return this.leaseModel
@@ -232,7 +236,7 @@ export class SandboxLeaseRepository {
                 killAt: { $lte: now },
                 sandboxId: { $exists: true, $ne: '' },
             })
-            .select('_id sandboxId killAt killRetryCount')
+            .select('_id sandboxId killAt killRetryCount organizationId')
             .lean();
     }
 
