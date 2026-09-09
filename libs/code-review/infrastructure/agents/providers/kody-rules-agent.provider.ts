@@ -350,15 +350,22 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                 const fileLevelRules = rulesForJudge.filter(
                     (r) => r.scope !== KodyRulesScope.PULL_REQUEST,
                 );
+                const hasFileLevelRule = new Map<string, boolean>();
+                for (const file of input.changedFiles ?? []) {
+                    hasFileLevelRule.set(
+                        file.filename,
+                        fileLevelRules.some((r) =>
+                            ruleAppliesToFile(file.filename, r.path),
+                        ),
+                    );
+                }
                 const readable = (input.changedFiles ?? []).filter(
                     (file) =>
                         // An added file is already whole inside its own diff;
                         // sending it twice buys nothing and doubles the prompt.
                         file.status !== 'added' &&
                         file.status !== 'removed' &&
-                        fileLevelRules.some((r) =>
-                            ruleAppliesToFile(file.filename, r.path),
-                        ),
+                        hasFileLevelRule.get(file.filename) === true,
                 );
 
                 let cursor = 0;
@@ -659,6 +666,7 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             // reaches the claim check too (KRC-22).
             lookup,
             logger: this.shardLogger,
+            organizationId: input.organizationAndTeamData?.organizationId,
         });
 
         for (const { violation, reason } of claimCheck.dropped) {

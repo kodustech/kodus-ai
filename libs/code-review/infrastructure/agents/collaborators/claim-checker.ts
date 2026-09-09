@@ -60,6 +60,8 @@ export interface ClaimCheckInput {
     /** Per-check budget; exceeding it means unverifiable, never confirmed. */
     timeoutMs?: number;
     logger?: ClaimCheckLogger;
+    /** For the drop-warning's metadata, so a discard is traceable per organization. */
+    organizationId?: string;
 }
 
 export interface DroppedClaim {
@@ -367,7 +369,7 @@ function spanOf(group: ShardViolation[]): ShardViolation {
 export async function checkClaims(
     input: ClaimCheckInput,
 ): Promise<ClaimCheckResult> {
-    const { violations, lookup, logger } = input;
+    const { violations, lookup, logger, organizationId } = input;
     const concurrency = input.concurrency ?? SHARD_CONCURRENCY_DEFAULT;
     const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
@@ -429,6 +431,7 @@ export async function checkClaims(
                         ruleUuid: span.ruleUuid,
                         filename: span.relevantFile,
                         claimKind: claim.kind,
+                        organizationId,
                     },
                 });
                 return `unverifiable: ${detail}`;
