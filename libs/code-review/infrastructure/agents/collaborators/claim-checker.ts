@@ -275,33 +275,58 @@ async function refute(
  * siblings survived to publish it anyway. Grouping makes the checked unit the
  * published unit, which is the only version of this check that holds whatever
  * model the customer brings and whatever shape a given run returns.
+ *
+ * The key is (rule, file) and NOTHING ELSE. An earlier version added the
+ * finding's own text as a third component, reasoning that one rule may report
+ * two different things in one file and a refutation of the first should not
+ * silence the second. That reasoning does not survive contact with
+ * `dedupKodyRulesByRuleUuid`, which folds every finding sharing a ruleUuid -
+ * across files, whatever the wording - into ONE published comment. The
+ * distinction the text was protecting is erased before the customer sees it,
+ * so the only thing it bought was a split: the model phrases per line, eight
+ * findings landed in eight groups, the one declared claim was refuted alone
+ * and the seven undeclared siblings published the refuted assertion anyway.
+ * Measured on a real E2B run: 1 of 20 negative case-runs leaked exactly that
+ * way. The unit stays no finer than what publishing can tell apart.
  */
 const groupKeyOf = (violation: ShardViolation): string =>
     [
         violation.ruleUuid ?? '',
         normalizePath(violation.relevantFile ?? ''),
-        assertionKeyOf(violation),
     ].join('::');
 
 /**
- * The assertion a finding makes, as a comparable key.
+ * Does this finding restate the assertion that was refuted?
  *
- * Rule and file alone are too coarse: one rule can legitimately report two
- * DIFFERENT things in one file, and grouping those would let a refutation of
- * the first silence the second. What has to group is the same sentence emitted
- * once per line, which is what the prompt asks for and what a model actually
- * returned. Normalisation is deliberately blunt — case, punctuation and runs of
- * whitespace collapse, so `line 3` and `line 4` phrasing differences do not
- * split a group that is otherwise one claim.
+ * The refuted claim names a target - a symbol, a path, or both. A sibling that
+ * is republishing that assertion necessarily names the same target, because
+ * that is what the assertion is ABOUT; a sibling about something else in the
+ * same file does not. Matching on the target rather than on the sentence is
+ * what makes this hold for a model that rewords per line and for a review
+ * localized into any language: an identifier and a path survive translation,
+ * a sentence does not.
+ *
+ * Deliberately permissive on the path (the basename counts) and strict on the
+ * symbol (delimited, so `slug` does not match `slugify`). When the claim named
+ * no target at all there is nothing to match on, and the sibling is kept.
  */
-function assertionKeyOf(violation: ShardViolation): string {
-    const text = violation.oneSentenceSummary || violation.suggestionContent || '';
-    return text
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, ' ')
-        .replace(/\b\d+\b/g, '')
-        .trim()
-        .slice(0, 200);
+function restates(violation: ShardViolation, claim: Claim): boolean {
+    const text = `${violation.oneSentenceSummary ?? ''} ${violation.suggestionContent ?? ''} ${violation.existingCode ?? ''}`;
+    if (!text.trim()) return false;
+
+    if (claim.symbol) {
+        const escaped = claim.symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        if (new RegExp(`(^|[^A-Za-z0-9_$])${escaped}([^A-Za-z0-9_$]|$)`).test(text)) {
+            return true;
+        }
+    }
+    if (claim.path) {
+        const normalized = normalizePath(claim.path);
+        const base = normalized.split('/').filter(Boolean).pop() ?? '';
+        if (normalized && text.includes(normalized)) return true;
+        if (base && text.includes(base)) return true;
+    }
+    return false;
 }
 
 /** Identity of a claim, so one repository check serves every finding making it. */
@@ -411,9 +436,9 @@ export async function checkClaims(
         },
     );
 
-    /** Drop reason per claim, and the first drop reason seen in each group. */
+    /** Drop reason per claim, and the first refuted claim seen in each group. */
     const byClaim = new Map<string, string>();
-    const byGroup = new Map<string, string>();
+    const byGroup = new Map<string, { reason: string; claim: Claim }>();
     jobs.forEach((job, i) => {
         const reason = verdicts[i];
         if (!reason) {
@@ -421,7 +446,7 @@ export async function checkClaims(
         }
         byClaim.set(`${job.groupKey}::${job.claimKey}`, reason);
         if (!byGroup.has(job.groupKey)) {
-            byGroup.set(job.groupKey, reason);
+            byGroup.set(job.groupKey, { reason, claim: job.claim });
         }
     });
 
@@ -430,13 +455,25 @@ export async function checkClaims(
     for (const violation of violations) {
         const groupKey = groupKeyOf(violation);
         const claim = readClaim(violation);
-        const reason =
-            claim.kind === 'none'
-                ? // A finding that asserts nothing is dropped only because a
-                  // sibling's assertion - which this one republishes once dedup
-                  // folds the group into one comment - was refuted.
-                  byGroup.get(groupKey)
-                : byClaim.get(`${groupKey}::${claimKeyOf(claim)}`);
+        let reason: string | undefined;
+        if (claim.kind === 'none') {
+            // A finding that asserts nothing is dropped only when it is
+            // RESTATING a sibling's refuted assertion. Two findings of one rule
+            // in one file may be about genuinely different things, and killing
+            // the second because the first was wrong would trade a false
+            // positive for a false negative.
+            //
+            // What separates the two is not prose - the model rewords per line,
+            // and a customer's output may not even be in English - but whether
+            // the finding names the thing the refutation was about. That target
+            // is an identifier or a path: code, not language.
+            const refuted = byGroup.get(groupKey);
+            if (refuted && restates(violation, refuted.claim)) {
+                reason = refuted.reason;
+            }
+        } else {
+            reason = byClaim.get(`${groupKey}::${claimKeyOf(claim)}`);
+        }
         if (reason) {
             dropped.push({ violation, reason });
         } else {
