@@ -9,11 +9,11 @@ import {
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
 import { PlatformType } from '@libs/core/domain/enums';
+import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import {
-    ISandboxProvider,
-    SANDBOX_PROVIDER_TOKEN,
-    SandboxInstance,
-} from '@libs/sandbox/domain/contracts/sandbox.provider';
+    ISandboxLeaseManager,
+    SANDBOX_LEASE_MANAGER_TOKEN,
+} from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { GraphIndexerService } from '@libs/code-review/infrastructure/adapters/services/graph/graph-indexer.service';
 import {
@@ -40,8 +40,8 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
     constructor(
         @Inject(WORKFLOW_JOB_REPOSITORY_TOKEN)
         private readonly jobRepository: IWorkflowJobRepository,
-        @Inject(SANDBOX_PROVIDER_TOKEN)
-        private readonly sandboxProvider: ISandboxProvider,
+        @Inject(SANDBOX_LEASE_MANAGER_TOKEN)
+        private readonly leaseManager: ISandboxLeaseManager,
         private readonly codeManagementService: CodeManagementService,
         private readonly graphIndexer: GraphIndexerService,
         @Inject(REPOSITORY_SERVICE_TOKEN)
@@ -149,14 +149,28 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
             const branchRaw = repoRecord.defaultBranch || payload.defaultBranch;
             const branch = branchRaw.replace(/^refs\/heads\//, '');
 
-            sandbox = await this.sandboxProvider.createSandboxWithRepo({
-                cloneUrl: cloneParams.url || payload.cloneUrl,
-                authToken: cloneParams.auth?.token || '',
-                authUsername: cloneParams.auth?.username,
-                branch,
-                platform: payload.platform as PlatformType,
-                sandboxMetadata: { stage: 'graph-build' },
-            });
+            // Routed through the lease manager (not the raw provider) so a
+            // worker crash mid-build leaves a lease doc the existing 30min
+            // TTL + 5min reaper cron already cleans up. The prKey is unique
+            // per job (jobId), so this always takes the creator path — never
+            // joins another job's sandbox, same as the direct-create call it
+            // replaces. No PR is involved here (repo-level graph build), so
+            // the key uses "graph" in the prNumber slot instead.
+            const prKey = `${payload.organizationAndTeamData?.organizationId}:${payload.repositoryId}:graph:${jobId}`;
+            const acquired = await this.leaseManager.acquire(
+                prKey,
+                'graph-build',
+                undefined,
+                {
+                    cloneUrl: cloneParams.url || payload.cloneUrl,
+                    authToken: cloneParams.auth?.token || '',
+                    authUsername: cloneParams.auth?.username,
+                    branch,
+                    platform: payload.platform as PlatformType,
+                    sandboxMetadata: { stage: 'graph-build' },
+                },
+            );
+            sandbox = acquired.sandbox;
 
             sandboxId =
                 (sandbox as any)?.sandboxId ||

@@ -7,7 +7,6 @@ import {
 import { requiresKnowledgeApproval } from '@libs/common/utils/kody-rules/knowledge-approval';
 import * as path from 'path';
 
-import { LLMModelProvider } from '@libs/llm/model-providers';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { UserInfo } from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
 import {
@@ -2071,8 +2070,6 @@ export class KodyRulesSyncService {
             };
         },
         options?: {
-            mainProvider?: LLMModelProvider;
-            fallbackProvider?: LLMModelProvider;
             runName?: string;
             defaultStatus?: KodyRulesStatus;
         },
