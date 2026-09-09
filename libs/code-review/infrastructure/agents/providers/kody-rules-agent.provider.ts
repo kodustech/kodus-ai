@@ -327,6 +327,79 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                 input,
             );
 
+            // ── issue #1826, step 1: the file shard carries its file whole ──
+            //
+            // The judge sees one file's hunks plus about three lines around
+            // them, so the largest class of broken rule — "is this import used
+            // later in the file", "is this function too long", "does this class
+            // have a docstring" — cannot be judged at all, and #1724 is what
+            // that looks like when the model answers anyway.
+            //
+            // Unconditional on purpose. It is not gated on a rule declaring a
+            // need, because a declaration can be wrong in the direction that
+            // silently stops judging the rule, and because the shard is already
+            // per-file: the file is the unit it was built around. Nothing here
+            // knows a language, which matters when the customer's rules may
+            // target any of them.
+            //
+            // Fail-soft everywhere: no sandbox, an unreadable path, or a file
+            // over the prompt budget all degrade to exactly today's hunk-only
+            // shard for that file.
+            const fileContents = new Map<string, string>();
+            if (lookup.available) {
+                const fileLevelRules = rulesForJudge.filter(
+                    (r) => r.scope !== KodyRulesScope.PULL_REQUEST,
+                );
+                const readable = (input.changedFiles ?? []).filter(
+                    (file) =>
+                        // An added file is already whole inside its own diff;
+                        // sending it twice buys nothing and doubles the prompt.
+                        file.status !== 'added' &&
+                        file.status !== 'removed' &&
+                        fileLevelRules.some((r) =>
+                            ruleAppliesToFile(file.filename, r.path),
+                        ),
+                );
+
+                let cursor = 0;
+                await Promise.all(
+                    Array.from(
+                        {
+                            length: Math.min(
+                                SHARD_CONCURRENCY_DEFAULT,
+                                readable.length || 1,
+                            ),
+                        },
+                        async () => {
+                            while (cursor < readable.length) {
+                                const file = readable[cursor++];
+                                try {
+                                    const text = await lookup.read(
+                                        file.filename,
+                                        1,
+                                        FILE_CONTENT_MAX_LINES,
+                                    );
+                                    if (text?.trim()) {
+                                        fileContents.set(file.filename, text);
+                                    }
+                                } catch (err) {
+                                    this.shardLogger.warn({
+                                        message: `[kody-rules] could not read ${file.filename} for PR#${input.prNumber}; that shard falls back to the diff alone: ${err instanceof Error ? err.message : String(err)}`,
+                                        context: this.getIdentity().name,
+                                        metadata: {
+                                            organizationAndTeamData:
+                                                input.organizationAndTeamData,
+                                            prNumber: input.prNumber,
+                                            filename: file.filename,
+                                        },
+                                    });
+                                }
+                            }
+                        },
+                    ),
+                );
+            }
+
             // Retrieve, per file, the repository slices the rules declared they
             // need (issue #1826), and record the ones we could NOT retrieve.
             // A rule that said the hunk is not enough, judged on the hunk
@@ -390,6 +463,11 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                     lookup,
                     changedFilenames,
                     logger: this.shardLogger,
+                    // Step 1 above already read this file and will render it
+                    // whole on the shard prompt. Retrieving it a second time
+                    // as a `full-file` slice put two copies of the same text
+                    // in one prompt, under two contradictory instructions.
+                    wholeFileAlreadyOnPage: fileContents.has(file.filename),
                 });
 
                 if (retrieved.slices.length) {
@@ -465,79 +543,6 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                         unavailableReason: lookup.unavailableReason,
                     },
                 });
-            }
-
-            // ── issue #1826, step 1: the file shard carries its file whole ──
-            //
-            // The judge sees one file's hunks plus about three lines around
-            // them, so the largest class of broken rule — "is this import used
-            // later in the file", "is this function too long", "does this class
-            // have a docstring" — cannot be judged at all, and #1724 is what
-            // that looks like when the model answers anyway.
-            //
-            // Unconditional on purpose. It is not gated on a rule declaring a
-            // need, because a declaration can be wrong in the direction that
-            // silently stops judging the rule, and because the shard is already
-            // per-file: the file is the unit it was built around. Nothing here
-            // knows a language, which matters when the customer's rules may
-            // target any of them.
-            //
-            // Fail-soft everywhere: no sandbox, an unreadable path, or a file
-            // over the prompt budget all degrade to exactly today's hunk-only
-            // shard for that file.
-            const fileContents = new Map<string, string>();
-            if (lookup.available) {
-                const fileLevelRules = rulesForJudge.filter(
-                    (r) => r.scope !== KodyRulesScope.PULL_REQUEST,
-                );
-                const readable = (input.changedFiles ?? []).filter(
-                    (file) =>
-                        // An added file is already whole inside its own diff;
-                        // sending it twice buys nothing and doubles the prompt.
-                        file.status !== 'added' &&
-                        file.status !== 'removed' &&
-                        fileLevelRules.some((r) =>
-                            ruleAppliesToFile(file.filename, r.path),
-                        ),
-                );
-
-                let cursor = 0;
-                await Promise.all(
-                    Array.from(
-                        {
-                            length: Math.min(
-                                SHARD_CONCURRENCY_DEFAULT,
-                                readable.length || 1,
-                            ),
-                        },
-                        async () => {
-                            while (cursor < readable.length) {
-                                const file = readable[cursor++];
-                                try {
-                                    const text = await lookup.read(
-                                        file.filename,
-                                        1,
-                                        FILE_CONTENT_MAX_LINES,
-                                    );
-                                    if (text?.trim()) {
-                                        fileContents.set(file.filename, text);
-                                    }
-                                } catch (err) {
-                                    this.shardLogger.warn({
-                                        message: `[kody-rules] could not read ${file.filename} for PR#${input.prNumber}; that shard falls back to the diff alone: ${err instanceof Error ? err.message : String(err)}`,
-                                        context: this.getIdentity().name,
-                                        metadata: {
-                                            organizationAndTeamData:
-                                                input.organizationAndTeamData,
-                                            prNumber: input.prNumber,
-                                            filename: file.filename,
-                                        },
-                                    });
-                                }
-                            }
-                        },
-                    ),
-                );
             }
 
             // Open the Langfuse root observation the sharded judge runs under.

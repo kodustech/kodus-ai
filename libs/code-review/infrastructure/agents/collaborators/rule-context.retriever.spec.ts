@@ -489,3 +489,75 @@ describe('#1826 — a failed retrieval must not take a working rule out of enfor
         ]);
     });
 });
+
+/**
+ * `full-file` is satisfied by the file already being on the page (#1826).
+ *
+ * The caller (kody-rules-agent.provider) reads every changed file
+ * unconditionally for step 1. Retrieving the same file here produced a second
+ * copy in the same prompt — identical text under the shard budget, a strict
+ * subset of it above. The need is MET by the cheaper path, so it must not
+ * yield a slice and must not count as unmet.
+ */
+describe('retrieveForShard — full-file when the file is already on the page', () => {
+    it('retrieves nothing and reads nothing', async () => {
+        const repo = lookup({
+            read: jest.fn(async () => 'the whole file'),
+        });
+
+        const out = await retrieveForShard({
+            file: file(),
+            rules: [rule('full-file')],
+            lookup: repo,
+            wholeFileAlreadyOnPage: true,
+        });
+
+        expect(out.slices).toEqual([]);
+        // MET, not unmet: an unmet need takes the rule out of the shard.
+        expect(out.unmet).toEqual([]);
+        expect(repo.read).not.toHaveBeenCalled();
+    });
+
+    it('still retrieves it when the caller did NOT put it on the page', async () => {
+        const repo = lookup({ read: jest.fn(async () => 'the whole file') });
+
+        const out = await retrieveForShard({
+            file: file(),
+            rules: [rule('full-file')],
+            lookup: repo,
+            wholeFileAlreadyOnPage: false,
+        });
+
+        expect(out.slices).toHaveLength(1);
+        expect(out.slices[0].kind).toBe('full-file');
+        expect(repo.read).toHaveBeenCalled();
+    });
+
+    it('does not suppress the OTHER needs a shard declares', async () => {
+        // The flag is about one file's own text. A sibling file or a symbol's
+        // references live elsewhere and are still missing from the page.
+        const repo = lookup({
+            read: jest.fn(async () => 'the whole file'),
+            grep: jest.fn(async () => 'src/other.ts:3: total'),
+        });
+
+        const out = await retrieveForShard({
+            // A hunk that DEFINES a symbol, so symbol-references has something
+            // to look for.
+            file: file({
+                patch: [
+                    '@@ -1,1 +1,2 @@',
+                    '+export function renderInvoice(order) {}',
+                ].join('\n'),
+            }),
+            rules: [rule('full-file'), rule('symbol-references')],
+            lookup: repo,
+            wholeFileAlreadyOnPage: true,
+        });
+
+        expect(out.slices.every((s) => s.kind !== 'full-file')).toBe(true);
+        expect(out.slices.some((s) => s.kind === 'symbol-references')).toBe(
+            true,
+        );
+    });
+});

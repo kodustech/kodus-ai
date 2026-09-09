@@ -350,3 +350,101 @@ describe('findUnresolvedReferenceRules — surfaces judge-blind rules', () => {
         expect(out).toHaveLength(0);
     });
 });
+
+/**
+ * The whole-file block carries the file ONCE, under exactly one instruction
+ * (issue #1826).
+ *
+ * Before this, two independent paths put the same file on the same page: step 1
+ * read it unconditionally into `fileContents`, and a rule declaring `full-file`
+ * made the retriever read it AGAIN into a `contextSlices` entry. Under the
+ * shard budget those two copies were byte-identical, and they arrived under
+ * contradictory instructions — "never report a violation whose evidence lies
+ * outside the diff hunks" in one block, "the evidence for such a violation may
+ * well sit outside the hunk — report it" in the other.
+ *
+ * The measurable claim is a count, so these tests count.
+ */
+describe('whole-file block — one copy, one instruction (#1826)', () => {
+    const BODY = Array.from(
+        { length: 40 },
+        (_, i) => `line ${i} SENTINEL_XYZ`,
+    ).join('\n');
+
+    const withNeed = (need: string) => ({
+        uuid: `r-${need}`,
+        title: 't',
+        rule: 'r',
+        path: '**/*.ts',
+        contextNeed: {
+            need,
+            sourceHash: 'h',
+            source: 'compiler',
+            inferredAt: new Date(0),
+        },
+    });
+
+    async function promptFor(rules: any[]) {
+        let captured = '';
+        const runJudge: RunJudge = async ({ user }) => {
+            captured = user;
+            return [];
+        };
+        await judgeKodyRulesSharded({
+            changedFiles: [file('src/a.ts', '1 +line 0 SENTINEL_XYZ')],
+            rules,
+            runJudge,
+            fileContents: new Map([['src/a.ts', BODY]]),
+        });
+        return captured;
+    }
+
+    const copies = (prompt: string) =>
+        (prompt.match(/SENTINEL_XYZ/g) || []).length;
+
+    it('sends the file ONCE when a rule declares full-file', async () => {
+        const prompt = await promptFor([withNeed('full-file')]);
+        // 40 body lines + the single diff line. A second copy would be 81.
+        expect(copies(prompt)).toBe(41);
+    });
+
+    it('sends the file ONCE when no rule declares anything', async () => {
+        const prompt = await promptFor([withNeed('diff-only')]);
+        expect(copies(prompt)).toBe(41);
+    });
+
+    it('authorizes whole-file judgment ONLY when a rule declared full-file', async () => {
+        const authorized = await promptFor([withNeed('full-file')]);
+        const notAuthorized = await promptFor([withNeed('diff-only')]);
+
+        expect(authorized).toContain('may well sit outside the hunk');
+        expect(authorized).not.toContain(
+            'never report a violation whose evidence lies outside the diff hunks',
+        );
+
+        expect(notAuthorized).toContain(
+            'never report a violation whose evidence lies outside the diff hunks',
+        );
+        expect(notAuthorized).not.toContain('may well sit outside the hunk');
+    });
+
+    it('never carries both instructions at once', async () => {
+        for (const need of ['full-file', 'diff-only', 'symbol-references']) {
+            const prompt = await promptFor([withNeed(need)]);
+            const permissive = prompt.includes('may well sit outside the hunk');
+            const restrictive = prompt.includes(
+                'never report a violation whose evidence lies outside the diff hunks',
+            );
+            expect(permissive && restrictive).toBe(false);
+        }
+    });
+
+    it('one full-file rule among many authorizes the shard', async () => {
+        const prompt = await promptFor([
+            withNeed('diff-only'),
+            withNeed('full-file'),
+        ]);
+        expect(prompt).toContain('may well sit outside the hunk');
+        expect(copies(prompt)).toBe(41);
+    });
+});
