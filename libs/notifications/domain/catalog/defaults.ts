@@ -273,6 +273,47 @@ export const EVENT_DEFAULTS: Readonly<
         defaultRoles: [Role.OWNER],
     },
 
+    // ── Prepaid credits (Kodus as the provider) ────────────────
+
+    [NotificationEvent.CREDITS_PURCHASED]: {
+        criticality: Criticality.TRANSACTIONAL,
+        category: 'billing',
+        label: 'Kodus Credits Purchased',
+        defaultChannels: new Set([
+            NotificationChannel.EMAIL,
+            NotificationChannel.IN_APP,
+        ]),
+        icon: 'credit-card',
+        defaultRoles: [Role.OWNER, Role.BILLING_MANAGER],
+    },
+
+    [NotificationEvent.CREDITS_LOW]: {
+        criticality: Criticality.INFORMATIONAL,
+        category: 'billing',
+        label: 'Kodus Credits Running Low',
+        defaultChannels: new Set([
+            NotificationChannel.EMAIL,
+            NotificationChannel.IN_APP,
+        ]),
+        icon: 'credit-card',
+        actionLabel: 'Top up credits',
+        defaultRoles: [Role.OWNER, Role.BILLING_MANAGER],
+    },
+
+    [NotificationEvent.CREDITS_EXHAUSTED]: {
+        criticality: Criticality.CRITICAL,
+        category: 'billing',
+        label: 'Kodus Credits Exhausted',
+        defaultChannels: new Set([
+            NotificationChannel.EMAIL,
+            NotificationChannel.IN_APP,
+        ]),
+        icon: 'credit-card',
+        pageSeverity: true,
+        actionLabel: 'Top up credits',
+        defaultRoles: [Role.OWNER, Role.BILLING_MANAGER],
+    },
+
     // ── Kody Rules (file reference validation) ────────────────
 
     [NotificationEvent.RULE_FILE_REFERENCES_INVALID]: {

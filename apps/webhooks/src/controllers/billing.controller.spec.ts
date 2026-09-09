@@ -238,4 +238,78 @@ describe('BillingController', () => {
             });
         });
     });
+
+    describe('prepaid credits webhooks', () => {
+        it('credits-purchased → CREDITS_PURCHASED with the amounts', async () => {
+            const body = { organizationId: 'org-1', teamId: 't', creditUsd: 100, balanceUsd: 142.5 };
+            const { signature, rawBody } = sign(body);
+            const res = makeRes();
+
+            await controller.creditsPurchased(
+                makeReq(body, signature, rawBody),
+                res as unknown as Response,
+            );
+
+            expect(res.status).toHaveBeenCalledWith(HttpStatus.OK);
+            expect(notify.emit).toHaveBeenCalledWith({
+                event: NotificationEvent.CREDITS_PURCHASED,
+                payload: { creditUsd: 100, balanceUsd: 142.5 },
+                organizationId: 'org-1',
+            });
+        });
+
+        it('credits-low (not exhausted) → CREDITS_LOW with threshold + top-up link', async () => {
+            const body = { organizationId: 'org-1', balanceUsd: 4.2, thresholdUsd: 5, exhausted: false };
+            const { signature, rawBody } = sign(body);
+            const res = makeRes();
+
+            await controller.creditsLow(
+                makeReq(body, signature, rawBody),
+                res as unknown as Response,
+            );
+
+            expect(res.status).toHaveBeenCalledWith(HttpStatus.OK);
+            expect(notify.emit).toHaveBeenCalledWith({
+                event: NotificationEvent.CREDITS_LOW,
+                payload: expect.objectContaining({ balanceUsd: 4.2, thresholdUsd: 5, topUpUrl: expect.stringContaining('/settings/subscription') }),
+                organizationId: 'org-1',
+            });
+        });
+
+        it('credits-low with exhausted=true → CREDITS_EXHAUSTED (critical, sticky)', async () => {
+            const body = { organizationId: 'org-1', balanceUsd: -0.3, thresholdUsd: 5, exhausted: true };
+            const { signature, rawBody } = sign(body);
+            const res = makeRes();
+
+            await controller.creditsLow(
+                makeReq(body, signature, rawBody),
+                res as unknown as Response,
+            );
+
+            expect(notify.emit).toHaveBeenCalledWith({
+                event: NotificationEvent.CREDITS_EXHAUSTED,
+                payload: expect.objectContaining({ balanceUsd: -0.3 }),
+                organizationId: 'org-1',
+            });
+        });
+
+        it('rejects an unsigned credits webhook (401) and a missing org (400)', async () => {
+            const res1 = makeRes();
+            await controller.creditsLow(
+                makeReq({ organizationId: 'org-1', balanceUsd: 0 }, undefined),
+                res1 as unknown as Response,
+            );
+            expect(res1.status).toHaveBeenCalledWith(HttpStatus.UNAUTHORIZED);
+
+            const body = { balanceUsd: 0 };
+            const { signature, rawBody } = sign(body);
+            const res2 = makeRes();
+            await controller.creditsPurchased(
+                makeReq(body, signature, rawBody),
+                res2 as unknown as Response,
+            );
+            expect(res2.status).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
+            expect(notify.emit).not.toHaveBeenCalled();
+        });
+    });
 });
