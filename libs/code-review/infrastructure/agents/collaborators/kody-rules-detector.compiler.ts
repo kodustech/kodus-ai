@@ -31,6 +31,7 @@ import {
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { ruleAppliesToFile } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge';
+import { extensionScopeAppliesToFile } from '@libs/common/utils/kody-rules/file-patterns';
 
 // ── the LLM side of the compiler (runs once at authoring) ────────────────────
 
@@ -54,19 +55,19 @@ INPUT CONTRACT (critical): your regex is applied by the engine to the raw CONTEN
 If mechanical, emit a JavaScript-compatible regex (source only, no slashes) that matches a violating line of code CONTENT.
 If not mechanical, decline — a wrong regex silently hides violations, which is worse than routing the rule to the LLM reviewer. When unsure, decline.
 
-LANGUAGE SCOPE (required when the rule names one): a regex cannot tell Ruby from JavaScript. If the rule's text is specific to a language, an ecosystem, or a file kind — "Ruby does not require semicolons", "in React components", "in our migrations" — list the file extensions it applies to in "extensions", lowercase and dot-prefixed, e.g. [".rb", ".rake", ".erb"]. Include every extension that language really uses, templates included; a missing extension means real violations go unchecked. Omit "extensions" ONLY when the rule is genuinely language-agnostic (e.g. "no TODO comments", "no hardcoded credentials").
+LANGUAGE SCOPE (answer this every time, mechanical or not). If the rule's text is specific to a language, an ecosystem, or a file kind — "Ruby does not require semicolons", "in React components", "in our migrations", "our Terraform modules" — list the file extensions it applies to in "extensions", lowercase and dot-prefixed, e.g. [".rb", ".rake", ".erb"]. Two things this list must get right: include EVERY extension that ecosystem really uses, templates and config included, because a missing one means real violations go unchecked; and write compound suffixes whole when the rule is about that file kind specifically (".blade.php", ".spec.ts", ".module.css", ".tf.json"). Omit "extensions" ONLY when the rule is genuinely language-agnostic (e.g. "no TODO comments", "no hardcoded credentials") — an unscoped rule is checked everywhere, which is the safe direction.
 
 DECLINE COSMETIC RULES. Formatting and style that a linter or formatter owns — semicolons, quote style, blank lines, trailing whitespace, indentation, line length, brace placement, statements per line — must be declined even when a regex could match them perfectly. They are mechanically detectable and still not worth a review comment: the reviewer's linter already enforces them, so a hit is at best noise and at worst wrong. Set {"mechanical": false, "cosmetic": true}.
 
-CONTEXT NEED (answer this every time, mechanical or not). The reviewer sees one file's changed lines and about three lines around them. Say in "contextNeed" what this rule must ALSO see to be judged honestly:
-- "diff-only" — the changed lines are enough.
-- "enclosing-scope" — you must see the whole function or class the change sits in (e.g. "functions must be under 40 lines").
-- "symbol-references" — you must see where the changed symbols are used elsewhere in the repository (e.g. "no unused imports", "do not duplicate an existing helper").
+CONTEXT NEED (answer this every time, mechanical or not). The reviewer sees ONLY the changed lines — a few lines of context around each hunk, nothing else. Say in "contextNeed" what this rule must ALSO see to be judged at all:
+- "diff-only" — the changed lines are enough. A rule about the shape of a line (naming, a forbidden call, a magic number, a missing await) is judged where it is written.
+- "full-file" — you must see the rest of THIS file (e.g. "no unused imports", "a function must not exceed N lines", "every exported class has a docstring", "do not repeat a block inside a file"). Anything about a property of a whole function, class or file belongs here: the hunk shows a fragment, and the property lives in the whole.
+- "symbol-references" — you must see where the changed symbols are used ELSEWHERE in the repository (e.g. "do not duplicate an existing helper", "an exported symbol nobody imports").
 - "sibling-file" — you must know whether a related file exists (e.g. "every new endpoint has a test").
 - "cited-file" — the rule points at another file whose content IS the convention.
 Answer "diff-only" unless the rule plainly cannot be judged without more. Over-declaring is the expensive mistake: a rule needing context the reviewer cannot fetch is not judged at all, so when unsure, answer "diff-only".
 
-Return ONLY JSON: {"mechanical": true, "pattern": "<regex source>", "flags": "<optional>", "extensions": ["<.ext>", …], "contextNeed": "<diff-only|enclosing-scope|symbol-references|sibling-file|cited-file>", "reason": "<one sentence>"} or {"mechanical": false, "cosmetic": <true|false>, "contextNeed": "<diff-only|enclosing-scope|symbol-references|sibling-file|cited-file>", "reason": "<one sentence>"}`;
+Return ONLY JSON: {"mechanical": true, "pattern": "<regex source>", "flags": "<optional>", "extensions": ["<.ext>", …], "contextNeed": "<diff-only|full-file|symbol-references|sibling-file|cited-file>", "reason": "<one sentence>"} or {"mechanical": false, "cosmetic": <true|false>, "extensions": ["<.ext>", …], "contextNeed": "<diff-only|full-file|symbol-references|sibling-file|cited-file>", "reason": "<one sentence>"}`;
 
 export const compilerOutputSchema = z.object({
     mechanical: z.boolean(),
@@ -102,7 +103,7 @@ export function normalizeContextNeed(raw: unknown): KodyRuleContextNeed {
 
 const CONTEXT_NEEDS: readonly KodyRuleContextNeed[] = [
     'diff-only',
-    'enclosing-scope',
+    'full-file',
     'symbol-references',
     'sibling-file',
     'cited-file',
@@ -247,12 +248,30 @@ export function normalizeDetectorExtensions(
     const out = new Set<string>();
     for (const raw of extensions) {
         if (typeof raw !== 'string') continue;
-        const e = raw.trim().toLowerCase();
+        // The prompt's own JSON template writes the placeholder as `<.ext>`,
+        // and models copy the angle brackets into the answer. Measured on real
+        // rules: "Avoid N+1 SQL Queries Inside Loops" came back as
+        // ["<.sql>","<.rb>",…] — the languages were right and every entry was
+        // then rejected, shipping the rule unscoped. The brackets are the
+        // template's punctuation and can never be part of an extension, so
+        // stripping them recovers a correct answer without loosening what
+        // counts as one: the pattern below still rejects globs and paths.
+        const e = raw.trim().toLowerCase().replace(/^<+|>+$/g, '').trim();
         if (!e) continue;
         const dotted = e.startsWith('.') ? e : `.${e}`;
-        // A real extension: dot + alphanumerics. Rejects globs ("*.rb"), paths
-        // and prose the model may have put here instead.
-        if (!/^\.[a-z0-9_+-]{1,12}$/.test(dotted)) continue;
+        // A real extension: one or more dot-prefixed alphanumeric segments.
+        // Compound suffixes are first-class because whole ecosystems name files
+        // that way — `.blade.php`, `.spec.ts`, `.d.ts`, `.module.css`,
+        // `.stories.tsx`, `.tar.gz` — and a single-segment pattern threw the
+        // second half away. Measured on real rules: one answered
+        // [".php", ".blade.php"] and lost the compound half.
+        //
+        // NOTHING here names a language. The shape is the only thing checked,
+        // so an ecosystem nobody thought of works the day a rule mentions it —
+        // which is the requirement, since a customer's rules can target any
+        // technology. Globs ("*.rb"), paths ("app/models/") and prose still
+        // fail, because `*` and `/` are outside the segment alphabet.
+        if (!/^(?:\.[a-z0-9_+-]{1,12}){1,3}$/.test(dotted)) continue;
         out.add(dotted);
     }
     return out.size ? [...out] : undefined;
@@ -472,18 +491,12 @@ export function detectorAppliesToFile(
     filename: string,
     detector: DetectorPlan,
 ): boolean {
-    const exts = detector.extensions;
-    if (!exts?.length) return true;
-    const m = String(filename).toLowerCase().match(/\.[^./]+$/);
-    // No extension at all (Rakefile, Gemfile, Dockerfile, Makefile, LICENSE):
-    // we cannot tell the language, so we do not narrow. Excluding them would be
-    // a SILENT enforcement loss — a Ruby-scoped rule would never fire on a
-    // Rakefile, and because the judge only shards files where a detector fired,
-    // no LLM pass would catch it either. The scope is a cost filter, so when it
-    // cannot decide it must abstain and let the judge rule; the same reason
-    // `normalizeDetectorExtensions` returns undefined instead of an empty list.
-    if (!m) return true;
-    return exts.includes(m[0]);
+    // Suffix matching, extensionless files abstaining — see
+    // `extensionScopeAppliesToFile`. The semantic judge narrows by the
+    // rule-level `fileScope` through that same predicate, so a detector and a
+    // semantic rule carrying the same extensions can never disagree about
+    // which files they cover.
+    return extensionScopeAppliesToFile(filename, detector.extensions);
 }
 
 /**

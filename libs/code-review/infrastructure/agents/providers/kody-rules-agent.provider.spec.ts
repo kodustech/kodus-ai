@@ -194,7 +194,7 @@ describe('KodyRulesAgentProvider — rule formatting and applicability', () => {
     });
 
     describe('formatKodyRules — external file reference', () => {
-        it('hints at readFile for an in-repo path and surfaces readReference as the cross-repo fallback', () => {
+        it('says a reference file is inlined, and promises no tool to fetch it', () => {
             const rules = [
                 {
                     uuid: 'r-ext',
@@ -208,11 +208,11 @@ describe('KodyRulesAgentProvider — rule formatting and applicability', () => {
             const out = formatRules(rules, [{ filename: 'a.ts' }]);
 
             expect(out).toContain('**Reference**: `docs/conventions.md`');
-            expect(out).toContain('use readFile');
-            expect(out).toContain('readReference');
+            expect(out).toContain('its content is inlined with this rule');
+            expect(out).not.toContain('readReference');
         });
 
-        it('mentions both readFile and readReference for cross-repo-shaped source paths so the LLM can choose', () => {
+        it('says the same for a cross-repo-shaped source path — there is no fetch either way', () => {
             const rules = [
                 {
                     uuid: 'r-ext-cross',
@@ -228,8 +228,8 @@ describe('KodyRulesAgentProvider — rule formatting and applicability', () => {
             expect(out).toContain(
                 '**Reference**: `kodustech/design-system/docs/conventions.md`',
             );
-            expect(out).toContain('use readFile');
-            expect(out).toContain('readReference');
+            expect(out).toContain('its content is inlined with this rule');
+            expect(out).not.toContain('readReference');
         });
 
         it('appends the section anchor to the Reference line when sourceAnchor is set', () => {

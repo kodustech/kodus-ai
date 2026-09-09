@@ -1,5 +1,8 @@
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
-import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import {
+    IKodyRule,
+    KodyRuleContextNeed,
+} from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
 import { RepoLookup, RepoLookupUnavailableError } from './repo-lookup';
 import {
@@ -54,6 +57,7 @@ function lookup(overrides: Partial<RepoLookup> = {}): RepoLookup {
         read: jest.fn(async () => ''),
         exists: jest.fn(async () => false),
         probe: jest.fn(async () => undefined),
+        stats: { grep: 0, read: 0, exists: 0, failures: 0 },
         ...overrides,
     } as RepoLookup;
 }
@@ -66,6 +70,7 @@ function unavailableLookup(): RepoLookup {
     return {
         available: false,
         unavailableReason: 'null sandbox',
+        stats: { grep: 0, read: 0, exists: 0, failures: 0 },
         grep: boom('grep') as any,
         read: boom('read') as any,
         exists: boom('exists') as any,
@@ -111,91 +116,6 @@ describe('retrieveForShard — diff-only', () => {
         expect(result).toEqual({ slices: [], unmet: [] });
         expect(repo.read).not.toHaveBeenCalled();
         expect(repo.grep).not.toHaveBeenCalled();
-    });
-});
-
-describe('retrieveForShard — enclosing-scope (KRC-13)', () => {
-    it('returns the scope the change sits inside', async () => {
-        const read = jest.fn(async () =>
-            [
-                'const unrelated = 1;',
-                'export function total(items) {',
-                '  const a = 1;',
-                '  total += 1;',
-                '}',
-            ].join('\n'),
-        );
-
-        const result = await retrieveForShard({
-            file: file({
-                patch: ['@@ -10,2 +10,3 @@', '+  total += 1;'].join('\n'),
-            }),
-            rules: [rule('enclosing-scope')],
-            lookup: lookup({ read }),
-        });
-
-        expect(read).toHaveBeenCalledWith('src/invoice.ts', 1, 32);
-        expect(result.unmet).toEqual([]);
-        expect(result.slices).toHaveLength(1);
-        expect(result.slices[0].kind).toBe('enclosing-scope');
-        expect(result.slices[0].content).toBe(
-            [
-                'export function total(items) {',
-                '  const a = 1;',
-                '  total += 1;',
-                '}',
-            ].join('\n'),
-        );
-        expect(result.slices[0].truncated).toBe(false);
-    });
-
-    it('falls back to a bounded window when the language has no recognizable definitions (KRC-27)', async () => {
-        const read = jest.fn(async () => '.total { color: red; }');
-
-        const result = await retrieveForShard({
-            file: file({
-                filename: 'src/theme.scss',
-                patch: ['@@ -30,1 +30,2 @@', '+  color: red;'].join('\n'),
-            }),
-            rules: [rule('enclosing-scope')],
-            lookup: lookup({ read }),
-        });
-
-        expect(read).toHaveBeenCalledWith('src/theme.scss', 10, 51);
-        expect(result.unmet).toEqual([]);
-        expect(result.slices[0].content).toBe('.total { color: red; }');
-        expect(result.slices[0].label).toContain('lines 10-51');
-    });
-
-    it('falls back to a bounded window when no definition sits above the hunk', async () => {
-        const read = jest
-            .fn()
-            .mockResolvedValueOnce('  a = 1;\n  b = 2;')
-            .mockResolvedValueOnce('window content');
-
-        const result = await retrieveForShard({
-            file: file({
-                patch: ['@@ -30,1 +30,2 @@', '+  b = 2;'].join('\n'),
-            }),
-            rules: [rule('enclosing-scope')],
-            lookup: lookup({ read }),
-        });
-
-        expect(read).toHaveBeenNthCalledWith(2, 'src/invoice.ts', 10, 51);
-        expect(result.slices[0].content).toBe('window content');
-    });
-
-    it('reports the rule unmet when the repository cannot be read', async () => {
-        const rules = [rule('enclosing-scope')];
-
-        const result = await retrieveForShard({
-            file: file(),
-            rules,
-            lookup: unavailableLookup(),
-        });
-
-        expect(result.slices).toEqual([]);
-        expect(result.unmet).toEqual(rules);
     });
 });
 
@@ -378,25 +298,29 @@ describe('retrieveForShard — budget (KRC-28, KRC-29)', () => {
     // which nothing asserted (Verifier round 2, gap 6). This pins it: every
     // read the retriever issues is a bounded line range, so a future "just read
     // the file" shortcut fails here instead of quietly tripling every shard.
-    it('never reads a whole file: every read is a bounded line range (KRC-28)', async () => {
+    // KRC-28 originally read "never reads a whole file: every read is a
+    // bounded line range". Issue #1826's step 1 is precisely the opposite for
+    // the file the shard is judging — the file shard now carries its file
+    // whole — so that requirement was removed rather than worked around. What
+    // survives is the part that still holds: RETRIEVAL of other files stays
+    // bounded, because those are additional slices on top of the file.
+    it('keeps retrieval of OTHER files bounded (KRC-28, narrowed)', async () => {
         const read = jest.fn(async () => 'const x = 1;');
-        const hunkStart = 400;
-        const patch = [
-            `@@ -${hunkStart},1 +${hunkStart},2 @@`,
-            '+export function renderInvoice(order) {}',
-        ].join('\n');
 
         await retrieveForShard({
-            file: file({ patch }),
-            rules: [rule('enclosing-scope')],
+            file: file({
+                patch: ['@@ -1,1 +1,2 @@', '+import { a } from "./a";'].join(
+                    '\n',
+                ),
+            }),
+            rules: [rule('sibling-file')],
             lookup: lookup({ read }),
         });
 
-        expect(read).toHaveBeenCalled();
-        for (const [, from, to] of read.mock.calls as unknown as Array<
+        for (const call of read.mock.calls as unknown as Array<
             [string, number, number]
         >) {
-            expect(from).toBeGreaterThan(1);
+            const [, from, to] = call;
             expect(Number.isFinite(to)).toBe(true);
             expect(to - from).toBeLessThan(200);
         }
@@ -468,5 +392,100 @@ describe('retrieveForShard — a file this PR added', () => {
         expect(result).toEqual({ slices: [], unmet: [] });
         expect(repo.grep).not.toHaveBeenCalled();
         expect(repo.read).not.toHaveBeenCalled();
+    });
+});
+
+/**
+ * The regression guard for shipping `full-file` to an installed base.
+ *
+ * Re-classifying the fleet moves rules OUT of `diff-only`. If a need that fails
+ * to retrieve always skipped the rule, then the first sandbox hiccup would take
+ * rules that work today out of enforcement — which is a worse outcome than the
+ * bug being fixed. `full-file` therefore degrades: the hunk is already part of
+ * the file, so judging without the slice is exactly the behaviour every rule
+ * had before this feature, and the claim checker still guards it.
+ *
+ * The outward-reaching needs must keep skipping: judging THEM blind is #1724.
+ */
+describe('#1826 — a failed retrieval must not take a working rule out of enforcement', () => {
+    const file = {
+        filename: 'src/reports/build-report.ts',
+        patch: '@@ -1,2 +1,3 @@\n context\n+const x = 1;\n',
+    } as any;
+
+    const ruleNeeding = (need: KodyRuleContextNeed) =>
+        ({
+            uuid: `rule-${need}`,
+            rule: 'r',
+            contextNeed: {
+                need,
+                sourceHash: 'h',
+                source: 'author' as const,
+                inferredAt: new Date(),
+            },
+        }) as Partial<IKodyRule>;
+
+    const brokenLookup = () =>
+        ({
+            available: true,
+            unavailableReason: '',
+            stats: { grep: 0, read: 0, exists: 0, failures: 0 },
+            grep: async () => {
+                throw new Error('sandbox went away');
+            },
+            read: async () => {
+                throw new Error('sandbox went away');
+            },
+            exists: async () => {
+                throw new Error('sandbox went away');
+            },
+            probe: async () => undefined,
+        }) as any;
+
+    it('still judges a full-file rule when the file cannot be read', async () => {
+        const res = await retrieveForShard({
+            file,
+            rules: [ruleNeeding('full-file')],
+            lookup: brokenLookup(),
+            changedFilenames: [file.filename],
+        });
+
+        expect(res.unmet).toHaveLength(0);
+        expect(res.slices).toHaveLength(0);
+    });
+
+    it('still SKIPS a symbol-references rule — judging it blind is the bug', async () => {
+        const res = await retrieveForShard({
+            file,
+            rules: [ruleNeeding('symbol-references')],
+            lookup: brokenLookup(),
+            changedFilenames: [file.filename],
+        });
+
+        expect(res.unmet).toHaveLength(1);
+    });
+
+    it('still SKIPS a sibling-file rule for the same reason', async () => {
+        const res = await retrieveForShard({
+            file,
+            rules: [ruleNeeding('sibling-file')],
+            lookup: brokenLookup(),
+            changedFilenames: [file.filename],
+        });
+
+        expect(res.unmet).toHaveLength(1);
+    });
+
+    it('skips only the rule that reaches outside, not its full-file neighbour', async () => {
+        const res = await retrieveForShard({
+            file,
+            rules: [ruleNeeding('full-file'), ruleNeeding('symbol-references')],
+            lookup: brokenLookup(),
+            changedFilenames: [file.filename],
+        });
+
+        expect(res.unmet.map((r: any) => r.uuid)).toEqual([
+            'rule-symbol-references',
+        ]);
     });
 });

@@ -14,6 +14,8 @@ import { runAgentWithTrace } from '@libs/code-review/infrastructure/agents/colla
 import {
     judgeKodyRulesSharded,
     ruleAppliesToFile,
+    SHARD_CONCURRENCY_DEFAULT,
+    FILE_CONTENT_MAX_LINES,
     inlineRuleReferences,
     inlineLoadedReferences,
     findUnresolvedReferenceRules,
@@ -438,6 +440,79 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                 });
             }
 
+            // ── issue #1826, step 1: the file shard carries its file whole ──
+            //
+            // The judge sees one file's hunks plus about three lines around
+            // them, so the largest class of broken rule — "is this import used
+            // later in the file", "is this function too long", "does this class
+            // have a docstring" — cannot be judged at all, and #1724 is what
+            // that looks like when the model answers anyway.
+            //
+            // Unconditional on purpose. It is not gated on a rule declaring a
+            // need, because a declaration can be wrong in the direction that
+            // silently stops judging the rule, and because the shard is already
+            // per-file: the file is the unit it was built around. Nothing here
+            // knows a language, which matters when the customer's rules may
+            // target any of them.
+            //
+            // Fail-soft everywhere: no sandbox, an unreadable path, or a file
+            // over the prompt budget all degrade to exactly today's hunk-only
+            // shard for that file.
+            const fileContents = new Map<string, string>();
+            if (lookup.available) {
+                const fileLevelRules = rulesForJudge.filter(
+                    (r) => r.scope !== KodyRulesScope.PULL_REQUEST,
+                );
+                const readable = (input.changedFiles ?? []).filter(
+                    (file) =>
+                        // An added file is already whole inside its own diff;
+                        // sending it twice buys nothing and doubles the prompt.
+                        file.status !== 'added' &&
+                        file.status !== 'removed' &&
+                        fileLevelRules.some((r) =>
+                            ruleAppliesToFile(file.filename, r.path),
+                        ),
+                );
+
+                let cursor = 0;
+                await Promise.all(
+                    Array.from(
+                        {
+                            length: Math.min(
+                                SHARD_CONCURRENCY_DEFAULT,
+                                readable.length || 1,
+                            ),
+                        },
+                        async () => {
+                            while (cursor < readable.length) {
+                                const file = readable[cursor++];
+                                try {
+                                    const text = await lookup.read(
+                                        file.filename,
+                                        1,
+                                        FILE_CONTENT_MAX_LINES,
+                                    );
+                                    if (text?.trim()) {
+                                        fileContents.set(file.filename, text);
+                                    }
+                                } catch (err) {
+                                    this.shardLogger.warn({
+                                        message: `[kody-rules] could not read ${file.filename} for PR#${input.prNumber}; that shard falls back to the diff alone: ${err instanceof Error ? err.message : String(err)}`,
+                                        context: this.getIdentity().name,
+                                        metadata: {
+                                            organizationAndTeamData:
+                                                input.organizationAndTeamData,
+                                            prNumber: input.prNumber,
+                                            filename: file.filename,
+                                        },
+                                    });
+                                }
+                            }
+                        },
+                    ),
+                );
+            }
+
             // Open the Langfuse root observation the sharded judge runs under.
             // Every OTHER review agent runs inside runAgentWithTrace (via the
             // base provider's agentic loop); this override bypassed super.execute
@@ -475,6 +550,7 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                         detectorHits,
                         contextSlices,
                         unmetRules,
+                        fileContents,
                     }),
             );
             judgeViolations = result.violations;
@@ -593,9 +669,42 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
         );
 
         const durationMs = Date.now() - startTime;
+        // How hard the repository was actually consulted. A review that
+        // retrieved nothing and refuted nothing looks identical to a clean PR
+        // in every other line of this log; `lookupFailures > 0` while the
+        // lookup still reports available is the shape of a silently degraded
+        // review, and it is the only place that distinction is visible.
+        // `input.repoLookup` is injected by the caller, so this must survive a
+        // lookup built before `stats` existed. A crash here would fail the
+        // whole review to write a log line — the counters are diagnostics, and
+        // diagnostics never get to be load-bearing.
+        const ls = lookup.stats ?? {
+            grep: 0,
+            read: 0,
+            exists: 0,
+            failures: 0,
+        };
+        const lookupSummary = lookup.available
+            ? `lookup ${ls.grep} grep / ${ls.read} read / ${ls.exists} exists${ls.failures ? `, ${ls.failures} FAILED` : ''}`
+            : `lookup unavailable (${lookup.unavailableReason})`;
+
         this.shardLogger.log({
-            message: `[AGENT] ${this.getIdentity().name} (sharded) done for PR#${input.prNumber}: ${mapped.suggestions.length} suggestions (${judgeViolations.length} confirmed across ${shardsRun} shards${shardsErrored ? `, ${shardsErrored} errored` : ''}${claimCheck.dropped.length ? `, ${claimCheck.dropped.length} discarded by the claim check` : ''}; ${candidateCount} detector candidate(s) offered) in ${durationMs}ms`,
+            message: `[AGENT] ${this.getIdentity().name} (sharded) done for PR#${input.prNumber}: ${mapped.suggestions.length} suggestions (${judgeViolations.length} confirmed across ${shardsRun} shards${shardsErrored ? `, ${shardsErrored} errored` : ''}${claimCheck.dropped.length ? `, ${claimCheck.dropped.length} discarded by the claim check` : ''}; ${candidateCount} detector candidate(s) offered; ${lookupSummary}) in ${durationMs}ms`,
             context: this.getIdentity().name,
+            metadata: {
+                organizationAndTeamData: input.organizationAndTeamData,
+                prNumber: input.prNumber,
+                shardsRun,
+                shardsErrored,
+                suggestions: mapped.suggestions.length,
+                claimsDropped: claimCheck.dropped.length,
+                lookupAvailable: lookup.available,
+                lookupUnavailableReason: lookup.unavailableReason || undefined,
+                lookupGrep: ls.grep,
+                lookupRead: ls.read,
+                lookupExists: ls.exists,
+                lookupFailures: ls.failures,
+            },
         });
 
         return {
@@ -608,10 +717,22 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
     }
 
     /**
-     * Override to include the request's rules in the category prompt. The
-     * formatted rule section is derived from `input.kodyRules` each call
-     * instead of from instance state, so concurrent reviews cannot see
-     * each other's rule set.
+     * The category prompt of the AGENTIC path, which this provider no longer
+     * takes: `execute` above returns from the sharded judge and never calls
+     * `super.execute`, and `getCategoryPrompt` is reached only through the
+     * base provider's `promptMeta`, which only `super.execute` calls. It stays
+     * because the base declares it abstract, and because the specs exercise the
+     * rule composition through it.
+     *
+     * It said "Investigate with tools: Use readFile/grep to verify" (issue
+     * #1826). Nothing in this provider gives the model a tool — `RunJudge`
+     * takes a system string and a user string and returns JSON. Text promising
+     * a capability that does not exist is worse than no text: it is the reason
+     * the model asserted "this import is unused" as if it had checked (#1724).
+     * Anything the judge needs is retrieved by code and inlined before the call.
+     *
+     * The rule section is derived from `input.kodyRules` each call rather than
+     * from instance state, so concurrent reviews cannot see each other's rules.
      */
     protected getCategoryPrompt(input: ReviewAgentInput): string {
         const rules = (
@@ -632,7 +753,7 @@ You validate code against the team's custom rules listed below. Your ONLY job is
 ### How to analyze:
 1. **Read each rule carefully**: Understand what the rule requires and what path patterns it applies to.
 2. **Check applicability**: Only check a rule if the changed files match its path pattern (if specified).
-3. **Investigate with tools**: Use readFile/grep to verify whether the changed code complies with each rule.
+3. **Judge from what you were given**: the changed lines, plus whatever repository context was retrieved and inlined for you above. You have no tools; if the evidence for a rule is not on this page, do not assert it.
 4. **Use examples**: If a rule has examples, compare the changed code against them.
 5. **Report violations only**: Do NOT report code that correctly follows the rules.
 
@@ -754,11 +875,11 @@ If no violations found, respond with \`{"reasoning": "Checked all rules, no viol
     <Rule>Check EVERY rule against the diffs and use tools to investigate further if needed.</Rule>
     <Rule>For PR-level rules (e.g., "must have tests", "PR description requirements"), evaluate the PR as a whole — check the PR title, description, and the full list of changed files. Do NOT attach these to a specific file.</Rule>
     <Rule>For file-level rules, check the diff of each applicable file and report with file path and line numbers.</Rule>
-    <Rule>If a rule has a Reference file, use readFile to read it and understand the expected pattern before checking.</Rule>
+    <Rule>A rule's Reference file is already inlined below it — read it there. There is no tool to fetch one.</Rule>
     <Rule>Only report actual violations — not code that follows the rules.</Rule>
     <Rule>Include the rule title in the suggestionContent so the team knows which rule was violated.</Rule>
     <Rule>If you spot a real issue that does NOT map to any listed rule, DROP IT. Your scope is only team rules. Other agents cover generic bugs, security, performance.</Rule>
-    <Rule>Only flag lines that are present in the &lt;Diffs&gt; above. readFile/grep return the FULL file including code this PR did not touch — surrounding lines are context only. Never report a violation whose evidence (existingCode / relevantLines) lies outside the diff hunks.</Rule>
+    <Rule>Only flag lines that are present in the &lt;Diffs&gt; above. Any repository context inlined for you is context only — never report a violation whose evidence (existingCode / relevantLines) lies outside the diff hunks.</Rule>
     <Rule>Commit-hygiene rules (e.g. "don't mix mechanical and behavioral changes", "separate commits and call out which are mechanical") MUST be judged against the &lt;Commits&gt; list, NOT the aggregated diff or the PR description. Seeing several commits' changes together, or an incremental push that is purely mechanical, is NOT a violation — you are just viewing more than one commit at once, or a subset. This rule is HIGH-PRECISION and targets only WHOLESALE mechanical changes — project/file-wide reformatting, mass renames, or import re-sorting — that are bundled into the SAME commit as unrelated behavioral logic. The following are NOT violations and must NOT be reported: incidental comments or docstrings, local whitespace/indentation, and formatting that is a normal part of implementing the change in that commit; a commit that is entirely mechanical (e.g. "fix lint", "style: formatting"); or mechanical changes already isolated in their own commit. When in doubt, do NOT report.</Rule>
   </Rules>
 </ReviewTask>`;
@@ -913,10 +1034,11 @@ If no violations found, respond with \`{"reasoning": "Checked all rules, no viol
                 const anchor = rule.sourceAnchor
                     ? ` (section: ${rule.sourceAnchor})`
                     : '';
-                const toolHint =
-                    'use readFile to read this file from the current repository; if the file lives in another repo, use readReference with repo="owner/repo" and path="path"';
+                // No tool hint here. `inlineLoadedReferences` has already put
+                // this file's content into the rule, so pointing the model at a
+                // fetch it cannot perform only invites it to pretend it did.
                 parts.push(
-                    `**Reference**: \`${rule.sourcePath}\`${anchor} — ${toolHint} for the full pattern/convention`,
+                    `**Reference**: \`${rule.sourcePath}\`${anchor} — its content is inlined with this rule`,
                 );
             }
 

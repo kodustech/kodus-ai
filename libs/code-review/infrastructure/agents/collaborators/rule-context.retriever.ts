@@ -22,6 +22,7 @@ import {
     KodyRuleContextNeed,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
+import { grepIsEmpty } from './repo-lookup';
 import type { RepoLookup } from './repo-lookup';
 import {
     DEFINITION_PATTERN,
@@ -61,6 +62,14 @@ const MAX_HUNKS_PER_FILE = 3;
 const MAX_SYMBOLS_PER_FILE = 3;
 
 /**
+ * Upper bound on a whole-file read. `file-scope` compares the result against
+ * the shard budget anyway; this only stops a pathological file (a lockfile, a
+ * generated bundle) from being pulled across the sandbox boundary in full
+ * before that comparison happens.
+ */
+const WHOLE_FILE_MAX_LINES = 4000;
+
+/**
  * Extensions whose definitions `DEFINITION_PATTERN` actually recognizes. A file
  * outside this set gets the bounded window instead of a wrong "enclosing scope"
  * — the fallback KRC-27 requires.
@@ -92,7 +101,7 @@ const ENCLOSING_SCOPE_EXTENSIONS = new Set([
  * slice is spent first.
  */
 const RETRIEVAL_ORDER: KodyRuleContextNeed[] = [
-    'enclosing-scope',
+    'full-file',
     'symbol-references',
     'sibling-file',
 ];
@@ -101,13 +110,36 @@ const RETRIEVAL_ORDER: KodyRuleContextNeed[] = [
 const NEED_WIDTH: Record<KodyRuleContextNeed, number> = {
     'diff-only': 0,
     'cited-file': 1,
-    'sibling-file': 2,
-    'enclosing-scope': 3,
+    // Wider than a cited file and narrower than anything that leaves the file:
+    // it reaches the whole of ONE file and nothing beyond it.
+    'full-file': 2,
+    'sibling-file': 3,
     'symbol-references': 4,
 };
 
 /** Thrown by a retriever that cannot answer its need. */
 class UnmetContextNeedError extends Error {}
+
+/**
+ * Needs that DEGRADE instead of skipping the rule when retrieval fails.
+ *
+ * Skipping is the right answer for a need that reaches OUTSIDE the file. A
+ * "do not duplicate an existing helper" or "every endpoint has a test" rule
+ * judged without the lookup has nothing to reason from and invents an answer —
+ * that is #1724, and a rule silently skipped with a note on the PR is better
+ * than a confident wrong comment.
+ *
+ * `full-file` is not like that, and treating it the same would be a
+ * REGRESSION. The hunk is already a subset of the file, so a full-file rule
+ * judged without its slice behaves exactly as every rule behaved before this
+ * feature existed — and the claim checker still refutes whatever it asserts.
+ * Skipping it would take a rule that works today out of enforcement the first
+ * time a sandbox blinks. Degrading can only ever land back on today's
+ * behaviour, so it cannot regress.
+ */
+const DEGRADES_INSTEAD_OF_SKIPPING = new Set<KodyRuleContextNeed>([
+    'full-file',
+]);
 
 /**
  * A rule's declared need. Absent means `diff-only`: a rule saved before the
@@ -154,62 +186,6 @@ const diffOf = (file: FileChange): string =>
     file.patch ?? (file as { patchWithLinesStr?: string }).patchWithLinesStr ?? '';
 
 /**
- * The enclosing function or class of each changed hunk (KRC-13), falling back
- * to a bounded window around the hunk when the file's language has no
- * definition shape we recognize (KRC-27).
- */
-async function retrieveEnclosingScope(
-    file: FileChange,
-    lookup: RepoLookup,
-): Promise<RetrievedSlice[]> {
-    const ranges = getModifiedRanges(diffOf(file)).slice(0, MAX_HUNKS_PER_FILE);
-    if (ranges.length === 0) return [];
-
-    const resolvable = ENCLOSING_SCOPE_EXTENSIONS.has(
-        extensionOf(file.filename),
-    );
-    const slices: RetrievedSlice[] = [];
-
-    for (const [start, end] of ranges) {
-        if (resolvable) {
-            const from = Math.max(1, start - ENCLOSING_LOOKBACK_LINES);
-            const content = await lookup.read(
-                file.filename,
-                from,
-                end + ENCLOSING_TRAILING_LINES,
-            );
-            const lines = content.split('\n');
-            // Last definition line at or above the hunk start, i.e. the scope
-            // the change sits inside.
-            let openedAt = -1;
-            for (let i = 0; i < lines.length && from + i <= start; i++) {
-                if (DEFINITION_PATTERN.test(lines[i])) openedAt = i;
-            }
-            if (openedAt >= 0) {
-                slices.push({
-                    kind: 'enclosing-scope',
-                    label: `${file.filename}: scope enclosing the change at line ${start}, from line ${from + openedAt}`,
-                    content: lines.slice(openedAt).join('\n'),
-                    truncated: false,
-                });
-                continue;
-            }
-        }
-
-        const from = Math.max(1, start - FALLBACK_WINDOW_RADIUS);
-        const to = end + FALLBACK_WINDOW_RADIUS;
-        slices.push({
-            kind: 'enclosing-scope',
-            label: `${file.filename}: lines ${from}-${to} around the change (no enclosing scope resolved for this file type)`,
-            content: await lookup.read(file.filename, from, to),
-            truncated: false,
-        });
-    }
-
-    return slices;
-}
-
-/**
  * Repository occurrences of the symbols this hunk defines (KRC-14).
  *
  * A hunk that defines no symbol leaves the need unanswerable: there is no
@@ -234,7 +210,12 @@ async function retrieveSymbolReferences(
 
     const slices: RetrievedSlice[] = [];
     for (const symbol of symbols) {
-        const found = (await lookup.grep(symbol)).trim();
+        const raw = await lookup.grep(symbol);
+        // `grepIsEmpty` covers BOTH provider shapes. Testing truthiness alone
+        // let E2B's "No matches found." through as if it were a slice of the
+        // repository, so the model was shown that sentence instead of the one
+        // this code writes for a real absence.
+        const found = grepIsEmpty(raw) ? '' : raw.trim();
         slices.push({
             kind: 'symbol-references',
             label: `repository occurrences of \`${symbol}\``,
@@ -242,6 +223,96 @@ async function retrieveSymbolReferences(
             truncated: false,
         });
     }
+    return slices;
+}
+
+/**
+ * The rest of the file the hunk lives in (KRC / issue #1826, the "majority" row).
+ *
+ * Two shapes, and which one is used is decided by SIZE, never by language:
+ *
+ *   fits the budget  -> the file, whole. Nothing is more accurate, and for the
+ *                       common file it is also the cheapest thing to reason about.
+ *   over the budget  -> the scope ENCLOSING each hunk. "Is this function too
+ *                       long" and "does this class have a docstring" are answered
+ *                       by the scope the change sits in; the far end of a 4,000
+ *                       line file is not evidence about them.
+ *
+ * The earlier attempt attached the whole file to every shard and OMITTED it
+ * whenever it did not fit, so the biggest files — the ones where "too long"
+ * actually bites — were exactly the ones that got nothing. Degrading to the
+ * enclosing scope inverts that: the bigger the file, the more the narrowing
+ * matters, and something true is always delivered.
+ *
+ * The slice is marked `truncated` when it is the narrowed form, so the prompt
+ * tells the model it is looking at part of a file rather than all of it.
+ */
+async function retrieveFullFile(
+    file: FileChange,
+    lookup: RepoLookup,
+    budgetChars: number,
+): Promise<RetrievedSlice[]> {
+    const whole = await lookup.read(file.filename, 1, WHOLE_FILE_MAX_LINES);
+    const text = whole ?? '';
+    if (!text.trim()) {
+        throw new UnmetContextNeedError(
+            'the file came back empty from the repository',
+        );
+    }
+
+    if (text.length <= budgetChars) {
+        return [
+            {
+                kind: 'full-file',
+                label: `the whole of ${file.filename}`,
+                content: text,
+                truncated: false,
+            },
+        ];
+    }
+
+    // Over budget: narrow to the scope around each hunk.
+    const lines = text.split('\n');
+    const ranges = getModifiedRanges(diffOf(file)).slice(0, MAX_HUNKS_PER_FILE);
+    if (ranges.length === 0) {
+        throw new UnmetContextNeedError(
+            'the file is over the context budget and its diff names no line range to narrow to',
+        );
+    }
+
+    const ext = extensionOf(file.filename);
+    const canResolveScope = !!ext && ENCLOSING_SCOPE_EXTENSIONS.has(ext);
+    const slices: RetrievedSlice[] = [];
+
+    for (const [start, end] of ranges) {
+        let from: number;
+        let to: number;
+        if (canResolveScope) {
+            // Walk back to the nearest definition line. `start` is 1-based.
+            from = Math.max(1, start - ENCLOSING_LOOKBACK_LINES);
+            for (let i = start - 1; i >= from; i--) {
+                if (DEFINITION_PATTERN.test(lines[i - 1] ?? '')) {
+                    from = i;
+                    break;
+                }
+            }
+            to = Math.min(lines.length, end + ENCLOSING_TRAILING_LINES);
+        } else {
+            // KRC-27: a language whose definitions DEFINITION_PATTERN does not
+            // recognise gets an honest bounded window rather than a confident
+            // wrong "enclosing scope".
+            from = Math.max(1, start - FALLBACK_WINDOW_RADIUS);
+            to = Math.min(lines.length, end + FALLBACK_WINDOW_RADIUS);
+        }
+
+        slices.push({
+            kind: 'full-file',
+            label: `${file.filename}, lines ${from}-${to} of ${lines.length} (the scope around one hunk; the file is too large to show whole)`,
+            content: lines.slice(from - 1, to).join('\n'),
+            truncated: true,
+        });
+    }
+
     return slices;
 }
 
@@ -368,29 +439,29 @@ export async function retrieveForShard(
 
     for (const need of wanted) {
         try {
-            if (need === 'enclosing-scope') {
-                collected.push(...(await retrieveEnclosingScope(file, lookup)));
+            if (need === 'full-file') {
+                collected.push(
+                    ...(await retrieveFullFile(file, lookup, budgetChars)),
+                );
             } else if (need === 'symbol-references') {
                 collected.push(
                     ...(await retrieveSymbolReferences(file, lookup)),
                 );
             } else {
                 collected.push(
-                    ...(await retrieveSiblingFile(
-                        file,
-                        lookup,
-                        changedFilenames,
-                    )),
+                    ...(await retrieveSiblingFile(file, lookup, changedFilenames)),
                 );
             }
         } catch (err) {
-            failed.add(need);
+            const degrades = DEGRADES_INSTEAD_OF_SKIPPING.has(need);
+            if (!degrades) failed.add(need);
             logger?.warn({
-                message: `[rule-context] could not retrieve ${need} for ${file.filename}; the rules that need it will not be judged: ${err instanceof Error ? err.message : String(err)}`,
+                message: `[rule-context] could not retrieve ${need} for ${file.filename}; ${degrades ? 'the rules that need it are judged on the diff alone, as they were before this feature' : 'the rules that need it will not be judged'}: ${err instanceof Error ? err.message : String(err)}`,
                 context: 'rule-context-retriever',
                 metadata: {
                     filename: file.filename,
                     need,
+                    degraded: DEGRADES_INSTEAD_OF_SKIPPING.has(need),
                     lookupAvailable: lookup.available,
                     unavailableReason: lookup.unavailableReason,
                 },

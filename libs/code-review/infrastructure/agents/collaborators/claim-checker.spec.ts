@@ -44,6 +44,7 @@ const fakeLookup = (
             return available ? '' : (opts.unavailableReason ?? 'null sandbox');
         },
         grepCalls,
+        stats: { grep: 0, read: 0, exists: 0, failures: 0 },
         async grep(pattern: string) {
             grepCalls.push(pattern);
             if (!opts.grep) return 'No matches found.';
@@ -552,5 +553,226 @@ describe('checkClaims — batch behavior (KRC-07)', () => {
             lookup: fakeLookup(),
         });
         expect(res).toEqual({ kept: [], dropped: [] });
+    });
+});
+
+
+// Regression: the checked unit must be the PUBLISHED unit.
+//
+// The shard prompt asks for "one entry PER violating line PER rule; do not
+// collapse repeats", and `dedupKodyRulesByRuleUuid` folds the repeats back into
+// one comment. Observed on kimi-k2.7-code via Fireworks: the same case returned
+// one ranged finding in seven runs and eight per-line findings in the eighth.
+// In that eighth run the model declared the claim on ONE finding; the checker
+// refuted it and dropped that one, and the seven undeclared siblings published
+// the refuted assertion anyway.
+describe('claim check groups by (rule, file), not by finding', () => {
+    const eightSiblings = (): ShardViolation[] =>
+        [2, 3, 4, 5, 6, 7, 8].map((line) =>
+            violation({
+                ruleUuid: 'rule-no-reimplemented-helper',
+                relevantFile: 'src/blog/slug.ts',
+                relevantLinesStart: line,
+                relevantLinesEnd: line,
+                suggestionContent:
+                    'Reimplemented a `slugify` helper instead of using the existing one in `src/shared`.',
+            }),
+        );
+
+    it('drops undeclared siblings when the group\'s claim is refuted', async () => {
+        const declared = violation({
+            ruleUuid: 'rule-no-reimplemented-helper',
+            relevantFile: 'src/blog/slug.ts',
+            relevantLinesStart: 1,
+            relevantLinesEnd: 1,
+            suggestionContent:
+                'Reimplemented a `slugify` helper instead of using the existing one in `src/shared`.',
+            claimKind: 'duplicate',
+            claimSymbol: 'slugify',
+            claimPath: 'src/shared',
+        });
+
+        // `slugify` exists nowhere else: the duplicate claim is false.
+        const lookup = fakeLookup({ grep: () => 'No matches found.' });
+
+        const res = await checkClaims({
+            violations: [declared, ...eightSiblings()],
+            changedFiles: [{ filename: 'src/blog/slug.ts' }],
+            lookup,
+        });
+
+        expect(res.kept).toHaveLength(0);
+        expect(res.dropped).toHaveLength(8);
+        for (const d of res.dropped) {
+            expect(d.reason).toContain('exists nowhere else');
+        }
+    });
+
+    it('checks one distinct claim once for the whole group', async () => {
+        const lookup = fakeLookup({ grep: () => 'No matches found.' });
+        const group = eightSiblings().map((v) => ({
+            ...v,
+            claimKind: 'duplicate' as const,
+            claimSymbol: 'slugify',
+            claimPath: 'src/shared',
+        }));
+
+        await checkClaims({
+            violations: group,
+            changedFiles: [{ filename: 'src/blog/slug.ts' }],
+            lookup,
+        });
+
+        expect(lookup.grepCalls).toHaveLength(1);
+    });
+
+    it('leaves a group nobody made a claim in untouched', async () => {
+        const lookup = fakeLookup({ grep: () => 'No matches found.' });
+
+        const res = await checkClaims({
+            violations: eightSiblings(),
+            changedFiles: [{ filename: 'src/blog/slug.ts' }],
+            lookup,
+        });
+
+        expect(res.kept).toHaveLength(7);
+        expect(res.dropped).toHaveLength(0);
+        expect(lookup.grepCalls).toHaveLength(0);
+    });
+
+    it('does not let one file\'s refutation drop another file\'s finding', async () => {
+        const refuted = violation({
+            ruleUuid: 'rule-no-unused-imports',
+            relevantFile: 'src/a.ts',
+            relevantLinesStart: 2,
+            relevantLinesEnd: 2,
+            claimKind: 'unused',
+            claimSymbol: 'helperA',
+        });
+        const other = violation({
+            ruleUuid: 'rule-no-unused-imports',
+            relevantFile: 'src/b.ts',
+            relevantLinesStart: 5,
+            relevantLinesEnd: 5,
+        });
+
+        // helperA IS used elsewhere, so the `unused` claim on src/a.ts is refuted.
+        const lookup = fakeLookup({
+            grep: () => 'src/z.ts:40:helperA()',
+        });
+
+        const res = await checkClaims({
+            violations: [refuted, other],
+            changedFiles: [],
+            lookup,
+        });
+
+        expect(res.dropped.map((d) => d.violation.relevantFile)).toEqual([
+            'src/a.ts',
+        ]);
+        expect(res.kept.map((v) => v.relevantFile)).toEqual(['src/b.ts']);
+    });
+
+    it('spans the whole group when deciding what counts as elsewhere', async () => {
+        // A symbol occurring only INSIDE the group's own lines does not refute
+        // an `unused` claim the group makes: those are the flagged lines.
+        const group = [2, 3, 4].map((line) =>
+            violation({
+                ruleUuid: 'rule-no-unused-imports',
+                relevantFile: 'src/a.ts',
+                relevantLinesStart: line,
+                relevantLinesEnd: line,
+                claimKind: 'unused',
+                claimSymbol: 'helperA',
+            }),
+        );
+
+        const lookup = fakeLookup({ grep: () => 'src/a.ts:3:helperA()' });
+
+        const res = await checkClaims({
+            violations: group,
+            changedFiles: [],
+            lookup,
+        });
+
+        expect(res.kept).toHaveLength(3);
+        expect(res.dropped).toHaveLength(0);
+    });
+
+    // A claim of any kind may name a path as SUPPORTING evidence — "reuse the
+    // one already in src/shared/slugify.ts". Only the `missing` branch ever
+    // read `claimPath`, so a fabricated path shipped whenever the symbol
+    // itself was real: the finding was right and the address was invented.
+    describe('a path named as evidence by a non-missing claim', () => {
+        const dupWithPath = (claimPath: string) => ({
+            ruleUuid: 'r1',
+            relevantFile: 'src/blog/slug.ts',
+            relevantLinesStart: 1,
+            relevantLinesEnd: 8,
+            claimKind: 'duplicate' as const,
+            claimSymbol: 'slugify',
+            claimPath,
+            suggestionContent: 'reuse the shared helper',
+            oneSentenceSummary: 'duplicate helper',
+        });
+
+        it('drops a finding whose cited file does not exist', async () => {
+            const res = await checkClaims({
+                violations: [dupWithPath('src/shared/slugify.ts')],
+                changedFiles: [{ filename: 'src/blog/slug.ts' } as any],
+                lookup: fakeLookup({
+                    grep: () => 'src/shared/strings.ts:9:export function slugify',
+                    exists: () => false,
+                }),
+            });
+
+            expect(res.kept).toHaveLength(0);
+            expect(res.dropped[0].reason).toContain('does not exist');
+        });
+
+        it('keeps it when the cited file is really there', async () => {
+            const res = await checkClaims({
+                violations: [dupWithPath('src/shared/strings.ts')],
+                changedFiles: [{ filename: 'src/blog/slug.ts' } as any],
+                lookup: fakeLookup({
+                    grep: () => 'src/shared/strings.ts:9:export function slugify',
+                    exists: () => true,
+                }),
+            });
+
+            expect(res.kept).toHaveLength(1);
+        });
+
+        // "src/shared" is a directory and a perfectly good thing to name.
+        // `exists` lists files, so it always answers false for one — judging it
+        // would make the checker invent a defect.
+        it('does not judge a path that names a directory', async () => {
+            const res = await checkClaims({
+                violations: [dupWithPath('src/shared')],
+                changedFiles: [{ filename: 'src/blog/slug.ts' } as any],
+                lookup: fakeLookup({
+                    grep: () => 'src/shared/strings.ts:9:export function slugify',
+                    exists: () => false,
+                }),
+            });
+
+            expect(res.kept).toHaveLength(1);
+        });
+
+        it('does not judge a path this very PR adds', async () => {
+            const res = await checkClaims({
+                violations: [dupWithPath('src/shared/new-helper.ts')],
+                changedFiles: [
+                    { filename: 'src/blog/slug.ts' } as any,
+                    { filename: 'src/shared/new-helper.ts' } as any,
+                ],
+                lookup: fakeLookup({
+                    grep: () => 'src/shared/new-helper.ts:1:export function slugify',
+                    exists: () => false,
+                }),
+            });
+
+            expect(res.kept).toHaveLength(1);
+        });
     });
 });

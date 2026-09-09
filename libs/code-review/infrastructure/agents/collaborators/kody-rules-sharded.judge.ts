@@ -22,7 +22,10 @@
 import { jsonSchema, type Schema } from 'ai';
 import { z } from 'zod';
 import { recoverRuleUuid } from './finding-mapper';
-import { fileMatchesRulePath } from '@libs/common/utils/kody-rules/file-patterns';
+import {
+    extensionScopeAppliesToFile,
+    fileMatchesRulePath,
+} from '@libs/common/utils/kody-rules/file-patterns';
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import {
     IKodyRule,
@@ -311,6 +314,16 @@ export interface ShardedJudgeInput {
      * them on the PR — a skipped rule must never look like a satisfied one.
      */
     unmetRules?: Map<string, Set<string>>;
+    /**
+     * The full text of each changed file, keyed by filename (issue #1826,
+     * step 1). Unconditional: it is not gated on a rule declaring anything,
+     * because "the rest of this file" is what the largest class of broken rule
+     * needs and the shard is already per-file.
+     *
+     * Absent, or absent for one file, degrades to exactly today's hunk-only
+     * prompt for that shard.
+     */
+    fileContents?: Map<string, string>;
 }
 
 export interface ShardedJudgeResult {
@@ -447,6 +460,68 @@ function intentLines(prTitle?: string, prBody?: string): string[] {
 }
 
 /**
+ * Upper bound on the file content sent with a file shard.
+ *
+ * Its job is to keep a generated artefact out of the prompt, NOT to ration
+ * ordinary source. Measured over this repository's 4,332 source files: median
+ * 3,438 chars, p90 15,991, p99 52,171, max 281,072 (a generated bundle). At
+ * this cap 97.7% of files go whole; the rest fall back to exactly today's
+ * hunk-only prompt. For comparison the PR-scope shard already spends up to
+ * PR_SHARD_DIFF_BUDGET_CHARS on one call.
+ */
+export const FILE_CONTENT_BUDGET_CHARS = 40_000;
+
+/**
+ * Line ceiling on the read that feeds it. The char budget above is the real
+ * gate; this only stops a pathological file being pulled across the sandbox
+ * boundary in full before that gate can reject it.
+ */
+export const FILE_CONTENT_MAX_LINES = 4000;
+
+/**
+ * The changed file, whole (issue #1826, step 1).
+ *
+ * The shard sees one file's hunks plus about three lines of context, so a rule
+ * whose truth lives elsewhere IN THE SAME FILE cannot be judged: an import used
+ * twenty lines below the window reads as unused (#1724), a function's length is
+ * unknowable from its first hunk, "every public class has a docstring" cannot
+ * be checked. That is the largest class of rule the diff-only judge broke, and
+ * the file is right there.
+ *
+ * This is unconditional and needs no classification: the shard is already
+ * per-file, so the file is the natural unit, and sending it costs the median
+ * file about 860 tokens. Nothing here is language-aware, which is the point —
+ * a customer's rule may target any language, so the retrieval that serves it
+ * must not recognise syntax.
+ *
+ * Two properties are load-bearing:
+ *
+ *   - The diff stays marked and stays the thing being judged. The block below
+ *     says so explicitly, because showing a model the whole file invites it to
+ *     comment on lines this PR never touched.
+ *   - Over budget it is OMITTED, never truncated. The head of a file is its
+ *     imports and declarations; the evidence that refutes "unused" lives
+ *     further down, so half a file is the one slice that actively misleads.
+ *
+ * Returns [] when there is no content, so a shard without it keeps a
+ * byte-identical prompt to before this existed.
+ */
+function fileContentLines(file: FileChange, content?: string): string[] {
+    const text = content?.trim();
+    if (!text || text.length > FILE_CONTENT_BUDGET_CHARS) return [];
+    return [
+        `<FileContent path="${file.filename}">`,
+        `The complete file as it stands in the repository, for context only. Line numbers match the diff below.`,
+        '```',
+        text,
+        '```',
+        `Use this to decide whether the ADDED lines break the rules — for example whether a symbol the diff introduces is used elsewhere in this file. These lines are NOT part of this pull request: never report a violation whose evidence lies outside the diff hunks, however wrong those lines look.`,
+        `</FileContent>`,
+        ``,
+    ];
+}
+
+/**
  * The retrieved-context block for a file shard (issue #1826): the repository
  * slices a rule declared it needs in order to be judged at all.
  *
@@ -479,11 +554,44 @@ function contextLines(
         rendered.push('```');
     }
 
+    // Two kinds of slice with OPPOSITE instructions, and getting this wrong
+    // silences the rule it was retrieved for.
+    //
+    // A `symbol-references` or `sibling-file` slice is somebody ELSE's code:
+    // the finding must not be about those lines, because a comment there
+    // cannot be acted on in this PR.
+    //
+    // A `full-file` slice is the SAME scope the diff edits, and the rules that
+    // ask for it are about a property of the whole — its length, a block
+    // repeated inside it, an import used further down. For those the evidence
+    // necessarily sits outside the hunk, so the blanket "never report a
+    // violation whose evidence lies outside the diff" forbids exactly the
+    // finding the rule exists to make. Measured: with that sentence alone the
+    // "function is too long" case fired 1 time in 5 despite the whole file
+    // being on the page.
+    const hasWholeFile = slices.some((s) => s.kind === 'full-file');
+    const hasExternal = slices.some((s) => s.kind !== 'full-file');
+
+    const closing: string[] = [];
+    if (hasWholeFile) {
+        closing.push(
+            `The file content above is the REST OF THE FILE this diff edits — the same functions and classes, not another author's code. A rule about a property of a whole function, class or file (how long it is, a block repeated inside it, whether something declared here is used further down) is judged against ALL of it, so the evidence for such a violation may well sit outside the hunk. When one holds, report it and anchor it on a line this PR ADDED. Do NOT raise separate findings about pre-existing lines the PR did not touch.`,
+        );
+    }
+    if (hasExternal) {
+        closing.push(
+            `The repository slices above are NOT part of this pull request. Use them only to decide whether the lines ADDED in the diff break the rules. Never report a violation whose evidence lies in them, however wrong those lines look — they are not this PR's to fix.`,
+        );
+    }
+    closing.push(
+        `Concluding "no violation here" is the normal outcome and needs no explanation.`,
+    );
+
     return [
         `<Context>`,
-        `Slices of the repository outside this diff, retrieved by code because one of the rules above says the hunk alone is not enough to judge it. Retrieval is deterministic and narrow: it followed only the paths and symbols this diff names. It cannot see dynamic or generated references, other branches, or the same thing under another name — so what is missing here is weak evidence, while what is present is reliable.`,
+        `Slices of the repository retrieved by code, because one of the rules above says the hunk alone is not enough to judge it. Retrieval is deterministic and narrow: it followed only the paths and symbols this diff names. It cannot see dynamic or generated references, other branches, or the same thing under another name — so what is missing here is weak evidence, while what is present is reliable.`,
         ...rendered,
-        `These lines are NOT part of this pull request. Use them only to decide whether the lines ADDED in the diff above break the rules. Never report a violation whose evidence lies outside the diff hunks, however wrong those lines look — they are not this PR's to fix. Concluding "no violation here" is the normal outcome and needs no explanation.`,
+        ...closing,
         `</Context>`,
         ``,
     ];
@@ -497,6 +605,7 @@ function fileShardUser(
     prTitle?: string,
     prBody?: string,
     contextSlices?: Map<string, RetrievedSlice[]>,
+    fileContents?: Map<string, string>,
 ): string {
     const diff = (file as any).patchWithLinesStr ?? file.patch ?? '';
     return [
@@ -505,6 +614,9 @@ function fileShardUser(
         `</Rules>`,
         ``,
         ...intentLines(prTitle, prBody),
+        // The whole file BEFORE the diff: the reader needs the world before
+        // the change to it.
+        ...fileContentLines(file, fileContents?.get(file.filename)),
         `<File path="${file.filename}">`,
         `Each diff line is prefixed with its file line number; '+' marks a line ADDED by this PR.`,
         '```diff',
@@ -612,6 +724,14 @@ function rulesForFile(
 ): Array<Partial<IKodyRule>> {
     return rules.filter((r) => {
         if (r.path && !matchesPathPattern(file.filename, r.path)) return false;
+        // The rule's OWN language scope (issue #1826). A Ruby rule stops being
+        // sharded against .tsx files — which until now it was, for every one of
+        // the 92,5% of rules that carry no detector, because the scope only
+        // existed inside the detector plan. Cheapest clause, so it runs first
+        // after the author's glob; the author's `path` still outranks it, since
+        // `path` is stated and this is inferred.
+        if (!extensionScopeAppliesToFile(file.filename, r.fileScope?.extensions))
+            return false;
         // A rule whose declared context need could not be retrieved for this
         // file is not judged here. Sits before the detector clause so it holds
         // for mechanical rules too — a detector hit is a candidate line, not
@@ -624,6 +744,50 @@ function rulesForFile(
             return !!detectorHits?.get(r.uuid)?.has(file.filename);
         }
         return true;
+    });
+}
+
+/**
+ * Say out loud which rules this PR never judged.
+ *
+ * Every narrowing clause in `rulesForFile` — the author's glob, the inferred
+ * language scope, an unmet context need, a detector that fired nowhere — makes
+ * a rule cheaper by making it INVISIBLE. When the narrowing is right that is
+ * the whole point; when it is wrong the rule is simply never enforced and
+ * nothing anywhere says so. That silence is the failure mode: a customer whose
+ * Ruby rule is scoped to the wrong extension sees no comment and no error, and
+ * reads it as "Kody agrees with my code".
+ *
+ * One aggregated line per review, not one per rule: this is a diagnostic for
+ * us, and a per-rule log on a 200-file PR would bury it.
+ */
+function reportUnjudgedFileRules(
+    fileRules: Array<Partial<IKodyRule>>,
+    shards: Array<{ applicable: Array<Partial<IKodyRule>> }>,
+    logger?: ShardedJudgeInput['logger'],
+): void {
+    if (!logger || fileRules.length === 0) return;
+    const judged = new Set<string>();
+    for (const shard of shards) {
+        for (const rule of shard.applicable) {
+            if (rule.uuid) judged.add(rule.uuid);
+        }
+    }
+    const unjudged = fileRules.filter((r) => r.uuid && !judged.has(r.uuid));
+    if (unjudged.length === 0) return;
+    logger.warn({
+        message: `[kody-rules-shard] ${unjudged.length} of ${fileRules.length} file-scope rule(s) matched no changed file and were not judged`,
+        // SimpleLogger drops entries without a context string.
+        context: 'kody-rules-sharded',
+        metadata: {
+            rules: unjudged.map((r) => ({
+                uuid: r.uuid,
+                title: r.title,
+                path: r.path,
+                extensions: r.fileScope?.extensions,
+                hasDetector: !!r.detector,
+            })),
+        },
     });
 }
 
@@ -891,6 +1055,7 @@ export async function judgeKodyRulesSharded(
         detectorHits,
         contextSlices,
         unmetRules,
+        fileContents,
     } = input;
     const concurrency = input.concurrency ?? SHARD_CONCURRENCY_DEFAULT;
 
@@ -916,6 +1081,8 @@ export async function judgeKodyRulesSharded(
         }))
         .filter((s) => s.applicable.length > 0);
 
+    reportUnjudgedFileRules(fileRules, fileShards, logger);
+
     const perFile = await mapLimit(
         fileShards,
         concurrency,
@@ -936,6 +1103,7 @@ export async function judgeKodyRulesSharded(
                         prTitle,
                         prBody,
                         contextSlices,
+                        fileContents,
                     ),
                     filename: file.filename,
                     ruleUuids,

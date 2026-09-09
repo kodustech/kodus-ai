@@ -1,3 +1,8 @@
+import {
+    ruleCompileHash,
+    ruleContextNeedHash,
+    CONTEXT_NEED_PROMPT_VERSION,
+} from '@libs/common/utils/kody-rules/compile-hash';
 import { createHash } from 'crypto';
 import { KodyRuleDetectorCompilerService } from './kody-rule-detector-compiler.service';
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
@@ -826,6 +831,9 @@ describe('KodyRuleDetectorCompilerService — context-need inference (#1826)', (
     it('stores diff-only when the model invents a need outside the vocabulary', async () => {
         const { svc, kodyRulesService } = makeWithNeed({
             mechanical: false,
+            // Also covers 'enclosing-scope', which issue #1826 step 1 removed
+            // from the vocabulary: the file shard carries the whole file, so a
+            // need for "the scope around the change" no longer exists.
             contextNeed: 'the-whole-repository',
         });
         await svc.compileAndSave({ organizationId: 'org-1' } as any, 'r1', needRule);
@@ -836,10 +844,10 @@ describe('KodyRuleDetectorCompilerService — context-need inference (#1826)', (
         const { svc, kodyRulesService } = makeWithNeed({
             mechanical: true,
             pattern: 'console\\.(log|warn|error)\\(',
-            contextNeed: 'enclosing-scope',
+            contextNeed: 'sibling-file',
         });
         await svc.compileAndSave({ organizationId: 'org-1' } as any, 'r1', needRule);
-        expect(storedNeed(kodyRulesService).need).toBe('enclosing-scope');
+        expect(storedNeed(kodyRulesService).need).toBe('sibling-file');
     });
 
     it('stamps the need with the hash of the rule text it was inferred from (KRC-12)', async () => {
@@ -851,7 +859,7 @@ describe('KodyRuleDetectorCompilerService — context-need inference (#1826)', (
 
         const written = storedNeed(kodyRulesService);
         expect(written.sourceHash).toBe(
-            createHash('sha256').update(needRule.rule).digest('hex'),
+            ruleContextNeedHash({ rule: needRule.rule }),
         );
         expect(written.source).toBe('compiler');
         expect(written.inferredAt).toBeInstanceOf(Date);
@@ -870,9 +878,7 @@ describe('KodyRuleDetectorCompilerService — context-need inference (#1826)', (
                 ...needRule,
                 contextNeed: {
                     need: 'sibling-file',
-                    sourceHash: createHash('sha256')
-                        .update(needRule.rule)
-                        .digest('hex'),
+                    sourceHash: ruleContextNeedHash({ rule: needRule.rule }),
                     source: 'compiler',
                     inferredAt: new Date('2026-01-01T00:00:00Z'),
                 },
@@ -898,9 +904,7 @@ describe('KodyRuleDetectorCompilerService — context-need inference (#1826)', (
                 ...needRule,
                 contextNeed: {
                     need: 'sibling-file',
-                    sourceHash: createHash('sha256')
-                        .update(needRule.rule)
-                        .digest('hex'),
+                    sourceHash: ruleContextNeedHash({ rule: needRule.rule }),
                     source: 'compiler',
                     inferredAt: new Date('2026-01-01T00:00:00Z'),
                 },
@@ -962,6 +966,361 @@ describe('KodyRuleDetectorCompilerService — context-need inference (#1826)', (
         );
 
         const res = await svc.compileAndSave({ organizationId: 'org-1' } as any, 'r1', needRule);
+
+        expect(res.compiled).toBe(true);
+        expect(kodyRulesService.updateRuleDetector).toHaveBeenCalledTimes(1);
+    });
+});
+
+// ── the rule's own language scope, saved for EVERY rule (#1826, step 1b) ────
+//
+// The scope used to be written only as part of a surviving detector, so the
+// 92,5% of the fleet with no detector had nowhere to record it and were judged
+// against every file in the PR regardless of the language the rule names.
+describe('KodyRuleDetectorCompilerService — rule-level file scope (#1826)', () => {
+    const rubyRule = {
+        uuid: 'r1',
+        title: 'Ruby keyword args',
+        rule: 'In Ruby, prefer keyword arguments over positional ones.',
+    };
+
+    const makeWithScope = (compilerOutput: any) => {
+        mockRun.mockReset();
+        mockRun.mockResolvedValue(compilerOutput);
+        const kodyRulesService: any = {
+            updateRuleDetector: jest.fn(async () => ({})),
+            updateRuleContextNeed: jest.fn(async () => ({})),
+            updateRuleFileScope: jest.fn(async () => ({})),
+        };
+        const svc = new KodyRuleDetectorCompilerService(
+            { resolveTaskSlot: jest.fn(async () => null) } as any,
+            {} as any,
+            kodyRulesService,
+        );
+        return { svc, kodyRulesService };
+    };
+
+    const storedScope = (k: any) => k.updateRuleFileScope.mock.calls[0][2];
+
+    it('saves the scope for a SEMANTIC rule — the case the detector path never covered', async () => {
+        const { svc, kodyRulesService } = makeWithScope({
+            mechanical: false,
+            extensions: ['.rb', '.rake'],
+            reason: 'needs judgment',
+        });
+        const res = await svc.compileAndSave(org, 'r1', rubyRule);
+
+        expect(res.compiled).toBe(false);
+        expect(kodyRulesService.updateRuleFileScope).toHaveBeenCalledTimes(1);
+        expect(storedScope(kodyRulesService)).toMatchObject({
+            extensions: ['.rb', '.rake'],
+            source: 'compiler',
+        });
+        expect(res.fileScope).toEqual(['.rb', '.rake']);
+    });
+
+    it('normalizes what the model answered (bare, upper-case, prompt brackets)', async () => {
+        const { svc, kodyRulesService } = makeWithScope({
+            mechanical: false,
+            extensions: ['RB', '<.erb>', 'app/models/', '*.rake'],
+        });
+        await svc.compileAndSave(org, 'r1', rubyRule);
+        // Bare and upper-case are normalized; the stray prompt-template
+        // brackets are stripped; globs and paths are dropped entirely because
+        // they are not extensions.
+        expect(storedScope(kodyRulesService).extensions).toEqual([
+            '.rb',
+            '.erb',
+        ]);
+    });
+
+    it('writes NOTHING for a language-agnostic rule instead of an empty list', async () => {
+        // An empty list would read as "applies to no file kind" — the opposite
+        // of what an unscoped rule means.
+        const { svc, kodyRulesService } = makeWithScope({
+            mechanical: false,
+            reason: 'agnostic',
+        });
+        const res = await svc.compileAndSave(org, 'r1', {
+            uuid: 'r1',
+            title: 'no secrets',
+            rule: 'Never hardcode credentials.',
+        });
+        expect(kodyRulesService.updateRuleFileScope).not.toHaveBeenCalled();
+        expect(res.fileScope).toBeUndefined();
+    });
+
+    it('CLEARS a stored scope when the edited rule no longer names a language', async () => {
+        // Otherwise the rule keeps a narrowing nobody can see and silently
+        // stops being enforced on the files it now covers.
+        const { svc, kodyRulesService } = makeWithScope({
+            mechanical: false,
+            reason: 'agnostic now',
+        });
+        await svc.compileAndSave(org, 'r1', {
+            ...rubyRule,
+            rule: 'Never hardcode credentials.',
+            fileScope: {
+                extensions: ['.rb'],
+                sourceHash: 'stale-hash',
+                source: 'compiler',
+                inferredAt: new Date(),
+            },
+        } as any);
+        expect(kodyRulesService.updateRuleFileScope).toHaveBeenCalledTimes(1);
+        expect(storedScope(kodyRulesService)).toBeNull();
+    });
+
+    it('does not re-write when the rule text is unchanged (hash gate)', async () => {
+        // fileScope keeps the plain text hash — only the CONTEXT NEED is
+        // versioned by the classifier prompt.
+        const sourceHash = createHash('sha256')
+            .update(rubyRule.rule)
+            .digest('hex');
+        const { svc, kodyRulesService } = makeWithScope({
+            mechanical: false,
+            extensions: ['.py'], // a differently-inferred second run
+        });
+        const res = await svc.compileAndSave(org, 'r1', {
+            ...rubyRule,
+            fileScope: {
+                extensions: ['.rb'],
+                sourceHash,
+                source: 'compiler',
+                inferredAt: new Date(),
+            },
+        } as any);
+        // The hash is the SOLE trigger for re-inference. Without this, two runs
+        // over the same unedited text would flip the rule in and out of
+        // enforcement between reviews with no author action.
+        expect(kodyRulesService.updateRuleFileScope).not.toHaveBeenCalled();
+        expect(res.fileScope).toEqual(['.rb']);
+    });
+
+    it('never overwrites an author-set scope', async () => {
+        const { svc, kodyRulesService } = makeWithScope({
+            mechanical: false,
+            extensions: ['.py'],
+        });
+        const res = await svc.compileAndSave(org, 'r1', {
+            ...rubyRule,
+            rule: 'A completely different text, so the hash does not match.',
+            fileScope: {
+                extensions: ['.rb'],
+                sourceHash: 'whatever',
+                source: 'author',
+                inferredAt: new Date(),
+            },
+        } as any);
+        expect(kodyRulesService.updateRuleFileScope).not.toHaveBeenCalled();
+        expect(res.fileScope).toEqual(['.rb']);
+    });
+
+    it('still reports the detector outcome when storing the scope fails', async () => {
+        const { svc, kodyRulesService } = makeWithScope({
+            mechanical: true,
+            pattern: 'console\\.(log|warn|error)\\(',
+            extensions: ['.ts'],
+        });
+        kodyRulesService.updateRuleFileScope.mockRejectedValue(
+            new Error('mongo down'),
+        );
+        const res = await svc.compileAndSave(org, 'r1', {
+            ...mechanicalRule,
+            rule: 'do not use console.log in TypeScript',
+        });
+        expect(res.compiled).toBe(true);
+        expect(kodyRulesService.updateRuleDetector).toHaveBeenCalledTimes(1);
+    });
+});
+
+// ── the compile-attempt marker: stop paying for a verdict we already have ───
+//
+// The nightly sweep decided what to compile by asking "does this rule have a
+// detector?". A DECLINED rule never gets one, and declining is the normal
+// outcome — 816 of 10.918 active rules carry a detector, so 92,5% are declined
+// — which made the whole fleet eligible again every night, forever, at the
+// customer's expense (BYOK: their key, their bill).
+describe('KodyRuleDetectorCompilerService — compile attempt (cost gate)', () => {
+    const plainRule = {
+        uuid: 'r1',
+        title: 'Prefer keyword arguments',
+        rule: 'Prefer keyword arguments over positional ones.',
+        examples: [{ isCorrect: false, snippet: 'foo(1, 2, 3)' }],
+    };
+
+    const makeWithAttempt = (compilerOutput: any) => {
+        mockRun.mockReset();
+        mockRun.mockResolvedValue(compilerOutput);
+        const kodyRulesService: any = {
+            updateRuleDetector: jest.fn(async () => ({})),
+            updateRuleContextNeed: jest.fn(async () => ({})),
+            updateRuleFileScope: jest.fn(async () => ({})),
+            updateRuleCompileAttempt: jest.fn(async () => ({})),
+        };
+        const svc = new KodyRuleDetectorCompilerService(
+            { resolveTaskSlot: jest.fn(async () => null) } as any,
+            {} as any,
+            kodyRulesService,
+        );
+        return { svc, kodyRulesService };
+    };
+
+    const current = (rule: any, over: any = {}) => ({
+        ...rule,
+        // A rule is "settled" only when BOTH keys are current: the compile
+        // attempt covers the detector, the context need is keyed separately and
+        // versioned by the classifier prompt so a corrected prompt can still
+        // reach a rule nobody edited.
+        contextNeed: {
+            need: 'diff-only',
+            sourceHash: ruleContextNeedHash(rule),
+            source: 'compiler',
+            inferredAt: new Date('2026-01-01T00:00:00Z'),
+        },
+        compileAttempt: {
+            sourceHash: ruleCompileHash(rule),
+            attemptedAt: new Date('2026-01-01T00:00:00Z'),
+            outcome: 'declined',
+            declineReason: 'not-mechanical',
+            ...over,
+        },
+    });
+
+    it('records the attempt when the rule is DECLINED — the case that leaked', async () => {
+        const { svc, kodyRulesService } = makeWithAttempt({
+            mechanical: false,
+            reason: 'needs judgment',
+        });
+
+        await svc.compileAndSave(org, 'r1', plainRule);
+
+        expect(kodyRulesService.updateRuleCompileAttempt).toHaveBeenCalledTimes(
+            1,
+        );
+        const stored = kodyRulesService.updateRuleCompileAttempt.mock.calls[0][2];
+        expect(stored).toMatchObject({
+            outcome: 'declined',
+            declineReason: 'not-mechanical',
+            sourceHash: ruleCompileHash(plainRule),
+        });
+    });
+
+    it('records the attempt when the rule COMPILES too', async () => {
+        const { svc, kodyRulesService } = makeWithAttempt({
+            mechanical: true,
+            pattern: 'foo\\(',
+        });
+
+        await svc.compileAndSave(org, 'r1', plainRule);
+
+        expect(
+            kodyRulesService.updateRuleCompileAttempt.mock.calls[0][2],
+        ).toMatchObject({ outcome: 'compiled' });
+    });
+
+    it('makes NO model call when the same text and examples were already decided', async () => {
+        const { svc, kodyRulesService } = makeWithAttempt({
+            mechanical: false,
+        });
+
+        const res = await svc.compileAndSave(org, 'r1', current(plainRule));
+
+        // This is the entire point: the call never happens.
+        expect(mockRun).not.toHaveBeenCalled();
+        expect(res.skipped).toBe(true);
+        expect(res.declineReason).toBe('not-mechanical');
+        expect(kodyRulesService.updateRuleDetector).not.toHaveBeenCalled();
+        expect(kodyRulesService.updateRuleCompileAttempt).not.toHaveBeenCalled();
+    });
+
+    it('reports the STORED outcome when it short-circuits, so counters stay right', async () => {
+        const { svc } = makeWithAttempt({ mechanical: false });
+
+        const res = await svc.compileAndSave(org, 'r1', {
+            ...current(plainRule, { outcome: 'compiled' }),
+            detector: { type: 'regex', pattern: 'x', extensions: ['.rb'] },
+            // A CURRENT hash on purpose: short-circuiting requires both keys
+            // settled, so a stale need here would (correctly) re-open the rule
+            // and there would be no short circuit to assert on.
+            contextNeed: {
+                need: 'sibling-file',
+                sourceHash: ruleContextNeedHash(plainRule),
+                source: 'compiler',
+                inferredAt: new Date(),
+            },
+            fileScope: {
+                extensions: ['.rb'],
+                sourceHash: 'h',
+                source: 'compiler',
+                inferredAt: new Date(),
+            },
+        } as any);
+
+        expect(res).toMatchObject({
+            compiled: true,
+            scoped: true,
+            contextNeed: 'sibling-file',
+            fileScope: ['.rb'],
+            skipped: true,
+        });
+    });
+
+    it('calls the model again once the rule TEXT changes', async () => {
+        const { svc } = makeWithAttempt({ mechanical: false });
+
+        await svc.compileAndSave(org, 'r1', {
+            ...current(plainRule),
+            rule: 'A completely different body.',
+        });
+
+        expect(mockRun).toHaveBeenCalledTimes(1);
+    });
+
+    it('calls the model again once an EXAMPLE changes', async () => {
+        // Examples gate the compile decision, so they belong in the hash. This
+        // is why the marker keys on `ruleCompileHash` and not on the rule text.
+        const { svc } = makeWithAttempt({ mechanical: false });
+
+        await svc.compileAndSave(org, 'r1', {
+            ...current(plainRule),
+            examples: [{ isCorrect: false, snippet: 'foo(9, 9, 9)' }],
+        });
+
+        expect(mockRun).toHaveBeenCalledTimes(1);
+    });
+
+    it('records NOTHING when the attempt errored, so one bad night cannot freeze a rule', async () => {
+        mockRun.mockReset();
+        mockRun.mockRejectedValue(new Error('provider down'));
+        const kodyRulesService: any = {
+            updateRuleDetector: jest.fn(async () => ({})),
+            updateRuleContextNeed: jest.fn(async () => ({})),
+            updateRuleFileScope: jest.fn(async () => ({})),
+            updateRuleCompileAttempt: jest.fn(async () => ({})),
+        };
+        const svc = new KodyRuleDetectorCompilerService(
+            { resolveTaskSlot: jest.fn(async () => null) } as any,
+            {} as any,
+            kodyRulesService,
+        );
+
+        const res = await svc.compileAndSave(org, 'r1', plainRule);
+
+        expect(res.declineReason).toBe('error');
+        expect(kodyRulesService.updateRuleCompileAttempt).not.toHaveBeenCalled();
+    });
+
+    it('still reports the detector outcome when recording the attempt fails', async () => {
+        const { svc, kodyRulesService } = makeWithAttempt({
+            mechanical: true,
+            pattern: 'foo\\(',
+        });
+        kodyRulesService.updateRuleCompileAttempt.mockRejectedValue(
+            new Error('mongo down'),
+        );
+
+        const res = await svc.compileAndSave(org, 'r1', plainRule);
 
         expect(res.compiled).toBe(true);
         expect(kodyRulesService.updateRuleDetector).toHaveBeenCalledTimes(1);

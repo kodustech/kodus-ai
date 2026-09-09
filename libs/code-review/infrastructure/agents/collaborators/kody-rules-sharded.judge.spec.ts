@@ -4,6 +4,7 @@ import {
     shardViolationsWireSchema,
     RunJudge,
     RawShardViolation,
+    FILE_CONTENT_BUDGET_CHARS,
 } from './kody-rules-sharded.judge';
 import { KodyRulesScope } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import {
@@ -1673,16 +1674,63 @@ describe('#1826 — the file shard is shown the retrieved context', () => {
         );
     });
 
-    it('forbids reporting a violation whose evidence lies outside the diff hunks (KRC-18)', async () => {
+    it('forbids reporting a violation that rests on ANOTHER file (KRC-18)', async () => {
         const user = await captureFileUser({
             contextSlices: new Map([
                 ['src/orders/order-mapper.ts', [slice()]],
             ]),
         });
 
-        expect(user).toContain('These lines are NOT part of this pull request.');
         expect(user).toContain(
-            'Never report a violation whose evidence lies outside the diff hunks',
+            'The repository slices above are NOT part of this pull request.',
+        );
+        expect(user).toContain(
+            'Never report a violation whose evidence lies in them',
+        );
+    });
+
+    // The opposite instruction, and it has to be: a `full-file` slice is the
+    // rest of the file the diff edits, and the rules that ask for it are about
+    // a property of the whole — length, a repeated block, a symbol used further
+    // down. Their evidence necessarily sits outside the hunk, so the KRC-18
+    // wording above would forbid the very finding they exist to make. Measured
+    // before this split: "the function is too long" fired 1 time in 5 with the
+    // whole file already on the page.
+    const wholeFileSlice = () => ({
+        kind: 'full-file' as const,
+        label: 'the whole of src/orders/order-mapper.ts',
+        content: 'export class OrderMapper {}',
+        truncated: false,
+    });
+
+    it('tells the judge a whole-file rule MAY rest on lines outside the hunk', async () => {
+        const user = await captureFileUser({
+            contextSlices: new Map([
+                ['src/orders/order-mapper.ts', [wholeFileSlice()]],
+            ]),
+        });
+
+        expect(user).toContain('the REST OF THE FILE this diff edits');
+        expect(user).toContain(
+            'the evidence for such a violation may well sit outside the hunk',
+        );
+        expect(user).toContain('anchor it on a line this PR ADDED');
+        // and it must NOT carry the instruction meant for other files
+        expect(user).not.toContain(
+            'Never report a violation whose evidence lies in them',
+        );
+    });
+
+    it('carries BOTH instructions when a shard has both kinds of slice', async () => {
+        const user = await captureFileUser({
+            contextSlices: new Map([
+                ['src/orders/order-mapper.ts', [wholeFileSlice(), slice()]],
+            ]),
+        });
+
+        expect(user).toContain('the REST OF THE FILE this diff edits');
+        expect(user).toContain(
+            'Never report a violation whose evidence lies in them',
         );
     });
 
@@ -1750,5 +1798,255 @@ describe('#1826 — the file shard is shown the retrieved context', () => {
         expect(withEmptyMap).toBe(withNothing);
         expect(withEmptyList).toBe(withNothing);
         expect(withAnotherFilesSlices).toBe(withNothing);
+    });
+});
+
+
+// Issue #1826, step 1: "Full file content in the file shard, not just the hunk."
+//
+// This is the failure the issue opens with, reproduced at the prompt level. The
+// SCSS hunk adds `@use '../variables' as v;` and stops at line 7; the only
+// evidence that `v` IS used sits at line 23. Judged on the hunk, "this import is
+// unused" is the answer the shard has the evidence for, and removing the import
+// breaks the build (#1724).
+describe('#1826 step 1 — the file shard carries its file whole', () => {
+    const CARD_SCSS = 'app/assets/stylesheets/components/_card.scss';
+    const CARD_HUNK = [
+        '@@ -1,6 +1,7 @@',
+        "1  @use 'sass:color';",
+        "2 +@use '../variables' as v;",
+        '3  ',
+        '4  .card {',
+        '5    padding: 12px;',
+        '6    border-radius: 4px;',
+        '7    background: #fff;',
+    ].join('\n');
+    const CARD_FILE = [
+        "@use 'sass:color';",
+        "@use '../variables' as v;",
+        '',
+        '.card {',
+        '  padding: 12px;',
+        '  border-radius: 4px;',
+        '  background: #fff;',
+        '}',
+        '',
+        '.card__body {',
+        '  color: v.$text-muted;',
+        '  line-height: 1.5;',
+        '}',
+    ].join('\n');
+
+    const captureUser = async (over: Record<string, unknown> = {}) => {
+        let user = '';
+        const runJudge: RunJudge = async ({ filename, user: u }) => {
+            if (filename === CARD_SCSS) user = u;
+            return [];
+        };
+        await judgeKodyRulesSharded({
+            changedFiles: [file(CARD_SCSS, CARD_HUNK)],
+            rules: [
+                {
+                    uuid: 'r1',
+                    title: 'No unused imports',
+                    rule: 'Remove imports that are not used in the file.',
+                },
+            ],
+            runJudge,
+            ...over,
+        } as any);
+        return user;
+    };
+
+    it('puts the evidence that refutes #1724 in front of the model', async () => {
+        const user = await captureUser({
+            fileContents: new Map([[CARD_SCSS, CARD_FILE]]),
+        });
+
+        // The line the hunk cannot reach, and the whole point of the change.
+        expect(user).toContain('color: v.$text-muted;');
+        expect(user).toContain(`<FileContent path="${CARD_SCSS}">`);
+    });
+
+    it('keeps the diff, and says the file is context rather than the change', async () => {
+        const user = await captureUser({
+            fileContents: new Map([[CARD_SCSS, CARD_FILE]]),
+        });
+
+        expect(user).toContain(`<File path="${CARD_SCSS}">`);
+        expect(user).toContain("2 +@use '../variables' as v;");
+        expect(user).toMatch(
+            /never report a violation whose evidence lies outside the diff hunks/i,
+        );
+        // The file comes BEFORE the diff: the world, then the change to it.
+        expect(user.indexOf('<FileContent')).toBeLessThan(
+            user.indexOf(`<File path="${CARD_SCSS}">`),
+        );
+    });
+
+    it('is byte-identical to before when no content is supplied', async () => {
+        const withoutArg = await captureUser();
+        const withEmptyMap = await captureUser({ fileContents: new Map() });
+        const withBlank = await captureUser({
+            fileContents: new Map([[CARD_SCSS, '   \n  \n']]),
+        });
+
+        expect(withEmptyMap).toBe(withoutArg);
+        expect(withBlank).toBe(withoutArg);
+        expect(withoutArg).not.toContain('<FileContent');
+    });
+
+    it('omits an over-budget file rather than sending half of it', async () => {
+        // Half a file is the one slice that actively misleads: the head of a
+        // file is its imports, and the usage that refutes "unused" is further
+        // down. So over budget the block is dropped whole and the shard falls
+        // back to exactly today's prompt.
+        const huge = `${CARD_FILE}\n${'/* pad */\n'.repeat(20_000)}`;
+        expect(huge.length).toBeGreaterThan(FILE_CONTENT_BUDGET_CHARS);
+
+        const user = await captureUser({
+            fileContents: new Map([[CARD_SCSS, huge]]),
+        });
+
+        expect(user).not.toContain('<FileContent');
+        expect(user).toBe(await captureUser());
+    });
+
+    it('only carries content for the file its own shard is judging', async () => {
+        let other = '';
+        const runJudge: RunJudge = async ({ filename, user }) => {
+            if (filename === 'src/other.ts') other = user;
+            return [];
+        };
+        await judgeKodyRulesSharded({
+            changedFiles: [
+                file(CARD_SCSS, CARD_HUNK),
+                file('src/other.ts', '1 +const a = 1;'),
+            ],
+            rules: [
+                { uuid: 'r1', title: 'No unused imports', rule: 'Remove unused imports.' },
+            ],
+            runJudge,
+            fileContents: new Map([[CARD_SCSS, CARD_FILE]]),
+        } as any);
+
+        expect(other).not.toContain('<FileContent');
+        expect(other).not.toContain('v.$text-muted');
+    });
+});
+
+// ── the rule's own language scope (#1826, step 1b/1c) ───────────────────────
+//
+// Until now the scope a rule states in its own prose lived inside the COMPILED
+// DETECTOR, which exists only for mechanical rules — 816 of 10.918 active rules
+// in production (7,5%). Every other rule was sharded against every changed file
+// no matter what language it named. These pin the rule-level `fileScope` doing
+// that narrowing for the semantic judge, where the other 92,5% live.
+describe('judgeKodyRulesSharded — rule-level fileScope', () => {
+    const rubyRule = {
+        uuid: 'r-ruby',
+        title: 'Ruby style',
+        rule: 'In Ruby, prefer keyword arguments',
+        fileScope: {
+            extensions: ['.rb', '.rake'],
+            sourceHash: 'h',
+            source: 'compiler' as const,
+            inferredAt: new Date(),
+        },
+    };
+
+    it('does not shard a scoped SEMANTIC rule against a file of another language', async () => {
+        const { run, calls } = fakeJudge({});
+        const res = await judgeKodyRulesSharded({
+            changedFiles: [
+                file('app/models/user.rb', '1 +def x; end'),
+                file('src/app.tsx', '1 +const a = 1;'),
+            ],
+            rules: [rubyRule],
+            runJudge: run,
+        });
+        // The .tsx file has no applicable rule left, so it is never a shard —
+        // that is the cost saving AND the precision fix (#1831 measured 93,6%
+        // of one Ruby rule's hits landing on files of another language).
+        expect(res.shardsRun).toBe(1);
+        expect(calls.map((c) => c.filename)).toEqual(['app/models/user.rb']);
+    });
+
+    it('still shards every file for a rule that declares no scope', async () => {
+        const { run } = fakeJudge({});
+        const res = await judgeKodyRulesSharded({
+            changedFiles: [
+                file('app/models/user.rb', '1 +x'),
+                file('src/app.tsx', '1 +y'),
+            ],
+            rules: [{ uuid: 'r1', title: 't', rule: 'no hardcoded secrets' }],
+            runJudge: run,
+        });
+        // Language-agnostic rules must not be silently narrowed.
+        expect(res.shardsRun).toBe(2);
+    });
+
+    it('abstains on an extensionless file rather than dropping the rule there', async () => {
+        const { run, calls } = fakeJudge({});
+        await judgeKodyRulesSharded({
+            changedFiles: [file('Rakefile', '1 +task :x')],
+            rules: [rubyRule],
+            runJudge: run,
+        });
+        expect(calls.map((c) => c.filename)).toEqual(['Rakefile']);
+    });
+
+    it("the author's own path glob still outranks the inferred scope", async () => {
+        // `path` is stated by a human; `fileScope` is inferred. When the glob
+        // excludes a file, the file is out regardless of the scope agreeing.
+        const { run, calls } = fakeJudge({});
+        await judgeKodyRulesSharded({
+            changedFiles: [
+                file('app/models/user.rb', '1 +x'),
+                file('lib/legacy.rb', '1 +y'),
+            ],
+            rules: [{ ...rubyRule, path: 'app/**' }],
+            runJudge: run,
+        });
+        expect(calls.map((c) => c.filename)).toEqual(['app/models/user.rb']);
+    });
+
+    it('reports the rules this PR never judged instead of dropping them in silence', async () => {
+        // Every narrowing clause makes a rule cheaper by making it INVISIBLE.
+        // When the narrowing is wrong, the customer sees no comment and no
+        // error and reads it as agreement — so the loss has to be logged.
+        const { run } = fakeJudge({});
+        const warns: any[] = [];
+        await judgeKodyRulesSharded({
+            changedFiles: [file('src/app.tsx', '1 +const a = 1;')],
+            rules: [rubyRule],
+            runJudge: run,
+            logger: { warn: (e: any) => warns.push(e) } as any,
+        });
+        const entry = warns.find((w) =>
+            String(w.message).includes('matched no changed file'),
+        );
+        expect(entry).toBeDefined();
+        expect(entry.context).toBe('kody-rules-sharded');
+        expect(entry.metadata.rules[0]).toMatchObject({
+            uuid: 'r-ruby',
+            extensions: ['.rb', '.rake'],
+        });
+    });
+
+    it('says nothing when every rule was judged somewhere', async () => {
+        const { run } = fakeJudge({});
+        const warns: any[] = [];
+        await judgeKodyRulesSharded({
+            changedFiles: [file('app/models/user.rb', '1 +x')],
+            rules: [rubyRule],
+            runJudge: run,
+            logger: { warn: (e: any) => warns.push(e) } as any,
+        });
+        expect(
+            warns.filter((w) =>
+                String(w.message).includes('matched no changed file'),
+            ),
+        ).toHaveLength(0);
     });
 });

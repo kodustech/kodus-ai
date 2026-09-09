@@ -27,6 +27,7 @@
  * without a sandbox.
  */
 import type { LogArguments } from '@libs/core/log/logger';
+import { GREP_NO_MATCHES } from './repo-lookup';
 import type { RepoLookup } from './repo-lookup';
 import { SHARD_CONCURRENCY_DEFAULT } from './kody-rules-sharded.judge';
 import type { ShardViolation } from './kody-rules-sharded.judge';
@@ -79,9 +80,20 @@ export interface ClaimCheckResult {
 const DEFAULT_TIMEOUT_MS = 5_000;
 
 /** What `RemoteCommands.grep` returns when ripgrep matched nothing. */
-const NO_MATCHES = 'No matches found.';
+const NO_MATCHES = GREP_NO_MATCHES;
 
 const normalizePath = (p: string): string => p.replace(/^\.\//, '').trim();
+
+/**
+ * Whether a claimed path names a file rather than a directory.
+ *
+ * `exists` answers over a listing of FILES, so a directory always comes back
+ * false. A comment that says "reuse the helper in src/shared" names a real
+ * place, and dropping it for that would be the checker inventing a defect.
+ * Only the last segment having a dot is treated as a file.
+ */
+const looksLikeFile = (p: string): boolean =>
+    /\.[^./]+$/.test(p.split('/').pop() ?? '');
 
 /** ripgrep is a regex engine; a claimed symbol is a literal. */
 const escapeRegex = (s: string): string =>
@@ -153,10 +165,7 @@ function isElsewhere(match: GrepMatch, violation: ShardViolation): boolean {
     return match.line < start || match.line > end;
 }
 
-async function withTimeout<T>(
-    work: Promise<T>,
-    timeoutMs: number,
-): Promise<T> {
+async function withTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
     let timer: NodeJS.Timeout | undefined;
     try {
         return await Promise.race([
@@ -204,6 +213,27 @@ async function refute(
         return null;
     }
 
+    // A non-`missing` claim may ALSO name a path, as supporting evidence:
+    // "reuse the helper already in src/shared/slugify.ts". The wire schema asks
+    // for `claimPath` on every claim and models fill it in, but only the
+    // `missing` branch above ever looked at it — so a fabricated path shipped
+    // as long as the SYMBOL was real. Observed: a finding that correctly said
+    // `slugify` is duplicated, and sent the developer to a file that does not
+    // exist.
+    //
+    // Only a path that looks like a FILE is checked. "src/shared" is a
+    // directory and a perfectly good thing for a comment to name; `exists`
+    // lists files, so judging it here would drop true findings.
+    if (claim.path && looksLikeFile(claim.path)) {
+        const named = normalizePath(claim.path);
+        const inThisPr = changedFiles.some(
+            (f) => normalizePath(f.filename) === named,
+        );
+        if (!inThisPr && !(await lookup.exists(claim.path))) {
+            return `pointed at "${named}", which does not exist in the repository`;
+        }
+    }
+
     const matches = parseGrep(await lookup.grep(escapeRegex(claim.symbol!)));
     const elsewhere = matches.filter((m) => isElsewhere(m, violation));
 
@@ -230,8 +260,84 @@ async function refute(
 }
 
 /**
+ * The unit a claim is adjudicated in: one rule, one file, one assertion.
+ *
+ * The shard prompt asks for "one entry PER violating line PER rule; do not
+ * collapse repeats", and the pipeline's `dedupKodyRulesByRuleUuid` folds those
+ * repeats back into a SINGLE published comment. Whether a given RUN expands or
+ * collapses is sampling variance, not a model trait: kimi-k2.7-code returned
+ * one ranged finding in seven observed runs of the same case and eight
+ * per-line findings in the eighth.
+ *
+ * Checking per finding while publishing per group let a refutation land on one
+ * sibling while the same assertion shipped on another - in that eighth run the
+ * claim was declared on one finding, refuted, and the seven undeclared
+ * siblings survived to publish it anyway. Grouping makes the checked unit the
+ * published unit, which is the only version of this check that holds whatever
+ * model the customer brings and whatever shape a given run returns.
+ */
+const groupKeyOf = (violation: ShardViolation): string =>
+    [
+        violation.ruleUuid ?? '',
+        normalizePath(violation.relevantFile ?? ''),
+        assertionKeyOf(violation),
+    ].join('::');
+
+/**
+ * The assertion a finding makes, as a comparable key.
+ *
+ * Rule and file alone are too coarse: one rule can legitimately report two
+ * DIFFERENT things in one file, and grouping those would let a refutation of
+ * the first silence the second. What has to group is the same sentence emitted
+ * once per line, which is what the prompt asks for and what a model actually
+ * returned. Normalisation is deliberately blunt — case, punctuation and runs of
+ * whitespace collapse, so `line 3` and `line 4` phrasing differences do not
+ * split a group that is otherwise one claim.
+ */
+function assertionKeyOf(violation: ShardViolation): string {
+    const text = violation.oneSentenceSummary || violation.suggestionContent || '';
+    return text
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .replace(/\b\d+\b/g, '')
+        .trim()
+        .slice(0, 200);
+}
+
+/** Identity of a claim, so one repository check serves every finding making it. */
+const claimKeyOf = (claim: Claim): string =>
+    `${claim.kind}::${claim.symbol ?? ''}::${claim.path ?? ''}`;
+
+/**
+ * The group's own lines, as one span. `refute` excludes a finding's own lines
+ * when deciding whether a symbol occurs "elsewhere"; with siblings, the whole
+ * group is the finding, so the span is their union. For a lone finding this is
+ * its own range and the behaviour is byte-identical to before.
+ */
+function spanOf(group: ShardViolation[]): ShardViolation {
+    const starts = group
+        .map((v) => v.relevantLinesStart)
+        .filter((n): n is number => typeof n === 'number');
+    const ends = group
+        .map((v) => v.relevantLinesEnd ?? v.relevantLinesStart)
+        .filter((n): n is number => typeof n === 'number');
+    return {
+        ...group[0],
+        relevantLinesStart: starts.length ? Math.min(...starts) : undefined,
+        relevantLinesEnd: ends.length ? Math.max(...ends) : undefined,
+    };
+}
+
+/**
  * Check every violation's claim against the repository and split the batch into
  * what may be published and what the repository refuted (or left unverifiable).
+ *
+ * Findings are adjudicated in (rule, file, assertion) groups. A finding that declares its
+ * own claim is judged by that claim's verdict; a finding that declares nothing
+ * inherits a refutation from any sibling, because the group ships as one
+ * comment and an undeclared sibling would otherwise carry an assertion the
+ * repository already refuted. A group where nobody declares anything is still
+ * not checked at all - "no claim, no check" is unchanged.
  */
 export async function checkClaims(
     input: ClaimCheckInput,
@@ -240,34 +346,63 @@ export async function checkClaims(
     const concurrency = input.concurrency ?? SHARD_CONCURRENCY_DEFAULT;
     const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
-    const verdicts = await mapLimit(
-        violations,
-        concurrency,
-        async (violation): Promise<string | null> => {
-            const claim = readClaim(violation);
-            if (claim.kind === 'none') return null;
+    const groups = new Map<string, ShardViolation[]>();
+    for (const violation of violations) {
+        const key = groupKeyOf(violation);
+        const group = groups.get(key);
+        if (group) {
+            group.push(violation);
+        } else {
+            groups.set(key, [violation]);
+        }
+    }
 
+    // One repository check per DISTINCT claim per group, not per finding: eight
+    // findings making one assertion cost one grep, not eight.
+    const jobs: Array<{
+        groupKey: string;
+        claimKey: string;
+        claim: Claim;
+        span: ShardViolation;
+    }> = [];
+    for (const [groupKey, group] of groups) {
+        const span = spanOf(group);
+        const seen = new Set<string>();
+        for (const violation of group) {
+            const claim = readClaim(violation);
+            if (claim.kind === 'none') {
+                continue;
+            }
+            const claimKey = claimKeyOf(claim);
+            if (seen.has(claimKey)) {
+                continue;
+            }
+            seen.add(claimKey);
+            jobs.push({ groupKey, claimKey, claim, span });
+        }
+    }
+
+    const verdicts = await mapLimit(
+        jobs,
+        concurrency,
+        async ({ claim, span }): Promise<string | null> => {
             if (!lookup.available) {
                 return `unverifiable: repository lookup unavailable (${lookup.unavailableReason})`;
             }
 
             try {
-                return await withTimeout(
-                    refute(claim, violation, input),
-                    timeoutMs,
-                );
+                return await withTimeout(refute(claim, span, input), timeoutMs);
             } catch (err) {
                 // Includes RepoLookupUnavailableError: the lookup can go
                 // unavailable mid-review (its own probe disables it), and the
                 // throw must stop this finding, not the whole shard's result.
-                const detail =
-                    err instanceof Error ? err.message : String(err);
+                const detail = err instanceof Error ? err.message : String(err);
                 logger?.warn({
                     message: `[claim-checker] could not verify a ${claim.kind} claim — dropping the finding: ${detail}`,
                     context: 'claim-checker',
                     metadata: {
-                        ruleUuid: violation.ruleUuid,
-                        filename: violation.relevantFile,
+                        ruleUuid: span.ruleUuid,
+                        filename: span.relevantFile,
                         claimKind: claim.kind,
                     },
                 });
@@ -276,13 +411,38 @@ export async function checkClaims(
         },
     );
 
+    /** Drop reason per claim, and the first drop reason seen in each group. */
+    const byClaim = new Map<string, string>();
+    const byGroup = new Map<string, string>();
+    jobs.forEach((job, i) => {
+        const reason = verdicts[i];
+        if (!reason) {
+            return;
+        }
+        byClaim.set(`${job.groupKey}::${job.claimKey}`, reason);
+        if (!byGroup.has(job.groupKey)) {
+            byGroup.set(job.groupKey, reason);
+        }
+    });
+
     const kept: ShardViolation[] = [];
     const dropped: DroppedClaim[] = [];
-    violations.forEach((violation, i) => {
-        const reason = verdicts[i];
-        if (reason) dropped.push({ violation, reason });
-        else kept.push(violation);
-    });
+    for (const violation of violations) {
+        const groupKey = groupKeyOf(violation);
+        const claim = readClaim(violation);
+        const reason =
+            claim.kind === 'none'
+                ? // A finding that asserts nothing is dropped only because a
+                  // sibling's assertion - which this one republishes once dedup
+                  // folds the group into one comment - was refuted.
+                  byGroup.get(groupKey)
+                : byClaim.get(`${groupKey}::${claimKeyOf(claim)}`);
+        if (reason) {
+            dropped.push({ violation, reason });
+        } else {
+            kept.push(violation);
+        }
+    }
     return { kept, dropped };
 }
 

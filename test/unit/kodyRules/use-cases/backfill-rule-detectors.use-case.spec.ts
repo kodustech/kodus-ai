@@ -1,3 +1,7 @@
+import {
+    ruleCompileHash,
+    ruleContextNeedHash,
+} from '@libs/common/utils/kody-rules/compile-hash';
 import { BackfillRuleDetectorsUseCase } from '@libs/kodyRules/application/use-cases/backfill-rule-detectors.use-case';
 import { KodyRulesType } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
@@ -27,6 +31,26 @@ const rule = (over: any = {}) => ({
     ...over,
 });
 
+const decided = (rule: any) => ({
+    ...rule,
+    // A rule is "settled" only when BOTH keys are current: the compile
+    // attempt covers the detector, the context need is keyed separately and
+    // versioned by the classifier prompt so a corrected prompt can still
+    // reach a rule nobody edited.
+    contextNeed: {
+        need: 'diff-only',
+        sourceHash: ruleContextNeedHash(rule),
+        source: 'compiler',
+        inferredAt: new Date('2026-01-01T00:00:00Z'),
+    },
+    compileAttempt: {
+        sourceHash: ruleCompileHash(rule),
+        attemptedAt: new Date('2026-01-01T00:00:00Z'),
+        outcome: 'declined',
+        declineReason: 'not-mechanical',
+    },
+});
+
 describe('BackfillRuleDetectorsUseCase (#1449 T0 activation)', () => {
     it('compiles only eligible rules and tallies the outcome', async () => {
         const rules = [
@@ -34,7 +58,12 @@ describe('BackfillRuleDetectorsUseCase (#1449 T0 activation)', () => {
             rule({ uuid: 'b' }), // eligible -> declines
             rule({ uuid: 'c', status: 'inactive' }), // skipped
             rule({ uuid: 'd', type: KodyRulesType.MEMORY }), // skipped
-            rule({ uuid: 'e', detector: { type: 'regex', pattern: 'x' } }), // skipped (has detector)
+            // skipped: the compiler already ran on exactly this text and these
+            // examples. Note what does NOT make a rule skippable any more —
+            // having a detector. Most rules are DECLINED and never get one, so
+            // keying on the detector meant re-deciding 92,5% of the fleet every
+            // night at the customer's expense.
+            decided(rule({ uuid: 'e' })),
         ];
         const { uc, compileAndSave } = make(rules, (r) =>
             r.uuid === 'a'
@@ -112,7 +141,7 @@ describe('BackfillRuleDetectorsUseCase — context-need backfill (#1826)', () =>
 
         expect(res.contextNeeds).toEqual({
             'diff-only': 1,
-            'enclosing-scope': 0,
+            'full-file': 0,
             'symbol-references': 2,
             'sibling-file': 0,
             'cited-file': 0,
@@ -188,12 +217,130 @@ describe('BackfillRuleDetectorsUseCase — context-need backfill (#1826)', () =>
         const { uc } = make(rules, () => ({
             compiled: false,
             declineReason: 'not-mechanical',
-            contextNeed: 'enclosing-scope',
+            contextNeed: 'sibling-file',
         }));
 
         const res = await uc.execute(org, { concurrency: 1 });
 
         expect(res.contextNeedUnchanged).toBe(0);
-        expect(res.contextNeeds['enclosing-scope']).toBe(1);
+        expect(res.contextNeeds['sibling-file']).toBe(1);
+    });
+
+    // ── #1826 step 1b: the sweep is what carries the language scope to the
+    // 92,5% of the fleet that will never have a detector.
+    it('counts the rules that came back with a language scope', async () => {
+        const rules = [rule({ uuid: 'a' }), rule({ uuid: 'b' })];
+        const { uc } = make(rules, (r) => ({
+            compiled: false,
+            declineReason: 'not-mechanical',
+            fileScope: r.uuid === 'a' ? ['.rb', '.rake'] : undefined,
+        }));
+
+        const res = await uc.execute(org, { concurrency: 1 });
+
+        expect(res.fileScoped).toBe(1);
+        expect(res.fileScopeUnchanged).toBe(0);
+    });
+
+    it('counts an unchanged scope separately, so a re-run is idempotent', async () => {
+        const rules = [
+            rule({
+                uuid: 'a',
+                fileScope: {
+                    extensions: ['.rb', '.rake'],
+                    sourceHash: 'h',
+                    source: 'compiler',
+                    inferredAt: new Date('2026-01-01T00:00:00Z'),
+                },
+            }),
+        ];
+        const { uc } = make(rules, () => ({
+            compiled: false,
+            declineReason: 'not-mechanical',
+            fileScope: ['.rb', '.rake'],
+        }));
+
+        const res = await uc.execute(org, { concurrency: 1 });
+
+        expect(res.fileScoped).toBe(1);
+        expect(res.fileScopeUnchanged).toBe(1);
+    });
+
+    it('still sweeps a rule that HAS a detector but no language scope', async () => {
+        // The 816 rules compiled before the scope moved off the detector plan.
+        // Skipping them on `onlyMissing` would leave them permanently unscoped,
+        // which is the incremental backfill quietly excluding its own target.
+        const rules = [
+            rule({ uuid: 'a', detector: { type: 'regex', pattern: 'x' } }),
+        ];
+        const { uc, compileAndSave } = make(rules, () => ({
+            compiled: true,
+            fileScope: ['.rb'],
+        }));
+
+        const res = await uc.execute(org, {});
+
+        expect(compileAndSave).toHaveBeenCalledTimes(1);
+        expect(res.processed).toBe(1);
+        expect(res.fileScoped).toBe(1);
+    });
+
+    it('skips a rule the compiler already decided on this exact text', async () => {
+        const { uc, compileAndSave } = make(
+            [decided(rule({ uuid: 'a' }))],
+            () => ({ compiled: true }),
+        );
+
+        const res = await uc.execute(org, {});
+
+        expect(compileAndSave).not.toHaveBeenCalled();
+        expect(res.processed).toBe(0);
+        expect(res.skipped).toBe(1);
+    });
+
+    it('sweeps a DECLINED rule only once, not every night', async () => {
+        // The whole bug in one test. A declined rule never gets a detector, so
+        // the old "has no detector" eligibility made it eligible forever — at
+        // roughly 2.000 model calls a night across the fleet, on the customer's
+        // own BYOK key, to re-reach a verdict we already had.
+        const declined = rule({ uuid: 'a' });
+        const first = make([declined], () => ({
+            compiled: false,
+            declineReason: 'not-mechanical',
+        }));
+        await first.uc.execute(org, {});
+        expect(first.compileAndSave).toHaveBeenCalledTimes(1);
+
+        // Same rule, now carrying the marker that first run would have written.
+        const second = make([decided(declined)], () => ({ compiled: false }));
+        await second.uc.execute(org, {});
+        expect(second.compileAndSave).not.toHaveBeenCalled();
+    });
+
+    it('sweeps again once the rule TEXT changes', async () => {
+        const edited = { ...decided(rule({ uuid: 'a' })), rule: 'a new body' };
+        const { uc, compileAndSave } = make([edited], () => ({
+            compiled: false,
+        }));
+
+        await uc.execute(org, {});
+
+        expect(compileAndSave).toHaveBeenCalledTimes(1);
+    });
+
+    it('sweeps again once an EXAMPLE changes, not just the text', async () => {
+        // Examples are the compile gate: the same text with a different
+        // `incorrect` snippet can flip a rule from declined to compiled.
+        const edited = {
+            ...decided(rule({ uuid: 'a' })),
+            examples: [{ isCorrect: false, snippet: 'console.log(x)' }],
+        };
+        const { uc, compileAndSave } = make([edited], () => ({
+            compiled: false,
+        }));
+
+        await uc.execute(org, {});
+
+        expect(compileAndSave).toHaveBeenCalledTimes(1);
     });
 });
