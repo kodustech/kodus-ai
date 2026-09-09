@@ -1979,17 +1979,23 @@ describe('SandboxLeaseManager reconnect RemoteCommands (blind-read fix)', () => 
         );
     });
 
-    it('listDir resolves against the repo root', async () => {
+    it('listDir cds into the repo root and lists RELATIVE paths', async () => {
+        // The reconnect path shares buildE2BRemoteCommands with the creator, so
+        // it inherits the shape `grep` already used: `cd <repo> && ... '<rel>'`.
+        // This test used to pin the ABSOLUTE form, which is exactly what made
+        // RepoLookup.exists — it compares repo-relative paths — answer false
+        // for every file that was in fact there (issue #1826).
         const fake = makeFakeE2bSandbox(async (cmd: string) =>
-            cmd.includes(`${REPO_DIR}/src`)
-                ? { stdout: `${REPO_DIR}/src/a.ts\n`, stderr: '', exitCode: 0 }
+            cmd.startsWith(`cd ${REPO_DIR} &&`) && cmd.includes("'src'")
+                ? { stdout: 'src/a.ts\n', stderr: '', exitCode: 0 }
                 : { stdout: '', stderr: '', exitCode: 0 },
         );
         const { remoteCommands } = buildReconnectCommands(fake);
 
         const out = await remoteCommands.listDir('src', 2);
 
-        expect(out).toContain('src/a.ts');
+        expect(out).toBe('src/a.ts\n');
+        expect(out).not.toContain(REPO_DIR);
     });
 
     it('read propagates real errors instead of silently returning empty', async () => {

@@ -26,6 +26,23 @@ import type { RemoteCommands } from '@libs/code-review/infrastructure/adapters/s
 import type { LogArguments } from '@libs/core/log/logger';
 import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 
+/**
+ * What a provider answers when `grep` matched nothing.
+ *
+ * The two providers disagree: E2B returns this sentence, LocalSandbox returns
+ * an empty string. Both mean "no occurrence", so every consumer has to accept
+ * either — and the string lives here, beside the contract, rather than being
+ * retyped per consumer (issue #1826: the retriever had its own idea and showed
+ * the model the literal "No matches found." as if it were a repository slice).
+ */
+export const GREP_NO_MATCHES = 'No matches found.';
+
+/** True when a grep answer carries no occurrence, in either provider's form. */
+export const grepIsEmpty = (output: string): boolean => {
+    const text = output?.trim() ?? '';
+    return !text || text === GREP_NO_MATCHES;
+};
+
 /** Thrown by every accessor when the repository cannot be looked at. */
 export class RepoLookupUnavailableError extends Error {
     constructor(operation: string, reason: string) {
@@ -36,7 +53,27 @@ export class RepoLookupUnavailableError extends Error {
     }
 }
 
+/**
+ * How much the repository was actually consulted during one review.
+ *
+ * A lookup can be `available` and still answer nothing useful — a sandbox that
+ * went quiet, a repo that failed to clone, an `rg` that times out on every
+ * call. Downstream that shows up only as findings quietly not being made, which
+ * is indistinguishable from a clean PR. Counting the calls and the failures
+ * makes the difference observable instead of inferred.
+ */
+export interface RepoLookupStats {
+    grep: number;
+    read: number;
+    exists: number;
+    /** Accessor calls that raised. A non-zero count with `available: true` is
+     *  the shape of a degraded review that still reported success. */
+    failures: number;
+}
+
 export interface RepoLookup {
+    /** Call counts for this review. Read it when the run ends. */
+    readonly stats: RepoLookupStats;
     /** False when there is no sandbox, when it is the null sandbox, or once
      *  `probe` has caught the lookup answering with silence. */
     readonly available: boolean;
@@ -100,6 +137,21 @@ export function buildRepoLookup(
 
     let available = reason === '';
 
+    const stats: RepoLookupStats = { grep: 0, read: 0, exists: 0, failures: 0 };
+    /** Count the call, and count a raise as a failure without swallowing it. */
+    const tally = async <T>(
+        kind: 'grep' | 'read' | 'exists',
+        run: () => Promise<T>,
+    ): Promise<T> => {
+        stats[kind]++;
+        try {
+            return await run();
+        } catch (err) {
+            stats.failures++;
+            throw err;
+        }
+    };
+
     const guard = (operation: string): void => {
         if (!available) {
             throw new RepoLookupUnavailableError(operation, reason);
@@ -117,6 +169,8 @@ export function buildRepoLookup(
     };
 
     return {
+        stats,
+
         get available() {
             return available;
         },
@@ -126,17 +180,29 @@ export function buildRepoLookup(
 
         async grep(pattern: string, path = '.', glob?: string) {
             guard(`grep ${JSON.stringify(pattern)}`);
-            return remote!.grep(pattern, path, glob);
+            return tally('grep', () => remote!.grep(pattern, path, glob));
         },
 
         async read(path: string, start: number, end: number) {
             guard(`read ${path}`);
-            return remote!.read(path, start, end);
+            return tally('read', () => remote!.read(path, start, end));
         },
 
         async exists(path: string) {
             guard(`check whether ${path} exists`);
-            const listing = await remote!.listDir(parentDirOf(path), 1);
+            const listing = await tally('exists', () =>
+                remote!.listDir(parentDirOf(path), 1),
+            );
+            // A provider reports a broken command as an `Error: ` payload rather
+            // than by throwing (the same convention `grep` uses). Parsed as a
+            // listing it contains no match, so a failed lookup would answer
+            // "not there" — the silence-as-evidence this module exists to stop.
+            if (listing.startsWith('Error:')) {
+                throw new RepoLookupUnavailableError(
+                    `check whether ${path} exists`,
+                    listing.slice('Error:'.length).trim(),
+                );
+            }
             const wanted = normalize(path);
             return listing
                 .split('\n')
