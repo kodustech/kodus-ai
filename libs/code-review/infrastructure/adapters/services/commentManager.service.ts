@@ -700,6 +700,11 @@ You must always respond in ${languageResultPrompt}.`;
         platformType: PlatformType,
         codeReviewConfig?: CodeReviewConfig,
         pullRequestMessages?: IPullRequestMessages,
+        existingCommentData?: {
+            commentId?: number;
+            noteId?: number;
+            threadId?: number;
+        },
     ): Promise<{ commentId: number; noteId: number; threadId?: number }> {
         try {
             let commentBody: string;
@@ -744,18 +749,60 @@ You must always respond in ${languageResultPrompt}.`;
                 ].join('\n');
             }
 
-            const comment = await this.codeManagementService.createIssueComment(
-                {
-                    organizationAndTeamData,
-                    prNumber,
-                    repository: {
-                        name: repository.name,
-                        id: repository.id,
+            // #1721: on a GitLab re-run (every-push) the start-of-review message
+            // must edit the existing plain MR note instead of opening a new
+            // resolvable discussion that blocks merge with "all threads must be
+            // resolved" enabled.
+            if (
+                platformType === PlatformType.GITLAB &&
+                existingCommentData?.noteId
+            ) {
+                const existingCommentId =
+                    existingCommentData.commentId ??
+                    existingCommentData.noteId;
+
+                await this.codeManagementService.updateSingleIssueComment(
+                    {
+                        organizationAndTeamData,
+                        prNumber,
+                        repository: {
+                            name: repository.name,
+                            id: repository.id,
+                        },
+                        body: commentBody,
+                        commentId: existingCommentId,
+                        noteId: existingCommentData.noteId,
+                        threadId: existingCommentData.threadId,
                     },
-                    body: commentBody,
-                },
-                undefined,
-            );
+                    undefined,
+                );
+
+                this.logger.log({
+                    message: `Updated existing start-of-review note for PR#${prNumber}`,
+                    context: CommentManagerService.name,
+                    metadata: existingCommentData,
+                });
+
+                return {
+                    commentId: existingCommentId,
+                    noteId: existingCommentData.noteId,
+                    threadId: existingCommentData.threadId,
+                };
+            }
+
+            const comment =
+                await this.codeManagementService.createSingleIssueComment(
+                    {
+                        organizationAndTeamData,
+                        prNumber,
+                        repository: {
+                            name: repository.name,
+                            id: repository.id,
+                        },
+                        body: commentBody,
+                    },
+                    undefined,
+                );
 
             if (
                 PlatformType.GITHUB === platformType &&
@@ -797,10 +844,15 @@ You must always respond in ${languageResultPrompt}.`;
             // Extract platform-specific IDs
             switch (platformType) {
                 case PlatformType.GITLAB:
-                    // GitLab uses noteId
-                    noteId = comment?.notes?.[0]?.id
-                        ? Number(comment.notes[0].id)
-                        : null;
+                    // GitLab uses noteId. createSingleIssueComment returns the
+                    // plain MR note (MergeRequestNotes) where `id` IS the note
+                    // id; we keep the discussion shape as a fallback so notes
+                    // created before #1721 still map correctly.
+                    noteId = comment?.id
+                        ? Number(comment.id)
+                        : comment?.notes?.[0]?.id
+                          ? Number(comment.notes[0].id)
+                          : null;
                     break;
                 case PlatformType.AZURE_REPOS:
                     // Azure Repos uses threadId
@@ -921,21 +973,33 @@ You must always respond in ${languageResultPrompt}.`;
                 }
             }
 
-            await this.codeManagementService.updateIssueComment(
-                {
-                    organizationAndTeamData,
-                    prNumber,
-                    commentId,
-                    repository: {
-                        name: repository.name,
-                        id: repository.id,
-                    },
-                    body: commentBody,
-                    noteId,
-                    threadId,
+            const updateParams = {
+                organizationAndTeamData,
+                prNumber,
+                commentId,
+                repository: {
+                    name: repository.name,
+                    id: repository.id,
                 },
-                undefined,
-            );
+                body: commentBody,
+                noteId,
+                threadId,
+            };
+
+            // #1721: on GitLab the start-of-review note is a plain MR note
+            // (MergeRequestNotes), so the end-of-review summary must edit the
+            // note — not a resolvable discussion that blocks merge.
+            if (platformType === PlatformType.GITLAB) {
+                await this.codeManagementService.updateSingleIssueComment(
+                    updateParams,
+                    undefined,
+                );
+            } else {
+                await this.codeManagementService.updateIssueComment(
+                    updateParams,
+                    undefined,
+                );
+            }
 
             this.logger.log({
                 message: `Updated overall comment for PR#${prNumber}`,
@@ -2488,15 +2552,16 @@ ${reviewOptions}
             );
         }
 
-        const comment = await this.codeManagementService.createIssueComment(
-            {
-                organizationAndTeamData,
-                repository,
-                prNumber,
-                body: commentBody,
-            },
-            undefined,
-        );
+        const comment =
+            await this.codeManagementService.createSingleIssueComment(
+                {
+                    organizationAndTeamData,
+                    repository,
+                    prNumber,
+                    body: commentBody,
+                },
+                undefined,
+            );
 
         if (
             platformType === PlatformType.GITHUB &&

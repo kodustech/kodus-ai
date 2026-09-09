@@ -476,4 +476,60 @@ describe('GitlabService', () => {
             expect(result?.isDraft).toBe(false);
         });
     });
+
+    describe('updateSingleIssueComment (#1721)', () => {
+        beforeEach(() => {
+            jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({
+                accessToken: 'token',
+                authMode: AuthMode.OAUTH,
+            });
+        });
+
+        it('edits the plain MR note via MergeRequestNotes (non-blocking), not a discussion', async () => {
+            const notesEdit = jest.fn().mockResolvedValue({ id: 9 });
+            const discussionsEditNote = jest.fn();
+            mockedGitlab.mockReturnValue({
+                MergeRequestNotes: { edit: notesEdit },
+                MergeRequestDiscussions: { editNote: discussionsEditNote },
+            });
+
+            await service.updateSingleIssueComment({
+                organizationAndTeamData,
+                repository: { id: '1' },
+                prNumber: 2,
+                commentId: 7,
+                noteId: 9,
+                body: 'end-of-review summary',
+            });
+
+            expect(notesEdit).toHaveBeenCalledWith('1', 2, 9, {
+                body: 'end-of-review summary',
+            });
+            expect(discussionsEditNote).not.toHaveBeenCalled();
+        });
+
+        it('falls back to the discussion edit for notes created as discussions pre-fix', async () => {
+            const notesEdit = jest
+                .fn()
+                .mockRejectedValue(new Error('404 Note not found'));
+            const discussionsEditNote = jest.fn().mockResolvedValue({ id: 9 });
+            mockedGitlab.mockReturnValue({
+                MergeRequestNotes: { edit: notesEdit },
+                MergeRequestDiscussions: { editNote: discussionsEditNote },
+            });
+
+            await service.updateSingleIssueComment({
+                organizationAndTeamData,
+                repository: { id: '1' },
+                prNumber: 2,
+                commentId: 7,
+                noteId: 9,
+                body: 'end-of-review summary',
+            });
+
+            expect(discussionsEditNote).toHaveBeenCalledWith('1', 2, '7', 9, {
+                body: 'end-of-review summary',
+            });
+        });
+    });
 });

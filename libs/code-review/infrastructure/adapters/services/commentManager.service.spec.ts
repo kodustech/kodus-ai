@@ -1610,3 +1610,183 @@ describe('LLMResponseProcessor.processResponse — raw-string parse rows', () =>
         expect(out?.codeSuggestions?.[0]?.id).toBe('a');
     });
 });
+
+describe('CommentManagerService — GitLab status notes (#1721)', () => {
+    let service: CommentManagerService;
+    let codeManagementService: {
+        createIssueComment: jest.Mock;
+        createSingleIssueComment: jest.Mock;
+        updateIssueComment: jest.Mock;
+        updateSingleIssueComment: jest.Mock;
+    };
+    let messageProcessor: { processTemplate: jest.Mock };
+
+    const stubRepository = { name: 'sample', id: 'repo-id' };
+    const stubOrg = { organizationId: 'org-1', teamId: 'team-1' };
+    const statusBody = 'Kody status body';
+
+    beforeEach(() => {
+        codeManagementService = {
+            createIssueComment: jest.fn().mockResolvedValue({ id: 999 }),
+            createSingleIssueComment: jest.fn().mockResolvedValue({ id: 123 }),
+            updateIssueComment: jest.fn().mockResolvedValue({}),
+            updateSingleIssueComment: jest.fn().mockResolvedValue({}),
+        };
+        messageProcessor = {
+            processTemplate: jest.fn().mockResolvedValue(statusBody),
+        };
+
+        service = new CommentManagerService(
+            {} as any,
+            messageProcessor as any,
+            {
+                runLLMInSpan: jest.fn(),
+                runAiSdkLLMInSpan: jest.fn(),
+            } as any,
+            {} as any,
+            codeManagementService as any,
+        );
+    });
+
+    it('start-of-review posts a plain MR note (createSingleIssueComment), never a resolvable discussion', async () => {
+        const result = await service.createInitialComment(
+            stubOrg,
+            5,
+            stubRepository,
+            [{ filename: 'a.ts', patch: '+ code', status: 'modified' }] as any,
+            'en-US',
+            PlatformType.GITLAB,
+            undefined,
+            {
+                startReviewMessage: { status: 'ACTIVE', content: 'Start' },
+            } as any,
+        );
+
+        expect(codeManagementService.createIssueComment).not.toHaveBeenCalled();
+        expect(
+            codeManagementService.createSingleIssueComment,
+        ).toHaveBeenCalledTimes(1);
+        expect(
+            codeManagementService.createSingleIssueComment.mock.calls[0][0],
+        ).toMatchObject({
+            organizationAndTeamData: stubOrg,
+            prNumber: 5,
+            repository: { name: 'sample', id: 'repo-id' },
+            body: statusBody,
+        });
+
+        // Plain MR note: `id` is the note id (no discussion wrapper).
+        expect(result).toEqual({ commentId: 123, noteId: 123, threadId: null });
+    });
+
+    it('re-run with a previous note id edits the existing status note instead of opening a new thread', async () => {
+        const result = await service.createInitialComment(
+            stubOrg,
+            5,
+            stubRepository,
+            [{ filename: 'a.ts', patch: '+ code', status: 'modified' }] as any,
+            'en-US',
+            PlatformType.GITLAB,
+            undefined,
+            {
+                startReviewMessage: {
+                    status: 'EVERY_PUSH',
+                    content: 'Start again',
+                },
+            } as any,
+            { commentId: 7, noteId: 9 },
+        );
+
+        expect(
+            codeManagementService.createSingleIssueComment,
+        ).not.toHaveBeenCalled();
+        expect(
+            codeManagementService.updateSingleIssueComment,
+        ).toHaveBeenCalledTimes(1);
+        expect(
+            codeManagementService.updateSingleIssueComment.mock.calls[0][0],
+        ).toMatchObject({
+            commentId: 7,
+            noteId: 9,
+            body: statusBody,
+        });
+        expect(result).toEqual({ commentId: 7, noteId: 9, threadId: undefined });
+    });
+
+    it('end-of-review summary edits the MR note via updateSingleIssueComment on GitLab', async () => {
+        await service.updateOverallComment(
+            stubOrg,
+            5,
+            stubRepository,
+            7,
+            9,
+            PlatformType.GITLAB,
+            [],
+            undefined,
+            undefined,
+            'Final summary body',
+            false,
+        );
+
+        expect(
+            codeManagementService.updateSingleIssueComment,
+        ).toHaveBeenCalledTimes(1);
+        expect(
+            codeManagementService.updateSingleIssueComment.mock.calls[0][0],
+        ).toMatchObject({
+            commentId: 7,
+            noteId: 9,
+            body: 'Final summary body',
+        });
+        expect(codeManagementService.updateIssueComment).not.toHaveBeenCalled();
+    });
+
+    it('non-GitLab platforms keep updating the end-of-review comment via updateIssueComment', async () => {
+        await service.updateOverallComment(
+            stubOrg,
+            5,
+            stubRepository,
+            7,
+            0,
+            PlatformType.GITHUB,
+            [],
+            undefined,
+            undefined,
+            'Final summary body',
+            false,
+        );
+
+        expect(
+            codeManagementService.updateSingleIssueComment,
+        ).not.toHaveBeenCalled();
+        expect(codeManagementService.updateIssueComment).toHaveBeenCalledTimes(1);
+        expect(
+            codeManagementService.updateIssueComment.mock.calls[0][0],
+        ).toMatchObject({ commentId: 7, body: 'Final summary body' });
+    });
+
+    it('end-review-only comment (no start) posts a plain MR note on GitLab', async () => {
+        await service.createComment(
+            stubOrg,
+            5,
+            stubRepository,
+            PlatformType.GITLAB,
+            [{ filename: 'a.ts', patch: '+ code', status: 'modified' }] as any,
+            'en-US',
+            [],
+            undefined,
+            'Review finished',
+            undefined,
+            [],
+            false,
+        );
+
+        expect(
+            codeManagementService.createSingleIssueComment,
+        ).toHaveBeenCalledTimes(1);
+        expect(
+            codeManagementService.createSingleIssueComment.mock.calls[0][0],
+        ).toMatchObject({ body: statusBody });
+        expect(codeManagementService.createIssueComment).not.toHaveBeenCalled();
+    });
+});

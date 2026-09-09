@@ -2702,6 +2702,74 @@ export class GitlabService implements Omit<
         }
     }
 
+    /**
+     * Updates a plain MR note (MergeRequestNotes) — the non-blocking
+     * counterpart of applyIssueComment for status messages (start/end of
+     * review, PR-level summaries). Line-level findings keep using
+     * discussions via updateIssueComment.
+     *
+     * When the note was originally created as a discussion (pre-#1721
+     * runs), MergeRequestNotes.edit fails with a 404 — fall back to
+     * MergeRequestDiscussions.editNote so an MR opened before the fix keeps
+     * updating its sticky summary instead of breaking.
+     */
+    async updateSingleIssueComment(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string };
+        prNumber: number;
+        body: string;
+        commentId?: number;
+        noteId?: number;
+    }): Promise<any | null> {
+        try {
+            const {
+                organizationAndTeamData,
+                repository,
+                prNumber,
+                body,
+                commentId,
+                noteId,
+            } = params;
+
+            const gitlabAuthDetail = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+
+            const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
+
+            try {
+                return await gitlabAPI.MergeRequestNotes.edit(
+                    repository.id,
+                    prNumber,
+                    noteId,
+                    { body: body },
+                );
+            } catch (error) {
+                if (commentId) {
+                    return await gitlabAPI.MergeRequestDiscussions.editNote(
+                        repository.id,
+                        prNumber,
+                        String(commentId),
+                        noteId,
+                        { body: body },
+                    );
+                }
+                throw error;
+            }
+        } catch (error) {
+            this.logger.error({
+                message: 'Error updating the note:',
+                context: GitlabService.name,
+                serviceName: 'GitlabService updateSingleIssueComment',
+                error: error,
+                metadata: {
+                    ...params,
+                },
+            });
+            throw error;
+        }
+    }
+
     async getCommitsForPullRequestForCodeReview(
         params: any,
     ): Promise<any[] | null> {

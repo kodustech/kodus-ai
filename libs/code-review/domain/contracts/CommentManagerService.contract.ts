@@ -28,6 +28,11 @@ export interface ICommentManagerService {
         platformType: string,
         codeReviewConfig?: CodeReviewConfig,
         pullRequestMessages?: IPullRequestMessages,
+        existingCommentData?: {
+            commentId?: number;
+            noteId?: number;
+            threadId?: number;
+        },
     ): Promise<{ commentId: number; noteId: number; threadId?: number }>;
 
     processEndReviewMessageTemplate(

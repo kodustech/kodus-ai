@@ -758,6 +758,33 @@ export class CodeManagementService implements ICodeManagementService {
         return codeManagementService.updateIssueComment(params);
     }
 
+    async updateSingleIssueComment(
+        params: {
+            organizationAndTeamData: OrganizationAndTeamData;
+            repository: { name: string; id: string };
+            prNumber: number;
+            body: string;
+            commentId?: number;
+            noteId?: number;
+            threadId?: number;
+        },
+        type?: PlatformType,
+    ) {
+        if (!type) {
+            type = await this.getTypeIntegration(
+                extractOrganizationAndTeamData(params),
+            );
+        }
+
+        const codeManagementService =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+
+        if (type === PlatformType.GITLAB) {
+            return codeManagementService.updateSingleIssueComment(params);
+        }
+        return codeManagementService.updateIssueComment(params);
+    }
+
     async findTeamAndOrganizationIdByConfigKey(
         params: any,
         type?: PlatformType,
