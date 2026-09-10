@@ -650,6 +650,30 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
             });
             expect(fileUser).not.toContain('<PreviousReviewDecisions>');
         });
+
+        // Kody PR #1895 review, confirmed real: relevantFile is LLM-produced
+        // free text on both sides — a strict equality match (as this shard
+        // used before) silently drops the evidence on a leading-'./' or
+        // slash-style mismatch between rounds, reopening the #1313 symptom.
+        it('matches the FILE shard through normalizePath, not strict equality', async () => {
+            let fileUser = '';
+            const run: RunJudge = async ({ filename, user }) => {
+                if (filename === 'src/a.ts') fileUser = user;
+                return [];
+            };
+            await judgeKodyRulesSharded({
+                changedFiles: [file('src/a.ts', '1 +let x = 1;')],
+                rules: [{ uuid: 'r1', title: 't', rule: 'r', path: '**/*.ts' }],
+                runJudge: run,
+                previousDecisions: [
+                    decision({
+                        relevantFile: './src/A.ts',
+                        suggestionContent: 'NORMALIZED MATCH',
+                    }),
+                ],
+            });
+            expect(fileUser).toContain('NORMALIZED MATCH');
+        });
     });
 
     it('normalizes null violation fields to absent keys (strict-provider output)', async () => {

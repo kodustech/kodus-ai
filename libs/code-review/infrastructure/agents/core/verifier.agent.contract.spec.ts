@@ -973,6 +973,35 @@ describe('verifier contract — previous review decisions (issue #1313)', () => 
         expect(verdict.keep).toBe(false);
     });
 
+    // Kody PR #1895 review, confirmed real: relevantFile on both sides is
+    // LLM-produced free text (z.string() in the finder's output schema), not
+    // a validated path — normalizePath already exists for exactly this drift
+    // elsewhere (finder.agent.ts's evidence gate). A strict === here would
+    // silently drop the evidence and reopen the #1313 symptom for a
+    // leading-'./' or slash-style difference between rounds.
+    it('matches previousDecisions through normalizePath, not strict equality (leading "./", backslashes, case)', async () => {
+        const { runner, run } = fakeRunner(async () =>
+            makeState({ keep: false, rationale: 'refuted: already applied' }),
+        );
+        const v = new LlmVerifier(runner, {
+            ...inertParams(),
+            previousDecisions: [
+                decision({
+                    relevantFile: './src/X.ts',
+                    suggestionContent: 'NORMALIZED MATCH decision',
+                }),
+            ],
+        });
+
+        await v.verify(
+            candidate({ relevantFile: 'src\\x.ts' }),
+            {} as ToolContext,
+        );
+
+        const [, input] = run.mock.calls[0];
+        expect(input.prompt).toContain('NORMALIZED MATCH decision');
+    });
+
     it('does not change the prompt for a candidate with no matching previousDecisions (backward compatible)', async () => {
         const { runner, run } = fakeRunner(async () =>
             makeState({ keep: true, rationale: 'r' }),

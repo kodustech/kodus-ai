@@ -41,6 +41,8 @@ import type { RetrievedSlice } from '@libs/code-review/infrastructure/agents/col
 import { needOf } from '@libs/code-review/infrastructure/agents/collaborators/rule-context.retriever';
 import { formatPreviousDecisions } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
 import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
+// Value import, and safe: finder.agent.ts imports nothing from this module.
+import { normalizePath } from '@libs/code-review/infrastructure/agents/core/finder.agent';
 
 /**
  * Parser schema for a shard's JSON output. The provider passes this to
@@ -646,6 +648,25 @@ function contextLines(
     ];
 }
 
+/** Keyed by normalizePath(relevantFile) — PR-level entries (no relevantFile)
+ *  are excluded, matching the per-file scoping fileShardUser always did. */
+function groupDecisionsByNormalizedFile(
+    previousDecisions: PrDecisionRecord[] | undefined,
+): Map<string, PrDecisionRecord[]> {
+    const byFile = new Map<string, PrDecisionRecord[]>();
+    for (const decision of previousDecisions ?? []) {
+        if (!decision.relevantFile) continue;
+        const key = normalizePath(decision.relevantFile);
+        const bucket = byFile.get(key);
+        if (bucket) {
+            bucket.push(decision);
+        } else {
+            byFile.set(key, [decision]);
+        }
+    }
+    return byFile;
+}
+
 function fileShardUser(
     file: FileChange,
     rules: Array<Partial<IKodyRule>>,
@@ -655,14 +676,17 @@ function fileShardUser(
     prBody?: string,
     contextSlices?: Map<string, RetrievedSlice[]>,
     fileContents?: Map<string, string>,
-    previousDecisions?: PrDecisionRecord[],
+    previousDecisionsByFile?: Map<string, PrDecisionRecord[]>,
 ): string {
     const diff = (file as any).patchWithLinesStr ?? file.patch ?? '';
     // Scoped to THIS file — matching by line range is deliberately not done
     // here either (same reasoning as the generic verifier: line numbers shift
-    // across review rounds).
+    // across review rounds). Looked up from a Map built once per run (issue
+    // #1313 perf review) instead of filtering the whole list per file, and
+    // matched through normalizePath (same reasoning as the generic verifier:
+    // relevantFile is LLM-produced free text, not a validated path).
     const previousDecisionsSection = formatPreviousDecisions(
-        previousDecisions?.filter((d) => d.relevantFile === file.filename),
+        previousDecisionsByFile?.get(normalizePath(file.filename)),
     );
     return [
         `<Rules>`,
@@ -1141,6 +1165,10 @@ export async function judgeKodyRulesSharded(
     const fileRules = judgeable.filter((r) => !isPrLevel(r));
     const prRules = judgeable.filter(isPrLevel);
 
+    // Built once per run (issue #1313 perf review), not per file shard.
+    const previousDecisionsByFile =
+        groupDecisionsByNormalizedFile(previousDecisions);
+
     let shardsRun = 0;
     let shardsErrored = 0;
     const violations: ShardViolation[] = [];
@@ -1176,7 +1204,7 @@ export async function judgeKodyRulesSharded(
                         prBody,
                         contextSlices,
                         fileContents,
-                        previousDecisions,
+                        previousDecisionsByFile,
                     ),
                     filename: file.filename,
                     ruleUuids,

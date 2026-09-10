@@ -31,6 +31,7 @@ import {
 } from '@libs/llm/structured-output-repair';
 import { createLogger } from '@libs/core/log/logger';
 import type { FinderSuggestion } from '@libs/code-review/infrastructure/agents/core/finder.agent';
+import { normalizePath } from '@libs/code-review/infrastructure/agents/core/finder.agent';
 import { supportsStrictToolsForRun } from '@libs/code-review/infrastructure/agents/core/model-strictness';
 import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 import {
@@ -322,8 +323,16 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
         // Scoped to the candidate's own file (issue #1313) — matching by line
         // range is deliberately NOT done here (line numbers shift across
         // review rounds); the model judges same-file semantic overlap itself.
+        // `relevantFile` on both sides is LLM-produced free text (z.string()),
+        // not a validated path, so compare through the same normalizePath()
+        // used elsewhere for this exact class of drift (slashes, leading
+        // './', case) instead of strict equality — a normalization mismatch
+        // here would silently drop the evidence and reopen the #1313 symptom.
+        const candidateFile = normalizePath(candidate.relevantFile ?? '');
         const matchingDecisions = this.params.previousDecisions?.filter(
-            (decision) => decision.relevantFile === candidate.relevantFile,
+            (decision) =>
+                !!decision.relevantFile &&
+                normalizePath(decision.relevantFile) === candidateFile,
         );
         const state = await this.runner.run(
             spec,

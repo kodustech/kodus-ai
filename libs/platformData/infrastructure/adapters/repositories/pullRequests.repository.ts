@@ -31,6 +31,14 @@ import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/del
 import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enums/implementationStatus.enum';
 import { UNRESOLVED_RANK_BONUS } from '@libs/platformData/domain/pullRequests/deep-link-rank';
 
+// Mirrors MAX_DECISIONS_PER_FILE in
+// libs/code-review/application/use-cases/previousReviewDecisions/build-previous-review-decisions.use-case.ts
+// (the only current caller of findSuggestionsByPRAndFilenames /
+// findPrLevelSuggestionsByPR) — capping in the aggregation itself keeps the
+// query bounded instead of fetching a whole PR's suggestion history and
+// discarding most of it in JS. If that use-case's cap changes, update this too.
+const PER_FILE_HISTORY_LIMIT = 5;
+
 @Injectable()
 export class PullRequestsRepository implements IPullRequestsRepository {
     constructor(
@@ -997,13 +1005,44 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                         'files.path': { $in: filenames as string[] },
                     },
                 },
+                // `files.suggestions` accumulates one entry per review round —
+                // an actively-iterated PR can carry dozens of stale entries
+                // per file. Filter to the requested deliveryStatus, sort, and
+                // cap to the most recent PER_FILE_HISTORY_LIMIT BEFORE
+                // unwinding, so the aggregation cost stays bounded by files
+                // changed in THIS round instead of growing with round count.
+                // Order matters: filter-then-sort-then-slice, so a
+                // never-sent suggestion buried among the newest entries can
+                // never push out an older SENT one (that would silently
+                // shrink the decision history the caller sees).
                 {
-                    $unwind: '$files.suggestions',
+                    $addFields: {
+                        'files.suggestions': {
+                            $slice: [
+                                {
+                                    $sortArray: {
+                                        input: {
+                                            $filter: {
+                                                input: '$files.suggestions',
+                                                as: 'suggestion',
+                                                cond: {
+                                                    $eq: [
+                                                        '$$suggestion.deliveryStatus',
+                                                        deliveryStatus,
+                                                    ],
+                                                },
+                                            },
+                                        },
+                                        sortBy: { createdAt: -1 },
+                                    },
+                                },
+                                PER_FILE_HISTORY_LIMIT,
+                            ],
+                        },
+                    },
                 },
                 {
-                    $match: {
-                        'files.suggestions.deliveryStatus': deliveryStatus,
-                    },
+                    $unwind: '$files.suggestions',
                 },
                 {
                     $replaceRoot: {
@@ -1031,13 +1070,38 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                         'organizationId': organizationId,
                     },
                 },
+                // Same accumulation risk as findSuggestionsByPRAndFilenames,
+                // but on the top-level prLevelSuggestions array (one entry
+                // per review round, no per-file bound to begin with) — cap it
+                // the same way, before unwinding.
                 {
-                    $unwind: '$prLevelSuggestions',
+                    $addFields: {
+                        prLevelSuggestions: {
+                            $slice: [
+                                {
+                                    $sortArray: {
+                                        input: {
+                                            $filter: {
+                                                input: '$prLevelSuggestions',
+                                                as: 'suggestion',
+                                                cond: {
+                                                    $eq: [
+                                                        '$$suggestion.deliveryStatus',
+                                                        deliveryStatus,
+                                                    ],
+                                                },
+                                            },
+                                        },
+                                        sortBy: { createdAt: -1 },
+                                    },
+                                },
+                                PER_FILE_HISTORY_LIMIT,
+                            ],
+                        },
+                    },
                 },
                 {
-                    $match: {
-                        'prLevelSuggestions.deliveryStatus': deliveryStatus,
-                    },
+                    $unwind: '$prLevelSuggestions',
                 },
                 {
                     $replaceRoot: {

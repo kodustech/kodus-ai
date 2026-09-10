@@ -259,12 +259,55 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
             );
 
             const pipeline = aggregate.mock.calls[0][0];
-            const deliveryMatch = pipeline.find(
-                (stage: any) => stage.$match?.['files.suggestions.deliveryStatus'],
-            )?.$match;
-            expect(deliveryMatch).toEqual({
-                'files.suggestions.deliveryStatus': 'sent',
+            const capStage = pipeline.find(
+                (stage: any) => stage.$addFields?.['files.suggestions'],
+            )?.$addFields['files.suggestions'];
+            const filterCond =
+                capStage.$slice[0].$sortArray.input.$filter.cond;
+            expect(filterCond).toEqual({
+                $eq: ['$$suggestion.deliveryStatus', 'sent'],
             });
+        });
+
+        // Perf hardening (Kody PR #1895 review): files.suggestions accumulates
+        // one entry per review round, so this caps per file BEFORE $unwind
+        // instead of fetching a long-lived PR's whole suggestion history and
+        // discarding most of it in JS (BuildPreviousReviewDecisionsUseCase's
+        // own cap). Filter-then-sort-then-slice, in that order, so an
+        // unrelated never-sent suggestion can never push a real SENT one out
+        // of the kept window.
+        it('caps files.suggestions to the most recent 5 PER FILE before unwinding, filtering deliveryStatus before the sort/slice', async () => {
+            (exec as jest.Mock).mockResolvedValueOnce([]);
+
+            await repo.findSuggestionsByPRAndFilenames(
+                42,
+                'kodustech/kodus-ai',
+                ['src/a.ts'],
+                'org-A',
+                'sent' as any,
+            );
+
+            const pipeline = aggregate.mock.calls[0][0];
+            const addFieldsIndex = pipeline.findIndex(
+                (stage: any) => stage.$addFields?.['files.suggestions'],
+            );
+            const unwindSuggestionsIndex = pipeline.findIndex(
+                (stage: any) => stage.$unwind === '$files.suggestions',
+            );
+            expect(addFieldsIndex).toBeGreaterThanOrEqual(0);
+            expect(addFieldsIndex).toBeLessThan(unwindSuggestionsIndex);
+
+            const capStage =
+                pipeline[addFieldsIndex].$addFields['files.suggestions'];
+            expect(capStage.$slice[1]).toBe(5);
+            expect(capStage.$slice[0].$sortArray.sortBy).toEqual({
+                createdAt: -1,
+            });
+            // Filter (deliveryStatus) must be the innermost step — applied
+            // BEFORE sortArray/slice, not after.
+            expect(
+                capStage.$slice[0].$sortArray.input.$filter.input,
+            ).toBe('$files.suggestions');
         });
 
         it('short-circuits without querying Mongo when filenames is empty', async () => {
@@ -330,12 +373,41 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
             );
 
             const pipeline = aggregate.mock.calls[0][0];
-            const deliveryMatch = pipeline.find(
-                (stage: any) =>
-                    stage.$match?.['prLevelSuggestions.deliveryStatus'],
-            )?.$match;
-            expect(deliveryMatch).toEqual({
-                'prLevelSuggestions.deliveryStatus': 'sent',
+            const capStage = pipeline.find(
+                (stage: any) => stage.$addFields?.prLevelSuggestions,
+            )?.$addFields.prLevelSuggestions;
+            const filterCond =
+                capStage.$slice[0].$sortArray.input.$filter.cond;
+            expect(filterCond).toEqual({
+                $eq: ['$$suggestion.deliveryStatus', 'sent'],
+            });
+        });
+
+        it('caps prLevelSuggestions to the most recent 5 before unwinding (same growth risk as files.suggestions)', async () => {
+            (exec as jest.Mock).mockResolvedValueOnce([]);
+
+            await repo.findPrLevelSuggestionsByPR(
+                42,
+                'kodustech/kodus-ai',
+                'org-A',
+                'sent' as any,
+            );
+
+            const pipeline = aggregate.mock.calls[0][0];
+            const addFieldsIndex = pipeline.findIndex(
+                (stage: any) => stage.$addFields?.prLevelSuggestions,
+            );
+            const unwindIndex = pipeline.findIndex(
+                (stage: any) => stage.$unwind === '$prLevelSuggestions',
+            );
+            expect(addFieldsIndex).toBeGreaterThanOrEqual(0);
+            expect(addFieldsIndex).toBeLessThan(unwindIndex);
+
+            const capStage =
+                pipeline[addFieldsIndex].$addFields.prLevelSuggestions;
+            expect(capStage.$slice[1]).toBe(5);
+            expect(capStage.$slice[0].$sortArray.sortBy).toEqual({
+                createdAt: -1,
             });
         });
     });
