@@ -226,6 +226,24 @@ describe('classifyLLMError', () => {
             );
         });
 
+        it.each([
+            // An AI_RetryError (SDK retries exhausted) embeds the last attempt
+            // as text with NO status field — the default RetryError is a plain
+            // Error. These must still classify as transient so the configured
+            // BYOK fallback cascades instead of failing the whole review (#1875).
+            'Failed after 4 attempts. Last error: AI_APICallError: Bad Gateway',
+            'Last error: AI_APICallError: 502 Bad Gateway',
+            'Upstream error: service unavailable',
+            'Proxy returned 530 (Bad Gateway) from Cloudflare',
+            'An upstream error occurred: internal server error',
+            'gateway timeout while waiting for the model to respond',
+        ])('5xx phrasing without a status (%s) → TRANSIENT', (msg) => {
+            // No `status`/`statusCode` on the error — message-string fallback only.
+            const err = new Error(msg);
+            const info = classifyLLMError(err);
+            expect(info.category).toBe(LlmErrorCategory.TRANSIENT);
+        });
+
         it('unrecognized message → UNKNOWN', () => {
             const err = new Error('something weird happened in the SDK');
             expect(classifyLLMError(err).category).toBe(
