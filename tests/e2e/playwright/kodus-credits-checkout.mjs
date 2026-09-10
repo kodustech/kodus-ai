@@ -287,7 +287,9 @@ try {
     // proxy the UI uses, then drive the balance under the threshold with a
     // real debit: the billing service charges the saved card off-session and
     // credits the ledger on its own.
-    const AUTO_THRESHOLD = 50;
+    // The threshold must not exceed the amount (a top-up that leaves the
+    // balance still under the threshold would re-trigger every hour).
+    const AUTO_THRESHOLD = 10;
     const AUTO_AMOUNT = pack;
     const auto = await billingFetch(token, `/credits/auto-topup`, {
         method: "POST",
@@ -301,7 +303,7 @@ try {
     if (!adminToken) fail("BILLING_ADMIN_TOKEN is required to stage the balance for the auto top-up check");
     const stamp = Date.now();
     const current = (await billingFetch(token, `/credits/balance${qs}`)).body.balanceUsd;
-    const target = AUTO_THRESHOLD - 10; // comfortably under the threshold after the debit
+    const target = AUTO_THRESHOLD + 2; // just above: the $3 debit below crosses it
     const adj = await fetch(`${BILLING_DIRECT}/credits/adjust`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -311,7 +313,7 @@ try {
     const debit = await fetch(`${BILLING_DIRECT}/credits/debit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ organizationId, teamId, entries: [{ usageKey: `e2e:auto:debit:${stamp}`, amountUsd: 1, metadata: { model: "e2e", reason: "auto top-up trigger" } }] }),
+        body: JSON.stringify({ organizationId, teamId, entries: [{ usageKey: `e2e:auto:debit:${stamp}`, amountUsd: 3, metadata: { model: "e2e", reason: "auto top-up trigger" } }] }),
     });
     const debitBody = await debit.json().catch(() => ({}));
     if (debit.status !== 200) fail(`credits/debit HTTP ${debit.status} ${JSON.stringify(debitBody).slice(0, 200)}`);
@@ -321,7 +323,7 @@ try {
         async () => {
             const r = await billingFetch(token, `/credits/balance${qs}`);
             return {
-                match: r.status === 200 && r.body.balanceUsd >= target - 1 + AUTO_AMOUNT - 1e-6,
+                match: r.status === 200 && r.body.balanceUsd >= target - 3 + AUTO_AMOUNT - 1e-6,
                 snapshot: r.body,
             };
         },
@@ -334,7 +336,9 @@ try {
     if (!/^stripe:pi:/.test(autoEntry.usageKey)) fail(`auto top-up usageKey must be the PaymentIntent: ${autoEntry.usageKey}`);
     log(`PASS auto top-up charged the saved card off-session: +$${AUTO_AMOUNT} → balance $${autoBalance.balanceUsd} (${autoEntry.usageKey})`);
 
-    await page.goto(`${WEB}/byok#kodus`, { waitUntil: "load", timeout: 240_000 });
+    // A hash-only navigation would not reload the page (and the 30s query
+    // cache would keep the old balance), so bust it with a query param.
+    await page.goto(`${WEB}/byok?r=${Date.now()}#kodus`, { waitUntil: "load", timeout: 240_000 });
     await page.getByTestId("kodus-auto-topup").waitFor({ timeout: 120_000 });
     await page.waitForFunction((b) => document.body.innerText.includes(b), `$${autoBalance.balanceUsd.toFixed(2)}`, { timeout: 60_000 });
     await page.screenshot({ path: `${KODUS_E2E_SHOTS}/04-auto-topup-row.png`, fullPage: true });

@@ -446,7 +446,12 @@ const AutoTopUpRow = ({
                     </SelectTrigger>
                     <SelectContent>
                         {THRESHOLDS_USD.map((t) => (
-                            <SelectItem key={t} value={String(t)}>
+                            // A threshold above the amount would re-trigger
+                            // right after every top-up; billing rejects it.
+                            <SelectItem
+                                key={t}
+                                value={String(t)}
+                                disabled={t > effectiveAmount}>
                                 {usd(t, 0)}
                             </SelectItem>
                         ))}
