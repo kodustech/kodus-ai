@@ -162,6 +162,51 @@ describe('openaiModule never-downgrade capability (D-00b, Pitfall 2)', () => {
     });
 });
 
+describe('openaiModule x-opencode-session header (issue #1880)', () => {
+    it('opencode.ai/zen baseURL gets a stable x-opencode-session header derived from the credential', () => {
+        const cfg = {
+            provider: 'openai_compatible',
+            model: 'deepseek-v4-flash',
+            apiKey: 'test-key',
+            baseURL: 'https://opencode.ai/zen/go/v1',
+            credentialId: 'cred-123',
+        } as any;
+
+        const model = openaiModule.build(cfg) as any;
+        const headers = model.config.headers();
+
+        expect(headers['x-opencode-session']).toBe('cred-123');
+    });
+
+    it('falls back to byokModelId, then model+baseURL, when no credentialId is present', () => {
+        const withModelId = openaiModule.build({
+            provider: 'openai_compatible',
+            model: 'deepseek-v4-flash',
+            apiKey: 'test-key',
+            baseURL: 'https://opencode.ai/zen/go/v1',
+            byokModelId: 'model-456',
+        } as any) as any;
+        expect(withModelId.config.headers()['x-opencode-session']).toBe(
+            'model-456',
+        );
+
+        const withNeither = openaiModule.build({
+            provider: 'openai_compatible',
+            model: 'deepseek-v4-flash',
+            apiKey: 'test-key',
+            baseURL: 'https://opencode.ai/zen/go/v1',
+        } as any) as any;
+        expect(withNeither.config.headers()['x-opencode-session']).toBe(
+            'deepseek-v4-flash:https://opencode.ai/zen/go/v1',
+        );
+    });
+
+    it('a non-OpenCode openai_compatible upstream never gets the header', () => {
+        const model = openaiModule.build(openaiCompatibleCfg) as any;
+        expect(model.config.headers()).not.toHaveProperty('x-opencode-session');
+    });
+});
+
 describe('openaiModule offline conformance (real boundary: build → SDK → normalize)', () => {
     it('openai_compatible reasoning fixture: SDK-shaped result splits reasoning, output not reduced', async () => {
         const run = await runConformance(

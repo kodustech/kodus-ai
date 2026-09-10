@@ -53,6 +53,28 @@ function isNativeOpenAiModel(model: string): boolean {
     return isOpenAiReasoner(model) || /^(gpt|chatgpt|o[0-9])/i.test(model);
 }
 
+/**
+ * OpenCode Go (`opencode.ai/zen/go`) started enforcing an `x-opencode-session`
+ * header around 2026-09-06 — a request missing it now gets HTTP 400
+ * ("Request is missing x-opencode-session and cannot be routed efficiently")
+ * instead of being served, breaking every BYOK review configured against it
+ * (issue #1880). Their docs ask for a header that is "stable" per conversation
+ * for routing/prompt-cache locality, not a security token, so a deterministic
+ * id derived from the resolved slot is enough — no session-tracking plumbing.
+ */
+function isOpenCodeGoBaseUrl(baseURL?: string): boolean {
+    return !!baseURL && /opencode\.ai\/zen/i.test(baseURL);
+}
+
+/** Stable per BYOK credential (falls back to the model slot's own id, then the
+ *  model+baseURL pair, so even a slot missing both still sends a valid header
+ *  instead of failing to build the model at all). */
+function openCodeSessionId(cfg: ProviderBuildConfig): string {
+    return (
+        cfg.credentialId || cfg.byokModelId || `${cfg.model}:${cfg.baseURL ?? ''}`
+    );
+}
+
 // The Kimi / Moonshot never-downgrade policy (`isNeverDowngradeModel`) now lives
 // in the shared structured-output-gate leaf so the moonshot module shares the
 // SAME policy — see the import above. build() still honors it as an ADDITIVE
@@ -116,6 +138,13 @@ export const openaiModule: ProviderModule = {
                 apiKey,
                 baseURL,
                 ...(opts?.fetch ? { fetch: opts.fetch } : {}),
+                ...(isOpenCodeGoBaseUrl(baseURL)
+                    ? {
+                          headers: {
+                              'x-opencode-session': openCodeSessionId(cfg),
+                          },
+                      }
+                    : {}),
                 // OpenAI's own API REJECTS `max_tokens` on a reasoning model:
                 //
                 //   Unsupported parameter: 'max_tokens' is not supported with
