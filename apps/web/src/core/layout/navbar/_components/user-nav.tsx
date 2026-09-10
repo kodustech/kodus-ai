@@ -15,7 +15,6 @@ import {
     CreditCardIcon,
     FileTextIcon,
     GitBranchIcon,
-    KeyRoundIcon,
     LockIcon,
     LogOutIcon,
     UserIcon,
@@ -145,14 +144,6 @@ export function UserNav() {
                     <Link href="/settings/subscription">
                         <DropdownMenuItem leftIcon={<CreditCardIcon />}>
                             Subscription
-                        </DropdownMenuItem>
-                    </Link>
-                )}
-
-                {canEditOrg && (
-                    <Link href="/byok">
-                        <DropdownMenuItem leftIcon={<KeyRoundIcon />}>
-                            BYOK
                         </DropdownMenuItem>
                     </Link>
                 )}

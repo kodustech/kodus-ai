@@ -160,9 +160,7 @@ export const ByokPageClient = ({
         <Page.Root>
             <Page.Header>
                 <Page.TitleContainer>
-                    <Page.Title className="text-balance">
-                        Bring your own key
-                    </Page.Title>
+                    <Page.Title className="text-balance">Models</Page.Title>
                     <Page.Description className="flex flex-col gap-2 text-pretty">
                         <span>
                             Connect the providers your team uses, then choose

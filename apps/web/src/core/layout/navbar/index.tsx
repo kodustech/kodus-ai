@@ -20,6 +20,7 @@ import {
     GitPullRequestIcon,
     LockIcon,
     SlidersHorizontalIcon,
+    SparklesIcon,
 } from "lucide-react";
 import { ErrorBoundary } from "react-error-boundary";
 import { UserNav } from "src/core/layout/navbar/_components/user-nav";
@@ -60,6 +61,10 @@ export const NavMenu = () => {
         Action.Read,
         ResourceType.PluginSettings,
     );
+    const canEditOrg = usePermission(
+        Action.Update,
+        ResourceType.OrganizationSettings,
+    );
     const { data: isMCPAvailable = true } = useMCPAvailability(canReadPlugins);
 
     // Four destinations. Reviews folds Pull Requests + CLI Reviews (tabs on
@@ -98,6 +103,17 @@ export const NavMenu = () => {
                 ),
             },
 
+            {
+                // Which model reviews the code and whose key pays for it —
+                // a first-order product decision, so it sits in the main nav
+                // under a name that says what it is (the page used to be
+                // reachable only as "BYOK" in the avatar menu).
+                label: "Models",
+                icon: <SparklesIcon className="size-5" />,
+                href: "/byok",
+                visible: canEditOrg,
+                matcher: (path) => path.startsWith("/byok"),
+            },
             {
                 label: "Settings",
                 icon: <SlidersHorizontalIcon className="size-5" />,
