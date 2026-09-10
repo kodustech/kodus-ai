@@ -51,7 +51,7 @@ export const IssuesDataTable = (
         <div
             ref={parentRef}
             // 'transition-none' is required for table virtualization to avoid stuttering
-            className="flex-1 overflow-auto **:transition-none">
+            className="border-card-lv3/60 bg-card-lv1 flex-1 overflow-auto rounded-xl border **:transition-none">
             <div style={{ height: `${virtualizer.getTotalSize()}px` }}>
                 {/* '--table-body-height' is required for sticky header to work */}
                 <Table className="after:inline-block after:h-(--table-body-height)">
