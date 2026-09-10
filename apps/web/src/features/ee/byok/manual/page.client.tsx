@@ -371,9 +371,13 @@ export function ByokManualPageClient({
     // the providers page: the API would refuse the save anyway, but the form
     // must not advertise what the org cannot use.
     const selectedProvider = form.watch("provider");
+    // The provider the form will actually save: the selection, else the URL
+    // preset. A non-entitled org never sees Kodus in the dropdown (the API
+    // hides it), so this only bites a direct ?provider=kodus URL — and
+    // switching that form to another provider lifts the bounce.
+    const effectiveProvider = selectedProvider || presetProvider;
     const kodusFormAllowed =
-        (!isPlatformFundedProvider(presetProvider) &&
-            !isPlatformFundedProvider(selectedProvider)) ||
+        !isPlatformFundedProvider(effectiveProvider) ||
         kodusProviderFlag === true ||
         kodusCredits.usesKodusProvider;
     useEffect(() => {

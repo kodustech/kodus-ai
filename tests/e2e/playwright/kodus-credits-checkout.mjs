@@ -128,7 +128,19 @@ async function completeStripeCheckout(page) {
     // pack purchase) gets the saved card pre-selected and no card form: then
     // there is nothing to type, just confirm.
     const cardNumber = page.locator("input#cardNumber");
-    const hasCardForm = await cardNumber.waitFor({ timeout: 15_000 }).then(() => true).catch(() => false);
+    const submitBtn = page.locator('button[data-testid="hosted-payment-submit-button"], button[type="submit"]').first();
+    // Wait for either state to be REAL: the card form, or a ready submit
+    // button with no card form (saved card pre-selected). Neither in time
+    // is a failure, never a silent empty submit.
+    await Promise.race([
+        cardNumber.waitFor({ timeout: 60_000 }),
+        submitBtn.waitFor({ timeout: 60_000 }),
+    ]).catch(() => {});
+    const hasCardForm = (await cardNumber.count()) > 0;
+    if (!hasCardForm && !(await submitBtn.count())) {
+        await page.screenshot({ path: `${KODUS_E2E_SHOTS}/01-stripe-unknown-state.png`, fullPage: true });
+        fail(`Stripe Checkout showed neither a card form nor a submit button: ${page.url()}`);
+    }
     if (hasCardForm) {
         await cardNumber.fill(TEST_CARD);
         await page.locator("input#cardExpiry").fill(TEST_EXPIRY);

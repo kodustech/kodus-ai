@@ -67,7 +67,7 @@ const orgQs = (session: KodusSession) =>
  *  route (they take a client-chosen organizationId) and the app itself only
  *  touches credits through server actions. The live cell already needs
  *  `BILLING_ADMIN_BASE_URL` for the admin adjustment; reads use it too. */
-function billingBase(ctx: RunContext): string {
+export function billingBase(ctx: RunContext): string {
     const base = process.env.BILLING_ADMIN_BASE_URL;
     ctx.assert(
         !!base,

@@ -93,6 +93,14 @@ type TelemetrySpan = {
     attributes?: Record<string, any>;
 };
 
+/** `before` arrives as the validated ISO string from the query DTO (or a
+ *  Date from internal callers); the controller stays a transport adapter. */
+function normalizeBefore(before: Date | string | undefined): Date | undefined {
+    if (before === undefined) return undefined;
+    const d = before instanceof Date ? before : new Date(before);
+    return Number.isNaN(d.getTime()) ? undefined : d;
+}
+
 /** DI token for the metering service (consumers inject the token, not the class). */
 export const KODUS_CREDITS_METERING_SERVICE_TOKEN = Symbol.for(
     'KodusCreditsMeteringService',
@@ -408,11 +416,11 @@ export class KodusCreditsMeteringService {
     /** Journal read for the UI: recent charges, newest first. */
     async listCharges(
         organizationId: string,
-        options: { limit?: number; before?: Date; prNumber?: number } = {},
+        options: { limit?: number; before?: Date | string; prNumber?: number } = {},
     ): Promise<KodusCreditChargeModel[]> {
         const limit = Math.min(Math.max(options.limit ?? 100, 1), 500);
         const filter: Record<string, unknown> = { organizationId };
-        if (options.before) filter.spanAt = { $lt: options.before };
+        if (normalizeBefore(options.before)) filter.spanAt = { $lt: normalizeBefore(options.before) };
         if (typeof options.prNumber === 'number')
             filter.prNumber = options.prNumber;
         return (await this.chargeModel

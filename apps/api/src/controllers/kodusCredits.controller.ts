@@ -70,7 +70,7 @@ export class KodusCreditsController {
         }
         const charges = await this.metering.listCharges(organizationId, {
             limit: query.limit,
-            before: query.before ? new Date(query.before) : undefined,
+            before: query.before,
             prNumber: query.prNumber,
         });
         return {

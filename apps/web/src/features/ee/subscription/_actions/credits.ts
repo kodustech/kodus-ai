@@ -60,16 +60,25 @@ const isAllowed = (result: unknown): boolean =>
         result !== null &&
         (result as { canAccess?: unknown }).canAccess === true);
 
+const permissionCheckFailed = (action: Action) => (error: unknown) => {
+    console.error("[credits] permission check failed; denying", {
+        resource: ResourceType.Billing,
+        action,
+        error: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+};
+
 const assertCanReadCredits = async () => {
     const result = await canAccess(ResourceType.Billing, Action.Read).catch(
-        () => false,
+        permissionCheckFailed(Action.Read),
     );
     if (!isAllowed(result)) throw new Error("FORBIDDEN");
 };
 
 const assertCanManageCredits = async () => {
     const result = await canAccess(ResourceType.Billing, Action.Update).catch(
-        () => false,
+        permissionCheckFailed(Action.Update),
     );
     if (!isAllowed(result)) throw new Error("FORBIDDEN");
 };

@@ -1,5 +1,7 @@
 import { http } from "../lib/http.js";
-import { auth, saveKodusByok } from "../lib/kodus-credits.js";
+import { auth, saveKodusByok,
+    billingBase,
+} from "../lib/kodus-credits.js";
 import {
     fetchOrgLicense,
     provisionFreshTrialOrg,
@@ -83,7 +85,7 @@ export const kodusCreditsGate: Scenario = {
         // 3. Balance + ledger through the web proxy; debit is denied there.
         const qs = `?organizationId=${encodeURIComponent(session.organizationId)}&teamId=${encodeURIComponent(session.teamId)}`;
         const balance = await http<Balance>(
-            `${(process.env.BILLING_ADMIN_BASE_URL || "").replace(/\/$/, "")}/credits/balance${qs}`,
+            `${billingBase(ctx)}/credits/balance${qs}`,
             { method: "GET", headers: auth(session), timeoutMs: 30_000 },
         );
         ctx.assert(
@@ -98,7 +100,7 @@ export const kodusCreditsGate: Scenario = {
         );
 
         const ledger = await http<{ entries?: unknown[] }>(
-            `${(process.env.BILLING_ADMIN_BASE_URL || "").replace(/\/$/, "")}/credits/ledger${qs}`,
+            `${billingBase(ctx)}/credits/ledger${qs}`,
             { method: "GET", headers: auth(session), timeoutMs: 30_000 },
         );
         ctx.assert(
@@ -153,7 +155,7 @@ export const kodusCreditsGate: Scenario = {
             url?: string;
             creditUsd?: number;
             chargeUsd?: number;
-        }>(`${(process.env.BILLING_ADMIN_BASE_URL || "").replace(/\/$/, "")}/credits/checkout`, {
+        }>(`${billingBase(ctx)}/credits/checkout`, {
             method: "POST",
             headers: auth(session),
             body: {

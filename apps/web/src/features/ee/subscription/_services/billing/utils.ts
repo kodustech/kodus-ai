@@ -96,7 +96,15 @@ export const billingRequest = async <Data>(
     let parsed: unknown = null;
     try {
         parsed = text ? JSON.parse(text) : null;
-    } catch {
+    } catch (error) {
+        // Keep the raw body as the payload, but never silently: a non-JSON
+        // answer from billing is a symptom worth finding in the logs.
+        console.warn("[billing] non-JSON response body", {
+            path,
+            status: response.status,
+            bodyPreview: text.slice(0, 200),
+            error: error instanceof Error ? error.message : String(error),
+        });
         parsed = text;
     }
     if (!response.ok) throw new BillingHttpError(response.status, parsed);
