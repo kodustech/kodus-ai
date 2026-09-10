@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@components/ui/button";
 import {
-    CommandDialog,
+    Command,
     CommandEmpty,
     CommandGroup,
     CommandInput,
@@ -12,6 +12,7 @@ import {
     CommandList,
     CommandSeparator,
 } from "@components/ui/command";
+import { Dialog, DialogContent } from "@components/ui/dialog";
 import { KODY_RULES_PATHS } from "@services/kodyRules";
 import type { KodyRule } from "@services/kodyRules/types";
 import { getMCPPlugins } from "@services/mcp-manager/fetch";
@@ -32,6 +33,7 @@ import {
     GlobeIcon,
     HeadsetIcon,
     KeyRoundIcon,
+    LockIcon,
     MessageSquareTextIcon,
     PlugIcon,
     PuzzleIcon,
@@ -50,13 +52,24 @@ import {
     triggerNavigationBlock,
 } from "src/core/utils/navigation-guard";
 import { useFetch } from "src/core/utils/reactQuery";
+import {
+    GATE_PLAN_LABEL,
+    useFeatureGates,
+    type GatedFeatureKey,
+} from "src/features/ee/subscription/_hooks/use-feature-gates";
 
 // ⌘K palette (prototype): one search box that jumps to any page, switches
 // the settings scope to a repository or directory, opens a Kody Rule by
 // title, or searches pull requests by number/title. Built on the DS Command
 // (cmdk); data is fetched lazily, only once the palette opens.
 
-const PAGES = [
+const PAGES: Array<{
+    label: string;
+    href: string;
+    icon: ComponentType<{ className?: string }>;
+    keywords: string;
+    gate?: GatedFeatureKey;
+}> = [
     {
         label: "Pull requests",
         href: "/pull-requests",
@@ -74,12 +87,14 @@ const PAGES = [
         href: "/cockpit",
         icon: GaugeIcon,
         keywords: "metrics analytics dashboard productivity",
+        gate: "cockpit",
     },
     {
         label: "Issues",
         href: "/issues",
         icon: TriangleAlertIcon,
         keywords: "cockpit open resolved",
+        gate: "cockpit",
     },
     {
         label: "Plugins",
@@ -128,6 +143,7 @@ const PAGES = [
         href: "/user-logs",
         icon: ActivityIcon,
         keywords: "audit history",
+        gate: "activityLogs",
     },
     {
         label: "Organization · General",
@@ -140,6 +156,7 @@ const PAGES = [
         href: "/organization/sso",
         icon: ShieldIcon,
         keywords: "saml okta login",
+        gate: "sso",
     },
     {
         label: "Organization · Cockpit",
@@ -164,6 +181,7 @@ const PAGES = [
         href: "/helpdesk",
         icon: HeadsetIcon,
         keywords: "support help",
+        gate: "helpdesk",
     },
 ];
 
@@ -253,11 +271,28 @@ const ruleHref = (rule: KodyRule) => {
     return `/settings/code-review/${repo}/kody-rules?${params.toString()}`;
 };
 
+// cmdk's default fuzzy match lets "sso" hit "Issues" and half the rules.
+// Every word typed has to appear literally in the item's value (label +
+// keywords); earlier matches rank first.
+const filterItems = (value: string, search: string) => {
+    const haystack = value.toLowerCase();
+    const words = search.toLowerCase().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return 1;
+    let score = 0;
+    for (const word of words) {
+        const index = haystack.indexOf(word);
+        if (index < 0) return 0;
+        score += 1 / (index + 1);
+    }
+    return score;
+};
+
 export const CommandPalette = () => {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
     const router = useRouter();
     const { teamId } = useSelectedTeamId();
+    const gates = useFeatureGates();
 
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
@@ -333,182 +368,201 @@ export const CommandPalette = () => {
                 </kbd>
             </Button>
 
-            <CommandDialog
+            <Dialog
                 open={open}
                 onOpenChange={(value) => {
                     setQuery("");
                     setOpen(value);
                 }}>
-                <CommandInput
-                    placeholder="Jump to a page, repository, rule or PR…"
-                    value={query}
-                    onValueChange={setQuery}
-                />
-                <CommandList className="max-h-[60vh]">
-                    <CommandEmpty>Nothing matches.</CommandEmpty>
+                <DialogContent className="overflow-hidden p-0 shadow-lg">
+                    <Command
+                        filter={filterItems}
+                        className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group]]:px-2 [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:size-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:size-5">
+                        <CommandInput
+                            placeholder="Jump to a page, repository, rule or PR…"
+                            value={query}
+                            onValueChange={setQuery}
+                        />
+                        <CommandList className="max-h-[60vh]">
+                            <CommandEmpty>Nothing matches.</CommandEmpty>
 
-                    {prNumber && (
-                        <CommandGroup heading="Pull request">
-                            <CommandItem
-                                value={`${trimmed} pull request ${prNumber}`}
-                                onSelect={() =>
-                                    go(`/pull-requests?by=number&q=${prNumber}`)
-                                }>
-                                <GitPullRequestIcon />
-                                <span className="min-w-0 flex-1 truncate">
-                                    Open pull request #{prNumber}
-                                </span>
-                            </CommandItem>
-                        </CommandGroup>
-                    )}
-
-                    <CommandGroup heading="Go to">
-                        {PAGES.map((page) => (
-                            <CommandItem
-                                key={page.href}
-                                value={`${page.label} ${page.keywords}`}
-                                onSelect={() => go(page.href)}>
-                                <page.icon />
-                                <span className="min-w-0 flex-1 truncate">
-                                    {page.label}
-                                </span>
-                            </CommandItem>
-                        ))}
-                    </CommandGroup>
-
-                    <CommandSeparator />
-
-                    <CommandGroup heading="Code review settings · Global">
-                        {SETTINGS_TABS.map((tab) => (
-                            <CommandItem
-                                key={tab.href}
-                                value={`global ${tab.label} ${tab.keywords}`}
-                                onSelect={() =>
-                                    go(settingsHref("global", tab.href))
-                                }>
-                                <GlobeIcon />
-                                <span className="min-w-0 flex-1 truncate">
-                                    {tab.label}
-                                </span>
-                            </CommandItem>
-                        ))}
-                    </CommandGroup>
-
-                    {repositories.length > 0 && (
-                        <CommandGroup heading="Repositories">
-                            {repositories.map((repo) => (
-                                <div key={repo.id}>
+                            {prNumber && (
+                                <CommandGroup heading="Pull request">
                                     <CommandItem
-                                        value={`repo ${repo.name}`}
+                                        value={`${trimmed} pull request ${prNumber}`}
                                         onSelect={() =>
-                                            go(settingsHref(repo.id, "general"))
+                                            go(
+                                                `/pull-requests?by=number&q=${prNumber}`,
+                                            )
                                         }>
-                                        <FolderIcon />
-                                        <span className="truncate">
-                                            {repo.name}
-                                        </span>
-                                        <span className="text-text-tertiary ml-auto text-xs">
-                                            settings
+                                        <GitPullRequestIcon />
+                                        <span className="min-w-0 flex-1 truncate">
+                                            Open pull request #{prNumber}
                                         </span>
                                     </CommandItem>
-                                    {(repo.directories ?? []).map(
-                                        (directory) => (
+                                </CommandGroup>
+                            )}
+
+                            <CommandGroup heading="Go to">
+                                {PAGES.map((page) => (
+                                    <CommandItem
+                                        key={page.href}
+                                        value={`${page.label} ${page.keywords}`}
+                                        onSelect={() => go(page.href)}>
+                                        <page.icon />
+                                        <span className="min-w-0 flex-1 truncate">
+                                            {page.label}
+                                        </span>
+                                        {page.gate && !gates[page.gate] && (
+                                            <span className="text-text-tertiary ml-auto flex shrink-0 items-center gap-1 text-xs">
+                                                <LockIcon className="size-3.5" />
+                                                {GATE_PLAN_LABEL[page.gate]}
+                                            </span>
+                                        )}
+                                    </CommandItem>
+                                ))}
+                            </CommandGroup>
+
+                            <CommandSeparator />
+
+                            <CommandGroup heading="Code review settings · Global">
+                                {SETTINGS_TABS.map((tab) => (
+                                    <CommandItem
+                                        key={tab.href}
+                                        value={`global ${tab.label} ${tab.keywords}`}
+                                        onSelect={() =>
+                                            go(settingsHref("global", tab.href))
+                                        }>
+                                        <GlobeIcon />
+                                        <span className="min-w-0 flex-1 truncate">
+                                            {tab.label}
+                                        </span>
+                                    </CommandItem>
+                                ))}
+                            </CommandGroup>
+
+                            {repositories.length > 0 && (
+                                <CommandGroup heading="Repositories">
+                                    {repositories.map((repo) => (
+                                        <div key={repo.id}>
                                             <CommandItem
-                                                key={directory.id}
-                                                value={`directory ${repo.name} ${directoryLabel(directory)}`}
+                                                value={`repo ${repo.name}`}
                                                 onSelect={() =>
                                                     go(
                                                         settingsHref(
                                                             repo.id,
                                                             "general",
-                                                            directory.id,
                                                         ),
                                                     )
                                                 }>
-                                                <FolderTreeIcon />
-                                                <span className="flex min-w-0 flex-1 items-baseline gap-2">
-                                                    <span className="shrink-0 truncate">
-                                                        {repo.name}
-                                                    </span>
-                                                    <span className="text-text-tertiary min-w-0 truncate font-mono text-xs">
-                                                        {directoryLabel(
-                                                            directory,
-                                                        )}
-                                                    </span>
+                                                <FolderIcon />
+                                                <span className="truncate">
+                                                    {repo.name}
+                                                </span>
+                                                <span className="text-text-tertiary ml-auto text-xs">
+                                                    settings
                                                 </span>
                                             </CommandItem>
-                                        ),
-                                    )}
-                                </div>
-                            ))}
-                        </CommandGroup>
-                    )}
+                                            {(repo.directories ?? []).map(
+                                                (directory) => (
+                                                    <CommandItem
+                                                        key={directory.id}
+                                                        value={`directory ${repo.name} ${directoryLabel(directory)}`}
+                                                        onSelect={() =>
+                                                            go(
+                                                                settingsHref(
+                                                                    repo.id,
+                                                                    "general",
+                                                                    directory.id,
+                                                                ),
+                                                            )
+                                                        }>
+                                                        <FolderTreeIcon />
+                                                        <span className="flex min-w-0 flex-1 items-baseline gap-2">
+                                                            <span className="shrink-0 truncate">
+                                                                {repo.name}
+                                                            </span>
+                                                            <span className="text-text-tertiary min-w-0 truncate font-mono text-xs">
+                                                                {directoryLabel(
+                                                                    directory,
+                                                                )}
+                                                            </span>
+                                                        </span>
+                                                    </CommandItem>
+                                                ),
+                                            )}
+                                        </div>
+                                    ))}
+                                </CommandGroup>
+                            )}
 
-                    {plugins && plugins.length > 0 && (
-                        <CommandGroup heading="Plugins">
-                            {plugins.map((plugin) => (
-                                <CommandItem
-                                    key={`${plugin.provider}-${plugin.id}`}
-                                    value={`plugin ${plugin.name} ${plugin.appName} ${plugin.provider}`}
-                                    onSelect={() =>
-                                        go(
-                                            `/settings/plugins/${plugin.provider}/${plugin.id}`,
-                                        )
-                                    }>
-                                    <PuzzleIcon />
-                                    <span className="min-w-0 flex-1 truncate">
-                                        {plugin.name}
-                                    </span>
-                                    <span className="text-text-tertiary ml-auto shrink-0 text-xs">
-                                        {plugin.isConnected
-                                            ? "connected"
-                                            : "plugin"}
-                                    </span>
-                                </CommandItem>
-                            ))}
-                        </CommandGroup>
-                    )}
+                            {plugins && plugins.length > 0 && (
+                                <CommandGroup heading="Plugins">
+                                    {plugins.map((plugin) => (
+                                        <CommandItem
+                                            key={`${plugin.provider}-${plugin.id}`}
+                                            value={`plugin ${plugin.name} ${plugin.appName} ${plugin.provider}`}
+                                            onSelect={() =>
+                                                go(
+                                                    `/settings/plugins/${plugin.provider}/${plugin.id}`,
+                                                )
+                                            }>
+                                            <PuzzleIcon />
+                                            <span className="min-w-0 flex-1 truncate">
+                                                {plugin.name}
+                                            </span>
+                                            <span className="text-text-tertiary ml-auto shrink-0 text-xs">
+                                                {plugin.isConnected
+                                                    ? "connected"
+                                                    : "plugin"}
+                                            </span>
+                                        </CommandItem>
+                                    ))}
+                                </CommandGroup>
+                            )}
 
-                    {rules && rules.length > 0 && (
-                        <CommandGroup heading="Kody Rules">
-                            {rules.map((rule) => (
-                                <CommandItem
-                                    key={rule.uuid ?? rule.title}
-                                    value={`rule ${rule.title}`}
-                                    onSelect={() => go(ruleHref(rule))}>
-                                    <ScrollTextIcon />
-                                    <span className="truncate">
-                                        {rule.title}
-                                    </span>
-                                    <span className="text-text-tertiary ml-auto shrink-0 text-xs">
-                                        {rule.repositoryId &&
-                                        rule.repositoryId !== "global"
-                                            ? "repository"
-                                            : "global"}
-                                    </span>
-                                </CommandItem>
-                            ))}
-                        </CommandGroup>
-                    )}
+                            {rules && rules.length > 0 && (
+                                <CommandGroup heading="Kody Rules">
+                                    {rules.map((rule) => (
+                                        <CommandItem
+                                            key={rule.uuid ?? rule.title}
+                                            value={`rule ${rule.title}`}
+                                            onSelect={() => go(ruleHref(rule))}>
+                                            <ScrollTextIcon />
+                                            <span className="truncate">
+                                                {rule.title}
+                                            </span>
+                                            <span className="text-text-tertiary ml-auto shrink-0 text-xs">
+                                                {rule.repositoryId &&
+                                                rule.repositoryId !== "global"
+                                                    ? "repository"
+                                                    : "global"}
+                                            </span>
+                                        </CommandItem>
+                                    ))}
+                                </CommandGroup>
+                            )}
 
-                    {trimmed && !prNumber && (
-                        <CommandGroup heading="Pull requests">
-                            <CommandItem
-                                value={`${trimmed} search pull requests`}
-                                onSelect={() =>
-                                    go(
-                                        `/pull-requests?by=title&q=${encodeURIComponent(trimmed)}`,
-                                    )
-                                }>
-                                <SearchIcon />
-                                <span className="min-w-0 flex-1 truncate">
-                                    Search pull requests for “{trimmed}”
-                                </span>
-                            </CommandItem>
-                        </CommandGroup>
-                    )}
-                </CommandList>
-            </CommandDialog>
+                            {trimmed && !prNumber && (
+                                <CommandGroup heading="Pull requests">
+                                    <CommandItem
+                                        value={`${trimmed} search pull requests`}
+                                        onSelect={() =>
+                                            go(
+                                                `/pull-requests?by=title&q=${encodeURIComponent(trimmed)}`,
+                                            )
+                                        }>
+                                        <SearchIcon />
+                                        <span className="min-w-0 flex-1 truncate">
+                                            Search pull requests for “{trimmed}”
+                                        </span>
+                                    </CommandItem>
+                                </CommandGroup>
+                            )}
+                        </CommandList>
+                    </Command>
+                </DialogContent>
+            </Dialog>
         </>
     );
 };
