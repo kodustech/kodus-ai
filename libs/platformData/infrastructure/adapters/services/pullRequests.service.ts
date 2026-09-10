@@ -17,6 +17,10 @@ import {
     ISuggestionByPR,
     SuggestionCountsBySeverity,
 } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+import {
+    budgetPatchForPersist,
+    MAX_TOTAL_EMBEDDED_PATCH_CHARS,
+} from '@libs/platformData/domain/pullRequests/utils/diff-budget';
 import { PlatformType, PullRequestState } from '@libs/core/domain/enums';
 import { Repository } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -1181,6 +1185,20 @@ export class PullRequestsService implements IPullRequestsService {
                 });
             }
 
+            // Seed the aggregate diff budget with the bytes the document already
+            // carries from prior syncs, so the whole `pullRequests` document —
+            // not just this batch — stays under MongoDB's 16 MB BSON ceiling.
+            const existingEmbeddedPatchChars =
+                existingPR.files?.reduce(
+                    (sum, f) =>
+                        sum + ((f as { patch?: string }).patch?.length ?? 0),
+                    0,
+                ) ?? 0;
+            let remainingTotalPatchBudget = Math.max(
+                0,
+                MAX_TOTAL_EMBEDDED_PATCH_CHARS - existingEmbeddedPatchChars,
+            );
+
             const ops: FileBulkOp[] = [];
             const seenInBatch = new Set<string>();
             let duplicateChangedFiles = 0;
@@ -1212,11 +1230,25 @@ export class PullRequestsService implements IPullRequestsService {
                 const existing = existingByPath.get(filename);
 
                 if (existing) {
-                    const fileFields = {
-                        patch: PullRequestsService.sanitizePatchForPersist(
+                    // Cap the union of embedded diffs so this PR document stays
+                    // well under MongoDB's 16 MB BSON ceiling. Shares a running
+                    // aggregate budget across all files in the batch, seeded by
+                    // the bytes already embedded on existing files. Oversized
+                    // diffs are truncated (with a visible marker) or dropped,
+                    // never failing the review (#1841).
+                    const budgeted = budgetPatchForPersist(
+                        PullRequestsService.sanitizePatchForPersist(
                             filename,
                             file.patch,
                         ),
+                        remainingTotalPatchBudget,
+                    );
+                    remainingTotalPatchBudget -= budgeted.consumed;
+                    const fileFields = {
+                        patch: budgeted.patch,
+                        ...(budgeted.truncated
+                            ? { patchTruncated: true }
+                            : {}),
                         status: file.status ?? '',
                         added: file.additions ?? 0,
                         deleted: file.deletions ?? 0,

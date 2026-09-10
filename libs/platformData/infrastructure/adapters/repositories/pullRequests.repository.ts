@@ -28,6 +28,7 @@ import {
 import { PullRequestsEntity } from '@libs/platformData/domain/pullRequests/entities/pullRequests.entity';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enums/implementationStatus.enum';
+import { clampPatchForPersist } from '@libs/platformData/domain/pullRequests/utils/diff-budget';
 import { UNRESOLVED_RANK_BONUS } from '@libs/platformData/domain/pullRequests/deep-link-rank';
 
 @Injectable()
@@ -1612,6 +1613,14 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                 );
                 const $set: Record<string, unknown> = {};
                 for (const [k, v] of Object.entries(sanitized)) {
+                    // Last-resort per-file clamp: a future caller that
+                    // bypasses the service-level aggregate budget can never
+                    // embed a single unbounded patch that pushes the document
+                    // past MongoDB's 16 MB BSON ceiling (#1841).
+                    if (k === 'patch' && typeof v === 'string') {
+                        $set['files.$.patch'] = clampPatchForPersist(v);
+                        continue;
+                    }
                     $set[`files.$.${k}`] = v;
                 }
                 return {

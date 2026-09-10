@@ -1,4 +1,9 @@
 import { PullRequestsService } from './pullRequests.service';
+import {
+    MAX_PATCH_CHARS_PER_FILE,
+    MAX_TOTAL_EMBEDDED_PATCH_CHARS,
+    TRUNCATED_DIFF_MARKER,
+} from '@libs/platformData/domain/pullRequests/utils/diff-budget';
 
 /**
  * Regression tests for issue #1107 — `aggregateAndSaveDataStructure`
@@ -682,9 +687,13 @@ describe('PullRequestsService — #1107 bulk file changes', () => {
                 makeExistingFile('docs/notpng.md'),      // ".md" — MUST keep patch
             ];
             const existingPR = { uuid: 'pr-uuid-case', files: existingFiles };
-            const huge = 'X'.repeat(1024 * 1024);
+            // Patch sized below the per-file embedded-diff budget so it is
+            // stored verbatim (only binary extensions are stripped). The new
+            // per-file/aggregate caps from #1841 are covered by the dedicated
+            // budget tests below.
+            const medium = 'X'.repeat(MAX_PATCH_CHARS_PER_FILE - 1000);
             const changedFiles = existingFiles.map((f) =>
-                makeChangedFile(f.path, { patch: huge }),
+                makeChangedFile(f.path, { patch: medium }),
             );
 
             await callHandleExisting({ existingPR, changedFiles });
@@ -701,8 +710,8 @@ describe('PullRequestsService — #1107 bulk file changes', () => {
 
             expect(byFile('docs/HERO.PNG').data.patch).toBe('');
             expect(byFile('design/Logo.Jpeg').data.patch).toBe('');
-            expect(byFile('src/png-utils.ts').data.patch).toBe(huge);
-            expect(byFile('docs/notpng.md').data.patch).toBe(huge);
+            expect(byFile('src/png-utils.ts').data.patch).toBe(medium);
+            expect(byFile('docs/notpng.md').data.patch).toBe(medium);
         });
 
         it('addFile op does NOT carry `patch` either (defense in depth — locks down today\'s behavior)', async () => {
@@ -753,6 +762,85 @@ describe('PullRequestsService — #1107 bulk file changes', () => {
             // + op envelope overhead. Should comfortably fit in <100KB total.
             expect(serializedSize).toBeLessThan(100 * 1024);
             expect(opsArg.length).toBe(100);
+        });
+    });
+
+    // ─────────────────────────────────────────────────────────
+    // C) Embedded-diff budget (#1841) — MongoDB 16MB BSON ceiling
+    // ─────────────────────────────────────────────────────────
+    describe('handleExistingPullRequest — embedded-diff budget (#1841)', () => {
+        it('caps a patch that exceeds the per-file limit and marks it truncated', async () => {
+            const existingPR = {
+                uuid: 'pr-budget-1',
+                files: [makeExistingFile('src/big.ts')],
+            };
+            const oversized = 'b'.repeat(MAX_PATCH_CHARS_PER_FILE * 2);
+            await callHandleExisting({
+                existingPR,
+                changedFiles: [makeChangedFile('src/big.ts', { patch: oversized })],
+            });
+
+            const ops = pullRequestsRepository.bulkApplyFileChanges.mock
+                .calls[0][2];
+            const updateOp = ops.find((op: any) => op.kind === 'updateFile');
+            expect(updateOp).toBeDefined();
+            const patch = updateOp.data.patch;
+            expect(patch.length).toBeLessThanOrEqual(MAX_PATCH_CHARS_PER_FILE);
+            expect(patch.endsWith(TRUNCATED_DIFF_MARKER)).toBe(true);
+            expect(updateOp.data.patchTruncated).toBe(true);
+        });
+
+        it('deducts the already-embedded diff from the aggregate budget, dropping later diffs when it is exhausted', async () => {
+            // Leave only a sliver above the marker length so the first file
+            // gets a truncated stub and the second is dropped entirely once
+            // the aggregate budget runs out. Existing rationale: the document
+            // already holds MAX_TOTAL - (marker + 50) chars of embedded diff.
+            const leftover = TRUNCATED_DIFF_MARKER.length + 50;
+            const alreadyEmbedded = MAX_TOTAL_EMBEDDED_PATCH_CHARS - leftover;
+            const existingPR = {
+                uuid: 'pr-budget-2',
+                files: [
+                    makeExistingFile('src/first.ts', {
+                        patch: 'a'.repeat(alreadyEmbedded),
+                    }),
+                    makeExistingFile('src/second.ts'),
+                ],
+            };
+
+            await callHandleExisting({
+                existingPR,
+                changedFiles: [
+                    makeChangedFile('src/first.ts', {
+                        patch: 'c'.repeat(1000),
+                    }),
+                    makeChangedFile('src/second.ts', {
+                        patch: 'd'.repeat(2000),
+                    }),
+                ],
+            });
+
+            const ops = pullRequestsRepository.bulkApplyFileChanges.mock
+                .calls[0][2];
+            const updateOps = ops.filter(
+                (op: any) => op.kind === 'updateFile',
+            );
+            // first.ts is truncated to the sliver of budget left (marker kept),
+            // and the embedded size stays bounded.
+            const firstOp = updateOps.find(
+                (op: any) => op.data.patch && op.data.patch.length > 0,
+            );
+            expect(firstOp).toBeDefined();
+            expect(firstOp.data.patchTruncated).toBe(true);
+            expect(firstOp.data.patch.endsWith(TRUNCATED_DIFF_MARKER)).toBe(
+                true,
+            );
+            expect(firstOp.data.patch.length).toBeLessThanOrEqual(leftover);
+            // second.ts is dropped once the aggregate budget is exhausted.
+            const secondOp = updateOps.find(
+                (op: any) => op.data.patch === '',
+            );
+            expect(secondOp).toBeDefined();
+            expect(secondOp.data.patchTruncated).toBe(true);
         });
     });
 });
