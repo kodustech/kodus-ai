@@ -14,10 +14,7 @@ import { BYOKProvider } from '@libs/llm/model-providers';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { DEFAULT_MODEL } from './byok-defaults';
 import { vertexModelFromAdc } from './model-builders';
-import {
-    isOpenCodeGoBaseUrl,
-    openCodeSessionId,
-} from './providers/openai';
+import { isOpenCodeGoBaseUrl, openCodeSessionId } from './opencode-go';
 
 // Model-name protocol patterns, used by the self-hosted / trial default-model
 // resolution below (the BYOK provider builders moved to the provider modules

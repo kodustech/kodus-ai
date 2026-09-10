@@ -34,6 +34,7 @@ import {
     type ModelReasoningTraits,
 } from '../kernel/reasoning-traits';
 import { normalizeSdkResult, normalizeSdkUsage } from '../kernel/usage';
+import { isOpenCodeGoBaseUrl, openCodeSessionId } from '@libs/llm/opencode-go';
 
 
 
@@ -91,12 +92,29 @@ export const anthropicModule: ProviderModule = {
                 // probe's redirect-refusing fetch) still needs the signature
                 // repair, and the repair still needs the caller's guard.
                 fetch: withThinkingSignatureRepair(opts?.fetch ?? fetch),
+                // OpenCode Go also exposes an Anthropic Messages-compatible
+                // endpoint (opencode.ai/zen/go/v1/messages) alongside its
+                // OpenAI-compatible one — the SAME `x-opencode-session`
+                // requirement the openai module works around for #1880 (see
+                // that module for the full rationale/history). Preemptive:
+                // not yet confirmed the 400 fires on this transport too, but
+                // the fix is free and shares the one exported helper pair.
+                ...(isOpenCodeGoBaseUrl(cfg.baseURL)
+                    ? {
+                          headers: {
+                              'x-opencode-session': openCodeSessionId(cfg),
+                          },
+                      }
+                    : {}),
             })(cfg.model);
         }
         return createAnthropic({
             apiKey: cfg.apiKey,
             ...(cfg.baseURL ? { baseURL: cfg.baseURL } : {}),
             ...(opts?.fetch ? { fetch: opts.fetch } : {}),
+            ...(isOpenCodeGoBaseUrl(cfg.baseURL)
+                ? { headers: { 'x-opencode-session': openCodeSessionId(cfg) } }
+                : {}),
         })(cfg.model);
     },
 
