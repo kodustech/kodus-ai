@@ -227,28 +227,30 @@ describe('openaiModule x-opencode-session header (issue #1880)', () => {
         );
     });
 
-    it('the fallback seed is NOT the bare model+baseURL hash — a per-process salt is mixed in so two orgs sharing model+baseURL never collide across processes', () => {
-        const fallbackCfg = {
-            provider: 'openai_compatible',
-            model: 'deepseek-v4-flash',
-            apiKey: 'test-key',
-            baseURL: 'https://opencode.ai/zen/go/v1',
-        } as any;
+    it('the fallback seed includes the credential apiKey — two orgs sharing model+baseURL never collide', () => {
+        const buildFallback = (apiKey: string) =>
+            (
+                openaiModule.build({
+                    provider: 'openai_compatible',
+                    model: 'deepseek-v4-flash',
+                    apiKey,
+                    baseURL: 'https://opencode.ai/zen/go/v1',
+                } as any) as any
+            ).config.headers()['x-opencode-session'];
 
-        const actual = (openaiModule.build(fallbackCfg) as any).config.headers()[
-            'x-opencode-session'
-        ];
+        // Different org (different key) → different session id, even though
+        // model + baseURL are identical (the OpenCode Go norm).
+        expect(buildFallback('org-a-key')).not.toBe(buildFallback('org-b-key'));
+
+        // Same org's key → the SAME id every time (persisted, not process state).
+        expect(buildFallback('org-a-key')).toBe(buildFallback('org-a-key'));
+
+        // Still not the bare, key-less model+baseURL hash.
         const unsalted = createHash('sha256')
             .update('deepseek-v4-flash:https://opencode.ai/zen/go/v1')
             .digest('hex')
             .slice(0, 32);
-
-        expect(actual).not.toBe(unsalted);
-        // Still stable across repeated builds within the same process.
-        const again = (openaiModule.build(fallbackCfg) as any).config.headers()[
-            'x-opencode-session'
-        ];
-        expect(actual).toBe(again);
+        expect(buildFallback('org-a-key')).not.toBe(unsalted);
     });
 
     it('a non-OpenCode openai_compatible upstream never gets the header', () => {

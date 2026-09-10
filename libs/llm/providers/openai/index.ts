@@ -12,7 +12,7 @@
  * normalizeUsage are declared stubs (Phase 3 owns them).
  */
 import type { LanguageModel } from 'ai';
-import { createHash, randomUUID } from 'crypto';
+import { createHash } from 'crypto';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { z } from 'zod';
@@ -68,31 +68,25 @@ function isOpenCodeGoBaseUrl(baseURL?: string): boolean {
 }
 
 /**
- * Per-process fallback salt — only mixed into the seed when a slot carries no
- * `byokModelId` (env/managed default, i.e. self-hosted mode with no BYOK v2
- * config). Without it every such slot would hash `model:baseURL` alone, and
- * since every OpenCode Go customer shares the SAME baseURL and picks from the
- * SAME small model catalog, two different orgs on that fallback would collide
- * on an IDENTICAL session id. `byokModelId` itself is a client-generated
- * `crypto.randomUUID()` (apps/web `byok-write.ts`), so the primary, expected
- * path never touches this salt at all.
- */
-const OPENCODE_FALLBACK_SALT = randomUUID();
-
-/**
- * Stable per BYOK model slot (falls back to model+baseURL+the process salt
- * above when the slot carries no `byokModelId`, so even that case still sends
- * a valid, non-colliding header instead of failing to build the model at all).
+ * Stable per BYOK model slot. Falls back to the resolved credential's own API
+ * key (plus model+baseURL) when the slot carries no `byokModelId` — legacy /
+ * pre-v2 BYOK configs and self-hosted env slots (resolve-model-slot.ts only
+ * sets `byokModelId` for a v2 `models[]` entry). A PROCESS-RANDOM salt was
+ * tried here first and rejected in review: it changes on every restart/pod
+ * rotation (not stable) AND is identical for every org that shares the
+ * process and lands on this fallback (doesn't fix the collision it exists to
+ * prevent — OpenCode Go's baseURL and model catalog are the same for
+ * everyone). The API key has neither problem: it is PERSISTED (stable across
+ * restarts) and already unique per org/credential, since that's the whole
+ * point of BYOK.
  *
- * HASHED rather than sent raw: `byokModelId` is our own internal config-entry
- * id — OpenCode only needs an opaque value that stays constant call-to-call,
- * not that actual id, so there is no reason to hand a third party a stable
- * handle onto our internal identifiers for however long they choose to keep it.
+ * HASHED rather than sent raw either way: OpenCode only needs an opaque value
+ * that stays constant call-to-call, not our internal id or the actual key, so
+ * there is no reason to hand a third party a stable handle onto either one.
  */
 function openCodeSessionId(cfg: ProviderBuildConfig): string {
     const seed =
-        cfg.byokModelId ||
-        `${OPENCODE_FALLBACK_SALT}:${cfg.model}:${cfg.baseURL ?? ''}`;
+        cfg.byokModelId || `${cfg.apiKey}:${cfg.model}:${cfg.baseURL ?? ''}`;
     return createHash('sha256').update(seed).digest('hex').slice(0, 32);
 }
 
