@@ -1,0 +1,194 @@
+#!/usr/bin/env node
+// Browser-driven check of the auto top-up controls on the Kodus card:
+//   1. Remove the saved card (UI) → card gone, auto top-up off;
+//   2. "Save a card" → Stripe setup-mode Checkout with a card that SAVES but
+//      DECLINES on charge (4000 0000 0000 0341 — attaches, then declines) → label shows •••• 0341;
+//   3. switch auto top-up on (UI), pick "$20 when below $10" (UI selects),
+//      stage the balance and debit under the threshold → the off-session
+//      charge fails → the row shows the last error;
+//   4. "Change" → setup Checkout with 4242 → toggle off/on (re-arms) → debit
+//      again → charge succeeds → balance up by $20, error gone;
+//   5. never-funded org: add a Kodus model through the form → lands on
+//      /byok#kodus with the "Add credits to start reviewing" callout.
+// Env: KODUS_E2E_EMAIL/PASSWORD (funded org), KODUS_E2E_UNFUNDED_EMAIL/PASSWORD
+// (org with $0 and no purchases), BILLING_ADMIN_BASE_URL, BILLING_ADMIN_TOKEN.
+import { chromium } from "playwright";
+import { mkdirSync } from "node:fs";
+
+const {
+    KODUS_WEB_URL = "http://localhost:3000",
+    KODUS_API_URL = "http://localhost:3001",
+    KODUS_E2E_EMAIL, KODUS_E2E_PASSWORD,
+    KODUS_E2E_UNFUNDED_EMAIL, KODUS_E2E_UNFUNDED_PASSWORD,
+    KODUS_E2E_SHOTS = ".playwright-shots",
+    BILLING_ADMIN_BASE_URL = "http://localhost:3992/api/billing",
+    BILLING_ADMIN_TOKEN,
+} = process.env;
+const WEB = KODUS_WEB_URL.replace(/\/$/, ""), API = KODUS_API_URL.replace(/\/$/, "");
+const BILLING = `${WEB}/api/proxy/billing`, DIRECT = BILLING_ADMIN_BASE_URL.replace(/\/$/, "");
+mkdirSync(KODUS_E2E_SHOTS, { recursive: true });
+const log = (...a) => console.log("[auto-topup-ui]", ...a);
+const fail = (m) => { console.error(`[auto-topup-ui] FAIL: ${m}`); process.exit(1); };
+
+async function apiLogin(email, password) {
+    const r = await fetch(`${API}/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }) });
+    const b = await r.json(); const t = b.accessToken ?? b.data?.accessToken; if (!t) throw new Error("login"); return t;
+}
+async function ids(token) {
+    const b = await fetch(`${API}/user/info`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json());
+    const d = b.data ?? b; return { organizationId: d.organization.uuid, teamId: d.teamMember[0].team.uuid };
+}
+async function balance(token, qs) { return (await fetch(`${BILLING}/credits/balance${qs}`, { headers: { Authorization: `Bearer ${token}` } })).json(); }
+async function stage(organizationId, teamId, target, current, stamp) {
+    const r = await fetch(`${DIRECT}/credits/adjust`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, teamId, amountUsd: target - current, usageKey: `e2e:ui:stage:${stamp}`, reason: "e2e ui", adminToken: BILLING_ADMIN_TOKEN }) });
+    if (r.status !== 200) fail(`adjust HTTP ${r.status}`);
+}
+async function debit(organizationId, teamId, amountUsd, stamp) {
+    const r = await fetch(`${DIRECT}/credits/debit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, teamId, entries: [{ usageKey: `e2e:ui:debit:${stamp}`, amountUsd, metadata: { model: "e2e" } }] }) });
+    const b = await r.json(); if (r.status !== 200) fail(`debit HTTP ${r.status}`); return b.balanceUsd;
+}
+async function poll(pred, { timeoutMs, label }) {
+    const end = Date.now() + timeoutMs; let last;
+    while (Date.now() < end) { const r = await pred(); last = r.snapshot; if (r.match) return r.snapshot; await new Promise((z) => setTimeout(z, 3000)); }
+    fail(`timeout waiting for ${label}; last=${JSON.stringify(last).slice(0, 300)}`);
+}
+async function webLogin(page, email, password) {
+    await page.goto(`${WEB}/sign-in`, { waitUntil: "load", timeout: 240_000 });
+    await page.locator('input[type="email"]').first().fill(email);
+    const pwd = page.locator('input[type="password"]').first();
+    for (let i = 0; i < 10; i++) { await page.getByRole("button", { name: /continue/i }).first().click({ timeout: 30_000 }).catch(() => {}); if (await pwd.waitFor({ timeout: 10_000 }).then(() => true).catch(() => false)) break; await page.waitForTimeout(3000); }
+    await pwd.fill(password);
+    await page.locator('button[type="submit"]').first().click();
+    await page.waitForURL((u) => !/sign-in/.test(u.toString()), { timeout: 240_000 });
+}
+async function stripeSetup(page, card) {
+    await page.waitForURL(/checkout\.stripe\.com/, { timeout: 60_000 });
+    await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
+    const email = page.locator('input#email, input[name="email"]').first();
+    if (await email.count()) await email.fill("kodus-e2e@kodus.io").catch(() => {});
+    await page.locator("input#cardNumber").fill(card);
+    await page.locator("input#cardExpiry").fill("1234");
+    await page.locator("input#cardCvc").fill("123");
+    const name = page.locator('input[autocomplete="cc-name"], input#billingName').first(); if (await name.count()) await name.fill("Kodus E2E");
+    const zip = page.locator('input[autocomplete="postal-code"], input#billingPostalCode').first(); if (await zip.count()) await zip.fill("12345");
+    const phone = page.locator('input#phoneNumber, input[name="phoneNumber"], input[autocomplete="tel"], input[type="tel"]').first();
+    if (await phone.count()) await phone.fill("2015550123").catch(() => {});
+    const linkOptIn = page.locator('input#enableStripePass, input[name="enableStripePass"]').first();
+    if ((await linkOptIn.count()) && (await linkOptIn.isChecked().catch(() => false))) await linkOptIn.uncheck({ force: true }).catch(() => {});
+    const submit = page.locator('button[data-testid="hosted-payment-submit-button"], button[type="submit"]').first();
+    await submit.waitFor({ timeout: 10_000 });
+    await submit.click();
+    try {
+        await page.waitForURL((u) => !/checkout\.stripe\.com/.test(u.toString()), { timeout: 90_000 });
+    } catch {
+        const err = await page.locator('[role="alert"], [data-testid*="error"], .CheckoutError').first().textContent({ timeout: 2_000 }).catch(() => null);
+        await page.screenshot({ path: `${KODUS_E2E_SHOTS}/stripe-setup-stuck.png`, fullPage: true });
+        throw new Error(`setup Checkout did not redirect. inline_error=${err ?? "(none)"} url=${page.url()}`);
+    }
+}
+async function openCard(page) {
+    await page.goto(`${WEB}/byok?r=${Date.now()}#kodus`, { waitUntil: "load", timeout: 240_000 });
+    await page.getByTestId("kodus-auto-topup").waitFor({ timeout: 120_000 });
+}
+async function pickSelect(page, ariaLabel, optionText) {
+    await page.getByRole("combobox", { name: ariaLabel }).click();
+    await page.getByRole("option", { name: optionText, exact: true }).click();
+}
+
+if (!KODUS_E2E_EMAIL || !BILLING_ADMIN_TOKEN) fail("KODUS_E2E_EMAIL and BILLING_ADMIN_TOKEN are required");
+const token = await apiLogin(KODUS_E2E_EMAIL, KODUS_E2E_PASSWORD);
+const { organizationId, teamId } = await ids(token);
+const qs = `?organizationId=${organizationId}&teamId=${teamId}`;
+const browser = await chromium.launch({ headless: true });
+try {
+    const page = await (await browser.newContext({ viewport: { width: 1400, height: 1000 } })).newPage();
+    await webLogin(page, KODUS_E2E_EMAIL, KODUS_E2E_PASSWORD);
+    await openCard(page);
+
+    // 1. Remove the saved card through the UI.
+    if (await page.getByTestId("kodus-auto-topup-card").count()) {
+        await page.getByTestId("kodus-auto-topup").getByRole("button", { name: "Remove", exact: true }).click();
+        await page.getByTestId("kodus-auto-topup").getByRole("button", { name: /save a card/i }).waitFor({ timeout: 60_000 });
+        const b = await balance(token, qs);
+        if (b.autoTopUp.paymentMethod !== null || b.autoTopUp.enabled) fail(`after Remove: ${JSON.stringify(b.autoTopUp)}`);
+        log("PASS Remove: card forgotten, auto top-up off (UI + billing)");
+    }
+
+    // 2. Save a card that declines on charge.
+    await page.getByTestId("kodus-auto-topup").getByRole("button", { name: /save a card/i }).click();
+    await stripeSetup(page, "4000000000000341");
+    if (!/credits=card_saved/.test(page.url())) fail(`expected credits=card_saved, got ${page.url()}`);
+    const saved = await poll(async () => { const b = await balance(token, qs); return { match: /0341$/.test(b.autoTopUp.paymentMethod ?? ""), snapshot: b.autoTopUp }; }, { timeoutMs: 60_000, label: "setup session to record the card" });
+    log(`PASS setup Checkout saved the card without a purchase: ${saved.paymentMethod}`);
+
+    // 3. Switch on + pick amounts through the UI, then trigger a failing charge.
+    await openCard(page);
+    await pickSelect(page, "Auto top-up amount", "$20");
+    await pickSelect(page, "Auto top-up threshold", "$10");
+    if (!(await page.getByRole("option", { name: "$50", exact: true }).count()) === false) { /* menu closed */ }
+    await page.getByTestId("kodus-auto-topup-switch").click();
+    const on = await poll(async () => { const b = await balance(token, qs); return { match: b.autoTopUp.enabled && b.autoTopUp.amountUsd === 20 && b.autoTopUp.thresholdUsd === 10, snapshot: b.autoTopUp }; }, { timeoutMs: 30_000, label: "auto top-up saved from the UI" });
+    log(`PASS UI saved auto top-up: add $${on.amountUsd} below $${on.thresholdUsd}`);
+    // The threshold picker must not offer values above the amount.
+    await page.getByRole("combobox", { name: "Auto top-up threshold" }).click();
+    const opt50 = page.getByRole("option", { name: "$50", exact: true });
+    const disabled50 = (await opt50.getAttribute("aria-disabled")) === "true" || (await opt50.getAttribute("data-disabled")) !== null;
+    await page.keyboard.press("Escape");
+    if (!disabled50) fail("threshold $50 should be disabled when the amount is $20");
+    log("PASS thresholds above the amount are disabled in the picker");
+
+    let stamp = Date.now();
+    const before = (await balance(token, qs)).balanceUsd;
+    await stage(organizationId, teamId, 12, before, stamp);
+    await debit(organizationId, teamId, 3, stamp);
+    const failed = await poll(async () => { const b = await balance(token, qs); return { match: !!b.autoTopUp.lastError, snapshot: b.autoTopUp }; }, { timeoutMs: 90_000, label: "the declined off-session charge to be recorded" });
+    log(`PASS declined card recorded: "${failed.lastError}"`);
+    await openCard(page);
+    await page.getByTestId("kodus-auto-topup-error").waitFor({ timeout: 60_000 });
+    await page.screenshot({ path: `${KODUS_E2E_SHOTS}/08-auto-topup-declined.png`, fullPage: true });
+    log("PASS the row shows the last failed charge (screenshot 08)");
+    if ((await balance(token, qs)).balanceUsd !== 9) fail("a declined charge must not credit anything");
+
+    // 4. Change the card to one that works, re-arm, debit again → success.
+    await page.getByTestId("kodus-auto-topup").getByRole("button", { name: "Change", exact: true }).click();
+    await stripeSetup(page, "4242424242424242");
+    await poll(async () => { const b = await balance(token, qs); return { match: /4242$/.test(b.autoTopUp.paymentMethod ?? ""), snapshot: b.autoTopUp }; }, { timeoutMs: 60_000, label: "the replacement card" });
+    await openCard(page);
+    await page.getByTestId("kodus-auto-topup-switch").click(); // off
+    await poll(async () => { const b = await balance(token, qs); return { match: b.autoTopUp.enabled === false, snapshot: b.autoTopUp }; }, { timeoutMs: 30_000, label: "switch off" });
+    await page.getByTestId("kodus-auto-topup-switch").click(); // on again → re-arms the hourly window
+    await poll(async () => { const b = await balance(token, qs); return { match: b.autoTopUp.enabled === true && b.autoTopUp.lastError === null, snapshot: b.autoTopUp }; }, { timeoutMs: 30_000, label: "switch on (re-armed, error cleared)" });
+    stamp = Date.now();
+    const b2 = (await balance(token, qs)).balanceUsd;
+    await stage(organizationId, teamId, 12, b2, stamp);
+    await debit(organizationId, teamId, 3, stamp);
+    const ok = await poll(async () => { const b = await balance(token, qs); return { match: b.balanceUsd >= 29 - 1e-6 && !b.autoTopUp.lastError, snapshot: b }; }, { timeoutMs: 90_000, label: "the successful off-session charge" });
+    log(`PASS replacement card charged off-session: balance $${ok.balanceUsd}, no error`);
+    await openCard(page);
+    await page.waitForFunction(() => document.body.innerText.includes("$29.00"), null, { timeout: 60_000 });
+    if (await page.getByTestId("kodus-auto-topup-error").count()) fail("error line should be gone after a successful charge");
+    await page.screenshot({ path: `${KODUS_E2E_SHOTS}/09-auto-topup-recovered.png`, fullPage: true });
+    log("PASS row recovered (screenshot 09)");
+    // Leave it off.
+    await page.getByTestId("kodus-auto-topup-switch").click();
+    await poll(async () => { const b = await balance(token, qs); return { match: b.autoTopUp.enabled === false, snapshot: b.autoTopUp }; }, { timeoutMs: 30_000, label: "switch off (cleanup)" });
+
+    // 5. Never-funded org: add a Kodus model through the form.
+    if (KODUS_E2E_UNFUNDED_EMAIL) {
+        const ctx2 = await browser.newContext({ viewport: { width: 1400, height: 1000 } });
+        const p2 = await ctx2.newPage();
+        await webLogin(p2, KODUS_E2E_UNFUNDED_EMAIL, KODUS_E2E_UNFUNDED_PASSWORD);
+        await p2.goto(`${WEB}/byok/manual?provider=kodus`, { waitUntil: "load", timeout: 240_000 });
+        await p2.getByRole("combobox").first().click({ timeout: 120_000 });
+        await p2.getByText("GLM 5.3 Flash", { exact: false }).first().click();
+        await p2.getByRole("button", { name: /test & save/i }).click();
+        await p2.waitForURL(/\/byok(\?|#|$)/, { timeout: 180_000 });
+        if (!/#kodus/.test(p2.url())) fail(`saving a Kodus model should land on /byok#kodus, got ${p2.url()}`);
+        await p2.getByTestId("kodus-credits-never-funded").waitFor({ timeout: 120_000 });
+        await p2.getByText("GLM 5.3 Flash", { exact: false }).first().waitFor({ timeout: 60_000 });
+        await p2.screenshot({ path: `${KODUS_E2E_SHOTS}/10-after-first-save.png`, fullPage: true });
+        log("PASS form save lands on the card with the add-credits callout (screenshot 10)");
+        await ctx2.close();
+    }
+} finally { await browser.close(); }
+log("ALL PASS");

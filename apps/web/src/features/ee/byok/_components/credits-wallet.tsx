@@ -501,8 +501,9 @@ const AutoTopUpRow = ({
                     className="text-danger flex w-full items-center gap-1.5"
                     data-testid="kodus-auto-topup-error">
                     <AlertTriangleIcon size={13} />
-                    Last automatic charge failed: {auto.lastError}. Update the
-                    card or top up manually.
+                    Last automatic charge failed:{" "}
+                    {auto.lastError.replace(/\.+$/, "")}. Update the card or top
+                    up manually.
                 </span>
             )}
         </div>
