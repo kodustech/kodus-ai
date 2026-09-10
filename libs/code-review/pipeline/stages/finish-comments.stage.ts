@@ -213,6 +213,8 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                         false,
                         context.externalPromptContext,
                         platformType,
+                        lineComments,
+                        context.prLevelCommentResults,
                     );
 
                 await this.commentManagerService.updateSummarizationInPR(
