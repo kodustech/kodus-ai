@@ -227,27 +227,52 @@ describe('openaiModule x-opencode-session header (issue #1880)', () => {
         expect(buildFallback('cred-a')).not.toContain('cred-a');
     });
 
-    it('falls back to model+baseURL only when BOTH byokModelId and credentialId are absent (managed/env slot) — still hashed', () => {
-        const withNeither = openaiModule.build({
-            provider: 'openai_compatible',
-            model: 'deepseek-v4-flash',
-            apiKey: 'test-key',
-            baseURL: 'https://opencode.ai/zen/go/v1',
-        } as any) as any;
-        expect(withNeither.config.headers()['x-opencode-session']).toMatch(
-            HEX32,
-        );
+    describe('last-resort fallback (neither byokModelId nor credentialId — self-hosted env/managed slot)', () => {
+        const buildNeither = () =>
+            (
+                openaiModule.build({
+                    provider: 'openai_compatible',
+                    model: 'deepseek-v4-flash',
+                    apiKey: 'test-key',
+                    baseURL: 'https://opencode.ai/zen/go/v1',
+                } as any) as any
+            ).config.headers()['x-opencode-session'];
 
-        const withCredentialId = openaiModule.build({
-            provider: 'openai_compatible',
-            model: 'deepseek-v4-flash',
-            apiKey: 'test-key',
-            baseURL: 'https://opencode.ai/zen/go/v1',
-            credentialId: 'cred-456',
-        } as any) as any;
-        expect(withNeither.config.headers()['x-opencode-session']).not.toBe(
-            withCredentialId.config.headers()['x-opencode-session'],
-        );
+        const originalCryptoKey = process.env.API_CRYPTO_KEY;
+        afterEach(() => {
+            process.env.API_CRYPTO_KEY = originalCryptoKey;
+        });
+
+        it('is HMAC-derived (hashed, distinct from a config carrying credentialId)', () => {
+            const withNeither = buildNeither();
+            expect(withNeither).toMatch(HEX32);
+
+            const withCredentialId = (
+                openaiModule.build({
+                    provider: 'openai_compatible',
+                    model: 'deepseek-v4-flash',
+                    apiKey: 'test-key',
+                    baseURL: 'https://opencode.ai/zen/go/v1',
+                    credentialId: 'cred-456',
+                } as any) as any
+            ).config.headers()['x-opencode-session'];
+            expect(withNeither).not.toBe(withCredentialId);
+        });
+
+        it('is stable across builds for the same deployment (same API_CRYPTO_KEY)', () => {
+            process.env.API_CRYPTO_KEY = 'deployment-a-key';
+            expect(buildNeither()).toBe(buildNeither());
+        });
+
+        it('differs across deployments (different API_CRYPTO_KEY) even with identical model+baseURL — the collision two prior review rounds flagged', () => {
+            process.env.API_CRYPTO_KEY = 'deployment-a-key';
+            const deploymentA = buildNeither();
+
+            process.env.API_CRYPTO_KEY = 'deployment-b-key';
+            const deploymentB = buildNeither();
+
+            expect(deploymentA).not.toBe(deploymentB);
+        });
     });
 
     it('a non-OpenCode openai_compatible upstream never gets the header', () => {

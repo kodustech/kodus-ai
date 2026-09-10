@@ -12,7 +12,7 @@
  * normalizeUsage are declared stubs (Phase 3 owns them).
  */
 import type { LanguageModel } from 'ai';
-import { createHash } from 'crypto';
+import { createHash, createHmac } from 'crypto';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { z } from 'zod';
@@ -69,36 +69,53 @@ function isOpenCodeGoBaseUrl(baseURL?: string): boolean {
 
 /**
  * Stable per BYOK model slot, falling back to the resolved CREDENTIAL's id
- * (plus model+baseURL) when the slot carries no `byokModelId` — legacy /
- * pre-v2 BYOK configs and self-hosted env slots (resolve-model-slot.ts only
- * sets `byokModelId` for a v2 `models[]` entry). Every resolved slot needs a
- * `credentialId` to have found its API key at all, so this fallback is at
- * least as available as the primary id.
+ * when the slot carries no `byokModelId`, then to a deployment-scoped HMAC
+ * as the last resort for a slot with NEITHER (self-hosted env/managed mode —
+ * resolve-model-slot.ts only sets both ids for a v2 `models[]` entry, and a
+ * config-based slot can't exist without a credential in the first place).
  *
- * Two rejected-in-review attempts got here:
+ * Three rejected-in-review attempts got here:
  *  1. A process-random salt: changes on every restart/pod rotation (not
  *     "stable"), AND identical for every org sharing the process and landing
  *     on this fallback — doesn't fix the collision it exists to prevent,
  *     since OpenCode Go's baseURL and model catalog are the same for
  *     everyone.
- *  2. The credential's own API KEY: fixed the collision (unique per org,
- *     persisted across restarts) but CodeQL flagged it as "password hash
- *     with insufficient computational effort" — SHA-256 is the wrong tool
- *     for deriving anything from a real secret, however implausible brute-
- *     force actually is here. `credentialId` gives the exact same
- *     persisted-and-unique-per-org properties without hashing secret
- *     material at all: it's an internal id, not a credential.
+ *  2. Hashing the credential's own API KEY: fixed the collision (unique per
+ *     org/deployment, persisted across restarts) but CodeQL flagged it as
+ *     "password hash with insufficient computational effort" — its static
+ *     taint analysis flags ANY `createHash()` fed by a value sourced from
+ *     `apiKey`, full stop, regardless of the fact that the SAME key is
+ *     already sent to OpenCode in cleartext as the request's own Bearer
+ *     token (so the hash itself discloses nothing new to that recipient).
+ *  3. Dropping the key from the last-resort tier entirely (falling straight
+ *     to bare `model:baseURL`): reintroduced exactly the collision (1) was
+ *     meant to fix, since that tier is the one place `credentialId` is
+ *     genuinely absent — a self-hosted install pointing its env vars at
+ *     OpenCode Go, where every "org" in that single-tenant deployment is
+ *     the same customer anyway, but two SEPARATE such deployments sharing
+ *     the same model choice would still collide.
  *
- * HASHED rather than sent raw either way: OpenCode only needs an opaque value
- * that stays constant call-to-call, not our internal id, so there is no
- * reason to hand a third party a stable handle onto it.
+ * The fix: keep secret material out of `createHash()` entirely, but still
+ * use it — as the KEY of an HMAC, which is what a secret is FOR, rather than
+ * as hashed message content. `API_CRYPTO_KEY` (libs/common/utils/crypto.ts)
+ * is already the one persisted, deployment-scoped secret every install
+ * needs for BYOK apiKey encryption, so this reuses it instead of adding a
+ * new env var — unique per self-hosted deployment, stable across restarts,
+ * and outside the specific pattern CodeQL flags.
+ *
+ * HASHED/HMAC'd rather than sent raw either way: OpenCode only needs an
+ * opaque value that stays constant call-to-call, not our internal id, so
+ * there is no reason to hand a third party a stable handle onto it.
  */
 function openCodeSessionId(cfg: ProviderBuildConfig): string {
-    const seed =
-        cfg.byokModelId ||
-        cfg.credentialId ||
-        `${cfg.model}:${cfg.baseURL ?? ''}`;
-    return createHash('sha256').update(seed).digest('hex').slice(0, 32);
+    const id = cfg.byokModelId || cfg.credentialId;
+    if (id) {
+        return createHash('sha256').update(id).digest('hex').slice(0, 32);
+    }
+    return createHmac('sha256', process.env.API_CRYPTO_KEY ?? '')
+        .update(`${cfg.model}:${cfg.baseURL ?? ''}`)
+        .digest('hex')
+        .slice(0, 32);
 }
 
 // The Kimi / Moonshot never-downgrade policy (`isNeverDowngradeModel`) now lives
