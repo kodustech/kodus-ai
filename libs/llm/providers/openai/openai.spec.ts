@@ -291,6 +291,26 @@ describe('openaiModule x-opencode-session header (issue #1880)', () => {
 
         expect(model.config.headers()['x-opencode-session']).toMatch(HEX32);
     });
+
+    it('the native openai branch does NOT get the header for non-OpenCode baseURLs (default and Azure/proxy overrides)', () => {
+        for (const baseURL of [
+            undefined,
+            'https://api.openai.com/v1',
+            'https://my-proxy.example/openai',
+        ]) {
+            const model = openaiModule.build({
+                provider: 'openai',
+                model: 'gpt-4o-mini',
+                apiKey: 'test-key',
+                ...(baseURL ? { baseURL } : {}),
+                byokModelId: 'model-123',
+            } as any) as any;
+
+            expect(model.config.headers()).not.toHaveProperty(
+                'x-opencode-session',
+            );
+        }
+    });
 });
 
 describe('openaiModule offline conformance (real boundary: build → SDK → normalize)', () => {
