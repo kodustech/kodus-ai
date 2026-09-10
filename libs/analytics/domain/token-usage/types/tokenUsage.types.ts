@@ -7,16 +7,15 @@ export type TokenUsageQueryContract = {
     timezone?: string; // for day bucketing
     developer?: string;
     /**
-     * Scope to one repository. Usage spans don't carry a repository id, so
-     * the service resolves this to the repo's PR numbers (`prNumbers`) and
-     * the read matches `attributes.prNumber ∈ prNumbers` — same join the
-     * by-developer view already relies on (PR numbers are assumed unique
-     * enough within an org; a cross-repo number collision over-includes,
-     * matching the existing by-developer behavior).
+     * Scope to one repository. Matched directly against `attributes.repositoryId`
+     * on the usage span (#1882 fix) — every usage span now carries its own
+     * repository id, so this no longer goes through the collision-prone
+     * `attributes.prNumber` join (two repos can both have a PR #1). Spans
+     * written before this field existed carry no `repositoryId` and simply
+     * won't match a repository-scoped read; the org-wide (unscoped) view is
+     * unaffected.
      */
     repositoryId?: string;
-    /** Internal: PR numbers resolved from `repositoryId`. */
-    prNumbers?: number[];
     byok: boolean;
 };
 
@@ -59,6 +58,10 @@ export interface DailyUsageResultContract extends BaseUsageContract {
 
 export interface UsageByPrResultContract extends BaseUsageContract {
     prNumber: number;
+    /** Repository the PR belongs to. `undefined` for spans written before
+     *  #1882 (no repository id stamped) — those rows still group by number
+     *  alone, same as before. */
+    repositoryId?: string;
 }
 
 export interface DailyUsageByPrResultContract extends UsageByPrResultContract {

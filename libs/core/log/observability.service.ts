@@ -78,6 +78,10 @@ interface UsageSpanInput {
     organizationId?: string;
     teamId?: string;
     prNumber?: number;
+    /** Repository the call ran against — the Token Usage repository filter's
+     *  scoping key (#1882). PR numbers alone can't disambiguate repos: they're
+     *  unique per repository, not per org. */
+    repositoryId?: string;
     steps?: number;
     toolCalls?: number;
     finishReason?: string;
@@ -127,6 +131,7 @@ function buildUsageSpanAttributes(p: UsageSpanInput): Record<string, any> {
         ...(p.organizationId && { organizationId: p.organizationId }),
         ...(p.teamId && { teamId: p.teamId }),
         ...(p.prNumber != null && { prNumber: p.prNumber }),
+        ...(p.repositoryId && { repositoryId: p.repositoryId }),
         ...(p.steps != null && { steps: p.steps }),
         ...(p.toolCalls != null && { toolCalls: p.toolCalls }),
         ...(p.finishReason && { finishReason: p.finishReason }),
@@ -444,6 +449,7 @@ export class ObservabilityService implements OnModuleInit {
                 organizationId: a.organizationId as string | undefined,
                 teamId: a.teamId as string | undefined,
                 prNumber: a.prNumber as number | undefined,
+                repositoryId: a.repositoryId as string | undefined,
                 source: a.source as string | undefined,
                 durationMs: Date.now() - startedAt,
                 finishReason,
@@ -531,6 +537,9 @@ export class ObservabilityService implements OnModuleInit {
         organizationId?: string;
         teamId?: string;
         prNumber?: number;
+        /** Repository the call ran against — the Token Usage repository filter's
+         *  scoping key (#1882). */
+        repositoryId?: string;
         steps?: number;
         toolCalls?: number;
         finishReason?: string;
@@ -558,6 +567,7 @@ export class ObservabilityService implements OnModuleInit {
                     organizationId: params.organizationId,
                     teamId: params.teamId,
                     prNumber: params.prNumber,
+                    repositoryId: params.repositoryId,
                     steps: params.steps,
                     toolCalls: params.toolCalls,
                     finishReason: params.finishReason,
