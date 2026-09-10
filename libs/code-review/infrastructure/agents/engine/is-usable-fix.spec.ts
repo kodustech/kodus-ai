@@ -201,19 +201,34 @@ describe('checkFix', () => {
         // as code. That opened a bigger hole than it closed: any label a
         // model emits outside the ~15-word vocabulary ("Warning:",
         // "Example:", "Consider:") bypassed the value check entirely and
-        // shipped as code. There is no regex shape that tells "enabled"
-        // apart from "warning" — both are just a lowercase word — so the
-        // gate is back to value-only. "enabled: on"/"action: add" are a
-        // known, accepted gap: narrower than the leak they caused, and the
-        // same direction of error (a dropped real fix) this file is
-        // deliberately biased toward over the alternative (a published
-        // fake one).
+        // shipped as code — there is no regex shape that tells "enabled"
+        // apart from "warning", both are just a lowercase word.
         it.each([
             'Warning: it',
             'Example: this',
             'Consider: add',
         ])('flags a label-prefixed tight pair using a label OUTSIDE the known vocabulary (%j) as prose', (improvedCode) => {
             expect(checkFix('const x = 1;', improvedCode)).toBe('prose-only');
+        });
+
+        // The real fix for "enabled: on"/"action: add": existingCode is
+        // guaranteed real source text (never prose), so the SAME key
+        // already appearing there in a "key: value" shape is proof, not a
+        // vocabulary guess.
+        it.each([
+            ['const c = { enabled: false };', 'enabled: on'],
+            ['const c = { action: "" };', 'action: add'],
+            ['logging: off', 'logging: on'],
+            ['mode: off', 'mode: on'],
+        ])('accepts a stop-word-valued tight pair when existingCode proves the key is a real field (%j -> %j)', (existingCode, improvedCode) => {
+            expect(checkFix(existingCode, improvedCode)).toBeNull();
+        });
+
+        it('still flags the same tight pair as prose when existingCode does NOT show the key', () => {
+            // Same shape as the accepted cases above, but nothing in
+            // existingCode proves "enabled" is a real field here — no
+            // evidence, no exemption.
+            expect(checkFix('const x = 1;', 'enabled: on')).toBe('prose-only');
         });
     });
 

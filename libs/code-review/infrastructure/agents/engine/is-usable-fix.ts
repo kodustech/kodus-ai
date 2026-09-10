@@ -141,6 +141,25 @@ const PROSE_STOPWORD_RE =
 const TIGHT_KEY_VALUE_RE = /^\w+\s*:\s*\S+\s*$/;
 
 /**
+ * Does `existingCode` already show `key` in a "key: value" shape? If it
+ * does, that is EVIDENCE, not a guess: `existingCode` is guaranteed real
+ * source text straight from the file — it is never a model's prose — so a
+ * key that already appears there in this shape proves the SAME key in
+ * `improvedCode`'s tight pair is a real field being edited, whatever the
+ * key's English spelling happens to be. Two prior attempts to solve this by
+ * classifying the key or value AS TEXT both failed (see `isCodeLike`'s
+ * comment) precisely because no regex can tell "enabled" apart from
+ * "warning" — this sidesteps that by not needing to.
+ */
+function keyAppearsAsFieldIn(key: string, existingCode: string): boolean {
+    if (!key) {
+        return false;
+    }
+    const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`\\b${escaped}\\s*:\\s*\\S`).test(existingCode);
+}
+
+/**
  * Does `text` look like code? A STRONG token always counts, regardless of
  * how much surrounding prose there is. A WEAK-only token counts when the
  * text is a tight `key: value` pair whose VALUE is not a stop word, or
@@ -150,26 +169,20 @@ const TIGHT_KEY_VALUE_RE = /^\w+\s*:\s*\S+\s*$/;
  * remove), so the bar for trusting a weak, sentence-compatible signal has
  * to be high.
  *
- * The tight-pair exemption gates on the VALUE only, deliberately, after two
- * narrower attempts both failed:
- *   - Exempting whenever the KEY was outside a fixed label vocabulary
- *     ("fix"/"note"/"how"/...) assumed that vocabulary was exhaustive. It
- *     is not — a model emits "Warning:", "Example:", "Consider:", and any
- *     other scaffolding word this codebase's own prompts never used, and
- *     every one of those slipped through as "usable code" the moment its
- *     key wasn't on the list.
- *   - Requiring BOTH the key to be a known label word AND the value to be a
- *     stop word (so a real field name like "enabled"/"action" could keep a
- *     stop-word value) ran into the same wall from the other side: there is
- *     no regex shape that tells "enabled" and "warning" apart — both are
- *     just an ordinary lowercase word.
- * A tight pair whose value is a stop word ("enabled: on", "action: add")
- * is consequently treated as prose too — a known, accepted gap, narrower
- * than the two failure modes above and the same direction of error this
- * whole file is deliberately biased toward (a dropped real fix, not a
- * published fake one).
+ * A tight pair whose value IS a stop word ("enabled: on", "action: add") is
+ * still accepted, but only with the evidence `keyAppearsAsFieldIn` provides
+ * — the key already exists as a real field in `existingCode`. Two narrower
+ * attempts to solve this by classifying the KEY or the VALUE as text alone
+ * both failed: exempting whenever the key was outside a fixed label
+ * vocabulary ("fix"/"note"/"how"/...) assumed that vocabulary was
+ * exhaustive (it let "Warning:"/"Example:"/"Consider:" through the moment
+ * their key wasn't on the list), and requiring the key to ALSO be a known
+ * label word ran into the same wall from the other side — there is no
+ * regex shape that tells "enabled" and "warning" apart, both are just an
+ * ordinary lowercase word. `existingCode` breaks the tie with something
+ * neither attempt had: proof, not vocabulary.
  */
-function isCodeLike(text: string): boolean {
+function isCodeLike(text: string, existingCode: string): boolean {
     if (STRONG_CODE_TOKEN_RE.test(text)) {
         return true;
     }
@@ -177,8 +190,15 @@ function isCodeLike(text: string): boolean {
         return false;
     }
     if (TIGHT_KEY_VALUE_RE.test(text)) {
+        const key = (text.match(/^\w+/) ?? [''])[0];
         const value = text.replace(/^\w+\s*:\s*/, '');
-        return value.length > 0 && !PROSE_STOPWORD_RE.test(value);
+        if (value.length === 0) {
+            return false;
+        }
+        if (!PROSE_STOPWORD_RE.test(value)) {
+            return true;
+        }
+        return keyAppearsAsFieldIn(key, existingCode);
     }
     return !PROSE_STOPWORD_RE.test(text);
 }
@@ -513,7 +533,7 @@ export function checkFix(
     // verbatim into the source. A real value is essentially never 2+ bare
     // words with nothing else, so this line is safe to draw.
     const strippedHasNoCodeSignal =
-        !isCodeLike(strippedView) && !BARE_STATEMENT_RE.test(strippedView);
+        !isCodeLike(strippedView, existing) && !BARE_STATEMENT_RE.test(strippedView);
     const strippedIsSingleToken =
         strippedView.length > 0 && !/\s/.test(strippedView);
     // Fall back to the UNSTRIPPED view (label + value together) only for a
@@ -523,7 +543,7 @@ export function checkFix(
         strippedHasNoCodeSignal && strippedIsSingleToken
             ? unstrippedView
             : strippedView;
-    if (!isCodeLike(tokenView) && !BARE_STATEMENT_RE.test(tokenView)) {
+    if (!isCodeLike(tokenView, existing) && !BARE_STATEMENT_RE.test(tokenView)) {
         return 'prose-only';
     }
 
