@@ -10,8 +10,7 @@ export type GateFeature =
     | "kody_rules"
     | "linked_repositories"
     | "sso"
-    | "activity_logs"
-    | "helpdesk";
+    | "activity_logs";
 
 type GateEventInput = {
     feature: GateFeature;

@@ -15,7 +15,6 @@ import {
     CreditCardIcon,
     FileTextIcon,
     GitBranchIcon,
-    Headset,
     KeyRoundIcon,
     LockIcon,
     LogOutIcon,
@@ -62,7 +61,7 @@ export function UserNav() {
     );
     const cfg = useConfig();
     // Gated entries stay listed with a padlock; each page shows its locked
-    // preview. Helpdesk is cloud-only, so self-hosted skips it entirely.
+    // preview.
     const gates = useFeatureGates();
 
     const handleChangeWorkspace = (teamId: string) => {
@@ -180,15 +179,6 @@ export function UserNav() {
                 <DropdownMenuSeparator />
 
                 <DropdownMenuLabel>Help</DropdownMenuLabel>
-
-                {!isSelfHosted && (
-                    <NextLink href="/helpdesk">
-                        <DropdownMenuItem leftIcon={<Headset />}>
-                            Helpdesk
-                            {!gates.helpdesk && <LockedTag />}
-                        </DropdownMenuItem>
-                    </NextLink>
-                )}
 
                 <NextLink target="_blank" href={cfg.supportDocsUrl || ""}>
                     <DropdownMenuItem leftIcon={<FileTextIcon />}>

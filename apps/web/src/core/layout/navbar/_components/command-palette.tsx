@@ -31,7 +31,6 @@ import {
     GitBranchIcon,
     GitPullRequestIcon,
     GlobeIcon,
-    HeadsetIcon,
     KeyRoundIcon,
     LockIcon,
     MessageSquareTextIcon,
@@ -175,13 +174,6 @@ const PAGES: Array<{
         href: "/organization/notifications",
         icon: BellIcon,
         keywords: "email alerts",
-    },
-    {
-        label: "Helpdesk",
-        href: "/helpdesk",
-        icon: HeadsetIcon,
-        keywords: "support help",
-        gate: "helpdesk",
     },
 ];
 

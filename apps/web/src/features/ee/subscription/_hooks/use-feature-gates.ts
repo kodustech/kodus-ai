@@ -1,19 +1,17 @@
 "use client";
 
 import { useSubscriptionStatus } from "src/core/providers/byok.provider";
-import { isSelfHosted } from "src/core/utils/self-hosted";
 import { isCockpitTierAllowed } from "src/features/ee/cockpit/_helpers/tier-policy";
 
 import { useSubscriptionContext } from "../_providers/subscription-context";
 
-export type GatedFeatureKey = "cockpit" | "sso" | "activityLogs" | "helpdesk";
+export type GatedFeatureKey = "cockpit" | "sso" | "activityLogs";
 
 /** The plan that unlocks each gated feature, for tags next to a padlock. */
 export const GATE_PLAN_LABEL: Record<GatedFeatureKey, string> = {
     cockpit: "Teams",
     sso: "Enterprise",
     activityLogs: "Enterprise",
-    helpdesk: "Enterprise",
 };
 
 /**
@@ -29,7 +27,5 @@ export const useFeatureGates = (): Record<GatedFeatureKey, boolean> => {
         cockpit: isCockpitTierAllowed(license),
         sso: isEnterprise || isTrial,
         activityLogs: isEnterprise || isTrial,
-        // Enterprise cloud only: the helpdesk is a hosted channel.
-        helpdesk: !isSelfHosted && isEnterprise,
     };
 };
