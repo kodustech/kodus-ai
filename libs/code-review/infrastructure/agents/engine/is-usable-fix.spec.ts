@@ -196,17 +196,24 @@ describe('checkFix', () => {
             },
         );
 
-        // Kody's own review caught this: gating the tight-pair exemption on
-        // the VALUE alone rejected real config whose value happens to be an
-        // English stop word — "enabled: on", "action: add" are genuine
-        // key:value fixes, not label-prefixed prose. Requiring the KEY to
-        // ALSO read as a scaffolding label (not just the value reading as a
-        // stop word) is what distinguishes them from "Note: this"/"Fix: it".
+        // Round 5 tried gating on the KEY instead (reject only when the key
+        // is ALSO a known label word), to keep "enabled: on"/"action: add"
+        // as code. That opened a bigger hole than it closed: any label a
+        // model emits outside the ~15-word vocabulary ("Warning:",
+        // "Example:", "Consider:") bypassed the value check entirely and
+        // shipped as code. There is no regex shape that tells "enabled"
+        // apart from "warning" — both are just a lowercase word — so the
+        // gate is back to value-only. "enabled: on"/"action: add" are a
+        // known, accepted gap: narrower than the leak they caused, and the
+        // same direction of error (a dropped real fix) this file is
+        // deliberately biased toward over the alternative (a published
+        // fake one).
         it.each([
-            ['const c = { enabled: false };', 'enabled: on'],
-            ['const c = { action: "" };', 'action: add'],
-        ])('does NOT flag a tight key:value pair whose VALUE is a stop word but key is not a label (%j -> %j)', (existingCode, improvedCode) => {
-            expect(checkFix(existingCode, improvedCode)).toBeNull();
+            'Warning: it',
+            'Example: this',
+            'Consider: add',
+        ])('flags a label-prefixed tight pair using a label OUTSIDE the known vocabulary (%j) as prose', (improvedCode) => {
+            expect(checkFix('const x = 1;', improvedCode)).toBe('prose-only');
         });
     });
 
