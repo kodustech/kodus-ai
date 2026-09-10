@@ -1,4 +1,5 @@
 import { http } from "../lib/http.js";
+import { logger } from "../lib/log.js";
 import { auth, saveKodusByok,
     billingBase,
 } from "../lib/kodus-credits.js";
@@ -41,6 +42,7 @@ export const kodusCreditsGate: Scenario = {
     },
     timeoutSec: 180,
     async run(ctx: RunContext) {
+        const log = logger("kodus-credits-gate");
         const target = ctx.target as TargetContext;
         const { email, session } = await provisionFreshTrialOrg(
             ctx,
@@ -60,6 +62,34 @@ export const kodusCreditsGate: Scenario = {
             license.creditBalanceUsd === 0,
             `A fresh org starts at 0 credits, got ${license.creditBalanceUsd}`,
         );
+
+        // Precondition: the provider is a private alpha (cloud + the
+        // `kodus-provider` flag / the deployment allow-list). On an
+        // environment where it is not enabled, the connect path is REFUSED by
+        // design — report that as skipped-for-setup instead of a failure, and
+        // let the same cell assert the whole contract wherever it IS on.
+        const providers = await http<{
+            data?: { providers?: Array<{ id?: string }> };
+        }>(`${target.apiBaseUrl}/organization-parameters/byok/providers`, {
+            method: "GET",
+            headers: auth(session),
+            timeoutMs: 25_000,
+        });
+        ctx.assert(
+            providers.status === 200,
+            `byok/providers must answer 200: HTTP ${providers.status} ${providers.raw.slice(0, 200)}`,
+        );
+        const kodusOffered = (providers.body?.data?.providers ?? []).some(
+            (p) => p.id === "kodus",
+        );
+        if (!kodusOffered) {
+            ctx.skip(
+                "the Kodus provider is not enabled on this environment " +
+                    "(private alpha: needs API_KODUS_PROVIDER_ALPHA_ORGS or the " +
+                    "`kodus-provider` PostHog flag + an alpha release track). " +
+                    "The provider being HIDDEN is the correct behavior here.",
+            );
+        }
 
         // 2. Keyless kodus credential persists (cloud-only path).
         await saveKodusByok(ctx, session);
@@ -82,37 +112,9 @@ export const kodusCreditsGate: Scenario = {
             `A keyless kodus credential must be reported resolvable (it needs no material): ${JSON.stringify(kodusModel)}`,
         );
 
-        // 3. Balance + ledger through the web proxy; debit is denied there.
         const qs = `?organizationId=${encodeURIComponent(session.organizationId)}&teamId=${encodeURIComponent(session.teamId)}`;
-        const balance = await http<Balance>(
-            `${billingBase(ctx)}/credits/balance${qs}`,
-            { method: "GET", headers: auth(session), timeoutMs: 30_000 },
-        );
-        ctx.assert(
-            balance.status === 200 && balance.body?.balanceUsd === 0,
-            `credits/balance must answer 200 with balanceUsd=0: HTTP ${balance.status} ${balance.raw.slice(0, 250)}`,
-        );
-        ctx.assert(
-            Array.isArray(balance.body?.packsUsd) &&
-                balance.body!.packsUsd.length > 0 &&
-                typeof balance.body?.markupPct === "number",
-            `credits/balance must carry packs + markup: ${JSON.stringify(balance.body)}`,
-        );
 
-        const ledger = await http<{ entries?: unknown[] }>(
-            `${billingBase(ctx)}/credits/ledger${qs}`,
-            { method: "GET", headers: auth(session), timeoutMs: 30_000 },
-        );
-        ctx.assert(
-            ledger.status === 200 && Array.isArray(ledger.body?.entries),
-            `credits/ledger must answer 200 with entries[]: HTTP ${ledger.status} ${ledger.raw.slice(0, 250)}`,
-        );
-        ctx.assert(
-            ledger.body!.entries!.length === 0,
-            `A fresh org has an empty ledger, got ${ledger.body!.entries!.length} entries`,
-        );
-
-        // The browser proxy must not expose ANY /credits/* route: they all
+        // 3. The browser proxy must not expose ANY /credits/* route: they all
         // take a client-chosen organizationId and billing has no caller auth.
         for (const [path, init] of [
             [
@@ -149,7 +151,54 @@ export const kodusCreditsGate: Scenario = {
             );
         }
 
-        // 4. A credit-pack checkout resolves to a Stripe session URL.
+        // 4. Billing's own API — balance shape, empty ledger, a real Stripe
+        // quote. The browser can no longer reach /credits/* (step 3), so this
+        // needs DIRECT billing access. Where the harness has it
+        // (BILLING_ADMIN_BASE_URL, e.g. a dev VM), assert it; where it does
+        // not, everything above still ran and this part is reported as
+        // skipped rather than faked through a route that must 404.
+        const billingDirect = process.env.BILLING_ADMIN_BASE_URL?.trim();
+        if (!billingDirect) {
+            log.warn(
+                "BILLING_ADMIN_BASE_URL unset — skipping the direct billing assertions " +
+                    "(balance shape, empty ledger, Stripe quote). The product-surface " +
+                    "contract above was fully asserted.",
+            );
+            return {
+                email,
+                organizationId: session.organizationId,
+                billingAsserted: false,
+            };
+        }
+
+        const balance = await http<Balance>(
+            `${billingBase(ctx)}/credits/balance${qs}`,
+            { method: "GET", headers: auth(session), timeoutMs: 30_000 },
+        );
+        ctx.assert(
+            balance.status === 200 && balance.body?.balanceUsd === 0,
+            `credits/balance must answer 200 with balanceUsd=0: HTTP ${balance.status} ${balance.raw.slice(0, 250)}`,
+        );
+        ctx.assert(
+            Array.isArray(balance.body?.packsUsd) &&
+                balance.body!.packsUsd.length > 0 &&
+                typeof balance.body?.markupPct === "number",
+            `credits/balance must carry packs + markup: ${JSON.stringify(balance.body)}`,
+        );
+
+        const ledger = await http<{ entries?: unknown[] }>(
+            `${billingBase(ctx)}/credits/ledger${qs}`,
+            { method: "GET", headers: auth(session), timeoutMs: 30_000 },
+        );
+        ctx.assert(
+            ledger.status === 200 && Array.isArray(ledger.body?.entries),
+            `credits/ledger must answer 200 with entries[]: HTTP ${ledger.status} ${ledger.raw.slice(0, 250)}`,
+        );
+        ctx.assert(
+            ledger.body!.entries!.length === 0,
+            `A fresh org has an empty ledger, got ${ledger.body!.entries!.length} entries`,
+        );
+
         const pack = balance.body!.packsUsd[0];
         const checkout = await http<{
             url?: string;
@@ -186,6 +235,7 @@ export const kodusCreditsGate: Scenario = {
         );
 
         return {
+            billingAsserted: true,
             email,
             organizationId: session.organizationId,
             teamId: session.teamId,
