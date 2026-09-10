@@ -12,7 +12,7 @@
  * normalizeUsage are declared stubs (Phase 3 owns them).
  */
 import type { LanguageModel } from 'ai';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { z } from 'zod';
@@ -68,9 +68,21 @@ function isOpenCodeGoBaseUrl(baseURL?: string): boolean {
 }
 
 /**
- * Stable per BYOK model slot (falls back to the model+baseURL pair when the
- * slot carries no `byokModelId`, e.g. a managed/env default, so even that case
- * still sends a valid header instead of failing to build the model at all).
+ * Per-process fallback salt — only mixed into the seed when a slot carries no
+ * `byokModelId` (env/managed default, i.e. self-hosted mode with no BYOK v2
+ * config). Without it every such slot would hash `model:baseURL` alone, and
+ * since every OpenCode Go customer shares the SAME baseURL and picks from the
+ * SAME small model catalog, two different orgs on that fallback would collide
+ * on an IDENTICAL session id. `byokModelId` itself is a client-generated
+ * `crypto.randomUUID()` (apps/web `byok-write.ts`), so the primary, expected
+ * path never touches this salt at all.
+ */
+const OPENCODE_FALLBACK_SALT = randomUUID();
+
+/**
+ * Stable per BYOK model slot (falls back to model+baseURL+the process salt
+ * above when the slot carries no `byokModelId`, so even that case still sends
+ * a valid, non-colliding header instead of failing to build the model at all).
  *
  * HASHED rather than sent raw: `byokModelId` is our own internal config-entry
  * id — OpenCode only needs an opaque value that stays constant call-to-call,
@@ -78,7 +90,9 @@ function isOpenCodeGoBaseUrl(baseURL?: string): boolean {
  * handle onto our internal identifiers for however long they choose to keep it.
  */
 function openCodeSessionId(cfg: ProviderBuildConfig): string {
-    const seed = cfg.byokModelId || `${cfg.model}:${cfg.baseURL ?? ''}`;
+    const seed =
+        cfg.byokModelId ||
+        `${OPENCODE_FALLBACK_SALT}:${cfg.model}:${cfg.baseURL ?? ''}`;
     return createHash('sha256').update(seed).digest('hex').slice(0, 32);
 }
 

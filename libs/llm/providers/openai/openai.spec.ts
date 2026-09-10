@@ -9,6 +9,7 @@
  * RED-first: written against the openai.module.ts:114-119 zero stub — the reasoning
  * assertions fail until normalize/normalizeUsage extract real values.
  */
+import { createHash } from 'crypto';
 import { openaiModule } from './index';
 import { runConformance, type ProviderFixture } from '../kernel/conformance';
 import reasoningFixture from './__fixtures__/reasoning.json';
@@ -224,6 +225,30 @@ describe('openaiModule x-opencode-session header (issue #1880)', () => {
         expect(withoutModelId.config.headers()['x-opencode-session']).not.toBe(
             withModelId.config.headers()['x-opencode-session'],
         );
+    });
+
+    it('the fallback seed is NOT the bare model+baseURL hash — a per-process salt is mixed in so two orgs sharing model+baseURL never collide across processes', () => {
+        const fallbackCfg = {
+            provider: 'openai_compatible',
+            model: 'deepseek-v4-flash',
+            apiKey: 'test-key',
+            baseURL: 'https://opencode.ai/zen/go/v1',
+        } as any;
+
+        const actual = (openaiModule.build(fallbackCfg) as any).config.headers()[
+            'x-opencode-session'
+        ];
+        const unsalted = createHash('sha256')
+            .update('deepseek-v4-flash:https://opencode.ai/zen/go/v1')
+            .digest('hex')
+            .slice(0, 32);
+
+        expect(actual).not.toBe(unsalted);
+        // Still stable across repeated builds within the same process.
+        const again = (openaiModule.build(fallbackCfg) as any).config.headers()[
+            'x-opencode-session'
+        ];
+        expect(actual).toBe(again);
     });
 
     it('a non-OpenCode openai_compatible upstream never gets the header', () => {
