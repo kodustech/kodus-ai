@@ -28,6 +28,7 @@ import { isCockpitTierAllowed } from "src/features/ee/cockpit/_helpers/tier-poli
 import { SubscriptionBadge } from "src/features/ee/subscription/_components/subscription-badge";
 import { useSubscriptionContext } from "src/features/ee/subscription/_providers/subscription-context";
 
+import { CommandPalette } from "./_components/command-palette";
 import { GithubStars } from "./_components/github-stars";
 import { NotificationBell } from "./_components/notification-bell";
 import { VERSION_QUERY } from "./_components/version-info";
@@ -200,6 +201,8 @@ export const NavMenu = () => {
             </div>
 
             <div className="flex items-center gap-4">
+                <CommandPalette />
+
                 <div className="hidden md:flex">
                     <ErrorBoundary fallback={null}>
                         <GithubStars />

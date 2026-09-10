@@ -267,6 +267,10 @@ const KodyRulesPageContent = () => {
         setFilterQuery(parsed.query);
         setListFilters(parsed.listFilters);
         setOnlyIdeSynced(parsed.onlyOrphans);
+        // Deep link from the command palette (and shareable URLs): open the
+        // rule straight in the detail sheet.
+        const deepLinkedRule = params.get("rule");
+        if (deepLinkedRule) setDetailRuleId(deepLinkedRule);
         setHasReadUrl(true);
         // Run only on mount; subsequent URL syncs flow the OTHER way
         // (state → URL) via the effect below.
