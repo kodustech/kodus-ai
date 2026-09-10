@@ -476,4 +476,120 @@ describe('GitlabService', () => {
             expect(result?.isDraft).toBe(false);
         });
     });
+
+    describe('updateSingleIssueComment (#1721)', () => {
+        beforeEach(() => {
+            jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({
+                accessToken: 'token',
+                authMode: AuthMode.OAUTH,
+            });
+        });
+
+        it('edits the plain MR note via MergeRequestNotes (non-blocking), not a discussion', async () => {
+            const notesEdit = jest.fn().mockResolvedValue({ id: 9 });
+            const discussionsEditNote = jest.fn();
+            mockedGitlab.mockReturnValue({
+                MergeRequestNotes: { edit: notesEdit },
+                MergeRequestDiscussions: { editNote: discussionsEditNote },
+            });
+
+            await service.updateSingleIssueComment({
+                organizationAndTeamData,
+                repository: { id: '1' },
+                prNumber: 2,
+                commentId: 7,
+                noteId: 9,
+                body: 'end-of-review summary',
+            });
+
+            expect(notesEdit).toHaveBeenCalledWith('1', 2, 9, {
+                body: 'end-of-review summary',
+            });
+            expect(discussionsEditNote).not.toHaveBeenCalled();
+        });
+
+        it('falls back to the discussion edit only on a 404 from MergeRequestNotes.edit', async () => {
+            const notesEdit = jest
+                .fn()
+                .mockRejectedValue({ response: { status: 404 } });
+            const discussionsEditNote = jest.fn().mockResolvedValue({ id: 9 });
+            mockedGitlab.mockReturnValue({
+                MergeRequestNotes: { edit: notesEdit },
+                MergeRequestDiscussions: { editNote: discussionsEditNote },
+            });
+
+            await service.updateSingleIssueComment({
+                organizationAndTeamData,
+                repository: { id: '1' },
+                prNumber: 2,
+                commentId: 7,
+                noteId: 9,
+                body: 'end-of-review summary',
+            });
+
+            expect(discussionsEditNote).toHaveBeenCalledWith('1', 2, '7', 9, {
+                body: 'end-of-review summary',
+            });
+        });
+
+        it('rethrows non-404 failures instead of triggering the fallback (rate-limit/5xx)', async () => {
+            const notesEdit = jest
+                .fn()
+                .mockRejectedValue({ response: { status: 429 } });
+            const discussionsEditNote = jest.fn();
+            mockedGitlab.mockReturnValue({
+                MergeRequestNotes: { edit: notesEdit },
+                MergeRequestDiscussions: { editNote: discussionsEditNote },
+            });
+
+            await expect(
+                service.updateSingleIssueComment({
+                    organizationAndTeamData,
+                    repository: { id: '1' },
+                    prNumber: 2,
+                    commentId: 7,
+                    noteId: 9,
+                    body: 'end-of-review summary',
+                }),
+            ).rejects.toMatchObject({ response: { status: 429 } });
+
+            expect(discussionsEditNote).not.toHaveBeenCalled();
+        });
+
+        it('recreates a plain MR note when the status note was deleted (404 on both paths)', async () => {
+            const notesEdit = jest
+                .fn()
+                .mockRejectedValue({ response: { status: 404 } });
+            const discussionsEditNote = jest
+                .fn()
+                .mockRejectedValue({ response: { status: 404 } });
+            const notesCreate = jest.fn().mockResolvedValue({ id: 22 });
+            mockedGitlab.mockReturnValue({
+                MergeRequestNotes: {
+                    edit: notesEdit,
+                    create: notesCreate,
+                },
+                MergeRequestDiscussions: { editNote: discussionsEditNote },
+            });
+
+            const result = await service.updateSingleIssueComment({
+                organizationAndTeamData,
+                repository: { id: '1' },
+                prNumber: 2,
+                commentId: 7,
+                noteId: 9,
+                body: 'end-of-review summary',
+            });
+
+            expect(discussionsEditNote).toHaveBeenCalledWith('1', 2, '7', 9, {
+                body: 'end-of-review summary',
+            });
+            expect(notesCreate).toHaveBeenCalledWith(
+                '1',
+                2,
+                'end-of-review summary',
+            );
+            expect(result).toEqual({ id: 22 });
+        });
+    });
 });

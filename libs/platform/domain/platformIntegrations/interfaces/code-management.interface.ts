@@ -166,6 +166,13 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
     createIssueComment(params: any): Promise<any | null>;
     createSingleIssueComment(params: any): Promise<any | null>;
     updateIssueComment(params: any): Promise<any | null>;
+    /**
+     * Update a plain (non-resolvable) merge/PR note in place. GitLab-only
+     * today: the status-message flow (start/end-of-review, "looks good"
+     * summaries) must never create resolvable discussions, so updates go to
+     * MergeRequestNotes. Non-GitLab adapters delegate to updateIssueComment.
+     */
+    updateSingleIssueComment?(params: any): Promise<any | null>;
     minimizeComment(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         commentId: string;

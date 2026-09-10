@@ -2702,6 +2702,99 @@ export class GitlabService implements Omit<
         }
     }
 
+    /**
+     * Updates a plain MR note (MergeRequestNotes) — the non-blocking
+     * counterpart of applyIssueComment for status messages (start/end of
+     * review, PR-level summaries). Line-level findings keep using
+     * discussions via updateIssueComment.
+     *
+     * When the note was originally created as a discussion (pre-#1721
+     * runs), MergeRequestNotes.edit fails with a 404 — fall back to
+     * MergeRequestDiscussions.editNote so an MR opened before the fix keeps
+     * updating its sticky summary instead of breaking. Non-404 failures are
+     * rethrown untouched. If the note was deleted entirely, it is recreated
+     * as a plain MR note so every-push reviews recover instead of failing.
+     */
+    async updateSingleIssueComment(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string };
+        prNumber: number;
+        body: string;
+        commentId?: number;
+        noteId?: number;
+    }): Promise<any | null> {
+        try {
+            const {
+                organizationAndTeamData,
+                repository,
+                prNumber,
+                body,
+                commentId,
+                noteId,
+            } = params;
+
+            const gitlabAuthDetail = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+
+            const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
+
+            try {
+                return await gitlabAPI.MergeRequestNotes.edit(
+                    repository.id,
+                    prNumber,
+                    noteId,
+                    { body: body },
+                );
+            } catch (error) {
+                // A non-404 means a transient/rate-limit/5xx failure — throw
+                // the original so it isn't masked by the fallback. Only a 404
+                // means the note is genuinely missing.
+                if (!this.isGitlabNotFoundError(error)) {
+                    throw error;
+                }
+
+                // 404: the note was created as a discussion pre-#1721, so try
+                // editing that discussion-shaped note.
+                if (commentId) {
+                    try {
+                        return await gitlabAPI.MergeRequestDiscussions.editNote(
+                            repository.id,
+                            prNumber,
+                            String(commentId),
+                            noteId,
+                            { body: body },
+                        );
+                    } catch (discussionError) {
+                        if (!this.isGitlabNotFoundError(discussionError)) {
+                            throw discussionError;
+                        }
+                    }
+                }
+
+                // The note was deleted (or never existed as a discussion):
+                // recreate it as a plain MR note so the review recovers
+                // instead of hard-failing on every-push runs.
+                return await gitlabAPI.MergeRequestNotes.create(
+                    repository.id,
+                    prNumber,
+                    body,
+                );
+            }
+        } catch (error) {
+            this.logger.error({
+                message: 'Error updating the note:',
+                context: GitlabService.name,
+                serviceName: 'GitlabService updateSingleIssueComment',
+                error: error,
+                metadata: {
+                    ...params,
+                },
+            });
+            throw error;
+        }
+    }
+
     async getCommitsForPullRequestForCodeReview(
         params: any,
     ): Promise<any[] | null> {
