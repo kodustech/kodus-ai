@@ -25,6 +25,20 @@ import { isKodusProviderAvailable } from './kodus-provider-availability';
  * saved keeps routing (the runtime never asks) — flipping the flag off stops
  * new connections, not reviews mid-flight.
  */
+/** Env allow-list for the alpha: `*` or comma-separated organization ids. */
+export const KODUS_PROVIDER_ALPHA_ORGS_ENV = 'API_KODUS_PROVIDER_ALPHA_ORGS';
+
+export function parseAlphaOrgs(raw: string | undefined): '*' | Set<string> {
+    const value = (raw ?? '').trim();
+    if (value === '*') return '*';
+    return new Set(
+        value
+            .split(',')
+            .map((v) => v.trim())
+            .filter((v) => v.length > 0),
+    );
+}
+
 /** DI token: consumers inject the token, the class stays the type. */
 export const KODUS_PROVIDER_GATE_TOKEN = Symbol.for('KodusProviderGate');
 
@@ -46,6 +60,11 @@ export class KodusProviderGate {
     async isEnabledFor(organizationId: string | undefined): Promise<boolean> {
         if (!isKodusProviderAvailable()) return false;
         if (!organizationId) return false;
+        // Ops/e2e allow-list ahead of PostHog: `*` opens the alpha to every
+        // org on this deployment (dev VMs, e2e), a list of org ids pins it
+        // (a fallback when PostHog is unreachable). Unset in production.
+        const allow = parseAlphaOrgs(process.env[KODUS_PROVIDER_ALPHA_ORGS_ENV]);
+        if (allow === '*' || allow.has(organizationId)) return true;
         try {
             const releaseTrack = this.organizationService
                 ? await this.organizationService.getReleaseTrack(organizationId)

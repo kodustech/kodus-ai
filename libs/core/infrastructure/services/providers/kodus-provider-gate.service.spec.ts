@@ -1,5 +1,9 @@
 import { environment } from '@libs/ee/configs/environment';
-import { KodusProviderGate } from './kodus-provider-gate.service';
+import {
+    KODUS_PROVIDER_ALPHA_ORGS_ENV,
+    KodusProviderGate,
+    parseAlphaOrgs,
+} from './kodus-provider-gate.service';
 
 /**
  * The private-alpha gate for the Kodus provider: cloud-only, then the
@@ -8,12 +12,17 @@ import { KodusProviderGate } from './kodus-provider-gate.service';
  */
 describe('KodusProviderGate', () => {
     let savedCloud: boolean;
+    let savedAllow: string | undefined;
     beforeEach(() => {
         savedCloud = environment.API_CLOUD_MODE;
         (environment as { API_CLOUD_MODE: boolean }).API_CLOUD_MODE = true;
+        savedAllow = process.env[KODUS_PROVIDER_ALPHA_ORGS_ENV];
+        delete process.env[KODUS_PROVIDER_ALPHA_ORGS_ENV];
     });
     afterEach(() => {
         (environment as { API_CLOUD_MODE: boolean }).API_CLOUD_MODE = savedCloud;
+        if (savedAllow === undefined) delete process.env[KODUS_PROVIDER_ALPHA_ORGS_ENV];
+        else process.env[KODUS_PROVIDER_ALPHA_ORGS_ENV] = savedAllow;
     });
 
     const build = (over: {
@@ -81,5 +90,31 @@ describe('KodusProviderGate', () => {
             'kodus-provider',
             expect.objectContaining({ releaseTrack: undefined }),
         );
+    });
+});
+
+describe('KodusProviderGate — env allow-list ahead of PostHog', () => {
+    it('parses `*` and comma-separated ids', () => {
+        expect(parseAlphaOrgs('*')).toBe('*');
+        expect(parseAlphaOrgs(' org-a, org-b ,')).toEqual(new Set(['org-a', 'org-b']));
+        expect(parseAlphaOrgs(undefined)).toEqual(new Set());
+    });
+
+    it('lets a listed org through without asking the flag; others still ask', async () => {
+        (environment as { API_CLOUD_MODE: boolean }).API_CLOUD_MODE = true;
+        process.env[KODUS_PROVIDER_ALPHA_ORGS_ENV] = 'org-a';
+        const isEnabled = jest.fn(async () => false);
+        const gate = new KodusProviderGate({ isEnabled } as any, undefined);
+        await expect(gate.isEnabledFor('org-a')).resolves.toBe(true);
+        expect(isEnabled).not.toHaveBeenCalled();
+        await expect(gate.isEnabledFor('org-b')).resolves.toBe(false);
+        expect(isEnabled).toHaveBeenCalledTimes(1);
+    });
+
+    it('`*` never overrides the cloud-only rule', async () => {
+        process.env[KODUS_PROVIDER_ALPHA_ORGS_ENV] = '*';
+        (environment as { API_CLOUD_MODE: boolean }).API_CLOUD_MODE = false;
+        const gate = new KodusProviderGate({ isEnabled: jest.fn() } as any, undefined);
+        await expect(gate.isEnabledFor('org-a')).resolves.toBe(false);
     });
 });

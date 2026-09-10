@@ -195,16 +195,18 @@ try {
     // wallet (an anonymous context is bounced to /sign-in and the success
     // query is lost).
     // Two-step form: email → Continue → password → submit.
-    await page.goto(`${WEB}/sign-in`, { waitUntil: "load", timeout: 240_000 });
+    await page.goto(`${WEB}/sign-in`, { waitUntil: "networkidle", timeout: 240_000 });
+    await page.waitForTimeout(1_200);
     await page.locator('input[type="email"], input[name="email"]').first().fill(KODUS_E2E_EMAIL);
     const pwd = page.locator('input[type="password"], input[name="password"]').first();
-    // The click can land before hydration and be swallowed: retry until the
-    // password step actually appears.
-    for (let attempt = 0; attempt < 6; attempt++) {
+    // The click can land before hydration and be swallowed (a dev server
+    // compiling the page makes this worse): retry until the password step
+    // actually appears.
+    for (let attempt = 0; attempt < 12; attempt++) {
         await page.getByRole("button", { name: /continue/i }).first().click({ timeout: 30_000 }).catch(() => {});
-        const shown = await pwd.waitFor({ timeout: 10_000 }).then(() => true).catch(() => false);
+        const shown = await pwd.waitFor({ timeout: 8_000 }).then(() => true).catch(() => false);
         if (shown) break;
-        await page.waitForTimeout(2_000);
+        await page.waitForTimeout(2_500);
     }
     await pwd.waitFor({ timeout: 30_000 });
     await pwd.fill(KODUS_E2E_PASSWORD);
