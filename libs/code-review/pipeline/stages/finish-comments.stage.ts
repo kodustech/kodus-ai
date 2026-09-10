@@ -310,23 +310,37 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
             context.pullRequestMessagesConfig?.endReviewMessage;
 
         if (!endReviewMessage) {
-            await this.commentManagerService.updateOverallComment(
-                organizationAndTeamData,
-                pullRequest.number,
-                repository,
-                initialCommentData.commentId,
-                initialCommentData.noteId,
-                platformType,
-                lineComments,
-                codeReviewConfig,
-                initialCommentData.threadId,
-                undefined,
-                reviewFailed,
-                reviewErrorMessage,
-                reviewHasPartialErrors,
-                reviewErrorCustomMessage,
-                context.linkedRepositoriesMetadata,
-            );
+            // #1877: updateOverallComment recreates an end-of-review note that
+            // was deleted on the provider and returns its NEW id — persist it
+            // into context so the next push edits it in place instead of 404ing
+            // and recreating yet another duplicate note.
+            const updatedComment =
+                await this.commentManagerService.updateOverallComment(
+                    organizationAndTeamData,
+                    pullRequest.number,
+                    repository,
+                    initialCommentData.commentId,
+                    initialCommentData.noteId,
+                    platformType,
+                    lineComments,
+                    codeReviewConfig,
+                    initialCommentData.threadId,
+                    undefined,
+                    reviewFailed,
+                    reviewErrorMessage,
+                    reviewHasPartialErrors,
+                    reviewErrorCustomMessage,
+                    context.linkedRepositoriesMetadata,
+                );
+            if (updatedComment) {
+                context = this.updateContext(context, (draft) => {
+                    draft.initialCommentData = {
+                        commentId: updatedComment.commentId,
+                        noteId: updatedComment.noteId,
+                        threadId: updatedComment.threadId,
+                    };
+                });
+            }
             return context;
         }
 
@@ -380,23 +394,36 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 ? `${finalCommentBody}${linkedLine}`
                 : finalCommentBody;
 
-            await this.commentManagerService.updateOverallComment(
-                organizationAndTeamData,
-                pullRequest.number,
-                repository,
-                initialCommentData.commentId,
-                initialCommentData.noteId,
-                platformType,
-                lineComments,
-                codeReviewConfig,
-                initialCommentData.threadId,
-                bodyWithLinked,
-                reviewFailed,
-                reviewErrorMessage,
-                reviewHasPartialErrors,
-                reviewErrorCustomMessage,
-                context.linkedRepositoriesMetadata,
-            );
+            // #1877: persist a recreated end-of-review note id (see note above the
+            // first updateOverallComment call) so the next push keeps editing
+            // that note in place instead of recreating duplicates.
+            const updatedComment =
+                await this.commentManagerService.updateOverallComment(
+                    organizationAndTeamData,
+                    pullRequest.number,
+                    repository,
+                    initialCommentData.commentId,
+                    initialCommentData.noteId,
+                    platformType,
+                    lineComments,
+                    codeReviewConfig,
+                    initialCommentData.threadId,
+                    bodyWithLinked,
+                    reviewFailed,
+                    reviewErrorMessage,
+                    reviewHasPartialErrors,
+                    reviewErrorCustomMessage,
+                    context.linkedRepositoriesMetadata,
+                );
+            if (updatedComment) {
+                context = this.updateContext(context, (draft) => {
+                    draft.initialCommentData = {
+                        commentId: updatedComment.commentId,
+                        noteId: updatedComment.noteId,
+                        threadId: updatedComment.threadId,
+                    };
+                });
+            }
             return context;
         }
 

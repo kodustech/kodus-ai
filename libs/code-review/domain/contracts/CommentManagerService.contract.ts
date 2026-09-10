@@ -75,7 +75,7 @@ export interface ICommentManagerService {
         reviewHasPartialErrors?: boolean,
         reviewErrorCustomMessage?: string,
         linkedRepositoriesMetadata?: import('@libs/ee/linked-repositories').LinkedRepositoriesReviewMetadata,
-    ): Promise<void>;
+    ): Promise<{ commentId: number; noteId: number; threadId?: number }>;
 
     updateSummarizationInPR(
         organizationAndTeamData: OrganizationAndTeamData,

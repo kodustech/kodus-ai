@@ -757,31 +757,48 @@ You must always respond in ${languageResultPrompt}.`;
                 platformType === PlatformType.GITLAB &&
                 existingCommentData?.noteId
             ) {
-                const existingCommentId =
+                let existingCommentId =
                     existingCommentData.commentId ??
                     existingCommentData.noteId;
+                let noteId = existingCommentData.noteId;
 
-                await this.codeManagementService.updateSingleIssueComment(
-                    {
-                        organizationAndTeamData,
-                        prNumber,
-                        repository: {
-                            name: repository.name,
-                            id: repository.id,
+                const updated =
+                    await this.codeManagementService.updateSingleIssueComment(
+                        {
+                            organizationAndTeamData,
+                            prNumber,
+                            repository: {
+                                name: repository.name,
+                                id: repository.id,
+                            },
+                            body: commentBody,
+                            commentId: existingCommentId,
+                            noteId: existingCommentData.noteId,
+                            threadId: existingCommentData.threadId,
                         },
-                        body: commentBody,
-                        commentId: existingCommentId,
-                        noteId: existingCommentData.noteId,
-                        threadId: existingCommentData.threadId,
-                    },
-                    undefined,
-                );
+                        undefined,
+                    );
+
+                // #1877: when the stored note was deleted on the provider,
+                // updateSingleIssueComment recreates it as a plain MR note and
+                // returns a NEW id. Adopt it — otherwise the stale id below is
+                // persisted to lastExecution and the next push 404s again,
+                // recreating yet another note and piling up duplicates per push.
+                if (updated?.id !== undefined && updated?.id !== null) {
+                    existingCommentId = Number(updated.id);
+                    noteId = Number(updated.id);
+                }
 
                 this.logger.log({
                     message: `Updated existing start-of-review note for PR#${prNumber}`,
                     context: CommentManagerService.name,
                     metadata: {
                         ...existingCommentData,
+                        recreatedNoteId:
+                            updated?.id !== undefined &&
+                            updated?.id !== null
+                                ? Number(updated.id)
+                                : undefined,
                         organizationAndTeamData,
                         prNumber,
                         repository: repository.name,
@@ -790,7 +807,7 @@ You must always respond in ${languageResultPrompt}.`;
 
                 return {
                     commentId: existingCommentId,
-                    noteId: existingCommentData.noteId,
+                    noteId,
                     threadId: existingCommentData.threadId,
                 };
             }
@@ -962,7 +979,7 @@ You must always respond in ${languageResultPrompt}.`;
         reviewHasPartialErrors?: boolean,
         reviewErrorCustomMessage?: string,
         linkedRepositoriesMetadata?: LinkedRepositoriesReviewMetadata,
-    ): Promise<void> {
+    ): Promise<{ commentId: number; noteId: number; threadId?: number }> {
         try {
             // When the review failed, we cannot honor a customer-configured
             // endReviewMessage template — those say "review completed", which
@@ -1018,11 +1035,22 @@ You must always respond in ${languageResultPrompt}.`;
             // #1721: on GitLab the start-of-review note is a plain MR note
             // (MergeRequestNotes), so the end-of-review summary must edit the
             // note — not a resolvable discussion that blocks merge.
+            let effectiveCommentId = commentId;
+            let effectiveNoteId = noteId;
             if (platformType === PlatformType.GITLAB) {
-                await this.codeManagementService.updateSingleIssueComment(
-                    updateParams,
-                    undefined,
-                );
+                // #1877: if the note was deleted, updateSingleIssueComment
+                // recreates it as a plain MR note and returns the NEW id.
+                // Propagate it so the caller can persist it — otherwise the
+                // next push references the deleted note and recreates again.
+                const updated =
+                    await this.codeManagementService.updateSingleIssueComment(
+                        updateParams,
+                        undefined,
+                    );
+                if (updated?.id !== undefined && updated?.id !== null) {
+                    effectiveCommentId = Number(updated.id);
+                    effectiveNoteId = Number(updated.id);
+                }
             } else {
                 await this.codeManagementService.updateIssueComment(
                     updateParams,
@@ -1033,8 +1061,18 @@ You must always respond in ${languageResultPrompt}.`;
             this.logger.log({
                 message: `Updated overall comment for PR#${prNumber}`,
                 context: CommentManagerService.name,
-                metadata: { commentId, noteId, threadId },
+                metadata: {
+                    commentId: effectiveCommentId,
+                    noteId: effectiveNoteId,
+                    threadId,
+                },
             });
+
+            return {
+                commentId: effectiveCommentId,
+                noteId: effectiveNoteId,
+                threadId,
+            };
         } catch (error) {
             this.logger.error({
                 message: `Failed to update overall comment for PR#${prNumber}`,

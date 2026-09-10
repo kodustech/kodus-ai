@@ -1741,6 +1741,66 @@ describe('CommentManagerService — GitLab status notes (#1721)', () => {
         expect(codeManagementService.updateIssueComment).not.toHaveBeenCalled();
     });
 
+    it('createInitialComment adopts the recreated note id when the stored GitLab note was deleted (#1877)', async () => {
+        codeManagementService.updateSingleIssueComment.mockResolvedValue({
+            id: 42,
+        });
+
+        const result = await service.createInitialComment(
+            stubOrg,
+            5,
+            stubRepository,
+            [{ filename: 'a.ts', patch: '+ code', status: 'modified' }] as any,
+            'en-US',
+            PlatformType.GITLAB,
+            undefined,
+            {
+                startReviewMessage: {
+                    status: 'EVERY_PUSH',
+                    content: 'Start again',
+                },
+            } as any,
+            { commentId: 7, noteId: 9 },
+        );
+
+        expect(
+            codeManagementService.updateSingleIssueComment,
+        ).toHaveBeenCalledTimes(1);
+        // The stored note was deleted on the provider → the fallback recreated
+        // a NEW note; the caller must persist that new id, not the deleted one,
+        // otherwise the next push 404s again and duplicates accumulate.
+        expect(result).toEqual({
+            commentId: 42,
+            noteId: 42,
+            threadId: undefined,
+        });
+    });
+
+    it('updateOverallComment propagates the recreated note id on GitLab (#1877)', async () => {
+        codeManagementService.updateSingleIssueComment.mockResolvedValue({
+            id: 42,
+        });
+
+        const result = await service.updateOverallComment(
+            stubOrg,
+            5,
+            stubRepository,
+            7,
+            9,
+            PlatformType.GITLAB,
+            [],
+            undefined,
+            undefined,
+            'Final summary body',
+            false,
+        );
+
+        expect(
+            codeManagementService.updateSingleIssueComment,
+        ).toHaveBeenCalledTimes(1);
+        expect(result).toEqual({ commentId: 42, noteId: 42, threadId: undefined });
+    });
+
     it('non-GitLab platforms keep updating the end-of-review comment via updateIssueComment', async () => {
         await service.updateOverallComment(
             stubOrg,

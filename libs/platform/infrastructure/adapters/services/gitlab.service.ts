@@ -2774,7 +2774,10 @@ export class GitlabService implements Omit<
 
                 // The note was deleted (or never existed as a discussion):
                 // recreate it as a plain MR note so the review recovers
-                // instead of hard-failing on every-push runs.
+                // instead of hard-failing on every-push runs. Callers MUST
+                // persist the returned note's id as the new commentId/noteId,
+                // otherwise the next push recreates again and duplicates
+                // accumulate per push.
                 return await gitlabAPI.MergeRequestNotes.create(
                     repository.id,
                     prNumber,
