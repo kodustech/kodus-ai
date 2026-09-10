@@ -280,6 +280,25 @@ const filterItems = (value: string, search: string) => {
     return score;
 };
 
+// Rank a list in memory and keep only the best `limit` entries, so a big org
+// (thousands of rules, hundreds of repositories) never mounts more than a
+// handful of items per group. `filterItems` is what cmdk uses for the static
+// entries; this applies the same rule before rendering.
+const topMatches = <T,>(
+    items: T[],
+    valueOf: (item: T) => string,
+    search: string,
+    limit: number,
+): T[] => {
+    if (!search.trim()) return items.slice(0, limit);
+    return items
+        .map((item) => ({ item, score: filterItems(valueOf(item), search) }))
+        .filter((entry) => entry.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit)
+        .map((entry) => entry.item);
+};
+
 export const CommandPalette = () => {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
@@ -334,6 +353,29 @@ export const CommandPalette = () => {
             ),
         [config],
     );
+
+    const matchedRules = useMemo(
+        () => topMatches(rules ?? [], (rule) => `rule ${rule.title}`, query, 8),
+        [rules, query],
+    );
+    const matchedRepositories = useMemo(() => {
+        const entries = repositories.flatMap((repo) => [
+            {
+                key: repo.id,
+                repo,
+                directory: undefined as
+                    (typeof repo.directories)[number] | undefined,
+                value: `repo ${repo.name}`,
+            },
+            ...(repo.directories ?? []).map((directory) => ({
+                key: directory.id,
+                repo,
+                directory,
+                value: `directory ${repo.name} ${directoryLabel(directory)}`,
+            })),
+        ]);
+        return topMatches(entries, (entry) => entry.value, query, 10);
+    }, [repositories, query]);
 
     const go = (href: string) => {
         setOpen(false);
@@ -434,58 +476,57 @@ export const CommandPalette = () => {
                                 ))}
                             </CommandGroup>
 
-                            {repositories.length > 0 && (
+                            {matchedRepositories.length > 0 && (
                                 <CommandGroup heading="Repositories">
-                                    {repositories.map((repo) => (
-                                        <div key={repo.id}>
-                                            <CommandItem
-                                                value={`repo ${repo.name}`}
-                                                onSelect={() =>
-                                                    go(
-                                                        settingsHref(
-                                                            repo.id,
-                                                            "general",
-                                                        ),
-                                                    )
-                                                }>
-                                                <FolderIcon />
-                                                <span className="truncate">
-                                                    {repo.name}
-                                                </span>
-                                                <span className="text-text-tertiary ml-auto text-xs">
-                                                    settings
-                                                </span>
-                                            </CommandItem>
-                                            {(repo.directories ?? []).map(
-                                                (directory) => (
-                                                    <CommandItem
-                                                        key={directory.id}
-                                                        value={`directory ${repo.name} ${directoryLabel(directory)}`}
-                                                        onSelect={() =>
-                                                            go(
-                                                                settingsHref(
-                                                                    repo.id,
-                                                                    "general",
-                                                                    directory.id,
-                                                                ),
-                                                            )
-                                                        }>
-                                                        <FolderTreeIcon />
-                                                        <span className="flex min-w-0 flex-1 items-baseline gap-2">
-                                                            <span className="shrink-0 truncate">
-                                                                {repo.name}
-                                                            </span>
-                                                            <span className="text-text-tertiary min-w-0 truncate font-mono text-xs">
-                                                                {directoryLabel(
-                                                                    directory,
-                                                                )}
-                                                            </span>
+                                    {matchedRepositories.map(
+                                        ({ key, repo, directory, value }) =>
+                                            directory ? (
+                                                <CommandItem
+                                                    key={key}
+                                                    value={value}
+                                                    onSelect={() =>
+                                                        go(
+                                                            settingsHref(
+                                                                repo.id,
+                                                                "general",
+                                                                directory.id,
+                                                            ),
+                                                        )
+                                                    }>
+                                                    <FolderTreeIcon />
+                                                    <span className="flex min-w-0 flex-1 items-baseline gap-2">
+                                                        <span className="shrink-0 truncate">
+                                                            {repo.name}
                                                         </span>
-                                                    </CommandItem>
-                                                ),
-                                            )}
-                                        </div>
-                                    ))}
+                                                        <span className="text-text-tertiary min-w-0 truncate font-mono text-xs">
+                                                            {directoryLabel(
+                                                                directory,
+                                                            )}
+                                                        </span>
+                                                    </span>
+                                                </CommandItem>
+                                            ) : (
+                                                <CommandItem
+                                                    key={key}
+                                                    value={value}
+                                                    onSelect={() =>
+                                                        go(
+                                                            settingsHref(
+                                                                repo.id,
+                                                                "general",
+                                                            ),
+                                                        )
+                                                    }>
+                                                    <FolderIcon />
+                                                    <span className="truncate">
+                                                        {repo.name}
+                                                    </span>
+                                                    <span className="text-text-tertiary ml-auto text-xs">
+                                                        settings
+                                                    </span>
+                                                </CommandItem>
+                                            ),
+                                    )}
                                 </CommandGroup>
                             )}
 
@@ -514,9 +555,9 @@ export const CommandPalette = () => {
                                 </CommandGroup>
                             )}
 
-                            {rules && rules.length > 0 && (
+                            {matchedRules.length > 0 && (
                                 <CommandGroup heading="Kody Rules">
-                                    {rules.map((rule) => (
+                                    {matchedRules.map((rule) => (
                                         <CommandItem
                                             key={rule.uuid ?? rule.title}
                                             value={`rule ${rule.title}`}
