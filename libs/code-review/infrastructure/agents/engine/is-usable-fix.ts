@@ -35,6 +35,17 @@
  * a method literally named `end`), so counting it the way `{`/`}` are
  * counted would misfire on real, unrelated code — the same class of harm
  * the rest of this file works hard to avoid elsewhere.
+ *
+ * Known scope boundary: a label glued onto an otherwise-identical fix
+ * (`"Fix: return x;"` for `existingCode` `"return x;"`) is NOT caught by the
+ * noop check — `normalizeForComparison` does not strip a leading `"Fix: "`,
+ * `"Note: "`, etc. before comparing. An earlier version of this file did
+ * strip such labels, via a fixed English word list; that list is exactly the
+ * prose-vocabulary approach this file's design note above rejects — it never
+ * matched a pt-BR (or any non-English) review config's own labels, and
+ * "which words count as a label" is not decidable any more deterministically
+ * than "which text reads as English" was. Left uncaught rather than
+ * resurrected as an ever-growing, still-incomplete word list.
  */
 
 export type BadFixReason = 'empty' | 'noop-fix' | 'truncated';
