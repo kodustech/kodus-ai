@@ -6,12 +6,20 @@ import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import { Input } from "@components/ui/input";
 import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@components/ui/select";
+import {
     Sheet,
     SheetContent,
     SheetDescription,
     SheetHeader,
     SheetTitle,
 } from "@components/ui/sheet";
+import { Switch } from "@components/ui/switch";
 import { toast } from "@components/ui/toaster/use-toast";
 import { useAsyncAction } from "@hooks/use-async-action";
 import { listKodusCreditCharges } from "@services/kodus-credits/fetch";
@@ -20,11 +28,21 @@ import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { formatUsd } from "@services/usage/format";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CoinsIcon, ReceiptTextIcon, SparklesIcon } from "lucide-react";
+import {
+    AlertTriangleIcon,
+    CoinsIcon,
+    CreditCardIcon,
+    ReceiptTextIcon,
+    RefreshCwIcon,
+    SparklesIcon,
+} from "lucide-react";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import {
     createCreditCheckoutAction,
+    createCreditPaymentMethodCheckoutAction,
     listCreditLedgerAction,
+    removeCreditPaymentMethodAction,
+    updateCreditAutoTopUpAction,
 } from "src/features/ee/subscription/_actions/credits";
 import type { CreditLedgerEntry } from "src/features/ee/subscription/_services/billing/types";
 
@@ -78,17 +96,21 @@ const describeEntry = (entry: CreditLedgerEntry): string => {
             typeof meta.chargeUsd === "number"
                 ? ` (paid ${usd(meta.chargeUsd)})`
                 : "";
-        return `Credit pack${charge}`;
+        return `${meta.auto ? "Auto top-up" : "Credit pack"}${charge}`;
     }
     return ENTRY_LABEL[entry.type];
 };
 
+/** Thresholds offered for auto top-up ("when the balance drops below…"). */
+const THRESHOLDS_USD = [5, 10, 25, 50];
+
 /**
  * The wallet, inside the Kodus provider card: one strip with the balance on
- * the left and the ways to add money on the right. The balance is an
- * attribute of this provider — it pays for nothing else — so it lives on the
- * card, not on a tab of its own. Stripe sends the user back to this card.
- * History (money ledger + charges by review) opens in a drawer.
+ * the left and the ways to add money on the right, plus the auto top-up row.
+ * The balance is an attribute of this provider — it pays for nothing else —
+ * so it lives on the card, not on a tab of its own. Stripe sends the user
+ * back to this card. History (money ledger + charges by review) opens in a
+ * drawer.
  */
 export const CreditsWalletStrip = () => {
     const { teamId } = useSelectedTeamId();
@@ -99,6 +121,11 @@ export const CreditsWalletStrip = () => {
     const canEdit = usePermission(Action.Update, ResourceType.Billing);
     const [customAmount, setCustomAmount] = useState("");
     const [ledgerOpen, setLedgerOpen] = useState(false);
+
+    const refresh = () => {
+        void queryClient.invalidateQueries({ queryKey: ["kodus-credits"] });
+        router.refresh();
+    };
 
     // Back from Stripe: the webhook lands a moment after the redirect, so
     // refetch once and tell the user what happened.
@@ -112,19 +139,24 @@ export const CreditsWalletStrip = () => {
                 description:
                     "Your credits will show up here within a few seconds.",
             });
-            const t = setTimeout(() => {
-                void queryClient.invalidateQueries({
-                    queryKey: ["kodus-credits"],
-                });
-                router.refresh();
-            }, 3000);
-            router.replace(KODUS_CREDITS_PATH);
-            return () => clearTimeout(t);
+        } else if (creditsParam === "card_saved") {
+            toast({
+                variant: "success",
+                title: "Card saved",
+                description:
+                    "You can turn on auto top-up now — it will show up in a moment.",
+            });
         }
-        if (creditsParam === "cancel") {
-            router.replace(KODUS_CREDITS_PATH);
-        }
-    }, [creditsParam, queryClient, router]);
+        const t =
+            creditsParam === "success" || creditsParam === "card_saved"
+                ? setTimeout(refresh, 3000)
+                : undefined;
+        router.replace(KODUS_CREDITS_PATH);
+        return () => {
+            if (t) clearTimeout(t);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [creditsParam]);
 
     const [topUp, { loading: checkingOut }] = useAsyncAction(
         async (creditUsd: number) => {
@@ -146,18 +178,41 @@ export const CreditsWalletStrip = () => {
         Number.isFinite(custom) &&
         custom >= min &&
         custom <= max;
+    // The highlighted pack: the smallest one for a first funding, the second
+    // one otherwise.
+    const primaryPack = credits.neverFunded ? packs[0] : packs[1];
 
     return (
         <div
             id="kodus-credits"
             data-testid="kodus-credits-wallet"
             className="bg-card-lv2/60 mb-3 flex flex-col gap-3 rounded-lg px-4 py-3">
+            {credits.neverFunded && (
+                <div
+                    className="bg-primary-light/10 text-text-primary flex items-start gap-2 rounded-md px-3 py-2 text-sm"
+                    data-testid="kodus-credits-never-funded">
+                    <SparklesIcon size={16} className="mt-0.5 shrink-0" />
+                    <span>
+                        <strong className="font-semibold">
+                            Add credits to start reviewing.
+                        </strong>{" "}
+                        Your Kodus model is set up, but reviews on it won&apos;t
+                        run until the balance is funded. $20 covers hundreds of
+                        reviews on the default model.
+                    </span>
+                </div>
+            )}
+
             <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="flex min-w-0 flex-col gap-1">
                     <span className="text-text-secondary flex items-center gap-2 text-xs">
                         <CoinsIcon size={13} />
                         Kodus credits
-                        {credits.exhausted ? (
+                        {credits.neverFunded ? (
+                            <Badge variant="helper" size="xs">
+                                Not funded
+                            </Badge>
+                        ) : credits.exhausted ? (
                             <Badge variant="error" size="xs">
                                 Used up
                             </Badge>
@@ -173,9 +228,9 @@ export const CreditsWalletStrip = () => {
                         {credits.loading ? "…" : usd(balanceUsd)}
                     </span>
                     <span className="text-text-tertiary max-w-md text-xs text-pretty">
-                        Pays for the models below, per token at the
-                        provider&apos;s list price. A {markup}% platform fee is
-                        added when you top up.
+                        Pays for the models below, per token at the list price
+                        shown on each model. A {markup}% platform fee is added
+                        when you top up.
                     </span>
                 </div>
 
@@ -186,7 +241,7 @@ export const CreditsWalletStrip = () => {
                                 key={pack}
                                 size="md"
                                 variant={
-                                    pack === packs[1] ? "primary" : "helper"
+                                    pack === primaryPack ? "primary" : "helper"
                                 }
                                 disabled={!canEdit || checkingOut}
                                 loading={checkingOut}
@@ -198,9 +253,10 @@ export const CreditsWalletStrip = () => {
                     <div className="flex items-center gap-2">
                         <Input
                             size="md"
-                            className="w-40"
+                            className="w-36"
                             inputMode="decimal"
-                            placeholder={`Custom (${usd(min, 0)}–${usd(max, 0)})`}
+                            placeholder="Custom amount"
+                            aria-label={`Custom amount, ${usd(min, 0)} to ${usd(max, 0)}`}
                             value={customAmount}
                             onChange={(e) => setCustomAmount(e.target.value)}
                         />
@@ -221,15 +277,15 @@ export const CreditsWalletStrip = () => {
                             History
                         </Button>
                     </div>
-                    {customValid && (
-                        <span className="text-text-tertiary text-xs tabular-nums">
-                            You&apos;ll pay {usd(custom * (1 + markup / 100))}
-                        </span>
-                    )}
+                    <span className="text-text-tertiary text-xs tabular-nums">
+                        {customValid
+                            ? `You'll pay ${usd(custom * (1 + markup / 100))}`
+                            : `Custom amount: ${usd(min, 0)} to ${usd(max, 0)}`}
+                    </span>
                 </div>
             </div>
 
-            {credits.exhausted && (
+            {credits.exhausted && !credits.neverFunded && (
                 <div className="bg-danger/10 text-text-primary flex items-start gap-2 rounded-md px-3 py-2 text-xs">
                     <SparklesIcon size={14} className="mt-0.5 shrink-0" />
                     <span>
@@ -239,10 +295,211 @@ export const CreditsWalletStrip = () => {
                 </div>
             )}
 
+            <AutoTopUpRow canEdit={canEdit} onChanged={refresh} />
+
             <CreditsLedgerDrawer
                 open={ledgerOpen}
                 onOpenChange={setLedgerOpen}
             />
+        </div>
+    );
+};
+
+/**
+ * "Add $X when the balance drops below $Y" — what keeps a team from stalling
+ * mid-week. Needs a saved card: the first pack purchase saves one
+ * automatically; otherwise a Stripe setup session does.
+ */
+const AutoTopUpRow = ({
+    canEdit,
+    onChanged,
+}: {
+    canEdit: boolean;
+    onChanged: () => void;
+}) => {
+    const { teamId } = useSelectedTeamId();
+    const credits = useKodusCreditBalance();
+    const auto = credits.autoTopUp;
+    const packs = credits.packsUsd;
+    const [threshold, setThreshold] = useState<number | null>(null);
+    const [amount, setAmount] = useState<number | null>(null);
+
+    const effectiveThreshold =
+        threshold ?? auto?.thresholdUsd ?? credits.lowThresholdUsd;
+    const effectiveAmount = amount ?? auto?.amountUsd ?? packs[1] ?? packs[0];
+
+    const [save, { loading: saving }] = useAsyncAction(
+        async (
+            enabled: boolean,
+            next?: { thresholdUsd?: number; amountUsd?: number },
+        ) => {
+            const thresholdUsd = next?.thresholdUsd ?? effectiveThreshold;
+            const amountUsd = next?.amountUsd ?? effectiveAmount;
+            try {
+                await updateCreditAutoTopUpAction({
+                    teamId,
+                    enabled,
+                    thresholdUsd,
+                    amountUsd,
+                });
+                toast({
+                    variant: "success",
+                    title: enabled ? "Auto top-up on" : "Auto top-up off",
+                    description: enabled
+                        ? `We'll add ${usd(amountUsd, 0)} whenever the balance drops below ${usd(thresholdUsd, 0)}.`
+                        : undefined,
+                });
+                onChanged();
+            } catch (error) {
+                if (
+                    error instanceof Error &&
+                    error.message === "NO_PAYMENT_METHOD"
+                ) {
+                    toast({
+                        variant: "warning",
+                        title: "Save a card first",
+                        description:
+                            "Auto top-up charges a saved card. Add one and try again.",
+                    });
+                    return;
+                }
+                toast({
+                    variant: "danger",
+                    title: "Couldn't save auto top-up",
+                });
+            }
+        },
+    );
+
+    const [saveCard, { loading: savingCard }] = useAsyncAction(async () => {
+        const { url } = await createCreditPaymentMethodCheckoutAction({
+            teamId,
+        });
+        window.location.href = url;
+    });
+
+    const [removeCard, { loading: removingCard }] = useAsyncAction(async () => {
+        await removeCreditPaymentMethodAction({ teamId });
+        toast({ variant: "info", title: "Card removed" });
+        onChanged();
+    });
+
+    if (!auto) return null;
+    const enabled = auto.enabled;
+    const busy = saving || savingCard || removingCard;
+
+    return (
+        <div
+            className="border-card-lv3/60 flex flex-wrap items-center gap-x-4 gap-y-2 border-t pt-3 text-xs"
+            data-testid="kodus-auto-topup">
+            <label className="text-text-primary flex items-center gap-2 font-medium">
+                <Switch
+                    size="sm"
+                    checked={enabled}
+                    disabled={!canEdit || busy}
+                    onCheckedChange={(next) => save(next)}
+                    aria-label="Auto top-up"
+                    data-testid="kodus-auto-topup-switch"
+                />
+                <RefreshCwIcon size={13} className="text-text-tertiary" />
+                Auto top-up
+            </label>
+
+            <span className="text-text-secondary flex flex-wrap items-center gap-2">
+                add
+                <Select
+                    value={String(effectiveAmount)}
+                    disabled={!canEdit || busy}
+                    onValueChange={(v) => {
+                        const amountUsd = Number(v);
+                        setAmount(amountUsd);
+                        if (enabled) void save(true, { amountUsd });
+                    }}>
+                    <SelectTrigger
+                        size="xs"
+                        className="w-24 tabular-nums"
+                        aria-label="Auto top-up amount">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {packs.map((p) => (
+                            <SelectItem key={p} value={String(p)}>
+                                {usd(p, 0)}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                when below
+                <Select
+                    value={String(effectiveThreshold)}
+                    disabled={!canEdit || busy}
+                    onValueChange={(v) => {
+                        const thresholdUsd = Number(v);
+                        setThreshold(thresholdUsd);
+                        if (enabled) void save(true, { thresholdUsd });
+                    }}>
+                    <SelectTrigger
+                        size="xs"
+                        className="w-20 tabular-nums"
+                        aria-label="Auto top-up threshold">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {THRESHOLDS_USD.map((t) => (
+                            <SelectItem key={t} value={String(t)}>
+                                {usd(t, 0)}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </span>
+
+            <span className="ml-auto flex items-center gap-2">
+                {auto.paymentMethod ? (
+                    <>
+                        <span
+                            className="text-text-secondary flex items-center gap-1.5"
+                            data-testid="kodus-auto-topup-card">
+                            <CreditCardIcon size={13} />
+                            {auto.paymentMethod}
+                        </span>
+                        <Button
+                            size="xs"
+                            variant="cancel"
+                            disabled={!canEdit || busy}
+                            onClick={() => saveCard()}>
+                            Change
+                        </Button>
+                        <Button
+                            size="xs"
+                            variant="cancel"
+                            disabled={!canEdit || busy}
+                            onClick={() => removeCard()}>
+                            Remove
+                        </Button>
+                    </>
+                ) : (
+                    <Button
+                        size="xs"
+                        variant="helper"
+                        leftIcon={<CreditCardIcon />}
+                        disabled={!canEdit || busy}
+                        loading={savingCard}
+                        onClick={() => saveCard()}>
+                        Save a card
+                    </Button>
+                )}
+            </span>
+
+            {auto.lastError && (
+                <span
+                    className="text-danger flex w-full items-center gap-1.5"
+                    data-testid="kodus-auto-topup-error">
+                    <AlertTriangleIcon size={13} />
+                    Last automatic charge failed: {auto.lastError}. Update the
+                    card or top up manually.
+                </span>
+            )}
         </div>
     );
 };

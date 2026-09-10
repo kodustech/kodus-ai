@@ -269,9 +269,79 @@ try {
     await hint.waitFor({ timeout: 60_000 });
     const hintText = (await hint.textContent()) ?? "";
     if (!hintText.includes(balanceText)) fail(`avatar menu BYOK hint shows "${hintText}", expected ${balanceText}`);
-    await page.screenshot({ path: `${KODUS_E2E_SHOTS}/04-avatar-menu.png`, clip: { x: 900, y: 0, width: 500, height: 420 } });
+    await page.screenshot({ path: `${KODUS_E2E_SHOTS}/05-avatar-menu.png`, clip: { x: 900, y: 0, width: 500, height: 420 } });
     await page.keyboard.press("Escape");
     log(`PASS avatar menu BYOK entry shows ${balanceText} (screenshot 04)`);
+
+    // The pack's card was saved for auto top-up (setup_future_usage) — the
+    // strip shows it; the model row shows the catalog tariff.
+    await page.goto(`${WEB}/byok#kodus`, { waitUntil: "load", timeout: 240_000 });
+    await page.getByTestId("kodus-model-tariff").first().waitFor({ timeout: 120_000 });
+    const cardLabel = page.getByTestId("kodus-auto-topup-card");
+    await cardLabel.waitFor({ timeout: 120_000 });
+    const cardText = (await cardLabel.textContent()) ?? "";
+    if (!/4242/.test(cardText)) fail(`saved card label "${cardText}" should end in 4242`);
+    log(`PASS the Checkout card was saved for auto top-up (${cardText.trim()}); model row shows the tariff`);
+
+    // Turn auto top-up on (threshold $50, add $20) through the same billing
+    // proxy the UI uses, then drive the balance under the threshold with a
+    // real debit: the billing service charges the saved card off-session and
+    // credits the ledger on its own.
+    const AUTO_THRESHOLD = 50;
+    const AUTO_AMOUNT = pack;
+    const auto = await billingFetch(token, `/credits/auto-topup`, {
+        method: "POST",
+        body: JSON.stringify({ organizationId, teamId, enabled: true, thresholdUsd: AUTO_THRESHOLD, amountUsd: AUTO_AMOUNT }),
+    });
+    if (auto.status !== 200 || auto.body?.enabled !== true) fail(`credits/auto-topup HTTP ${auto.status} ${JSON.stringify(auto.body).slice(0, 200)}`);
+    log(`PASS auto top-up enabled: add $${AUTO_AMOUNT} when below $${AUTO_THRESHOLD}`);
+
+    const BILLING_DIRECT = (process.env.BILLING_ADMIN_BASE_URL || "http://localhost:3992/api/billing").replace(/\/$/, "");
+    const adminToken = process.env.BILLING_ADMIN_TOKEN;
+    if (!adminToken) fail("BILLING_ADMIN_TOKEN is required to stage the balance for the auto top-up check");
+    const stamp = Date.now();
+    const current = (await billingFetch(token, `/credits/balance${qs}`)).body.balanceUsd;
+    const target = AUTO_THRESHOLD - 10; // comfortably under the threshold after the debit
+    const adj = await fetch(`${BILLING_DIRECT}/credits/adjust`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ organizationId, teamId, amountUsd: target - current, usageKey: `e2e:auto:stage:${stamp}`, reason: "e2e: stage balance under the auto top-up threshold", adminToken }),
+    });
+    if (adj.status !== 200) fail(`credits/adjust HTTP ${adj.status}`);
+    const debit = await fetch(`${BILLING_DIRECT}/credits/debit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ organizationId, teamId, entries: [{ usageKey: `e2e:auto:debit:${stamp}`, amountUsd: 1, metadata: { model: "e2e", reason: "auto top-up trigger" } }] }),
+    });
+    const debitBody = await debit.json().catch(() => ({}));
+    if (debit.status !== 200) fail(`credits/debit HTTP ${debit.status} ${JSON.stringify(debitBody).slice(0, 200)}`);
+    log(`debit applied → balance $${debitBody.balanceUsd} (below $${AUTO_THRESHOLD}); waiting for the off-session charge`);
+
+    const autoBalance = await pollUntil(
+        async () => {
+            const r = await billingFetch(token, `/credits/balance${qs}`);
+            return {
+                match: r.status === 200 && r.body.balanceUsd >= target - 1 + AUTO_AMOUNT - 1e-6,
+                snapshot: r.body,
+            };
+        },
+        { timeoutMs: 90_000, label: "auto top-up to credit the ledger" },
+    );
+    if (autoBalance.autoTopUp?.lastError) fail(`auto top-up recorded an error: ${autoBalance.autoTopUp.lastError}`);
+    const autoLedger = await billingFetch(token, `/credits/ledger${qs}`);
+    const autoEntry = (autoLedger.body?.entries ?? []).find((e) => e.type === "purchase" && e.metadata?.auto === true);
+    if (!autoEntry || autoEntry.amountUsd !== AUTO_AMOUNT) fail(`no automatic purchase of $${AUTO_AMOUNT} in the ledger: ${JSON.stringify(autoLedger.body).slice(0, 300)}`);
+    if (!/^stripe:pi:/.test(autoEntry.usageKey)) fail(`auto top-up usageKey must be the PaymentIntent: ${autoEntry.usageKey}`);
+    log(`PASS auto top-up charged the saved card off-session: +$${AUTO_AMOUNT} → balance $${autoBalance.balanceUsd} (${autoEntry.usageKey})`);
+
+    await page.goto(`${WEB}/byok#kodus`, { waitUntil: "load", timeout: 240_000 });
+    await page.getByTestId("kodus-auto-topup").waitFor({ timeout: 120_000 });
+    await page.waitForFunction((b) => document.body.innerText.includes(b), `$${autoBalance.balanceUsd.toFixed(2)}`, { timeout: 60_000 });
+    await page.screenshot({ path: `${KODUS_E2E_SHOTS}/04-auto-topup-row.png`, fullPage: true });
+    log(`PASS wallet shows the auto top-up row + new balance (screenshot 04)`);
+
+    // Leave the org as it was: auto top-up off (the card stays).
+    await billingFetch(token, `/credits/auto-topup`, { method: "POST", body: JSON.stringify({ organizationId, teamId, enabled: false }) });
 
     // Subscription page: a pointer to the wallet, not a second wallet.
     await page.goto(`${WEB}/settings/subscription`, { waitUntil: "load", timeout: 240_000 });
@@ -280,8 +350,8 @@ try {
     await page.getByRole("link", { name: /manage credits|top up/i }).first().waitFor({ timeout: 60_000 });
     const topUpButtons = await page.getByRole("button", { name: /^\+\$/ }).count();
     if (topUpButtons !== 0) fail(`subscription page still renders ${topUpButtons} pack buttons — the wallet must live in BYOK only`);
-    await page.screenshot({ path: `${KODUS_E2E_SHOTS}/05-subscription-pointer.png`, fullPage: true });
-    log(`PASS subscription page points at the wallet without duplicating it (screenshot 05)`);
+    await page.screenshot({ path: `${KODUS_E2E_SHOTS}/06-subscription-pointer.png`, fullPage: true });
+    log(`PASS subscription page points at the wallet without duplicating it (screenshot 06)`);
     await ctx.close();
 } finally {
     await browser.close();

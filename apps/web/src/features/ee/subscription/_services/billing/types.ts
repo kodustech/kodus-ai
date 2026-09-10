@@ -26,11 +26,7 @@ export type OrganizationLicenseTrial = WithCreditBalance & {
 };
 
 export type TrialCreditTier =
-    | "base"
-    | "team_signal"
-    | "qualified"
-    | "manual"
-    | (string & {});
+    "base" | "team_signal" | "qualified" | "manual" | (string & {});
 
 export type TrialUnlockKey =
     | "company_email"
@@ -41,10 +37,7 @@ export type TrialUnlockKey =
     | (string & {});
 
 export type TrialUnlockStatus =
-    | "locked"
-    | "available"
-    | "completed"
-    | "claimed";
+    "locked" | "available" | "completed" | "claimed";
 
 export type TrialUnlock = {
     key: TrialUnlockKey;
@@ -112,9 +105,23 @@ export type CreditBalance = {
     lifetimePurchasedUsd: number;
     lifetimeDebitedUsd: number;
     lastPurchaseAt: string | null;
+    autoTopUp: CreditAutoTopUp;
 };
 
-export type CreditLedgerEntryType = "purchase" | "debit" | "adjustment" | "refund";
+/** Auto top-up as the UI sees it — never the Stripe ids. */
+export type CreditAutoTopUp = {
+    enabled: boolean;
+    thresholdUsd: number | null;
+    amountUsd: number | null;
+    /** "Visa •••• 4242", or null when no card is saved. */
+    paymentMethod: string | null;
+    lastAt: string | null;
+    /** Last automatic charge failure (a declined card). */
+    lastError: string | null;
+};
+
+export type CreditLedgerEntryType =
+    "purchase" | "debit" | "adjustment" | "refund";
 
 export type CreditLedgerEntry = {
     id: string;

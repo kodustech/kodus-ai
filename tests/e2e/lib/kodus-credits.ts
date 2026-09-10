@@ -11,7 +11,10 @@ export const auth = (session: KodusSession) => ({
     Authorization: `Bearer ${session.accessToken}`,
 });
 
+/** Catalog model the scenarios route through Kodus. Override with
+ *  KODUS_E2E_MODEL to run the same live cell on another catalog entry. */
 export const KODUS_E2E_MODEL =
+    process.env.KODUS_E2E_MODEL ||
     "fireworks/accounts/fireworks/models/deepseek-v4-flash-0731";
 
 /** Persist a v2 BYOK config whose only model is routed by Kodus (no key). */

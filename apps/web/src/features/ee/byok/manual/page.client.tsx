@@ -681,7 +681,13 @@ export function ByokManualPageClient({
                 title: `${newConfig.model} ${isEditing ? "updated" : "saved"}`,
             });
             await revalidateServerSidePath("/byok");
-            router.push("/byok");
+            // A Kodus model lands on its card: the wallet strip is where the
+            // org funds it (an unfunded balance blocks the first review).
+            router.push(
+                isPlatformFundedProvider(newConfig.provider)
+                    ? "/byok#kodus"
+                    : "/byok",
+            );
         } catch {
             toast({
                 variant: "danger",

@@ -4,7 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { getCreditBalanceAction } from "src/features/ee/subscription/_actions/credits";
 import { useKodusCredits } from "src/features/ee/subscription/_hooks/use-kodus-credits";
-import type { CreditBalance } from "src/features/ee/subscription/_services/billing/types";
+import type {
+    CreditAutoTopUp,
+    CreditBalance,
+} from "src/features/ee/subscription/_services/billing/types";
 
 /** Default commercial parameters until billing answers (mirrors the billing
  *  service's creditPricing config; only used to render, never to charge). */
@@ -25,6 +28,11 @@ export type KodusCreditBalanceView = {
     exhausted: boolean;
     /** Balance known, positive, and at or below the low-balance threshold. */
     low: boolean;
+    /** The org never bought credits: the balance is empty because nothing was
+     *  ever added, not because it was spent. Drives the "add credits to start"
+     *  framing instead of "used up". */
+    neverFunded: boolean;
+    autoTopUp: CreditAutoTopUp | null;
     /** Billing's answer, or null when it has none / is unreachable. */
     balance: CreditBalance | null | undefined;
     loading: boolean;
@@ -69,11 +77,15 @@ export const useKodusCreditBalance = (): KodusCreditBalanceView => {
         balance?.lowThresholdUsd ?? FALLBACK.lowThresholdUsd;
     const known = typeof balanceUsd === "number";
 
+    const exhausted = known && balanceUsd <= 0;
     return {
         usesKodusProvider: credits.usesKodusProvider,
         balanceUsd,
-        exhausted: known && balanceUsd <= 0,
+        exhausted,
         low: known && balanceUsd > 0 && balanceUsd <= lowThresholdUsd,
+        neverFunded:
+            exhausted && !!balance && balance.lifetimePurchasedUsd === 0,
+        autoTopUp: balance?.autoTopUp ?? null,
         balance,
         loading: query.isLoading && !known,
         packsUsd: balance?.packsUsd ?? FALLBACK.packsUsd,

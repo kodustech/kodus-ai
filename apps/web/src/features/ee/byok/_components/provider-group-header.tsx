@@ -100,9 +100,11 @@ export function ProviderGroupHeader({
                                             className={`flex items-center gap-1.5 tabular-nums ${balanceTone}`}
                                             data-testid="kodus-provider-balance">
                                             <CoinsIcon size={12} />
-                                            {credits.exhausted
-                                                ? `Credits used up · reviews paused`
-                                                : `${balanceLabel} credits · no key needed`}
+                                            {credits.neverFunded
+                                                ? `No credits yet · add some to start reviewing`
+                                                : credits.exhausted
+                                                  ? `Credits used up · reviews paused`
+                                                  : `${balanceLabel} credits · no key needed`}
                                         </span>
                                     ) : (
                                         <span className="flex items-center gap-1.5 font-mono">
@@ -126,7 +128,7 @@ export function ProviderGroupHeader({
                             variant={credits.exhausted ? "primary" : "helper"}
                             leftIcon={<CoinsIcon />}
                             onClick={openWallet}>
-                            Top up
+                            {credits.neverFunded ? "Add credits" : "Top up"}
                         </Button>
                     )}
 

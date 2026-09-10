@@ -53,7 +53,11 @@ export const CreditsCard = () => {
                         size="sm"
                         variant={credits.exhausted ? "primary" : "helper"}
                         rightIcon={<ArrowRightIcon />}>
-                        {credits.exhausted ? "Top up" : "Manage credits"}
+                        {credits.neverFunded
+                            ? "Add credits"
+                            : credits.exhausted
+                              ? "Top up"
+                              : "Manage credits"}
                     </Button>
                 </Link>
             </CardHeader>

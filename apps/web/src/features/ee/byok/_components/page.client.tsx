@@ -5,7 +5,10 @@ import { useSearchParams } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@components/ui/alert";
 import { Badge } from "@components/ui/badge";
 import { Page } from "@components/ui/page";
-import { type LLMConfigStatus } from "@services/organizationParameters/fetch";
+import type {
+    LLMConfigStatus,
+    LLMProviderModel,
+} from "@services/organizationParameters/fetch";
 import type { ByokModelCost } from "@services/usage/byok-cost";
 import {
     ExternalLinkIcon,
@@ -125,6 +128,7 @@ export const ByokPageClient = ({
     costByModelId,
     periodLabel,
     costRangeQuery,
+    kodusCatalog,
 }: {
     config: BYOKConfig | null | undefined;
     llmConfigStatus: LLMConfigStatus | null;
@@ -132,6 +136,12 @@ export const ByokPageClient = ({
     costByModelId?: Record<string, ByokModelCost>;
     periodLabel?: string;
     costRangeQuery?: string;
+    /** Kodus catalog (name + list price) keyed by model id; only fetched
+     *  when the org has the Kodus provider. */
+    kodusCatalog?: Record<
+        string,
+        { name: string; pricing?: LLMProviderModel["pricing"] }
+    >;
 }) => {
     // First-run (D-UI-FIRSTRUN): no non-managed credential carries a model yet.
     // Both tabs stay reachable — Routing shows its own "connect a provider
@@ -205,12 +215,13 @@ export const ByokPageClient = ({
             <Page.Header className="max-w-full px-6">
                 <Page.TitleContainer>
                     <Page.Title className="text-balance">
-                        Bring your own key
+                        AI providers
                     </Page.Title>
                     <Page.Description className="flex flex-col gap-2 text-pretty">
                         <span>
-                            Connect the providers your team uses, then choose
-                            which model runs each task.
+                            Connect the providers your team uses — Kodus credits
+                            with no key, or your own keys — then choose which
+                            model runs each task.
                         </span>
                         <span className="flex items-center gap-2">
                             <span>
@@ -291,6 +302,7 @@ export const ByokPageClient = ({
                             costRangeQuery={costRangeQuery}
                             llmConfigStatus={llmConfigStatus}
                             onOpenRouting={openRouting}
+                            kodusCatalog={kodusCatalog}
                         />
                     </TabsContent>
 

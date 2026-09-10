@@ -4,6 +4,7 @@ import { pathToApiUrl } from "src/core/utils/helpers";
 import { isSelfHosted } from "src/core/utils/self-hosted";
 
 import type {
+    CreditAutoTopUp,
     CreditBalance,
     CreditCheckoutResult,
     CreditLedgerEntry,
@@ -392,6 +393,39 @@ export const listCreditLedger = async (params: {
         },
     );
     return page?.entries ?? [];
+};
+
+export const updateCreditAutoTopUp = async (params: {
+    teamId: string;
+    enabled: boolean;
+    thresholdUsd?: number;
+    amountUsd?: number;
+}): Promise<CreditAutoTopUp> => {
+    const organizationId = await getOrganizationId();
+    return billingFetch<CreditAutoTopUp>(`credits/auto-topup`, {
+        method: "POST",
+        body: JSON.stringify({ organizationId, ...params }),
+    });
+};
+
+export const createCreditPaymentMethodCheckout = async (params: {
+    teamId: string;
+}): Promise<{ url: string }> => {
+    const organizationId = await getOrganizationId();
+    return billingFetch<{ url: string }>(`credits/payment-method/checkout`, {
+        method: "POST",
+        body: JSON.stringify({ organizationId, teamId: params.teamId }),
+    });
+};
+
+export const removeCreditPaymentMethod = async (params: {
+    teamId: string;
+}): Promise<CreditAutoTopUp> => {
+    const organizationId = await getOrganizationId();
+    return billingFetch<CreditAutoTopUp>(`credits/payment-method`, {
+        method: "DELETE",
+        params: { organizationId, teamId: params.teamId },
+    });
 };
 
 export const createCreditCheckout = async (params: {
