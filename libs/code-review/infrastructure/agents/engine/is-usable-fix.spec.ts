@@ -60,177 +60,15 @@ describe('checkFix', () => {
             const improvedCode = 'msg = “old text”';
             expect(checkFix(existingCode, improvedCode)).toBeNull();
         });
-
-        // Kody's own review caught this: the noop comparison ran before the
-        // scaffolding-label strip, so a label glued onto otherwise-identical
-        // code was not recognized as a noop.
-        it('flags a scaffolding-label-prefixed noop ("Fix: <identical code>")', () => {
-            const existingCode = 'return x;';
-            const improvedCode = 'Fix: return x;';
-            expect(checkFix(existingCode, improvedCode)).toBe('noop-fix');
-        });
     });
 
-    describe('prose-only', () => {
-        it('flags a comment describing the fix instead of code', () => {
-            const existingCode = 'catch (e) { console.log(e); }';
-            const improvedCode =
-                '// re-throw the error here instead of swallowing it';
-            expect(checkFix(existingCode, improvedCode)).toBe('prose-only');
-        });
-
-        it('flags a plain-English sentence with no code tokens', () => {
-            const existingCode = 'if (user.role === "admin") grantAccess();';
-            const improvedCode = 'Add a check for user.active before granting access';
-            expect(checkFix(existingCode, improvedCode)).toBe('prose-only');
-        });
-
-        // Regression guard: these words were proposed as
-        // STRONG_CODE_TOKEN_RE additions and deliberately rejected — they
-        // are common enough in plain English that adding them would let
-        // real prose slip through as if it were a valid fix, which is the
-        // harm on the OTHER side of this check.
-        it.each([
-            'this would break the existing tests',
-            'wait for the promise to resolve first',
-            'try adding a null check here instead',
-            'this creates a new instance every time',
-            'in that case the fallback should run',
-        ])('still flags common-English prose containing %j', (improvedCode) => {
-            const existingCode = 'if (user.role === "admin") grantAccess();';
-            expect(checkFix(existingCode, improvedCode)).toBe('prose-only');
-        });
-
-        // Found probing realistic/messy LLM output shapes, not hand-picked
-        // to fit the implementation: a scaffolding-style label ("Fix:",
-        // "**WHY:**") leaking into improvedCode has a bare ":" that used to
-        // satisfy CODE_TOKEN_RE all by itself. Same leak
-        // strip-review-scaffolding.ts documents for suggestionContent.
-        it.each([
-            '**Fix:** add a null check before line 5',
-            'Note: this needs a null check',
-            'WHY: the null check was missing',
-            'Suggestion: add error handling here',
-        ])('flags a scaffolding-label lead-in %j as prose, not code', (improvedCode) => {
-            const existingCode = 'const x = 1;';
-            expect(checkFix(existingCode, improvedCode)).toBe('prose-only');
-        });
-
-        it('does NOT strip a genuine "key: value" pair — only the known label vocabulary', () => {
-            const existingCode = 'const config = { timeout: 30 };';
-            const improvedCode = 'timeout: 60';
-            expect(checkFix(existingCode, improvedCode)).toBeNull();
-        });
-
-        // Kody's own review of this file caught these: a bare ":" or a
-        // WEAK-only keyword (import/async/await/yield) is not enough on its
-        // own once real English stop words surround it — a colon or "await"
-        // used as an ordinary sentence word, not a code construct.
-        it.each([
-            'Add a null check: verify the input before using it',
-            'await the response before continuing',
-            'this could yield unexpected results for the user',
-            'we should import the missing validation logic here',
-        ])('flags a sentence containing a WEAK-only signal (%j) as prose', (improvedCode) => {
-            const existingCode = 'if (user.role === "admin") grantAccess();';
-            expect(checkFix(existingCode, improvedCode)).toBe('prose-only');
-        });
-
-        it('still accepts short, genuinely code-shaped WEAK-only fixes', () => {
-            expect(checkFix('timeout: 30', 'timeout: 60')).toBeNull();
-            expect(checkFix('import sys', 'import os')).toBeNull();
-            expect(checkFix('yield old_item', 'yield next_item')).toBeNull();
-        });
-
-        it('flags a scaffolding-label lead-in even with whitespace before the colon', () => {
-            const existingCode = 'const x = 1;';
-            const improvedCode = 'Fix : add a null check';
-            expect(checkFix(existingCode, improvedCode)).toBe('prose-only');
-        });
-
-        it('does NOT misread a genuine code field whose name is also a label word ("how")', () => {
-            // "how" is in PROSE_LABEL_LEAD_RE's vocabulary, but stripping it
-            // here would leave the bare value "number" with no code
-            // signal — the fallback-to-unstripped path must catch this.
-            const existingCode = 'interface Options { how: string }';
-            const improvedCode = 'how: number';
-            expect(checkFix(existingCode, improvedCode)).toBeNull();
-        });
-
-        // Kody's own review caught this: the fallback-to-unstripped path
-        // above (for "how: number") also let a MULTI-WORD label-prefixed
-        // sentence through, since the unstripped view's colon alone
-        // satisfied isCodeLike — "Fix: validate inputs" shipped the label
-        // text verbatim as if it were code. A real value is essentially
-        // never 2+ bare words with nothing else, so the fallback is now
-        // restricted to a single-token remainder.
-        it.each([
-            'Fix: validate inputs',
-            'Solution: refactor service',
-            'Note: this needs better error handling',
-        ])('flags a label-prefixed multi-word sentence (%j) as prose, not code', (improvedCode) => {
-            const existingCode = 'const x = 1;';
-            expect(checkFix(existingCode, improvedCode)).toBe('prose-only');
-        });
-
-        // Kody's own review caught this too: an ordinary object/config key
-        // that is ALSO an English stop word ("on", "check", "in") made
-        // isCodeLike suppress a genuine tight key:value pair.
-        it.each([
-            ['const config = { check: false };', 'check: true'],
-            ['const config = { on: false };', 'on: true'],
-            ['const config = { in: 3 };', 'in: 5'],
-        ])('does NOT flag a tight key:value pair whose key is a stop word (%j -> %j)', (existingCode, improvedCode) => {
-            expect(checkFix(existingCode, improvedCode)).toBeNull();
-        });
-
-        // Kody's own review caught this: TIGHT_KEY_VALUE_RE bypassed the
-        // stopword gate for the WHOLE pair, not just the key — "Note: this"
-        // and "Fix: it" match the exact same tight shape and shipped as
-        // code. The gate now only exempts the key; the value is still
-        // checked.
-        it.each(['Note: this', 'Fix: it', 'Solution: add'])(
-            'flags a label-prefixed tight pair (%j) as prose, not code',
-            (improvedCode) => {
-                expect(checkFix('const x = 1;', improvedCode)).toBe('prose-only');
-            },
-        );
-
-        // Round 5 tried gating on the KEY instead (reject only when the key
-        // is ALSO a known label word), to keep "enabled: on"/"action: add"
-        // as code. That opened a bigger hole than it closed: any label a
-        // model emits outside the ~15-word vocabulary ("Warning:",
-        // "Example:", "Consider:") bypassed the value check entirely and
-        // shipped as code — there is no regex shape that tells "enabled"
-        // apart from "warning", both are just a lowercase word.
-        it.each([
-            'Warning: it',
-            'Example: this',
-            'Consider: add',
-        ])('flags a label-prefixed tight pair using a label OUTSIDE the known vocabulary (%j) as prose', (improvedCode) => {
-            expect(checkFix('const x = 1;', improvedCode)).toBe('prose-only');
-        });
-
-        // The real fix for "enabled: on"/"action: add": existingCode is
-        // guaranteed real source text (never prose), so the SAME key
-        // already appearing there in a "key: value" shape is proof, not a
-        // vocabulary guess.
-        it.each([
-            ['const c = { enabled: false };', 'enabled: on'],
-            ['const c = { action: "" };', 'action: add'],
-            ['logging: off', 'logging: on'],
-            ['mode: off', 'mode: on'],
-        ])('accepts a stop-word-valued tight pair when existingCode proves the key is a real field (%j -> %j)', (existingCode, improvedCode) => {
-            expect(checkFix(existingCode, improvedCode)).toBeNull();
-        });
-
-        it('still flags the same tight pair as prose when existingCode does NOT show the key', () => {
-            // Same shape as the accepted cases above, but nothing in
-            // existingCode proves "enabled" is a real field here — no
-            // evidence, no exemption.
-            expect(checkFix('const x = 1;', 'enabled: on')).toBe('prose-only');
-        });
-    });
+    // Prose-only detection (was this text English or code?) was removed
+    // entirely after seven review rounds of keyword lists, stop-word gates,
+    // and label vocabularies each fixed one false positive by opening a new
+    // false negative — see the file header. "Fix: return x;" and similar
+    // scaffolding-prefixed text now simply ships (or gets caught by the
+    // truncated/empty/noop checks below on its own, unrelated merits); it is
+    // no longer this gate's job to guess whether a string "reads like" code.
 
     describe('truncated', () => {
         it('flags unbalanced brackets', () => {
@@ -545,10 +383,5 @@ describe('checkFix', () => {
             expect(checkFix(existing, bareFix)).toBeNull();
         });
 
-        it('still flags "break" embedded in an ordinary English sentence as prose', () => {
-            const existingCode = 'do_something()';
-            const improvedCode = 'this would break the existing tests';
-            expect(checkFix(existingCode, improvedCode)).toBe('prose-only');
-        });
     });
 });

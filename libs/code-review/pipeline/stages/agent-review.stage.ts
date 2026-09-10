@@ -1280,8 +1280,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
 
             // Publication gate (issue #1833): four weeks of production
             // thumbs-down showed 38% had no usable fix — empty, identical to
-            // existingCode, prose-only, or truncated mid-token. A correct
-            // diagnosis with a broken "fix" reads as OUR mistake, not a miss.
+            // existingCode, or syntactically truncated. A correct diagnosis
+            // with a broken "fix" reads as OUR mistake, not a miss. (Prose-
+            // only detection was tried and removed — see is-usable-fix.ts's
+            // header: no regex reliably tells English apart from code.)
             // Runs AFTER the content formatter (which never touches
             // improvedCode, only suggestionContent/llmPrompt) and BEFORE the
             // Kody Rule link enrichment, so a dropped suggestion never pays

@@ -11,13 +11,21 @@
  * should ship at all. A wrong diagnosis reads as a miss; a right diagnosis
  * with an empty or identical "fix" reads as OUR mistake.
  *
- * This is a text check on two strings, deliberately conservative: false
- * positives here silently drop a real fix, so each rule requires the kind of
- * evidence a human reviewing the raw pair would call obviously wrong, not a
- * guess about style. This codebase reviews 9 languages (see
- * `SupportedLanguages.ts`), and the checks below were tuned against real
- * examples from each of them, not just semicolon-terminated JS/TS — see the
- * per-check notes for the specific cases that shaped each one.
+ * Scope is deliberately narrower than the issue's original four buckets
+ * (empty / identical / prose-only / truncated). A "prose-only" classifier —
+ * does this text read as English or as code? — went through seven review
+ * rounds of keyword lists, stop-word gates, and label vocabularies, and each
+ * fix for one false positive (real code wrongly dropped) opened a new false
+ * negative (prose wrongly shipped) or vice versa: there is no regex that
+ * reliably tells "enabled" apart from "warning", or "await the response"
+ * from "await(response)". That is not a bug to keep patching — it is
+ * evidence the classification itself is not decidable this way. Dropped
+ * entirely rather than kept as an ever-more-elaborate heuristic. What
+ * remains is checkable without judging whether text "looks like" code:
+ * empty, byte-for-byte (whitespace-normalized) identical to `existingCode`,
+ * or syntactically broken (unbalanced brackets/quotes, a dangling operator,
+ * a diff hunk, a stray list marker) — each of those is true or false of the
+ * TEXT ITSELF, never a guess about what a human would call it.
  *
  * Known scope boundary: Ruby's `do`/`end` block delimiters are not tracked
  * as a bracket pair the way `{}()[]` are, so a Ruby fix truncated mid-block
@@ -29,7 +37,7 @@
  * the rest of this file works hard to avoid elsewhere.
  */
 
-export type BadFixReason = 'empty' | 'noop-fix' | 'prose-only' | 'truncated';
+export type BadFixReason = 'empty' | 'noop-fix' | 'truncated';
 
 /**
  * Quoted string / template-literal spans, escape-aware. Capturing group so
@@ -80,158 +88,6 @@ function stringLiteralRegexFor(language: string | undefined): RegExp {
         ? STRING_LITERAL_RE_RUST
         : STRING_LITERAL_RE;
 }
-
-/**
- * Any of these appearing outside a comment is enough to call a chunk "code"
- * on their own, in any amount of surrounding text. Punctuation here (braces/
- * parens/brackets/quotes/arrows) barely ever appears in a plain-English
- * sentence describing a fix, which is what makes it a safe signal across
- * every language this pipeline reviews. `:` is deliberately NOT here — see
- * `WEAK_CODE_TOKEN_RE` below, where a colon alone turned out to be too easy
- * for prose to satisfy.
- *
- * Deliberately NOT included: a dotted-access pattern (`\.\w`, e.g. "x.y").
- * That one first looked like a safe method/property-access signal but a
- * sentence prose commonly NAMES a property this way too ("check user.active
- * before granting access"), and that turned a real prose-only fix into a
- * false "usable" verdict — worse than the gap it was meant to close.
- *
- * The keyword list stays SHORT and deliberately excludes common English words
- * (for/new/try/case/while/throw/switch/else/from/include/require all lost
- * this bid) — accepting one of those as a "code" token lets genuine prose
- * slip through as if it were a real fix, which is the harm on the OTHER side
- * of this check and just as bad as a false positive. `import`/`async`/
- * `await`/`yield` lost the same bid for the same reason ("await the response
- * before continuing" is a real sentence a model can write) and moved to
- * `WEAK_CODE_TOKEN_RE`.
- */
-const STRONG_CODE_TOKEN_RE =
-    /[;{}()[\]=<>]|=>|->|::|["'`]|\b(?:function|const|let|var|return|def|elif|class|attr_reader)\b/;
-
-/**
- * Signals that are real code ONLY in a short, code-shaped fragment ("key:
- * value", "import os") — the same characters/words also occur naturally in
- * an ordinary English sentence ("Add a null check: verify the input before
- * using it", "await the response before continuing"), so on their own they
- * are not enough. `isCodeLike` below only trusts a WEAK-only match when the
- * text carries none of `PROSE_STOPWORD_RE`'s stop words; a genuinely short
- * code fragment essentially never does.
- */
-const WEAK_CODE_TOKEN_RE = /:|\b(?:import|async|await|yield)\b/;
-
-/**
- * Common English function/stop words. Their presence alongside a WEAK-only
- * signal is what actually distinguishes "Add a null check: verify the input
- * before using it" (a sentence, coincidentally containing ":") from "key:
- * value" or "import os" (genuinely short code, containing none of these).
- */
-const PROSE_STOPWORD_RE =
-    /\b(?:the|a|an|is|are|was|were|this|that|these|those|before|after|using|verify|check|add|should|would|could|will|must|need|needs|to|of|in|on|with|for|and|or|but|not|here|there|it|please|make|sure|ensure)\b/i;
-
-/**
- * A TIGHT `key: value` pair — one bare key, a colon, one bare value token,
- * nothing else. Some ordinary object/config keys ARE English stop words
- * ("on: true" in a GitHub Actions-shaped config, "check: false", "in: 5"),
- * and the stopword gate below would otherwise suppress every one of them.
- * The shape itself is what makes this safe to trust regardless of the key's
- * spelling: real prose is not two bare tokens joined by a single colon with
- * nothing else — `PROSE_STOPWORD_RE` stays load-bearing for anything wider
- * than this ("try adding a null check here instead" does not match).
- */
-const TIGHT_KEY_VALUE_RE = /^\w+\s*:\s*\S+\s*$/;
-
-/**
- * Does `existingCode` already show `key` in a "key: value" shape? If it
- * does, that is EVIDENCE, not a guess: `existingCode` is guaranteed real
- * source text straight from the file — it is never a model's prose — so a
- * key that already appears there in this shape proves the SAME key in
- * `improvedCode`'s tight pair is a real field being edited, whatever the
- * key's English spelling happens to be. Two prior attempts to solve this by
- * classifying the key or value AS TEXT both failed (see `isCodeLike`'s
- * comment) precisely because no regex can tell "enabled" apart from
- * "warning" — this sidesteps that by not needing to.
- */
-function keyAppearsAsFieldIn(key: string, existingCode: string): boolean {
-    if (!key) {
-        return false;
-    }
-    const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return new RegExp(`\\b${escaped}\\s*:\\s*\\S`).test(existingCode);
-}
-
-/**
- * Does `text` look like code? A STRONG token always counts, regardless of
- * how much surrounding prose there is. A WEAK-only token counts when the
- * text is a tight `key: value` pair whose VALUE is not a stop word, or
- * otherwise only when the text carries no English stop word at all — the
- * same asymmetry every check in this file applies: a false "usable" verdict
- * here ships prose as if it were a fix (the bug this whole gate exists to
- * remove), so the bar for trusting a weak, sentence-compatible signal has
- * to be high.
- *
- * A tight pair whose value IS a stop word ("enabled: on", "action: add") is
- * still accepted, but only with the evidence `keyAppearsAsFieldIn` provides
- * — the key already exists as a real field in `existingCode`. Two narrower
- * attempts to solve this by classifying the KEY or the VALUE as text alone
- * both failed: exempting whenever the key was outside a fixed label
- * vocabulary ("fix"/"note"/"how"/...) assumed that vocabulary was
- * exhaustive (it let "Warning:"/"Example:"/"Consider:" through the moment
- * their key wasn't on the list), and requiring the key to ALSO be a known
- * label word ran into the same wall from the other side — there is no
- * regex shape that tells "enabled" and "warning" apart, both are just an
- * ordinary lowercase word. `existingCode` breaks the tie with something
- * neither attempt had: proof, not vocabulary.
- */
-function isCodeLike(text: string, existingCode: string): boolean {
-    if (STRONG_CODE_TOKEN_RE.test(text)) {
-        return true;
-    }
-    if (!WEAK_CODE_TOKEN_RE.test(text)) {
-        return false;
-    }
-    if (TIGHT_KEY_VALUE_RE.test(text)) {
-        const key = (text.match(/^\w+/) ?? [''])[0];
-        const value = text.replace(/^\w+\s*:\s*/, '');
-        if (value.length === 0) {
-            return false;
-        }
-        if (!PROSE_STOPWORD_RE.test(value)) {
-            return true;
-        }
-        return keyAppearsAsFieldIn(key, existingCode);
-    }
-    return !PROSE_STOPWORD_RE.test(text);
-}
-
-/**
- * A short leading label — "Fix:", "Note:", "**WHY:**" — immediately followed
- * by ":" (optional whitespace before it, "Fix : ...") is a prose lead-in, not
- * a code colon, and would otherwise satisfy `WEAK_CODE_TOKEN_RE` all by
- * itself. This is the SAME leak `strip-review-scaffolding.ts` documents for
- * `suggestionContent` (the review prompt's own WHAT/WHY/HOW template) landing
- * in `improvedCode` instead: "**Fix:** add a null check before line 5" has a
- * colon and registered as usable code with nothing else in this file to stop
- * it. Scoped to this SPECIFIC label vocabulary, not any short word, so a
- * genuine one-line dict/object pair like "key: value" keeps registering as
- * code — only the words this codebase's own review prompts are known to
- * produce as scaffolding labels are excluded.
- */
-const PROSE_LABEL_LEAD_RE =
-    /^(?:\*\*|__)?(?:fix|note|why|how|what|issue|bug|problem|solution|suggestion|recommendation|explanation|reason|cause|summary)(?:\*\*|__)?\s*:\s*/i;
-
-/**
- * A handful of control-flow statements that are, on their own, complete and
- * valid in several supported languages — Python's bare `pass`/`break`/
- * `continue`/`raise`, Ruby's `next`/`redo`/`retry`, Go's `fallthrough` — and
- * carry NEITHER punctuation nor a STRONG_CODE_TOKEN_RE keyword, so a fix
- * that is exactly one of these words alone would otherwise register as
- * prose-only. "break" itself was excluded from STRONG_CODE_TOKEN_RE for
- * colliding with ordinary English ("this would break the tests"), but that
- * risk only exists mid-sentence — gating on the fix being EXACTLY this one
- * word and nothing else is safe: prose is not shaped like a single bare word.
- */
-const BARE_STATEMENT_RE =
-    /^(?:break|continue|pass|raise|next|redo|retry|fallthrough)[;:]?$/;
 
 /**
  * Captures the bare-word run after a trailing `return`/`yield` (see
@@ -507,44 +363,8 @@ export function checkFix(
         return 'empty';
     }
 
-    // Strip a scaffolding label before comparing too — "Fix: return x;" is a
-    // noop against existingCode "return x;" once the decoration is gone, and
-    // without this the label alone kept it from ever matching.
-    const fixForComparison = fix.replace(PROSE_LABEL_LEAD_RE, '').trim();
-    if (
-        normalizeForComparison(fixForComparison, lang) ===
-        normalizeForComparison(existing, lang)
-    ) {
+    if (normalizeForComparison(fix, lang) === normalizeForComparison(existing, lang)) {
         return 'noop-fix';
-    }
-
-    const unstrippedView = outsideStringLiterals(fix, lang, stripComments).trim();
-    const strippedView = unstrippedView.replace(PROSE_LABEL_LEAD_RE, '').trim();
-    // Prefer the stripped view (the label is decoration, not code), but fall
-    // back to the unstripped one when stripping leaves nothing code-shaped
-    // AND what's left is a single bare token — "how: number" has "how" in
-    // the label vocabulary too, and stripping it down to the bare value
-    // "number" would misread a genuine one-line field/type pair as prose.
-    // The fallback is deliberately NOT taken for a multi-word remainder:
-    // "Fix: validate inputs" strips to "validate inputs", two words with no
-    // code signal of their own — that is a verb phrase, not a value, and
-    // falling back to the unstripped "Fix: validate inputs" would trust
-    // only the label's OWN colon to call it code, shipping the label text
-    // verbatim into the source. A real value is essentially never 2+ bare
-    // words with nothing else, so this line is safe to draw.
-    const strippedHasNoCodeSignal =
-        !isCodeLike(strippedView, existing) && !BARE_STATEMENT_RE.test(strippedView);
-    const strippedIsSingleToken =
-        strippedView.length > 0 && !/\s/.test(strippedView);
-    // Fall back to the UNSTRIPPED view (label + value together) only for a
-    // single-token remainder; a multi-word one stays on the stripped view
-    // so it is judged on its own, label-free content.
-    const tokenView =
-        strippedHasNoCodeSignal && strippedIsSingleToken
-            ? unstrippedView
-            : strippedView;
-    if (!isCodeLike(tokenView, existing) && !BARE_STATEMENT_RE.test(tokenView)) {
-        return 'prose-only';
     }
 
     if (

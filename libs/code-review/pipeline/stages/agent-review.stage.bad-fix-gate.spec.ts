@@ -160,28 +160,6 @@ describe('AgentReviewStage — improvedCode publication gate (#1833)', () => {
         expect(badFixDiscards(result)).toHaveLength(1);
     });
 
-    it('drops a prose-only improvedCode', async () => {
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue(
-            happyEnvelope([
-                sugg({
-                    existingCode: 'catch (e) { console.log(e); }',
-                    improvedCode:
-                        '// re-throw the error here instead of swallowing it',
-                }),
-            ]),
-        );
-
-        const result = await run(stage, makeContext());
-
-        expect(
-            (result.fileAnalysisResults ?? []).flatMap(
-                (f: any) => f.validSuggestionsToAnalyze,
-            ),
-        ).toHaveLength(0);
-        expect(badFixDiscards(result)).toHaveLength(1);
-    });
-
     it('drops a truncated improvedCode (the literal issue #1833 example)', async () => {
         const { stage, reviewOrchestrator } = makeStage();
         reviewOrchestrator.execute.mockResolvedValue(
