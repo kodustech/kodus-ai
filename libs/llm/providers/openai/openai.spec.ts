@@ -254,6 +254,18 @@ describe('openaiModule x-opencode-session header (issue #1880)', () => {
         const model = openaiModule.build(openaiCompatibleCfg) as any;
         expect(model.config.headers()).not.toHaveProperty('x-opencode-session');
     });
+
+    it('the native openai branch (provider "openai") gets the header too when pointed at opencode.ai/zen — it also accepts a baseURL override', () => {
+        const model = openaiModule.build({
+            provider: 'openai',
+            model: 'gpt-4o-mini',
+            apiKey: 'test-key',
+            baseURL: 'https://opencode.ai/zen/go/v1',
+            byokModelId: 'model-123',
+        } as any) as any;
+
+        expect(model.config.headers()['x-opencode-session']).toMatch(HEX32);
+    });
 });
 
 describe('openaiModule offline conformance (real boundary: build → SDK → normalize)', () => {

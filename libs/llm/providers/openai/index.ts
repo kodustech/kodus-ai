@@ -218,10 +218,18 @@ export const openaiModule: ProviderModule = {
 
         // Native OpenAI (id 'openai'). Only pass baseURL when set — the native
         // SDK has a sensible default and an empty string throws "Invalid URL".
+        // Still gated on the SAME OpenCode Go check as the compatible branch
+        // above: 'openai' also accepts a baseURL override (e.g. Azure OpenAI
+        // proxies), so a slot pointed at opencode.ai/zen through THIS provider
+        // id needs the header too, or it 400s exactly like the compatible one
+        // did before #1880.
         return createOpenAI({
             apiKey,
             ...(baseURL ? { baseURL } : {}),
             ...(opts?.fetch ? { fetch: opts.fetch } : {}),
+            ...(isOpenCodeGoBaseUrl(baseURL)
+                ? { headers: { 'x-opencode-session': openCodeSessionId(cfg) } }
+                : {}),
         })(cfg.model);
     },
 
