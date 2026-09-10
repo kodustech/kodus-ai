@@ -17,7 +17,11 @@ import { Sandbox } from 'e2b';
 import { randomUUID } from 'crypto';
 
 import { calculateBackoffInterval } from '@libs/common/utils/polling';
-import { SandboxLeaseRepository } from '../repositories/sandbox-lease.repository';
+import { existsSync } from 'fs';
+import {
+    SandboxLeaseRepository,
+    SANDBOX_LEASE_REPOSITORY_TOKEN,
+} from '../repositories/sandbox-lease.repository';
 import { SANDBOX_LEASE_CLEANUP_STATUS } from '../repositories/schemas/sandbox-lease.model';
 import { NULL_SANDBOX_INSTANCE } from '../providers/null-sandbox.service';
 import { buildE2BRemoteCommands } from '../providers/e2b-sandbox.service';
@@ -133,6 +137,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
     constructor(
         @Inject(SANDBOX_PROVIDER_TOKEN)
         private readonly sandboxProvider: ISandboxProvider,
+        @Inject(SANDBOX_LEASE_REPOSITORY_TOKEN)
         private readonly leaseRepo: SandboxLeaseRepository,
         private readonly configService: ConfigService,
     ) {}
@@ -263,15 +268,15 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             );
         } catch (err) {
             if (err instanceof SandboxStaleConnectionError) {
-                // Lease referenced a sandbox that E2B no longer has (idle-
-                // kill timer, reaper, or external termination). The
-                // joiner path already deleted the stale lease — restart
-                // acquire from scratch so this caller becomes the creator.
+                // Lease referenced a sandbox that is stale.
+                // Delete the stuck lease and restart acquire from scratch
+                // so this caller becomes the creator.
                 this.logger.log({
                     message: `SandboxLeaseManager: re-acquiring after stale sandbox prKey="${prKey}" consumer="${consumer}"`,
                     context: SandboxLeaseManager.name,
                     metadata: { prKey, consumer },
                 });
+                await this.leaseRepo.delete(prKey).catch(() => {});
                 return this.acquire(prKey, consumer, leaseTtlMs, cloneParams);
             }
             throw err;
@@ -761,6 +766,38 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         consumer: string,
         sandboxId: string,
     ): Promise<AcquireResult> {
+        const providerAny = this.sandboxProvider as any;
+        if (providerAny?.type === 'local' || typeof providerAny?.buildSandboxInstance === 'function') {
+            if (sandboxId && existsSync(sandboxId)) {
+                this.logger.log({
+                    message: `SandboxLeaseManager: reusing local sandbox sandboxId="${sandboxId}" prKey="${prKey}" consumer="${consumer}"`,
+                    context: SandboxLeaseManager.name,
+                    metadata: { prKey, consumer, sandboxId },
+                });
+                const sandbox = providerAny.buildSandboxInstance(sandboxId);
+                sandbox.cleanup = async () => {
+                    await this.release(leaseId);
+                };
+                this.leaseIdToPrKey.set(leaseId, prKey);
+                return { sandbox, leaseId, sandboxId, wasCreated: false };
+            }
+            // Local provider but dir is gone or on another host.
+            // Check if other workers hold this lease before deleting DB lease.
+            const doc = await this.leaseRepo.findByPrKey(prKey);
+            if (doc && doc.leaseCount > 1) {
+                await this.leaseRepo.decrementLease(prKey);
+                this.logger.error({
+                    message: `SandboxLeaseManager: local sandbox directory "${sandboxId}" is missing on this host for prKey="${prKey}", but lease has active holders (leaseCount=${doc.leaseCount})`,
+                    context: SandboxLeaseManager.name,
+                    metadata: { prKey, sandboxId, leaseCount: doc.leaseCount },
+                });
+                throw new Error(
+                    `SandboxLeaseManager: local sandbox directory "${sandboxId}" is missing on this host for prKey="${prKey}", but lease has active holders (leaseCount=${doc.leaseCount})`,
+                );
+            }
+            throw new SandboxStaleConnectionError(prKey, sandboxId);
+        }
+
         const apiKey = this.configService.get<string>('API_E2B_KEY');
 
         if (!apiKey) {
