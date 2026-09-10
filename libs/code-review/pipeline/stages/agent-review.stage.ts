@@ -1290,7 +1290,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 const badFixCounts: Partial<Record<BadFixReason, number>> = {};
                 const kept: Partial<CodeSuggestion>[] = [];
                 for (const s of deduped) {
-                    const reason = checkFix(s.existingCode, s.improvedCode);
+                    const reason = checkFix(
+                        s.existingCode,
+                        s.improvedCode,
+                        s.language,
+                    );
                     if (!reason) {
                         kept.push(s);
                         continue;
@@ -1308,7 +1312,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     this.logger.log({
                         message: `[AGENT] Dropped ${totalBadFix} suggestion(s) with unusable improvedCode`,
                         context: this.stageName,
-                        metadata: { prNumber, ...badFixCounts },
+                        metadata: {
+                            prNumber,
+                            organizationId:
+                                context.organizationAndTeamData
+                                    ?.organizationId,
+                            ...badFixCounts,
+                        },
                     });
                     context = this.updateContext(context, (draft) => {
                         draft.reviewWarnings = dedupReviewWarnings([
