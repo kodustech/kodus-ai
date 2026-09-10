@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Alert, AlertDescription } from "@components/ui/alert";
@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { ErrorBoundary } from "react-error-boundary";
 import { FormProvider, useForm } from "react-hook-form";
+import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
 import { ConfirmModal } from "src/core/components/ui/confirm-modal";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 
@@ -122,6 +123,18 @@ export function ByokManualPageClient({
     // Kodus provider: the balance the model will draw from (shown in the
     // Billing card in place of a key field).
     const kodusCredits = useKodusCreditBalance();
+    // Private alpha: the Kodus form is reachable only for an org on the flag
+    // (or one that already routes through Kodus). A direct URL from anyone
+    // else bounces to the providers page — the API would refuse the save
+    // anyway, but the form must not advertise what the org cannot use.
+    const { kodusProvider: kodusProviderFlag } = useFeatureFlags();
+    const kodusFormAllowed =
+        !isPlatformFundedProvider(presetProvider) ||
+        kodusProviderFlag === true ||
+        kodusCredits.usesKodusProvider;
+    useEffect(() => {
+        if (!kodusFormAllowed) router.replace("/byok");
+    }, [kodusFormAllowed, router]);
     const editSettings = (editCredential?.settings ?? {}) as Record<
         string,
         unknown
@@ -701,6 +714,8 @@ export function ByokManualPageClient({
     });
 
     const testing = testState.status === "testing";
+
+    if (!kodusFormAllowed) return null;
 
     return (
         <Page.Root>
