@@ -20,6 +20,7 @@ export const getCreditBalanceAction = async ({
     teamId: string;
 }) => {
     try {
+        await assertCanReadCredits();
         return await getCreditBalance({ teamId });
     } catch (error) {
         console.error("Failed to load credit balance:", error);
@@ -37,6 +38,7 @@ export const listCreditLedgerAction = async ({
     before?: string;
 }) => {
     try {
+        await assertCanReadCredits();
         return await listCreditLedger({ teamId, limit, before });
     } catch (error) {
         console.error("Failed to load credit ledger:", error);
@@ -49,6 +51,15 @@ export const listCreditLedgerAction = async ({
  * here on the server, not only where the buttons are hidden (a server action
  * can be called directly).
  */
+/** Reading the org's balance/ledger needs the Billing read permission. */
+const assertCanReadCredits = async () => {
+    const { canAccess: allowed } = await canAccess(
+        ResourceType.Billing,
+        Action.Read,
+    ).catch(() => ({ canAccess: false }));
+    if (!allowed) throw new Error("FORBIDDEN");
+};
+
 const assertCanManageCredits = async () => {
     const { canAccess: allowed } = await canAccess(
         ResourceType.Billing,
