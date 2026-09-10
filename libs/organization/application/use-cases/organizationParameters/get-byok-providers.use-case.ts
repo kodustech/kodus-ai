@@ -5,7 +5,9 @@ import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { REGISTRY } from '@libs/llm/providers';
 import { describeProviderId } from '@libs/llm/providers/provider-ui-descriptor';
 import { isProviderAvailableHere } from '@libs/core/infrastructure/services/providers/kodus-provider-availability';
-import { Injectable } from '@nestjs/common';
+import { KodusProviderGate } from '@libs/core/infrastructure/services/providers/kodus-provider-gate.service';
+import { isPlatformFundedProvider } from '@libs/llm/platform-funded-provider';
+import { Injectable, Optional } from '@nestjs/common';
 
 /**
  * One connectable provider descriptor — STATIC and NON-SENSITIVE (no org data,
@@ -41,11 +43,22 @@ export interface ByokProvidersResult {
  */
 @Injectable()
 export class GetByokProvidersUseCase implements IUseCase {
-    async execute(): Promise<ByokProvidersResult> {
+    constructor(
+        // Optional: the descriptor stays dependency-free in specs; in the app
+        // the gate is always provided by the module.
+        @Optional() private readonly kodusGate?: KodusProviderGate,
+    ) {}
+
+    async execute(organizationId?: string): Promise<ByokProvidersResult> {
+        // The `kodus` provider is a private alpha: cloud-only AND allow-listed
+        // per org. Hidden from the picker for everyone else.
+        const kodusEnabled = this.kodusGate
+            ? await this.kodusGate.isEnabledFor(organizationId)
+            : false;
         return {
             providers: REGISTRY.all()
-                // The cloud-only `kodus` provider is hidden on self-hosted.
                 .filter((m) => isProviderAvailableHere(m.id))
+                .filter((m) => !isPlatformFundedProvider(m.id) || kodusEnabled)
                 .map((m) => ({
                 id: m.id,
                 label: m.label,

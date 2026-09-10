@@ -5,10 +5,15 @@ import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/
 import { ProviderService } from '@libs/core/infrastructure/services/providers/provider.service';
 import { createLogger } from '@libs/core/log/logger';
 import {
+    KODUS_PROVIDER_NOT_ENABLED_MESSAGE,
+    KodusProviderGate,
+} from '@libs/core/infrastructure/services/providers/kodus-provider-gate.service';
+import { isPlatformFundedProvider } from '@libs/llm/platform-funded-provider';
+import {
     IOrganizationParametersService,
     ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Optional } from '@nestjs/common';
 import axios from 'axios';
 
 import { resolveByokSlot } from './byok-credentials.util';
@@ -46,6 +51,7 @@ export class GetModelsByProviderUseCase {
         private readonly providerService: ProviderService,
         @Inject(ORGANIZATION_PARAMETERS_SERVICE_TOKEN)
         private readonly organizationParametersService: IOrganizationParametersService,
+        @Optional() private readonly kodusGate?: KodusProviderGate,
     ) {}
 
     async execute(
@@ -61,6 +67,15 @@ export class GetModelsByProviderUseCase {
     ): Promise<ModelResponse> {
         if (!this.providerService.isProviderSupported(provider)) {
             throw new BadRequestException(`Unsupported provider: ${provider}`);
+        }
+        // Private alpha: the Kodus catalog is not listed for an org outside it.
+        if (
+            isPlatformFundedProvider(provider) &&
+            !(await this.kodusGate?.isEnabledFor(
+                organizationAndTeamData?.organizationId,
+            ))
+        ) {
+            throw new BadRequestException(KODUS_PROVIDER_NOT_ENABLED_MESSAGE);
         }
 
         const byokProvider = provider as BYOKProvider;

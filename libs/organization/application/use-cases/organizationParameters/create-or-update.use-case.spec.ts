@@ -20,7 +20,12 @@ const orgAndTeam = { organizationId: 'org-1', teamId: 'team-1' } as any;
  * findByKey returns as the stored configValue (undefined → no row). The
  * captured `persisted` holds whatever createOrUpdateConfig was asked to write.
  */
-function buildUseCase(existing?: unknown) {
+function buildUseCase(
+    existing?: unknown,
+    options: {
+        kodusGate?: { isEnabledFor: (org?: string) => Promise<boolean> };
+    } = {},
+) {
     const persisted: { value?: any } = {};
     const createOrUpdateConfig = jest.fn(async (_k, value: any) => {
         persisted.value = value;
@@ -38,11 +43,17 @@ function buildUseCase(existing?: unknown) {
     const eventEmitter = { emit: jest.fn() } as any;
     const telemetry = { byokConfigured: jest.fn() } as any;
 
+    // The Kodus provider is a private alpha; specs act as an allow-listed org
+    // unless they pass their own gate.
+    const kodusGate = options.kodusGate ?? {
+        isEnabledFor: jest.fn(async () => true),
+    };
     const useCase = new CreateOrUpdateOrganizationParametersUseCase(
         organizationParametersService as any,
         request,
         eventEmitter,
         telemetry,
+        kodusGate as any,
     );
 
     return {
@@ -718,6 +729,27 @@ describe('platform-funded (`kodus`) credential — keyless by design, cloud-only
         expect(cred.provider).toBe('kodus');
         expect(cred.apiKey).toBeUndefined();
         expect(cred.managed).toBeUndefined();
+    });
+
+    it('is refused for an org outside the private alpha (gate off), naming the alpha', async () => {
+        const gate = { isEnabledFor: jest.fn(async () => false) };
+        const { useCase, createOrUpdateConfig } = buildUseCase(undefined, {
+            kodusGate: gate,
+        });
+        await expect(saveByok(useCase, kodusConfig())).rejects.toThrow(
+            /private alpha/,
+        );
+        expect(createOrUpdateConfig).not.toHaveBeenCalled();
+    });
+
+    it('keeps saving for an org that ALREADY has the credential even if the gate is off (edits stay possible)', async () => {
+        const gate = { isEnabledFor: jest.fn(async () => false) };
+        const { useCase, createOrUpdateConfig } = buildUseCase(kodusConfig(), {
+            kodusGate: gate,
+        });
+        await saveByok(useCase, kodusConfig());
+        expect(createOrUpdateConfig).toHaveBeenCalled();
+        expect(gate.isEnabledFor).not.toHaveBeenCalled();
     });
 
     it('is refused on a self-hosted install (no platform accounts, no ledger)', async () => {

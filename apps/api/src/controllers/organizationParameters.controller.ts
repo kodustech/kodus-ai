@@ -395,7 +395,10 @@ export class OrganizationParametersController {
             awsSessionToken?: string;
         },
     ): Promise<TestByokResult> {
-        return await this.testByokConnectionUseCase.execute(body);
+        return await this.testByokConnectionUseCase.execute(
+            body,
+            this.request?.user?.organization?.uuid,
+        );
     }
 
     @Post('/test-byok-model')
@@ -589,7 +592,9 @@ export class OrganizationParametersController {
             'Return the registry-driven list of connectable BYOK providers (id, label, aliases). Static and non-sensitive — never returns any credential.',
     })
     public async getByokProviders(): Promise<ByokProvidersResult> {
-        return await this.getByokProvidersUseCase.execute();
+        return await this.getByokProvidersUseCase.execute(
+            this.request?.user?.organization?.uuid,
+        );
     }
 
 

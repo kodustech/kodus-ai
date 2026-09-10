@@ -2,6 +2,7 @@
 
 import { Image } from "@components/ui/image";
 import { ExternalLinkIcon } from "lucide-react";
+import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
 
 import { ConnectProviderFlow } from "./connect-provider-flow";
 
@@ -15,6 +16,8 @@ const BYOK_DOCS_URL = "https://docs.kodus.io/how_to_use/en/byok";
  * "best model" catalog.
  */
 export function FirstRunCard() {
+    // Private alpha: only orgs on the Kodus-provider flag hear about it.
+    const { kodusProvider } = useFeatureFlags();
     return (
         <ConnectProviderFlow
             existingKeyByProvider={{}}
@@ -32,11 +35,9 @@ export function FirstRunCard() {
                             Connect your first provider
                         </h3>
                         <p className="text-text-secondary text-sm text-pretty">
-                            Pick Kodus to start with no key at all — usage is
-                            billed to your Kodus credits. Or add your own
-                            provider key once and enable as many of its models
-                            as you want; you pay that provider directly, and
-                            Kodus never sees your key.
+                            {kodusProvider
+                                ? "Pick Kodus to start with no key at all — usage is billed to your Kodus credits. Or add your own provider key once and enable as many of its models as you want; you pay that provider directly, and Kodus never sees your key."
+                                : "Add your provider key once and enable as many of its models as you want. You pay that provider directly, and Kodus never sees your key."}
                         </p>
                     </div>
                 </>

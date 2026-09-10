@@ -17,6 +17,7 @@ import {
     PackageIcon,
     WalletIcon,
 } from "lucide-react";
+import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
 import {
     Tabs,
     TabsContent,
@@ -162,6 +163,9 @@ export const ByokPageClient = ({
     const usesKodusProvider = (config?.credentials ?? []).some((c) =>
         isPlatformFundedProvider(c.provider),
     );
+    // Private alpha: the Kodus-credits framing shows for orgs on the flag
+    // (or that already route through Kodus).
+    const { kodusProvider: kodusProviderFlag } = useFeatureFlags();
     const searchParams = useSearchParams();
     const requestedTab = searchParams.get("tab");
 
@@ -219,9 +223,9 @@ export const ByokPageClient = ({
                     </Page.Title>
                     <Page.Description className="flex flex-col gap-2 text-pretty">
                         <span>
-                            Connect the providers your team uses — Kodus credits
-                            with no key, or your own keys — then choose which
-                            model runs each task.
+                            {kodusProviderFlag || usesKodusProvider
+                                ? "Connect the providers your team uses — Kodus credits with no key, or your own keys — then choose which model runs each task."
+                                : "Connect the providers your team uses, then choose which model runs each task."}
                         </span>
                         <span className="flex items-center gap-2">
                             <span>

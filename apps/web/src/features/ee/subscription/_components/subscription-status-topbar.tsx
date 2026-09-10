@@ -1,6 +1,7 @@
 "use client";
 
 import { Link } from "@components/ui/link";
+import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
 import { useKodusCreditBalance } from "src/features/ee/byok/_hooks/use-kodus-credit-balance";
 import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
 
@@ -23,16 +24,30 @@ const TrialExpiring = () => {
 };
 
 const TrialExhausted = () => {
+    // Private alpha: the Kodus-credits path is offered only to orgs on the flag.
+    const { kodusProvider } = useFeatureFlags();
     return (
         <div className="bg-danger/30 py-2 text-center text-sm">
             You've used all the free PR reviews included in your trial.{" "}
-            <Link href="/byok/manual?provider=kodus" className="font-bold">
-                Use Kodus credits
-            </Link>{" "}
-            (no API key) or{" "}
-            <Link href="/byok" className="font-bold">
-                connect your own AI key
-            </Link>{" "}
+            {kodusProvider ? (
+                <>
+                    <Link
+                        href="/byok/manual?provider=kodus"
+                        className="font-bold">
+                        Use Kodus credits
+                    </Link>{" "}
+                    (no API key) or{" "}
+                    <Link href="/byok" className="font-bold">
+                        connect your own AI key
+                    </Link>{" "}
+                </>
+            ) : (
+                <>
+                    <Link href="/byok" className="font-bold">
+                        Connect your own AI key
+                    </Link>{" "}
+                </>
+            )}
             to keep Kody reviewing — unlimited, on any plan.
         </div>
     );

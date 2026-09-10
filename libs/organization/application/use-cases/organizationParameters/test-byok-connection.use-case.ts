@@ -14,9 +14,13 @@ import { LLM_ERROR_TAG, LLM_SUCCESS_TAG } from '@libs/llm/log-tags';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { encrypt } from '@libs/common/utils/crypto';
 import { validateModelTuning } from '@libs/llm/validate-model-tuning';
+import {
+    KODUS_PROVIDER_NOT_ENABLED_MESSAGE,
+    KodusProviderGate,
+} from '@libs/core/infrastructure/services/providers/kodus-provider-gate.service';
 import { ProviderService } from '@libs/core/infrastructure/services/providers/provider.service';
 import { createLogger } from '@libs/core/log/logger';
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import axios, { AxiosError } from 'axios';
 import { lookup } from 'dns/promises';
 
@@ -232,7 +236,10 @@ const TEST_TIMEOUT_MS = 15_000;
 export class TestByokConnectionUseCase {
     private readonly logger = createLogger(TestByokConnectionUseCase.name);
 
-    constructor(private readonly providerService: ProviderService) {}
+    constructor(
+        private readonly providerService: ProviderService,
+        @Optional() private readonly kodusGate?: KodusProviderGate,
+    ) {}
 
     /**
      * Public entry: run the connection test and emit ONE greppable observability
@@ -241,8 +248,19 @@ export class TestByokConnectionUseCase {
      * HTTP status / provider message) instead of dying silently in the UI. Input
      * rejections (BadRequestException) are logged too, then re-thrown unchanged.
      */
-    async execute(input: TestByokInput): Promise<TestByokResult> {
+    async execute(
+        input: TestByokInput,
+        organizationId?: string,
+    ): Promise<TestByokResult> {
         try {
+            // Private alpha: no probe on Kodus's own accounts for an org
+            // outside it (the probe is a real, billed upstream call).
+            if (
+                isPlatformFundedProvider(input?.provider) &&
+                !(await this.kodusGate?.isEnabledFor(organizationId))
+            ) {
+                throw new BadRequestException(KODUS_PROVIDER_NOT_ENABLED_MESSAGE);
+            }
             const result = await this.runTest(input);
             this.logTestOutcome(input, result);
             // Everything this use case does is a REAL call to the provider, so

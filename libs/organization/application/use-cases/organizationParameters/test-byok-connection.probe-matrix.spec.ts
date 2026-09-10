@@ -28,9 +28,12 @@ jest.mock('ai', () => ({
 }));
 
 function useCase() {
-    return new TestByokConnectionUseCase({
-        isProviderSupported: () => true,
-    } as any);
+    return new TestByokConnectionUseCase(
+        { isProviderSupported: () => true } as any,
+        // The Kodus provider is a private alpha; the matrix probes it as an
+        // allow-listed org would.
+        { isEnabledFor: async () => true } as any,
+    );
 }
 
 // Vertex and Bedrock validate auth material (SA JSON / STS) before any model
