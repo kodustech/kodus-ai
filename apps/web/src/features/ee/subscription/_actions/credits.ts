@@ -52,20 +52,26 @@ export const listCreditLedgerAction = async ({
  * can be called directly).
  */
 /** Reading the org's balance/ledger needs the Billing read permission. */
+// The API answers `/permissions/can-access` with a bare boolean (unwrapped
+// from its envelope by authorizedFetch); tolerate an object shape too.
+const isAllowed = (result: unknown): boolean =>
+    result === true ||
+    (typeof result === "object" &&
+        result !== null &&
+        (result as { canAccess?: unknown }).canAccess === true);
+
 const assertCanReadCredits = async () => {
-    const { canAccess: allowed } = await canAccess(
-        ResourceType.Billing,
-        Action.Read,
-    ).catch(() => ({ canAccess: false }));
-    if (!allowed) throw new Error("FORBIDDEN");
+    const result = await canAccess(ResourceType.Billing, Action.Read).catch(
+        () => false,
+    );
+    if (!isAllowed(result)) throw new Error("FORBIDDEN");
 };
 
 const assertCanManageCredits = async () => {
-    const { canAccess: allowed } = await canAccess(
-        ResourceType.Billing,
-        Action.Update,
-    ).catch(() => ({ canAccess: false }));
-    if (!allowed) throw new Error("FORBIDDEN");
+    const result = await canAccess(ResourceType.Billing, Action.Update).catch(
+        () => false,
+    );
+    if (!isAllowed(result)) throw new Error("FORBIDDEN");
 };
 
 export const createCreditCheckoutAction = async ({

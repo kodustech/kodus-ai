@@ -124,17 +124,26 @@ async function completeStripeCheckout(page) {
     if ((await linkOptIn.count()) && (await linkOptIn.isChecked().catch(() => false))) {
         await linkOptIn.uncheck({ force: true }).catch(() => {});
     }
-    await page.locator("input#cardNumber").fill(TEST_CARD);
-    await page.locator("input#cardExpiry").fill(TEST_EXPIRY);
-    await page.locator("input#cardCvc").fill(TEST_CVC);
-    const nameField = page.locator('input[autocomplete="cc-name"], input#billingName').first();
-    if (await nameField.count()) await nameField.fill("Kodus E2E");
-    const zip = page.locator('input[autocomplete="postal-code"], input#billingPostalCode').first();
-    if (await zip.count()) await zip.fill(TEST_ZIP);
-    const phone = page
-        .locator('input#phoneNumber, input[name="phoneNumber"], input[autocomplete="tel"], input[type="tel"]')
-        .first();
-    if (await phone.count()) await phone.fill(TEST_PHONE);
+    // A customer with a card already on file (saved off-session by an earlier
+    // pack purchase) gets the saved card pre-selected and no card form: then
+    // there is nothing to type, just confirm.
+    const cardNumber = page.locator("input#cardNumber");
+    const hasCardForm = await cardNumber.waitFor({ timeout: 15_000 }).then(() => true).catch(() => false);
+    if (hasCardForm) {
+        await cardNumber.fill(TEST_CARD);
+        await page.locator("input#cardExpiry").fill(TEST_EXPIRY);
+        await page.locator("input#cardCvc").fill(TEST_CVC);
+        const nameField = page.locator('input[autocomplete="cc-name"], input#billingName').first();
+        if (await nameField.count()) await nameField.fill("Kodus E2E");
+        const zip = page.locator('input[autocomplete="postal-code"], input#billingPostalCode').first();
+        if (await zip.count()) await zip.fill(TEST_ZIP);
+        const phone = page
+            .locator('input#phoneNumber, input[name="phoneNumber"], input[autocomplete="tel"], input[type="tel"]')
+            .first();
+        if (await phone.count()) await phone.fill(TEST_PHONE);
+    } else {
+        log("stripe checkout: no card form (saved card pre-selected) — confirming as is");
+    }
     await page.screenshot({ path: `${KODUS_E2E_SHOTS}/01-stripe-checkout.png`, fullPage: true });
     const submit = page
         .locator(
@@ -198,7 +207,7 @@ try {
     await page.goto(`${WEB}/sign-in`, { waitUntil: "networkidle", timeout: 240_000 });
     await page.waitForTimeout(1_200);
     await page.locator('input[type="email"], input[name="email"]').first().fill(KODUS_E2E_EMAIL);
-    const pwd = page.locator('input[type="password"], input[name="password"]').first();
+    const pwd = page.locator('input[type="password"]').first();
     // The click can land before hydration and be swallowed (a dev server
     // compiling the page makes this worse): retry until the password step
     // actually appears.

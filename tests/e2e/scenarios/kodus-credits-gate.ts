@@ -83,7 +83,7 @@ export const kodusCreditsGate: Scenario = {
         // 3. Balance + ledger through the web proxy; debit is denied there.
         const qs = `?organizationId=${encodeURIComponent(session.organizationId)}&teamId=${encodeURIComponent(session.teamId)}`;
         const balance = await http<Balance>(
-            `${target.webBaseUrl}/api/proxy/billing/credits/balance${qs}`,
+            `${(process.env.BILLING_ADMIN_BASE_URL || "").replace(/\/$/, "")}/credits/balance${qs}`,
             { method: "GET", headers: auth(session), timeoutMs: 30_000 },
         );
         ctx.assert(
@@ -98,7 +98,7 @@ export const kodusCreditsGate: Scenario = {
         );
 
         const ledger = await http<{ entries?: unknown[] }>(
-            `${target.webBaseUrl}/api/proxy/billing/credits/ledger${qs}`,
+            `${(process.env.BILLING_ADMIN_BASE_URL || "").replace(/\/$/, "")}/credits/ledger${qs}`,
             { method: "GET", headers: auth(session), timeoutMs: 30_000 },
         );
         ctx.assert(
@@ -110,22 +110,42 @@ export const kodusCreditsGate: Scenario = {
             `A fresh org has an empty ledger, got ${ledger.body!.entries!.length} entries`,
         );
 
-        const debit = await http(
-            `${target.webBaseUrl}/api/proxy/billing/credits/debit`,
-            {
-                method: "POST",
-                headers: auth(session),
-                body: {
-                    organizationId: session.organizationId,
-                    entries: [{ usageKey: "e2e:never", amountUsd: 1 }],
+        // The browser proxy must not expose ANY /credits/* route: they all
+        // take a client-chosen organizationId and billing has no caller auth.
+        for (const [path, init] of [
+            [
+                "/credits/debit",
+                {
+                    method: "POST",
+                    body: {
+                        organizationId: session.organizationId,
+                        entries: [{ usageKey: "e2e:never", amountUsd: 1 }],
+                    },
                 },
-                timeoutMs: 30_000,
-            },
-        );
-        ctx.assert(
-            debit.status === 404,
-            `credits/debit must be unreachable through the browser proxy (expected 404, got ${debit.status})`,
-        );
+            ],
+            ["/credits/balance" + qs, { method: "GET" }],
+            ["/credits/ledger" + qs, { method: "GET" }],
+            [
+                "/credits/checkout",
+                {
+                    method: "POST",
+                    body: {
+                        organizationId: session.organizationId,
+                        teamId: session.teamId,
+                        creditUsd: 20,
+                    },
+                },
+            ],
+        ] as const) {
+            const viaProxy = await http(
+                `${target.webBaseUrl}/api/proxy/billing${path}`,
+                { ...(init as object), headers: auth(session), timeoutMs: 30_000 } as any,
+            );
+            ctx.assert(
+                viaProxy.status === 404,
+                `${path.split("?")[0]} must be unreachable through the browser proxy (expected 404, got ${viaProxy.status})`,
+            );
+        }
 
         // 4. A credit-pack checkout resolves to a Stripe session URL.
         const pack = balance.body!.packsUsd[0];
@@ -133,7 +153,7 @@ export const kodusCreditsGate: Scenario = {
             url?: string;
             creditUsd?: number;
             chargeUsd?: number;
-        }>(`${target.webBaseUrl}/api/proxy/billing/credits/checkout`, {
+        }>(`${(process.env.BILLING_ADMIN_BASE_URL || "").replace(/\/$/, "")}/credits/checkout`, {
             method: "POST",
             headers: auth(session),
             body: {
