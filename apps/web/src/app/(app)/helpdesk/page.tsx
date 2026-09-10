@@ -1,16 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { LockedFeatureOverlay } from "@components/system/locked-feature-overlay";
+import { LockedPagePreview } from "@components/system/locked-page-preview";
 import { useAuth } from "src/core/providers/auth.provider";
 import { useConfig } from "src/core/providers/ConfigProvider";
 import { axiosAuthorized } from "src/core/utils/axios";
 import { pathToApiUrl } from "src/core/utils/helpers";
+import { useFeatureGates } from "src/features/ee/subscription/_hooks/use-feature-gates";
 
 const HELPDESK_TOKEN_URL = pathToApiUrl("/auth/helpdesk-token");
 
 export default function HelpdeskPage() {
     const { accessToken } = useAuth();
     const { helpdeskUrl } = useConfig();
+    const gates = useFeatureGates();
     const iframeRef = useRef<HTMLIFrameElement>(null);
     const [iframeReady, setIframeReady] = useState(false);
     const tokenSentRef = useRef(false);
@@ -54,6 +58,21 @@ export default function HelpdeskPage() {
             sendToken();
         }
     }, [iframeReady, accessToken, sendToken]);
+
+    if (!gates.helpdesk) {
+        return (
+            <LockedFeatureOverlay
+                title="Unlock the helpdesk"
+                description="A direct support channel with the Kodus team, inside the app, is available on the Enterprise plan."
+                cta={{
+                    label: "Upgrade plan",
+                    href: "/settings/subscription",
+                    feature: "helpdesk",
+                }}>
+                <LockedPagePreview title="Helpdesk" rows={2} />
+            </LockedFeatureOverlay>
+        );
+    }
 
     if (!helpdeskUrl) {
         return (

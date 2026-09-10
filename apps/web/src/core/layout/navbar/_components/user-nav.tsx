@@ -17,6 +17,7 @@ import {
     GitBranchIcon,
     Headset,
     KeyRoundIcon,
+    LockIcon,
     LogOutIcon,
     UserIcon,
 } from "lucide-react";
@@ -34,10 +35,10 @@ import {
 } from "src/core/components/ui/dropdown-menu";
 import { useAllTeams } from "src/core/providers/all-teams-context";
 import { useAuth } from "src/core/providers/auth.provider";
-import { useSubscriptionStatus } from "src/core/providers/byok.provider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { TEAM_STATUS } from "src/core/types";
 import { isSelfHosted } from "src/core/utils/self-hosted";
+import { useFeatureGates } from "src/features/ee/subscription/_hooks/use-feature-gates";
 
 import { VersionInfo } from "./version-info";
 
@@ -59,10 +60,10 @@ export function UserNav() {
         Action.Read,
         ResourceType.TokenUsage,
     );
-    const { isBYOK, isTrial, isEnterprise } = useSubscriptionStatus();
     const cfg = useConfig();
-    // Helpdesk is an enterprise-cloud channel; the other links are public.
-    const showHelpdesk = !isSelfHosted && isEnterprise;
+    // Gated entries stay listed with a padlock; each page shows its locked
+    // preview. Helpdesk is cloud-only, so self-hosted skips it entirely.
+    const gates = useFeatureGates();
 
     const handleChangeWorkspace = (teamId: string) => {
         setTeamId(teamId);
@@ -157,10 +158,11 @@ export function UserNav() {
                     </Link>
                 )}
 
-                {(isEnterprise || isTrial) && canReadLogs && (
+                {canReadLogs && (
                     <Link href="/user-logs">
                         <DropdownMenuItem leftIcon={<ActivityIcon />}>
                             Activity Logs
+                            {!gates.activityLogs && <LockedTag />}
                         </DropdownMenuItem>
                     </Link>
                 )}
@@ -179,10 +181,11 @@ export function UserNav() {
 
                 <DropdownMenuLabel>Help</DropdownMenuLabel>
 
-                {showHelpdesk && (
+                {!isSelfHosted && (
                     <NextLink href="/helpdesk">
                         <DropdownMenuItem leftIcon={<Headset />}>
                             Helpdesk
+                            {!gates.helpdesk && <LockedTag />}
                         </DropdownMenuItem>
                     </NextLink>
                 )}
@@ -225,3 +228,11 @@ export function UserNav() {
         </DropdownMenu>
     );
 }
+
+/** Padlock at the end of a menu row whose page needs a higher plan. */
+const LockedTag = () => (
+    <LockIcon
+        aria-label="Enterprise plan"
+        className="text-text-tertiary ml-auto size-3.5"
+    />
+);

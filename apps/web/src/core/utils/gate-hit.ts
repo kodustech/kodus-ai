@@ -8,7 +8,10 @@ export type GateFeature =
     | "cockpit"
     | "mcp_plugins"
     | "kody_rules"
-    | "linked_repositories";
+    | "linked_repositories"
+    | "sso"
+    | "activity_logs"
+    | "helpdesk";
 
 type GateEventInput = {
     feature: GateFeature;
@@ -25,8 +28,7 @@ async function captureGateEvent(
         // Session user is the JWT payload (see auth.ts session callback);
         // the next-auth User type isn't augmented with it.
         const user = session?.user as
-            | { userId?: string; organizationId?: string }
-            | undefined;
+            { userId?: string; organizationId?: string } | undefined;
         if (!user?.userId) return;
 
         await capturePostHogEvent({
