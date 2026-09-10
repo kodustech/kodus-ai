@@ -106,12 +106,14 @@ export class AuthRepository implements IAuthRepository {
         const authSelected = await this.authRepository.findOne(findOneOptions);
 
         if (authSelected) {
+            // TypeORM's UpdateQueryBuilder can't resolve a nested relation
+            // path in its criteria — `update({ user: { uuid } }, ...)` throws
+            // "Cannot find alias for relation at user" on the real query
+            // builder (same root cause as the markAsRead/markAllAsRead 500
+            // fixed in #1894). The record is already scoped by the `findOne`
+            // above, so update by its own flat `uuid` instead.
             await this.authRepository.update(
-                {
-                    user: {
-                        uuid: authSelected.user.uuid,
-                    },
-                },
+                { uuid: authSelected.uuid },
                 {
                     refreshToken: authSelected.refreshToken,
                 },

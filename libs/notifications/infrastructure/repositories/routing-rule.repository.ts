@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 
 import { mapSimpleModelToEntity } from '@libs/core/infrastructure/repositories/mappers';
 
@@ -117,11 +117,22 @@ export class RoutingRuleRepository implements IRoutingRuleRepository {
         return results;
     }
 
+    // TypeORM's DeleteQueryBuilder can't resolve a nested relation path in its
+    // criteria — `delete({ organization: { uuid } })` throws "Cannot find
+    // alias for relation at organization" (same root cause as the
+    // markAsRead/markAllAsRead 500 fixed in #1894). `find` supports nested
+    // criteria, so scope the ids there first and delete by a flat `In(ids)`.
     async deleteByOrganization(organizationId: string): Promise<number> {
-        const result = await this.repo.delete({
-            organization: { uuid: organizationId },
+        const rows = await this.repo.find({
+            select: { uuid: true },
+            where: { organization: { uuid: organizationId } },
         });
-        return result.affected ?? 0;
+        if (rows.length === 0) {
+            return 0;
+        }
+        const ids = rows.map((row) => row.uuid);
+        await this.repo.delete({ uuid: In(ids) });
+        return ids.length;
     }
 
     async deleteByOrgEventRole(
@@ -129,11 +140,19 @@ export class RoutingRuleRepository implements IRoutingRuleRepository {
         event: string,
         role: string,
     ): Promise<number> {
-        const result = await this.repo.delete({
-            organization: { uuid: organizationId },
-            event,
-            role,
+        const rows = await this.repo.find({
+            select: { uuid: true },
+            where: {
+                organization: { uuid: organizationId },
+                event,
+                role,
+            },
         });
-        return result.affected ?? 0;
+        if (rows.length === 0) {
+            return 0;
+        }
+        const ids = rows.map((row) => row.uuid);
+        await this.repo.delete({ uuid: In(ids) });
+        return ids.length;
     }
 }

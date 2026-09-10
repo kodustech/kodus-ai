@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
     FindManyOptions,
     FindOneOptions,
+    In,
     Repository,
     UpdateQueryBuilder,
 } from 'typeorm';
@@ -185,10 +186,21 @@ export class ParametersRepository implements IParametersRepository {
         await this.parametersRepository.delete(uuid);
     }
 
+    // TypeORM's DeleteQueryBuilder can't resolve a nested relation path in its
+    // criteria — `delete({ team: { uuid } })` throws "Cannot find alias for
+    // relation at team" (same root cause as the markAsRead/markAllAsRead 500
+    // fixed in #1894). `find` supports nested criteria, so scope the ids there
+    // first and delete by a flat `In(ids)`.
     async deleteByTeamId(teamId: string): Promise<void> {
-        await this.parametersRepository.delete({
-            team: { uuid: teamId },
+        const rows = await this.parametersRepository.find({
+            select: { uuid: true },
+            where: { team: { uuid: teamId } },
         });
+        if (rows.length === 0) {
+            return;
+        }
+        const ids = rows.map((row) => row.uuid);
+        await this.parametersRepository.delete({ uuid: In(ids) });
     }
 
     async findByKey<K extends ParametersKey>(
