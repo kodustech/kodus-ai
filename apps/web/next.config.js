@@ -66,6 +66,11 @@ const nextConfig = {
     // build is not Turbopack — and `build-analyze` still runs `--webpack` —
     // so it stays off until the analyzer moves off webpack.
     reactCompiler: true,
+    // Dev only. Next 16 answers 403 for /_next/* when the page origin is not
+    // the dev server's own host. 127.0.0.1 is the host we use to keep two
+    // environments' cookies apart (cookies ignore the port: localhost:3000 and
+    // localhost:3100 share a jar, localhost and 127.0.0.1 do not).
+    allowedDevOrigins: ["127.0.0.1"],
     experimental: {
         // Tree-shake barrel-heavy packages: import only the icons/helpers a
         // module actually uses instead of pulling the whole package into the
