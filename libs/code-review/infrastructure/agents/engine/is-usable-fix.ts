@@ -129,18 +129,37 @@ const PROSE_STOPWORD_RE =
     /\b(?:the|a|an|is|are|was|were|this|that|these|those|before|after|using|verify|check|add|should|would|could|will|must|need|needs|to|of|in|on|with|for|and|or|but|not|here|there|it|please|make|sure|ensure)\b/i;
 
 /**
+ * A TIGHT `key: value` pair — one bare key, a colon, one bare value token,
+ * nothing else. Some ordinary object/config keys ARE English stop words
+ * ("on: true" in a GitHub Actions-shaped config, "check: false", "in: 5"),
+ * and the stopword gate below would otherwise suppress every one of them.
+ * The shape itself is what makes this safe to trust regardless of the key's
+ * spelling: real prose is not two bare tokens joined by a single colon with
+ * nothing else — `PROSE_STOPWORD_RE` stays load-bearing for anything wider
+ * than this ("try adding a null check here instead" does not match).
+ */
+const TIGHT_KEY_VALUE_RE = /^\w+\s*:\s*\S+\s*$/;
+
+/**
  * Does `text` look like code? A STRONG token always counts, regardless of
- * how much surrounding prose there is. A WEAK-only token counts ONLY when
- * the text carries no English stop word — the same asymmetry every check in
- * this file applies: a false "usable" verdict here ships prose as if it
- * were a fix (the bug this whole gate exists to remove), so the bar for
- * trusting a weak, sentence-compatible signal has to be high.
+ * how much surrounding prose there is. A WEAK-only token counts when the
+ * text is a tight `key: value` pair, or otherwise only when the text
+ * carries no English stop word — the same asymmetry every check in this
+ * file applies: a false "usable" verdict here ships prose as if it were a
+ * fix (the bug this whole gate exists to remove), so the bar for trusting a
+ * weak, sentence-compatible signal has to be high.
  */
 function isCodeLike(text: string): boolean {
     if (STRONG_CODE_TOKEN_RE.test(text)) {
         return true;
     }
-    return WEAK_CODE_TOKEN_RE.test(text) && !PROSE_STOPWORD_RE.test(text);
+    if (!WEAK_CODE_TOKEN_RE.test(text)) {
+        return false;
+    }
+    if (TIGHT_KEY_VALUE_RE.test(text)) {
+        return true;
+    }
+    return !PROSE_STOPWORD_RE.test(text);
 }
 
 /**
@@ -172,6 +191,26 @@ const PROSE_LABEL_LEAD_RE =
  */
 const BARE_STATEMENT_RE =
     /^(?:break|continue|pass|raise|next|redo|retry|fallthrough)[;:]?$/;
+
+/**
+ * Captures the bare-word run after a trailing `return`/`yield` (see
+ * `isStructurallyBroken`'s truncated-return-value check below).
+ */
+const RETURN_TAIL_WORD_RUN_RE =
+    /\b(?:return|yield)\s+([A-Za-z_]\w*(?:\s+[A-Za-z_]\w*)+)\s*$/;
+
+/**
+ * A word-form logical/comparison operator or clause keyword. Python
+ * especially spells several operators as bare words rather than symbols
+ * (`and`/`or`/`not`/`is`/`in`), and both Python's conditional expression
+ * (`x if y else z`) and `yield from` are also bare-word forms — every one
+ * of these is a real, COMPLETE multi-word return value, not a truncated
+ * one. If the captured word run contains any of these, the bare-word-run
+ * check does not apply; "return safe default pa" contains none of them and
+ * is still caught.
+ */
+const LOGICAL_CONNECTOR_WORD_RE =
+    /\b(?:and|or|not|is|in|if|else|elif|from|for|while|as|with|lambda)\b/;
 
 /** Apply `transform` only to the parts of `code` OUTSIDE string literals. */
 function outsideStringLiterals(
@@ -292,11 +331,14 @@ function isStructurallyBroken(code: string, language: string | undefined): boole
     // collides with real multi-keyword declarations valid in several of
     // these languages ("var x int" in Go, "public static void" in Java).
     // Checked against `withoutComments` for the same reason as above.
-    if (
-        /\b(?:return|yield)\s+[A-Za-z_]\w*(?:\s+[A-Za-z_]\w*)+\s*$/.test(
-            withoutComments.trimEnd(),
-        )
-    ) {
+    //
+    // Excludes a word run containing a word-form operator/keyword
+    // (LOGICAL_CONNECTOR_WORD_RE) — without this, "yield from gen",
+    // "return not x", and "return x if y else z" (all valid, COMPLETE
+    // Python) matched the same shape as the truncated example and were
+    // silently dropped as "truncated", the opposite of this file's purpose.
+    const returnTailMatch = RETURN_TAIL_WORD_RUN_RE.exec(withoutComments.trimEnd());
+    if (returnTailMatch && !LOGICAL_CONNECTOR_WORD_RE.test(returnTailMatch[1])) {
         return true;
     }
 
@@ -417,16 +459,28 @@ export function checkFix(
     const unstrippedView = outsideStringLiterals(fix, lang, stripComments).trim();
     const strippedView = unstrippedView.replace(PROSE_LABEL_LEAD_RE, '').trim();
     // Prefer the stripped view (the label is decoration, not code), but fall
-    // back to the unstripped one when stripping leaves nothing code-shaped —
-    // "how: number" has "how" in the label vocabulary too, and stripping it
-    // down to the bare value "number" would misread a genuine one-line
-    // field/type pair as prose. The label vocabulary was chosen to be
-    // implausible as a real identifier, not impossible, and "how" is a
-    // plausible one.
+    // back to the unstripped one when stripping leaves nothing code-shaped
+    // AND what's left is a single bare token — "how: number" has "how" in
+    // the label vocabulary too, and stripping it down to the bare value
+    // "number" would misread a genuine one-line field/type pair as prose.
+    // The fallback is deliberately NOT taken for a multi-word remainder:
+    // "Fix: validate inputs" strips to "validate inputs", two words with no
+    // code signal of their own — that is a verb phrase, not a value, and
+    // falling back to the unstripped "Fix: validate inputs" would trust
+    // only the label's OWN colon to call it code, shipping the label text
+    // verbatim into the source. A real value is essentially never 2+ bare
+    // words with nothing else, so this line is safe to draw.
+    const strippedHasNoCodeSignal =
+        !isCodeLike(strippedView) && !BARE_STATEMENT_RE.test(strippedView);
+    const strippedIsSingleToken =
+        strippedView.length > 0 && !/\s/.test(strippedView);
+    // Fall back to the UNSTRIPPED view (label + value together) only for a
+    // single-token remainder; a multi-word one stays on the stripped view
+    // so it is judged on its own, label-free content.
     const tokenView =
-        isCodeLike(strippedView) || BARE_STATEMENT_RE.test(strippedView)
-            ? strippedView
-            : unstrippedView;
+        strippedHasNoCodeSignal && strippedIsSingleToken
+            ? unstrippedView
+            : strippedView;
     if (!isCodeLike(tokenView) && !BARE_STATEMENT_RE.test(tokenView)) {
         return 'prose-only';
     }

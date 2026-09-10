@@ -156,6 +156,33 @@ describe('checkFix', () => {
             const improvedCode = 'how: number';
             expect(checkFix(existingCode, improvedCode)).toBeNull();
         });
+
+        // Kody's own review caught this: the fallback-to-unstripped path
+        // above (for "how: number") also let a MULTI-WORD label-prefixed
+        // sentence through, since the unstripped view's colon alone
+        // satisfied isCodeLike — "Fix: validate inputs" shipped the label
+        // text verbatim as if it were code. A real value is essentially
+        // never 2+ bare words with nothing else, so the fallback is now
+        // restricted to a single-token remainder.
+        it.each([
+            'Fix: validate inputs',
+            'Solution: refactor service',
+            'Note: this needs better error handling',
+        ])('flags a label-prefixed multi-word sentence (%j) as prose, not code', (improvedCode) => {
+            const existingCode = 'const x = 1;';
+            expect(checkFix(existingCode, improvedCode)).toBe('prose-only');
+        });
+
+        // Kody's own review caught this too: an ordinary object/config key
+        // that is ALSO an English stop word ("on", "check", "in") made
+        // isCodeLike suppress a genuine tight key:value pair.
+        it.each([
+            ['const config = { check: false };', 'check: true'],
+            ['const config = { on: false };', 'on: true'],
+            ['const config = { in: 3 };', 'in: 5'],
+        ])('does NOT flag a tight key:value pair whose key is a stop word (%j -> %j)', (existingCode, improvedCode) => {
+            expect(checkFix(existingCode, improvedCode)).toBeNull();
+        });
     });
 
     describe('truncated', () => {
@@ -193,6 +220,19 @@ describe('checkFix', () => {
             const existingCode = 'return null;';
             const improvedCode = 'return default_value';
             expect(checkFix(existingCode, improvedCode)).toBeNull();
+        });
+
+        // Kody's own review caught this: the bare-word-run check above did
+        // not know Python spells several operators as words, not symbols —
+        // these are all valid, COMPLETE Python, not truncated.
+        it.each([
+            ['yield from old_gen', 'yield from gen'],
+            ['return not y', 'return not x'],
+            ['return a if b else c', 'return x if y else z'],
+            ['return a and b', 'return x and y'],
+            ['return a is None', 'return x is None'],
+        ])('does NOT flag valid multi-word Python return/yield (%j -> %j)', (existingCode, improvedCode) => {
+            expect(checkFix(existingCode, improvedCode, 'python')).toBeNull();
         });
 
         it('does NOT flag "var x int" (Go) — a valid multi-word declaration, not return/yield', () => {
