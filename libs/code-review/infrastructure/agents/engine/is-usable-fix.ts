@@ -19,29 +19,43 @@
  * examples from each of them, not just semicolon-terminated JS/TS — see the
  * per-check notes for the specific cases that shaped each one.
  *
- * Known scope boundary: `STRING_LITERAL_RE` recognizes `"..."`, `'...'`, and
- * `` `...` `` only — a Ruby `%w[...]`/`%q{...}` literal or a Python triple-
- * quoted string is not specially protected, so a whitespace-only fix INSIDE
- * one of those could theoretically misread as a noop-fix. Narrower and rarer
- * than the cases this file already fixes; left as a documented gap rather
- * than grown further on speculation.
+ * Known scope boundary: Ruby's `do`/`end` block delimiters are not tracked
+ * as a bracket pair the way `{}()[]` are, so a Ruby fix truncated mid-block
+ * (a `do` with no matching `end`) is caught only if it ALSO leaves a bracket
+ * or quote unbalanced. Deliberately not attempted: unlike a bracket
+ * character, `end` collides with ordinary Ruby identifier use (`range.end`,
+ * a method literally named `end`), so counting it the way `{`/`}` are
+ * counted would misfire on real, unrelated code — the same class of harm
+ * the rest of this file works hard to avoid elsewhere.
  */
 
 export type BadFixReason = 'empty' | 'noop-fix' | 'prose-only' | 'truncated';
 
 /**
- * Quoted string / template-literal spans, escape-aware: `"..."`, `'...'`,
- * `` `...` ``. Capturing group so `.split()` interleaves [nonLiteral, literal,
- * nonLiteral, ...] — string CONTENT has its own semantics (a whitespace or
- * bracket character inside a string is data, not structure) and the checks
- * below need to treat it differently from the surrounding code.
+ * Quoted string / template-literal spans, escape-aware. Capturing group so
+ * `.split()` interleaves [nonLiteral, literal, nonLiteral, ...] — string
+ * CONTENT has its own semantics (a whitespace or bracket character inside a
+ * string is data, not structure) and the checks below need to treat it
+ * differently from the surrounding code.
  *
- * The single-quote branch matches an ARBITRARY-length run — correct for
- * JavaScript/TypeScript/Python/Ruby/PHP, which all use `'...'` for ordinary
- * strings of any length.
+ * Forms recognized, in match-priority order (triple-quotes MUST precede the
+ * single/double branches — otherwise `"""x"""` reads as an empty `""`
+ * literal immediately followed by unprotected code, then another empty
+ * `""`, which is exactly wrong):
+ *   - `"""..."""` / `'''...'''` — Python triple-quoted strings.
+ *   - `"..."` / `'...'` — the single-quote branch matches an ARBITRARY-length
+ *     run, correct for JavaScript/TypeScript/Python/Ruby/PHP.
+ *   - `` `...` `` — JS/TS template literals.
+ *   - `“...”` / `‘...’` — typographic/"smart" quotes. Not a programming-
+ *     language construct, but a model with autocorrect-flavored output can
+ *     emit them inside what is otherwise real code, and an unprotected `“`
+ *     or `”` reads no differently to the checks below than a straight one.
+ *   - `%w[...]` / `%i[...]` / `%q{...}` / `%Q{...}` — Ruby's `%`-literals,
+ *     bracket/brace-delimited forms (by far the most common in the wild;
+ *     the arbitrary-delimiter general form is not attempted).
  */
 const STRING_LITERAL_RE =
-    /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)/g;
+    /("""(?:[^\\]|\\.)*?"""|'''(?:[^\\]|\\.)*?'''|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|“[^”]*”|‘[^’]*’|%[wiqQ]\[[^\]]*\]|%[qQ]\{[^}]*\})/g;
 
 /**
  * Rust's `'` is NOT reserved for strings: a lifetime (`&'a str`,
@@ -53,10 +67,13 @@ const STRING_LITERAL_RE =
  * `(` this way. Rust's actual single-quote construct, a char literal, is
  * always exactly one character or one escape (`'a'`, `'\n'`, `'\''`), so that
  * is all this variant's single-quote branch accepts; a lifetime marker simply
- * never matches it and is left as ordinary code.
+ * never matches it and is left as ordinary code. Every other form (triple-
+ * quotes, template literals, smart quotes, Ruby `%`-literals) is kept for
+ * parity even though Rust source will not produce them — a language switch
+ * with an incomplete twin is how a variant silently rots.
  */
 const STRING_LITERAL_RE_RUST =
-    /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)'|`(?:[^`\\]|\\.)*`)/g;
+    /("""(?:[^\\]|\\.)*?"""|'''(?:[^\\]|\\.)*?'''|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)'|`(?:[^`\\]|\\.)*`|“[^”]*”|‘[^’]*’|%[wiqQ]\[[^\]]*\]|%[qQ]\{[^}]*\})/g;
 
 function stringLiteralRegexFor(language: string | undefined): RegExp {
     return (language ?? '').trim().toLowerCase() === 'rust'
@@ -243,6 +260,21 @@ function looksLikeDiffHunk(code: string): boolean {
 }
 
 /**
+ * Does `code` open with a markdown ordered-list marker ("1. ", "2) ")? A
+ * fix's own place in an explanatory numbered list sometimes leaks into the
+ * dedicated `improvedCode` field instead of staying in `suggestionContent` —
+ * "1. const x = 2;" is otherwise perfectly valid code, but applying it
+ * verbatim inserts "1. " into the source, invalid in every language
+ * reviewed here.
+ *
+ * Anchored so a decimal literal never collides: "1.5 * x" has no whitespace
+ * between the "." and the "5", which this requires after the marker.
+ */
+function startsWithListMarker(code: string): boolean {
+    return /^\s*\d+[.)]\s+\S/.test(code);
+}
+
+/**
  * Classify why `improvedCode` is not a usable fix for `existingCode`, or
  * `null` when it is fine to publish. Order matters: emptiness and the noop
  * check are cheap and catch the bulk (933 + 30 of 963 in the source data)
@@ -288,7 +320,11 @@ export function checkFix(
         return 'prose-only';
     }
 
-    if (isStructurallyBroken(fix, lang) || looksLikeDiffHunk(fix)) {
+    if (
+        isStructurallyBroken(fix, lang) ||
+        looksLikeDiffHunk(fix) ||
+        startsWithListMarker(fix)
+    ) {
         return 'truncated';
     }
 

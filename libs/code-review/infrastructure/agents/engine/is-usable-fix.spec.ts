@@ -44,6 +44,22 @@ describe('checkFix', () => {
             const improvedCode = 'throw new Error("bad input");';
             expect(checkFix(existingCode, improvedCode)).toBeNull();
         });
+
+        it('does NOT flag a whitespace-only change inside a Ruby %w[] literal', () => {
+            const existingCode = 'list = %w[a  b]';
+            const improvedCode = 'list = %w[a b]';
+            expect(checkFix(existingCode, improvedCode, 'ruby')).toBeNull();
+        });
+
+        it('does NOT flag a whitespace-only change inside typographic/"smart" quotes', () => {
+            // SAME words either side — only whitespace differs — so this
+            // only stays usable if the quoted content is genuinely
+            // protected; using different words either side would pass for
+            // the wrong reason (they are never a noop regardless).
+            const existingCode = 'msg = “old  text”';
+            const improvedCode = 'msg = “old text”';
+            expect(checkFix(existingCode, improvedCode)).toBeNull();
+        });
     });
 
     describe('prose-only', () => {
@@ -119,6 +135,20 @@ describe('checkFix', () => {
             expect(checkFix(existingCode, improvedCode)).toBeNull();
         });
 
+        // A single well-formed triple-quote with no embedded bare quote is
+        // ALSO protected by the plain "..." branch as an accident of how
+        // greedy pairing partitions 3 consecutive quote chars into an empty
+        // match + the real content + another empty match — so that shape
+        // does not actually discriminate triple-quote-aware handling from
+        // its absence. An embedded bare quote does: greedy double-quote-only
+        // pairing closes early AT that embedded quote, leaving what follows
+        // it (here, an unbalanced "(") unprotected structural code.
+        it('does NOT flag an unbalanced bracket sitting after a bare quote embedded inside a Python triple-quoted string', () => {
+            const existingCode = 'x = 1';
+            const improvedCode = 'x = """He said "hi (there" to me"""';
+            expect(checkFix(existingCode, improvedCode)).toBeNull();
+        });
+
         // Regression guard: stripComments treats a "#" preceded by whitespace
         // as a line-comment marker (Python/Ruby), and running it on RAW code
         // that still contains string literals ate into a well-formed string
@@ -151,6 +181,27 @@ describe('checkFix', () => {
         it('does NOT flag a single-line fix that starts with "-" (ordinary negation)', () => {
             const existingCode = 'const x = compute();';
             const improvedCode = '-compute();';
+            expect(checkFix(existingCode, improvedCode)).toBeNull();
+        });
+
+        // Found probing realistic/messy LLM output shapes: the fix's own
+        // position in an explanatory numbered list leaking into
+        // improvedCode instead of staying in suggestionContent.
+        it('flags a leading numbered-list marker as truncated', () => {
+            const existingCode = 'const x = 1;';
+            const improvedCode = '1. const x = 2;';
+            expect(checkFix(existingCode, improvedCode)).toBe('truncated');
+        });
+
+        it('flags a leading ")"-style list marker as truncated', () => {
+            const existingCode = 'doWork();';
+            const improvedCode = '2) doWork();';
+            expect(checkFix(existingCode, improvedCode)).toBe('truncated');
+        });
+
+        it('does NOT mistake a decimal literal for a list marker', () => {
+            const existingCode = 'const x = 1;';
+            const improvedCode = 'const x = 1.5 * factor;';
             expect(checkFix(existingCode, improvedCode)).toBeNull();
         });
 
