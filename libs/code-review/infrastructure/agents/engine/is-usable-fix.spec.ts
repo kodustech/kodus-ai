@@ -75,6 +75,27 @@ describe('checkFix', () => {
             const existingCode = 'if (user.role === "admin") grantAccess();';
             expect(checkFix(existingCode, improvedCode)).toBe('prose-only');
         });
+
+        // Found probing realistic/messy LLM output shapes, not hand-picked
+        // to fit the implementation: a scaffolding-style label ("Fix:",
+        // "**WHY:**") leaking into improvedCode has a bare ":" that used to
+        // satisfy CODE_TOKEN_RE all by itself. Same leak
+        // strip-review-scaffolding.ts documents for suggestionContent.
+        it.each([
+            '**Fix:** add a null check before line 5',
+            'Note: this needs a null check',
+            'WHY: the null check was missing',
+            'Suggestion: add error handling here',
+        ])('flags a scaffolding-label lead-in %j as prose, not code', (improvedCode) => {
+            const existingCode = 'const x = 1;';
+            expect(checkFix(existingCode, improvedCode)).toBe('prose-only');
+        });
+
+        it('does NOT strip a genuine "key: value" pair — only the known label vocabulary', () => {
+            const existingCode = 'const config = { timeout: 30 };';
+            const improvedCode = 'timeout: 60';
+            expect(checkFix(existingCode, improvedCode)).toBeNull();
+        });
     });
 
     describe('truncated', () => {
@@ -113,6 +134,23 @@ describe('checkFix', () => {
         it('does NOT mistake a "//" preceded by whitespace inside a string for a comment marker', () => {
             const existingCode = 'const msg = "old note";';
             const improvedCode = 'const msg = "see docs // updated section";';
+            expect(checkFix(existingCode, improvedCode)).toBeNull();
+        });
+
+        // Found probing realistic/messy LLM output shapes: a model that
+        // echoes back a unified-diff hunk instead of plain replacement code.
+        // Well-formed text (balanced brackets, real code tokens) that sails
+        // past every other check here, but inserting it verbatim puts diff
+        // markers into the source file — not a valid fix in any language.
+        it('flags a unified-diff hunk as truncated, not a plain code fix', () => {
+            const existingCode = 'const x = 1;';
+            const improvedCode = '-const x = 1;\n+const x = 2;';
+            expect(checkFix(existingCode, improvedCode)).toBe('truncated');
+        });
+
+        it('does NOT flag a single-line fix that starts with "-" (ordinary negation)', () => {
+            const existingCode = 'const x = compute();';
+            const improvedCode = '-compute();';
             expect(checkFix(existingCode, improvedCode)).toBeNull();
         });
 

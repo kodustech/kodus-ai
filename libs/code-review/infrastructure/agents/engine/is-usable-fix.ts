@@ -89,6 +89,22 @@ const CODE_TOKEN_RE =
     /[;{}()[\]=<>:]|=>|->|::|["'`]|\b(?:function|const|let|var|return|def|elif|class|import|async|await|yield|attr_reader)\b/;
 
 /**
+ * A short leading label — "Fix:", "Note:", "**WHY:**" — immediately followed
+ * by ":" is a prose lead-in, not a code colon, and CODE_TOKEN_RE's bare `:`
+ * cannot tell them apart from a Python/Ruby block-opener or a `key: value`
+ * pair. This is the SAME leak `strip-review-scaffolding.ts` documents for
+ * `suggestionContent` (the review prompt's own WHAT/WHY/HOW template) landing
+ * in `improvedCode` instead: "**Fix:** add a null check before line 5" has a
+ * colon and registered as usable code with nothing else in this file to stop
+ * it. Scoped to this SPECIFIC label vocabulary, not any short word, so a
+ * genuine one-line dict/object pair like "key: value" keeps registering as
+ * code — only the words this codebase's own review prompts are known to
+ * produce as scaffolding labels are excluded.
+ */
+const PROSE_LABEL_LEAD_RE =
+    /^(?:\*\*|__)?(?:fix|note|why|how|what|issue|bug|problem|solution|suggestion|recommendation|explanation|reason|cause|summary)(?:\*\*|__)?:\s*/i;
+
+/**
  * A handful of control-flow statements that are, on their own, complete and
  * valid in several supported languages — Python's bare `pass`/`break`/
  * `continue`/`raise`, Ruby's `next`/`redo`/`retry`, Go's `fallthrough` — and
@@ -198,6 +214,35 @@ function isStructurallyBroken(code: string, language: string | undefined): boole
 }
 
 /**
+ * Is `code` a unified-diff hunk (every line starting with "-"/"+") rather
+ * than plain replacement code? `improvedCode`'s contract is "ready to
+ * apply" — pasting a hunk in verbatim inserts diff markers into the source
+ * file, which is invalid in every language reviewed here, even though the
+ * text itself is otherwise well-formed (balanced brackets, real code
+ * tokens) and would sail past every other check in this file. Requiring
+ * BOTH a "-" line and a "+" line is what makes this specific to diff
+ * output — a single-line fix that starts with "-" is ordinary negation
+ * (`-x`) and is unaffected (fewer than 2 lines short-circuits below).
+ */
+function looksLikeDiffHunk(code: string): boolean {
+    const lines = code
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
+    if (lines.length < 2) {
+        return false;
+    }
+    const allMarked = lines.every(
+        (line) => line.startsWith('-') || line.startsWith('+'),
+    );
+    return (
+        allMarked &&
+        lines.some((line) => line.startsWith('-')) &&
+        lines.some((line) => line.startsWith('+'))
+    );
+}
+
+/**
  * Classify why `improvedCode` is not a usable fix for `existingCode`, or
  * `null` when it is fine to publish. Order matters: emptiness and the noop
  * check are cheap and catch the bulk (933 + 30 of 963 in the source data)
@@ -236,12 +281,14 @@ export function checkFix(
         return 'noop-fix';
     }
 
-    const tokenView = outsideStringLiterals(fix, lang, stripComments).trim();
+    const tokenView = outsideStringLiterals(fix, lang, stripComments)
+        .replace(PROSE_LABEL_LEAD_RE, '')
+        .trim();
     if (!CODE_TOKEN_RE.test(tokenView) && !BARE_STATEMENT_RE.test(tokenView)) {
         return 'prose-only';
     }
 
-    if (isStructurallyBroken(fix, lang)) {
+    if (isStructurallyBroken(fix, lang) || looksLikeDiffHunk(fix)) {
         return 'truncated';
     }
 
