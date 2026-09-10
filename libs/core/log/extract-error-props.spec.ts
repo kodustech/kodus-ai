@@ -110,6 +110,34 @@ describe('extractErrorProps (#1829)', () => {
         expect(props.responseBody as string).toHaveLength(2000 + 1);
     });
 
+    it('surfaces in-repo scalar diagnostics (status, modelName, contextWindow) while still dropping heavy payload props', () => {
+        // Mirrors the in-repo error shapes that attach small scalar own props
+        // (azure `status`, llm context-window errors `contextWindow`/`modelName`)
+        // plus a heavy `requestBodyValues` — the allowlist must keep the
+        // scalars AND still drop the payload.
+        class InRepoError extends Error {
+            constructor(
+                readonly status: number,
+                readonly contextWindow: number,
+                readonly modelName: string,
+                readonly requestBodyValues: unknown,
+            ) {
+                super('model context too small');
+            }
+        }
+
+        const err = new InRepoError(404, 128_000, 'gpt-4o', {
+            messages: ['x'.repeat(50_000)],
+        });
+
+        const props = extractErrorProps(err, 2_000);
+
+        expect(props.status).toBe(404);
+        expect(props.contextWindow).toBe(128_000);
+        expect(props.modelName).toBe('gpt-4o');
+        expect(props.requestBodyValues).toBeUndefined();
+    });
+
     it('returns nothing for a plain Error with no own extra props', () => {
         expect(extractErrorProps(new Error('plain failure'), 2_000)).toEqual({});
     });

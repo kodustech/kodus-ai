@@ -645,14 +645,14 @@ export class SimpleLogger {
             logObject.error = {
                 message: sanitizeString(error.message),
                 stack: error.stack ? sanitizeString(error.stack) : undefined,
-                // #1829: BYOK provider errors carry statusCode / responseBody /
-                // url as enumerable own props of the Error subclass. pino's
-                // default `err` serializer only keeps name/message/stack, so
-                // those actionable fields were silently dropped from every log
-                // (the customer only ever saw "Unexpected error"). Merge any
-                // enumerable own props generically so subclasses — and call
-                // sites that attach extra fields — surface them, with values
-                // kept small enough for a 2KB-ish log line.
+                // #1829: provider/review errors carry actionable own props
+                // (statusCode, responseBody, url, requestHeaders + in-repo
+                // scalars like status / code / gate / contextWindow / modelName)
+                // as own props of the Error subclass. pino's default `err`
+                // serializer only keeps name/message/stack, so those were
+                // silently dropped from every log (the customer only ever saw
+                // "Unexpected error"). Surface the allowlisted props (see
+                // ERROR_LOG_PROPS), sanitized and truncated to a 2KB-ish line.
                 ...extractErrorProps(error, 2_000),
             };
         }
@@ -700,6 +700,22 @@ const ERROR_LOG_PROPS = new Set([
     'responseBody',
     'url',
     'responseHeaders',
+    // Small scalar diagnostics attached in-repo that the previous generic
+    // merge surfaced and operators relied on: azure `status`, code-review job
+    // `gate`/`target`/`requestId`, mcp `code`, llm context-window errors
+    // `contextWindow`/`overheadTokens`/`estimatedTokens`/`contextWindowTokens`/
+    // `modelName`. All scalar (number/string) — they pass through
+    // sanitize/deepSanitize/truncate safely and stay small on the log line.
+    'status',
+    'code',
+    'gate',
+    'target',
+    'requestId',
+    'contextWindow',
+    'overheadTokens',
+    'estimatedTokens',
+    'contextWindowTokens',
+    'modelName',
 ]);
 
 /**
