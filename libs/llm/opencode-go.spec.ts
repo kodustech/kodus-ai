@@ -20,6 +20,24 @@ describe('isOpenCodeGoBaseUrl', () => {
         expect(isOpenCodeGoBaseUrl(undefined)).toBe(false);
     });
 
+    it('is anchored to the actual host, not a substring anywhere in the URL', () => {
+        // A prior version was a bare `/opencode\.ai\/zen/i.test(baseURL)`
+        // substring scan — these two would have matched it, attaching the
+        // header to an upstream that is not OpenCode Go at all.
+        expect(isOpenCodeGoBaseUrl('https://notopencode.ai/zen/v1')).toBe(
+            false,
+        );
+        expect(
+            isOpenCodeGoBaseUrl(
+                'https://gw.corp.example/opencode.ai/zen/v1',
+            ),
+        ).toBe(false);
+        // Same host, unrelated path — still no match.
+        expect(isOpenCodeGoBaseUrl('https://opencode.ai/other')).toBe(false);
+        // A malformed / non-absolute baseURL degrades to false, not a throw.
+        expect(isOpenCodeGoBaseUrl('not a url')).toBe(false);
+    });
+
     it('matches bare opencode.ai/zen/v1 too (no "/go" segment) — a real shape in production, not just the documented /zen/go/v1 form', () => {
         // libs/llm/testing/__fixtures__/byok-prod-shapes.json has live orgs on
         // exactly this bare shape (kimi-k2.5, minimax-m3-free) alongside the

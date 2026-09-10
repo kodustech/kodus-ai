@@ -17,20 +17,41 @@
 import { createHash, createHmac } from 'crypto';
 
 /**
- * Deliberately broad — matches bare `opencode.ai/zen`, not just `/zen/go`.
+ * Deliberately broad on the PATH — matches bare `/zen`, not just `/zen/go`.
  * A prior commit narrowed this to require `/go`, reasoning from OpenCode's
  * docs that the session-header requirement is scoped to the Go tier. Real
  * production BYOK configs proved that wrong: `libs/llm/testing/__fixtures__/
  * byok-prod-shapes.json` has live orgs on BOTH `opencode.ai/zen/go/v1` AND
  * bare `opencode.ai/zen/v1` (kimi-k2.5, minimax-m3-free) — the `/go` form is
  * not the only shape actually in use, docs notwithstanding. The asymmetry
- * settles it: matching too broadly costs one harmless extra header (their
- * own docs call it "recommended" for routing/cache locality, never
- * rejected); matching too narrowly means a real customer's every review
- * 400s — the exact outage #1880 is about. So: broad, on purpose.
+ * settles it: matching too broadly on the PATH costs one harmless extra
+ * header (their own docs call it "recommended" for routing/cache locality,
+ * never rejected); matching too narrowly means a real customer's every
+ * review 400s — the exact outage #1880 is about. So: broad on the path,
+ * on purpose.
+ *
+ * But NOT broad on the HOST: an earlier version of this function was a plain
+ * substring regex (`/opencode\.ai\/zen/i.test(baseURL)`), which also matches
+ * `https://notopencode.ai/zen/v1` and a corp gateway path like
+ * `https://gw.corp.example/opencode.ai/zen/v1` — attaching this header to an
+ * upstream that isn't OpenCode at all, which a strict server could 400 on an
+ * unrecognized `x-*` header (the exact failure class this exists to avoid).
+ * Parse the URL for real and anchor on the actual authority instead of
+ * scanning the whole string — same idiom base-url-hygiene.ts already uses
+ * for the same reason.
  */
 export function isOpenCodeGoBaseUrl(baseURL?: string): boolean {
-    return !!baseURL && /opencode\.ai\/zen/i.test(baseURL);
+    if (!baseURL) return false;
+    let parsed: URL;
+    try {
+        parsed = new URL(baseURL);
+    } catch {
+        return false;
+    }
+    return (
+        parsed.hostname.toLowerCase() === 'opencode.ai' &&
+        parsed.pathname.toLowerCase().startsWith('/zen')
+    );
 }
 
 /** The handful of `NormalizedModel` fields `openCodeSessionId` actually reads
