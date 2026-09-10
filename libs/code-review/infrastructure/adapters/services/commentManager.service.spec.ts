@@ -1801,6 +1801,34 @@ describe('CommentManagerService — GitLab status notes (#1721)', () => {
         expect(result).toEqual({ commentId: 42, noteId: 42, threadId: undefined });
     });
 
+    it('never persists a non-numeric recreated id (discussion-hash guard, #1877)', async () => {
+        codeManagementService.updateSingleIssueComment.mockResolvedValue({
+            id: 'abc123def', // discussion hash leaking from a provider fallback
+        });
+
+        const result = await service.createInitialComment(
+            stubOrg,
+            5,
+            stubRepository,
+            [{ filename: 'a.ts', patch: '+ code', status: 'modified' }] as any,
+            'en-US',
+            PlatformType.GITLAB,
+            undefined,
+            {
+                startReviewMessage: {
+                    status: 'EVERY_PUSH',
+                    content: 'Start again',
+                },
+            } as any,
+            { commentId: 7, noteId: 9 },
+        );
+
+        // NaN must never land in commentId/noteId — it reads as falsy on the
+        // next push and would open a duplicate status note.
+        expect(result).toEqual({ commentId: 7, noteId: 9, threadId: undefined });
+        expect(Number.isNaN(result.commentId)).toBe(false);
+    });
+
     it('non-GitLab platforms keep updating the end-of-review comment via updateIssueComment', async () => {
         await service.updateOverallComment(
             stubOrg,

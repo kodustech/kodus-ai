@@ -784,9 +784,18 @@ You must always respond in ${languageResultPrompt}.`;
                 // returns a NEW id. Adopt it — otherwise the stale id below is
                 // persisted to lastExecution and the next push 404s again,
                 // recreating yet another note and piling up duplicates per push.
+                // A non-numeric id (e.g. a discussion hash leaking from a
+                // provider fallback) is never adopted, so NaN never lands in
+                // lastExecution — it would read as falsy and open a duplicate.
+                let adoptedId: number | undefined;
                 if (updated?.id !== undefined && updated?.id !== null) {
-                    existingCommentId = Number(updated.id);
-                    noteId = Number(updated.id);
+                    adoptedId = Number(updated.id);
+                    if (!Number.isNaN(adoptedId)) {
+                        existingCommentId = adoptedId;
+                        noteId = adoptedId;
+                    } else {
+                        adoptedId = undefined;
+                    }
                 }
 
                 this.logger.log({
@@ -794,11 +803,7 @@ You must always respond in ${languageResultPrompt}.`;
                     context: CommentManagerService.name,
                     metadata: {
                         ...existingCommentData,
-                        recreatedNoteId:
-                            updated?.id !== undefined &&
-                            updated?.id !== null
-                                ? Number(updated.id)
-                                : undefined,
+                        recreatedNoteId: adoptedId,
                         organizationAndTeamData,
                         prNumber,
                         repository: repository.name,
@@ -1042,14 +1047,19 @@ You must always respond in ${languageResultPrompt}.`;
                 // recreates it as a plain MR note and returns the NEW id.
                 // Propagate it so the caller can persist it — otherwise the
                 // next push references the deleted note and recreates again.
+                // Guard against non-numeric ids (discussion-hash leaks) so NaN
+                // is never returned/persisted as commentId/noteId.
                 const updated =
                     await this.codeManagementService.updateSingleIssueComment(
                         updateParams,
                         undefined,
                     );
                 if (updated?.id !== undefined && updated?.id !== null) {
-                    effectiveCommentId = Number(updated.id);
-                    effectiveNoteId = Number(updated.id);
+                    const adoptedId = Number(updated.id);
+                    if (!Number.isNaN(adoptedId)) {
+                        effectiveCommentId = adoptedId;
+                        effectiveNoteId = adoptedId;
+                    }
                 }
             } else {
                 await this.codeManagementService.updateIssueComment(
@@ -1061,10 +1071,13 @@ You must always respond in ${languageResultPrompt}.`;
             this.logger.log({
                 message: `Updated overall comment for PR#${prNumber}`,
                 context: CommentManagerService.name,
+                // Rule 4: rich metadata — org/team is required so the entry is
+                // traceable back to the organization.
                 metadata: {
                     commentId: effectiveCommentId,
                     noteId: effectiveNoteId,
                     threadId,
+                    organizationAndTeamData,
                 },
             });
 

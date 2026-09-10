@@ -2758,13 +2758,36 @@ export class GitlabService implements Omit<
                 // editing that discussion-shaped note.
                 if (commentId) {
                     try {
-                        return await gitlabAPI.MergeRequestDiscussions.editNote(
-                            repository.id,
-                            prNumber,
-                            String(commentId),
-                            noteId,
-                            { body: body },
-                        );
+                        const edited =
+                            await gitlabAPI.MergeRequestDiscussions.editNote(
+                                repository.id,
+                                prNumber,
+                                String(commentId),
+                                noteId,
+                                { body: body },
+                            );
+
+                        // GitLab's editNote returns either the edited note
+                        // (id = note id) or a Discussion whose `id` is a string
+                        // hash — in the latter case the note id lives on
+                        // notes[0].id. Normalize so callers always receive a
+                        // numeric note id; otherwise Number(discussion.id)
+                        // yields NaN that would be persisted downstream.
+                        const discussionShape = edited as {
+                            notes?: Array<{ id?: number | string }>;
+                        };
+                        if (
+                            Array.isArray(discussionShape?.notes) &&
+                            discussionShape.notes.length > 0
+                        ) {
+                            const targetNote =
+                                discussionShape.notes.find(
+                                    (note) =>
+                                        Number(note?.id) === Number(noteId),
+                                ) ?? discussionShape.notes[0];
+                            return targetNote;
+                        }
+                        return edited;
                     } catch (discussionError) {
                         if (!this.isGitlabNotFoundError(discussionError)) {
                             throw discussionError;

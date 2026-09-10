@@ -532,6 +532,34 @@ describe('GitlabService', () => {
             });
         });
 
+        it('normalizes a Discussion-shaped editNote response to the numeric note id (#1877)', async () => {
+            const notesEdit = jest
+                .fn()
+                .mockRejectedValue({ response: { status: 404 } });
+            const discussionsEditNote = jest.fn().mockResolvedValue({
+                id: 'abc123def', // discussion hash — NOT the note id
+                individual_note: false,
+                notes: [{ id: 11, body: 'pre-existing' }, { id: 9, body: 'summary' }],
+            });
+            mockedGitlab.mockReturnValue({
+                MergeRequestNotes: { edit: notesEdit },
+                MergeRequestDiscussions: { editNote: discussionsEditNote },
+            });
+
+            const result = await service.updateSingleIssueComment({
+                organizationAndTeamData,
+                repository: { id: '1' },
+                prNumber: 2,
+                commentId: 7,
+                noteId: 9,
+                body: 'end-of-review summary',
+            });
+
+            // Callers must persist a numeric note id — the discussion hash
+            // would otherwise be coerced to NaN and corrupt lastExecution.
+            expect(result).toEqual({ id: 9, body: 'summary' });
+        });
+
         it('rethrows non-404 failures instead of triggering the fallback (rate-limit/5xx)', async () => {
             const notesEdit = jest
                 .fn()
