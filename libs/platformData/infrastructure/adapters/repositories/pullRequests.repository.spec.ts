@@ -304,10 +304,12 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                 createdAt: -1,
             });
             // Filter (deliveryStatus) must be the innermost step — applied
-            // BEFORE sortArray/slice, not after.
+            // BEFORE sortArray/slice, not after. $ifNull guards a file
+            // pushed without a `suggestions` key at all (addFileToPullRequest
+            // $push'es whatever IFile it's given).
             expect(
                 capStage.$slice[0].$sortArray.input.$filter.input,
-            ).toBe('$files.suggestions');
+            ).toEqual({ $ifNull: ['$files.suggestions', []] });
         });
 
         it('short-circuits without querying Mongo when filenames is empty', async () => {

@@ -1015,6 +1015,16 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                 // never-sent suggestion buried among the newest entries can
                 // never push out an older SENT one (that would silently
                 // shrink the decision history the caller sees).
+                //
+                // `files.suggestions` is $push'ed per-file by addFileToPullRequest
+                // with no guaranteed `suggestions` key (see IFile / the $push
+                // call), and the old bare $unwind silently dropped a document
+                // missing it (same reasoning as this file's preserveNullAndEmptyArrays
+                // unwinds elsewhere). $filter/$sortArray on a missing field
+                // resolve to null, and $slice on null throws — so a PR whose
+                // matched file has no `suggestions` array would make this whole
+                // aggregation throw instead of degrading to "no history".
+                // $ifNull guards that.
                 {
                     $addFields: {
                         'files.suggestions': {
@@ -1023,7 +1033,12 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                                     $sortArray: {
                                         input: {
                                             $filter: {
-                                                input: '$files.suggestions',
+                                                input: {
+                                                    $ifNull: [
+                                                        '$files.suggestions',
+                                                        [],
+                                                    ],
+                                                },
                                                 as: 'suggestion',
                                                 cond: {
                                                     $eq: [
@@ -1073,7 +1088,9 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                 // Same accumulation risk as findSuggestionsByPRAndFilenames,
                 // but on the top-level prLevelSuggestions array (one entry
                 // per review round, no per-file bound to begin with) — cap it
-                // the same way, before unwinding.
+                // the same way, before unwinding. prLevelSuggestions has no
+                // schema default either and only exists on PRs that ever had
+                // a PR-level finding, so guard the same way with $ifNull.
                 {
                     $addFields: {
                         prLevelSuggestions: {
@@ -1082,7 +1099,12 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                                     $sortArray: {
                                         input: {
                                             $filter: {
-                                                input: '$prLevelSuggestions',
+                                                input: {
+                                                    $ifNull: [
+                                                        '$prLevelSuggestions',
+                                                        [],
+                                                    ],
+                                                },
                                                 as: 'suggestion',
                                                 cond: {
                                                     $eq: [

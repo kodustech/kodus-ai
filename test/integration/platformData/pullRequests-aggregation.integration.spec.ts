@@ -637,5 +637,149 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test');
                 expect(counts?.firstSentSuggestion).toBeNull();
             });
         });
+
+        describe('findSuggestionsByPRAndFilenames / findPrLevelSuggestionsByPR (issue #1313 — decision memory reads)', () => {
+            it('returns matching SENT suggestions, most recent first, capped per file, against a real aggregation', async () => {
+                await createTestPR({
+                    number: 700,
+                    repositoryId: 'repo-decisions',
+                    files: [
+                        {
+                            suggestions: [
+                                {
+                                    deliveryStatus: DeliveryStatus.SENT,
+                                    createdAt: '2026-01-01T00:00:00.000Z',
+                                } as any,
+                                {
+                                    deliveryStatus: DeliveryStatus.NOT_SENT,
+                                    createdAt: '2026-01-02T00:00:00.000Z',
+                                } as any,
+                                {
+                                    deliveryStatus: DeliveryStatus.SENT,
+                                    createdAt: '2026-01-03T00:00:00.000Z',
+                                } as any,
+                            ],
+                        },
+                    ],
+                });
+
+                const result = await repository.findSuggestionsByPRAndFilenames(
+                    700,
+                    'org/test-repo',
+                    ['src/file0.ts'],
+                    TEST_ORG_ID,
+                    DeliveryStatus.SENT,
+                );
+
+                expect(result).toHaveLength(2);
+                expect(result.every((s) => s.deliveryStatus === DeliveryStatus.SENT)).toBe(
+                    true,
+                );
+                // Most recent first (createdAt desc).
+                expect(result[0].createdAt).toBe('2026-01-03T00:00:00.000Z');
+                expect(result[1].createdAt).toBe('2026-01-01T00:00:00.000Z');
+            });
+
+            // The regression this describe block exists for: addFileToPullRequest
+            // $push'es whatever IFile it's given, with no guarantee it carries a
+            // `suggestions` key. The old bare $unwind silently dropped such a
+            // document; $filter/$sortArray/$slice on a missing field throws
+            // unless guarded with $ifNull — and PrDecisionStoreService's
+            // Promise.allSettled would swallow that throw as a fail-open "no
+            // history", silently losing the #1313 decision memory for that file.
+            it('does not throw, and returns empty, when the matched file has no `suggestions` field at all', async () => {
+                await model.create({
+                    organizationId: TEST_ORG_ID,
+                    number: 701,
+                    title: 'PR with a file missing `suggestions`',
+                    status: 'open',
+                    merged: false,
+                    url: 'https://github.com/test/repo/pull/701',
+                    baseBranchRef: 'main',
+                    headBranchRef: 'feature/test',
+                    repository: {
+                        id: 'repo-decisions',
+                        name: 'test-repo',
+                        fullName: 'org/test-repo',
+                        language: 'TypeScript',
+                        url: 'https://github.com/org/test-repo',
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                    },
+                    openedAt: new Date().toISOString(),
+                    closedAt: '',
+                    files: [
+                        {
+                            id: 'file-0',
+                            path: 'src/file0.ts',
+                            filename: 'file0.ts',
+                            previousName: '',
+                            status: 'modified',
+                            createdAt: new Date().toISOString(),
+                            updatedAt: new Date().toISOString(),
+                            // `suggestions` intentionally omitted.
+                        },
+                    ],
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    provider: 'github',
+                    user: { id: 'user-1', username: 'testuser' },
+                    commits: [],
+                    isDraft: false,
+                } as any);
+
+                await expect(
+                    repository.findSuggestionsByPRAndFilenames(
+                        701,
+                        'org/test-repo',
+                        ['src/file0.ts'],
+                        TEST_ORG_ID,
+                        DeliveryStatus.SENT,
+                    ),
+                ).resolves.toEqual([]);
+            });
+
+            it('does not throw, and returns empty, when the PR has no `prLevelSuggestions` field at all', async () => {
+                await model.create({
+                    organizationId: TEST_ORG_ID,
+                    number: 702,
+                    title: 'PR with no prLevelSuggestions field',
+                    status: 'open',
+                    merged: false,
+                    url: 'https://github.com/test/repo/pull/702',
+                    baseBranchRef: 'main',
+                    headBranchRef: 'feature/test',
+                    repository: {
+                        id: 'repo-decisions',
+                        name: 'test-repo',
+                        fullName: 'org/test-repo',
+                        language: 'TypeScript',
+                        url: 'https://github.com/org/test-repo',
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                    },
+                    openedAt: new Date().toISOString(),
+                    closedAt: '',
+                    files: [],
+                    // `prLevelSuggestions` intentionally omitted.
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    provider: 'github',
+                    user: { id: 'user-1', username: 'testuser' },
+                    commits: [],
+                    isDraft: false,
+                } as any);
+
+                await expect(
+                    repository.findPrLevelSuggestionsByPR(
+                        702,
+                        'org/test-repo',
+                        TEST_ORG_ID,
+                        DeliveryStatus.SENT,
+                    ),
+                ).resolves.toEqual([]);
+            });
+        });
+
     },
 );
