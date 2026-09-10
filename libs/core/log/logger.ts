@@ -687,26 +687,48 @@ export class SimpleLogger {
 }
 
 /**
+ * Provider-error fields worth surfacing in structured logs, allowlisted so a
+ * vendor error subclass like @ai-sdk/provider's `APICallError` never leaks its
+ * heavy own props (`requestBodyValues`, `data`) into a log line. `requestBodyValues`
+ * is the full request payload — for a review call that's the whole prompt,
+ * messages array included, and `data` is an arbitrary object; both would dump
+ * uncapped into the structured log. `Object.keys(error)` minus name/message/stack
+ * is too broad for that reason.
+ */
+const ERROR_LOG_PROPS = new Set([
+    'statusCode',
+    'responseBody',
+    'url',
+    'responseHeaders',
+]);
+
+/**
  * Collect the user-facing fields a provider error carries on itself.
  *
  * pino's default `err` serializer only keeps name/message/stack (which live on
  * Error.prototype), so BYOK subclasses that attach `statusCode`, `responseBody`
- * or `url` as own props with them were invisible in every structured log (#1829).
- * This merges those own enumerable props generically — no need to special-case
- * each provider — with string/Array values truncated to keep the log line sane.
+ * or `url` as own props were invisible in every structured log (#1829). This
+ * picks the allowlisted fields and truncates string values — and sanitizes
+ * (URL-embedded credential redaction) BEFORE truncating, so a long
+ * credential-shaped string can't skip redaction by being oversized.
  */
 export function extractErrorProps(
     error: Error,
     maxStringLength: number,
 ): Record<string, unknown> {
     const props: Record<string, unknown> = {};
-    for (const key of Object.keys(error)) {
-        if (key === 'name' || key === 'message' || key === 'stack') {
+    const source = error as unknown as Record<string, unknown>;
+    for (const key of ERROR_LOG_PROPS) {
+        const value = source[key];
+        if (value === undefined) {
             continue;
         }
-        const value = (error as unknown as Record<string, unknown>)[key];
-        if (typeof value === 'string' && value.length > maxStringLength) {
-            props[key] = `${value.substring(0, maxStringLength)}…`;
+        if (typeof value === 'string') {
+            const sanitized = sanitizeString(value);
+            props[key] =
+                sanitized.length > maxStringLength
+                    ? `${sanitized.substring(0, maxStringLength)}…`
+                    : sanitized;
         } else {
             props[key] = deepSanitize(value);
         }
