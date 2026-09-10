@@ -18,6 +18,11 @@ describe('isOpenCodeGoBaseUrl', () => {
         expect(isOpenCodeGoBaseUrl('https://opencode.ai/docs')).toBe(false);
         expect(isOpenCodeGoBaseUrl(undefined)).toBe(false);
     });
+
+    it('does not match "zen" without "go" — the session-header requirement is scoped to the Go tier, not the whole Zen portal', () => {
+        expect(isOpenCodeGoBaseUrl('https://opencode.ai/zen')).toBe(false);
+        expect(isOpenCodeGoBaseUrl('https://opencode.ai/zen/v1')).toBe(false);
+    });
 });
 
 describe('openCodeSessionId', () => {

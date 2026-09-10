@@ -16,8 +16,16 @@
  */
 import { createHash, createHmac } from 'crypto';
 
+/**
+ * Matches `/go` specifically, not `opencode.ai/zen` alone: "Zen" is the
+ * broader auth/gateway portal (OpenCode's other, non-Go offerings sit behind
+ * the same host), and their docs scope the session-header requirement to the
+ * Go subscription tier — not to Zen as a whole. All three documented Go
+ * endpoints share this prefix: `/zen/go/v1/chat/completions`, `/v1/responses`,
+ * and `/v1/messages`.
+ */
 export function isOpenCodeGoBaseUrl(baseURL?: string): boolean {
-    return !!baseURL && /opencode\.ai\/zen/i.test(baseURL);
+    return !!baseURL && /opencode\.ai\/zen\/go/i.test(baseURL);
 }
 
 /** The handful of `NormalizedModel` fields `openCodeSessionId` actually reads
