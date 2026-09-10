@@ -230,5 +230,26 @@ describe('checkFix', () => {
             const improvedCode = '"Invalid configuration provided"';
             expect(checkFix(existingCode, improvedCode)).toBeNull();
         });
+
+        // Bare control-flow statements: complete, valid, and carry neither
+        // punctuation nor a CODE_TOKEN_RE keyword in several languages.
+        it.each([
+            ['break', 'do_something()'],
+            ['continue', 'do_something()'],
+            ['pass', 'do_something()'], // Python
+            ['raise', 'log_and_continue()'], // Python bare re-raise
+            ['next', 'do_something'], // Ruby
+            ['redo', 'do_something'], // Ruby
+            ['retry', 'do_something'], // Ruby
+            ['fallthrough', 'do_something()'], // Go
+        ])('accepts a bare "%s" statement as the whole fix', (bareFix, existing) => {
+            expect(checkFix(existing, bareFix)).toBeNull();
+        });
+
+        it('still flags "break" embedded in an ordinary English sentence as prose', () => {
+            const existingCode = 'do_something()';
+            const improvedCode = 'this would break the existing tests';
+            expect(checkFix(existingCode, improvedCode)).toBe('prose-only');
+        });
     });
 });

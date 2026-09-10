@@ -80,13 +80,27 @@ function stringLiteralRegexFor(language: string | undefined): RegExp {
  * false "usable" verdict — worse than the gap it was meant to close.
  *
  * The keyword list stays SHORT and deliberately excludes common English words
- * (for/new/try/case/while/break/continue/throw/switch/else/from/include/
- * require all lost this bid) — accepting one of those as a "code" token lets
- * genuine prose slip through as if it were a real fix, which is the harm on
- * the OTHER side of this check and just as bad as a false positive.
+ * (for/new/try/case/while/throw/switch/else/from/include/require all lost
+ * this bid) — accepting one of those as a "code" token lets genuine prose
+ * slip through as if it were a real fix, which is the harm on the OTHER side
+ * of this check and just as bad as a false positive.
  */
 const CODE_TOKEN_RE =
     /[;{}()[\]=<>:]|=>|->|::|["'`]|\b(?:function|const|let|var|return|def|elif|class|import|async|await|yield|attr_reader)\b/;
+
+/**
+ * A handful of control-flow statements that are, on their own, complete and
+ * valid in several supported languages — Python's bare `pass`/`break`/
+ * `continue`/`raise`, Ruby's `next`/`redo`/`retry`, Go's `fallthrough` — and
+ * carry NEITHER punctuation nor a CODE_TOKEN_RE keyword, so a fix that is
+ * exactly one of these words alone would otherwise register as prose-only.
+ * "break" itself was excluded from CODE_TOKEN_RE for colliding with ordinary
+ * English ("this would break the tests"), but that risk only exists mid-
+ * sentence — gating on the fix being EXACTLY this one word and nothing else
+ * is safe: prose is not shaped like a single bare word.
+ */
+const BARE_STATEMENT_RE =
+    /^(?:break|continue|pass|raise|next|redo|retry|fallthrough)[;:]?$/;
 
 /** Apply `transform` only to the parts of `code` OUTSIDE string literals. */
 function outsideStringLiterals(
@@ -222,7 +236,8 @@ export function checkFix(
         return 'noop-fix';
     }
 
-    if (!CODE_TOKEN_RE.test(outsideStringLiterals(fix, lang, stripComments))) {
+    const tokenView = outsideStringLiterals(fix, lang, stripComments).trim();
+    if (!CODE_TOKEN_RE.test(tokenView) && !BARE_STATEMENT_RE.test(tokenView)) {
         return 'prose-only';
     }
 
