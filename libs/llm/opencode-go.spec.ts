@@ -4,7 +4,7 @@ import PROD_SHAPES from './testing/__fixtures__/byok-prod-shapes.json';
 const HEX32 = /^[0-9a-f]{32}$/;
 
 describe('isOpenCodeGoBaseUrl', () => {
-    it('matches any opencode.ai/zen endpoint (chat completions, responses, or messages)', () => {
+    it('matches the opencode.ai host regardless of path — chat completions, responses, messages, or bare', () => {
         expect(isOpenCodeGoBaseUrl('https://opencode.ai/zen/go/v1')).toBe(
             true,
         );
@@ -12,11 +12,19 @@ describe('isOpenCodeGoBaseUrl', () => {
             isOpenCodeGoBaseUrl('https://opencode.ai/zen/go/v1/chat/completions'),
         ).toBe(true);
         expect(isOpenCodeGoBaseUrl('https://opencode.ai/zen/go')).toBe(true);
+        // No path restriction at all — matches jcode's own validated fix for
+        // this issue (github.com/1jehuang/jcode PR #1172), which checks only
+        // the host, never the path.
+        expect(isOpenCodeGoBaseUrl('https://opencode.ai/docs')).toBe(true);
+        expect(isOpenCodeGoBaseUrl('https://opencode.ai')).toBe(true);
+    });
+
+    it('matches an opencode.ai SUBDOMAIN too, same as jcode does', () => {
+        expect(isOpenCodeGoBaseUrl('https://api.opencode.ai/v1')).toBe(true);
     });
 
     it('does not match an unrelated or missing baseURL', () => {
         expect(isOpenCodeGoBaseUrl('https://api.openai.com/v1')).toBe(false);
-        expect(isOpenCodeGoBaseUrl('https://opencode.ai/docs')).toBe(false);
         expect(isOpenCodeGoBaseUrl(undefined)).toBe(false);
     });
 
@@ -32,8 +40,6 @@ describe('isOpenCodeGoBaseUrl', () => {
                 'https://gw.corp.example/opencode.ai/zen/v1',
             ),
         ).toBe(false);
-        // Same host, unrelated path — still no match.
-        expect(isOpenCodeGoBaseUrl('https://opencode.ai/other')).toBe(false);
         // A malformed / non-absolute baseURL degrades to false, not a throw.
         expect(isOpenCodeGoBaseUrl('not a url')).toBe(false);
     });

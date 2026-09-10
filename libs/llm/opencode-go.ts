@@ -17,28 +17,32 @@
 import { createHash, createHmac } from 'crypto';
 
 /**
- * Deliberately broad on the PATH — matches bare `/zen`, not just `/zen/go`.
- * A prior commit narrowed this to require `/go`, reasoning from OpenCode's
- * docs that the session-header requirement is scoped to the Go tier. Real
- * production BYOK configs proved that wrong: `libs/llm/testing/__fixtures__/
- * byok-prod-shapes.json` has live orgs on BOTH `opencode.ai/zen/go/v1` AND
- * bare `opencode.ai/zen/v1` (kimi-k2.5, minimax-m3-free) — the `/go` form is
- * not the only shape actually in use, docs notwithstanding. The asymmetry
- * settles it: matching too broadly on the PATH costs one harmless extra
- * header (their own docs call it "recommended" for routing/cache locality,
- * never rejected); matching too narrowly means a real customer's every
- * review 400s — the exact outage #1880 is about. So: broad on the path,
- * on purpose.
+ * HOST-only check, no path restriction — matches `jcode`'s own fix for this
+ * exact issue (github.com/1jehuang/jcode PR #1172, linked from OpenCode's own
+ * "Validated Clients" table):
  *
- * But NOT broad on the HOST: an earlier version of this function was a plain
- * substring regex (`/opencode\.ai\/zen/i.test(baseURL)`), which also matches
- * `https://notopencode.ai/zen/v1` and a corp gateway path like
- * `https://gw.corp.example/opencode.ai/zen/v1` — attaching this header to an
- * upstream that isn't OpenCode at all, which a strict server could 400 on an
- * unrecognized `x-*` header (the exact failure class this exists to avoid).
- * Parse the URL for real and anchor on the actual authority instead of
- * scanning the whole string — same idiom base-url-hygiene.ts already uses
- * for the same reason.
+ *   fn is_opencode_api_base(api_base: &str) -> bool {
+ *       matches!(url.host_str(), Some(host) if host == "opencode.ai" || host.ends_with(".opencode.ai"))
+ *   }
+ *
+ * Two things this codebase tried and rejected before landing here:
+ *  1. A plain substring regex (`/opencode\.ai\/zen/i.test(baseURL)`) — also
+ *     matches `https://notopencode.ai/zen/v1` and a corp gateway path like
+ *     `https://gw.corp.example/opencode.ai/zen/v1`, attaching the header to
+ *     an upstream that isn't OpenCode at all (a strict server could 400 on
+ *     an unrecognized `x-*` header — the exact failure class this exists to
+ *     avoid). Fixed by parsing the URL for real instead of scanning the
+ *     whole string, same idiom base-url-hygiene.ts uses for the same reason.
+ *  2. Requiring the path to start with `/zen` (or `/zen/go`) — reasoning
+ *     from OpenCode's docs that the session-header requirement is scoped to
+ *     a specific tier/path. Real production BYOK configs proved the `/go`
+ *     version wrong (`libs/llm/testing/__fixtures__/byok-prod-shapes.json`
+ *     has live orgs on bare `opencode.ai/zen/v1`, no `/go`), and jcode's own
+ *     validated fix doesn't check the path at all — just the host. Matching
+ *     on host alone is a strict superset of every real shape seen so far,
+ *     and the same asymmetry as always applies: an extra header costs
+ *     nothing (OpenCode's docs call it "recommended", never rejected); a
+ *     missed one 400s a real customer's every review.
  */
 export function isOpenCodeGoBaseUrl(baseURL?: string): boolean {
     if (!baseURL) return false;
@@ -48,10 +52,8 @@ export function isOpenCodeGoBaseUrl(baseURL?: string): boolean {
     } catch {
         return false;
     }
-    return (
-        parsed.hostname.toLowerCase() === 'opencode.ai' &&
-        parsed.pathname.toLowerCase().startsWith('/zen')
-    );
+    const host = parsed.hostname.toLowerCase();
+    return host === 'opencode.ai' || host.endsWith('.opencode.ai');
 }
 
 /** The handful of `NormalizedModel` fields `openCodeSessionId` actually reads
