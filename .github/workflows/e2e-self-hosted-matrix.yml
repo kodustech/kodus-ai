@@ -295,6 +295,12 @@ jobs:
                   IMAGE_TAG: ${{ needs.plan.outputs.image_tag }}
                   SOURCE_MATRIX_FILE: ${{ inputs.matrix_file || 'matrix/fast.yml' }}
                   LICENSE_MODE: ${{ matrix.cell.license }}
+                  # Scheduled cron runs test the newest PUBLISHED release against
+                  # a main-refreshed RBAC manifest, so endpoints added since that
+                  # release legitimately 404. PR / release-train runs test an
+                  # image built from the same commit as the manifest — there a
+                  # 404 is a real regression and must keep failing (#1696).
+                  RBAC_ALLOW_MISSING_ROUTE: ${{ github.event_name == 'schedule' && '1' || '0' }}
                   KODUS_INSTALLER_PATH: ${{ github.workspace }}/kodus-installer
                   # AWS by default: Kodus has credit there, and DigitalOcean
                   # was the direct cause of two failure classes — 504s on
