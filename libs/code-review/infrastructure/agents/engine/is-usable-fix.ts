@@ -157,7 +157,13 @@ function isCodeLike(text: string): boolean {
         return false;
     }
     if (TIGHT_KEY_VALUE_RE.test(text)) {
-        return true;
+        // The KEY is allowed to be a stop word ("on: true", "check: false")
+        // — that's the whole point of this branch — but the VALUE is not:
+        // skipping the stopword gate entirely let "Note: this" and "Fix:
+        // it" (both matching the same tight shape) through as code, which
+        // is exactly the label-prefixed prose this file exists to catch.
+        const value = text.replace(/^\w+\s*:\s*/, '');
+        return value.length > 0 && !PROSE_STOPWORD_RE.test(value);
     }
     return !PROSE_STOPWORD_RE.test(text);
 }
@@ -211,6 +217,18 @@ const RETURN_TAIL_WORD_RUN_RE =
  */
 const LOGICAL_CONNECTOR_WORD_RE =
     /\b(?:and|or|not|is|in|if|else|elif|from|for|while|as|with|lambda)\b/;
+
+/**
+ * Same word list as `LOGICAL_CONNECTOR_WORD_RE`, but anchored to the END of
+ * the captured run. A connector word appearing mid-run ("x if y else z") is
+ * what makes the whole thing a complete expression; the SAME word dangling
+ * at the very end ("return a if", "return x and") is the opposite — every
+ * one of these connectors requires an operand after it in every supported
+ * language, so a run ending in one is truncated exactly like the plain
+ * word-run case, not exempt from it.
+ */
+const CONNECTOR_TAIL_RE =
+    /\b(?:and|or|not|is|in|if|else|elif|from|for|while|as|with|lambda)\s*$/;
 
 /** Apply `transform` only to the parts of `code` OUTSIDE string literals. */
 function outsideStringLiterals(
@@ -337,8 +355,17 @@ function isStructurallyBroken(code: string, language: string | undefined): boole
     // "return not x", and "return x if y else z" (all valid, COMPLETE
     // Python) matched the same shape as the truncated example and were
     // silently dropped as "truncated", the opposite of this file's purpose.
+    // That exemption is narrowed back by CONNECTOR_TAIL_RE: the connector
+    // has to appear mid-run, not be the LAST word — "return a if" and
+    // "return x and" dangle the same way "return safe default pa" does,
+    // just with a keyword instead of an identifier, and every one of these
+    // connectors requires an operand after it in every supported language.
     const returnTailMatch = RETURN_TAIL_WORD_RUN_RE.exec(withoutComments.trimEnd());
-    if (returnTailMatch && !LOGICAL_CONNECTOR_WORD_RE.test(returnTailMatch[1])) {
+    if (
+        returnTailMatch &&
+        (!LOGICAL_CONNECTOR_WORD_RE.test(returnTailMatch[1]) ||
+            CONNECTOR_TAIL_RE.test(returnTailMatch[1]))
+    ) {
         return true;
     }
 

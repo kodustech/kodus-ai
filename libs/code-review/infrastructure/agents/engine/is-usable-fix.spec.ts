@@ -183,6 +183,18 @@ describe('checkFix', () => {
         ])('does NOT flag a tight key:value pair whose key is a stop word (%j -> %j)', (existingCode, improvedCode) => {
             expect(checkFix(existingCode, improvedCode)).toBeNull();
         });
+
+        // Kody's own review caught this: TIGHT_KEY_VALUE_RE bypassed the
+        // stopword gate for the WHOLE pair, not just the key — "Note: this"
+        // and "Fix: it" match the exact same tight shape and shipped as
+        // code. The gate now only exempts the key; the value is still
+        // checked.
+        it.each(['Note: this', 'Fix: it', 'Solution: add'])(
+            'flags a label-prefixed tight pair (%j) as prose, not code',
+            (improvedCode) => {
+                expect(checkFix('const x = 1;', improvedCode)).toBe('prose-only');
+            },
+        );
     });
 
     describe('truncated', () => {
@@ -233,6 +245,20 @@ describe('checkFix', () => {
             ['return a is None', 'return x is None'],
         ])('does NOT flag valid multi-word Python return/yield (%j -> %j)', (existingCode, improvedCode) => {
             expect(checkFix(existingCode, improvedCode, 'python')).toBeNull();
+        });
+
+        // Kody's own review caught this: the connector exemption above was
+        // too broad — it also exempted a run that DANGLES on a connector
+        // word ("return a if", with nothing after "if"), which is just as
+        // truncated as the plain word-run case, only with a keyword instead
+        // of an identifier as the last word.
+        it.each([
+            'return a if',
+            'return x and',
+            'return a is',
+            'return x in',
+        ])('flags a truncated tail dangling on a connector word (%j)', (improvedCode) => {
+            expect(checkFix('return b;', improvedCode, 'python')).toBe('truncated');
         });
 
         it('does NOT flag "var x int" (Go) — a valid multi-word declaration, not return/yield', () => {
