@@ -101,9 +101,12 @@ async function hit(
 // Guards run before handlers. With a definitely-invalid bearer token the
 // JwtAuthGuard answers 401 when a route EXISTS (it is found and rejects the
 // token) and the router answers 404 when it is ABSENT. Either way no handler
-// runs, so this probe has zero side effects — it is the mutation analogue of
-// the GET branch's owner canary, used to attribute a deny-role 404 to a
-// release gap only when the route is genuinely missing (#1696, rbac:146).
+// runs, so this probe has zero side effects. Used to confirm a 404 is a
+// genuine release gap rather than a normal handler-level 404 (a denied
+// mutation that shouldn't have reached the handler at all, or — on the GET
+// side — an allowed request whose dummy :param id has no matching resource,
+// the same "downstream 404 still reflects allowed by policy" case the owner
+// canary already tolerates for every other status) (#1696, rbac:146).
 const UNAUTHENTICATED_PROBE_TOKEN = "orca-rbac-probe-invalid-token";
 
 async function routeExists(
@@ -189,12 +192,19 @@ export const rbacAuthorization: Scenario = {
             const ownerStatus = await hit(ctx.target, entry, tokenOf("owner"));
             if (ownerStatus === 404 && ALLOW_MISSING_ROUTE) {
                 // Route added on main but absent from the released image
-                // (scheduled-matrix-only narrow case #1696).
-                missingEndpoints.add(`GET ${entry.urlPath}`);
-                releaseGapSkipped.push(
-                    `GET ${entry.urlPath} (404 — route not in tested release image)`,
-                );
-                continue;
+                // (scheduled-matrix-only narrow case #1696). Confirm the route
+                // is genuinely absent first — a route that EXISTS but 404s for
+                // owner (e.g. the dummy :param id has no matching resource,
+                // same as any other allowed GET) must fall through to the
+                // normal checks below instead of skipping this endpoint's RBAC
+                // verification entirely. The GET analogue of rbac:146.
+                if (!(await routeExists(ctx.target, entry))) {
+                    missingEndpoints.add(`GET ${entry.urlPath}`);
+                    releaseGapSkipped.push(
+                        `GET ${entry.urlPath} (404 — route not in tested release image)`,
+                    );
+                    continue;
+                }
             }
             if (ownerStatus === 401 || ownerStatus === 403) {
                 tierSkipped.push(
