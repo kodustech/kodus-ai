@@ -21,8 +21,13 @@ import {
 import { buildPlatformEmbedder } from '@libs/common/utils/document';
 import {
     dedupReviewWarnings,
+    buildBadFixDroppedWarning,
     type ReviewWarning,
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
+import {
+    checkFix,
+    type BadFixReason,
+} from '@libs/code-review/infrastructure/agents/engine/is-usable-fix';
 import { getModelName } from '@libs/llm/byok-to-vercel';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { buildKodyRuleLink } from '@libs/code-review/utils/build-kody-rule-link';
@@ -1271,6 +1276,65 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     message: `[AGENT] Content formatting failed, keeping original text: ${err instanceof Error ? err.message : String(err)}`,
                     context: this.stageName,
                 });
+            }
+
+            // Publication gate (issue #1833): four weeks of production
+            // thumbs-down showed 38% had no usable fix — empty, identical to
+            // existingCode, or syntactically truncated. A correct diagnosis
+            // with a broken "fix" reads as OUR mistake, not a miss. (Prose-
+            // only detection was tried and removed — see is-usable-fix.ts's
+            // header: no regex reliably tells English apart from code.)
+            // Runs AFTER the content formatter (which never touches
+            // improvedCode, only suggestionContent/llmPrompt) and BEFORE the
+            // Kody Rule link enrichment, so a dropped suggestion never pays
+            // for either.
+            {
+                const badFixCounts: Partial<Record<BadFixReason, number>> = {};
+                const kept: Partial<CodeSuggestion>[] = [];
+                for (const s of deduped) {
+                    const reason = checkFix(
+                        s.existingCode,
+                        s.improvedCode,
+                        s.language,
+                    );
+                    if (!reason) {
+                        kept.push(s);
+                        continue;
+                    }
+                    badFixCounts[reason] = (badFixCounts[reason] ?? 0) + 1;
+                    allDiscarded.push({
+                        ...s,
+                        priorityStatus: PriorityStatus.DISCARDED_BY_BAD_FIX,
+                        deliveryStatus: DeliveryStatus.NOT_SENT,
+                    });
+                }
+                const totalBadFix = deduped.length - kept.length;
+                if (totalBadFix > 0) {
+                    deduped = kept;
+                    this.logger.log({
+                        message: `[AGENT] Dropped ${totalBadFix} suggestion(s) with unusable improvedCode`,
+                        context: this.stageName,
+                        metadata: {
+                            prNumber,
+                            organizationId:
+                                context.organizationAndTeamData
+                                    ?.organizationId,
+                            ...badFixCounts,
+                        },
+                    });
+                    context = this.updateContext(context, (draft) => {
+                        draft.reviewWarnings = dedupReviewWarnings([
+                            ...(draft.reviewWarnings ?? []),
+                            buildBadFixDroppedWarning({
+                                count: totalBadFix,
+                                modelName: getModelName(
+                                    context.codeReviewConfig?.byokConfig,
+                                ),
+                                agentName: 'agent-review',
+                            }),
+                        ]);
+                    });
+                }
             }
 
             // Enrich kody_rules suggestions with markdown links to the rule

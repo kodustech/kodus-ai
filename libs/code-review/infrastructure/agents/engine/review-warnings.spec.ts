@@ -2,6 +2,7 @@ import {
     dedupReviewWarnings,
     buildProviderFallbackWarning,
     buildRuleContextUnavailableWarning,
+    buildBadFixDroppedWarning,
     type ReviewWarning,
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 
@@ -154,5 +155,35 @@ describe('buildRuleContextUnavailableWarning', () => {
         });
         titles.push('B');
         expect(warning.ruleTitles).toEqual(['A']);
+    });
+});
+
+describe('buildBadFixDroppedWarning', () => {
+    it('reports the drop count in `detail`', () => {
+        const warning = buildBadFixDroppedWarning({
+            count: 3,
+            modelName: 'gemini',
+            agentName: 'bug',
+        });
+        expect(warning.kind).toBe('BAD_FIX_DROPPED');
+        expect(warning.reason).toBe('unusable_fix');
+        expect(warning.detail).toContain('3 suggestion(s)');
+    });
+
+    it('merges counts from two agents into one dashboard entry via dedup', () => {
+        const out = dedupReviewWarnings([
+            buildBadFixDroppedWarning({
+                count: 2,
+                modelName: 'gemini',
+                agentName: 'bug',
+            }),
+            buildBadFixDroppedWarning({
+                count: 1,
+                modelName: 'gemini',
+                agentName: 'security',
+            }),
+        ]);
+        expect(out).toHaveLength(1);
+        expect(out[0].agentName).toBeUndefined();
     });
 });

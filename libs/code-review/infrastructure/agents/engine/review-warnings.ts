@@ -26,7 +26,10 @@ export type ReviewWarningKind =
     | 'PROVIDER_FALLBACK'
     /** Kody Rules were not judged because the context they declared they need
      *  could not be retrieved from the repository. */
-    | 'RULE_CONTEXT_UNAVAILABLE';
+    | 'RULE_CONTEXT_UNAVAILABLE'
+    /** A finding was dropped because its `improvedCode` was empty, identical
+     *  to `existingCode`, prose-only, or syntactically truncated. */
+    | 'BAD_FIX_DROPPED';
 
 export type ReviewWarningReason =
     | 'small_context_window'
@@ -34,7 +37,9 @@ export type ReviewWarningReason =
     | 'provider_failover'
     /** The repository could not be looked at, so a declared context need went
      *  unmet. */
-    | 'lookup_unavailable';
+    | 'lookup_unavailable'
+    /** `improvedCode` failed the publication gate (issue #1833). */
+    | 'unusable_fix';
 
 export interface ReviewWarning {
     kind: ReviewWarningKind;
@@ -161,6 +166,29 @@ export function buildRuleContextUnavailableWarning(params: {
         modelName: params.modelName,
         detail: `${params.skippedRuleTitles.length} Kody Rule(s) were not evaluated because the repository context they need could not be retrieved: ${titles}`,
         ruleTitles: [...params.skippedRuleTitles],
+        agentName: params.agentName,
+    };
+}
+
+/**
+ * Build the notice for findings dropped by the `improvedCode` publication
+ * gate (issue #1833) — empty, identical to `existingCode`, prose-only, or
+ * truncated fixes. A silent drop here would look like the review found less
+ * than it did; this makes the count visible instead of just quietly shrinking
+ * the suggestion list. `contextWindowTokens` is 0 for the same reason as the
+ * other capability-signal warnings above: it is not a fidelity trade-off.
+ */
+export function buildBadFixDroppedWarning(params: {
+    count: number;
+    modelName: string;
+    agentName?: string;
+}): ReviewWarning {
+    return {
+        kind: 'BAD_FIX_DROPPED',
+        reason: 'unusable_fix',
+        contextWindowTokens: 0,
+        modelName: params.modelName,
+        detail: `${params.count} suggestion(s) were dropped because the proposed fix was empty, identical to the existing code, prose-only, or truncated`,
         agentName: params.agentName,
     };
 }
