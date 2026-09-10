@@ -173,6 +173,10 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                 updateData.scheduledAt = data.scheduledAt;
             if (data.startedAt !== undefined)
                 updateData.startedAt = data.startedAt;
+            if (data.leaseOwner !== undefined)
+                updateData.leaseOwner = data.leaseOwner;
+            if (data.leaseExpiresAt !== undefined)
+                updateData.leaseExpiresAt = data.leaseExpiresAt;
             if (data.completedAt !== undefined)
                 updateData.completedAt = data.completedAt;
             if (data.currentStage !== undefined)
@@ -313,6 +317,125 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                 context: WorkflowJobRepository.name,
                 error,
                 metadata: { olderThan: params.olderThan },
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Lists PROCESSING jobs owned by a dead/slow worker (issue #1830): a job
+     * with a lease whose `leaseExpiresAt` is in the past, or (for legacy rows
+     * that pre-date the lease) a job whose `updatedAt` is older than
+     * `olderThan`. A live worker renews the lease every ~30s, so an expired
+     * lease is evidence of death — recovery drops from 180 min to ~90 s.
+     */
+    async findStaleProcessing(params: {
+        now: Date;
+        olderThan: Date;
+    }): Promise<StaleWorkflowJobReapResult[]> {
+        try {
+            const result = await this.repository
+                .createQueryBuilder()
+                .select(['uuid', 'workflowType', 'organizationId', 'startedAt', 'leaseExpiresAt', 'retryCount', 'maxRetries'])
+                .from(WorkflowJobModel, 'job')
+                .where('job.status = :status', { status: JobStatus.PROCESSING })
+                .andWhere(
+                    '(job."leaseExpiresAt" IS NOT NULL AND job."leaseExpiresAt" < :now)' +
+                        ' OR ' +
+                        '(job."leaseExpiresAt" IS NULL AND job."updatedAt" < :olderThan)',
+                    { now: params.now, olderThan: params.olderThan },
+                )
+                .getRawMany();
+
+            return (result ?? []) as StaleWorkflowJobReapResult[];
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to find stale PROCESSING workflow jobs',
+                context: WorkflowJobRepository.name,
+                error,
+                metadata: {
+                    now: params.now.toISOString(),
+                    olderThan: params.olderThan.toISOString(),
+                },
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Returns a reclaimed job to PENDING with retryCount + 1 and clears its
+     * lease + run state, so a fresh trigger re-processes it instead of the job
+     * being permanently failed and reported forever as PROCESSING.
+     */
+    async requeueStaleJobs(params: {
+        uuids: string[];
+        lastError: string;
+        requeuedBy: string;
+    }): Promise<number> {
+        if (params.uuids.length === 0) {
+            return 0;
+        }
+        try {
+            const result = await this.repository
+                .createQueryBuilder()
+                .update(WorkflowJobModel)
+                .set({
+                    status: JobStatus.PENDING,
+                    retryCount: () => '"retryCount" + 1',
+                    lastError: params.lastError,
+                    errorClassification: null,
+                    startedAt: null,
+                    completedAt: null,
+                    leaseOwner: null,
+                    leaseExpiresAt: null,
+                    currentStage: null,
+                })
+                .whereInIds(params.uuids)
+                .execute();
+            return result.affected ?? 0;
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to requeue stale PROCESSING workflow jobs',
+                context: WorkflowJobRepository.name,
+                error,
+                metadata: { uuids: params.uuids },
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Terminally fails reclaimed jobs whose retry budget is exhausted.
+     */
+    async failStaleJobs(params: {
+        uuids: string[];
+        lastError: string;
+        errorClassification: ErrorClassification;
+    }): Promise<number> {
+        if (params.uuids.length === 0) {
+            return 0;
+        }
+        try {
+            const result = await this.repository
+                .createQueryBuilder()
+                .update(WorkflowJobModel)
+                .set({
+                    status: JobStatus.FAILED,
+                    errorClassification: params.errorClassification,
+                    lastError: params.lastError,
+                    completedAt: () => 'NOW()',
+                    leaseOwner: null,
+                    leaseExpiresAt: null,
+                })
+                .whereInIds(params.uuids)
+                .execute();
+            return result.affected ?? 0;
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to permanently fail stale workflow jobs',
+                context: WorkflowJobRepository.name,
+                error,
+                metadata: { uuids: params.uuids },
             });
             throw error;
         }

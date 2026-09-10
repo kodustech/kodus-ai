@@ -508,55 +508,98 @@ export class OutboxRelayService
         }
 
         try {
+            const now = new Date();
             const olderThan = new Date(
                 Date.now() - this.staleJobTimeoutMinutes * 60 * 1000,
             );
 
-            const reaped = await this.jobRepository.failStaleProcessing?.({
-                olderThan,
-                lastError: `Orphaned: worker crashed/evicted while job was PROCESSING (no terminal update within ${this.staleJobTimeoutMinutes}min). Reaped by stale-job watchdog.`,
-                errorClassification: ErrorClassification.PERMANENT,
-            });
+            // Reclaim by job-ownership LEASE (issue #1830): PROCESSING jobs
+            // whose lease has EXPIRED (a worker that died can no longer renew)
+            // or, for legacy rows that pre-date the lease, jobs older than the
+            // age cutoff. A renewed lease means the worker is alive — leave it
+            // alone. This detects a dead worker in ~90s instead of waiting out
+            // the 180-min in-process timeout.
+            const stale =
+                (await this.jobRepository.findStaleProcessing?.({
+                    now,
+                    olderThan,
+                })) ?? [];
+            if (stale.length === 0) {
+                return;
+            }
 
-            const reapedCount = reaped?.length ?? 0;
+            const requeueable = stale.filter(
+                (job) =>
+                    (job.retryCount ?? 0) + 1 < (job.maxRetries ?? 3),
+            );
+            const dead = stale.filter((job) => !requeueable.includes(job));
+            const requeueUuids = requeueable.map((job) => job.uuid);
+            const deadUuids = dead.map((job) => job.uuid);
+            const staleReason =
+                'Worker died while job was PROCESSING (job lease expired) — reclaimed by stale-job watchdog.';
+
+            const requeued =
+                requeueUuids.length > 0
+                    ? ((await this.jobRepository.requeueStaleJobs?.({
+                          uuids: requeueUuids,
+                          lastError: staleReason,
+                          requeuedBy: this.constructor.name,
+                      })) ?? 0)
+                    : 0;
+            const permanentlyFailed =
+                deadUuids.length > 0
+                    ? ((await this.jobRepository.failStaleJobs?.({
+                          uuids: deadUuids,
+                          lastError: `${staleReason} Retry budget exhausted (${deadUuids.length} job(s)).`,
+                          errorClassification: ErrorClassification.PERMANENT,
+                      })) ?? 0)
+                    : 0;
+
+            const reapedCount = requeued + permanentlyFailed;
             if (reapedCount === 0) {
                 return;
             }
 
             this.logger.warn({
-                message: `Reaped ${reapedCount} stale PROCESSING workflow jobs`,
+                message: `Reclaimed ${requeued} stale PROCESSING workflow job(s) for retry; permanently failed ${permanentlyFailed}`,
                 context: OutboxRelayService.name,
                 metadata: {
-                    reapedCount,
+                    requeued,
+                    permanentlyFailed,
                     staleTimeoutMinutes: this.staleJobTimeoutMinutes,
-                    olderThan: olderThan.toISOString(),
-                    jobs: reaped.map((job) => ({
+                    now: now.toISOString(),
+                    stale: stale.map((job) => ({
                         jobId: job.uuid,
                         workflowType: job.workflowType,
                         organizationId: job.organizationId,
                         startedAt: job.startedAt,
+                        leaseExpiresAt: job.leaseExpiresAt,
+                        retryCount: job.retryCount,
+                        maxRetries: job.maxRetries,
                     })),
                 },
             });
 
             if (reapedCount > STALE_JOB_HIGH_REAP_THRESHOLD) {
                 this.logger.error({
-                    message: `HIGH REAP RATE: ${reapedCount} workflow jobs orphaned in PROCESSING!`,
+                    message: `HIGH REAP RATE: ${reapedCount} workflow jobs reclaimed from PROCESSING (${requeued} for retry, ${permanentlyFailed} permanently failed)!`,
                     context: OutboxRelayService.name,
                     metadata: {
-                        reapedCount,
+                        requeued,
+                        permanentlyFailed,
                         possibleCause:
-                            'Worker crashes/evictions (OOM, node pressure, restarts)',
+                            'Worker crashes/evictions (OOM, node pressure, restarts) — detected by an expired job-ownership lease',
                     },
                 });
 
                 this.incidentManager
                     ?.failHeartbeat(
                         'API_BETTERSTACK_HEARTBEAT_OUTBOX_URL',
-                        `High stale-job reap rate: ${reapedCount} workflow jobs orphaned in PROCESSING. Possible cause: worker crashes/evictions (OOM, node pressure, restarts). ${this.formatContext(
+                        `High stale-job reap rate: ${reapedCount} workflow jobs reclaimed from PROCESSING (${requeued} for retry, ${permanentlyFailed} permanently failed). Possible cause: worker crashes/evictions (OOM, node pressure, restarts) — job-ownership lease expired. ${this.formatContext(
                             {
                                 monitor: 'stale_job_reap_rate',
-                                reapedCount,
+                                requeued,
+                                permanentlyFailed,
                             },
                         )}`,
                     )
@@ -566,7 +609,7 @@ export class OutboxRelayService
                                 'Failed to report stale-job reap heartbeat failure',
                             context: OutboxRelayService.name,
                             error: err instanceof Error ? err : undefined,
-                            metadata: { reapedCount },
+                            metadata: { requeued, permanentlyFailed },
                         });
                     });
             }
