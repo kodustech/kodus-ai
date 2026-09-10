@@ -7,6 +7,7 @@ import {
 } from "../lib/github-repos.js";
 import {
     adminAdjustCredits,
+    auth,
     fetchCreditBalance,
     fetchCreditCharges,
     fetchCreditLedger,
@@ -62,6 +63,21 @@ export const kodusCreditsReview: Scenario = {
             process.env.GH_TEST_REPO_CLOUD ?? "kodus-e2e/tiny-url-cloud";
         const owner = baseRepo.split("/")[0];
 
+        // Preconditions, checked BEFORE spending GitHub quota on a throwaway
+        // repo. Both are environment wiring, not product state, so a missing
+        // one is `skipped` with the exact reason — never a red cell:
+        //   1. seeding a balance without Stripe needs the billing admin
+        //      endpoint (the browser proxy denies every /credits/* route);
+        //   2. the provider is a private alpha — on an environment where it
+        //      is off, being unable to connect it is the CORRECT behavior
+        //      (asserted by kodus-credits-gate).
+        if (!process.env.BILLING_ADMIN_BASE_URL || !process.env.BILLING_ADMIN_TOKEN) {
+            ctx.skip(
+                "needs direct billing access to seed a balance without Stripe " +
+                    "(BILLING_ADMIN_BASE_URL + BILLING_ADMIN_TOKEN)",
+            );
+        }
+
         await sweepStaleThrowawayRepos(owner, REPO_PREFIX).catch(() => 0);
         const repoFullName = await createThrowawayRepo(
             baseRepo,
@@ -76,6 +92,25 @@ export const kodusCreditsReview: Scenario = {
 
             // ── 1. Kodus provider + a seeded balance ─────────────────────
             await saveKodusByok(ctx, session, KODUS_E2E_MODEL);
+            const providers = await http<{
+                data?: { providers?: Array<{ id?: string }> };
+            }>(`${target.apiBaseUrl}/organization-parameters/byok/providers`, {
+                method: "GET",
+                headers: auth(session),
+                timeoutMs: 25_000,
+            });
+            if (
+                !(providers.body?.data?.providers ?? []).some(
+                    (p) => p.id === "kodus",
+                )
+            ) {
+                ctx.skip(
+                    "the Kodus provider is not enabled on this environment " +
+                        "(private alpha: needs API_KODUS_PROVIDER_ALPHA_ORGS or the " +
+                        "`kodus-provider` PostHog flag + an alpha release track)",
+                );
+            }
+
             const seeded = await adminAdjustCredits(
                 ctx,
                 session,
