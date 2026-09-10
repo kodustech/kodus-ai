@@ -163,22 +163,57 @@ describe('openaiModule never-downgrade capability (D-00b, Pitfall 2)', () => {
 });
 
 describe('openaiModule x-opencode-session header (issue #1880)', () => {
-    it('opencode.ai/zen baseURL gets a stable x-opencode-session header derived from the credential', () => {
+    const HEX32 = /^[0-9a-f]{32}$/;
+
+    it('opencode.ai/zen baseURL gets a hashed, stable x-opencode-session header — never the raw byokModelId', () => {
         const cfg = {
             provider: 'openai_compatible',
             model: 'deepseek-v4-flash',
             apiKey: 'test-key',
             baseURL: 'https://opencode.ai/zen/go/v1',
-            credentialId: 'cred-123',
+            byokModelId: 'model-123',
         } as any;
 
-        const model = openaiModule.build(cfg) as any;
-        const headers = model.config.headers();
+        const headerA = (openaiModule.build(cfg) as any).config.headers()[
+            'x-opencode-session'
+        ];
+        const headerB = (openaiModule.build(cfg) as any).config.headers()[
+            'x-opencode-session'
+        ];
 
-        expect(headers['x-opencode-session']).toBe('cred-123');
+        expect(headerA).toMatch(HEX32);
+        expect(headerA).not.toBe('model-123');
+        expect(headerA).not.toContain('model-123');
+        // Stable across independent build() calls for the same slot.
+        expect(headerA).toBe(headerB);
     });
 
-    it('falls back to byokModelId, then model+baseURL, when no credentialId is present', () => {
+    it('a different byokModelId hashes to a different session id', () => {
+        const build = (byokModelId: string) =>
+            (
+                openaiModule.build({
+                    provider: 'openai_compatible',
+                    model: 'deepseek-v4-flash',
+                    apiKey: 'test-key',
+                    baseURL: 'https://opencode.ai/zen/go/v1',
+                    byokModelId,
+                } as any) as any
+            ).config.headers()['x-opencode-session'];
+
+        expect(build('model-123')).not.toBe(build('model-456'));
+    });
+
+    it('falls back to model+baseURL when no byokModelId is present (managed/env slot) — still hashed', () => {
+        const withoutModelId = openaiModule.build({
+            provider: 'openai_compatible',
+            model: 'deepseek-v4-flash',
+            apiKey: 'test-key',
+            baseURL: 'https://opencode.ai/zen/go/v1',
+        } as any) as any;
+        expect(withoutModelId.config.headers()['x-opencode-session']).toMatch(
+            HEX32,
+        );
+
         const withModelId = openaiModule.build({
             provider: 'openai_compatible',
             model: 'deepseek-v4-flash',
@@ -186,18 +221,8 @@ describe('openaiModule x-opencode-session header (issue #1880)', () => {
             baseURL: 'https://opencode.ai/zen/go/v1',
             byokModelId: 'model-456',
         } as any) as any;
-        expect(withModelId.config.headers()['x-opencode-session']).toBe(
-            'model-456',
-        );
-
-        const withNeither = openaiModule.build({
-            provider: 'openai_compatible',
-            model: 'deepseek-v4-flash',
-            apiKey: 'test-key',
-            baseURL: 'https://opencode.ai/zen/go/v1',
-        } as any) as any;
-        expect(withNeither.config.headers()['x-opencode-session']).toBe(
-            'deepseek-v4-flash:https://opencode.ai/zen/go/v1',
+        expect(withoutModelId.config.headers()['x-opencode-session']).not.toBe(
+            withModelId.config.headers()['x-opencode-session'],
         );
     });
 

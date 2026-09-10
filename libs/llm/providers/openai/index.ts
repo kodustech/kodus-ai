@@ -12,6 +12,7 @@
  * normalizeUsage are declared stubs (Phase 3 owns them).
  */
 import type { LanguageModel } from 'ai';
+import { createHash } from 'crypto';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { z } from 'zod';
@@ -66,13 +67,19 @@ function isOpenCodeGoBaseUrl(baseURL?: string): boolean {
     return !!baseURL && /opencode\.ai\/zen/i.test(baseURL);
 }
 
-/** Stable per BYOK credential (falls back to the model slot's own id, then the
- *  model+baseURL pair, so even a slot missing both still sends a valid header
- *  instead of failing to build the model at all). */
+/**
+ * Stable per BYOK model slot (falls back to the model+baseURL pair when the
+ * slot carries no `byokModelId`, e.g. a managed/env default, so even that case
+ * still sends a valid header instead of failing to build the model at all).
+ *
+ * HASHED rather than sent raw: `byokModelId` is our own internal config-entry
+ * id — OpenCode only needs an opaque value that stays constant call-to-call,
+ * not that actual id, so there is no reason to hand a third party a stable
+ * handle onto our internal identifiers for however long they choose to keep it.
+ */
 function openCodeSessionId(cfg: ProviderBuildConfig): string {
-    return (
-        cfg.credentialId || cfg.byokModelId || `${cfg.model}:${cfg.baseURL ?? ''}`
-    );
+    const seed = cfg.byokModelId || `${cfg.model}:${cfg.baseURL ?? ''}`;
+    return createHash('sha256').update(seed).digest('hex').slice(0, 32);
 }
 
 // The Kimi / Moonshot never-downgrade policy (`isNeverDowngradeModel`) now lives
