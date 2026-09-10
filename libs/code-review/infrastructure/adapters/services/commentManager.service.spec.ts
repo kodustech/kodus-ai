@@ -1789,4 +1789,51 @@ describe('CommentManagerService — GitLab status notes (#1721)', () => {
         ).toMatchObject({ body: statusBody });
         expect(codeManagementService.createIssueComment).not.toHaveBeenCalled();
     });
+
+    it('start-of-review surfaces a GitLab create failure instead of storing null ids', async () => {
+        codeManagementService.createSingleIssueComment.mockResolvedValue(
+            undefined,
+        );
+
+        await expect(
+            service.createInitialComment(
+                stubOrg,
+                5,
+                stubRepository,
+                [{ filename: 'a.ts', patch: '+ code', status: 'modified' }] as any,
+                'en-US',
+                PlatformType.GITLAB,
+                undefined,
+                {
+                    startReviewMessage: { status: 'ACTIVE', content: 'Start' },
+                } as any,
+            ),
+        ).rejects.toThrow(
+            'Failed to create start-of-review note for PR#5',
+        );
+        expect(codeManagementService.updateSingleIssueComment).not.toHaveBeenCalled();
+    });
+
+    it('end-of-review-only surfaces a GitLab create failure instead of storing null ids', async () => {
+        codeManagementService.createSingleIssueComment.mockResolvedValue(
+            undefined,
+        );
+
+        await expect(
+            service.createComment(
+                stubOrg,
+                5,
+                stubRepository,
+                PlatformType.GITLAB,
+                [{ filename: 'a.ts', patch: '+ code', status: 'modified' }] as any,
+                'en-US',
+                [],
+                undefined,
+                'Review finished',
+                undefined,
+                [],
+                false,
+            ),
+        ).rejects.toThrow('Failed to create end-of-review comment for PR#5');
+    });
 });

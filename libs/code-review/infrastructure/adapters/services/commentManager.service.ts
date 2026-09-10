@@ -780,7 +780,12 @@ You must always respond in ${languageResultPrompt}.`;
                 this.logger.log({
                     message: `Updated existing start-of-review note for PR#${prNumber}`,
                     context: CommentManagerService.name,
-                    metadata: existingCommentData,
+                    metadata: {
+                        ...existingCommentData,
+                        organizationAndTeamData,
+                        prNumber,
+                        repository: repository.name,
+                    },
                 });
 
                 return {
@@ -803,6 +808,30 @@ You must always respond in ${languageResultPrompt}.`;
                     },
                     undefined,
                 );
+
+            if (
+                platformType === PlatformType.GITLAB &&
+                (comment === null || comment === undefined)
+            ) {
+                // GitlabService.createSingleIssueComment swallows the failure
+                // (logs + returns undefined). Surface it here so the pipeline
+                // fails with the real create error instead of storing null ids
+                // and misreporting later as a failed update.
+                const error = new Error(
+                    `Failed to create start-of-review note for PR#${prNumber}: GitLab returned no note from MergeRequestNotes.create.`,
+                );
+                this.logger.error({
+                    message: `Failed to create start-of-review note for PR#${prNumber}`,
+                    context: CommentManagerService.name,
+                    error: error,
+                    metadata: {
+                        organizationAndTeamData,
+                        prNumber,
+                        repository,
+                    },
+                });
+                throw error;
+            }
 
             if (
                 PlatformType.GITHUB === platformType &&
@@ -2562,6 +2591,28 @@ ${reviewOptions}
                 },
                 undefined,
             );
+
+        if (
+            platformType === PlatformType.GITLAB &&
+            (comment === null || comment === undefined)
+        ) {
+            // Same as createInitialComment: surface the real create failure
+            // instead of silently losing the end-of-review summary.
+            const error = new Error(
+                `Failed to create end-of-review comment for PR#${prNumber}: GitLab returned no note from MergeRequestNotes.create.`,
+            );
+            this.logger.error({
+                message: `Failed to create end-of-review comment for PR#${prNumber}`,
+                context: CommentManagerService.name,
+                error: error,
+                metadata: {
+                    organizationAndTeamData,
+                    prNumber,
+                    repository,
+                },
+            });
+            throw error;
+        }
 
         if (
             platformType === PlatformType.GITHUB &&
