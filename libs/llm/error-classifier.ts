@@ -397,10 +397,21 @@ function matchByMessage(lower: string): LlmErrorCategory {
         lower.includes('fetch failed') ||
         lower.includes('timeout') ||
         lower.includes('aborted') ||
-        // 502/503 status phrases: all that is left of the status once the
+// 502/503 status phrases: all that is left of the status once the
         // review path has rebuilt the error from its text.
         lower.includes('service unavailable') ||
-        lower.includes('bad gateway')
+        lower.includes('bad gateway') ||
+        // Additional 5xx phrasings and bare status numbers that appear as text
+        // when no HTTP status reached the classifier (upstream outage over a
+        // passthrough or a RetryError whose embedded text carries no status);
+        // without these a real 5xx classifies UNKNOWN and the BYOK fallback is
+        // never tried (#1875).
+        lower.includes('gateway timeout') ||
+        lower.includes('internal server error') ||
+        lower.includes('502') ||
+        lower.includes('503') ||
+        lower.includes('504') ||
+        lower.includes('530')
     ) {
         return LlmErrorCategory.TRANSIENT;
     }
