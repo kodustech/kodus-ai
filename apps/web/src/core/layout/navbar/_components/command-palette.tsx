@@ -267,13 +267,23 @@ const directoryLabel = (directory: CodeReviewScope["directories"][number]) => {
     return paths.length > 1 ? `${path} +${paths.length - 1}` : path;
 };
 
-const ruleHref = (rule: KodyRuleIndexEntry) => {
-    const repo = rule.repositoryId || "global";
+const ruleHref = (
+    rule: KodyRuleIndexEntry,
+    knownScopes: Map<string, string>,
+) => {
+    // A rule can outlive its repository's configuration (the repo was removed
+    // from the config, or its rules were imported from elsewhere). The
+    // settings shell has nothing to render for such a scope, so those rules
+    // open on Global, which lists every scope's rules.
+    const scoped =
+        rule.repositoryId &&
+        rule.repositoryId !== "global" &&
+        knownScopes.has(rule.repositoryId);
     const params = new URLSearchParams();
     if (rule.uuid) params.set("rule", rule.uuid);
     if (rule.type === "memory") params.set("tab", "memories");
-    if (rule.directoryId) params.set("directoryId", rule.directoryId);
-    return `/settings/code-review/${repo}/kody-rules?${params.toString()}`;
+    if (scoped && rule.directoryId) params.set("directoryId", rule.directoryId);
+    return `/settings/code-review/${scoped ? rule.repositoryId : "global"}/kody-rules?${params.toString()}`;
 };
 
 // cmdk's default fuzzy match lets "sso" hit "Issues" and half the rules.
@@ -370,9 +380,31 @@ export const CommandPalette = () => {
         [scopes],
     );
 
+    // Repository ids the settings shell can actually open, and their names.
+    const scopeNames = useMemo(
+        () => new Map((scopes ?? []).map((scope) => [scope.id, scope.name])),
+        [scopes],
+    );
+
+    // Only rules the settings screen can actually show: global ones, and
+    // ones whose repository is still configured. A rule can outlive its
+    // scope's configuration (repository removed, rules imported from
+    // elsewhere), and no page lists those — offering them here would be a
+    // dead end.
+    const openableRules = useMemo(
+        () =>
+            (rules ?? []).filter(
+                (rule) =>
+                    !rule.repositoryId ||
+                    rule.repositoryId === "global" ||
+                    scopeNames.has(rule.repositoryId),
+            ),
+        [rules, scopeNames],
+    );
     const matchedRules = useMemo(
-        () => topMatches(rules ?? [], (rule) => `rule ${rule.title}`, query, 8),
-        [rules, query],
+        () =>
+            topMatches(openableRules, (rule) => `rule ${rule.title}`, query, 8),
+        [openableRules, query],
     );
     const matchedRepositories = useMemo(() => {
         const entries = repositories.flatMap((repo) => [
@@ -577,16 +609,17 @@ export const CommandPalette = () => {
                                         <CommandItem
                                             key={rule.uuid ?? rule.title}
                                             value={`rule ${rule.title}`}
-                                            onSelect={() => go(ruleHref(rule))}>
+                                            onSelect={() =>
+                                                go(ruleHref(rule, scopeNames))
+                                            }>
                                             <ScrollTextIcon />
                                             <span className="truncate">
                                                 {rule.title}
                                             </span>
                                             <span className="text-text-tertiary ml-auto shrink-0 text-xs">
-                                                {rule.repositoryId &&
-                                                rule.repositoryId !== "global"
-                                                    ? "repository"
-                                                    : "global"}
+                                                {scopeNames.get(
+                                                    rule.repositoryId,
+                                                ) ?? "global"}
                                             </span>
                                         </CommandItem>
                                     ))}
