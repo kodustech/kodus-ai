@@ -55,11 +55,17 @@ describe('kodus provider availability', () => {
         expect(service.isProviderSupported('anthropic')).toBe(true);
     });
 
-    it('GetByokProvidersUseCase lists kodus only on cloud', async () => {
-        const useCase = new GetByokProvidersUseCase();
+    it('GetByokProvidersUseCase lists kodus only on cloud (and only for an org the alpha gate allows)', async () => {
+        // The alpha gate is a separate layer (kodus-provider-gate.service.spec);
+        // here it says yes so the deployment rule alone is under test.
+        const allow = { isEnabledFor: jest.fn(async () => true) };
+        const useCase = new GetByokProvidersUseCase(allow as any);
         setCloud(true);
-        expect((await useCase.execute()).providers.map((p) => p.id)).toContain('kodus');
+        expect((await useCase.execute('org-1')).providers.map((p) => p.id)).toContain('kodus');
         setCloud(false);
-        expect((await useCase.execute()).providers.map((p) => p.id)).not.toContain('kodus');
+        expect((await useCase.execute('org-1')).providers.map((p) => p.id)).not.toContain('kodus');
+        // Without a gate the descriptor stays closed even on cloud.
+        setCloud(true);
+        expect((await new GetByokProvidersUseCase().execute('org-1')).providers.map((p) => p.id)).not.toContain('kodus');
     });
 });

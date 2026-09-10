@@ -132,6 +132,14 @@
 | `API_CRON_KODUS_CREDITS_SWEEP` | – | cron | ☁️ Cloud | Metering sweep for Kodus-routed usage → prepaid credits. Every 5 minutes. |
 | `API_KODUS_PROVIDER_MAX_CONCURRENT` | – | number | ☁️ Cloud | Process-wide caps on the SHARED Kodus upstream accounts (all orgs together), keyed per upstream: a `_FIREWORKS` / `_ANTHROPIC` / `_OPENAI` / `_GOOGLE` suffix overrides the shared value. Unset/0 = no platform gate (per-org slot limits still apply). Set from the account tier. |
 | `API_KODUS_PROVIDER_RPM` | – | number | ☁️ Cloud |  |
+| `API_KODUS_PROVIDER_MAX_CONCURRENT_FIREWORKS` | – | number | ☁️ Cloud | Per-upstream overrides of the shared caps above (the suffix is the upstream account: FIREWORKS / ANTHROPIC / OPENAI / GOOGLE). |
+| `API_KODUS_PROVIDER_MAX_CONCURRENT_ANTHROPIC` | – | number | ☁️ Cloud |  |
+| `API_KODUS_PROVIDER_MAX_CONCURRENT_OPENAI` | – | number | ☁️ Cloud |  |
+| `API_KODUS_PROVIDER_MAX_CONCURRENT_GOOGLE` | – | number | ☁️ Cloud |  |
+| `API_KODUS_PROVIDER_RPM_FIREWORKS` | – | number | ☁️ Cloud |  |
+| `API_KODUS_PROVIDER_RPM_ANTHROPIC` | – | number | ☁️ Cloud |  |
+| `API_KODUS_PROVIDER_RPM_OPENAI` | – | number | ☁️ Cloud |  |
+| `API_KODUS_PROVIDER_RPM_GOOGLE` | – | number | ☁️ Cloud |  |
 | `API_DEEPSEEK_API_KEY` | – | secret | ☁️ Cloud | DeepSeek — legacy managed fallback. Kept only for any lingering explicit deepseek-* overrides; the default trial path now routes through Fireworks. |
 | `API_DEEPSEEK_BASE_URL` | – | url | ☁️ Cloud |  |
 | `API_GROQ_BASE_URL` | – | url | ☁️ Cloud |  |
