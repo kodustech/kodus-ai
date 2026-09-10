@@ -141,6 +141,20 @@ const PROSE_STOPWORD_RE =
 const TIGHT_KEY_VALUE_RE = /^\w+\s*:\s*\S+\s*$/;
 
 /**
+ * Same vocabulary as `PROSE_LABEL_LEAD_RE`'s word list (duplicated, not
+ * imported from it, because that regex also matches the `**`/`__` markdown
+ * wrapping and the trailing `:` — this one only needs the bare key word).
+ * Used below to require BOTH halves of a tight pair to look like
+ * scaffolding before rejecting it as prose: the key alone is not enough
+ * ("how: number" is real code with "how" as a field name, not the "Fix:"
+ * scaffolding label), and neither is the value alone ("enabled: on",
+ * "action: add" are real config with a stop word as the VALUE, not a
+ * label's prose tail).
+ */
+const LABEL_KEY_RE =
+    /^(?:fix|note|why|how|what|issue|bug|problem|solution|suggestion|recommendation|explanation|reason|cause|summary)$/i;
+
+/**
  * Does `text` look like code? A STRONG token always counts, regardless of
  * how much surrounding prose there is. A WEAK-only token counts when the
  * text is a tight `key: value` pair, or otherwise only when the text
@@ -157,13 +171,19 @@ function isCodeLike(text: string): boolean {
         return false;
     }
     if (TIGHT_KEY_VALUE_RE.test(text)) {
-        // The KEY is allowed to be a stop word ("on: true", "check: false")
-        // — that's the whole point of this branch — but the VALUE is not:
-        // skipping the stopword gate entirely let "Note: this" and "Fix:
-        // it" (both matching the same tight shape) through as code, which
-        // is exactly the label-prefixed prose this file exists to catch.
+        // Reject only when BOTH the key reads as a scaffolding label AND
+        // the value reads as prose. Gating on the value alone rejected
+        // real config whose value happens to be a stop word ("enabled:
+        // on", "action: add"); gating on the key alone would reject real
+        // code whose field name happens to be a label word ("how: number").
+        // Requiring both is what a genuine "Fix: it"/"Note: this" leak
+        // actually looks like — neither half reads as code on its own.
+        const key = (text.match(/^\w+/) ?? [''])[0];
         const value = text.replace(/^\w+\s*:\s*/, '');
-        return value.length > 0 && !PROSE_STOPWORD_RE.test(value);
+        if (value.length === 0) {
+            return false;
+        }
+        return !(LABEL_KEY_RE.test(key) && PROSE_STOPWORD_RE.test(value));
     }
     return !PROSE_STOPWORD_RE.test(text);
 }

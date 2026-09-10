@@ -195,6 +195,19 @@ describe('checkFix', () => {
                 expect(checkFix('const x = 1;', improvedCode)).toBe('prose-only');
             },
         );
+
+        // Kody's own review caught this: gating the tight-pair exemption on
+        // the VALUE alone rejected real config whose value happens to be an
+        // English stop word — "enabled: on", "action: add" are genuine
+        // key:value fixes, not label-prefixed prose. Requiring the KEY to
+        // ALSO read as a scaffolding label (not just the value reading as a
+        // stop word) is what distinguishes them from "Note: this"/"Fix: it".
+        it.each([
+            ['const c = { enabled: false };', 'enabled: on'],
+            ['const c = { action: "" };', 'action: add'],
+        ])('does NOT flag a tight key:value pair whose VALUE is a stop word but key is not a label (%j -> %j)', (existingCode, improvedCode) => {
+            expect(checkFix(existingCode, improvedCode)).toBeNull();
+        });
     });
 
     describe('truncated', () => {
