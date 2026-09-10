@@ -61,8 +61,9 @@ async function poll(pred, { timeoutMs, label }) {
     fail(`timeout waiting for ${label}; last=${JSON.stringify(last).slice(0, 300)}`);
 }
 async function webLogin(page, email, password) {
-    await page.goto(`${WEB}/sign-in`, { waitUntil: "load", timeout: 240_000 });
-    await page.locator('input[type="email"]').first().fill(email);
+    await page.goto(`${WEB}/sign-in`, { waitUntil: "networkidle", timeout: 240_000 });
+    await page.waitForTimeout(1_200);
+    await page.locator('input[type="email"]').first().fill(email, { timeout: 120_000 });
     const pwd = page.locator('input[type="password"]').first();
     for (let i = 0; i < 10; i++) { await page.getByRole("button", { name: /continue/i }).first().click({ timeout: 30_000 }).catch(() => {}); if (await pwd.waitFor({ timeout: 10_000 }).then(() => true).catch(() => false)) break; await page.waitForTimeout(3000); }
     await pwd.fill(password);
@@ -98,6 +99,24 @@ async function openCard(page) {
     await page.goto(`${WEB}/byok?r=${Date.now()}#kodus`, { waitUntil: "load", timeout: 240_000 });
     await page.getByTestId("kodus-auto-topup").waitFor({ timeout: 120_000 });
 }
+/** Click the auto top-up switch until billing reports `wanted` — a click can
+ *  land while the row is disabled (busy) right after a refresh. */
+async function setAutoTopUp(page, token, qs, wanted, label) {
+    for (let attempt = 0; attempt < 8; attempt++) {
+        const b = await balance(token, qs);
+        if (b.autoTopUp.enabled === wanted) return b;
+        const sw = page.getByTestId("kodus-auto-topup-switch");
+        await sw.waitFor({ timeout: 30_000 });
+        await page.waitForFunction(() => {
+            const el = document.querySelector('[data-testid="kodus-auto-topup-switch"]');
+            return el && !el.hasAttribute("disabled") && el.getAttribute("data-disabled") === null;
+        }, null, { timeout: 30_000 }).catch(() => {});
+        await sw.click();
+        await page.waitForTimeout(4_000);
+    }
+    fail(`could not switch auto top-up ${wanted ? "on" : "off"} (${label})`);
+}
+
 async function pickSelect(page, ariaLabel, optionText) {
     await page.getByRole("combobox", { name: ariaLabel }).click();
     await page.getByRole("option", { name: optionText, exact: true }).click();
@@ -133,8 +152,8 @@ try {
     await openCard(page);
     await pickSelect(page, "Auto top-up amount", "$20");
     await pickSelect(page, "Auto top-up threshold", "$10");
-    await page.getByTestId("kodus-auto-topup-switch").click();
-    const on = await poll(async () => { const b = await balance(token, qs); return { match: b.autoTopUp.enabled && b.autoTopUp.amountUsd === 20 && b.autoTopUp.thresholdUsd === 10, snapshot: b.autoTopUp }; }, { timeoutMs: 30_000, label: "auto top-up saved from the UI" });
+    const on = (await setAutoTopUp(page, token, qs, true, "first enable from the UI")).autoTopUp;
+    if (!(on.amountUsd === 20 && on.thresholdUsd === 10)) fail(`UI should have saved $20 below $10: ${JSON.stringify(on)}`);
     log(`PASS UI saved auto top-up: add $${on.amountUsd} below $${on.thresholdUsd}`);
     // The threshold picker must not offer values above the amount.
     await page.getByRole("combobox", { name: "Auto top-up threshold" }).click();
@@ -161,10 +180,9 @@ try {
     await stripeSetup(page, "4242424242424242");
     await poll(async () => { const b = await balance(token, qs); return { match: /4242$/.test(b.autoTopUp.paymentMethod ?? ""), snapshot: b.autoTopUp }; }, { timeoutMs: 60_000, label: "the replacement card" });
     await openCard(page);
-    await page.getByTestId("kodus-auto-topup-switch").click(); // off
-    await poll(async () => { const b = await balance(token, qs); return { match: b.autoTopUp.enabled === false, snapshot: b.autoTopUp }; }, { timeoutMs: 30_000, label: "switch off" });
-    await page.getByTestId("kodus-auto-topup-switch").click(); // on again → re-arms the hourly window
-    await poll(async () => { const b = await balance(token, qs); return { match: b.autoTopUp.enabled === true && b.autoTopUp.lastError === null, snapshot: b.autoTopUp }; }, { timeoutMs: 30_000, label: "switch on (re-armed, error cleared)" });
+    await setAutoTopUp(page, token, qs, false, "off after the card change");
+    const rearmed = await setAutoTopUp(page, token, qs, true, "on again → re-arms the hourly window");
+    if (rearmed.autoTopUp.lastError !== null) fail(`re-enabling must clear the last error: ${JSON.stringify(rearmed.autoTopUp)}`);
     stamp = Date.now();
     const b2 = (await balance(token, qs)).balanceUsd;
     await stage(organizationId, teamId, 12, b2, stamp);
@@ -177,8 +195,7 @@ try {
     await page.screenshot({ path: `${KODUS_E2E_SHOTS}/09-auto-topup-recovered.png`, fullPage: true });
     log("PASS row recovered (screenshot 09)");
     // Leave it off.
-    await page.getByTestId("kodus-auto-topup-switch").click();
-    await poll(async () => { const b = await balance(token, qs); return { match: b.autoTopUp.enabled === false, snapshot: b.autoTopUp }; }, { timeoutMs: 30_000, label: "switch off (cleanup)" });
+    await setAutoTopUp(page, token, qs, false, "cleanup");
 
     // 5. Never-funded org: add a Kodus model through the form.
     if (KODUS_E2E_UNFUNDED_EMAIL) {
@@ -187,12 +204,17 @@ try {
         await webLogin(p2, KODUS_E2E_UNFUNDED_EMAIL, KODUS_E2E_UNFUNDED_PASSWORD);
         await p2.goto(`${WEB}/byok/manual?provider=kodus`, { waitUntil: "load", timeout: 240_000 });
         await p2.getByRole("combobox").first().click({ timeout: 120_000 });
-        await p2.getByText("GLM 5.3 Flash", { exact: false }).first().click();
+        // Pick whichever catalog model is still offered (a model the org
+        // already connected is not listed again on re-runs).
+        const option = p2.getByRole("option").filter({ hasText: /DeepSeek|Kimi|GLM/ }).first();
+        await option.waitFor({ timeout: 60_000 });
+        const picked = ((await option.textContent()) ?? "").split("\n")[0].trim().replace(/RECOMMENDED/i, "").trim();
+        await option.click();
         await p2.getByRole("button", { name: /test & save/i }).click();
         await p2.waitForURL(/\/byok(\?|#|$)/, { timeout: 180_000 });
         if (!/#kodus/.test(p2.url())) fail(`saving a Kodus model should land on /byok#kodus, got ${p2.url()}`);
         await p2.getByTestId("kodus-credits-never-funded").waitFor({ timeout: 120_000 });
-        await p2.getByText("GLM 5.3 Flash", { exact: false }).first().waitFor({ timeout: 60_000 });
+        await p2.getByText(picked.slice(0, 12), { exact: false }).first().waitFor({ timeout: 60_000 });
         await p2.screenshot({ path: `${KODUS_E2E_SHOTS}/10-after-first-save.png`, fullPage: true });
         log("PASS form save lands on the card with the add-credits callout (screenshot 10)");
         await ctx2.close();
