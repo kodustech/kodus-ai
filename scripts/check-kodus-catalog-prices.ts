@@ -83,6 +83,15 @@ async function main(): Promise<void> {
         );
         process.exit(1);
     }
+    // An entry models.dev cannot resolve was not checked at all — a renamed
+    // or retired id must fail loudly, not pass as "matches".
+    if (missing.length > 0) {
+        console.error(
+            `\n[kodus-catalog] ${missing.length} catalog id(s) not found on models.dev; ` +
+                `fix the id (or the upstream mapping) before shipping.`,
+        );
+        process.exit(1);
+    }
     console.log('[kodus-catalog] OK — catalog matches models.dev.');
 }
 

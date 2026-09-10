@@ -63,13 +63,25 @@ export type CreditBalance = {
 const orgQs = (session: KodusSession) =>
     `?organizationId=${encodeURIComponent(session.organizationId)}&teamId=${encodeURIComponent(session.teamId)}`;
 
+/** Billing is reached DIRECTLY: the browser proxy denies every /credits/*
+ *  route (they take a client-chosen organizationId) and the app itself only
+ *  touches credits through server actions. The live cell already needs
+ *  `BILLING_ADMIN_BASE_URL` for the admin adjustment; reads use it too. */
+function billingBase(ctx: RunContext): string {
+    const base = process.env.BILLING_ADMIN_BASE_URL;
+    ctx.assert(
+        !!base,
+        "kodus-credits scenarios need BILLING_ADMIN_BASE_URL (direct billing access; the browser proxy denies /credits/*)",
+    );
+    return base!.replace(/\/$/, "");
+}
+
 export async function fetchCreditBalance(
     ctx: RunContext,
     session: KodusSession,
 ): Promise<CreditBalance> {
-    const target = ctx.target as TargetContext;
     const resp = await http<CreditBalance>(
-        `${target.webBaseUrl}/api/proxy/billing/credits/balance${orgQs(session)}`,
+        `${billingBase(ctx)}/credits/balance${orgQs(session)}`,
         { method: "GET", headers: auth(session), timeoutMs: 30_000 },
     );
     ctx.assert(
@@ -92,9 +104,8 @@ export async function fetchCreditLedger(
     ctx: RunContext,
     session: KodusSession,
 ): Promise<LedgerEntry[]> {
-    const target = ctx.target as TargetContext;
     const resp = await http<{ entries?: LedgerEntry[] }>(
-        `${target.webBaseUrl}/api/proxy/billing/credits/ledger${orgQs(session)}&limit=200`,
+        `${billingBase(ctx)}/credits/ledger${orgQs(session)}&limit=200`,
         { method: "GET", headers: auth(session), timeoutMs: 30_000 },
     );
     ctx.assert(

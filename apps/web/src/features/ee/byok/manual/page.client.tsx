@@ -123,18 +123,7 @@ export function ByokManualPageClient({
     // Kodus provider: the balance the model will draw from (shown in the
     // Billing card in place of a key field).
     const kodusCredits = useKodusCreditBalance();
-    // Private alpha: the Kodus form is reachable only for an org on the flag
-    // (or one that already routes through Kodus). A direct URL from anyone
-    // else bounces to the providers page — the API would refuse the save
-    // anyway, but the form must not advertise what the org cannot use.
     const { kodusProvider: kodusProviderFlag } = useFeatureFlags();
-    const kodusFormAllowed =
-        !isPlatformFundedProvider(presetProvider) ||
-        kodusProviderFlag === true ||
-        kodusCredits.usesKodusProvider;
-    useEffect(() => {
-        if (!kodusFormAllowed) router.replace("/byok");
-    }, [kodusFormAllowed, router]);
     const editSettings = (editCredential?.settings ?? {}) as Record<
         string,
         unknown
@@ -376,6 +365,20 @@ export function ByokManualPageClient({
         seededProvidersRef.current.add(picked);
     };
     const model = form.watch("model");
+    // Private alpha: the Kodus form is reachable only for an org on the flag
+    // (or one that already routes through Kodus) — whether Kodus came from
+    // the URL (?provider=) or was picked in the form. Anyone else bounces to
+    // the providers page: the API would refuse the save anyway, but the form
+    // must not advertise what the org cannot use.
+    const selectedProvider = form.watch("provider");
+    const kodusFormAllowed =
+        (!isPlatformFundedProvider(presetProvider) &&
+            !isPlatformFundedProvider(selectedProvider)) ||
+        kodusProviderFlag === true ||
+        kodusCredits.usesKodusProvider;
+    useEffect(() => {
+        if (!kodusFormAllowed) router.replace("/byok");
+    }, [kodusFormAllowed, router]);
     const apiKey = form.watch("apiKey");
     const watchedBaseURL = form.watch("baseURL");
     // Title label: derive from the id — so the header reads "Edit Kimi K2.6" /

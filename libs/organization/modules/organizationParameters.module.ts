@@ -27,7 +27,10 @@ import { CodebaseModule } from '@libs/code-review/modules/codebase.module';
 import { ProviderModule } from '@libs/core/infrastructure/services/providers/provider.module';
 import { ParametersModule } from './parameters.module';
 import { OrganizationModule } from './organization.module';
-import { KodusProviderGate } from '@libs/core/infrastructure/services/providers/kodus-provider-gate.service';
+import {
+    KODUS_PROVIDER_GATE_TOKEN,
+    KodusProviderGate,
+} from '@libs/core/infrastructure/services/providers/kodus-provider-gate.service';
 
 @Module({
     imports: [
@@ -57,7 +60,7 @@ import { KodusProviderGate } from '@libs/core/infrastructure/services/providers/
         DeleteByokConfigUseCase,
         GetLLMConfigStatusUseCase,
         GetByokProvidersUseCase,
-        KodusProviderGate,
+        { provide: KODUS_PROVIDER_GATE_TOKEN, useClass: KodusProviderGate },
         IgnoreBotsUseCase,
         GetModelsByProviderUseCase,
         GetModelCapabilitiesUseCase,

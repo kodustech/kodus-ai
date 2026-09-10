@@ -32,10 +32,12 @@ if (!KODUS_E2E_EMAIL || !KODUS_E2E_PASSWORD) {
 }
 
 const WEB = KODUS_WEB_URL.replace(/\/$/, "");
-// The API is reached directly (the web proxy for /api is cookie-gated); the
-// billing service goes through the proxy exactly as the app does.
+// The API is reached directly (the web proxy for /api is cookie-gated). The
+// billing service is reached DIRECTLY too: the browser proxy denies every
+// /credits/* route (client-chosen organizationId), and the app itself only
+// touches credits through server actions.
 const API = KODUS_API_URL.replace(/\/$/, "");
-const BILLING = `${WEB}/api/proxy/billing`;
+const BILLING = (process.env.BILLING_ADMIN_BASE_URL || "http://localhost:3992/api/billing").replace(/\/$/, "");
 const headless = KODUS_E2E_HEADLESS !== "0";
 mkdirSync(KODUS_E2E_SHOTS, { recursive: true });
 

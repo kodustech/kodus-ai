@@ -5,9 +5,12 @@ import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { REGISTRY } from '@libs/llm/providers';
 import { describeProviderId } from '@libs/llm/providers/provider-ui-descriptor';
 import { isProviderAvailableHere } from '@libs/core/infrastructure/services/providers/kodus-provider-availability';
-import { KodusProviderGate } from '@libs/core/infrastructure/services/providers/kodus-provider-gate.service';
+import {
+    KODUS_PROVIDER_GATE_TOKEN,
+    KodusProviderGate,
+} from '@libs/core/infrastructure/services/providers/kodus-provider-gate.service';
 import { isPlatformFundedProvider } from '@libs/llm/platform-funded-provider';
-import { Injectable, Optional } from '@nestjs/common';
+import { Injectable, Optional, Inject } from '@nestjs/common';
 
 /**
  * One connectable provider descriptor — STATIC and NON-SENSITIVE (no org data,
@@ -46,7 +49,9 @@ export class GetByokProvidersUseCase implements IUseCase {
     constructor(
         // Optional: the descriptor stays dependency-free in specs; in the app
         // the gate is always provided by the module.
-        @Optional() private readonly kodusGate?: KodusProviderGate,
+        @Optional()
+        @Inject(KODUS_PROVIDER_GATE_TOKEN)
+        private readonly kodusGate?: KodusProviderGate,
     ) {}
 
     async execute(organizationId?: string): Promise<ByokProvidersResult> {

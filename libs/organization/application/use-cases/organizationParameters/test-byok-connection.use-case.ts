@@ -15,12 +15,13 @@ import type { NormalizedModel } from '@libs/llm/byok-config';
 import { encrypt } from '@libs/common/utils/crypto';
 import { validateModelTuning } from '@libs/llm/validate-model-tuning';
 import {
+    KODUS_PROVIDER_GATE_TOKEN,
     KODUS_PROVIDER_NOT_ENABLED_MESSAGE,
     KodusProviderGate,
 } from '@libs/core/infrastructure/services/providers/kodus-provider-gate.service';
 import { ProviderService } from '@libs/core/infrastructure/services/providers/provider.service';
 import { createLogger } from '@libs/core/log/logger';
-import { BadRequestException, Injectable, Optional } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional, Inject } from '@nestjs/common';
 import axios, { AxiosError } from 'axios';
 import { lookup } from 'dns/promises';
 
@@ -238,7 +239,9 @@ export class TestByokConnectionUseCase {
 
     constructor(
         private readonly providerService: ProviderService,
-        @Optional() private readonly kodusGate?: KodusProviderGate,
+        @Optional()
+        @Inject(KODUS_PROVIDER_GATE_TOKEN)
+        private readonly kodusGate?: KodusProviderGate,
     ) {}
 
     /**
@@ -259,6 +262,11 @@ export class TestByokConnectionUseCase {
                 isPlatformFundedProvider(input?.provider) &&
                 !(await this.kodusGate?.isEnabledFor(organizationId))
             ) {
+                this.logger.warn({
+                    message: 'Refused to probe the Kodus provider: org outside the private alpha',
+                    context: TestByokConnectionUseCase.name,
+                    metadata: { organizationId, provider: input?.provider },
+                });
                 throw new BadRequestException(KODUS_PROVIDER_NOT_ENABLED_MESSAGE);
             }
             const result = await this.runTest(input);

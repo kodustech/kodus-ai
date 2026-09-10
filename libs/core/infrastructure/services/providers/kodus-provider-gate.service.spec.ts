@@ -7,14 +7,13 @@ import { KodusProviderGate } from './kodus-provider-gate.service';
  * release track supplied — and closed on any failure.
  */
 describe('KodusProviderGate', () => {
-    const cloud = environment as { API_CLOUD_MODE: boolean };
     let savedCloud: boolean;
     beforeEach(() => {
-        savedCloud = cloud.API_CLOUD_MODE;
-        cloud.API_CLOUD_MODE = true;
+        savedCloud = environment.API_CLOUD_MODE;
+        (environment as { API_CLOUD_MODE: boolean }).API_CLOUD_MODE = true;
     });
     afterEach(() => {
-        cloud.API_CLOUD_MODE = savedCloud;
+        (environment as { API_CLOUD_MODE: boolean }).API_CLOUD_MODE = savedCloud;
     });
 
     const build = (over: {
@@ -54,7 +53,7 @@ describe('KodusProviderGate', () => {
     });
 
     it('is off on a self-hosted install without asking the flag', async () => {
-        cloud.API_CLOUD_MODE = false;
+        (environment as { API_CLOUD_MODE: boolean }).API_CLOUD_MODE = false;
         const { gate, isEnabled } = build();
         await expect(gate.isEnabledFor('org-1')).resolves.toBe(false);
         expect(isEnabled).not.toHaveBeenCalled();

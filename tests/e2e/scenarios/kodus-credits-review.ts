@@ -203,13 +203,28 @@ export const kodusCreditsReview: Scenario = {
                 );
 
                 // ── 5. Drain to zero → the next review is blocked ────────
-                const drained = await adminAdjustCredits(
-                    ctx,
-                    session,
-                    -balanceAfterReview,
-                    `adjust:e2e:${ctx.runId}:drain`,
-                    "e2e drain to exercise the gate",
-                );
+                // Iterative: the sweep re-reads a 15-minute overlap window,
+                // so a late debit can land between the balance read and the
+                // adjustment; re-read and adjust until it settles at zero.
+                let drained = { applied: false, balanceUsd: balanceAfterReview };
+                for (let attempt = 0; attempt < 4; attempt++) {
+                    const current =
+                        attempt === 0
+                            ? balanceAfterReview
+                            : (await fetchCreditBalance(ctx, session)).balanceUsd;
+                    if (Math.abs(current) < 0.000_01) {
+                        drained = { applied: true, balanceUsd: current };
+                        break;
+                    }
+                    drained = await adminAdjustCredits(
+                        ctx,
+                        session,
+                        -current,
+                        `adjust:e2e:${ctx.runId}:drain:${attempt}`,
+                        "e2e drain to exercise the gate",
+                    );
+                    if (Math.abs(drained.balanceUsd) < 0.000_01) break;
+                }
                 ctx.assert(
                     Math.abs(drained.balanceUsd) < 0.000_01,
                     `Drain must leave balance 0: ${JSON.stringify(drained)}`,

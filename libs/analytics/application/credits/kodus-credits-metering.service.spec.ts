@@ -68,6 +68,23 @@ function harness(opts: {
             charges.push({ ...update.$setOnInsert });
             return { upsertedCount: 1, matchedCount: 0 };
         }),
+        // The sweep journals with ONE unordered bulkWrite of upserts; the
+        // fake keeps the same UNIQUE(spanId) semantics and reports which op
+        // indexes inserted, as the driver does via `upsertedIds`.
+        bulkWrite: jest.fn(async (ops: any[]) => {
+            const upsertedIds: Record<string, string> = {};
+            ops.forEach((op, index) => {
+                const { filter, update } = op.updateOne;
+                const exists = charges.some((c) => c.spanId === filter.spanId);
+                if (exists) return;
+                charges.push({ ...update.$setOnInsert });
+                upsertedIds[String(index)] = `id-${filter.spanId}`;
+            });
+            return {
+                upsertedCount: Object.keys(upsertedIds).length,
+                upsertedIds,
+            };
+        }),
         find: jest.fn((filter: any) =>
             chain(
                 charges.filter(

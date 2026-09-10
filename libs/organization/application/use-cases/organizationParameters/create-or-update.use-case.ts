@@ -10,6 +10,7 @@ import { BYOKProvider } from '@libs/llm/model-providers';
 import { isPlatformFundedProvider } from '@libs/llm/platform-funded-provider';
 import { isProviderAvailableHere } from '@libs/core/infrastructure/services/providers/kodus-provider-availability';
 import {
+    KODUS_PROVIDER_GATE_TOKEN,
     KODUS_PROVIDER_NOT_ENABLED_MESSAGE,
     KodusProviderGate,
 } from '@libs/core/infrastructure/services/providers/kodus-provider-gate.service';
@@ -59,7 +60,9 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         private readonly eventEmitter: EventEmitter2,
         private readonly telemetry: TelemetryService,
         // Last, so positional construction in specs stays valid.
-        @Optional() private readonly kodusGate?: KodusProviderGate,
+        @Optional()
+        @Inject(KODUS_PROVIDER_GATE_TOKEN)
+        private readonly kodusGate?: KodusProviderGate,
     ) {}
 
     async execute(
@@ -372,21 +375,23 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         next: BYOKConfig,
         existing?: BYOKConfig,
     ): Promise<void> {
-        const had = new Set(
-            (existing?.credentials ?? [])
-                .filter((c) => isPlatformFundedProvider(c?.provider))
-                .map((c) => c.id),
+        const alreadyConnected = (existing?.credentials ?? []).some((c) =>
+            isPlatformFundedProvider(c?.provider),
         );
-        const wantsNewKodus = (next?.credentials ?? []).some(
-            (c) =>
-                !c?.managed &&
-                isPlatformFundedProvider(c?.provider) &&
-                !(c.id && had.has(c.id)) &&
-                had.size === 0,
+        const wantsKodus = (next?.credentials ?? []).some(
+            (c) => !c?.managed && isPlatformFundedProvider(c?.provider),
         );
-        if (!wantsNewKodus) return;
+        // Connecting the provider is what the alpha gates; an org that has it
+        // connected keeps saving its config (and there is only ever one Kodus
+        // credential per org — the connect flow reuses it).
+        if (!wantsKodus || alreadyConnected) return;
         const organizationId = this.request?.user?.organization?.uuid;
         if (!(await this.kodusGate?.isEnabledFor(organizationId))) {
+            this.logger.warn({
+                message: 'Refused to connect the Kodus provider: org outside the private alpha',
+                context: CreateOrUpdateOrganizationParametersUseCase.name,
+                metadata: { organizationId, provider: 'kodus' },
+            });
             throw new BadRequestException(KODUS_PROVIDER_NOT_ENABLED_MESSAGE);
         }
     }

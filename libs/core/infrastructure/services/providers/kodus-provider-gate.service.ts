@@ -25,6 +25,9 @@ import { isKodusProviderAvailable } from './kodus-provider-availability';
  * saved keeps routing (the runtime never asks) — flipping the flag off stops
  * new connections, not reviews mid-flight.
  */
+/** DI token: consumers inject the token, the class stays the type. */
+export const KODUS_PROVIDER_GATE_TOKEN = Symbol.for('KodusProviderGate');
+
 @Injectable()
 export class KodusProviderGate {
     private readonly logger = createLogger(KodusProviderGate.name);

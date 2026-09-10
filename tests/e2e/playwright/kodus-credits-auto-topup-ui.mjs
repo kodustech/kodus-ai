@@ -25,7 +25,9 @@ const {
     BILLING_ADMIN_TOKEN,
 } = process.env;
 const WEB = KODUS_WEB_URL.replace(/\/$/, ""), API = KODUS_API_URL.replace(/\/$/, "");
-const BILLING = `${WEB}/api/proxy/billing`, DIRECT = BILLING_ADMIN_BASE_URL.replace(/\/$/, "");
+// Billing is reached directly: the browser proxy denies /credits/* (the app
+// only touches credits through server actions).
+const DIRECT = BILLING_ADMIN_BASE_URL.replace(/\/$/, ""), BILLING = DIRECT;
 mkdirSync(KODUS_E2E_SHOTS, { recursive: true });
 const log = (...a) => console.log("[auto-topup-ui]", ...a);
 const fail = (m) => { console.error(`[auto-topup-ui] FAIL: ${m}`); process.exit(1); };
@@ -38,7 +40,13 @@ async function ids(token) {
     const b = await fetch(`${API}/user/info`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json());
     const d = b.data ?? b; return { organizationId: d.organization.uuid, teamId: d.teamMember[0].team.uuid };
 }
-async function balance(token, qs) { return (await fetch(`${BILLING}/credits/balance${qs}`, { headers: { Authorization: `Bearer ${token}` } })).json(); }
+async function balance(token, qs) {
+    const r = await fetch(`${BILLING}/credits/balance${qs}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (r.status !== 200) fail(`credits/balance HTTP ${r.status}`);
+    const b = await r.json();
+    if (!b?.autoTopUp) fail(`credits/balance answered without autoTopUp: ${JSON.stringify(b).slice(0, 200)}`);
+    return b;
+}
 async function stage(organizationId, teamId, target, current, stamp) {
     const r = await fetch(`${DIRECT}/credits/adjust`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, teamId, amountUsd: target - current, usageKey: `e2e:ui:stage:${stamp}`, reason: "e2e ui", adminToken: BILLING_ADMIN_TOKEN }) });
     if (r.status !== 200) fail(`adjust HTTP ${r.status}`);
@@ -125,7 +133,6 @@ try {
     await openCard(page);
     await pickSelect(page, "Auto top-up amount", "$20");
     await pickSelect(page, "Auto top-up threshold", "$10");
-    if (!(await page.getByRole("option", { name: "$50", exact: true }).count()) === false) { /* menu closed */ }
     await page.getByTestId("kodus-auto-topup-switch").click();
     const on = await poll(async () => { const b = await balance(token, qs); return { match: b.autoTopUp.enabled && b.autoTopUp.amountUsd === 20 && b.autoTopUp.thresholdUsd === 10, snapshot: b.autoTopUp }; }, { timeoutMs: 30_000, label: "auto top-up saved from the UI" });
     log(`PASS UI saved auto top-up: add $${on.amountUsd} below $${on.thresholdUsd}`);

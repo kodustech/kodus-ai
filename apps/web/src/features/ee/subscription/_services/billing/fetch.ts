@@ -16,7 +16,7 @@ import type {
     TrialUnlock,
     TrialUnlockSignals,
 } from "./types";
-import { billingFetch } from "./utils";
+import { billingFetch, billingRequest } from "./utils";
 
 type OrganizationMember = {
     id: string | number;
@@ -395,6 +395,8 @@ export const listCreditLedger = async (params: {
     return page?.entries ?? [];
 };
 
+// Mutations go through `billingRequest` (throws with the HTTP status): the UI
+// must tell a 409 "no saved card" apart from a saved setting.
 export const updateCreditAutoTopUp = async (params: {
     teamId: string;
     enabled: boolean;
@@ -402,9 +404,9 @@ export const updateCreditAutoTopUp = async (params: {
     amountUsd?: number;
 }): Promise<CreditAutoTopUp> => {
     const organizationId = await getOrganizationId();
-    return billingFetch<CreditAutoTopUp>(`credits/auto-topup`, {
+    return billingRequest<CreditAutoTopUp>(`credits/auto-topup`, {
         method: "POST",
-        body: JSON.stringify({ organizationId, ...params }),
+        body: { organizationId, ...params },
     });
 };
 
@@ -412,9 +414,9 @@ export const createCreditPaymentMethodCheckout = async (params: {
     teamId: string;
 }): Promise<{ url: string }> => {
     const organizationId = await getOrganizationId();
-    return billingFetch<{ url: string }>(`credits/payment-method/checkout`, {
+    return billingRequest<{ url: string }>(`credits/payment-method/checkout`, {
         method: "POST",
-        body: JSON.stringify({ organizationId, teamId: params.teamId }),
+        body: { organizationId, teamId: params.teamId },
     });
 };
 
@@ -422,7 +424,7 @@ export const removeCreditPaymentMethod = async (params: {
     teamId: string;
 }): Promise<CreditAutoTopUp> => {
     const organizationId = await getOrganizationId();
-    return billingFetch<CreditAutoTopUp>(`credits/payment-method`, {
+    return billingRequest<CreditAutoTopUp>(`credits/payment-method`, {
         method: "DELETE",
         params: { organizationId, teamId: params.teamId },
     });
@@ -433,12 +435,12 @@ export const createCreditCheckout = async (params: {
     creditUsd: number;
 }): Promise<CreditCheckoutResult> => {
     const organizationId = await getOrganizationId();
-    return billingFetch<CreditCheckoutResult>(`credits/checkout`, {
+    return billingRequest<CreditCheckoutResult>(`credits/checkout`, {
         method: "POST",
-        body: JSON.stringify({
+        body: {
             organizationId,
             teamId: params.teamId,
             creditUsd: params.creditUsd,
-        }),
+        },
     });
 };

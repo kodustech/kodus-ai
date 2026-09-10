@@ -1,5 +1,8 @@
 "use server";
 
+import { canAccess } from "@services/permissions/fetch";
+import { Action, ResourceType } from "@services/permissions/types";
+
 import {
     createCreditCheckout,
     createCreditPaymentMethodCheckout,
@@ -8,6 +11,7 @@ import {
     removeCreditPaymentMethod,
     updateCreditAutoTopUp,
 } from "../_services/billing/fetch";
+import { BillingHttpError } from "../_services/billing/utils";
 
 /** Balance + commercial parameters; null when billing has none / is down. */
 export const getCreditBalanceAction = async ({
@@ -40,6 +44,19 @@ export const listCreditLedgerAction = async ({
     }
 };
 
+/**
+ * Mutations on the org's money need the Billing update permission — checked
+ * here on the server, not only where the buttons are hidden (a server action
+ * can be called directly).
+ */
+const assertCanManageCredits = async () => {
+    const { canAccess: allowed } = await canAccess(
+        ResourceType.Billing,
+        Action.Update,
+    ).catch(() => ({ canAccess: false }));
+    if (!allowed) throw new Error("FORBIDDEN");
+};
+
 export const createCreditCheckoutAction = async ({
     teamId,
     creditUsd,
@@ -47,6 +64,7 @@ export const createCreditCheckoutAction = async ({
     teamId: string;
     creditUsd: number;
 }) => {
+    await assertCanManageCredits();
     try {
         const result = await createCreditCheckout({ teamId, creditUsd });
         if (!result?.url) throw new Error("no checkout url");
@@ -63,25 +81,27 @@ export const updateCreditAutoTopUpAction = async (params: {
     thresholdUsd?: number;
     amountUsd?: number;
 }) => {
+    await assertCanManageCredits();
     try {
         return await updateCreditAutoTopUp(params);
     } catch (error) {
-        const message =
-            error instanceof Error ? error.message : "Failed to save";
         console.error("Failed to update auto top-up:", error);
-        // The billing service answers 409 NO_PAYMENT_METHOD when no card is
-        // saved; surface it so the UI can route to the card step.
-        throw new Error(
-            /NO_PAYMENT_METHOD|409/.test(message)
-                ? "NO_PAYMENT_METHOD"
-                : "Failed to update auto top-up",
-        );
+        // Billing answers 409 NO_PAYMENT_METHOD when no card is saved and
+        // 400 INVALID_* for a bad pair; surface the code so the UI can react.
+        if (error instanceof BillingHttpError) {
+            const code = (error.body as { error?: string } | null)?.error;
+            if (code === "NO_PAYMENT_METHOD")
+                throw new Error("NO_PAYMENT_METHOD");
+            if (code) throw new Error(code);
+        }
+        throw new Error("Failed to update auto top-up");
     }
 };
 
 export const createCreditPaymentMethodCheckoutAction = async (params: {
     teamId: string;
 }) => {
+    await assertCanManageCredits();
     try {
         const result = await createCreditPaymentMethodCheckout(params);
         if (!result?.url) throw new Error("no checkout url");
@@ -95,6 +115,7 @@ export const createCreditPaymentMethodCheckoutAction = async (params: {
 export const removeCreditPaymentMethodAction = async (params: {
     teamId: string;
 }) => {
+    await assertCanManageCredits();
     try {
         return await removeCreditPaymentMethod(params);
     } catch (error) {

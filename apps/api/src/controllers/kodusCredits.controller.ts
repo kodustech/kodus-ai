@@ -1,4 +1,7 @@
-import { KodusCreditsMeteringService } from '@libs/analytics/application/credits/kodus-credits-metering.service';
+import {
+    KODUS_CREDITS_METERING_SERVICE_TOKEN,
+    KodusCreditsMeteringService,
+} from '@libs/analytics/application/credits/kodus-credits-metering.service';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
 import {
     Action,
@@ -22,6 +25,7 @@ import { REQUEST } from '@nestjs/core';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
+import { ListKodusCreditChargesQueryDto } from '../dtos/list-kodus-credit-charges-query.dto';
 
 /**
  * Read side of the prepaid-credit METERING JOURNAL ("Kodus as the provider").
@@ -39,6 +43,7 @@ export class KodusCreditsController {
     constructor(
         @Inject(REQUEST)
         private readonly request: UserRequest,
+        @Inject(KODUS_CREDITS_METERING_SERVICE_TOKEN)
         private readonly metering: KodusCreditsMeteringService,
     ) {}
 
@@ -56,26 +61,17 @@ export class KodusCreditsController {
             'at the catalog list rate, newest first. `status` tells whether ' +
             'the row was already debited from the prepaid balance.',
     })
-    async charges(
-        @Query('limit') limit?: string,
-        @Query('before') before?: string,
-        @Query('prNumber') prNumber?: string,
-    ) {
+    async charges(@Query() query: ListKodusCreditChargesQueryDto) {
         const organizationId = this.request?.user?.organization?.uuid;
         if (!organizationId) {
             throw new BadRequestException(
                 'organizationId not found in request',
             );
         }
-        const beforeDate = before ? new Date(before) : undefined;
-        if (beforeDate && Number.isNaN(beforeDate.getTime())) {
-            throw new BadRequestException('before must be an ISO date');
-        }
-        const pr = prNumber ? Number(prNumber) : undefined;
         const charges = await this.metering.listCharges(organizationId, {
-            limit: limit ? Number(limit) : undefined,
-            before: beforeDate,
-            prNumber: Number.isFinite(pr) ? pr : undefined,
+            limit: query.limit,
+            before: query.before ? new Date(query.before) : undefined,
+            prNumber: query.prNumber,
         });
         return {
             charges: charges.map((c) => ({

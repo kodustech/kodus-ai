@@ -1,10 +1,13 @@
 import { createLogger } from '@libs/core/log/logger';
-import { KodusCreditsMeteringService } from '@libs/analytics/application/credits/kodus-credits-metering.service';
+import {
+    KODUS_CREDITS_METERING_SERVICE_TOKEN,
+    KodusCreditsMeteringService,
+} from '@libs/analytics/application/credits/kodus-credits-metering.service';
 import {
     DistributedLock,
     DistributedLockService,
 } from '@libs/core/workflow/infrastructure/distributed-lock.service';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 
 const API_CRON_KODUS_CREDITS_SWEEP =
@@ -21,6 +24,7 @@ export class KodusCreditsSweepCronProvider {
     private readonly logger = createLogger(KodusCreditsSweepCronProvider.name);
 
     constructor(
+        @Inject(KODUS_CREDITS_METERING_SERVICE_TOKEN)
         private readonly metering: KodusCreditsMeteringService,
         private readonly distributedLockService: DistributedLockService,
     ) {}

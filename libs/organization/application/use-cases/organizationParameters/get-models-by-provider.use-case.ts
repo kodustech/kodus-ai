@@ -5,6 +5,7 @@ import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/
 import { ProviderService } from '@libs/core/infrastructure/services/providers/provider.service';
 import { createLogger } from '@libs/core/log/logger';
 import {
+    KODUS_PROVIDER_GATE_TOKEN,
     KODUS_PROVIDER_NOT_ENABLED_MESSAGE,
     KodusProviderGate,
 } from '@libs/core/infrastructure/services/providers/kodus-provider-gate.service';
@@ -51,7 +52,9 @@ export class GetModelsByProviderUseCase {
         private readonly providerService: ProviderService,
         @Inject(ORGANIZATION_PARAMETERS_SERVICE_TOKEN)
         private readonly organizationParametersService: IOrganizationParametersService,
-        @Optional() private readonly kodusGate?: KodusProviderGate,
+        @Optional()
+        @Inject(KODUS_PROVIDER_GATE_TOKEN)
+        private readonly kodusGate?: KodusProviderGate,
     ) {}
 
     async execute(
@@ -75,6 +78,14 @@ export class GetModelsByProviderUseCase {
                 organizationAndTeamData?.organizationId,
             ))
         ) {
+            this.logger.warn({
+                message: 'Refused to list the Kodus catalog: org outside the private alpha',
+                context: GetModelsByProviderUseCase.name,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    provider,
+                },
+            });
             throw new BadRequestException(KODUS_PROVIDER_NOT_ENABLED_MESSAGE);
         }
 

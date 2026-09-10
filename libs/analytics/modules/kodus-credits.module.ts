@@ -4,7 +4,10 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { LicenseModule } from '@libs/ee/license/license.module';
 import { OrganizationParametersModule } from '@libs/organization/modules/organizationParameters.module';
 
-import { KodusCreditsMeteringService } from '../application/credits/kodus-credits-metering.service';
+import {
+    KODUS_CREDITS_METERING_SERVICE_TOKEN,
+    KodusCreditsMeteringService,
+} from '../application/credits/kodus-credits-metering.service';
 import {
     KodusCreditChargeModel,
     KodusCreditChargeModelSchema,
@@ -40,7 +43,12 @@ import {
         forwardRef(() => OrganizationParametersModule),
         forwardRef(() => LicenseModule),
     ],
-    providers: [KodusCreditsMeteringService],
-    exports: [KodusCreditsMeteringService],
+    providers: [
+        {
+            provide: KODUS_CREDITS_METERING_SERVICE_TOKEN,
+            useClass: KodusCreditsMeteringService,
+        },
+    ],
+    exports: [KODUS_CREDITS_METERING_SERVICE_TOKEN],
 })
 export class KodusCreditsModule {}

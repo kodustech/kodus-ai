@@ -28,15 +28,9 @@ function resolveBillingUpstream(path: string, search: string): string {
 export const { GET, POST, PUT, PATCH, DELETE } = createProxyHandler({
     resolveUpstream: resolveBillingUpstream,
     proxyMountPath: "/api/proxy/billing",
-    // `/credits/debit` is the metering sweep's endpoint (API → billing). It
-    // takes an organizationId in the body and the billing service has no
-    // caller auth of its own, so a browser must never be able to reach it.
-    denyPathPrefixes: [
-        "/admin",
-        "/internal",
-        "/metrics",
-        "/debug",
-        "/credits/debit",
-        "/credits/adjust",
-    ],
+    // The billing service has no caller auth of its own: every /credits/*
+    // route takes a client-chosen organizationId, so a browser must never
+    // reach any of them. The app reads and mutates credits through server
+    // actions only (session-derived org, server-side billingFetch).
+    denyPathPrefixes: ["/admin", "/internal", "/metrics", "/debug", "/credits"],
 });

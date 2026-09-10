@@ -93,6 +93,11 @@ type TelemetrySpan = {
     attributes?: Record<string, any>;
 };
 
+/** DI token for the metering service (consumers inject the token, not the class). */
+export const KODUS_CREDITS_METERING_SERVICE_TOKEN = Symbol.for(
+    'KodusCreditsMeteringService',
+);
+
 @Injectable()
 export class KodusCreditsMeteringService {
     private readonly logger = createLogger(KodusCreditsMeteringService.name);
@@ -196,6 +201,14 @@ export class KodusCreditsMeteringService {
         }
         let maxTimestamp = cursor;
 
+        // One bulkWrite per org per tick (unordered, upsert per span) instead
+        // of a round-trip per span: the journal is idempotent on spanId, so
+        // a re-read of the overlap window inserts nothing and costs one call.
+        const ops: Array<{
+            spanId: string;
+            unpriced: boolean;
+            op: Record<string, unknown>;
+        }> = [];
         for (const span of spans) {
             const tu = span.attributes?.tu;
             const ts = span.timestamp ? new Date(span.timestamp) : null;
@@ -211,44 +224,80 @@ export class KodusCreditsMeteringService {
                 cacheWrite: Number(tu.cacheWrite ?? 0),
             };
             const amountUsd = kodusModelUsageCostUsd(model, tokens);
-
-            try {
-                const res = await this.chargeModel.updateOne(
-                    { spanId: String(span._id) },
-                    {
-                        $setOnInsert: {
-                            spanId: String(span._id),
-                            organizationId,
-                            teamId: span.attributes?.teamId ?? undefined,
-                            correlationId: span.correlationId,
-                            prNumber:
-                                typeof span.attributes?.prNumber === 'number'
-                                    ? span.attributes.prNumber
-                                    : undefined,
-                            modelId: model,
-                            area: tu.area,
-                            route: tu.route,
-                            tokens,
-                            amountUsd: amountUsd ?? 0,
-                            pricingAsOf: KODUS_CATALOG_PRICES_AS_OF,
-                            status:
-                                amountUsd === null ? 'unpriced' : 'pending',
-                            spanAt: ts,
+            const spanId = String(span._id);
+            ops.push({
+                spanId,
+                unpriced: amountUsd === null,
+                op: {
+                    updateOne: {
+                        filter: { spanId },
+                        update: {
+                            $setOnInsert: {
+                                spanId,
+                                organizationId,
+                                teamId: span.attributes?.teamId ?? undefined,
+                                correlationId: span.correlationId,
+                                prNumber:
+                                    typeof span.attributes?.prNumber === 'number'
+                                        ? span.attributes.prNumber
+                                        : undefined,
+                                modelId: model,
+                                area: tu.area,
+                                route: tu.route,
+                                tokens,
+                                amountUsd: amountUsd ?? 0,
+                                pricingAsOf: KODUS_CATALOG_PRICES_AS_OF,
+                                status: amountUsd === null ? 'unpriced' : 'pending',
+                                spanAt: ts,
+                            },
                         },
+                        upsert: true,
                     },
-                    { upsert: true },
+                },
+            });
+        }
+
+        if (ops.length > 0) {
+            try {
+                const res = (await this.chargeModel.bulkWrite(
+                    ops.map((o) => o.op) as Parameters<
+                        typeof this.chargeModel.bulkWrite
+                    >[0],
+                    { ordered: false },
+                )) as {
+                    upsertedCount?: number;
+                    upsertedIds?: Record<string, unknown>;
+                };
+                // `upsertedIds` is keyed by the op index, so the unpriced
+                // count covers only rows this tick actually inserted.
+                const inserted = new Set(
+                    Object.keys(res.upsertedIds ?? {}).map(Number),
                 );
-                if ((res as { upsertedCount?: number }).upsertedCount > 0) {
-                    summary.journaled += 1;
-                    if (amountUsd === null) summary.unpriced += 1;
+                summary.journaled += res.upsertedCount ?? inserted.size;
+                for (const idx of inserted) {
+                    if (ops[idx]?.unpriced) summary.unpriced += 1;
                 }
             } catch (error) {
-                summary.failed += 1;
+                // An unordered bulk write applies what it can; count the rest.
+                const writeErrors = (
+                    error as { writeErrors?: unknown[]; result?: { upsertedCount?: number } }
+                )?.writeErrors;
+                const applied =
+                    (error as { result?: { upsertedCount?: number } })?.result
+                        ?.upsertedCount ?? 0;
+                summary.journaled += applied;
+                summary.failed += Array.isArray(writeErrors)
+                    ? writeErrors.length
+                    : ops.length - applied;
                 this.logger.error({
-                    message: 'Failed to journal Kodus credit charge',
+                    message: 'Failed to journal Kodus credit charges',
                     context: KodusCreditsMeteringService.name,
                     error: error instanceof Error ? error : undefined,
-                    metadata: { organizationId, spanId: String(span._id) },
+                    metadata: {
+                        organizationId,
+                        spans: ops.length,
+                        failed: summary.failed,
+                    },
                 });
             }
         }
