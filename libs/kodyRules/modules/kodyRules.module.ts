@@ -40,6 +40,7 @@ import { FindLibraryKodyRulesUseCase } from '../application/use-cases/find-libra
 import { FindRecommendedKodyRulesUseCase } from '../application/use-cases/find-recommended-kody-rules.use-case'; // Added
 import { CountRulesByRepositoryUseCase } from '../application/use-cases/count-rules-by-repository.use-case';
 import { FindRulesInOrganizationByRuleFilterKodyRulesUseCase } from '../application/use-cases/find-rules-in-organization-by-filter.use-case';
+import { GetKodyRulesIndexUseCase } from '../application/use-cases/get-kody-rules-index.use-case';
 import { GetPendingKodyRulesUseCase } from '../application/use-cases/get-pending-kody-rules.use-case';
 import { FindSuggestionsByRuleUseCase } from '../application/use-cases/find-suggestions-by-rule.use-case';
 import { GenerateKodyRulesUseCase } from '../application/use-cases/generate-kody-rules.use-case';
@@ -120,6 +121,7 @@ import { NotificationModule } from '@libs/notifications/modules/notification.mod
         ApplyPendingKodyRulesUseCase,
         FindByOrganizationIdKodyRulesUseCase,
         FindRulesInOrganizationByRuleFilterKodyRulesUseCase,
+        GetKodyRulesIndexUseCase,
         GetPendingKodyRulesUseCase,
         CountRulesByRepositoryUseCase,
         ChangeStatusKodyRulesUseCase,
@@ -170,6 +172,7 @@ import { NotificationModule } from '@libs/notifications/modules/notification.mod
         ApplyPendingKodyRulesUseCase,
         FindByOrganizationIdKodyRulesUseCase,
         FindRulesInOrganizationByRuleFilterKodyRulesUseCase,
+        GetKodyRulesIndexUseCase,
         GetPendingKodyRulesUseCase,
         CountRulesByRepositoryUseCase,
         ChangeStatusKodyRulesUseCase,

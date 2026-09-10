@@ -50,6 +50,20 @@ export interface IKodyRules {
     updatedAt?: Date;
 }
 
+/**
+ * The few fields a picker needs to list a rule and link to it: no rule body,
+ * no examples, no detector. An org with thousands of rules ships kilobytes
+ * here instead of megabytes (see `findRulesIndex`).
+ */
+export interface IKodyRuleIndexEntry {
+    uuid: string;
+    title: string;
+    repositoryId: string;
+    directoryId?: string;
+    type?: KodyRulesType;
+    status: KodyRulesStatus;
+}
+
 export interface IKodyRule {
     uuid?: string;
     title: string;

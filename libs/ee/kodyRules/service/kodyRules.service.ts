@@ -74,6 +74,7 @@ import {
     KodyRulesOrigin,
     KodyRulesStatus,
     KodyRulesType,
+    IKodyRuleIndexEntry,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
 import {
@@ -283,6 +284,12 @@ export class KodyRulesService implements IKodyRulesService {
         return this.kodyRulesRepository.findByOrganizationId(organizationId);
     }
 
+    async findRulesIndex(
+        organizationId: string,
+    ): Promise<IKodyRuleIndexEntry[]> {
+        return this.kodyRulesRepository.findRulesIndex(organizationId);
+    }
+
     /**
      * Synchronizes an organization's stored Kody Rules in MongoDB with its
      * current plan resource limits (#1626).
@@ -333,12 +340,19 @@ export class KodyRulesService implements IKodyRulesService {
             }
         }
 
-        const changedRules: Array<{ ruleId: string; patch: Partial<IKodyRule> }> = [];
+        const changedRules: Array<{
+            ruleId: string;
+            patch: Partial<IKodyRule>;
+        }> = [];
 
         if (!isLimited) {
             // Paid plan: unpause any rule that was auto-locked by a plan limit
             for (const r of existingRules) {
-                if (r.uuid && r.status === KodyRulesStatus.PAUSED && r.lockedByPlan) {
+                if (
+                    r.uuid &&
+                    r.status === KodyRulesStatus.PAUSED &&
+                    r.lockedByPlan
+                ) {
                     changedRules.push({
                         ruleId: r.uuid,
                         patch: {
@@ -376,11 +390,7 @@ export class KodyRulesService implements IKodyRulesService {
         // Targeted per-rule updates in parallel: prevents whole-array overwrite race conditions (#1626)
         const updateResults = await Promise.allSettled(
             changedRules.map(({ ruleId, patch }) =>
-                this.kodyRulesRepository.updateRule(
-                    entity.uuid,
-                    ruleId,
-                    patch,
-                ),
+                this.kodyRulesRepository.updateRule(entity.uuid, ruleId, patch),
             ),
         );
 
@@ -390,13 +400,17 @@ export class KodyRulesService implements IKodyRulesService {
                     message: 'Failed per-rule update in syncRulesWithPlanLimit',
                     context: KodyRulesService.name,
                     error: res.reason,
-                    metadata: { organizationId, ruleId: changedRules[i].ruleId },
+                    metadata: {
+                        organizationId,
+                        ruleId: changedRules[i].ruleId,
+                    },
                 });
             }
         });
 
         this.logger.log({
-            message: 'Synchronized Kody Rules with current plan limits in MongoDB',
+            message:
+                'Synchronized Kody Rules with current plan limits in MongoDB',
             context: KodyRulesService.name,
             metadata: {
                 organizationId,

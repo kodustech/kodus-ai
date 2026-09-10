@@ -14,7 +14,6 @@ import {
 } from "@components/ui/command";
 import { Dialog, DialogContent } from "@components/ui/dialog";
 import { KODY_RULES_PATHS } from "@services/kodyRules";
-import type { KodyRule } from "@services/kodyRules/types";
 import { getMCPPlugins } from "@services/mcp-manager/fetch";
 import { PARAMETERS_PATHS } from "@services/parameters";
 import { useQuery } from "@tanstack/react-query";
@@ -45,7 +44,6 @@ import {
     TerminalIcon,
     TriangleAlertIcon,
 } from "lucide-react";
-import type { FormattedGlobalCodeReviewConfig } from "src/app/(app)/settings/code-review/_types";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import {
     hasUnsavedChanges,
@@ -235,6 +233,23 @@ const SETTINGS_TABS = [
     },
 ];
 
+/** What /kody-rules/index returns per rule. */
+type KodyRuleIndexEntry = {
+    uuid: string;
+    title: string;
+    repositoryId: string;
+    directoryId?: string;
+    type?: string;
+};
+
+/** What /parameters/code-review-scopes returns per repository. */
+type CodeReviewScope = {
+    id: string;
+    name: string;
+    isSelected: boolean;
+    directories: Array<{ id: string; name: string; paths: string[] }>;
+};
+
 const settingsHref = (
     repositoryId: string,
     page: string,
@@ -246,16 +261,13 @@ const settingsHref = (
 
 // Same label the settings scope switcher uses: the first linked folder's
 // path, or the directory name when it has none.
-const directoryLabel = (directory: {
-    name: string;
-    folders?: Array<{ path: string }>;
-}) => {
-    const folders = directory.folders ?? [];
-    const path = folders[0]?.path ?? directory.name;
-    return folders.length > 1 ? `${path} +${folders.length - 1}` : path;
+const directoryLabel = (directory: CodeReviewScope["directories"][number]) => {
+    const paths = directory.paths ?? [];
+    const path = paths[0] ?? directory.name;
+    return paths.length > 1 ? `${path} +${paths.length - 1}` : path;
 };
 
-const ruleHref = (rule: KodyRule) => {
+const ruleHref = (rule: KodyRuleIndexEntry) => {
     const repo = rule.repositoryId || "global";
     const params = new URLSearchParams();
     if (rule.uuid) params.set("rule", rule.uuid);
@@ -321,16 +333,20 @@ export const CommandPalette = () => {
         return () => window.removeEventListener("keydown", onKeyDown);
     }, []);
 
-    const { data: rules } = useFetch<Array<KodyRule>>(
-        KODY_RULES_PATHS.FIND_BY_ORGANIZATION_ID_AND_FILTER,
+    // Projected index: id, title and scope. The full listing carries every
+    // rule's body, examples and detector — megabytes on a large org, and the
+    // palette only shows titles.
+    const { data: rules } = useFetch<Array<KodyRuleIndexEntry>>(
+        KODY_RULES_PATHS.INDEX,
         undefined,
         open,
         { staleTime: 60_000 },
     );
-    const { data: config } = useFetch<{
-        configValue: FormattedGlobalCodeReviewConfig;
-    }>(
-        PARAMETERS_PATHS.GET_CODE_REVIEW_PARAMETER,
+    // Scope list without the configuration payload: /code-review-parameter
+    // returns every scope's merged config and, by default, reads each
+    // repository's kodus-config.yml live from the git provider.
+    const { data: scopes } = useFetch<Array<CodeReviewScope>>(
+        PARAMETERS_PATHS.CODE_REVIEW_SCOPES,
         { params: { teamId } },
         open && Boolean(teamId),
         { staleTime: 60_000 },
@@ -347,11 +363,11 @@ export const CommandPalette = () => {
 
     const repositories = useMemo(
         () =>
-            (config?.configValue?.repositories ?? []).filter(
-                (repo) =>
-                    repo.isSelected || (repo.directories?.length ?? 0) > 0,
+            (scopes ?? []).filter(
+                (scope) =>
+                    scope.isSelected || (scope.directories?.length ?? 0) > 0,
             ),
-        [config],
+        [scopes],
     );
 
     const matchedRules = useMemo(
