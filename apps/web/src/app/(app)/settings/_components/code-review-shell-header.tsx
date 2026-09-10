@@ -249,9 +249,11 @@ const ScopeCommandItem = ({
         className={cn("min-h-8 gap-2 py-1.5 text-[13px]", indent && "pl-8")}>
         <Icon className="text-text-tertiary size-4 shrink-0" aria-hidden />
         <span className="flex min-w-0 flex-1 items-baseline gap-2">
-            <span className="truncate">{label}</span>
+            {/* The name never gives way to its path: the mono sublabel
+                truncates first. */}
+            <span className="max-w-[70%] shrink-0 truncate">{label}</span>
             {sublabel && (
-                <span className="text-text-tertiary truncate font-mono text-[11px]">
+                <span className="text-text-tertiary min-w-0 truncate font-mono text-[11px]">
                     {sublabel}
                 </span>
             )}
@@ -608,7 +610,11 @@ export const CodeReviewShellHeader = ({
                             </button>
                         </PopoverTrigger>
 
-                        <PopoverContent align="start" className="w-[22rem] p-0">
+                        <PopoverContent
+                            align="start"
+                            // The DS popover scrolls at 300px and so does the
+                            // CommandList inside it; only the list should.
+                            className="max-h-none w-[26rem] overflow-visible p-0">
                             <Command>
                                 <CommandInput placeholder="Search repositories and directories…" />
                                 <CommandList>
