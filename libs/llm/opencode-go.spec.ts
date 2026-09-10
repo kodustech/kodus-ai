@@ -1,4 +1,5 @@
 import { isOpenCodeGoBaseUrl, openCodeSessionId } from './opencode-go';
+import PROD_SHAPES from './testing/__fixtures__/byok-prod-shapes.json';
 
 const HEX32 = /^[0-9a-f]{32}$/;
 
@@ -19,9 +20,26 @@ describe('isOpenCodeGoBaseUrl', () => {
         expect(isOpenCodeGoBaseUrl(undefined)).toBe(false);
     });
 
-    it('does not match "zen" without "go" — the session-header requirement is scoped to the Go tier, not the whole Zen portal', () => {
-        expect(isOpenCodeGoBaseUrl('https://opencode.ai/zen')).toBe(false);
-        expect(isOpenCodeGoBaseUrl('https://opencode.ai/zen/v1')).toBe(false);
+    it('matches bare opencode.ai/zen/v1 too (no "/go" segment) — a real shape in production, not just the documented /zen/go/v1 form', () => {
+        // libs/llm/testing/__fixtures__/byok-prod-shapes.json has live orgs on
+        // exactly this bare shape (kimi-k2.5, minimax-m3-free) alongside the
+        // /zen/go/v1 ones — a prior commit narrowed the match to require
+        // "/go" and would have silently dropped the header for these.
+        expect(isOpenCodeGoBaseUrl('https://opencode.ai/zen/v1')).toBe(true);
+    });
+
+    it('matches EVERY real opencode.ai baseURL shape in the production corpus — a regression guard against re-narrowing the match', () => {
+        const opencodeShapes = (
+            PROD_SHAPES as Array<{ baseURL?: string }>
+        ).filter((shape) => shape.baseURL?.includes('opencode.ai'));
+
+        // Fails loud if the fixture ever stops carrying an opencode.ai shape —
+        // a passing-by-vacuity corpus test is worse than no test at all.
+        expect(opencodeShapes.length).toBeGreaterThan(0);
+
+        for (const shape of opencodeShapes) {
+            expect(isOpenCodeGoBaseUrl(shape.baseURL)).toBe(true);
+        }
     });
 });
 

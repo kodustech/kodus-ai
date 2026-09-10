@@ -17,15 +17,20 @@
 import { createHash, createHmac } from 'crypto';
 
 /**
- * Matches `/go` specifically, not `opencode.ai/zen` alone: "Zen" is the
- * broader auth/gateway portal (OpenCode's other, non-Go offerings sit behind
- * the same host), and their docs scope the session-header requirement to the
- * Go subscription tier — not to Zen as a whole. All three documented Go
- * endpoints share this prefix: `/zen/go/v1/chat/completions`, `/v1/responses`,
- * and `/v1/messages`.
+ * Deliberately broad — matches bare `opencode.ai/zen`, not just `/zen/go`.
+ * A prior commit narrowed this to require `/go`, reasoning from OpenCode's
+ * docs that the session-header requirement is scoped to the Go tier. Real
+ * production BYOK configs proved that wrong: `libs/llm/testing/__fixtures__/
+ * byok-prod-shapes.json` has live orgs on BOTH `opencode.ai/zen/go/v1` AND
+ * bare `opencode.ai/zen/v1` (kimi-k2.5, minimax-m3-free) — the `/go` form is
+ * not the only shape actually in use, docs notwithstanding. The asymmetry
+ * settles it: matching too broadly costs one harmless extra header (their
+ * own docs call it "recommended" for routing/cache locality, never
+ * rejected); matching too narrowly means a real customer's every review
+ * 400s — the exact outage #1880 is about. So: broad, on purpose.
  */
 export function isOpenCodeGoBaseUrl(baseURL?: string): boolean {
-    return !!baseURL && /opencode\.ai\/zen\/go/i.test(baseURL);
+    return !!baseURL && /opencode\.ai\/zen/i.test(baseURL);
 }
 
 /** The handful of `NormalizedModel` fields `openCodeSessionId` actually reads
