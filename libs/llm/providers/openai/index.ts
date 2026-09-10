@@ -62,17 +62,38 @@ function isNativeOpenAiModel(model: string): boolean {
  * (issue #1880). Their docs ask for a header that is "stable" per conversation
  * for routing/prompt-cache locality, not a security token, so a deterministic
  * id derived from the resolved slot is enough — no session-tracking plumbing.
+ *
+ * Exported: `managed-slot.ts`'s self-hosted `openai_compat` case builds its
+ * model INLINE (bypassing this module's `build()` entirely — see the comment
+ * on `openCodeSessionId` below), so it needs these same two functions to
+ * cover that config shape too.
  */
-function isOpenCodeGoBaseUrl(baseURL?: string): boolean {
+export function isOpenCodeGoBaseUrl(baseURL?: string): boolean {
     return !!baseURL && /opencode\.ai\/zen/i.test(baseURL);
+}
+
+/** The handful of `NormalizedModel` fields `openCodeSessionId` actually reads
+ *  — narrowed so a caller with no full slot (managed-slot.ts's inline
+ *  self-hosted branch has no `byokModelId`/`credentialId` at all) can still
+ *  call it without fabricating one. */
+interface OpenCodeSessionInput {
+    model: string;
+    baseURL?: string;
+    byokModelId?: string;
+    credentialId?: string;
 }
 
 /**
  * Stable per BYOK model slot, falling back to the resolved CREDENTIAL's id
  * when the slot carries no `byokModelId`, then to a deployment-scoped HMAC
- * as the last resort for a slot with NEITHER (self-hosted env/managed mode —
- * resolve-model-slot.ts only sets both ids for a v2 `models[]` entry, and a
- * config-based slot can't exist without a credential in the first place).
+ * as the last resort for neither — a slot with NO BYOK config at all. Within
+ * this module's own `build()`, that last tier is dead: every config-based
+ * slot reaching it via byok-to-vercel.ts already carries a `credentialId`
+ * (resolve-model-slot.ts can't build one without finding a credential first).
+ * It IS reached, though — by `managed-slot.ts`'s self-hosted `openai_compat`
+ * case, which builds its `createOpenAICompatible` INLINE and never calls this
+ * module's `build()` at all; that is genuinely the one config shape with no
+ * BYOK ids whatsoever, so this function is exported for it to call directly.
  *
  * Three rejected-in-review attempts got here:
  *  1. A process-random salt: changes on every restart/pod rotation (not
@@ -89,30 +110,36 @@ function isOpenCodeGoBaseUrl(baseURL?: string): boolean {
  *     token (so the hash itself discloses nothing new to that recipient).
  *  3. Dropping the key from the last-resort tier entirely (falling straight
  *     to bare `model:baseURL`): reintroduced exactly the collision (1) was
- *     meant to fix, since that tier is the one place `credentialId` is
- *     genuinely absent — a self-hosted install pointing its env vars at
- *     OpenCode Go, where every "org" in that single-tenant deployment is
- *     the same customer anyway, but two SEPARATE such deployments sharing
- *     the same model choice would still collide.
+ *     meant to fix, since every self-hosted install shares that same bare
+ *     seed once it targets the same OpenCode Go model.
  *
  * The fix: keep secret material out of `createHash()` entirely, but still
  * use it — as the KEY of an HMAC, which is what a secret is FOR, rather than
  * as hashed message content. `API_CRYPTO_KEY` (libs/common/utils/crypto.ts)
- * is already the one persisted, deployment-scoped secret every install
- * needs for BYOK apiKey encryption, so this reuses it instead of adding a
- * new env var — unique per self-hosted deployment, stable across restarts,
- * and outside the specific pattern CodeQL flags.
+ * is already the one persisted, deployment-scoped secret every install needs
+ * for BYOK apiKey encryption, so this reuses it instead of adding a new env
+ * var — unique per self-hosted deployment, stable across restarts, and
+ * outside the specific pattern CodeQL flags. REQUIRED, not `?? ''`: a silent
+ * empty-string default would be the SAME weak key on every deployment that
+ * happens to be missing it, i.e. attempt (3)'s collision again — fail loud
+ * instead, matching crypto.ts's own fail-fast contract for this exact var.
  *
  * HASHED/HMAC'd rather than sent raw either way: OpenCode only needs an
  * opaque value that stays constant call-to-call, not our internal id, so
  * there is no reason to hand a third party a stable handle onto it.
  */
-function openCodeSessionId(cfg: ProviderBuildConfig): string {
+export function openCodeSessionId(cfg: OpenCodeSessionInput): string {
     const id = cfg.byokModelId || cfg.credentialId;
     if (id) {
         return createHash('sha256').update(id).digest('hex').slice(0, 32);
     }
-    return createHmac('sha256', process.env.API_CRYPTO_KEY ?? '')
+    const hmacKey = process.env.API_CRYPTO_KEY;
+    if (!hmacKey) {
+        throw new Error(
+            'API_CRYPTO_KEY is required to derive the OpenCode Go session id',
+        );
+    }
+    return createHmac('sha256', hmacKey)
         .update(`${cfg.model}:${cfg.baseURL ?? ''}`)
         .digest('hex')
         .slice(0, 32);
