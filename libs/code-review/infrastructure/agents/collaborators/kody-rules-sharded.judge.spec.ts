@@ -570,6 +570,88 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
         });
     });
 
+    describe('previousDecisions — prior-round memory (issue #1313 Fase 1b)', () => {
+        const decision = (over: Record<string, unknown> = {}) => ({
+            suggestionId: 'sug-1',
+            relevantFile: 'src/a.ts',
+            suggestionContent: 'Use const instead of let.',
+            label: 'bug',
+            outcome: 'implemented' as const,
+            decidedAt: '2026-01-01T00:00:00.000Z',
+            ...over,
+        });
+
+        it('scopes the FILE shard to that file only — never leaks another file\'s decision', async () => {
+            let fileUser = '';
+            const run: RunJudge = async ({ filename, user }) => {
+                if (filename === 'src/a.ts') fileUser = user;
+                return [];
+            };
+            await judgeKodyRulesSharded({
+                changedFiles: [file('src/a.ts', '1 +let x = 1;')],
+                rules: [{ uuid: 'r1', title: 't', rule: 'r', path: '**/*.ts' }],
+                runJudge: run,
+                previousDecisions: [
+                    decision({ relevantFile: 'src/a.ts', suggestionContent: 'SAME FILE' }),
+                    decision({
+                        suggestionId: 'sug-2',
+                        relevantFile: 'src/other.ts',
+                        suggestionContent: 'OTHER FILE',
+                    }),
+                ],
+            });
+            expect(fileUser).toContain('<PreviousReviewDecisions>');
+            expect(fileUser).toContain('SAME FILE');
+            expect(fileUser).not.toContain('OTHER FILE');
+        });
+
+        it('gives the PR shard the FULL list — file-level AND PR-level', async () => {
+            let prUser = '';
+            const run: RunJudge = async ({ filename, user }) => {
+                if (filename === null) prUser = user;
+                return [];
+            };
+            await judgeKodyRulesSharded({
+                changedFiles: [file('src/a.ts', '1 +x')],
+                rules: [
+                    {
+                        uuid: 'pr1',
+                        title: 'must have tests',
+                        rule: 'every PR needs a test',
+                        scope: KodyRulesScope.PULL_REQUEST,
+                    },
+                ],
+                runJudge: run,
+                previousDecisions: [
+                    decision({ relevantFile: 'src/a.ts', suggestionContent: 'FILE-LEVEL decision' }),
+                    decision({
+                        suggestionId: 'sug-2',
+                        relevantFile: undefined,
+                        suggestionContent: 'PR-LEVEL decision',
+                        outcome: 'pending' as const,
+                    }),
+                ],
+            });
+            expect(prUser).toContain('FILE-LEVEL decision');
+            expect(prUser).toContain('PR-LEVEL decision');
+            expect(prUser).toContain('PR-level (judges the diff as a whole');
+        });
+
+        it('omits the block entirely when previousDecisions is absent (backward compatible)', async () => {
+            let fileUser = '';
+            const run: RunJudge = async ({ user }) => {
+                fileUser = user;
+                return [];
+            };
+            await judgeKodyRulesSharded({
+                changedFiles: [file('src/a.ts', '1 +x')],
+                rules: [{ uuid: 'r1', title: 't', rule: 'r', path: '**/*.ts' }],
+                runJudge: run,
+            });
+            expect(fileUser).not.toContain('<PreviousReviewDecisions>');
+        });
+    });
+
     it('normalizes null violation fields to absent keys (strict-provider output)', async () => {
         const run: RunJudge = async () => [
             {

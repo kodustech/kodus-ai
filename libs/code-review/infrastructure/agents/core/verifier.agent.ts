@@ -24,6 +24,7 @@ import { BudgetPolicy } from '@libs/agent-harness/infrastructure/policies/budget
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
 
 import { buildVerifierPrompt } from '@libs/code-review/infrastructure/agents/prompts/verifier-prompt';
+import { formatPreviousDecisions } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
 import {
     normalizeEnvelope,
     LLM_ENVELOPE_TAG,
@@ -31,6 +32,7 @@ import {
 import { createLogger } from '@libs/core/log/logger';
 import type { FinderSuggestion } from '@libs/code-review/infrastructure/agents/core/finder.agent';
 import { supportsStrictToolsForRun } from '@libs/code-review/infrastructure/agents/core/model-strictness';
+import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 import {
     buildLangfuseTelemetry,
     toAiSdkTelemetryArgs,
@@ -115,8 +117,13 @@ export function buildVerifierAgentSpec(
     };
 }
 
-/** Format a finding into the verifier's per-run task prompt (HV2 evidence). */
-export function verifierPromptFor(finding: FinderSuggestion): string {
+/** Format a finding into the verifier's per-run task prompt (HV2 evidence).
+ *  `previousDecisions` (issue #1313) should already be filtered to this
+ *  candidate's own file by the caller — see LlmVerifier.verify(). */
+export function verifierPromptFor(
+    finding: FinderSuggestion,
+    previousDecisions?: readonly PrDecisionRecord[],
+): string {
     const bundle = [
         `File: ${finding.relevantFile}`,
         finding.relevantLinesStart != null
@@ -125,6 +132,7 @@ export function verifierPromptFor(finding: FinderSuggestion): string {
         `Severity: ${finding.severity ?? 'unknown'}`,
         `Claim: ${finding.suggestionContent}`,
         finding.existingCode ? `Code:\n${finding.existingCode}` : '',
+        formatPreviousDecisions(previousDecisions),
     ]
         .filter(Boolean)
         .join('\n');
@@ -230,6 +238,12 @@ export interface LlmVerifierParams {
      *  their leaf usage span under `${usageRunName}-verify` so `deriveArea`
      *  buckets them to `review` (verify is part of the review cost). */
     usageRunName?: string;
+    /** Suggestions already posted on THIS PR in a previous review round
+     *  (issue #1313). `verify()` filters this down to the candidate's own file
+     *  before rendering it as evidence — matching by line range is deliberately
+     *  NOT done here (line numbers shift across commits); the model judges
+     *  whether a same-file record is "the same issue" semantically. */
+    previousDecisions?: PrDecisionRecord[];
 }
 
 /** The LLM-judge Verifier (HV2): runs a verifier AgentSpec once per finding on
@@ -305,10 +319,16 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
             ? `#${candidate.relevantLinesStart}`
             : '';
         const fnId = `${this.params.agentName ?? 'agent'}/verify:${candidate.relevantFile}${loc}`;
+        // Scoped to the candidate's own file (issue #1313) — matching by line
+        // range is deliberately NOT done here (line numbers shift across
+        // review rounds); the model judges same-file semantic overlap itself.
+        const matchingDecisions = this.params.previousDecisions?.filter(
+            (decision) => decision.relevantFile === candidate.relevantFile,
+        );
         const state = await this.runner.run(
             spec,
             {
-                prompt: verifierPromptFor(candidate),
+                prompt: verifierPromptFor(candidate, matchingDecisions),
                 ...toAiSdkTelemetryArgs(
                     buildLangfuseTelemetry(fnId, this.params.telemetryMetadata),
                 ),

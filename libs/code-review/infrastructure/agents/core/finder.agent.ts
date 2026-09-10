@@ -36,6 +36,7 @@ import { LlmVerifier } from '@libs/code-review/infrastructure/agents/core/verifi
 import { buildToolEvidenceSummary } from '@libs/code-review/infrastructure/agents/core/agent-anomalies';
 import { supportsStrictToolsForRun } from '@libs/code-review/infrastructure/agents/core/model-strictness';
 import type { ToolEvidenceSummary } from '@libs/code-review/infrastructure/agents/review-agent.contract';
+import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 import type { Verdict } from '@libs/agent-harness/domain/contracts/verifier.contract';
 import {
     buildLangfuseTelemetry,
@@ -434,6 +435,10 @@ export interface RunFinderWithVerifyParams {
     /** Injected prose-findings recovery capability (see ProseRecoverer). The
      *  adapter wires it to the internal-model fallback; omit to disable. */
     recoverProse?: ProseRecoverer;
+    /** Suggestions already posted on THIS PR in a previous review round
+     *  (issue #1313). Forwarded to the LlmVerifier, which filters by file per
+     *  candidate — see LlmVerifierParams. */
+    previousDecisions?: PrDecisionRecord[];
 }
 
 export interface VerifyUsage {
@@ -571,6 +576,7 @@ export async function runFinderWithVerify(
         telemetryMetadata: params.telemetryMetadata,
         agentName: params.agentName,
         usageRunName: params.usageRunName,
+        previousDecisions: params.previousDecisions,
     });
     const pass = await runVerificationPass<FinderSuggestion>(
         { candidates: suggestions, verifier, concurrency: params.concurrency },
@@ -604,6 +610,7 @@ export async function runFinderWithVerify(
             telemetryMetadata: params.telemetryMetadata,
             agentName: params.agentName,
             usageRunName: params.usageRunName,
+            previousDecisions: params.previousDecisions,
         });
         const gate = await runVerificationPass<FinderSuggestion>(
             {

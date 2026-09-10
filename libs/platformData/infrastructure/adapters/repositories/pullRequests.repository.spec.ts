@@ -205,6 +205,141 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
         });
     });
 
+    describe('findSuggestionsByPRAndFilenames (issue #1313 — PrDecisionStore read)', () => {
+        it('includes organizationId AND repository.fullName in the FIRST $match (multi-tenant + cross-repo scope)', async () => {
+            (exec as jest.Mock).mockResolvedValueOnce([]);
+
+            await repo.findSuggestionsByPRAndFilenames(
+                42,
+                'kodustech/kodus-ai',
+                ['src/foo.ts'],
+                'org-A',
+                'sent' as any,
+            );
+
+            expect(aggregate).toHaveBeenCalledTimes(1);
+            const pipeline = aggregate.mock.calls[0][0];
+            const firstMatch = pipeline[0]?.$match;
+            expect(firstMatch).toMatchObject({
+                'number': 42,
+                'repository.fullName': 'kodustech/kodus-ai',
+                'organizationId': 'org-A',
+            });
+        });
+
+        it('filters files by the given filenames via $in (never returns suggestions from unrelated files)', async () => {
+            (exec as jest.Mock).mockResolvedValueOnce([]);
+
+            await repo.findSuggestionsByPRAndFilenames(
+                42,
+                'kodustech/kodus-ai',
+                ['src/a.ts', 'src/b.ts'],
+                'org-A',
+                'sent' as any,
+            );
+
+            const pipeline = aggregate.mock.calls[0][0];
+            const fileMatch = pipeline.find(
+                (stage: any) => stage.$match?.['files.path'],
+            )?.$match;
+            expect(fileMatch).toEqual({
+                'files.path': { $in: ['src/a.ts', 'src/b.ts'] },
+            });
+        });
+
+        it('scopes to the given deliveryStatus (never returns unsent/failed suggestions)', async () => {
+            (exec as jest.Mock).mockResolvedValueOnce([]);
+
+            await repo.findSuggestionsByPRAndFilenames(
+                42,
+                'kodustech/kodus-ai',
+                ['src/a.ts'],
+                'org-A',
+                'sent' as any,
+            );
+
+            const pipeline = aggregate.mock.calls[0][0];
+            const deliveryMatch = pipeline.find(
+                (stage: any) => stage.$match?.['files.suggestions.deliveryStatus'],
+            )?.$match;
+            expect(deliveryMatch).toEqual({
+                'files.suggestions.deliveryStatus': 'sent',
+            });
+        });
+
+        it('short-circuits without querying Mongo when filenames is empty', async () => {
+            const result = await repo.findSuggestionsByPRAndFilenames(
+                42,
+                'kodustech/kodus-ai',
+                [],
+                'org-A',
+                'sent' as any,
+            );
+
+            expect(result).toEqual([]);
+            expect(aggregate).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('findPrLevelSuggestionsByPR (issue #1313 Fase 1b — PR-level PrDecisionStore read)', () => {
+        it('includes organizationId AND repository.fullName in the FIRST $match (multi-tenant + cross-repo scope)', async () => {
+            (exec as jest.Mock).mockResolvedValueOnce([]);
+
+            await repo.findPrLevelSuggestionsByPR(
+                42,
+                'kodustech/kodus-ai',
+                'org-A',
+                'sent' as any,
+            );
+
+            expect(aggregate).toHaveBeenCalledTimes(1);
+            const pipeline = aggregate.mock.calls[0][0];
+            const firstMatch = pipeline[0]?.$match;
+            expect(firstMatch).toMatchObject({
+                'number': 42,
+                'repository.fullName': 'kodustech/kodus-ai',
+                'organizationId': 'org-A',
+            });
+        });
+
+        it('unwinds prLevelSuggestions (NOT files.suggestions — a separate top-level array)', async () => {
+            (exec as jest.Mock).mockResolvedValueOnce([]);
+
+            await repo.findPrLevelSuggestionsByPR(
+                42,
+                'kodustech/kodus-ai',
+                'org-A',
+                'sent' as any,
+            );
+
+            const pipeline = aggregate.mock.calls[0][0];
+            expect(pipeline.some((s: any) => s.$unwind === '$prLevelSuggestions')).toBe(
+                true,
+            );
+            expect(pipeline.some((s: any) => s.$unwind === '$files')).toBe(false);
+        });
+
+        it('scopes to the given deliveryStatus (never returns unsent/failed suggestions)', async () => {
+            (exec as jest.Mock).mockResolvedValueOnce([]);
+
+            await repo.findPrLevelSuggestionsByPR(
+                42,
+                'kodustech/kodus-ai',
+                'org-A',
+                'sent' as any,
+            );
+
+            const pipeline = aggregate.mock.calls[0][0];
+            const deliveryMatch = pipeline.find(
+                (stage: any) =>
+                    stage.$match?.['prLevelSuggestions.deliveryStatus'],
+            )?.$match;
+            expect(deliveryMatch).toEqual({
+                'prLevelSuggestions.deliveryStatus': 'sent',
+            });
+        });
+    });
+
     describe('regression — distinct orgs, same PR# + repo name', () => {
         // Simulates what happened in production: 8 different orgs running
         // benchmarks against the same forked repos (cal.com, sentry, ...).

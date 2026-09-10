@@ -907,6 +907,29 @@ describe('request assembly + byokConfig threading', () => {
         expect(loopParams.maxSteps).toBe(33);
     });
 
+    it('forwards previousDecisions onto loopParams explicitly (issue #1313)', async () => {
+        const previousDecisions = [
+            {
+                suggestionId: 'sug-1',
+                relevantFile: 'a.ts',
+                suggestionContent: 'Use const instead of let.',
+                label: 'bug',
+                outcome: 'implemented' as const,
+                decidedAt: '2026-01-01T00:00:00.000Z',
+            },
+        ];
+
+        await newAgent().execute(makeInput({ previousDecisions }));
+        const [loopParams] = runLoopMock.mock.calls[0];
+        expect(loopParams.previousDecisions).toBe(previousDecisions);
+    });
+
+    it('omits previousDecisions from loopParams when the input has none (backward compatible)', async () => {
+        await newAgent().execute(makeInput());
+        const [loopParams] = runLoopMock.mock.calls[0];
+        expect(loopParams.previousDecisions).toBeUndefined();
+    });
+
     it('AGENT_RECURSION_LIMIT_EXCEEDED at max depth (never loops the worker heap)', async () => {
         await expect(
             newAgent().execute(makeInput({ recursionDepth: 2 })),

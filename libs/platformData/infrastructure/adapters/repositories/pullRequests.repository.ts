@@ -23,6 +23,7 @@ import {
     IPullRequestUserMapping,
     IPullRequestWithDeliveredSuggestions,
     ISuggestion,
+    ISuggestionByPR,
     SuggestionCountsBySeverity,
 } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { PullRequestsEntity } from '@libs/platformData/domain/pullRequests/entities/pullRequests.entity';
@@ -960,6 +961,87 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                 {
                     $replaceRoot: {
                         newRoot: '$suggestions',
+                    },
+                },
+            ])
+            .exec();
+
+        return result;
+    }
+
+    async findSuggestionsByPRAndFilenames(
+        prNumber: number,
+        repoFullName: string,
+        filenames: readonly string[],
+        organizationId: string,
+        deliveryStatus: DeliveryStatus,
+    ): Promise<ISuggestion[]> {
+        if (!filenames.length) {
+            return [];
+        }
+
+        const result = await this.pullRequestsModel
+            .aggregate([
+                {
+                    $match: {
+                        'number': prNumber,
+                        'repository.fullName': repoFullName,
+                        'organizationId': organizationId,
+                    },
+                },
+                {
+                    $unwind: '$files',
+                },
+                {
+                    $match: {
+                        'files.path': { $in: filenames as string[] },
+                    },
+                },
+                {
+                    $unwind: '$files.suggestions',
+                },
+                {
+                    $match: {
+                        'files.suggestions.deliveryStatus': deliveryStatus,
+                    },
+                },
+                {
+                    $replaceRoot: {
+                        newRoot: '$files.suggestions',
+                    },
+                },
+            ])
+            .exec();
+
+        return result;
+    }
+
+    async findPrLevelSuggestionsByPR(
+        prNumber: number,
+        repoFullName: string,
+        organizationId: string,
+        deliveryStatus: DeliveryStatus,
+    ): Promise<ISuggestionByPR[]> {
+        const result = await this.pullRequestsModel
+            .aggregate([
+                {
+                    $match: {
+                        'number': prNumber,
+                        'repository.fullName': repoFullName,
+                        'organizationId': organizationId,
+                    },
+                },
+                {
+                    $unwind: '$prLevelSuggestions',
+                },
+                {
+                    $match: {
+                        'prLevelSuggestions.deliveryStatus': deliveryStatus,
+                    },
+                },
+                {
+                    $replaceRoot: {
+                        newRoot: '$prLevelSuggestions',
                     },
                 },
             ])

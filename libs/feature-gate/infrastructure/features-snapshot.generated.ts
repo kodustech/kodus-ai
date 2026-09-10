@@ -5,7 +5,7 @@ import type { FeaturesSnapshot } from '../domain/snapshot.types';
 
 export const FEATURES_SNAPSHOT: FeaturesSnapshot = {
     "schema_version": 1,
-    "generated_at": "2026-08-11T19:06:02.620Z",
+    "generated_at": "2026-09-10T13:51:11.433Z",
     "source": "manual",
     "features": {
         "github-enterprise-server-pat": {
