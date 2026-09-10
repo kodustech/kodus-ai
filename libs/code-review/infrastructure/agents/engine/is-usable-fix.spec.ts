@@ -60,6 +60,15 @@ describe('checkFix', () => {
             const improvedCode = 'msg = “old text”';
             expect(checkFix(existingCode, improvedCode)).toBeNull();
         });
+
+        // Kody's own review caught this: the noop comparison ran before the
+        // scaffolding-label strip, so a label glued onto otherwise-identical
+        // code was not recognized as a noop.
+        it('flags a scaffolding-label-prefixed noop ("Fix: <identical code>")', () => {
+            const existingCode = 'return x;';
+            const improvedCode = 'Fix: return x;';
+            expect(checkFix(existingCode, improvedCode)).toBe('noop-fix');
+        });
     });
 
     describe('prose-only', () => {
@@ -76,11 +85,11 @@ describe('checkFix', () => {
             expect(checkFix(existingCode, improvedCode)).toBe('prose-only');
         });
 
-        // Regression guard: these words were proposed as CODE_TOKEN_RE
-        // additions and deliberately rejected — they are common enough in
-        // plain English that adding them would let real prose slip through
-        // as if it were a valid fix, which is the harm on the OTHER side of
-        // this check.
+        // Regression guard: these words were proposed as
+        // STRONG_CODE_TOKEN_RE additions and deliberately rejected — they
+        // are common enough in plain English that adding them would let
+        // real prose slip through as if it were a valid fix, which is the
+        // harm on the OTHER side of this check.
         it.each([
             'this would break the existing tests',
             'wait for the promise to resolve first',
@@ -112,6 +121,41 @@ describe('checkFix', () => {
             const improvedCode = 'timeout: 60';
             expect(checkFix(existingCode, improvedCode)).toBeNull();
         });
+
+        // Kody's own review of this file caught these: a bare ":" or a
+        // WEAK-only keyword (import/async/await/yield) is not enough on its
+        // own once real English stop words surround it — a colon or "await"
+        // used as an ordinary sentence word, not a code construct.
+        it.each([
+            'Add a null check: verify the input before using it',
+            'await the response before continuing',
+            'this could yield unexpected results for the user',
+            'we should import the missing validation logic here',
+        ])('flags a sentence containing a WEAK-only signal (%j) as prose', (improvedCode) => {
+            const existingCode = 'if (user.role === "admin") grantAccess();';
+            expect(checkFix(existingCode, improvedCode)).toBe('prose-only');
+        });
+
+        it('still accepts short, genuinely code-shaped WEAK-only fixes', () => {
+            expect(checkFix('timeout: 30', 'timeout: 60')).toBeNull();
+            expect(checkFix('import sys', 'import os')).toBeNull();
+            expect(checkFix('yield old_item', 'yield next_item')).toBeNull();
+        });
+
+        it('flags a scaffolding-label lead-in even with whitespace before the colon', () => {
+            const existingCode = 'const x = 1;';
+            const improvedCode = 'Fix : add a null check';
+            expect(checkFix(existingCode, improvedCode)).toBe('prose-only');
+        });
+
+        it('does NOT misread a genuine code field whose name is also a label word ("how")', () => {
+            // "how" is in PROSE_LABEL_LEAD_RE's vocabulary, but stripping it
+            // here would leave the bare value "number" with no code
+            // signal — the fallback-to-unstripped path must catch this.
+            const existingCode = 'interface Options { how: string }';
+            const improvedCode = 'how: number';
+            expect(checkFix(existingCode, improvedCode)).toBeNull();
+        });
     });
 
     describe('truncated', () => {
@@ -132,6 +176,71 @@ describe('checkFix', () => {
             // The literal ")" is message content, not an unclosed paren.
             const existingCode = 'const s = "x";';
             const improvedCode = 'const s = "x)";';
+            expect(checkFix(existingCode, improvedCode)).toBeNull();
+        });
+
+        // Kody's own review caught this: removing the old, over-broad
+        // endsMidToken check for issue #1568's Python/Ruby/no-semi false
+        // positives also removed the ONLY thing that caught the issue's own
+        // motivating example — a truncated tail with no unclosed bracket.
+        it('flags a bare truncated return value (the literal issue #1833 example, standalone)', () => {
+            const existingCode = 'return null;';
+            const improvedCode = 'return safe default pa';
+            expect(checkFix(existingCode, improvedCode)).toBe('truncated');
+        });
+
+        it('does NOT flag "return x" — a complete, single-expression return', () => {
+            const existingCode = 'return null;';
+            const improvedCode = 'return default_value';
+            expect(checkFix(existingCode, improvedCode)).toBeNull();
+        });
+
+        it('does NOT flag "var x int" (Go) — a valid multi-word declaration, not return/yield', () => {
+            const existingCode = 'var x string';
+            const improvedCode = 'var x int';
+            expect(checkFix(existingCode, improvedCode)).toBeNull();
+        });
+
+        it.each([
+            'const x = 1 +',
+            'const x =',
+            'const f = x =>',
+            'const x: Array<',
+        ])('flags a tail ending mid-operator (%j)', (improvedCode) => {
+            const existingCode = 'const x = 1;';
+            expect(checkFix(existingCode, improvedCode)).toBe('truncated');
+        });
+
+        it('does NOT flag a fix whose real (comment/literal-aware) ending is a closing generic ">"', () => {
+            // ">" alone is routinely how a COMPLETE generic type ends
+            // (Rust/TypeScript/Java/C#) — only the 2-char arrow "=>" counts
+            // as a dangling operator, not a bare trailing ">".
+            const existingCode = 'fn parse(input: &str) -> Result<&str, Error>';
+            const improvedCode =
+                "fn parse<'a>(input: &'a str) -> Result<&'a str, Error>";
+            expect(checkFix(existingCode, improvedCode, 'rust')).toBeNull();
+        });
+
+        it('does NOT misread the operator preceding a trailing literal as dangling', () => {
+            // "=" is followed by real, protected content ("%w[a b]"), not
+            // nothing — stripping that content for the bracket/quote scan
+            // must not make the "=" that came before it look truncated.
+            const existingCode = 'list = %w[a]';
+            const improvedCode = 'list = %w[a b c]';
+            expect(checkFix(existingCode, improvedCode, 'ruby')).toBeNull();
+        });
+
+        // Kody's own review caught this too: a JS/TS regex literal's quote
+        // characters are a character class, not an unterminated string.
+        it('does NOT flag a regex literal containing quote characters', () => {
+            const existingCode = 'const hasQuote = /[a-z]/.test(x);';
+            const improvedCode = "const hasQuote = /[\"']/.test(x);";
+            expect(checkFix(existingCode, improvedCode)).toBeNull();
+        });
+
+        it('does NOT mistake division for a regex literal', () => {
+            const existingCode = 'const avg = total / n;';
+            const improvedCode = 'const avg = total / count;';
             expect(checkFix(existingCode, improvedCode)).toBeNull();
         });
 

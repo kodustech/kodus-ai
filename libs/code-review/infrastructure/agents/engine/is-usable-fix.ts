@@ -82,13 +82,13 @@ function stringLiteralRegexFor(language: string | undefined): RegExp {
 }
 
 /**
- * Any of these appearing outside a comment is enough to call a chunk "code".
- * Punctuation first (quotes/colon/brackets/arrows) because it barely ever
- * appears in a plain-English sentence describing a fix, which is what makes
- * it a safe signal across every language this pipeline reviews — unlike a
- * keyword list, which is inherently one language's vocabulary at a time and
- * runs out for the next one (a bare Python `import os` or `elif x:` has none
- * of function/const/let/var/return/def/class).
+ * Any of these appearing outside a comment is enough to call a chunk "code"
+ * on their own, in any amount of surrounding text. Punctuation here (braces/
+ * parens/brackets/quotes/arrows) barely ever appears in a plain-English
+ * sentence describing a fix, which is what makes it a safe signal across
+ * every language this pipeline reviews. `:` is deliberately NOT here — see
+ * `WEAK_CODE_TOKEN_RE` below, where a colon alone turned out to be too easy
+ * for prose to satisfy.
  *
  * Deliberately NOT included: a dotted-access pattern (`\.\w`, e.g. "x.y").
  * That one first looked like a safe method/property-access signal but a
@@ -100,16 +100,54 @@ function stringLiteralRegexFor(language: string | undefined): RegExp {
  * (for/new/try/case/while/throw/switch/else/from/include/require all lost
  * this bid) — accepting one of those as a "code" token lets genuine prose
  * slip through as if it were a real fix, which is the harm on the OTHER side
- * of this check and just as bad as a false positive.
+ * of this check and just as bad as a false positive. `import`/`async`/
+ * `await`/`yield` lost the same bid for the same reason ("await the response
+ * before continuing" is a real sentence a model can write) and moved to
+ * `WEAK_CODE_TOKEN_RE`.
  */
-const CODE_TOKEN_RE =
-    /[;{}()[\]=<>:]|=>|->|::|["'`]|\b(?:function|const|let|var|return|def|elif|class|import|async|await|yield|attr_reader)\b/;
+const STRONG_CODE_TOKEN_RE =
+    /[;{}()[\]=<>]|=>|->|::|["'`]|\b(?:function|const|let|var|return|def|elif|class|attr_reader)\b/;
+
+/**
+ * Signals that are real code ONLY in a short, code-shaped fragment ("key:
+ * value", "import os") — the same characters/words also occur naturally in
+ * an ordinary English sentence ("Add a null check: verify the input before
+ * using it", "await the response before continuing"), so on their own they
+ * are not enough. `isCodeLike` below only trusts a WEAK-only match when the
+ * text carries none of `PROSE_STOPWORD_RE`'s stop words; a genuinely short
+ * code fragment essentially never does.
+ */
+const WEAK_CODE_TOKEN_RE = /:|\b(?:import|async|await|yield)\b/;
+
+/**
+ * Common English function/stop words. Their presence alongside a WEAK-only
+ * signal is what actually distinguishes "Add a null check: verify the input
+ * before using it" (a sentence, coincidentally containing ":") from "key:
+ * value" or "import os" (genuinely short code, containing none of these).
+ */
+const PROSE_STOPWORD_RE =
+    /\b(?:the|a|an|is|are|was|were|this|that|these|those|before|after|using|verify|check|add|should|would|could|will|must|need|needs|to|of|in|on|with|for|and|or|but|not|here|there|it|please|make|sure|ensure)\b/i;
+
+/**
+ * Does `text` look like code? A STRONG token always counts, regardless of
+ * how much surrounding prose there is. A WEAK-only token counts ONLY when
+ * the text carries no English stop word — the same asymmetry every check in
+ * this file applies: a false "usable" verdict here ships prose as if it
+ * were a fix (the bug this whole gate exists to remove), so the bar for
+ * trusting a weak, sentence-compatible signal has to be high.
+ */
+function isCodeLike(text: string): boolean {
+    if (STRONG_CODE_TOKEN_RE.test(text)) {
+        return true;
+    }
+    return WEAK_CODE_TOKEN_RE.test(text) && !PROSE_STOPWORD_RE.test(text);
+}
 
 /**
  * A short leading label — "Fix:", "Note:", "**WHY:**" — immediately followed
- * by ":" is a prose lead-in, not a code colon, and CODE_TOKEN_RE's bare `:`
- * cannot tell them apart from a Python/Ruby block-opener or a `key: value`
- * pair. This is the SAME leak `strip-review-scaffolding.ts` documents for
+ * by ":" (optional whitespace before it, "Fix : ...") is a prose lead-in, not
+ * a code colon, and would otherwise satisfy `WEAK_CODE_TOKEN_RE` all by
+ * itself. This is the SAME leak `strip-review-scaffolding.ts` documents for
  * `suggestionContent` (the review prompt's own WHAT/WHY/HOW template) landing
  * in `improvedCode` instead: "**Fix:** add a null check before line 5" has a
  * colon and registered as usable code with nothing else in this file to stop
@@ -119,18 +157,18 @@ const CODE_TOKEN_RE =
  * produce as scaffolding labels are excluded.
  */
 const PROSE_LABEL_LEAD_RE =
-    /^(?:\*\*|__)?(?:fix|note|why|how|what|issue|bug|problem|solution|suggestion|recommendation|explanation|reason|cause|summary)(?:\*\*|__)?:\s*/i;
+    /^(?:\*\*|__)?(?:fix|note|why|how|what|issue|bug|problem|solution|suggestion|recommendation|explanation|reason|cause|summary)(?:\*\*|__)?\s*:\s*/i;
 
 /**
  * A handful of control-flow statements that are, on their own, complete and
  * valid in several supported languages — Python's bare `pass`/`break`/
  * `continue`/`raise`, Ruby's `next`/`redo`/`retry`, Go's `fallthrough` — and
- * carry NEITHER punctuation nor a CODE_TOKEN_RE keyword, so a fix that is
- * exactly one of these words alone would otherwise register as prose-only.
- * "break" itself was excluded from CODE_TOKEN_RE for colliding with ordinary
- * English ("this would break the tests"), but that risk only exists mid-
- * sentence — gating on the fix being EXACTLY this one word and nothing else
- * is safe: prose is not shaped like a single bare word.
+ * carry NEITHER punctuation nor a STRONG_CODE_TOKEN_RE keyword, so a fix
+ * that is exactly one of these words alone would otherwise register as
+ * prose-only. "break" itself was excluded from STRONG_CODE_TOKEN_RE for
+ * colliding with ordinary English ("this would break the tests"), but that
+ * risk only exists mid-sentence — gating on the fix being EXACTLY this one
+ * word and nothing else is safe: prose is not shaped like a single bare word.
  */
 const BARE_STATEMENT_RE =
     /^(?:break|continue|pass|raise|next|redo|retry|fallthrough)[;:]?$/;
@@ -184,17 +222,39 @@ function stripComments(code: string): string {
 }
 
 /**
- * Is `code` structurally broken — brackets that don't close, or a string
- * literal that never does? Both are strong, language-agnostic truncation
+ * A JS/TS regex literal (`/["']/g`, `/^\d+$/`) is neither a string nor a
+ * comment, but its content is just as opaque — the quote characters inside
+ * `/["']/g` are a character class, not an unterminated string, and the `[`/
+ * `]` are regex syntax, not real brackets. Left unstripped, a fix that adds
+ * a perfectly valid quote-matching regex registered as "truncated": the
+ * exact false-positive this file's header says it must avoid.
+ *
+ * Gated on what can precede a regex literal (assignment, open paren, comma,
+ * colon, start of text, or "return") and never a division operand — the
+ * standard regex-vs-divide disambiguation every JS tokenizer needs, so
+ * `total / count` is never mistaken for the start of one.
+ */
+const REGEX_LITERAL_RE =
+    /(^|[=(,:]|\breturn)(\s*)(\/(?:[^/\\\n]|\\.)+\/[a-z]*)/g;
+
+function stripRegexLiterals(code: string): string {
+    return code.replace(REGEX_LITERAL_RE, (_m, pre: string, ws: string) => pre + ws);
+}
+
+/**
+ * Is `code` structurally broken — brackets that don't close, a string
+ * literal that never does, or a tail that cannot end a statement in any
+ * supported language? All three are strong, language-agnostic truncation
  * signals: a model cut off mid-generation almost always stops before closing
- * whatever it was in the middle of writing.
+ * whatever it was in the middle of writing, or mid-expression.
  *
  * Order matters and was itself a bug the first time this was written: strip
  * comments OUTSIDE string literals first (so `#`/`//` living inside a string
  * is never mistaken for a comment marker), and only THEN strip the now-intact
  * literal spans for the bracket scan — `const s = "x)"` has a `)` that is
  * data, not a closer, and counting it made a one-line fix with a parenthesis
- * in its message text register as unbalanced.
+ * in its message text register as unbalanced. Regex literals are stripped
+ * from that same text, for the same reason string literals are.
  *
  * A leftover `'` is NOT treated as an unterminated literal for Rust — that
  * character is legitimately part of a lifetime marker there and never closes
@@ -204,7 +264,41 @@ function stripComments(code: string): string {
 function isStructurallyBroken(code: string, language: string | undefined): boolean {
     const withoutComments = outsideStringLiterals(code, language, stripComments);
     // Everything left over after every COMPLETE literal is removed.
-    const nonLiteral = stripStringLiterals(withoutComments, language);
+    const nonLiteral = stripRegexLiterals(
+        stripStringLiterals(withoutComments, language),
+    );
+
+    // A tail that cannot end a statement in ANY supported language — a bare
+    // binary/assignment operator, a dangling "?"/":"/",", or an arrow with
+    // nothing after it. Checked against `withoutComments` (literal CONTENT
+    // still intact), not the fully-stripped `nonLiteral`: removing a
+    // TRAILING literal's content shifts what character is now "last" and
+    // can make an operator that precedes it look dangling by accident —
+    // "list = %w[a b]" ends in "]", but stripping the %w[] content down to
+    // nothing leaves the "=" sitting at the new end, registering as
+    // truncated. Bare "<"/">" are deliberately asymmetric: "<" with nothing
+    // after is always an incomplete generic/comparison, but ">" alone is
+    // routinely how a real, COMPLETE generic type ends ("Result<T, E>",
+    // Rust/TypeScript/Java/C#), so only the 2-char arrow "=>" counts, not a
+    // bare trailing ">".
+    if (/[=+\-*&|?:,<]\s*$|=>\s*$/.test(withoutComments.trimEnd())) {
+        return true;
+    }
+    // "return"/"yield" followed by 2+ bare, unseparated words is a syntax
+    // error in every supported language regardless of truncation — a return
+    // value is a single expression, not a word run — and is the issue's own
+    // literal motivating example ("...return safe default pa"). Scoped to
+    // return/yield specifically, not any bare-word run: a general rule
+    // collides with real multi-keyword declarations valid in several of
+    // these languages ("var x int" in Go, "public static void" in Java).
+    // Checked against `withoutComments` for the same reason as above.
+    if (
+        /\b(?:return|yield)\s+[A-Za-z_]\w*(?:\s+[A-Za-z_]\w*)+\s*$/.test(
+            withoutComments.trimEnd(),
+        )
+    ) {
+        return true;
+    }
 
     const isRust = (language ?? '').trim().toLowerCase() === 'rust';
     for (const ch of nonLiteral) {
@@ -309,14 +403,31 @@ export function checkFix(
         return 'empty';
     }
 
-    if (normalizeForComparison(fix, lang) === normalizeForComparison(existing, lang)) {
+    // Strip a scaffolding label before comparing too — "Fix: return x;" is a
+    // noop against existingCode "return x;" once the decoration is gone, and
+    // without this the label alone kept it from ever matching.
+    const fixForComparison = fix.replace(PROSE_LABEL_LEAD_RE, '').trim();
+    if (
+        normalizeForComparison(fixForComparison, lang) ===
+        normalizeForComparison(existing, lang)
+    ) {
         return 'noop-fix';
     }
 
-    const tokenView = outsideStringLiterals(fix, lang, stripComments)
-        .replace(PROSE_LABEL_LEAD_RE, '')
-        .trim();
-    if (!CODE_TOKEN_RE.test(tokenView) && !BARE_STATEMENT_RE.test(tokenView)) {
+    const unstrippedView = outsideStringLiterals(fix, lang, stripComments).trim();
+    const strippedView = unstrippedView.replace(PROSE_LABEL_LEAD_RE, '').trim();
+    // Prefer the stripped view (the label is decoration, not code), but fall
+    // back to the unstripped one when stripping leaves nothing code-shaped —
+    // "how: number" has "how" in the label vocabulary too, and stripping it
+    // down to the bare value "number" would misread a genuine one-line
+    // field/type pair as prose. The label vocabulary was chosen to be
+    // implausible as a real identifier, not impossible, and "how" is a
+    // plausible one.
+    const tokenView =
+        isCodeLike(strippedView) || BARE_STATEMENT_RE.test(strippedView)
+            ? strippedView
+            : unstrippedView;
+    if (!isCodeLike(tokenView) && !BARE_STATEMENT_RE.test(tokenView)) {
         return 'prose-only';
     }
 
