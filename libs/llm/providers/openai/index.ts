@@ -68,25 +68,36 @@ function isOpenCodeGoBaseUrl(baseURL?: string): boolean {
 }
 
 /**
- * Stable per BYOK model slot. Falls back to the resolved credential's own API
- * key (plus model+baseURL) when the slot carries no `byokModelId` — legacy /
+ * Stable per BYOK model slot, falling back to the resolved CREDENTIAL's id
+ * (plus model+baseURL) when the slot carries no `byokModelId` — legacy /
  * pre-v2 BYOK configs and self-hosted env slots (resolve-model-slot.ts only
- * sets `byokModelId` for a v2 `models[]` entry). A PROCESS-RANDOM salt was
- * tried here first and rejected in review: it changes on every restart/pod
- * rotation (not stable) AND is identical for every org that shares the
- * process and lands on this fallback (doesn't fix the collision it exists to
- * prevent — OpenCode Go's baseURL and model catalog are the same for
- * everyone). The API key has neither problem: it is PERSISTED (stable across
- * restarts) and already unique per org/credential, since that's the whole
- * point of BYOK.
+ * sets `byokModelId` for a v2 `models[]` entry). Every resolved slot needs a
+ * `credentialId` to have found its API key at all, so this fallback is at
+ * least as available as the primary id.
+ *
+ * Two rejected-in-review attempts got here:
+ *  1. A process-random salt: changes on every restart/pod rotation (not
+ *     "stable"), AND identical for every org sharing the process and landing
+ *     on this fallback — doesn't fix the collision it exists to prevent,
+ *     since OpenCode Go's baseURL and model catalog are the same for
+ *     everyone.
+ *  2. The credential's own API KEY: fixed the collision (unique per org,
+ *     persisted across restarts) but CodeQL flagged it as "password hash
+ *     with insufficient computational effort" — SHA-256 is the wrong tool
+ *     for deriving anything from a real secret, however implausible brute-
+ *     force actually is here. `credentialId` gives the exact same
+ *     persisted-and-unique-per-org properties without hashing secret
+ *     material at all: it's an internal id, not a credential.
  *
  * HASHED rather than sent raw either way: OpenCode only needs an opaque value
- * that stays constant call-to-call, not our internal id or the actual key, so
- * there is no reason to hand a third party a stable handle onto either one.
+ * that stays constant call-to-call, not our internal id, so there is no
+ * reason to hand a third party a stable handle onto it.
  */
 function openCodeSessionId(cfg: ProviderBuildConfig): string {
     const seed =
-        cfg.byokModelId || `${cfg.apiKey}:${cfg.model}:${cfg.baseURL ?? ''}`;
+        cfg.byokModelId ||
+        cfg.credentialId ||
+        `${cfg.model}:${cfg.baseURL ?? ''}`;
     return createHash('sha256').update(seed).digest('hex').slice(0, 32);
 }
 

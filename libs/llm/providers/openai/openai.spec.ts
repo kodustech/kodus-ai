@@ -9,7 +9,6 @@
  * RED-first: written against the openai.module.ts:114-119 zero stub — the reasoning
  * assertions fail until normalize/normalizeUsage extract real values.
  */
-import { createHash } from 'crypto';
 import { openaiModule } from './index';
 import { runConformance, type ProviderFixture } from '../kernel/conformance';
 import reasoningFixture from './__fixtures__/reasoning.json';
@@ -204,53 +203,51 @@ describe('openaiModule x-opencode-session header (issue #1880)', () => {
         expect(build('model-123')).not.toBe(build('model-456'));
     });
 
-    it('falls back to model+baseURL when no byokModelId is present (managed/env slot) — still hashed', () => {
-        const withoutModelId = openaiModule.build({
-            provider: 'openai_compatible',
-            model: 'deepseek-v4-flash',
-            apiKey: 'test-key',
-            baseURL: 'https://opencode.ai/zen/go/v1',
-        } as any) as any;
-        expect(withoutModelId.config.headers()['x-opencode-session']).toMatch(
-            HEX32,
-        );
-
-        const withModelId = openaiModule.build({
-            provider: 'openai_compatible',
-            model: 'deepseek-v4-flash',
-            apiKey: 'test-key',
-            baseURL: 'https://opencode.ai/zen/go/v1',
-            byokModelId: 'model-456',
-        } as any) as any;
-        expect(withoutModelId.config.headers()['x-opencode-session']).not.toBe(
-            withModelId.config.headers()['x-opencode-session'],
-        );
-    });
-
-    it('the fallback seed includes the credential apiKey — two orgs sharing model+baseURL never collide', () => {
-        const buildFallback = (apiKey: string) =>
+    it('falls back to credentialId when no byokModelId is present — two orgs sharing model+baseURL never collide, and never the raw credentialId', () => {
+        const buildFallback = (credentialId: string) =>
             (
                 openaiModule.build({
                     provider: 'openai_compatible',
                     model: 'deepseek-v4-flash',
-                    apiKey,
+                    apiKey: 'test-key',
                     baseURL: 'https://opencode.ai/zen/go/v1',
+                    credentialId,
                 } as any) as any
             ).config.headers()['x-opencode-session'];
 
-        // Different org (different key) → different session id, even though
-        // model + baseURL are identical (the OpenCode Go norm).
-        expect(buildFallback('org-a-key')).not.toBe(buildFallback('org-b-key'));
+        // Different org (different credential) → different session id, even
+        // though model + baseURL are identical (the OpenCode Go norm).
+        expect(buildFallback('cred-a')).not.toBe(buildFallback('cred-b'));
 
-        // Same org's key → the SAME id every time (persisted, not process state).
-        expect(buildFallback('org-a-key')).toBe(buildFallback('org-a-key'));
+        // Same org's credential → the SAME id every time (persisted, not
+        // process state).
+        expect(buildFallback('cred-a')).toBe(buildFallback('cred-a'));
+        expect(buildFallback('cred-a')).toMatch(HEX32);
+        expect(buildFallback('cred-a')).not.toBe('cred-a');
+        expect(buildFallback('cred-a')).not.toContain('cred-a');
+    });
 
-        // Still not the bare, key-less model+baseURL hash.
-        const unsalted = createHash('sha256')
-            .update('deepseek-v4-flash:https://opencode.ai/zen/go/v1')
-            .digest('hex')
-            .slice(0, 32);
-        expect(buildFallback('org-a-key')).not.toBe(unsalted);
+    it('falls back to model+baseURL only when BOTH byokModelId and credentialId are absent (managed/env slot) — still hashed', () => {
+        const withNeither = openaiModule.build({
+            provider: 'openai_compatible',
+            model: 'deepseek-v4-flash',
+            apiKey: 'test-key',
+            baseURL: 'https://opencode.ai/zen/go/v1',
+        } as any) as any;
+        expect(withNeither.config.headers()['x-opencode-session']).toMatch(
+            HEX32,
+        );
+
+        const withCredentialId = openaiModule.build({
+            provider: 'openai_compatible',
+            model: 'deepseek-v4-flash',
+            apiKey: 'test-key',
+            baseURL: 'https://opencode.ai/zen/go/v1',
+            credentialId: 'cred-456',
+        } as any) as any;
+        expect(withNeither.config.headers()['x-opencode-session']).not.toBe(
+            withCredentialId.config.headers()['x-opencode-session'],
+        );
     });
 
     it('a non-OpenCode openai_compatible upstream never gets the header', () => {
