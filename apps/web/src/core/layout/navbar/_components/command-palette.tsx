@@ -14,21 +14,32 @@ import {
 } from "@components/ui/command";
 import { KODY_RULES_PATHS } from "@services/kodyRules";
 import type { KodyRule } from "@services/kodyRules/types";
+import { getMCPPlugins } from "@services/mcp-manager/fetch";
 import { PARAMETERS_PATHS } from "@services/parameters";
+import { useQuery } from "@tanstack/react-query";
 import {
+    ActivityIcon,
+    BellIcon,
     BookOpenIcon,
     Building2Icon,
+    ChartColumnIcon,
+    CreditCardIcon,
     FolderIcon,
     FolderTreeIcon,
     GaugeIcon,
+    GitBranchIcon,
     GitPullRequestIcon,
     GlobeIcon,
+    HeadsetIcon,
+    KeyRoundIcon,
     MessageSquareTextIcon,
+    PlugIcon,
     PuzzleIcon,
     ScanSearchIcon,
     ScrollTextIcon,
     SearchIcon,
     SettingsIcon,
+    ShieldIcon,
     TerminalIcon,
     TriangleAlertIcon,
 } from "lucide-react";
@@ -56,37 +67,103 @@ const PAGES = [
         label: "CLI reviews",
         href: "/cli-reviews",
         icon: TerminalIcon,
-        keywords: "reviews cli",
+        keywords: "reviews cli terminal",
     },
     {
         label: "Cockpit",
         href: "/cockpit",
         icon: GaugeIcon,
-        keywords: "metrics analytics dashboard",
+        keywords: "metrics analytics dashboard productivity",
     },
     {
         label: "Issues",
         href: "/issues",
         icon: TriangleAlertIcon,
-        keywords: "cockpit",
+        keywords: "cockpit open resolved",
     },
     {
         label: "Plugins",
         href: "/settings/plugins",
         icon: PuzzleIcon,
-        keywords: "mcp integrations",
+        keywords: "mcp integrations tools",
+    },
+    {
+        label: "Integrations",
+        href: "/settings/integrations",
+        icon: PlugIcon,
+        keywords: "github gitlab bitbucket azure jira",
+    },
+    {
+        label: "Git settings",
+        href: "/settings/git",
+        icon: GitBranchIcon,
+        keywords: "repositories provider connection",
     },
     {
         label: "Rules library",
         href: "/library/kody-rules",
         icon: BookOpenIcon,
-        keywords: "marketplace kody rules",
+        keywords: "marketplace kody rules packs",
     },
     {
-        label: "Organization",
+        label: "BYOK",
+        href: "/byok",
+        icon: KeyRoundIcon,
+        keywords: "bring your own key api key model provider llm",
+    },
+    {
+        label: "Subscription",
+        href: "/settings/subscription",
+        icon: CreditCardIcon,
+        keywords: "billing plan licenses seats",
+    },
+    {
+        label: "Token usage",
+        href: "/token-usage",
+        icon: ChartColumnIcon,
+        keywords: "cost spend tokens",
+    },
+    {
+        label: "Activity logs",
+        href: "/user-logs",
+        icon: ActivityIcon,
+        keywords: "audit history",
+    },
+    {
+        label: "Organization · General",
         href: "/organization/general",
         icon: Building2Icon,
-        keywords: "org settings",
+        keywords: "org timezone auto join",
+    },
+    {
+        label: "Organization · SSO",
+        href: "/organization/sso",
+        icon: ShieldIcon,
+        keywords: "saml okta login",
+    },
+    {
+        label: "Organization · Cockpit",
+        href: "/organization/cockpit",
+        icon: GaugeIcon,
+        keywords: "metrics visibility",
+    },
+    {
+        label: "Organization · CLI keys",
+        href: "/organization/cli-keys",
+        icon: KeyRoundIcon,
+        keywords: "api token cli",
+    },
+    {
+        label: "Organization · Notifications",
+        href: "/organization/notifications",
+        icon: BellIcon,
+        keywords: "email alerts",
+    },
+    {
+        label: "Helpdesk",
+        href: "/helpdesk",
+        icon: HeadsetIcon,
+        keywords: "support help",
     },
 ];
 
@@ -95,7 +172,7 @@ const SETTINGS_TABS = [
         label: "General",
         href: "general",
         icon: SettingsIcon,
-        keywords: "code review settings",
+        keywords: "code review settings automated approval",
     },
     {
         label: "What to review",
@@ -114,6 +191,36 @@ const SETTINGS_TABS = [
         href: "output",
         icon: MessageSquareTextIcon,
         keywords: "summary comments personality prompts",
+    },
+    {
+        label: "Custom prompts",
+        href: "custom-prompts",
+        icon: MessageSquareTextIcon,
+        keywords: "prompt overrides",
+    },
+    {
+        label: "Custom messages",
+        href: "custom-messages",
+        icon: MessageSquareTextIcon,
+        keywords: "review start end error comments",
+    },
+    {
+        label: "PR summary",
+        href: "pr-summary",
+        icon: MessageSquareTextIcon,
+        keywords: "description summary",
+    },
+    {
+        label: "Review filters",
+        href: "suggestion-control",
+        icon: ScanSearchIcon,
+        keywords: "severity suggestion control limit",
+    },
+    {
+        label: "Review categories",
+        href: "review-categories",
+        icon: ScanSearchIcon,
+        keywords: "bug performance security",
     },
 ];
 
@@ -181,6 +288,15 @@ export const CommandPalette = () => {
         open && Boolean(teamId),
         { staleTime: 60_000 },
     );
+
+    // MCP plugins (Jira, Linear, …): each opens its own page. Empty when the
+    // MCP manager is not reachable.
+    const { data: plugins } = useQuery({
+        queryKey: ["command-palette", "mcp-plugins"],
+        queryFn: () => getMCPPlugins().catch(() => []),
+        enabled: open,
+        staleTime: 60_000,
+    });
 
     const repositories = useMemo(
         () =>
@@ -324,6 +440,31 @@ export const CommandPalette = () => {
                                         ),
                                     )}
                                 </div>
+                            ))}
+                        </CommandGroup>
+                    )}
+
+                    {plugins && plugins.length > 0 && (
+                        <CommandGroup heading="Plugins">
+                            {plugins.map((plugin) => (
+                                <CommandItem
+                                    key={`${plugin.provider}-${plugin.id}`}
+                                    value={`plugin ${plugin.name} ${plugin.appName} ${plugin.provider}`}
+                                    onSelect={() =>
+                                        go(
+                                            `/settings/plugins/${plugin.provider}/${plugin.id}`,
+                                        )
+                                    }>
+                                    <PuzzleIcon />
+                                    <span className="min-w-0 flex-1 truncate">
+                                        {plugin.name}
+                                    </span>
+                                    <span className="text-text-tertiary ml-auto shrink-0 text-xs">
+                                        {plugin.isConnected
+                                            ? "connected"
+                                            : "plugin"}
+                                    </span>
+                                </CommandItem>
                             ))}
                         </CommandGroup>
                     )}
