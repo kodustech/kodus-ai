@@ -2769,23 +2769,25 @@ export class GitlabService implements Omit<
 
                         // GitLab's editNote returns either the edited note
                         // (id = note id) or a Discussion whose `id` is a string
-                        // hash — in the latter case the note id lives on
-                        // notes[0].id. Normalize so callers always receive a
-                        // numeric note id; otherwise Number(discussion.id)
-                        // yields NaN that would be persisted downstream.
+                        // hash — in the latter case the edited note id lives on
+                        // the notes array. Only return a note when we can
+                        // positively match it to the noteId we just edited;
+                        // guessing notes[0] could redirect callers to an
+                        // unrelated pre-existing note. When there is no match,
+                        // return the raw response: the callers' NaN guard keeps
+                        // the previous ids, and since the edit succeeded, the
+                        // noteId we already hold is still the right target.
                         const discussionShape = edited as {
                             notes?: Array<{ id?: number | string }>;
                         };
-                        if (
-                            Array.isArray(discussionShape?.notes) &&
-                            discussionShape.notes.length > 0
-                        ) {
-                            const targetNote =
-                                discussionShape.notes.find(
-                                    (note) =>
-                                        Number(note?.id) === Number(noteId),
-                                ) ?? discussionShape.notes[0];
-                            return targetNote;
+                        if (Array.isArray(discussionShape?.notes)) {
+                            const targetNote = discussionShape.notes.find(
+                                (note) =>
+                                    Number(note?.id) === Number(noteId),
+                            );
+                            if (targetNote) {
+                                return targetNote;
+                            }
                         }
                         return edited;
                     } catch (discussionError) {

@@ -560,6 +560,38 @@ describe('GitlabService', () => {
             expect(result).toEqual({ id: 9, body: 'summary' });
         });
 
+        it('does NOT guess notes[0] when the edited note id is absent from the Discussion response (#1877)', async () => {
+            const notesEdit = jest
+                .fn()
+                .mockRejectedValue({ response: { status: 404 } });
+            const discussionsEditNote = jest.fn().mockResolvedValue({
+                id: 'abc123def',
+                individual_note: false,
+                notes: [{ id: 11, body: 'pre-existing' }],
+            });
+            mockedGitlab.mockReturnValue({
+                MergeRequestNotes: { edit: notesEdit },
+                MergeRequestDiscussions: { editNote: discussionsEditNote },
+            });
+
+            const result = await service.updateSingleIssueComment({
+                organizationAndTeamData,
+                repository: { id: '1' },
+                prNumber: 2,
+                commentId: 7,
+                noteId: 9,
+                body: 'end-of-review summary',
+            });
+
+            // The raw response is returned (no numeric note id) so the callers'
+            // NaN guard keeps the previous noteId instead of adopting note 11.
+            expect(result).toEqual({
+                id: 'abc123def',
+                individual_note: false,
+                notes: [{ id: 11, body: 'pre-existing' }],
+            });
+        });
+
         it('rethrows non-404 failures instead of triggering the fallback (rate-limit/5xx)', async () => {
             const notesEdit = jest
                 .fn()
