@@ -12,6 +12,7 @@
 //      /byok#kodus with the "Add credits to start reviewing" callout.
 // Env: KODUS_E2E_EMAIL/PASSWORD (funded org), KODUS_E2E_UNFUNDED_EMAIL/PASSWORD
 // (org with $0 and no purchases), BILLING_ADMIN_BASE_URL, BILLING_ADMIN_TOKEN.
+import { createHmac } from "node:crypto";
 import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
 
@@ -29,9 +30,21 @@ const WEB = KODUS_WEB_URL.replace(/\/$/, ""), API = KODUS_API_URL.replace(/\/$/,
 // only touches credits through server actions).
 const DIRECT = BILLING_ADMIN_BASE_URL.replace(/\/$/, ""), BILLING = DIRECT;
 mkdirSync(KODUS_E2E_SHOTS, { recursive: true });
-const SERVICE_TOKEN = (process.env.BILLING_SERVICE_TOKEN || "").trim();
-// Billing requires a shared service token on /credits/* (money routes).
-const svc = () => (SERVICE_TOKEN ? { "x-kodus-service-token": SERVICE_TOKEN } : {});
+const SERVICE_SECRET = (process.env.BILLING_SERVICE_TOKEN || "").trim();
+// Billing authenticates the callers of /credits/* (money routes) with a shared
+// secret — the same one that signs its outbound webhooks. Signed, never sent:
+// HMAC-SHA256 over `METHOD\n/path\n<body>` in `x-kodus-signature`.
+const svc = (method, url, body) => {
+    if (!SERVICE_SECRET) return {};
+    const upper = String(method || "GET").toUpperCase();
+    const path = new URL(url, "http://placeholder").pathname;
+    const raw = upper === "GET" || upper === "DELETE" ? "" : (body ?? "");
+    return {
+        "x-kodus-signature": createHmac("sha256", SERVICE_SECRET)
+            .update(`${upper}\n${path}\n${raw}`)
+            .digest("hex"),
+    };
+};
 
 const log = (...a) => console.log("[auto-topup-ui]", ...a);
 const fail = (m) => { console.error(`[auto-topup-ui] FAIL: ${m}`); process.exit(1); };
@@ -47,18 +60,23 @@ async function ids(token) {
     const d = b.data ?? b; return { organizationId: d.organization.uuid, teamId: d.teamMember[0].team.uuid };
 }
 async function balance(token, qs) {
-    const r = await fetch(`${BILLING}/credits/balance${qs}`, { headers: { Authorization: `Bearer ${token}`, ...svc() } });
+    const url = `${BILLING}/credits/balance${qs}`;
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}`, ...svc("GET", url) } });
     if (r.status !== 200) fail(`credits/balance HTTP ${r.status}`);
     const b = await r.json();
     if (!b?.autoTopUp) fail(`credits/balance answered without autoTopUp: ${JSON.stringify(b).slice(0, 200)}`);
     return b;
 }
 async function stage(organizationId, teamId, target, current, stamp) {
-    const r = await fetch(`${DIRECT}/credits/adjust`, { method: "POST", headers: { "Content-Type": "application/json", ...svc() }, body: JSON.stringify({ organizationId, teamId, amountUsd: target - current, usageKey: `e2e:ui:stage:${stamp}`, reason: "e2e ui", adminToken: BILLING_ADMIN_TOKEN }) });
+    const url = `${DIRECT}/credits/adjust`;
+    const payload = JSON.stringify({ organizationId, teamId, amountUsd: target - current, usageKey: `e2e:ui:stage:${stamp}`, reason: "e2e ui", adminToken: BILLING_ADMIN_TOKEN });
+    const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", ...svc("POST", url, payload) }, body: payload });
     if (r.status !== 200) fail(`adjust HTTP ${r.status}`);
 }
 async function debit(organizationId, teamId, amountUsd, stamp) {
-    const r = await fetch(`${DIRECT}/credits/debit`, { method: "POST", headers: { "Content-Type": "application/json", ...svc() }, body: JSON.stringify({ organizationId, teamId, entries: [{ usageKey: `e2e:ui:debit:${stamp}`, amountUsd, metadata: { model: "e2e" } }] }) });
+    const url = `${DIRECT}/credits/debit`;
+    const payload = JSON.stringify({ organizationId, teamId, entries: [{ usageKey: `e2e:ui:debit:${stamp}`, amountUsd, metadata: { model: "e2e" } }] });
+    const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", ...svc("POST", url, payload) }, body: payload });
     const b = await r.json(); if (r.status !== 200) fail(`debit HTTP ${r.status}`); return b.balanceUsd;
 }
 async function poll(pred, { timeoutMs, label }) {
@@ -214,13 +232,15 @@ try {
         // already connected is not listed again on re-runs).
         const option = p2.getByRole("option").filter({ hasText: /DeepSeek|Kimi|GLM/ }).first();
         await option.waitFor({ timeout: 60_000 });
-        const picked = ((await option.textContent()) ?? "").split("\n")[0].trim().replace(/RECOMMENDED/i, "").trim();
         await option.click();
         await p2.getByRole("button", { name: /test & save/i }).click();
         await p2.waitForURL(/\/byok(\?|#|$)/, { timeout: 180_000 });
         if (!/#kodus/.test(p2.url())) fail(`saving a Kodus model should land on /byok#kodus, got ${p2.url()}`);
         await p2.getByTestId("kodus-credits-never-funded").waitFor({ timeout: 120_000 });
-        await p2.getByText(picked.slice(0, 12), { exact: false }).first().waitFor({ timeout: 60_000 });
+        // The model that was just saved shows up as a row with its list price
+        // (the option's own label carries its description, so assert on the
+        // row's stable marker instead of re-matching the picker text).
+        await p2.getByTestId("kodus-model-tariff").first().waitFor({ timeout: 60_000 });
         await p2.screenshot({ path: `${KODUS_E2E_SHOTS}/10-after-first-save.png`, fullPage: true });
         log("PASS form save lands on the card with the add-credits callout (screenshot 10)");
         await ctx2.close();

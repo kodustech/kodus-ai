@@ -176,7 +176,15 @@ export const kodusCreditsGate: Scenario = {
 
         const balance = await http<Balance>(
             `${billingBase(ctx)}/credits/balance${qs}`,
-            { method: "GET", headers: billingAuth(session), timeoutMs: 30_000 },
+            {
+                method: "GET",
+                headers: billingAuth(
+                    session,
+                    "GET",
+                    `${billingBase(ctx)}/credits/balance`,
+                ),
+                timeoutMs: 30_000,
+            },
         );
         ctx.assert(
             balance.status === 200 && balance.body?.balanceUsd === 0,
@@ -191,7 +199,15 @@ export const kodusCreditsGate: Scenario = {
 
         const ledger = await http<{ entries?: unknown[] }>(
             `${billingBase(ctx)}/credits/ledger${qs}`,
-            { method: "GET", headers: billingAuth(session), timeoutMs: 30_000 },
+            {
+                method: "GET",
+                headers: billingAuth(
+                    session,
+                    "GET",
+                    `${billingBase(ctx)}/credits/ledger`,
+                ),
+                timeoutMs: 30_000,
+            },
         );
         ctx.assert(
             ledger.status === 200 && Array.isArray(ledger.body?.entries),
@@ -209,7 +225,16 @@ export const kodusCreditsGate: Scenario = {
             chargeUsd?: number;
         }>(`${billingBase(ctx)}/credits/checkout`, {
             method: "POST",
-            headers: billingAuth(session),
+            headers: billingAuth(
+                session,
+                "POST",
+                `${billingBase(ctx)}/credits/checkout`,
+                {
+                    organizationId: session.organizationId,
+                    teamId: session.teamId,
+                    creditUsd: pack,
+                },
+            ),
             body: {
                 organizationId: session.organizationId,
                 teamId: session.teamId,

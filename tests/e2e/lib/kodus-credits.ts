@@ -1,3 +1,5 @@
+import { createHmac } from "node:crypto";
+
 import { http } from "./http.js";
 import type { KodusSession, RunContext, TargetContext } from "./types.js";
 
@@ -11,17 +13,42 @@ export const auth = (session: KodusSession) => ({
     Authorization: `Bearer ${session.accessToken}`,
 });
 
-/** Billing requires a shared service token on its `/credits/*` routes (money);
- *  the harness talks to billing directly, so it must send it too. */
-export const serviceToken = (): Record<string, string> => {
-    const token = (process.env.BILLING_SERVICE_TOKEN ?? "").trim();
-    return token ? { "x-kodus-service-token": token } : {};
-};
+/**
+ * Billing authenticates the callers of its `/credits/*` routes (money) with a
+ * shared secret — the same one that signs its outbound webhooks. The harness
+ * talks to billing directly, so it signs the same way the services do:
+ * HMAC-SHA256 over `METHOD\n/path\n<body>` in `x-kodus-signature`.
+ * BILLING_SERVICE_TOKEN is that secret (the deployment's webhook secret).
+ */
+export function serviceToken(
+    method: string,
+    url: string,
+    body?: unknown,
+): Record<string, string> {
+    const secret = (process.env.BILLING_SERVICE_TOKEN ?? "").trim();
+    if (!secret) return {};
+    const upper = method.toUpperCase();
+    const path = new URL(url, "http://placeholder").pathname;
+    const raw =
+        upper === "GET" || upper === "DELETE"
+            ? ""
+            : JSON.stringify(body ?? {});
+    return {
+        "x-kodus-signature": createHmac("sha256", secret)
+            .update(`${upper}\n${path}\n${raw}`)
+            .digest("hex"),
+    };
+}
 
-/** Headers for a DIRECT billing call: the tenant session + the service token. */
-export const billingAuth = (session: KodusSession): Record<string, string> => ({
+/** Headers for a DIRECT billing call: the tenant session + the signature. */
+export const billingAuth = (
+    session: KodusSession,
+    method: string,
+    url: string,
+    body?: unknown,
+): Record<string, string> => ({
     ...auth(session),
-    ...serviceToken(),
+    ...serviceToken(method, url, body),
 });
 
 /** Catalog model the scenarios route through Kodus. Override with
@@ -95,7 +122,15 @@ export async function fetchCreditBalance(
 ): Promise<CreditBalance> {
     const resp = await http<CreditBalance>(
         `${billingBase(ctx)}/credits/balance${orgQs(session)}`,
-        { method: "GET", headers: billingAuth(session), timeoutMs: 30_000 },
+        {
+            method: "GET",
+            headers: billingAuth(
+                session,
+                "GET",
+                `${billingBase(ctx)}/credits/balance`,
+            ),
+            timeoutMs: 30_000,
+        },
     );
     ctx.assert(
         resp.status === 200 && typeof resp.body?.balanceUsd === "number",
@@ -119,7 +154,15 @@ export async function fetchCreditLedger(
 ): Promise<LedgerEntry[]> {
     const resp = await http<{ entries?: LedgerEntry[] }>(
         `${billingBase(ctx)}/credits/ledger${orgQs(session)}&limit=200`,
-        { method: "GET", headers: billingAuth(session), timeoutMs: 30_000 },
+        {
+            method: "GET",
+            headers: billingAuth(
+                session,
+                "GET",
+                `${billingBase(ctx)}/credits/ledger`,
+            ),
+            timeoutMs: 30_000,
+        },
     );
     ctx.assert(
         resp.status === 200 && Array.isArray(resp.body?.entries),
@@ -181,8 +224,6 @@ export async function adminAdjustCredits(
         `${base!.replace(/\/$/, "")}/credits/adjust`,
         {
             method: "POST",
-            // `/credits/*` needs the service token on top of the adminToken.
-            headers: serviceToken(),
             body: {
                 organizationId: session.organizationId,
                 teamId: session.teamId,
@@ -191,6 +232,14 @@ export async function adminAdjustCredits(
                 reason,
                 adminToken,
             },
+            headers: serviceToken("POST", `${base!.replace(/\/$/, "")}/credits/adjust`, {
+                organizationId: session.organizationId,
+                teamId: session.teamId,
+                amountUsd,
+                usageKey,
+                reason,
+                adminToken,
+            }),
             timeoutMs: 30_000,
         },
     );

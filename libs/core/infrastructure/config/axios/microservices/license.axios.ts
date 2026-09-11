@@ -1,30 +1,60 @@
+import { createHmac } from 'crypto';
+
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
 import { createLogger } from '@libs/core/log/logger';
 
 const DEFAULT_TIMEOUT_MS = 60000; // 60 seconds
+
+/** Header billing reads on its credit routes — the same one it uses outbound. */
+export const SIGNATURE_HEADER = 'x-kodus-signature';
+
+/** The shared service secret: the dedicated one when set, else the webhook
+ *  secret both deployments already hold. */
+export function billingServiceSecret(): string {
+    return (
+        (process.env.API_CREDITS_SERVICE_TOKEN ?? '').trim() ||
+        (process.env.API_BILLING_WEBHOOK_SECRET ?? '').trim()
+    );
+}
 
 export class AxiosLicenseService {
     private readonly axiosInstance: AxiosInstance;
     private readonly logger = createLogger('AxiosLicenseService');
 
     constructor() {
-        // The billing service authenticates the callers of its `/credits/*`
-        // routes (money) with a shared secret; every other route is unchanged.
-        // Sent on all requests from this client — it is a server-to-server
-        // client, never reachable from a browser — so a route that starts
-        // requiring it does not need a new call site.
-        const serviceToken = (
-            process.env.API_CREDITS_SERVICE_TOKEN ?? ''
-        ).trim();
         this.axiosInstance = axios.create({
             baseURL: `${process.env.GLOBAL_KODUS_SERVICE_BILLING}/api/billing/`,
             headers: {
                 'Content-Type': 'application/json',
-                ...(serviceToken
-                    ? { 'x-kodus-service-token': serviceToken }
-                    : {}),
             },
             timeout: DEFAULT_TIMEOUT_MS,
+        });
+
+        // Billing authenticates the callers of its `/credits/*` routes (money)
+        // with the SAME shared secret that already signs its outbound webhooks
+        // to us (API_BILLING_WEBHOOK_SECRET here,
+        // KODUS_NOTIFICATION_WEBHOOK_SECRET there — one value by contract), so
+        // enabling this needs no new env var. Signed, not sent: the secret
+        // never crosses the wire. An interceptor covers every call site, and
+        // routes that do not require it simply ignore the header.
+        this.axiosInstance.interceptors.request.use((config) => {
+            const secret = billingServiceSecret();
+            if (!secret) return config;
+            const method = (config.method ?? 'get').toUpperCase();
+            const rawBody =
+                method === 'GET' || method === 'DELETE'
+                    ? ''
+                    : JSON.stringify(config.data ?? {});
+            const path = `/api/billing/${String(config.url ?? '').replace(/^\//, '')}`.split(
+                '?',
+            )[0];
+            config.headers.set(
+                SIGNATURE_HEADER,
+                createHmac('sha256', secret)
+                    .update(`${method}\n${path}\n${rawBody}`)
+                    .digest('hex'),
+            );
+            return config;
         });
     }
 

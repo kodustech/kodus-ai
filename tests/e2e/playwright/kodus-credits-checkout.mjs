@@ -14,6 +14,7 @@
 // Env: KODUS_WEB_URL (default http://localhost:3000), KODUS_API_URL
 // (default http://localhost:3001), KODUS_E2E_EMAIL,
 // KODUS_E2E_PASSWORD, KODUS_E2E_HEADLESS=0 to watch, KODUS_E2E_SHOTS (dir).
+import { createHmac } from "node:crypto";
 import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
 
@@ -47,9 +48,21 @@ const TEST_CVC = "123";
 const TEST_ZIP = "12345";
 const TEST_PHONE = "2015550123";
 
-const SERVICE_TOKEN = (process.env.BILLING_SERVICE_TOKEN || "").trim();
-// Billing requires a shared service token on /credits/* (money routes).
-const svc = () => (SERVICE_TOKEN ? { "x-kodus-service-token": SERVICE_TOKEN } : {});
+const SERVICE_SECRET = (process.env.BILLING_SERVICE_TOKEN || "").trim();
+// Billing authenticates the callers of /credits/* (money routes) with a shared
+// secret — the same one that signs its outbound webhooks. Signed, never sent:
+// HMAC-SHA256 over `METHOD\n/path\n<body>` in `x-kodus-signature`.
+const svc = (method, url, body) => {
+    if (!SERVICE_SECRET) return {};
+    const upper = String(method || "GET").toUpperCase();
+    const path = new URL(url, "http://placeholder").pathname;
+    const raw = upper === "GET" || upper === "DELETE" ? "" : (body ?? "");
+    return {
+        "x-kodus-signature": createHmac("sha256", SERVICE_SECRET)
+            .update(`${upper}\n${path}\n${raw}`)
+            .digest("hex"),
+    };
+};
 
 const log = (...a) => console.log("[kodus-credits]", ...a);
 const fail = (msg) => {
@@ -86,12 +99,13 @@ async function userInfo(token) {
 }
 
 async function billingFetch(token, path, init = {}) {
-    const resp = await fetch(`${BILLING}${path}`, {
+    const url = `${BILLING}${path}`;
+    const resp = await fetch(url, {
         ...init,
         headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
-            ...svc(),
+            ...svc(init.method ?? "GET", url, init.body),
             ...(init.headers ?? {}),
         },
     });
@@ -338,13 +352,13 @@ try {
     const target = AUTO_THRESHOLD + 2; // just above: the $3 debit below crosses it
     const adj = await fetch(`${BILLING_DIRECT}/credits/adjust`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...svc() },
+        headers: { "Content-Type": "application/json", ...svc("POST", `${BILLING_DIRECT}/credits/adjust`, JSON.stringify({ organizationId, teamId, amountUsd: target - current, usageKey: `e2e:auto:stage:${stamp}`, reason: "e2e: stage balance under the auto top-up threshold", adminToken })) },
         body: JSON.stringify({ organizationId, teamId, amountUsd: target - current, usageKey: `e2e:auto:stage:${stamp}`, reason: "e2e: stage balance under the auto top-up threshold", adminToken }),
     });
     if (adj.status !== 200) fail(`credits/adjust HTTP ${adj.status}`);
     const debit = await fetch(`${BILLING_DIRECT}/credits/debit`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...svc() },
+        headers: { "Content-Type": "application/json", ...svc("POST", `${BILLING_DIRECT}/credits/debit`, JSON.stringify({ organizationId, teamId, entries: [{ usageKey: `e2e:auto:debit:${stamp}`, amountUsd: 3, metadata: { model: "e2e", reason: "auto top-up trigger" } }] })) },
         body: JSON.stringify({ organizationId, teamId, entries: [{ usageKey: `e2e:auto:debit:${stamp}`, amountUsd: 3, metadata: { model: "e2e", reason: "auto top-up trigger" } }] }),
     });
     const debitBody = await debit.json().catch(() => ({}));

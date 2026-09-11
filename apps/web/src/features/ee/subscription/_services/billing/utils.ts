@@ -1,3 +1,4 @@
+import { createHmac } from "crypto";
 import { typedFetch } from "@services/fetch";
 import { createUrl } from "src/core/utils/helpers";
 import { isServerSide } from "src/core/utils/server-side";
@@ -12,17 +13,50 @@ import { isServerSide } from "src/core/utils/server-side";
  *     route in apps/web/src/app/api/proxy/billing/[...path]/route.ts.
  *     Keeps the internal hostname out of the client bundle.
  */
-/** The shared secret billing requires on its `/credits/*` routes (money). */
-export const creditsServiceTokenHeader = (): Record<string, string> => {
-    const token = (process.env.API_CREDITS_SERVICE_TOKEN ?? "").trim();
-    return token ? { "x-kodus-service-token": token } : {};
+/**
+ * Billing authenticates the callers of its `/credits/*` routes (money) with
+ * the SAME shared secret that already signs its outbound webhooks to the API
+ * (`API_BILLING_WEBHOOK_SECRET` here, `KODUS_NOTIFICATION_WEBHOOK_SECRET`
+ * there — one value by contract), so enabling this needs no new env var.
+ * Signed, never sent: HMAC-SHA256 over `METHOD\n/path\n<body>`, in the same
+ * `x-kodus-signature` header the other direction already uses. Server-side
+ * only — the browser proxy denies `/credits/*` outright.
+ */
+const SIGNATURE_HEADER = "x-kodus-signature";
+
+const billingServiceSecret = (): string =>
+    (process.env.API_CREDITS_SERVICE_TOKEN ?? "").trim() ||
+    (process.env.API_BILLING_WEBHOOK_SECRET ?? "").trim();
+
+export const billingSignatureHeader = (
+    method: string,
+    path: string,
+    rawBody = "",
+): Record<string, string> => {
+    const secret = billingServiceSecret();
+    if (!secret) return {};
+    const upper = method.toUpperCase();
+    const signedPath = `/api/billing/${path.replace(/^\//, "")}`.split("?")[0];
+    const body = upper === "GET" || upper === "DELETE" ? "" : rawBody;
+    return {
+        [SIGNATURE_HEADER]: createHmac("sha256", secret)
+            .update(`${upper}\n${signedPath}\n${body}`)
+            .digest("hex"),
+    };
 };
 
-/** Attach it to a server-side request config, preserving everything else. */
-const withServiceToken = <C extends { headers?: HeadersInit }>(
+/** Attach the signature to a server-side request config. */
+const withSignature = <
+    C extends { headers?: HeadersInit; method?: string; body?: unknown },
+>(
+    path: string,
     config?: C,
 ): C => {
-    const extra = creditsServiceTokenHeader();
+    const extra = billingSignatureHeader(
+        config?.method ?? "GET",
+        path,
+        typeof config?.body === "string" ? config.body : "",
+    );
     if (Object.keys(extra).length === 0) return (config ?? {}) as C;
     return {
         ...((config ?? {}) as C),
@@ -68,7 +102,7 @@ export const billingFetch = async <Data>(
         // server-side branch can carry it — `isServerSide` above.
         return typedFetch(
             url,
-            isServerSide ? withServiceToken(config) : config,
+            isServerSide ? withSignature(_url.toString(), config) : config,
         );
     } catch {
         return null as Data;
@@ -116,13 +150,15 @@ export const billingRequest = async <Data>(
     const url = createUrl(hostName, port, `/api/billing/${path}${query}`, {
         internal: true,
     });
+    const rawBody =
+        init.body === undefined ? undefined : JSON.stringify(init.body);
     const response = await fetch(url, {
         method: init.method,
         headers: {
             "Content-Type": "application/json",
-            ...creditsServiceTokenHeader(),
+            ...billingSignatureHeader(init.method, path, rawBody ?? ""),
         },
-        body: init.body === undefined ? undefined : JSON.stringify(init.body),
+        body: rawBody,
         cache: "no-store",
     });
     const text = await response.text();
