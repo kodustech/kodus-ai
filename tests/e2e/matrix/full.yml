@@ -107,6 +107,9 @@ scenarios:
     # Public PR-review demo API (also in fast.yml). Anonymous, cloud-only;
     # appliesTo pins it to one cell (cloud × github × paid).
     - public-pr-demo
+    # Prior-round decision memory (#1313, also in fast.yml). github-only —
+    # needs pushFollowupCommit + listReviewCommentBodies.
+    - review-decision-memory
     # Claude-on-Vertex BYOK on BOTH engines (self-hosted × github only).
     # Full-tier, not fast: needs a GCP service account + a Model-Garden-enabled
     # Claude model (real LLM cost). Each SKIPS (not fails) when its secret is

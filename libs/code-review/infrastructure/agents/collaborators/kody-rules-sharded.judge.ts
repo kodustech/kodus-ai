@@ -39,6 +39,10 @@ import type { RetrievedSlice } from '@libs/code-review/infrastructure/agents/col
 // module, so this edge does not close a require cycle the way the compiler's
 // would.
 import { needOf } from '@libs/code-review/infrastructure/agents/collaborators/rule-context.retriever';
+import { formatPreviousDecisions } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
+import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
+// Value import, and safe: finder.agent.ts imports nothing from this module.
+import { normalizePath } from '@libs/code-review/infrastructure/agents/core/finder.agent';
 
 /**
  * Parser schema for a shard's JSON output. The provider passes this to
@@ -328,6 +332,19 @@ export interface ShardedJudgeInput {
      * prompt for that shard.
      */
     fileContents?: Map<string, string>;
+    /**
+     * Suggestions already posted on THIS PR in a previous review round
+     * (issue #1313). Unlike the agentic bug/security/performance path, there
+     * is no downstream `Verifier<T>`/refute step here — `checkClaims` is a
+     * deterministic symbolic check (unused/missing/duplicate), not a semantic
+     * judge, so it has nothing to refute a "contradicts prior history" claim
+     * WITH. The only place this can act is here, in the shard's own prompt:
+     * the model itself must be the one that doesn't re-flag or reverse an
+     * already-applied decision. File shards get the subset for their own
+     * file; the PR-scope shard gets everything (file-level AND PR-level),
+     * since it reasons across the whole diff anyway.
+     */
+    previousDecisions?: PrDecisionRecord[];
 }
 
 export interface ShardedJudgeResult {
@@ -344,9 +361,10 @@ Rules of engagement:
 - Only flag lines ADDED in this diff (each line is prefixed with its file line number then '+'). Unchanged context lines are NEVER flagged.
 - One entry PER violating line PER rule; do not collapse repeats. Downstream dedup folds repeats into one comment.
 - Identify the violated rule by its number — the [n] shown before each rule. Put that number in "ruleId". Never invent a number; if a real issue matches no listed rule, DROP it.
-- If nothing violates, return an empty list.`;
+- If nothing violates, return an empty list.
+- If a <PreviousReviewDecisions> block is present: do not re-flag, or flag the reverse of, an entry whose outcome is "implemented"/"partially_implemented" — unless the diff shows concrete evidence that specific decision was reverted or is still wrong. There is no separate check after you decide — you ARE the only judgment this path gets.`;
 
-export const SHARD_PR_SYSTEM_PROMPT = `You evaluate PULL-REQUEST-level team rules against a PR: its title, description, the list of changed files, and the FULL DIFF of every changed file. Judge the PR as a whole — cross-file conditions (e.g. "one migration = one logical change", "index added to a table that already existed before this PR") are exactly what these rules are about, so reason across the whole diff. Identify each violated rule by its number — the [n] shown before each rule — and put that number in "ruleId"; never invent one. Return only real violations.`;
+export const SHARD_PR_SYSTEM_PROMPT = `You evaluate PULL-REQUEST-level team rules against a PR: its title, description, the list of changed files, and the FULL DIFF of every changed file. Judge the PR as a whole — cross-file conditions (e.g. "one migration = one logical change", "index added to a table that already existed before this PR") are exactly what these rules are about, so reason across the whole diff. Identify each violated rule by its number — the [n] shown before each rule — and put that number in "ruleId"; never invent one. Return only real violations. If a <PreviousReviewDecisions> block is present: do not re-flag, or flag the reverse of, an entry whose outcome is "implemented"/"partially_implemented" — unless the diff shows concrete evidence that specific decision was reverted or is still wrong.`;
 
 function ruleBlock(rules: Array<Partial<IKodyRule>>): string {
     return rules
@@ -630,6 +648,25 @@ function contextLines(
     ];
 }
 
+/** Keyed by normalizePath(relevantFile) — PR-level entries (no relevantFile)
+ *  are excluded, matching the per-file scoping fileShardUser always did. */
+function groupDecisionsByNormalizedFile(
+    previousDecisions: PrDecisionRecord[] | undefined,
+): Map<string, PrDecisionRecord[]> {
+    const byFile = new Map<string, PrDecisionRecord[]>();
+    for (const decision of previousDecisions ?? []) {
+        if (!decision.relevantFile) continue;
+        const key = normalizePath(decision.relevantFile);
+        const bucket = byFile.get(key);
+        if (bucket) {
+            bucket.push(decision);
+        } else {
+            byFile.set(key, [decision]);
+        }
+    }
+    return byFile;
+}
+
 function fileShardUser(
     file: FileChange,
     rules: Array<Partial<IKodyRule>>,
@@ -639,8 +676,18 @@ function fileShardUser(
     prBody?: string,
     contextSlices?: Map<string, RetrievedSlice[]>,
     fileContents?: Map<string, string>,
+    previousDecisionsByFile?: Map<string, PrDecisionRecord[]>,
 ): string {
     const diff = (file as any).patchWithLinesStr ?? file.patch ?? '';
+    // Scoped to THIS file — matching by line range is deliberately not done
+    // here either (same reasoning as the generic verifier: line numbers shift
+    // across review rounds). Looked up from a Map built once per run (issue
+    // #1313 perf review) instead of filtering the whole list per file, and
+    // matched through normalizePath (same reasoning as the generic verifier:
+    // relevantFile is LLM-produced free text, not a validated path).
+    const previousDecisionsSection = formatPreviousDecisions(
+        previousDecisionsByFile?.get(normalizePath(file.filename)),
+    );
     return [
         `<Rules>`,
         ruleBlock(rules),
@@ -669,6 +716,7 @@ function fileShardUser(
         // Context BEFORE candidates: the candidates are questions to be judged
         // using the context, so the evidence has to be on the page first.
         ...contextLines(file, contextSlices),
+        previousDecisionsSection,
         ...candidateLines(file, rules, detectorHits),
         ...languageInstructionLines(languageLabel),
         // `improvedCode` and `language` are REQUIRED by the wire schema but were
@@ -707,7 +755,11 @@ function prShardUser(
     prTitle?: string,
     prBody?: string,
     languageLabel?: string | null,
+    previousDecisions?: PrDecisionRecord[],
 ): string {
+    // Full list — file-level AND PR-level — since this shard reasons across
+    // the whole PR anyway, unlike the per-file shard's file-scoped filter.
+    const previousDecisionsSection = formatPreviousDecisions(previousDecisions);
     let used = 0;
     const diffs: string[] = [];
     for (const f of files) {
@@ -742,6 +794,7 @@ function prShardUser(
         '```',
         `</PR>`,
         ``,
+        previousDecisionsSection,
         ...languageInstructionLines(languageLabel),
         `Return ONLY JSON (ruleId is the rule's [n] number): {"violations":[{"ruleId":<n>,"suggestionContent":"WHAT/WHY","oneSentenceSummary":"<short>"}]}`,
     ].join('\n');
@@ -1098,6 +1151,7 @@ export async function judgeKodyRulesSharded(
         contextSlices,
         unmetRules,
         fileContents,
+        previousDecisions,
     } = input;
     const concurrency = input.concurrency ?? SHARD_CONCURRENCY_DEFAULT;
 
@@ -1110,6 +1164,10 @@ export async function judgeKodyRulesSharded(
 
     const fileRules = judgeable.filter((r) => !isPrLevel(r));
     const prRules = judgeable.filter(isPrLevel);
+
+    // Built once per run (issue #1313 perf review), not per file shard.
+    const previousDecisionsByFile =
+        groupDecisionsByNormalizedFile(previousDecisions);
 
     let shardsRun = 0;
     let shardsErrored = 0;
@@ -1146,6 +1204,7 @@ export async function judgeKodyRulesSharded(
                         prBody,
                         contextSlices,
                         fileContents,
+                        previousDecisionsByFile,
                     ),
                     filename: file.filename,
                     ruleUuids,
@@ -1185,6 +1244,7 @@ export async function judgeKodyRulesSharded(
                     prTitle,
                     prBody,
                     languageLabel,
+                    previousDecisions,
                 ),
                 filename: null,
                 ruleUuids,

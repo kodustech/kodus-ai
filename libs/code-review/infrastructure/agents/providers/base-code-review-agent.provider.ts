@@ -572,6 +572,11 @@ export abstract class BaseCodeReviewAgentProvider {
                     // would have their preference silently dropped here.
                     skipHeavyPasses: input.skipHeavyPasses,
                     skipSynthesisRescue: input.skipSynthesisRescue,
+                    // Verifier evidence (issue #1313) — forwarded explicitly for
+                    // the same reason as the two fields above: loopParams is
+                    // built field-by-field, so without this line the verifier
+                    // never sees prior-round decisions.
+                    previousDecisions: input.previousDecisions,
                     // HEAVY opt-in (`--heavy`) — forwarded explicitly, same reason
                     // as skipHeavyPasses above: loopParams is built field-by-field,
                     // so without this line the resample passes never run.

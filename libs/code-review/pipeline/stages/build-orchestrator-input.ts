@@ -76,6 +76,7 @@ export function buildOrchestratorInput(
             context.codeReviewConfig?.languageResultPrompt || 'en-US',
         memoryRules: context.codeReviewConfig?.kodyMemoryRules,
         traceDecisions: context.traceDecisions,
+        previousDecisions: context.previousDecisions,
         v2PromptOverrides: context.codeReviewConfig?.v2PromptOverrides,
         generationMain:
             context.codeReviewConfig?.v2PromptOverrides?.generation?.main,

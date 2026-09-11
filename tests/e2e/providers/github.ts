@@ -18,7 +18,7 @@ import {
     resolveTargetRepo,
 } from './base.js';
 import { ensureOk, http } from '../lib/http.js';
-import { prepareBranch } from '../lib/git.js';
+import { prepareBranch, pushFollowupCommit } from '../lib/git.js';
 import { logger } from '../lib/log.js';
 
 const log = logger('provider:github');
@@ -250,6 +250,63 @@ export class GitHubProvider extends BaseProvider {
         } finally {
             prepared.cleanup();
         }
+    }
+
+    async pushFollowupCommit(
+        pr: OpenedPR,
+        files: Record<string, string>,
+        commitMessage: string,
+    ): Promise<void> {
+        await pushFollowupCommit({
+            cloneUrl: this.cloneUrl(),
+            branch: pr.branch,
+            files,
+            commitMessage,
+        });
+    }
+
+    async listReviewCommentBodies(
+        pr: { number: number },
+        opts: { sinceIso: string; path?: string },
+    ): Promise<string[]> {
+        await this.refreshInstallationTokenIfNeeded();
+        const since = encodeURIComponent(opts.sinceIso);
+        const [reviewComments, issueComments] = await Promise.all([
+            this.conditionalGet<
+                { id: number; body: string; path?: string }[]
+            >(
+                `${this.apiBase}/repos/${this.repoFullName}/pulls/${pr.number}/comments?since=${since}`,
+            ),
+            this.conditionalGet<{ id: number; body: string }[]>(
+                `${this.apiBase}/repos/${this.repoFullName}/issues/${pr.number}/comments?since=${since}`,
+            ),
+        ]);
+        const isRealReview = (body: string) =>
+            !body.toLowerCase().startsWith('@kody') &&
+            classifyKodyComment(body) === 'review';
+
+        const inline = this.listOrThrow(
+            reviewComments,
+            'github:listReviewCommentBodies:reviewComments',
+        ).filter(
+            (c) =>
+                (opts.path === undefined || c.path === opts.path) &&
+                isRealReview(c.body ?? ''),
+        );
+        // Issue/PR-level comments are never anchored to a file — when the
+        // caller scopes the query to a path, only inline comments can match
+        // it, so issue-level comments (things like the generic "Code Review
+        // Completed!" wrap-up, which classifyKodyComment reads as 'review')
+        // must be excluded entirely rather than always tagging along.
+        const issueLevel =
+            opts.path === undefined
+                ? this.listOrThrow(
+                      issueComments,
+                      'github:listReviewCommentBodies:issueComments',
+                  ).filter((c) => isRealReview(c.body ?? ''))
+                : [];
+
+        return [...inline, ...issueLevel].map((c) => c.body ?? '');
     }
 
     async openPRFromBranches(args: OpenPRFromBranchesArgs): Promise<OpenedPR> {

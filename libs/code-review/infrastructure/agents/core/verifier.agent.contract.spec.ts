@@ -35,6 +35,7 @@ import {
     LlmVerifier,
 } from '@libs/code-review/infrastructure/agents/core/verifier.agent';
 import { openRouterHonorsJsonSchema } from '@libs/llm/structured-output-gate';
+import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 
 // --- fixtures -------------------------------------------------------------
 
@@ -249,6 +250,15 @@ describe('verifier contract — assembly', () => {
         expect(spec.tools.list().some((t) => t.name === VERIFY_DONE_TOOL)).toBe(
             true,
         );
+    });
+
+    it('the verifier system prompt allows refuting on a previous review decision (issue #1313)', () => {
+        const spec = buildVerifierAgentSpec({
+            modelId: 'moonshot/kimi-k2',
+            tools: new InMemoryToolRegistry([]),
+        });
+        expect(spec.systemPrompt).toContain('previous review round');
+        expect(spec.systemPrompt).toContain('PreviousReviewDecisions');
     });
 
     it('verifierPromptFor embeds the finding evidence', () => {
@@ -859,5 +869,147 @@ describe('backfill E — N-model structured-output gate', () => {
         const b = extractVerdict(makeState(wrapped));
         expect(a.keep).toBe(b.keep);
         expect(typeof a.keep).toBe('boolean');
+    });
+});
+
+// =========================================================================
+// F — previous review decisions evidence (issue #1313)
+//
+// A finding that contradicts a suggestion Kody already posted (and the
+// developer already applied) on THIS exact PR should be refutable by the
+// verifier. The plumbing under test here: LlmVerifier.verify() must filter
+// `previousDecisions` down to the candidate's OWN file before handing them to
+// verifierPromptFor — never by line range (line numbers shift across review
+// rounds), and never records from an unrelated file.
+// =========================================================================
+describe('verifier contract — previous review decisions (issue #1313)', () => {
+    const decision = (over: Partial<PrDecisionRecord> = {}): PrDecisionRecord => ({
+        suggestionId: 'sug-1',
+        relevantFile: 'src/x.ts',
+        suggestionContent: 'Use const instead of let.',
+        label: 'bug',
+        outcome: 'implemented',
+        decidedAt: '2026-01-01T00:00:00.000Z',
+        ...over,
+    });
+
+    it('verifierPromptFor embeds previous-decision evidence when given', () => {
+        const p = verifierPromptFor(candidate(), [decision()]);
+        expect(p).toContain('<PreviousReviewDecisions>');
+        expect(p).toContain('Use const instead of let.');
+    });
+
+    it('verifierPromptFor omits the block entirely when no previous decisions are given', () => {
+        const p = verifierPromptFor(candidate());
+        expect(p).not.toContain('<PreviousReviewDecisions>');
+    });
+
+    it('LlmVerifier.verify scopes previousDecisions to the candidate\'s own file, never by line range', async () => {
+        const { runner, run } = fakeRunner(async () =>
+            makeState({ keep: false, rationale: 'refuted: already applied' }),
+        );
+        const v = new LlmVerifier(runner, {
+            ...inertParams(),
+            previousDecisions: [
+                decision({ relevantFile: 'src/x.ts', suggestionContent: 'SAME FILE decision' }),
+                decision({
+                    suggestionId: 'sug-2',
+                    relevantFile: 'src/other.ts',
+                    suggestionContent: 'OTHER FILE decision',
+                }),
+            ],
+        });
+
+        await v.verify(candidate({ relevantFile: 'src/x.ts' }), {} as ToolContext);
+
+        const [, input] = run.mock.calls[0];
+        expect(input.prompt).toContain('SAME FILE decision');
+        expect(input.prompt).not.toContain('OTHER FILE decision');
+    });
+
+    it('LlmVerifier.verify sends no PreviousReviewDecisions block when nothing matches the file', async () => {
+        const { runner, run } = fakeRunner(async () =>
+            makeState({ keep: true, rationale: 'r' }),
+        );
+        const v = new LlmVerifier(runner, {
+            ...inertParams(),
+            previousDecisions: [decision({ relevantFile: 'src/unrelated.ts' })],
+        });
+
+        await v.verify(candidate({ relevantFile: 'src/x.ts' }), {} as ToolContext);
+
+        const [, input] = run.mock.calls[0];
+        expect(input.prompt).not.toContain('<PreviousReviewDecisions>');
+    });
+
+    it('reproduces the #1313 symptom end to end: a same-file "implemented" decision lets the verifier refute the opposite suggestion', async () => {
+        const { runner } = fakeRunner(async () =>
+            makeState({
+                keep: false,
+                rationale: 'refuted: contradicts an already-applied decision',
+            }),
+        );
+        const v = new LlmVerifier(runner, {
+            ...inertParams(),
+            previousDecisions: [
+                decision({
+                    relevantFile: 'src/x.ts',
+                    suggestionContent: 'Use const instead of let.',
+                    outcome: 'implemented',
+                }),
+            ],
+        });
+
+        // Round 2: the finder (with no memory of its own) proposes the OPPOSITE
+        // of what it already suggested and the developer already applied.
+        const verdict = await v.verify(
+            candidate({
+                relevantFile: 'src/x.ts',
+                suggestionContent: 'Use let instead of const.',
+            }),
+            {} as ToolContext,
+        );
+
+        expect(verdict.keep).toBe(false);
+    });
+
+    // Kody PR #1895 review, confirmed real: relevantFile on both sides is
+    // LLM-produced free text (z.string() in the finder's output schema), not
+    // a validated path — normalizePath already exists for exactly this drift
+    // elsewhere (finder.agent.ts's evidence gate). A strict === here would
+    // silently drop the evidence and reopen the #1313 symptom for a
+    // leading-'./' or slash-style difference between rounds.
+    it('matches previousDecisions through normalizePath, not strict equality (leading "./", backslashes, case)', async () => {
+        const { runner, run } = fakeRunner(async () =>
+            makeState({ keep: false, rationale: 'refuted: already applied' }),
+        );
+        const v = new LlmVerifier(runner, {
+            ...inertParams(),
+            previousDecisions: [
+                decision({
+                    relevantFile: './src/X.ts',
+                    suggestionContent: 'NORMALIZED MATCH decision',
+                }),
+            ],
+        });
+
+        await v.verify(
+            candidate({ relevantFile: 'src\\x.ts' }),
+            {} as ToolContext,
+        );
+
+        const [, input] = run.mock.calls[0];
+        expect(input.prompt).toContain('NORMALIZED MATCH decision');
+    });
+
+    it('does not change the prompt for a candidate with no matching previousDecisions (backward compatible)', async () => {
+        const { runner, run } = fakeRunner(async () =>
+            makeState({ keep: true, rationale: 'r' }),
+        );
+        const v = new LlmVerifier(runner, inertParams()); // previousDecisions omitted entirely
+        await v.verify(candidate(), {} as ToolContext);
+
+        const [, input] = run.mock.calls[0];
+        expect(input.prompt).not.toContain('<PreviousReviewDecisions>');
     });
 });

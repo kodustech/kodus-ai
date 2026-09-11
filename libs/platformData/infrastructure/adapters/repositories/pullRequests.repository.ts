@@ -23,12 +23,21 @@ import {
     IPullRequestUserMapping,
     IPullRequestWithDeliveredSuggestions,
     ISuggestion,
+    ISuggestionByPR,
     SuggestionCountsBySeverity,
 } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { PullRequestsEntity } from '@libs/platformData/domain/pullRequests/entities/pullRequests.entity';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enums/implementationStatus.enum';
 import { UNRESOLVED_RANK_BONUS } from '@libs/platformData/domain/pullRequests/deep-link-rank';
+
+// Mirrors MAX_DECISIONS_PER_FILE in
+// libs/code-review/application/use-cases/previousReviewDecisions/build-previous-review-decisions.use-case.ts
+// (the only current caller of findSuggestionsByPRAndFilenames /
+// findPrLevelSuggestionsByPR) — capping in the aggregation itself keeps the
+// query bounded instead of fetching a whole PR's suggestion history and
+// discarding most of it in JS. If that use-case's cap changes, update this too.
+const PER_FILE_HISTORY_LIMIT = 5;
 
 @Injectable()
 export class PullRequestsRepository implements IPullRequestsRepository {
@@ -960,6 +969,165 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                 {
                     $replaceRoot: {
                         newRoot: '$suggestions',
+                    },
+                },
+            ])
+            .exec();
+
+        return result;
+    }
+
+    async findSuggestionsByPRAndFilenames(
+        prNumber: number,
+        repoFullName: string,
+        filenames: readonly string[],
+        organizationId: string,
+        deliveryStatus: DeliveryStatus,
+    ): Promise<ISuggestion[]> {
+        if (!filenames.length) {
+            return [];
+        }
+
+        const result = await this.pullRequestsModel
+            .aggregate([
+                {
+                    $match: {
+                        'number': prNumber,
+                        'repository.fullName': repoFullName,
+                        'organizationId': organizationId,
+                    },
+                },
+                {
+                    $unwind: '$files',
+                },
+                {
+                    $match: {
+                        'files.path': { $in: filenames as string[] },
+                    },
+                },
+                // `files.suggestions` accumulates one entry per review round —
+                // an actively-iterated PR can carry dozens of stale entries
+                // per file. Filter to the requested deliveryStatus, sort, and
+                // cap to the most recent PER_FILE_HISTORY_LIMIT BEFORE
+                // unwinding, so the aggregation cost stays bounded by files
+                // changed in THIS round instead of growing with round count.
+                // Order matters: filter-then-sort-then-slice, so a
+                // never-sent suggestion buried among the newest entries can
+                // never push out an older SENT one (that would silently
+                // shrink the decision history the caller sees).
+                //
+                // `files.suggestions` is $push'ed per-file by addFileToPullRequest
+                // with no guaranteed `suggestions` key (see IFile / the $push
+                // call), and the old bare $unwind silently dropped a document
+                // missing it (same reasoning as this file's preserveNullAndEmptyArrays
+                // unwinds elsewhere). $filter/$sortArray on a missing field
+                // resolve to null, and $slice on null throws — so a PR whose
+                // matched file has no `suggestions` array would make this whole
+                // aggregation throw instead of degrading to "no history".
+                // $ifNull guards that.
+                {
+                    $addFields: {
+                        'files.suggestions': {
+                            $slice: [
+                                {
+                                    $sortArray: {
+                                        input: {
+                                            $filter: {
+                                                input: {
+                                                    $ifNull: [
+                                                        '$files.suggestions',
+                                                        [],
+                                                    ],
+                                                },
+                                                as: 'suggestion',
+                                                cond: {
+                                                    $eq: [
+                                                        '$$suggestion.deliveryStatus',
+                                                        deliveryStatus,
+                                                    ],
+                                                },
+                                            },
+                                        },
+                                        sortBy: { createdAt: -1 },
+                                    },
+                                },
+                                PER_FILE_HISTORY_LIMIT,
+                            ],
+                        },
+                    },
+                },
+                {
+                    $unwind: '$files.suggestions',
+                },
+                {
+                    $replaceRoot: {
+                        newRoot: '$files.suggestions',
+                    },
+                },
+            ])
+            .exec();
+
+        return result;
+    }
+
+    async findPrLevelSuggestionsByPR(
+        prNumber: number,
+        repoFullName: string,
+        organizationId: string,
+        deliveryStatus: DeliveryStatus,
+    ): Promise<ISuggestionByPR[]> {
+        const result = await this.pullRequestsModel
+            .aggregate([
+                {
+                    $match: {
+                        'number': prNumber,
+                        'repository.fullName': repoFullName,
+                        'organizationId': organizationId,
+                    },
+                },
+                // Same accumulation risk as findSuggestionsByPRAndFilenames,
+                // but on the top-level prLevelSuggestions array (one entry
+                // per review round, no per-file bound to begin with) — cap it
+                // the same way, before unwinding. prLevelSuggestions has no
+                // schema default either and only exists on PRs that ever had
+                // a PR-level finding, so guard the same way with $ifNull.
+                {
+                    $addFields: {
+                        prLevelSuggestions: {
+                            $slice: [
+                                {
+                                    $sortArray: {
+                                        input: {
+                                            $filter: {
+                                                input: {
+                                                    $ifNull: [
+                                                        '$prLevelSuggestions',
+                                                        [],
+                                                    ],
+                                                },
+                                                as: 'suggestion',
+                                                cond: {
+                                                    $eq: [
+                                                        '$$suggestion.deliveryStatus',
+                                                        deliveryStatus,
+                                                    ],
+                                                },
+                                            },
+                                        },
+                                        sortBy: { createdAt: -1 },
+                                    },
+                                },
+                                PER_FILE_HISTORY_LIMIT,
+                            ],
+                        },
+                    },
+                },
+                {
+                    $unwind: '$prLevelSuggestions',
+                },
+                {
+                    $replaceRoot: {
+                        newRoot: '$prLevelSuggestions',
                     },
                 },
             ])

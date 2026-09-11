@@ -700,6 +700,121 @@ describe('SandboxLeaseManager', () => {
         expect(result.wasCreated).toBe(true);
     });
 
+    // ─── Reconnect-path git sync (#1313 e2e validation, 2026-09-11) ───────
+    // A reused sandbox's checkout must be brought up to date with the
+    // CURRENT commit before it's handed back — see syncE2BSandboxRepo's
+    // docstring in e2b-sandbox.service.ts for the stale-checkout bug this
+    // closes.
+
+    it('joiner WITH cloneParams syncs the reused sandbox to the current commit', async () => {
+        const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:301';
+        const cloneParams = {
+            cloneUrl: 'https://github.com/org/repo.git',
+            authToken: 'token',
+            branch: 'feature',
+            prNumber: 301,
+            platform: 'GITHUB' as any,
+        };
+
+        leaseRepo.upsertAcquire.mockResolvedValueOnce({
+            _id: prKey,
+            leaseCount: 2,
+            state: 'READY',
+            sandboxId: 'warm-sandbox-id',
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        } as any);
+
+        const run = jest
+            .fn()
+            .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+        (Sandbox.connect as jest.Mock).mockResolvedValueOnce({
+            commands: { run },
+        });
+
+        const result = await manager.acquire(
+            prKey,
+            'review',
+            undefined,
+            cloneParams,
+        );
+
+        expect(result.sandbox).toBeDefined();
+        expect(result.wasCreated).toBe(false);
+        // The sync ran BEFORE the sandbox was handed back — exact command
+        // built by syncE2BSandboxRepo for a PR-mode, authenticated GitHub sync.
+        expect(run).toHaveBeenCalledWith(
+            expect.stringContaining(
+                "git -c http.extraHeader=\"$GIT_AUTH_HEADER\" fetch --depth=1 'https://github.com/org/repo.git' 'refs/pull/301/head' && git checkout -f FETCH_HEAD",
+            ),
+            expect.objectContaining({
+                envs: expect.objectContaining({ GIT_AUTH_HEADER: expect.any(String) }),
+            }),
+        );
+    });
+
+    it('joiner WITHOUT cloneParams never attempts a sync (nothing to sync to)', async () => {
+        const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:302';
+
+        leaseRepo.upsertAcquire.mockResolvedValueOnce({
+            _id: prKey,
+            leaseCount: 2,
+            state: 'READY',
+            sandboxId: 'warm-sandbox-id',
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        } as any);
+
+        const run = jest.fn();
+        (Sandbox.connect as jest.Mock).mockResolvedValueOnce({
+            commands: { run },
+        });
+
+        // No 4th arg — e.g. a non-review consumer that never has clone info.
+        const result = await manager.acquire(prKey, 'graph-build');
+
+        expect(result.sandbox).toBeDefined();
+        expect(run).not.toHaveBeenCalled();
+    });
+
+    it('a failed sync is non-fatal — the reused sandbox is still returned with its stale checkout', async () => {
+        const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:303';
+        const cloneParams = {
+            cloneUrl: 'https://github.com/org/repo.git',
+            authToken: 'token',
+            branch: 'feature',
+            prNumber: 303,
+            platform: 'GITHUB' as any,
+        };
+
+        leaseRepo.upsertAcquire.mockResolvedValueOnce({
+            _id: prKey,
+            leaseCount: 2,
+            state: 'READY',
+            sandboxId: 'warm-sandbox-id',
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        } as any);
+
+        // commands.run itself throws (e.g. transient E2B network error) —
+        // must not propagate and fail the whole acquire.
+        const run = jest.fn().mockRejectedValue(new Error('network blip'));
+        (Sandbox.connect as jest.Mock).mockResolvedValueOnce({
+            commands: { run },
+        });
+
+        const result = await manager.acquire(
+            prKey,
+            'review',
+            undefined,
+            cloneParams,
+        );
+
+        expect(result.sandbox).toBeDefined();
+        expect(result.sandboxId).toBe('warm-sandbox-id');
+        expect(run).toHaveBeenCalledTimes(1);
+    });
+
     // ─── Test 9a: release accepts custom idleMs (review uses 30s) ────────
 
     it('release(leaseId, { idleMs }) overrides the 5min default — review flow uses 30s', async () => {

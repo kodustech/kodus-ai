@@ -20,6 +20,9 @@ import { BackfillHistoricalPRsUseCase } from '@libs/platformData/application/use
 import { PlatformModule } from '@libs/platform/modules/platform.module';
 import { IntegrationConfigCoreModule } from '@libs/integrations/modules/config-core.module';
 import { PlatformCoreModule } from '@libs/platform/modules/platform-core.module'; // Added
+import { PrDecisionStoreService } from '@libs/code-review/infrastructure/adapters/services/pr-decision-store.service';
+import { PR_DECISION_STORE_TOKEN } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
+import { BuildPreviousReviewDecisionsUseCase } from '@libs/code-review/application/use-cases/previousReviewDecisions/build-previous-review-decisions.use-case';
 
 @Module({
     imports: [
@@ -53,6 +56,11 @@ import { PlatformCoreModule } from '@libs/platform/modules/platform-core.module'
         },
         SavePullRequestUseCase,
         BackfillHistoricalPRsUseCase, // Added
+        {
+            provide: PR_DECISION_STORE_TOKEN,
+            useClass: PrDecisionStoreService,
+        },
+        BuildPreviousReviewDecisionsUseCase,
     ],
     exports: [
         CODE_REVIEW_EXECUTION_SERVICE,
@@ -61,6 +69,7 @@ import { PlatformCoreModule } from '@libs/platform/modules/platform-core.module'
         PULL_REQUESTS_SERVICE_TOKEN,
         SavePullRequestUseCase,
         BackfillHistoricalPRsUseCase, // Added
+        BuildPreviousReviewDecisionsUseCase,
     ],
 })
 export class CodeReviewCoreModule {}

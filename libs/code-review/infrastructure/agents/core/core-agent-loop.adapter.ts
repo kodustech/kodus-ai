@@ -222,6 +222,7 @@ export async function runAgentLoopViaCore(
             // HEAVY mode — extra critic pass. Only meaningful when heavy passes
             // run at all (not fast/self-contained); harmless otherwise.
             heavy: !!input.heavy && !skipHeavyPasses,
+            previousDecisions: input.previousDecisions,
             telemetryMetadata: input.telemetryMetadata,
             agentName: input.agentName,
             usageRunName: input.usageRunName,

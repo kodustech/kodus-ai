@@ -23,6 +23,7 @@ import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/servic
 import type { RepoLookup } from '@libs/code-review/infrastructure/agents/collaborators/repo-lookup';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import type { TraceContextDecision } from '@libs/cli-review/domain/types/trace-context.types';
+import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 
 import { BYOKProvider } from '@libs/llm/model-providers';
 import type { NormalizedModel } from '@libs/llm/byok-config';
@@ -165,6 +166,10 @@ export interface ReviewRuleConfig {
      * current implementation is correct.
      */
     traceDecisions?: TraceContextDecision[];
+    /** Suggestions already posted on THIS PR in a previous review round, scoped
+     *  to the changed files (issue #1313). Historical evidence, never proof the
+     *  current code is correct — same discipline as `traceDecisions`. */
+    previousDecisions?: PrDecisionRecord[];
     /** Kody rules passed through so findings tagged with ruleUuid can be cross-referenced. */
     kodyRules?: Partial<IKodyRule>[];
     v2PromptOverrides?: CodeReviewConfig['v2PromptOverrides'];
@@ -382,6 +387,13 @@ export interface AgentLoopInput {
      *  agents where rules are explicit and synthesis just re-words the
      *  same findings, leading to dedup churn and duplicate comments. */
     skipSynthesisRescue?: boolean;
+    /** Suggestions already posted on THIS PR in a previous review round
+     *  (issue #1313). Threaded down to the verifier so it can refute a
+     *  finding that contradicts a decision already applied — the finder's
+     *  own system/user prompts already have their copy baked into
+     *  `systemPrompt`/`userPrompt` above (see `formatPreviousDecisions` in
+     *  prompt-builder.ts), so this field exists ONLY for the verifier hop. */
+    previousDecisions?: PrDecisionRecord[];
     /** Reasoning effort level from BYOK config. Mapped to provider-specific
      *  providerOptions (anthropic.thinking, google.thinkingConfig, etc). */
     reasoningEffort?: ReasoningEffort;

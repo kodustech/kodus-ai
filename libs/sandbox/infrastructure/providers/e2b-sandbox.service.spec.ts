@@ -29,7 +29,9 @@ import { CommandExitError } from 'e2b';
 import {
     E2BSandboxService,
     buildE2BRemoteCommands,
+    syncE2BSandboxRepo,
 } from './e2b-sandbox.service';
+import type { CreateSandboxParams } from '@libs/sandbox/domain/contracts/sandbox.provider';
 
 const REPO_DIR = '/home/user/repo';
 
@@ -533,5 +535,159 @@ describe('E2BSandboxService.buildRemoteCommands', () => {
         expect(run).toHaveBeenCalledWith(`cat '${REPO_DIR}/src/a.ts'`, {
             timeoutMs: 10_000,
         });
+    });
+});
+
+// ---------------------------------------------------------------------------
+// E2BSandboxService.getPrRefspec (private, exercised via the instance so the
+// delegation to the standalone resolvePrRefspec is proven, not assumed)
+// ---------------------------------------------------------------------------
+describe('E2BSandboxService.getPrRefspec', () => {
+    const service = new E2BSandboxService({} as any);
+    const refspec = (
+        platform: PlatformType,
+        prNumber: number,
+        cloneUrl: string,
+        branch: string,
+    ) =>
+        (service as any).getPrRefspec(
+            platform,
+            prNumber,
+            cloneUrl,
+            branch,
+        ) as string;
+
+    it('GitHub: refs/pull/<n>/head', () => {
+        expect(refspec(PlatformType.GITHUB, 42, 'https://github.com/a/b', 'main')).toBe(
+            'refs/pull/42/head',
+        );
+    });
+
+    it('GitLab: refs/merge-requests/<n>/head', () => {
+        expect(refspec(PlatformType.GITLAB, 7, 'https://gitlab.com/a/b', 'main')).toBe(
+            'refs/merge-requests/7/head',
+        );
+    });
+
+    it('Bitbucket Cloud: falls back to refs/heads/<branch> (no PR refspec on cloud)', () => {
+        expect(
+            refspec(PlatformType.BITBUCKET, 3, 'https://bitbucket.org/a/b', 'feat/x'),
+        ).toBe('refs/heads/feat/x');
+    });
+
+    it('Bitbucket Server (self-hosted, non-bitbucket.org host): refs/pull-requests/<n>/from', () => {
+        expect(
+            refspec(PlatformType.BITBUCKET, 3, 'https://bitbucket.internal.corp/a/b', 'feat/x'),
+        ).toBe('refs/pull-requests/3/from');
+    });
+
+    it('Azure Repos: refs/pull/<n>/merge', () => {
+        expect(
+            refspec(PlatformType.AZURE_REPOS, 5, 'https://dev.azure.com/a/b', 'main'),
+        ).toBe('refs/pull/5/merge');
+    });
+
+    it('falls back to refs/pull/<n>/head for any unlisted platform', () => {
+        expect(
+            refspec(PlatformType.FORGEJO, 9, 'https://forgejo.example/a/b', 'main'),
+        ).toBe('refs/pull/9/head');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// syncE2BSandboxRepo — the reconnect-path fix (#1313 e2e validation):
+// bring a REUSED sandbox's checkout up to date with the current commit.
+// ---------------------------------------------------------------------------
+describe('syncE2BSandboxRepo', () => {
+    const makeSandbox = (run: jest.Mock) => ({ commands: { run } }) as any;
+    const baseParams: CreateSandboxParams = {
+        cloneUrl: 'https://github.com/kodustech/kodus-ai',
+        authToken: 'tok123',
+        branch: 'feature/x',
+        prNumber: 44,
+        platform: PlatformType.GITHUB,
+    };
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    it('fetches the PR refspec and force-checks-out FETCH_HEAD, with the auth header', async () => {
+        const run = jest
+            .fn()
+            .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+        await syncE2BSandboxRepo(makeSandbox(run), baseParams);
+
+        expect(run).toHaveBeenCalledTimes(1);
+        const [command, opts] = run.mock.calls[0];
+        expect(command).toBe(
+            `cd ${REPO_DIR} && git -c http.extraHeader="$GIT_AUTH_HEADER" fetch --depth=1 'https://github.com/kodustech/kodus-ai' 'refs/pull/44/head' && git checkout -f FETCH_HEAD`,
+        );
+        expect(opts.envs.GIT_AUTH_HEADER).toBe(
+            `Authorization: Basic ${Buffer.from('x-access-token:tok123').toString('base64')}`,
+        );
+    });
+
+    it('omits the auth header entirely for an anonymous (public repo) sync', async () => {
+        const run = jest
+            .fn()
+            .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+        await syncE2BSandboxRepo(
+            makeSandbox(run),
+            { ...baseParams, authToken: '' },
+        );
+
+        const [command, opts] = run.mock.calls[0];
+        expect(command).toBe(
+            `cd ${REPO_DIR} && git fetch --depth=1 'https://github.com/kodustech/kodus-ai' 'refs/pull/44/head' && git checkout -f FETCH_HEAD`,
+        );
+        expect(opts.envs).toBeUndefined();
+    });
+
+    it('falls back to refs/heads/<branch> when there is no prNumber (branch-based review)', async () => {
+        const run = jest
+            .fn()
+            .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+        await syncE2BSandboxRepo(makeSandbox(run), {
+            ...baseParams,
+            prNumber: undefined,
+        });
+
+        const [command] = run.mock.calls[0];
+        expect(command).toContain(`'refs/heads/feature/x'`);
+    });
+
+    it('is non-fatal on a failed fetch — logs a warning instead of throwing, leaving the stale checkout in place', async () => {
+        const run = jest.fn().mockResolvedValue({
+            stdout: '',
+            stderr: 'fatal: could not read from remote',
+            exitCode: 128,
+        });
+        const warn = jest.fn();
+
+        await expect(
+            syncE2BSandboxRepo(makeSandbox(run), baseParams, {
+                logger: { warn, log: jest.fn() } as any,
+            }),
+        ).resolves.toBeUndefined();
+
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0][0].message).toContain('git sync failed');
+    });
+
+    it('logs success (not warn) when the sync succeeds', async () => {
+        const run = jest
+            .fn()
+            .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+        const warn = jest.fn();
+        const log = jest.fn();
+
+        await syncE2BSandboxRepo(makeSandbox(run), baseParams, {
+            logger: { warn, log } as any,
+        });
+
+        expect(warn).not.toHaveBeenCalled();
+        expect(log).toHaveBeenCalledTimes(1);
+        expect(log.mock.calls[0][0].message).toContain('synced reused sandbox');
     });
 });

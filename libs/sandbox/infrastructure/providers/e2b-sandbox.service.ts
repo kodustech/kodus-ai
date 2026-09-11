@@ -209,6 +209,147 @@ export function buildE2BRemoteCommands(
     };
 }
 
+/** Standalone so `syncE2BSandboxRepo` (reconnect path) and the instance
+ *  method (create path) can never drift — same reasoning as
+ *  `buildE2BRemoteCommands` above. */
+function resolvePrRefspec(
+    platform: PlatformType,
+    prNumber: number,
+    cloneUrl: string,
+    branch: string,
+): string {
+    switch (platform) {
+        case PlatformType.GITHUB:
+            return `refs/pull/${prNumber}/head`;
+        case PlatformType.GITLAB:
+            return `refs/merge-requests/${prNumber}/head`;
+        case PlatformType.BITBUCKET: {
+            const isCloud = /(^|\/\/|\.)bitbucket\.org(\/|$)/i.test(cloneUrl);
+            return isCloud
+                ? `refs/heads/${branch}`
+                : `refs/pull-requests/${prNumber}/from`;
+        }
+        case PlatformType.AZURE_REPOS:
+            return `refs/pull/${prNumber}/merge`;
+        default:
+            return `refs/pull/${prNumber}/head`;
+    }
+}
+
+/** Standalone so it can be shared with `syncE2BSandboxRepo` — see
+ *  `resolvePrRefspec` above for the same reasoning. */
+function buildGitAuthHeader(
+    platform: PlatformType,
+    token: string,
+    username?: string,
+): string {
+    switch (platform) {
+        case PlatformType.GITHUB:
+            return `Authorization: Basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`;
+        case PlatformType.BITBUCKET: {
+            const gitUsername = token.startsWith('ATATT')
+                ? 'x-bitbucket-api-token-auth'
+                : username;
+            if (!gitUsername) {
+                throw new Error(
+                    'Bitbucket authentication requires a username (app password) or an Atlassian API token, but neither was provided.',
+                );
+            }
+            return `Authorization: Basic ${Buffer.from(`${gitUsername}:${token}`).toString('base64')}`;
+        }
+        case PlatformType.GITLAB:
+        case PlatformType.AZURE_REPOS:
+            return `Authorization: Basic ${Buffer.from(`oauth2:${token}`).toString('base64')}`;
+        default:
+            return `Authorization: Basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`;
+    }
+}
+
+export interface SyncE2BSandboxRepoOptions {
+    logger?: SimpleLogger;
+    logContext?: string;
+    timeoutMs?: number;
+}
+
+/**
+ * Bring an EXISTING sandbox's repo checkout up to date with the CURRENT
+ * commit before it is reused for a new review round (SandboxLeaseManager's
+ * reconnect/joiner path — see `buildE2BRemoteCommands`'s docstring for why
+ * that path gets single-source-of-truth helpers).
+ *
+ * Without this, a sandbox paused after round 1 and resumed for round 2 keeps
+ * round 1's git checkout forever — `readFile`/`grep` inside the sandbox see
+ * the OLD commit while the diff/PreviousReviewDecisions context correctly
+ * describes the NEW one. Observed live: the agent read the pre-fix content
+ * of an already-fixed file and "file not found" for a file introduced only
+ * in the new commit, got confused by the contradiction, and silently
+ * dropped both a duplicate and a genuinely new, unrelated finding — a
+ * false negative unrelated to any prompt/memory logic, purely a stale
+ * working tree (#1313 e2e validation, 2026-09-11).
+ *
+ * `git fetch` + `checkout -f FETCH_HEAD` intentionally discards anything the
+ * previous round's agent may have left in the working tree — the ONLY
+ * source of truth for round N's review is round N's commit.
+ */
+export async function syncE2BSandboxRepo(
+    sandbox: Sandbox,
+    params: CreateSandboxParams,
+    opts: SyncE2BSandboxRepoOptions = {},
+): Promise<void> {
+    const { cloneUrl, authToken, authUsername, branch, prNumber, platform } =
+        params;
+    const { logger, logContext, timeoutMs = TIMEOUTS.CLONE_MS } = opts;
+
+    const refspec =
+        prNumber != null
+            ? resolvePrRefspec(platform, prNumber, cloneUrl, branch)
+            : `refs/heads/${branch}`;
+
+    const hasAuth = !!authToken;
+    const authHeader = hasAuth
+        ? buildGitAuthHeader(platform, authToken, authUsername)
+        : '';
+
+    const safeCloneUrl = shSingleQuote(cloneUrl);
+    const safeRefspec = shSingleQuote(refspec);
+
+    const fetchCmd = hasAuth
+        ? `git -c http.extraHeader="$GIT_AUTH_HEADER" fetch --depth=1 ${safeCloneUrl} ${safeRefspec}`
+        : `git fetch --depth=1 ${safeCloneUrl} ${safeRefspec}`;
+
+    const result = await sandbox.commands.run(
+        [`cd ${REPO_DIR}`, fetchCmd, `git checkout -f FETCH_HEAD`].join(
+            ' && ',
+        ),
+        {
+            timeoutMs,
+            ...(hasAuth && { envs: { GIT_AUTH_HEADER: authHeader } }),
+        },
+    );
+
+    if (result.exitCode !== 0) {
+        // Non-fatal: the reused sandbox falls back to its stale checkout
+        // (same behavior as before this fix existed) rather than failing
+        // the whole review over a sync hiccup.
+        logger?.warn?.({
+            message: `[DEBUG] syncE2BSandboxRepo: git sync failed (exit=${result.exitCode}), sandbox keeps its previous checkout`,
+            context: logContext ?? 'syncE2BSandboxRepo',
+            metadata: {
+                exitCode: result.exitCode,
+                stderr: result.stderr?.slice(0, 500),
+                refspec,
+            },
+        });
+        return;
+    }
+
+    logger?.log?.({
+        message: `[DEBUG] syncE2BSandboxRepo: synced reused sandbox to refspec=${refspec}`,
+        context: logContext ?? 'syncE2BSandboxRepo',
+        metadata: { refspec },
+    });
+}
+
 @Injectable()
 export class E2BSandboxService implements ISandboxProvider {
     private readonly logger = createLogger(E2BSandboxService.name);
@@ -752,34 +893,12 @@ export class E2BSandboxService implements ISandboxProvider {
         token: string,
         username?: string,
     ): string {
-        // Git http.extraHeader sends an Authorization header — token never embedded in URLs
-        switch (platform) {
-            case PlatformType.GITHUB:
-                return `Authorization: Basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`;
-            case PlatformType.BITBUCKET: {
-                // Bitbucket git-over-HTTPS auth differs from the REST API.
-                // Atlassian API tokens (ATATT…, the scheme that replaces app
-                // passwords) authenticate to git ONLY with the literal
-                // username `x-bitbucket-api-token-auth` — the REST API accepts
-                // <email>:<token>, but git rejects that pair (→ "could not
-                // read Username"). Classic app passwords keep using the
-                // Bitbucket account username. See #1168.
-                const gitUsername = token.startsWith('ATATT')
-                    ? 'x-bitbucket-api-token-auth'
-                    : username;
-                if (!gitUsername) {
-                    throw new Error(
-                        'Bitbucket authentication requires a username (app password) or an Atlassian API token, but neither was provided.',
-                    );
-                }
-                return `Authorization: Basic ${Buffer.from(`${gitUsername}:${token}`).toString('base64')}`;
-            }
-            case PlatformType.GITLAB:
-            case PlatformType.AZURE_REPOS:
-                return `Authorization: Basic ${Buffer.from(`oauth2:${token}`).toString('base64')}`;
-            default:
-                return `Authorization: Basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`;
-        }
+        // Bitbucket's #1168 nuance (ATATT tokens need the literal username
+        // `x-bitbucket-api-token-auth`, not the account username) lives in
+        // the standalone `buildGitAuthHeader` now — see it for the full
+        // rationale. Delegates so this and `syncE2BSandboxRepo` can never
+        // drift, same reasoning as `buildE2BRemoteCommands`.
+        return buildGitAuthHeader(platform, token, username);
     }
 
     private getPrRefspec(
@@ -788,24 +907,9 @@ export class E2BSandboxService implements ISandboxProvider {
         cloneUrl: string,
         branch: string,
     ): string {
-        switch (platform) {
-            case PlatformType.GITHUB:
-                return `refs/pull/${prNumber}/head`;
-            case PlatformType.GITLAB:
-                return `refs/merge-requests/${prNumber}/head`;
-            case PlatformType.BITBUCKET: {
-                const isCloud = /(^|\/\/|\.)bitbucket\.org(\/|$)/i.test(
-                    cloneUrl,
-                );
-                return isCloud
-                    ? `refs/heads/${branch}`
-                    : `refs/pull-requests/${prNumber}/from`;
-            }
-            case PlatformType.AZURE_REPOS:
-                return `refs/pull/${prNumber}/merge`;
-            default:
-                return `refs/pull/${prNumber}/head`;
-        }
+        // Delegates to the standalone `resolvePrRefspec` so the create path
+        // and `syncE2BSandboxRepo` (reconnect path) can never drift.
+        return resolvePrRefspec(platform, prNumber, cloneUrl, branch);
     }
 
     private buildRemoteCommands(sandbox: Sandbox): RemoteCommands {

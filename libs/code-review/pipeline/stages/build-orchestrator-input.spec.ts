@@ -82,6 +82,26 @@ describe('buildOrchestratorInput — context→agent wiring', () => {
         expect(input.traceDecisions).toBe(traceDecisions);
     });
 
+    it('forwards the exact previous review decisions into the agent input (issue #1313)', () => {
+        const previousDecisions = [
+            {
+                suggestionId: 'sug-1',
+                relevantFile: 'src/payments/index.ts',
+                suggestionContent: 'Use const instead of let.',
+                label: 'bug',
+                outcome: 'implemented' as const,
+                decidedAt: '2026-01-01T00:00:00.000Z',
+            },
+        ];
+
+        const input = buildOrchestratorInput(
+            makeContext({ previousDecisions }),
+            computed,
+        );
+
+        expect(input.previousDecisions).toBe(previousDecisions);
+    });
+
     it('defaults reviewMode to normal when unset', () => {
         expect(
             buildOrchestratorInput(makeContext(), computed).reviewMode,
