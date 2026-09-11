@@ -270,6 +270,62 @@ describe('AxiosLicenseService request signing', () => {
         );
     });
 
+    /**
+     * The strongest form of this test: ask AXIOS ITSELF what the URL will be
+     * and require the signed query to be the canonical form of exactly that.
+     * It pins the pairs axios keeps and drops (`null` and `undefined` go, an
+     * empty string stays, arrays become `key[]`) without this spec having to
+     * restate those rules — if a future axios changes them, this goes red.
+     */
+    it.each([
+        {
+            name: 'a null param (axios drops it)',
+            params: { organizationId: 'o', teamId: null },
+        },
+        {
+            name: 'an undefined param',
+            params: { organizationId: 'o', teamId: undefined },
+        },
+        {
+            name: 'an EMPTY-STRING param (axios keeps it)',
+            params: { organizationId: 'o', teamId: '' },
+        },
+        {
+            name: 'array params',
+            params: { organizationId: 'o', types: ['purchase', 'debit'] },
+        },
+        {
+            name: 'params out of order',
+            params: { teamId: 't', organizationId: 'o' },
+        },
+        { name: 'a numeric param', params: { organizationId: 'o', limit: 25 } },
+    ])(
+        'signs exactly what axios puts on the wire: $name',
+        async ({ params }) => {
+            const uri = axios.getUri({
+                url: 'http://billing/api/billing/credits/ledger',
+                params,
+            });
+            const wireQuery = uri.slice(uri.indexOf('?') + 1);
+
+            const headers = await runInterceptor({
+                method: 'get',
+                url: 'credits/ledger',
+                params,
+            });
+
+            expect(headers[BILLING_SIGNATURE_HEADER]).toBe(
+                billingSignatureHeaders({
+                    secret: GOLDEN_SECRET,
+                    method: 'GET',
+                    path: '/api/billing/credits/ledger',
+                    query: wireQuery,
+                    now: Number(headers[BILLING_TIMESTAMP_HEADER]),
+                })[BILLING_SIGNATURE_HEADER],
+            );
+        },
+    );
+
     it('sends no signature when no secret is configured', async () => {
         delete process.env.API_BILLING_WEBHOOK_SECRET;
         const headers = await runInterceptor({

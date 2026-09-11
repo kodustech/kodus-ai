@@ -202,6 +202,26 @@ describe("billingFetch signs what it sends", () => {
         );
     });
 
+    it("passes a form body through untouched on an unsigned route", async () => {
+        const { billingFetch } = await import("./utils");
+        const form = new URLSearchParams({ a: "1" });
+        await billingFetch("plans", { method: "POST", body: form } as never);
+        const [, config] = typedFetchMock.mock.calls[0];
+        // Not replaced by "{}" — the payload survives.
+        expect(config.body).toBe(form);
+    });
+
+    it("refuses a body it cannot sign on a credit route", async () => {
+        const { billingFetch } = await import("./utils");
+        await expect(
+            billingFetch("credits/checkout", {
+                method: "POST",
+                body: new URLSearchParams({ creditUsd: "20" }),
+            } as never),
+        ).rejects.toThrow(/cannot be signed/);
+        expect(typedFetchMock).not.toHaveBeenCalled();
+    });
+
     it("says so, loudly, when no secret is configured", async () => {
         delete process.env.API_BILLING_WEBHOOK_SECRET;
         const error = jest

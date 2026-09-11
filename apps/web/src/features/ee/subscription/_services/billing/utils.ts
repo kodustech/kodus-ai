@@ -45,16 +45,43 @@ const withSignature = <
     config?: C,
 ): C => {
     const signedTarget = addSearchParamsToUrl(path, config?.params);
-    // Sign the bytes that will be SENT. A non-string body is serialized here
-    // and put back on the config, so `fetch` transmits the same string that
-    // was signed — passing an object through would otherwise sign "" and send
-    // a coerced payload, and billing's 401 becomes a silent null.
+    const body = config?.body;
+    // Sign the bytes that will be SENT. A plain object is serialized here and
+    // put back on the config, so `fetch` transmits the same string that was
+    // signed — passing it through would otherwise sign "" and send a coerced
+    // payload, and billing's 401 becomes a silent null.
+    //
+    // A streamed or form body (FormData, URLSearchParams, Blob, a stream)
+    // cannot be signed: there are no bytes to hash here, and serializing it
+    // would replace the payload with "{}". No credit route takes one, so
+    // rather than send something that is quietly wrong, say so.
+    const isPlainJson =
+        body !== undefined &&
+        body !== null &&
+        typeof body !== "string" &&
+        (Array.isArray(body) ||
+            Object.getPrototypeOf(body) === Object.prototype ||
+            Object.getPrototypeOf(body) === null);
+    const isUnsignable =
+        body !== undefined &&
+        body !== null &&
+        typeof body !== "string" &&
+        !isPlainJson;
+    if (isUnsignable && /(^|\/)credits(\/|$)/.test(signedTarget)) {
+        throw new Error(
+            `billing: a ${
+                (body as object)?.constructor?.name ?? typeof body
+            } body cannot be signed for ${signedTarget} — send JSON to the credit routes`,
+        );
+    }
     const rawBody =
-        config?.body === undefined || config?.body === null
+        body === undefined || body === null
             ? ""
-            : typeof config.body === "string"
-              ? config.body
-              : JSON.stringify(config.body);
+            : typeof body === "string"
+              ? body
+              : isPlainJson
+                ? JSON.stringify(body)
+                : "";
     const extra = billingSignatureHeader(
         config?.method ?? "GET",
         signedTarget,
@@ -63,7 +90,9 @@ const withSignature = <
     if (Object.keys(extra).length === 0) return (config ?? {}) as C;
     return {
         ...((config ?? {}) as C),
-        ...(rawBody === "" ? {} : { body: rawBody }),
+        // Only a body this function serialized is replaced; anything else is
+        // passed through exactly as the caller built it.
+        ...(isPlainJson ? { body: rawBody } : {}),
         headers: {
             ...((config?.headers as Record<string, string>) ?? {}),
             ...extra,
@@ -100,14 +129,19 @@ export const billingFetch = async <Data>(
         url = `/api/proxy/billing${normalized}`;
     }
 
+    // `/credits/*` on billing requires the shared service token (money
+    // routes; the browser proxy denies them outright). Only the server-side
+    // branch can carry it — `isServerSide` above. Signing happens OUTSIDE the
+    // catch on purpose: the catch is there to turn a failed request into
+    // `null` for read paths, and a body that cannot be signed is a bug in the
+    // caller, not a failed request. Swallowing it would produce exactly the
+    // silent null this whole signature is meant to make impossible.
+    const signed = isServerSide
+        ? withSignature(_url.toString(), config)
+        : config;
+
     try {
-        // `/credits/*` on billing requires the shared service token (money
-        // routes; the browser proxy denies them outright). Only the
-        // server-side branch can carry it — `isServerSide` above.
-        return typedFetch(
-            url,
-            isServerSide ? withSignature(_url.toString(), config) : config,
-        );
+        return typedFetch(url, signed);
     } catch {
         return null as Data;
     }
