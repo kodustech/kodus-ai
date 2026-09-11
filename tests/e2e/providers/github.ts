@@ -293,10 +293,18 @@ export class GitHubProvider extends BaseProvider {
                 (opts.path === undefined || c.path === opts.path) &&
                 isRealReview(c.body ?? ''),
         );
-        const issueLevel = this.listOrThrow(
-            issueComments,
-            'github:listReviewCommentBodies:issueComments',
-        ).filter((c) => isRealReview(c.body ?? ''));
+        // Issue/PR-level comments are never anchored to a file — when the
+        // caller scopes the query to a path, only inline comments can match
+        // it, so issue-level comments (things like the generic "Code Review
+        // Completed!" wrap-up, which classifyKodyComment reads as 'review')
+        // must be excluded entirely rather than always tagging along.
+        const issueLevel =
+            opts.path === undefined
+                ? this.listOrThrow(
+                      issueComments,
+                      'github:listReviewCommentBodies:issueComments',
+                  ).filter((c) => isRealReview(c.body ?? ''))
+                : [];
 
         return [...inline, ...issueLevel].map((c) => c.body ?? '');
     }

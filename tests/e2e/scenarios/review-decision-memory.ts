@@ -24,18 +24,45 @@ const BUGGY_CONTENT = `export function getUserName(user: { name: string } | null
 }
 `;
 
-// The deterministic, "correct" fix — hardcoded here, NOT derived from
-// whatever Kody's actual round-1 suggestion said. Round 1 only needs to
-// prove Kody flagged *something* on this file (assert findings > 0); round
-// 2 is judged against this fixed reference, not against Kody's own words,
-// so the scenario can't be gamed by an LLM that reworded the fix.
-const FIXED_CONTENT = `export function getUserName(user: { name: string } | null): string {
-    if (!user) {
-        return '';
-    }
-    return user.name;
+// A SECOND, unrelated throwaway file introduced in the SAME round-2 commit
+// as the applied fix (see below). Its only purpose is a quality-regression
+// guard: PreviousReviewDecisions in the prompt must only suppress
+// contradicting the ALREADY-decided fixture, never suppress a genuinely new,
+// unrelated finding elsewhere in the same diff. Same bug shape as
+// BUGGY_CONTENT (missing null-check) because that shape has proven reliable
+// across every real run of this scenario so far — a different function,
+// unrelated to the fixture's decision history, so the check isolates
+// "does memory over-suppress new findings" from anything decision-specific.
+const QUALITY_CHECK_PATH = 'src/e2e-decision-memory-quality-check.ts';
+
+const QUALITY_CHECK_BUGGY_CONTENT = `export function getFirstChar(text: string | null): string {
+    return text.charAt(0);
 }
 `;
+
+// Kody's suggestion comments render the replacement as the FIRST fenced
+// code block in the body (a second, redundant one lives inside the
+// "Prompt for LLM" <details> section further down) — e.g.:
+//   ```undefined
+//   export function getUserName(user: { name: string } | null): string {
+//       return user ? user.name : '';
+//   }
+//   ```
+//   <details><summary>Prompt for LLM</summary> ... </details>
+// Matching greedily-but-non-greedy up to the FIRST closing fence lands on
+// that first block and never the <details> copy.
+const CODE_BLOCK_PATTERN = /```[^\n]*\n([\s\S]*?)```/;
+
+/** Exported for unit testing. Extracts the code Kody actually suggested
+ *  from a round-1 comment body, so the "developer applies it" step in this
+ *  scenario applies the REAL suggestion — not an equivalent fix we wrote
+ *  ourselves — matching how a developer actually uses Kody in practice. */
+export function extractSuggestedCode(body: string): string | null {
+    const match = body.match(CODE_BLOCK_PATTERN);
+    if (!match) return null;
+    const code = match[1].trim();
+    return code.length > 0 ? `${code}\n` : null;
+}
 
 // A round-2 comment on this file matching any of these means Kody suggested
 // UNDOING the applied fix — the exact #1313 symptom (contradicting a
@@ -135,15 +162,52 @@ export const reviewDecisionMemory: Scenario = {
                 pr.number,
             );
 
-            // ---- Apply the fix for real, push a genuine 2nd commit ----
+            // ---- Extract Kody's REAL suggestion and apply it verbatim ----
+            const round1Bodies = await ctx.provider.listReviewCommentBodies!(
+                { number: pr.number },
+                { sinceIso: sinceIsoRound1, path: FIXTURE_PATH },
+            );
+            const suggestedFix = round1Bodies
+                .map(extractSuggestedCode)
+                .find((code): code is string => code !== null);
+            ctx.assert(
+                suggestedFix !== undefined,
+                `Round 1 flagged the bug on ${FIXTURE_PATH} but none of its ${round1Bodies.length} ` +
+                    `comment(s) contained a parseable suggested-code block — can't apply a real fix. ` +
+                    `Comment(s):\n${round1Bodies.map((c) => `---\n${c.slice(0, 500)}`).join('\n')}`,
+            );
+
+            // ---- Apply the fix for real, push a genuine 2nd commit.
+            // Bundles a second, unrelated buggy file in with the fix — see
+            // QUALITY_CHECK_PATH's comment above for why. ----
             const sinceIsoRound2 = new Date().toISOString();
             await ctx.provider.pushFollowupCommit!(
                 pr,
-                { [FIXTURE_PATH]: FIXED_CONTENT },
-                '[e2e] apply the suggested null-check fix',
+                {
+                    [FIXTURE_PATH]: suggestedFix!,
+                    [QUALITY_CHECK_PATH]: QUALITY_CHECK_BUGGY_CONTENT,
+                },
+                '[e2e] apply Kody\'s suggested fix verbatim + introduce an unrelated bug',
             );
 
-            // ---- Round 2: wait for a SECOND execution row, not just any settle ----
+            // ---- Round 2: wait for a SECOND execution row that has actually
+            // FINISHED, not just appeared. `countExecutions` counts a row the
+            // instant it exists — including `pending`/`in_progress` — so
+            // `count >= 2` alone goes green while round 2's agent is still
+            // mid-run, and every read taken right after (comments, contradiction
+            // check, the quality-check assertion below) would be reading STALE
+            // round-1 state or a still-empty round 2. `findExecutionStatus` is
+            // documented to be no better here: "success anywhere wins" means it
+            // would report round 1's success even with round 2 still in flight.
+            // Read the newest row directly and require ITS status to be
+            // terminal (API returns newest-first, confirmed against this same
+            // endpoint throughout this session's manual verification). ----
+            const TERMINAL_STATUSES = new Set([
+                'success',
+                'error',
+                'partial_error',
+                'skipped',
+            ]);
             const executionsAfterRound2 = await pollUntil<number>(
                 async () => {
                     const resp = await http<any>(
@@ -157,14 +221,25 @@ export const reviewDecisionMemory: Scenario = {
                     );
                     ensureOk(resp, 'executions:list:round2');
                     const count = countExecutions(resp.body, pr.number);
-                    return count >= 2 ? count : null;
+                    if (count < 2) return null;
+                    const entries: Array<{
+                        automationExecution?: { status?: string };
+                    }> = resp.body?.data?.data ?? [];
+                    const latestStatus = entries[0]?.automationExecution?.status;
+                    if (!latestStatus || !TERMINAL_STATUSES.has(latestStatus)) {
+                        return null;
+                    }
+                    return count;
                 },
                 { intervalSec: 10, timeoutSec: 1500 },
             );
             ctx.assert(
                 executionsAfterRound2 !== null,
-                `Pushing a real follow-up commit to PR #${pr.number} never produced a 2nd automation execution row within 1500s — the review pipeline may not have re-triggered on the new commit.`,
+                `Pushing a real follow-up commit to PR #${pr.number} never produced a 2nd automation execution row that reached a terminal status within 1500s — the review pipeline may not have re-triggered on the new commit, or is stuck in_progress.`,
             );
+            // Let the comment-delivery side catch up to the now-terminal
+            // execution — mirrors assertHealthyExecution's own settle gap.
+            await new Promise((resolve) => setTimeout(resolve, 5_000));
 
             const round2Bodies = await ctx.provider.listReviewCommentBodies!(
                 { number: pr.number },
@@ -180,6 +255,21 @@ export const reviewDecisionMemory: Scenario = {
                     `Offending comment(s):\n${contradictions.map((c) => `---\n${c.slice(0, 500)}`).join('\n')}`,
             );
 
+            // ---- Quality-regression guard: memory must not suppress a
+            // genuinely new, unrelated finding bundled into the same commit ----
+            const qualityCheckBodies = await ctx.provider.listReviewCommentBodies!(
+                { number: pr.number },
+                { sinceIso: sinceIsoRound2, path: QUALITY_CHECK_PATH },
+            );
+            ctx.assert(
+                qualityCheckBodies.length > 0,
+                `Round 2 found 0 comment(s) on ${QUALITY_CHECK_PATH}, a brand-new deliberate ` +
+                    `missing-null-check bug bundled into the SAME commit as the fix — this file has ` +
+                    `no prior decision history, so PreviousReviewDecisions context must not have ` +
+                    `suppressed it. Any decent LLM should flag it independent of memory; 0 findings ` +
+                    `means the memory feature is over-suppressing unrelated new findings.`,
+            );
+
             return {
                 prNumber: pr.number,
                 prUrl: pr.url,
@@ -192,6 +282,7 @@ export const reviewDecisionMemory: Scenario = {
                     executions: executionsAfterRound2,
                     commentsOnFixtureFile: round2Bodies.length,
                     contradictions: contradictions.length,
+                    commentsOnQualityCheckFile: qualityCheckBodies.length,
                 },
             };
         } finally {
