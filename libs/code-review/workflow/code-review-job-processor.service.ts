@@ -225,12 +225,31 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 metadata: this.removeByokConcurrencyGateMetadata(job.metadata),
             });
 
+            // A local controller mirrors the parent signal and can ALSO be
+            // aborted when the lease is lost: two consecutive renewal failures
+            // mean this worker may no longer own the job (the reaper is free to
+            // reclaim a lease older than the TTL), so we stop running it rather
+            // than race the reaper toward a double execution (#1830 review).
+            const runController = new AbortController();
+            const abortRun = () => runController.abort(signal?.reason);
+            if (signal) {
+                if (signal.aborted) {
+                    runController.abort(signal.reason);
+                } else {
+                    signal.addEventListener('abort', abortRun, { once: true });
+                }
+            }
+            const runSignal = runController.signal;
+
             // Renew the lease on a ~30s cadence for as long as the review
             // runs. A killed worker (OOM, ECS eviction, kill -9) cannot renew,
             // so its lease lapses and the reaper reclaims instead of waiting
             // out the 180-min in-process timeout that dies with the process.
             const leaseRenewal = startJobLeaseRenewal({
-                signal,
+                signal: runSignal,
+                logger: this.logger,
+                jobId,
+                organizationId: organizationAndTeamData?.organizationId,
                 renew: () =>
                     this.jobRepository.update(jobId, {
                         leaseOwner: this.instanceId,
@@ -249,6 +268,24 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                             instanceId: this.instanceId,
                         },
                     }),
+                onLeaseLost: (error) => {
+                    this.logger.error({
+                        message:
+                            'Job lease lost after repeated renewal failures — aborting the run so the reaper can reclaim it without a double execution',
+                        context: CodeReviewJobProcessorService.name,
+                        error:
+                            error instanceof Error
+                                ? error
+                                : new Error(String(error)),
+                        metadata: {
+                            jobId,
+                            instanceId: this.instanceId,
+                            organizationId:
+                                organizationAndTeamData?.organizationId,
+                        },
+                    });
+                    runController.abort(new Error('Job lease lost'));
+                },
             });
 
             // Race the use-case against the parent's AbortSignal. The use
@@ -271,12 +308,15 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                             teamAutomationId,
                             workflowJobId: jobId,
                         },
-                        signal,
+                        runSignal,
                     ),
-                    signal,
+                    runSignal,
                 );
             } finally {
                 leaseRenewal.stop();
+                if (signal) {
+                    signal.removeEventListener('abort', abortRun);
+                }
             }
 
             await this.markCompleted(jobId);

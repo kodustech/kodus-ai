@@ -336,13 +336,30 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
         try {
             const result = await this.repository
                 .createQueryBuilder()
-                .select(['uuid', 'workflowType', 'organizationId', 'startedAt', 'leaseExpiresAt', 'retryCount', 'maxRetries'])
+                // Columns are quoted and alias-qualified: unquoted mixed-case
+                // identifiers are folded to lowercase by Postgres, so a bare
+                // `workflowType` selects `workflowtype` and errors out.
+                .select([
+                    'job."uuid"',
+                    'job."workflowType"',
+                    'job."organizationId"',
+                    'job."startedAt"',
+                    'job."leaseExpiresAt"',
+                    'job."retryCount"',
+                    'job."maxRetries"',
+                ])
                 .from(WorkflowJobModel, 'job')
                 .where('job.status = :status', { status: JobStatus.PROCESSING })
+                // The whole disjunction is wrapped in its own parens so the
+                // `status = PROCESSING` guard applies to BOTH branches. Emitted
+                // bare, SQL precedence would parse this as
+                // `(status AND lease-expired) OR (legacy)` and the legacy branch
+                // would match every old row — including COMPLETED/FAILED ones —
+                // on every run.
                 .andWhere(
-                    '(job."leaseExpiresAt" IS NOT NULL AND job."leaseExpiresAt" < :now)' +
+                    '((job."leaseExpiresAt" IS NOT NULL AND job."leaseExpiresAt" < :now)' +
                         ' OR ' +
-                        '(job."leaseExpiresAt" IS NULL AND job."updatedAt" < :olderThan)',
+                        '(job."leaseExpiresAt" IS NULL AND job."updatedAt" < :olderThan))',
                     { now: params.now, olderThan: params.olderThan },
                 )
                 .getRawMany();
@@ -391,6 +408,11 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                     currentStage: null,
                 })
                 .whereInIds(params.uuids)
+                // Re-assert PROCESSING in the UPDATE: a job can complete (or be
+                // permanently failed) between the SELECT that listed it as stale
+                // and this write. Without the guard the UPDATE clobbers the
+                // newer terminal state back to PENDING and the job re-runs.
+                .andWhere('status = :status', { status: JobStatus.PROCESSING })
                 .execute();
             return result.affected ?? 0;
         } catch (error) {
@@ -428,6 +450,10 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                     leaseExpiresAt: null,
                 })
                 .whereInIds(params.uuids)
+                // Same re-check as requeueStaleJobs: only a still-PROCESSING row
+                // may be terminally failed, so a job that completed between the
+                // SELECT and this UPDATE is never clobbered to FAILED.
+                .andWhere('status = :status', { status: JobStatus.PROCESSING })
                 .execute();
             return result.affected ?? 0;
         } catch (error) {
