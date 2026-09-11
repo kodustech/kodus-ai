@@ -1,7 +1,7 @@
-import { createHmac } from "crypto";
 import { typedFetch } from "@services/fetch";
 import { createUrl } from "src/core/utils/helpers";
 import { isServerSide } from "src/core/utils/server-side";
+import { addSearchParamsToUrl } from "src/core/utils/url";
 
 /**
  * Billing service fetch utility.
@@ -14,47 +14,40 @@ import { isServerSide } from "src/core/utils/server-side";
  *     Keeps the internal hostname out of the client bundle.
  */
 /**
- * Billing authenticates the callers of its `/credits/*` routes (money) with
- * the SAME shared secret that already signs its outbound webhooks to the API
- * (`API_BILLING_WEBHOOK_SECRET` here, `KODUS_NOTIFICATION_WEBHOOK_SECRET`
- * there — one value by contract), so enabling this needs no new env var.
- * Signed, never sent: HMAC-SHA256 over `METHOD\n/path\n<body>`, in the same
- * `x-kodus-signature` header the other direction already uses. Server-side
- * only — the browser proxy denies `/credits/*` outright.
+ * The signature on billing's money routes lives in ./signature (re-exported
+ * here so existing importers keep working).
  */
-const SIGNATURE_HEADER = "x-kodus-signature";
+import {
+    billingSignatureHeader,
+    SIGNATURE_HEADER,
+    TIMESTAMP_HEADER,
+} from "./signature";
 
-const billingServiceSecret = (): string =>
-    (process.env.API_CREDITS_SERVICE_TOKEN ?? "").trim() ||
-    (process.env.API_BILLING_WEBHOOK_SECRET ?? "").trim();
+export { SIGNATURE_HEADER, TIMESTAMP_HEADER, billingSignatureHeader };
 
-export const billingSignatureHeader = (
-    method: string,
-    path: string,
-    rawBody = "",
-): Record<string, string> => {
-    const secret = billingServiceSecret();
-    if (!secret) return {};
-    const upper = method.toUpperCase();
-    const signedPath = `/api/billing/${path.replace(/^\//, "")}`.split("?")[0];
-    const body = upper === "GET" || upper === "DELETE" ? "" : rawBody;
-    return {
-        [SIGNATURE_HEADER]: createHmac("sha256", secret)
-            .update(`${upper}\n${signedPath}\n${body}`)
-            .digest("hex"),
-    };
-};
-
-/** Attach the signature to a server-side request config. */
+/**
+ * Attach the signature to a server-side request config.
+ *
+ * The signed path must carry the SAME query the request ends up with, and
+ * `typedFetch` appends `config.params` itself — so the query is built here
+ * with the very same helper (`addSearchParamsToUrl`, which drops empty and
+ * nullish values) instead of a second, almost-identical implementation.
+ */
 const withSignature = <
-    C extends { headers?: HeadersInit; method?: string; body?: unknown },
+    C extends {
+        headers?: HeadersInit;
+        method?: string;
+        body?: unknown;
+        params?: Record<string, string | number | boolean | undefined | null>;
+    },
 >(
     path: string,
     config?: C,
 ): C => {
+    const signedTarget = addSearchParamsToUrl(path, config?.params);
     const extra = billingSignatureHeader(
         config?.method ?? "GET",
-        path,
+        signedTarget,
         typeof config?.body === "string" ? config.body : "",
     );
     if (Object.keys(extra).length === 0) return (config ?? {}) as C;
@@ -156,7 +149,13 @@ export const billingRequest = async <Data>(
         method: init.method,
         headers: {
             "Content-Type": "application/json",
-            ...billingSignatureHeader(init.method, path, rawBody ?? ""),
+            // The query is part of the signature (billing reads the tenant
+            // from it), so sign the path WITH it — exactly what is sent.
+            ...billingSignatureHeader(
+                init.method,
+                `${path}${query}`,
+                rawBody ?? "",
+            ),
         },
         body: rawBody,
         cache: "no-store",

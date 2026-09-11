@@ -1,7 +1,7 @@
-import { createHmac } from "node:crypto";
+import { createHmac } from 'node:crypto';
 
-import { http } from "./http.js";
-import type { KodusSession, RunContext, TargetContext } from "./types.js";
+import { http } from './http.js';
+import type { KodusSession, RunContext, TargetContext } from './types.js';
 
 // Helpers for the "Kodus as the provider" scenarios: the keyless `kodus`
 // BYOK credential, the prepaid-credit endpoints (through the web proxy, as
@@ -17,26 +17,45 @@ export const auth = (session: KodusSession) => ({
  * Billing authenticates the callers of its `/credits/*` routes (money) with a
  * shared secret — the same one that signs its outbound webhooks. The harness
  * talks to billing directly, so it signs the same way the services do:
- * HMAC-SHA256 over `METHOD\n/path\n<body>` in `x-kodus-signature`.
- * BILLING_SERVICE_TOKEN is that secret (the deployment's webhook secret).
+ * HMAC-SHA256 in `x-kodus-signature` over
+ * `METHOD\n/path\n<canonical query>\n<timestamp>\n<body>`, with the
+ * timestamp in `x-kodus-timestamp` (billing rejects anything outside a
+ * 5-minute window). The query is signed because the credit reads carry
+ * organizationId there. BILLING_SERVICE_TOKEN is that secret (the
+ * deployment's webhook secret).
  */
 export function serviceToken(
     method: string,
     url: string,
     body?: unknown,
 ): Record<string, string> {
-    const secret = (process.env.BILLING_SERVICE_TOKEN ?? "").trim();
+    const secret = (process.env.BILLING_SERVICE_TOKEN ?? '').trim();
     if (!secret) return {};
     const upper = method.toUpperCase();
-    const path = new URL(url, "http://placeholder").pathname;
+    const parsed = new URL(url, 'http://placeholder');
+    const query = new URLSearchParams(parsed.search);
+    query.sort();
+    // No body on the wire means an empty signed body — billing verifies the
+    // bytes it received, and `{}` is not the same as nothing.
     const raw =
-        upper === "GET" || upper === "DELETE"
-            ? ""
-            : JSON.stringify(body ?? {});
+        upper === 'GET' || upper === 'DELETE' || body === undefined
+            ? ''
+            : typeof body === 'string'
+              ? body
+              : JSON.stringify(body);
+    const timestamp = String(Date.now());
+    const payload = [
+        upper,
+        parsed.pathname,
+        query.toString(),
+        timestamp,
+        raw,
+    ].join('\n');
     return {
-        "x-kodus-signature": createHmac("sha256", secret)
-            .update(`${upper}\n${path}\n${raw}`)
-            .digest("hex"),
+        'x-kodus-signature': createHmac('sha256', secret)
+            .update(payload)
+            .digest('hex'),
+        'x-kodus-timestamp': timestamp,
     };
 }
 
@@ -55,7 +74,7 @@ export const billingAuth = (
  *  KODUS_E2E_MODEL to run the same live cell on another catalog entry. */
 export const KODUS_E2E_MODEL =
     process.env.KODUS_E2E_MODEL ||
-    "fireworks/accounts/fireworks/models/deepseek-v4-flash-0731";
+    'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731';
 
 /** Persist a v2 BYOK config whose only model is routed by Kodus (no key). */
 export async function saveKodusByok(
@@ -66,22 +85,22 @@ export async function saveKodusByok(
     const target = ctx.target as TargetContext;
     const configValue = {
         version: 2,
-        credentials: [{ id: "e2e-kodus-cred", provider: "kodus" }],
+        credentials: [{ id: 'e2e-kodus-cred', provider: 'kodus' }],
         models: [
-            { id: "e2e-kodus-model", credentialId: "e2e-kodus-cred", model },
+            { id: 'e2e-kodus-model', credentialId: 'e2e-kodus-cred', model },
         ],
         routing: {
-            mode: "manual",
-            defaultModelId: "e2e-kodus-model",
+            mode: 'manual',
+            defaultModelId: 'e2e-kodus-model',
             taskOverrides: {},
         },
     };
     const save = await http(
         `${target.apiBaseUrl}/organization-parameters/create-or-update`,
         {
-            method: "POST",
+            method: 'POST',
             headers: auth(session),
-            body: { key: "byok_config", configValue },
+            body: { key: 'byok_config', configValue },
             timeoutMs: 25_000,
         },
     );
@@ -111,9 +130,9 @@ export function billingBase(ctx: RunContext): string {
     const base = process.env.BILLING_ADMIN_BASE_URL;
     ctx.assert(
         !!base,
-        "kodus-credits scenarios need BILLING_ADMIN_BASE_URL (direct billing access; the browser proxy denies /credits/*)",
+        'kodus-credits scenarios need BILLING_ADMIN_BASE_URL (direct billing access; the browser proxy denies /credits/*)',
     );
-    return base!.replace(/\/$/, "");
+    return base!.replace(/\/$/, '');
 }
 
 export async function fetchCreditBalance(
@@ -123,17 +142,17 @@ export async function fetchCreditBalance(
     const resp = await http<CreditBalance>(
         `${billingBase(ctx)}/credits/balance${orgQs(session)}`,
         {
-            method: "GET",
+            method: 'GET',
             headers: billingAuth(
                 session,
-                "GET",
+                'GET',
                 `${billingBase(ctx)}/credits/balance`,
             ),
             timeoutMs: 30_000,
         },
     );
     ctx.assert(
-        resp.status === 200 && typeof resp.body?.balanceUsd === "number",
+        resp.status === 200 && typeof resp.body?.balanceUsd === 'number',
         `credits/balance must answer 200 with a numeric balance: HTTP ${resp.status} ${resp.raw.slice(0, 250)}`,
     );
     return resp.body!;
@@ -155,10 +174,10 @@ export async function fetchCreditLedger(
     const resp = await http<{ entries?: LedgerEntry[] }>(
         `${billingBase(ctx)}/credits/ledger${orgQs(session)}&limit=200`,
         {
-            method: "GET",
+            method: 'GET',
             headers: billingAuth(
                 session,
-                "GET",
+                'GET',
                 `${billingBase(ctx)}/credits/ledger`,
             ),
             timeoutMs: 30_000,
@@ -177,7 +196,7 @@ export type Charge = {
     prNumber?: number;
     model: string;
     amountUsd: number;
-    status: "pending" | "debited" | "unpriced" | "failed";
+    status: 'pending' | 'debited' | 'unpriced' | 'failed';
     spanAt: string;
 };
 
@@ -188,11 +207,15 @@ export async function fetchCreditCharges(
     prNumber?: number,
 ): Promise<Charge[]> {
     const target = ctx.target as TargetContext;
-    const qs = prNumber ? `?prNumber=${prNumber}&limit=500` : "?limit=500";
-    const resp = await http<{ data?: { charges?: Charge[] }; charges?: Charge[] }>(
-        `${target.apiBaseUrl}/credits/charges${qs}`,
-        { method: "GET", headers: auth(session), timeoutMs: 30_000 },
-    );
+    const qs = prNumber ? `?prNumber=${prNumber}&limit=500` : '?limit=500';
+    const resp = await http<{
+        data?: { charges?: Charge[] };
+        charges?: Charge[];
+    }>(`${target.apiBaseUrl}/credits/charges${qs}`, {
+        method: 'GET',
+        headers: auth(session),
+        timeoutMs: 30_000,
+    });
     ctx.assert(
         resp.status === 200,
         `GET /credits/charges must answer 200: HTTP ${resp.status} ${resp.raw.slice(0, 250)}`,
@@ -218,12 +241,12 @@ export async function adminAdjustCredits(
     const adminToken = process.env.BILLING_ADMIN_TOKEN;
     ctx.assert(
         !!base && !!adminToken,
-        "kodus-credits live cell needs BILLING_ADMIN_BASE_URL + BILLING_ADMIN_TOKEN (direct billing access)",
+        'kodus-credits live cell needs BILLING_ADMIN_BASE_URL + BILLING_ADMIN_TOKEN (direct billing access)',
     );
     const resp = await http<{ applied: boolean; balanceUsd: number }>(
-        `${base!.replace(/\/$/, "")}/credits/adjust`,
+        `${base!.replace(/\/$/, '')}/credits/adjust`,
         {
-            method: "POST",
+            method: 'POST',
             body: {
                 organizationId: session.organizationId,
                 teamId: session.teamId,
@@ -232,19 +255,23 @@ export async function adminAdjustCredits(
                 reason,
                 adminToken,
             },
-            headers: serviceToken("POST", `${base!.replace(/\/$/, "")}/credits/adjust`, {
-                organizationId: session.organizationId,
-                teamId: session.teamId,
-                amountUsd,
-                usageKey,
-                reason,
-                adminToken,
-            }),
+            headers: serviceToken(
+                'POST',
+                `${base!.replace(/\/$/, '')}/credits/adjust`,
+                {
+                    organizationId: session.organizationId,
+                    teamId: session.teamId,
+                    amountUsd,
+                    usageKey,
+                    reason,
+                    adminToken,
+                },
+            ),
             timeoutMs: 30_000,
         },
     );
     ctx.assert(
-        resp.status === 200 && typeof resp.body?.balanceUsd === "number",
+        resp.status === 200 && typeof resp.body?.balanceUsd === 'number',
         `credits/adjust must answer 200: HTTP ${resp.status} ${resp.raw.slice(0, 250)}`,
     );
     return resp.body!;

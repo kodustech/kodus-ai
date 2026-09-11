@@ -1,12 +1,14 @@
-import { createHmac } from 'crypto';
-
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
 import { createLogger } from '@libs/core/log/logger';
+import {
+    BILLING_SIGNATURE_HEADER,
+    billingSignatureHeaders,
+} from '@libs/common/utils/billing-signature';
 
 const DEFAULT_TIMEOUT_MS = 60000; // 60 seconds
 
 /** Header billing reads on its credit routes — the same one it uses outbound. */
-export const SIGNATURE_HEADER = 'x-kodus-signature';
+export const SIGNATURE_HEADER = BILLING_SIGNATURE_HEADER;
 
 /** The shared service secret: the dedicated one when set, else the webhook
  *  secret both deployments already hold. */
@@ -41,19 +43,31 @@ export class AxiosLicenseService {
             const secret = billingServiceSecret();
             if (!secret) return config;
             const method = (config.method ?? 'get').toUpperCase();
+            // The bytes axios is about to send: it serializes an object body
+            // with JSON.stringify, so signing that is signing the wire.
             const rawBody =
-                method === 'GET' || method === 'DELETE'
-                    ? ''
-                    : JSON.stringify(config.data ?? {});
-            const path = `/api/billing/${String(config.url ?? '').replace(/^\//, '')}`.split(
-                '?',
-            )[0];
-            config.headers.set(
-                SIGNATURE_HEADER,
-                createHmac('sha256', secret)
-                    .update(`${method}\n${path}\n${rawBody}`)
-                    .digest('hex'),
-            );
+                typeof config.data === 'string'
+                    ? config.data
+                    : config.data === undefined
+                      ? ''
+                      : JSON.stringify(config.data);
+            const url = String(config.url ?? '');
+            const [urlPath, inlineQuery] = url.split('?');
+            const path = `/api/billing/${urlPath.replace(/^\//, '')}`;
+            // `params` is where every credit read carries organizationId, and
+            // billing signs the query for exactly that reason.
+            const query = config.params ?? inlineQuery ?? '';
+            for (const [header, value] of Object.entries(
+                billingSignatureHeaders({
+                    secret,
+                    method,
+                    path,
+                    query,
+                    rawBody,
+                }),
+            )) {
+                config.headers.set(header, value);
+            }
             return config;
         });
     }
