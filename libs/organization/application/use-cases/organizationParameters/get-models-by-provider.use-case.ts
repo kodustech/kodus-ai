@@ -57,7 +57,20 @@ export class GetModelsByProviderUseCase {
         // supplied here, the http path is STRICT — a failed live call surfaces the
         // error instead of degrading to the curated placeholder (the user asked
         // for the real list, not a stand-in).
-        candidate?: { apiKey?: string; baseURL?: string },
+        //
+        // awsBearerToken/awsRegion are Bedrock's equivalent of `apiKey` — Bedrock
+        // never authenticates with a plain apiKey (see below), so a just-typed
+        // bearer token needs its own field to reach the live call before save.
+        // awsAccessKeyId/awsSecretAccessKey (IAM/SigV4) are deliberately NOT
+        // candidate fields: SigV4 needs request signing, not a static header, so
+        // an IAM-only connect can't be live-listed pre-save — it degrades to the
+        // curated fallback below, same as it always has.
+        candidate?: {
+            apiKey?: string;
+            baseURL?: string;
+            awsBearerToken?: string;
+            awsRegion?: string;
+        },
     ): Promise<ModelResponse> {
         if (!this.providerService.isProviderSupported(provider)) {
             throw new BadRequestException(`Unsupported provider: ${provider}`);
@@ -66,6 +79,24 @@ export class GetModelsByProviderUseCase {
         const byokProvider = provider as BYOKProvider;
         const candidateKey = candidate?.apiKey?.trim() || undefined;
         const candidateBaseURL = candidate?.baseURL?.trim() || undefined;
+        // Scoped to Bedrock: these fields mean nothing to any other provider's
+        // listing (only bedrock/listing.ts reads awsBearerToken/awsRegion), so a
+        // caller sending them alongside a different `provider` must not affect
+        // that provider's strict/lenient fallback gate below.
+        const isBedrockCandidate = byokProvider === BYOKProvider.AMAZON_BEDROCK;
+        const candidateAwsBearerToken = isBedrockCandidate
+            ? candidate?.awsBearerToken?.trim() || undefined
+            : undefined;
+        const candidateAwsRegion = isBedrockCandidate
+            ? candidate?.awsRegion?.trim() || undefined
+            : undefined;
+        // Any candidate makes this a "the user is actively trying THIS
+        // credential" request — strict-mode gate for both catch branches below.
+        // Region is included because a bad/unreachable region fails the live
+        // call regardless of how good the credential is — the user needs that
+        // error surfaced, not a silent degrade to the curated placeholder.
+        const hasCandidateCredential =
+            !!candidateKey || !!candidateAwsBearerToken || !!candidateAwsRegion;
 
         const providerModule = REGISTRY.has(provider)
             ? REGISTRY.get(provider)
@@ -115,9 +146,10 @@ export class GetModelsByProviderUseCase {
                 : undefined) ??
             listing.defaultBaseURL;
         // Amazon Bedrock authenticates the list call with a bearer token + region
-        // (never an apiKey), resolved from the org's saved credential.
-        const awsBearerToken = creds?.awsBearerToken;
-        const awsRegion = creds?.awsRegion;
+        // (never an apiKey). A just-typed candidate wins over the saved slot, same
+        // precedence as apiKey above, so a fresh connect can list live too.
+        const awsBearerToken = candidateAwsBearerToken ?? creds?.awsBearerToken;
+        const awsRegion = candidateAwsRegion ?? creds?.awsRegion;
 
         // The stand-in when the live call can't run: the http listing's own
         // fallbackModels (e.g. Bedrock's curated profiles), if the listing declares
@@ -184,11 +216,12 @@ export class GetModelsByProviderUseCase {
             };
         } catch (error) {
             // Live fetch failed (bad/expired key, provider down, parse error).
-            // STRICT when the caller supplied a candidate key: the user is trying
-            // that specific key, so surface the failure (→ the UI's "type the
-            // model id" fallback) rather than masking a bad key behind the curated
-            // list. Only the keyless/saved path degrades to the curated catalog.
-            if (!candidateKey) {
+            // STRICT when the caller supplied a candidate credential (apiKey OR,
+            // for Bedrock, a bearer token): the user is trying that specific
+            // credential, so surface the failure (→ the UI's "type the model id"
+            // fallback) rather than masking a bad key behind the curated list.
+            // Only the keyless/saved path degrades to the curated catalog.
+            if (!hasCandidateCredential) {
                 const fb = listingFallback();
                 if (fb) {
                     // Degrading to the curated list is otherwise invisible — the

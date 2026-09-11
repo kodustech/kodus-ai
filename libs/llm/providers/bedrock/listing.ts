@@ -16,9 +16,11 @@ const CURATED: Array<{ id: string; name: string }> = [
     { id: 'us.anthropic.claude-3-5-sonnet-20241022-v2:0', name: 'Claude 3.5 Sonnet v2 (us, cross-region)' },
 ];
 
-// Look up caps by the Anthropic-style suffix (after "us.anthropic.").
+// Look up caps by the Anthropic-style suffix (after "anthropic." — the
+// geography prefix, e.g. "us.", is optional: ListFoundationModels returns the
+// BARE id, ListInferenceProfiles the geography-prefixed one).
 const reasoningKeyOf = (id: string): string => {
-    const match = id.match(/^[a-z]{2,5}\.anthropic\.(.+?)-v\d+:\d+$/);
+    const match = id.match(/^(?:[a-z]{2,5}\.)?anthropic\.(.+?)-v\d+:\d+$/);
     return match ? match[1] : id;
 };
 
@@ -36,13 +38,28 @@ const AWS_REGION_RE = /^[a-z]{2}-[a-z]+-\d+$/;
 /**
  * Amazon Bedrock model listing.
  *
- * LIVE when a Bedrock API key (bearer token) + a valid region are available: hits
- * the control-plane `ListInferenceProfiles` for the user's OWN account/region, so
- * the picker shows exactly the SYSTEM_DEFINED profiles that account can invoke —
- * and never a retired one. The bearer token authenticates directly
- * (`Authorization: Bearer …`), so no SigV4 signing is needed. IAM-only creds (no
- * bearer) and the no-cred setup path fall back to {@link BEDROCK_CURATED_CATALOG}
- * via the fetcher (SigV4 can't be expressed as pure headers).
+ * LIVE when a Bedrock API key (bearer token) + a valid region are available:
+ * hits the control-plane `ListFoundationModels` for the user's OWN
+ * account/region, so the picker shows every base model that region serves —
+ * Claude, Kimi, MiniMax, Nova, Llama, etc. The bearer token authenticates
+ * directly (`Authorization: Bearer …`), so no SigV4 signing is needed.
+ * IAM-only creds (no bearer) and the no-cred setup path fall back to
+ * {@link BEDROCK_CURATED_CATALOG} via the fetcher (SigV4 can't be expressed
+ * as pure headers).
+ *
+ * Was `ListInferenceProfiles` (cross-region routing profiles) until this
+ * surfaced only Anthropic — AWS built that endpoint for Claude's cross-region
+ * routing, so a third-party marketplace model like `moonshotai.kimi-k2.5`
+ * (invoked directly by its bare id, never registered as a profile) could never
+ * appear there, no matter how valid the credential. `ListFoundationModels` is
+ * the base catalog — every invocable model lives here, profile or not.
+ *
+ * The bare id this returns for Claude generations that require a
+ * geography-prefixed profile (3.7+) is NOT wrong to list: `build()`
+ * (bedrock/index.ts) runs every model through `repairBedrockModelId()`
+ * unconditionally before invoking, which rewrites a bare 3.7+ id to the
+ * correct `us.`/`eu.`/`apac.` profile for the configured region. Picking the
+ * bare id from this dropdown still ends up calling the right profile.
  */
 const httpListing: ModelListing = {
     kind: 'http',
@@ -58,31 +75,31 @@ const httpListing: ModelListing = {
                 'A valid AWS region is required to list Bedrock models.',
             );
         }
-        // ListInferenceProfiles filters on `typeEquals` (enum SYSTEM_DEFINED |
-        // APPLICATION), NOT `type` — a wrong key is silently ignored and the call
-        // returns every profile instead of just the cross-region system ones.
-        return `https://bedrock.${region}.amazonaws.com/inference-profiles?maxResults=1000&typeEquals=SYSTEM_DEFINED`;
+        return `https://bedrock.${region}.amazonaws.com/foundation-models`;
     },
     headers: (creds) => ({
         Authorization: `Bearer ${creds.awsBearerToken ?? ''}`,
         Accept: 'application/json',
     }),
     parse: (body: unknown): CatalogModel[] => {
-        const summaries =
-            (body as { inferenceProfileSummaries?: unknown })
-                ?.inferenceProfileSummaries;
+        const summaries = (body as { modelSummaries?: unknown })
+            ?.modelSummaries;
         if (!Array.isArray(summaries)) return [];
         return summaries
             .map((s) => s as Record<string, unknown>)
-            // Only invocable profiles — a non-ACTIVE one can't be used for review.
-            .filter((s) => (s.status ?? 'ACTIVE') === 'ACTIVE')
+            // Only invocable models — LEGACY ones AWS is retiring shouldn't be
+            // offered as a fresh pick. Permissive when the field is absent
+            // rather than dropping everything on an unexpected shape.
+            .filter((s) => {
+                const lifecycle = s.modelLifecycle as
+                    | { status?: unknown }
+                    | undefined;
+                return (lifecycle?.status ?? 'ACTIVE') === 'ACTIVE';
+            })
             .map((s) => {
-                const id = typeof s.inferenceProfileId === 'string'
-                    ? s.inferenceProfileId
-                    : '';
-                const name = typeof s.inferenceProfileName === 'string'
-                    ? s.inferenceProfileName
-                    : id;
+                const id = typeof s.modelId === 'string' ? s.modelId : '';
+                const name =
+                    typeof s.modelName === 'string' ? s.modelName : id;
                 return id
                     ? catalogWithReasoning(id, name, reasoningKeyOf(id))
                     : null;

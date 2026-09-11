@@ -217,6 +217,131 @@ describe('GetModelsByProviderUseCase — BYOK-aware model listing', () => {
         if (prev !== undefined) process.env.API_OPEN_AI_API_KEY = prev;
     });
 
+    // ---- Bedrock candidate (just-typed, unsaved bearer token) — regression: a
+    // fresh Bedrock connect used to be stuck on the curated fallback forever
+    // because the frontend only ever sent {apiKey, baseURL}, never a bearer
+    // token candidate. These mirror the OpenAI candidate tests above, for the
+    // field Bedrock actually authenticates with.
+
+    it('lists Bedrock live with a JUST-TYPED candidate bearer token + region — including a non-Anthropic model', async () => {
+        mockedAxios.get.mockResolvedValue({
+            data: {
+                modelSummaries: [
+                    {
+                        modelId: 'anthropic.claude-x',
+                        modelName: 'Claude X',
+                        modelLifecycle: { status: 'ACTIVE' },
+                    },
+                    {
+                        modelId: 'moonshotai.kimi-k2.5',
+                        modelName: 'Kimi K2.5',
+                        modelLifecycle: { status: 'ACTIVE' },
+                    },
+                ],
+            },
+        } as any);
+        const useCase = buildUseCase(null); // no saved config
+
+        const res = await useCase.execute(
+            BYOKProvider.AMAZON_BEDROCK,
+            { organizationId: 'org-1' },
+            { awsBearerToken: 'ABSK-typed', awsRegion: 'us-east-1' },
+        );
+
+        expect(res.exercisedCredential).toBe(true);
+        // ListFoundationModels, not ListInferenceProfiles — proves a
+        // third-party marketplace model (never a registered inference
+        // profile) now shows up too.
+        expect(res.models.map((m) => m.id)).toEqual(
+            expect.arrayContaining(['anthropic.claude-x', 'moonshotai.kimi-k2.5']),
+        );
+        const [url, cfg] = mockedAxios.get.mock.calls[0];
+        expect(url).toContain('bedrock.us-east-1.amazonaws.com');
+        expect(cfg?.headers?.Authorization).toBe('Bearer ABSK-typed');
+    });
+
+    it('is STRICT with a candidate Bedrock bearer token: a live-fetch failure throws instead of the curated fallback', async () => {
+        mockedAxios.get.mockRejectedValue(new Error('403 expired'));
+        const useCase = buildUseCase(null);
+
+        await expect(
+            useCase.execute(
+                BYOKProvider.AMAZON_BEDROCK,
+                { organizationId: 'org-1' },
+                { awsBearerToken: 'ABSK-bad', awsRegion: 'us-east-1' },
+            ),
+        ).rejects.toThrow(/Error fetching amazon_bedrock models/i);
+    });
+
+    it('a candidate Bedrock bearer token with no region surfaces the region error, not the curated fallback', async () => {
+        const useCase = buildUseCase(null);
+
+        await expect(
+            useCase.execute(
+                BYOKProvider.AMAZON_BEDROCK,
+                { organizationId: 'org-1' },
+                { awsBearerToken: 'ABSK-typed' },
+            ),
+        ).rejects.toThrow(/region/i);
+        expect(mockedAxios.get).not.toHaveBeenCalled();
+    });
+
+    // Regression: `hasCandidateCredential` originally checked only
+    // candidateKey/candidateAwsBearerToken, so testing a NEW region against an
+    // ALREADY-SAVED Bedrock bearer token (the user retypes only the region, not
+    // the token) was treated as lenient — a bad region silently degraded to the
+    // curated Claude-only fallback instead of surfacing the real region error.
+    it('is STRICT when only the region is a candidate against an already-saved Bedrock bearer token', async () => {
+        mockedAxios.get.mockRejectedValue(new Error('403 unknown region'));
+        const useCase = buildUseCase({
+            version: 2,
+            credentials: [
+                {
+                    id: 'c1',
+                    provider: 'amazon_bedrock',
+                    settings: { awsBearerToken: 'stored-token' },
+                },
+            ],
+            models: [],
+        });
+
+        await expect(
+            useCase.execute(
+                BYOKProvider.AMAZON_BEDROCK,
+                { organizationId: 'org-1' },
+                { awsRegion: 'eu-west-99' }, // no bearer candidate — reuses the saved one
+            ),
+        ).rejects.toThrow(/Error fetching amazon_bedrock models/i);
+    });
+
+    // Regression: awsBearerToken/awsRegion are Bedrock-specific fields, but the
+    // controller forwards them regardless of `provider`. Before scoping the
+    // candidate read to Bedrock, a stray awsBearerToken on another provider's
+    // request would flip the shared `hasCandidateCredential` flag — harmless
+    // today only because no non-Bedrock listing declares a fallback, but the
+    // fields must not leak into another provider's request either way.
+    it('ignores a stray awsBearerToken/awsRegion candidate for a non-Bedrock provider', async () => {
+        mockedAxios.get.mockResolvedValue({
+            data: { object: 'list', data: [{ id: 'gpt-5.4' }] },
+        } as any);
+        const useCase = buildUseCase(null);
+
+        const res = await useCase.execute(
+            BYOKProvider.OPENAI,
+            { organizationId: 'org-1' },
+            {
+                apiKey: 'sk-typed',
+                awsBearerToken: 'stray-token',
+                awsRegion: 'us-east-1',
+            } as any,
+        );
+
+        expect(res.models.map((m) => m.id)).toContain('gpt-5.4');
+        const [, cfg] = mockedAxios.get.mock.calls[0];
+        // The OpenAI call authenticates with the apiKey, not a stray Bearer.
+        expect(cfg?.headers?.Authorization).toBe('Bearer sk-typed');
+    });
+
     it('a manual-listing BRAND (Z.ai/GLM) can no longer be enumerated — the user types the model id', async () => {
         // Z.ai speaks the Anthropic protocol → no `/models` call (manual listing),
         // and there is no curated catalog to stand in. The picker falls back to
