@@ -100,9 +100,16 @@ const httpListing: ModelListing = {
                 // — none of them can serve a code review. Nothing downstream
                 // filters by modality, so an embedding/image id picked here
                 // would only fail once the review tries to invoke it.
-                // Permissive when the field is absent/malformed.
+                // Permissive when the field is absent/malformed — including an
+                // EMPTY array, which declares no modality at all rather than
+                // "not TEXT"; dropping it there would silently lose a model
+                // that may well serve text generation.
                 const out = s.outputModalities;
-                return !Array.isArray(out) || out.includes('TEXT');
+                return (
+                    !Array.isArray(out) ||
+                    out.length === 0 ||
+                    out.includes('TEXT')
+                );
             })
             .map((s) => {
                 const id = typeof s.modelId === 'string' ? s.modelId : '';

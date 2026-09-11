@@ -163,6 +163,23 @@ describe('bedrockModelListing', () => {
         expect(models.map((m) => m.id)).toEqual(['moonshotai.kimi-k2.5']);
     });
 
+    // Regression: an EMPTY outputModalities array declares no modality at all —
+    // it must be treated the same as an absent field (keep the model), not as
+    // "does not support TEXT" (drop it).
+    it('is permissive when outputModalities is an EMPTY array (does not drop the model)', () => {
+        const models = listing().parse({
+            modelSummaries: [
+                {
+                    modelId: 'moonshotai.kimi-k2.5',
+                    modelName: 'Kimi K2.5',
+                    modelLifecycle: { status: 'ACTIVE' },
+                    outputModalities: [],
+                },
+            ],
+        });
+        expect(models.map((m) => m.id)).toEqual(['moonshotai.kimi-k2.5']);
+    });
+
     it('parse tolerates a malformed body', () => {
         expect(listing().parse({})).toEqual([]);
         expect(listing().parse(null)).toEqual([]);
