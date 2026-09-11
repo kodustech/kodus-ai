@@ -29,6 +29,10 @@ const WEB = KODUS_WEB_URL.replace(/\/$/, ""), API = KODUS_API_URL.replace(/\/$/,
 // only touches credits through server actions).
 const DIRECT = BILLING_ADMIN_BASE_URL.replace(/\/$/, ""), BILLING = DIRECT;
 mkdirSync(KODUS_E2E_SHOTS, { recursive: true });
+const SERVICE_TOKEN = (process.env.BILLING_SERVICE_TOKEN || "").trim();
+// Billing requires a shared service token on /credits/* (money routes).
+const svc = () => (SERVICE_TOKEN ? { "x-kodus-service-token": SERVICE_TOKEN } : {});
+
 const log = (...a) => console.log("[auto-topup-ui]", ...a);
 const fail = (m) => { console.error(`[auto-topup-ui] FAIL: ${m}`); process.exit(1); };
 
@@ -37,22 +41,22 @@ async function apiLogin(email, password) {
     const b = await r.json(); const t = b.accessToken ?? b.data?.accessToken; if (!t) throw new Error("login"); return t;
 }
 async function ids(token) {
-    const b = await fetch(`${API}/user/info`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json());
+    const b = await fetch(`${API}/user/info`, { headers: { Authorization: `Bearer ${token}`, ...svc() } }).then((r) => r.json());
     const d = b.data ?? b; return { organizationId: d.organization.uuid, teamId: d.teamMember[0].team.uuid };
 }
 async function balance(token, qs) {
-    const r = await fetch(`${BILLING}/credits/balance${qs}`, { headers: { Authorization: `Bearer ${token}` } });
+    const r = await fetch(`${BILLING}/credits/balance${qs}`, { headers: { Authorization: `Bearer ${token}`, ...svc() } });
     if (r.status !== 200) fail(`credits/balance HTTP ${r.status}`);
     const b = await r.json();
     if (!b?.autoTopUp) fail(`credits/balance answered without autoTopUp: ${JSON.stringify(b).slice(0, 200)}`);
     return b;
 }
 async function stage(organizationId, teamId, target, current, stamp) {
-    const r = await fetch(`${DIRECT}/credits/adjust`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, teamId, amountUsd: target - current, usageKey: `e2e:ui:stage:${stamp}`, reason: "e2e ui", adminToken: BILLING_ADMIN_TOKEN }) });
+    const r = await fetch(`${DIRECT}/credits/adjust`, { method: "POST", headers: { "Content-Type": "application/json", ...svc() }, body: JSON.stringify({ organizationId, teamId, amountUsd: target - current, usageKey: `e2e:ui:stage:${stamp}`, reason: "e2e ui", adminToken: BILLING_ADMIN_TOKEN }) });
     if (r.status !== 200) fail(`adjust HTTP ${r.status}`);
 }
 async function debit(organizationId, teamId, amountUsd, stamp) {
-    const r = await fetch(`${DIRECT}/credits/debit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, teamId, entries: [{ usageKey: `e2e:ui:debit:${stamp}`, amountUsd, metadata: { model: "e2e" } }] }) });
+    const r = await fetch(`${DIRECT}/credits/debit`, { method: "POST", headers: { "Content-Type": "application/json", ...svc() }, body: JSON.stringify({ organizationId, teamId, entries: [{ usageKey: `e2e:ui:debit:${stamp}`, amountUsd, metadata: { model: "e2e" } }] }) });
     const b = await r.json(); if (r.status !== 200) fail(`debit HTTP ${r.status}`); return b.balanceUsd;
 }
 async function poll(pred, { timeoutMs, label }) {

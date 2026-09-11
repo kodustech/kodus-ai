@@ -11,6 +11,19 @@ export const auth = (session: KodusSession) => ({
     Authorization: `Bearer ${session.accessToken}`,
 });
 
+/** Billing requires a shared service token on its `/credits/*` routes (money);
+ *  the harness talks to billing directly, so it must send it too. */
+export const serviceToken = (): Record<string, string> => {
+    const token = (process.env.BILLING_SERVICE_TOKEN ?? "").trim();
+    return token ? { "x-kodus-service-token": token } : {};
+};
+
+/** Headers for a DIRECT billing call: the tenant session + the service token. */
+export const billingAuth = (session: KodusSession): Record<string, string> => ({
+    ...auth(session),
+    ...serviceToken(),
+});
+
 /** Catalog model the scenarios route through Kodus. Override with
  *  KODUS_E2E_MODEL to run the same live cell on another catalog entry. */
 export const KODUS_E2E_MODEL =
@@ -82,7 +95,7 @@ export async function fetchCreditBalance(
 ): Promise<CreditBalance> {
     const resp = await http<CreditBalance>(
         `${billingBase(ctx)}/credits/balance${orgQs(session)}`,
-        { method: "GET", headers: auth(session), timeoutMs: 30_000 },
+        { method: "GET", headers: billingAuth(session), timeoutMs: 30_000 },
     );
     ctx.assert(
         resp.status === 200 && typeof resp.body?.balanceUsd === "number",
@@ -106,7 +119,7 @@ export async function fetchCreditLedger(
 ): Promise<LedgerEntry[]> {
     const resp = await http<{ entries?: LedgerEntry[] }>(
         `${billingBase(ctx)}/credits/ledger${orgQs(session)}&limit=200`,
-        { method: "GET", headers: auth(session), timeoutMs: 30_000 },
+        { method: "GET", headers: billingAuth(session), timeoutMs: 30_000 },
     );
     ctx.assert(
         resp.status === 200 && Array.isArray(resp.body?.entries),
@@ -168,6 +181,8 @@ export async function adminAdjustCredits(
         `${base!.replace(/\/$/, "")}/credits/adjust`,
         {
             method: "POST",
+            // `/credits/*` needs the service token on top of the adminToken.
+            headers: serviceToken(),
             body: {
                 organizationId: session.organizationId,
                 teamId: session.teamId,

@@ -12,6 +12,27 @@ import { isServerSide } from "src/core/utils/server-side";
  *     route in apps/web/src/app/api/proxy/billing/[...path]/route.ts.
  *     Keeps the internal hostname out of the client bundle.
  */
+/** The shared secret billing requires on its `/credits/*` routes (money). */
+export const creditsServiceTokenHeader = (): Record<string, string> => {
+    const token = (process.env.API_CREDITS_SERVICE_TOKEN ?? "").trim();
+    return token ? { "x-kodus-service-token": token } : {};
+};
+
+/** Attach it to a server-side request config, preserving everything else. */
+const withServiceToken = <C extends { headers?: HeadersInit }>(
+    config?: C,
+): C => {
+    const extra = creditsServiceTokenHeader();
+    if (Object.keys(extra).length === 0) return (config ?? {}) as C;
+    return {
+        ...((config ?? {}) as C),
+        headers: {
+            ...((config?.headers as Record<string, string>) ?? {}),
+            ...extra,
+        },
+    };
+};
+
 export const billingFetch = async <Data>(
     _url: Parameters<typeof typedFetch>[0],
     config?: Parameters<typeof typedFetch>[1],
@@ -32,6 +53,9 @@ export const billingFetch = async <Data>(
         url = createUrl(hostName, port, `/api/billing/${_url}`, {
             internal: true,
         });
+        // `/credits/*` on billing requires the shared service token (money
+        // routes; the browser proxy denies them outright). Sent on every
+        // server-side call — this branch is server-only.
     } else {
         const path = _url.toString();
         const normalized = path.startsWith("/") ? path : `/${path}`;
@@ -39,7 +63,13 @@ export const billingFetch = async <Data>(
     }
 
     try {
-        return typedFetch(url, config);
+        // `/credits/*` on billing requires the shared service token (money
+        // routes; the browser proxy denies them outright). Only the
+        // server-side branch can carry it — `isServerSide` above.
+        return typedFetch(
+            url,
+            isServerSide ? withServiceToken(config) : config,
+        );
     } catch {
         return null as Data;
     }
@@ -88,7 +118,10 @@ export const billingRequest = async <Data>(
     });
     const response = await fetch(url, {
         method: init.method,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+            "Content-Type": "application/json",
+            ...creditsServiceTokenHeader(),
+        },
         body: init.body === undefined ? undefined : JSON.stringify(init.body),
         cache: "no-store",
     });

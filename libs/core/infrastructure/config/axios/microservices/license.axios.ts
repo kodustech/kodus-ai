@@ -8,10 +8,21 @@ export class AxiosLicenseService {
     private readonly logger = createLogger('AxiosLicenseService');
 
     constructor() {
+        // The billing service authenticates the callers of its `/credits/*`
+        // routes (money) with a shared secret; every other route is unchanged.
+        // Sent on all requests from this client — it is a server-to-server
+        // client, never reachable from a browser — so a route that starts
+        // requiring it does not need a new call site.
+        const serviceToken = (
+            process.env.API_CREDITS_SERVICE_TOKEN ?? ''
+        ).trim();
         this.axiosInstance = axios.create({
             baseURL: `${process.env.GLOBAL_KODUS_SERVICE_BILLING}/api/billing/`,
             headers: {
                 'Content-Type': 'application/json',
+                ...(serviceToken
+                    ? { 'x-kodus-service-token': serviceToken }
+                    : {}),
             },
             timeout: DEFAULT_TIMEOUT_MS,
         });

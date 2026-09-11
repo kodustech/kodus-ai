@@ -48,10 +48,13 @@ export class KodusCreditsController {
     ) {}
 
     @Get('charges')
+    // Billing, not TokenUsage: a row here is USD debited from the org's
+    // prepaid balance (money), and it is read from the wallet's history — the
+    // per-token counts live on the Token Usage screen behind that resource.
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
-            resource: ResourceType.TokenUsage,
+            resource: ResourceType.Billing,
         }),
     )
     @ApiOperation({

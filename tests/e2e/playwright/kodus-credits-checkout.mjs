@@ -47,6 +47,10 @@ const TEST_CVC = "123";
 const TEST_ZIP = "12345";
 const TEST_PHONE = "2015550123";
 
+const SERVICE_TOKEN = (process.env.BILLING_SERVICE_TOKEN || "").trim();
+// Billing requires a shared service token on /credits/* (money routes).
+const svc = () => (SERVICE_TOKEN ? { "x-kodus-service-token": SERVICE_TOKEN } : {});
+
 const log = (...a) => console.log("[kodus-credits]", ...a);
 const fail = (msg) => {
     console.error(`[kodus-credits] FAIL: ${msg}`);
@@ -68,7 +72,7 @@ async function login(email, password) {
 
 async function userInfo(token) {
     const resp = await fetch(`${API}/user/info`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}`, ...svc() },
     });
     if (resp.status !== 200) throw new Error(`/user/info HTTP ${resp.status}`);
     const body = await resp.json();
@@ -85,6 +89,7 @@ async function billingFetch(token, path, init = {}) {
         headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
+            ...svc(),
             ...(init.headers ?? {}),
         },
     });
@@ -331,13 +336,13 @@ try {
     const target = AUTO_THRESHOLD + 2; // just above: the $3 debit below crosses it
     const adj = await fetch(`${BILLING_DIRECT}/credits/adjust`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...svc() },
         body: JSON.stringify({ organizationId, teamId, amountUsd: target - current, usageKey: `e2e:auto:stage:${stamp}`, reason: "e2e: stage balance under the auto top-up threshold", adminToken }),
     });
     if (adj.status !== 200) fail(`credits/adjust HTTP ${adj.status}`);
     const debit = await fetch(`${BILLING_DIRECT}/credits/debit`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...svc() },
         body: JSON.stringify({ organizationId, teamId, entries: [{ usageKey: `e2e:auto:debit:${stamp}`, amountUsd: 3, metadata: { model: "e2e", reason: "auto top-up trigger" } }] }),
     });
     const debitBody = await debit.json().catch(() => ({}));
