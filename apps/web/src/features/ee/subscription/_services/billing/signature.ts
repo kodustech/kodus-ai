@@ -46,9 +46,13 @@ export const billingSignaturePayload = (
     timestamp: string,
     rawBody = "",
 ): string => {
-    const [signedPath, query] = `/api/billing/${path.replace(/^\//, "")}`.split(
-        "?",
-    );
+    const target = `/api/billing/${path.replace(/^\//, "")}`;
+    // Split on the FIRST "?" only: a query value may contain a literal "?"
+    // (an unencoded return URL, say), and dropping everything after it would
+    // sign a truncated query while billing canonicalizes the whole thing.
+    const q = target.indexOf("?");
+    const signedPath = q === -1 ? target : target.slice(0, q);
+    const query = q === -1 ? "" : target.slice(q + 1);
     return [
         method.toUpperCase(),
         signedPath,
@@ -58,6 +62,9 @@ export const billingSignaturePayload = (
     ].join("\n");
 };
 
+/** Say it once per process, not once per request: this is a deployment fact. */
+let missingSecretWarned = false;
+
 export const billingSignatureHeader = (
     method: string,
     path: string,
@@ -65,7 +72,25 @@ export const billingSignatureHeader = (
     now = Date.now(),
 ): Record<string, string> => {
     const secret = billingServiceSecret();
-    if (!secret) return {};
+    if (!secret) {
+        // Unsigned means billing answers 401 (or 500) and `billingFetch`
+        // resolves null — a wallet with no balance and nothing in the logs to
+        // say why. Name the cause, but only for the routes that actually
+        // require a signature: every other billing route is unauthenticated
+        // and a warning there would be noise. `console` and not
+        // PinoLoggerService because apps/web has no Pino; console is what its
+        // server code uses.
+        if (!missingSecretWarned && /(^|\/)credits(\/|$)/.test(path)) {
+            missingSecretWarned = true;
+            console.error(
+                "[billing] neither API_CREDITS_SERVICE_TOKEN nor " +
+                    "API_BILLING_WEBHOOK_SECRET is set — credit calls will go " +
+                    "out unsigned and billing will refuse them",
+                { method: method.toUpperCase(), path: path.split("?")[0] },
+            );
+        }
+        return {};
+    }
     const upper = method.toUpperCase();
     const timestamp = String(now);
     const body = upper === "GET" || upper === "DELETE" ? "" : rawBody;

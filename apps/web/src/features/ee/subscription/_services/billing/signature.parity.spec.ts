@@ -68,6 +68,19 @@ describe("billing signature parity (web ↔ backend)", () => {
             method: "DELETE",
             webPath: "credits/payment-method?organizationId=org-1",
         },
+        {
+            // A literal "?" inside a value: splitting on every "?" instead of
+            // the first would sign a truncated query on one side only.
+            name: "a query value containing a literal ?",
+            method: "GET",
+            webPath:
+                "credits/balance?organizationId=org-1&returnTo=/byok?credits=success",
+        },
+        {
+            name: "an empty query value",
+            method: "GET",
+            webPath: "credits/balance?organizationId=org-1&teamId=",
+        },
     ];
 
     it.each(cases)(
@@ -77,7 +90,9 @@ describe("billing signature parity (web ↔ backend)", () => {
                 method === "GET" || method === "DELETE"
                     ? ""
                     : JSON.stringify({ organizationId: "org-1", entries: [] });
-            const [path, query = ""] = webPath.split("?");
+            const q = webPath.indexOf("?");
+            const path = q === -1 ? webPath : webPath.slice(0, q);
+            const query = q === -1 ? "" : webPath.slice(q + 1);
             expect(webPayload(method, webPath, TS, body)).toBe(
                 backendPayload({
                     method,

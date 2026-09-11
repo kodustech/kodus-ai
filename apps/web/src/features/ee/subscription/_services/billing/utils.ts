@@ -45,14 +45,25 @@ const withSignature = <
     config?: C,
 ): C => {
     const signedTarget = addSearchParamsToUrl(path, config?.params);
+    // Sign the bytes that will be SENT. A non-string body is serialized here
+    // and put back on the config, so `fetch` transmits the same string that
+    // was signed — passing an object through would otherwise sign "" and send
+    // a coerced payload, and billing's 401 becomes a silent null.
+    const rawBody =
+        config?.body === undefined || config?.body === null
+            ? ""
+            : typeof config.body === "string"
+              ? config.body
+              : JSON.stringify(config.body);
     const extra = billingSignatureHeader(
         config?.method ?? "GET",
         signedTarget,
-        typeof config?.body === "string" ? config.body : "",
+        rawBody,
     );
     if (Object.keys(extra).length === 0) return (config ?? {}) as C;
     return {
         ...((config ?? {}) as C),
+        ...(rawBody === "" ? {} : { body: rawBody }),
         headers: {
             ...((config?.headers as Record<string, string>) ?? {}),
             ...extra,

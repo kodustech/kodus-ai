@@ -52,11 +52,31 @@ export class AxiosLicenseService {
                       ? ''
                       : JSON.stringify(config.data);
             const url = String(config.url ?? '');
-            const [urlPath, inlineQuery] = url.split('?');
+            // Split on the FIRST '?' only, and MERGE: axios appends `params`
+            // to whatever query the url already carries, so both end up on the
+            // wire and both have to be signed. `params` is also where every
+            // credit read puts organizationId, which is the whole reason
+            // billing signs the query.
+            const q = url.indexOf('?');
+            const urlPath = q === -1 ? url : url.slice(0, q);
             const path = `/api/billing/${urlPath.replace(/^\//, '')}`;
-            // `params` is where every credit read carries organizationId, and
-            // billing signs the query for exactly that reason.
-            const query = config.params ?? inlineQuery ?? '';
+            const wireQuery = new URLSearchParams(
+                q === -1 ? '' : url.slice(q + 1),
+            );
+            for (const [key, value] of Object.entries(config.params ?? {})) {
+                if (value === undefined || value === null) continue;
+                // Arrays: axios's default serializer emits `key[]=a&key[]=b`,
+                // so sign the same shape it puts on the wire.
+                if (Array.isArray(value)) {
+                    for (const item of value) {
+                        if (item === undefined || item === null) continue;
+                        wireQuery.append(`${key}[]`, String(item));
+                    }
+                } else {
+                    wireQuery.append(key, String(value));
+                }
+            }
+            const query = wireQuery.toString();
             for (const [header, value] of Object.entries(
                 billingSignatureHeaders({
                     secret,

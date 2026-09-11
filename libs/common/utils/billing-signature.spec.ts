@@ -219,6 +219,57 @@ describe('AxiosLicenseService request signing', () => {
         );
     });
 
+    it('MERGES an inline query with params (axios sends both)', async () => {
+        const headers = await runInterceptor({
+            method: 'get',
+            url: 'credits/ledger?limit=25',
+            params: { organizationId: 'o' },
+        });
+        expect(headers[BILLING_SIGNATURE_HEADER]).toBe(
+            billingSignatureHeaders({
+                secret: GOLDEN_SECRET,
+                method: 'GET',
+                path: '/api/billing/credits/ledger',
+                query: 'limit=25&organizationId=o',
+                now: Number(headers[BILLING_TIMESTAMP_HEADER]),
+            })[BILLING_SIGNATURE_HEADER],
+        );
+    });
+
+    it('signs array params the way axios serializes them (`key[]`)', async () => {
+        const headers = await runInterceptor({
+            method: 'get',
+            url: 'credits/ledger',
+            params: { organizationId: 'o', types: ['purchase', 'debit'] },
+        });
+        expect(headers[BILLING_SIGNATURE_HEADER]).toBe(
+            billingSignatureHeaders({
+                secret: GOLDEN_SECRET,
+                method: 'GET',
+                path: '/api/billing/credits/ledger',
+                query: 'organizationId=o&types%5B%5D=purchase&types%5B%5D=debit',
+                now: Number(headers[BILLING_TIMESTAMP_HEADER]),
+            })[BILLING_SIGNATURE_HEADER],
+        );
+    });
+
+    it('does not truncate a query value that contains a literal "?"', async () => {
+        const headers = await runInterceptor({
+            method: 'get',
+            url: 'credits/balance?returnTo=/byok?credits=success',
+            params: { organizationId: 'o' },
+        });
+        expect(headers[BILLING_SIGNATURE_HEADER]).toBe(
+            billingSignatureHeaders({
+                secret: GOLDEN_SECRET,
+                method: 'GET',
+                path: '/api/billing/credits/balance',
+                query: 'organizationId=o&returnTo=/byok?credits=success',
+                now: Number(headers[BILLING_TIMESTAMP_HEADER]),
+            })[BILLING_SIGNATURE_HEADER],
+        );
+    });
+
     it('sends no signature when no secret is configured', async () => {
         delete process.env.API_BILLING_WEBHOOK_SECRET;
         const headers = await runInterceptor({
