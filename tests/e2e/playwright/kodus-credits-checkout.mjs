@@ -71,8 +71,10 @@ async function login(email, password) {
 }
 
 async function userInfo(token) {
+    // The Kodus API never validates the billing service secret — do not put
+    // a money-scoped credential in its request (or its access log).
     const resp = await fetch(`${API}/user/info`, {
-        headers: { Authorization: `Bearer ${token}`, ...svc() },
+        headers: { Authorization: `Bearer ${token}` },
     });
     if (resp.status !== 200) throw new Error(`/user/info HTTP ${resp.status}`);
     const body = await resp.json();

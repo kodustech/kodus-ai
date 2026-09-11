@@ -41,7 +41,9 @@ async function apiLogin(email, password) {
     const b = await r.json(); const t = b.accessToken ?? b.data?.accessToken; if (!t) throw new Error("login"); return t;
 }
 async function ids(token) {
-    const b = await fetch(`${API}/user/info`, { headers: { Authorization: `Bearer ${token}`, ...svc() } }).then((r) => r.json());
+    // No billing secret on API calls: it validates nothing there and would
+    // only land in that service's access log.
+    const b = await fetch(`${API}/user/info`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json());
     const d = b.data ?? b; return { organizationId: d.organization.uuid, teamId: d.teamMember[0].team.uuid };
 }
 async function balance(token, qs) {
