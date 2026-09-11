@@ -18,6 +18,7 @@ import {
     ObservabilityTelemetryModel,
     ObservabilityTelemetryModelSchema,
 } from '../infrastructure/adapters/repositories/schemas/observabilityTelemetry.model';
+import { ListKodusCreditChargesUseCase } from '../application/use-cases/credits/list-kodus-credit-charges.use-case';
 
 /**
  * Metering for "Kodus as the provider": journals Kodus-routed usage spans as
@@ -48,7 +49,11 @@ import {
             provide: KODUS_CREDITS_METERING_SERVICE_TOKEN,
             useClass: KodusCreditsMeteringService,
         },
+        ListKodusCreditChargesUseCase,
     ],
-    exports: [KODUS_CREDITS_METERING_SERVICE_TOKEN],
+    exports: [
+        KODUS_CREDITS_METERING_SERVICE_TOKEN,
+        ListKodusCreditChargesUseCase,
+    ],
 })
 export class KodusCreditsModule {}

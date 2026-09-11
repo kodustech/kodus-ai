@@ -1,7 +1,4 @@
-import {
-    KODUS_CREDITS_METERING_SERVICE_TOKEN,
-    KodusCreditsMeteringService,
-} from '@libs/analytics/application/credits/kodus-credits-metering.service';
+import { ListKodusCreditChargesUseCase } from '@libs/analytics/application/use-cases/credits/list-kodus-credit-charges.use-case';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
 import {
     Action,
@@ -43,8 +40,7 @@ export class KodusCreditsController {
     constructor(
         @Inject(REQUEST)
         private readonly request: UserRequest,
-        @Inject(KODUS_CREDITS_METERING_SERVICE_TOKEN)
-        private readonly metering: KodusCreditsMeteringService,
+        private readonly listKodusCreditChargesUseCase: ListKodusCreditChargesUseCase,
     ) {}
 
     @Get('charges')
@@ -71,25 +67,10 @@ export class KodusCreditsController {
                 'organizationId not found in request',
             );
         }
-        const charges = await this.metering.listCharges(organizationId, {
+        return this.listKodusCreditChargesUseCase.execute(organizationId, {
             limit: query.limit,
             before: query.before,
             prNumber: query.prNumber,
         });
-        return {
-            charges: charges.map((c) => ({
-                spanId: c.spanId,
-                correlationId: c.correlationId,
-                prNumber: c.prNumber,
-                model: c.modelId,
-                area: c.area,
-                route: c.route,
-                tokens: c.tokens,
-                amountUsd: c.amountUsd,
-                status: c.status,
-                spanAt: c.spanAt,
-                debitedAt: c.debitedAt,
-            })),
-        };
     }
 }
