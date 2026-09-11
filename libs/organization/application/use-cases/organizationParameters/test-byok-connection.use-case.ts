@@ -530,15 +530,29 @@ export class TestByokConnectionUseCase {
     }
 
     /**
-     * The form's values as the runtime slot they will become. `apiKey` is
-     * re-encrypted because a slot carries ciphertext by contract (the model build
-     * decrypts it downstream) — the probe must not be the one path that hands the
-     * builder a raw secret and quietly changes that invariant.
+     * The form's values as the runtime slot they will become. Every secret is
+     * re-encrypted because a slot carries ciphertext by contract (the model
+     * build decrypts it downstream) — the probe must not be the one path that
+     * hands the builder a raw secret and quietly changes that invariant.
+     * `apiKey` was the only field this covered; the Bedrock aws* secrets were
+     * forwarded as plaintext, and `bedrockModelFromCredentials` unconditionally
+     * decrypt()s them, so a real Bedrock credential blew up
+     * `createDecipheriv` on a plaintext value with "Invalid initialization
+     * vector" the moment a model was picked and the probe went through the
+     * runtime slot instead of the credential-only bearer/SigV4 checks.
      */
     private slotFromInput(
         input: TestByokInput,
         baseURL?: string,
     ): NormalizedModel {
+        // Encrypts whenever a value is present, even whitespace-only — gating on
+        // `.trim()` truthiness here while `bedrockModelFromCredentials` decrypts
+        // on plain truthiness would leave a whitespace-only secret unencrypted,
+        // reintroducing the exact "Invalid initialization vector" crash this
+        // method exists to prevent.
+        const encryptIfPresent = (v?: string): string | undefined =>
+            v !== undefined ? encrypt(v) : undefined;
+
         return {
             provider: input.provider as BYOKProvider,
             apiKey: encrypt(input.apiKey ?? ''),
@@ -551,11 +565,11 @@ export class TestByokConnectionUseCase {
             openrouterProviderOrder: input.openrouterProviderOrder,
             openrouterAllowFallbacks: input.openrouterAllowFallbacks,
             vertexLocation: input.vertexLocation,
-            awsBearerToken: input.awsBearerToken,
-            awsAccessKeyId: input.awsAccessKeyId,
-            awsSecretAccessKey: input.awsSecretAccessKey,
+            awsBearerToken: encryptIfPresent(input.awsBearerToken),
+            awsAccessKeyId: encryptIfPresent(input.awsAccessKeyId),
+            awsSecretAccessKey: encryptIfPresent(input.awsSecretAccessKey),
             awsRegion: input.awsRegion,
-            awsSessionToken: input.awsSessionToken,
+            awsSessionToken: encryptIfPresent(input.awsSessionToken),
         } as NormalizedModel;
     }
 
