@@ -394,11 +394,10 @@ function matchByMessage(lower: string): LlmErrorCategory {
         lower.includes('service unavailable') ||
         lower.includes('internal server error') ||
         // Status numbers can appear as text without a status field (Cloudflare's
-        // 530 over a 5xx, proxy passthrough).
-        lower.includes('502') ||
-        lower.includes('503') ||
-        lower.includes('504') ||
-        lower.includes('530')
+        // 530 over a 5xx, proxy passthrough). Word boundaries keep bare digits
+        // inside larger numbers (token counts like "5032", ids) from being read
+        // as an HTTP status and wrongly marking a permanent error TRANSIENT.
+        /\b(?:502|503|504|530)\b/.test(lower)
     ) {
         return LlmErrorCategory.TRANSIENT;
     }

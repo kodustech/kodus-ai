@@ -244,6 +244,19 @@ describe('classifyLLMError', () => {
             expect(info.category).toBe(LlmErrorCategory.TRANSIENT);
         });
 
+        it.each([
+            // A 5xx-like number embedded in a larger number is not a status:
+            // substring checks used to read "5032" as a 503 and flip a permanent
+            // failure to TRANSIENT, defeating the purpose of the fallback.
+            'The input token count (5032) exceeds the maximum allowed for this model',
+            'Request id req_5301 rejected by the gateway',
+        ])('bare digit inside a larger number (%s) → not TRANSIENT', (msg) => {
+            const err = new Error(msg);
+            expect(classifyLLMError(err).category).not.toBe(
+                LlmErrorCategory.TRANSIENT,
+            );
+        });
+
         it('unrecognized message → UNKNOWN', () => {
             const err = new Error('something weird happened in the SDK');
             expect(classifyLLMError(err).category).toBe(
