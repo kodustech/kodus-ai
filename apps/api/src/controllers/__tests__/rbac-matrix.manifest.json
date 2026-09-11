@@ -633,7 +633,7 @@
     "expected": {
       "owner": "allow",
       "billing_manager": "allow",
-      "repo_admin": "allow",
+      "repo_admin": "deny",
       "contributor": "deny"
     }
   },
