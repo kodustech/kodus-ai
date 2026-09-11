@@ -528,32 +528,78 @@ export class OutboxRelayService
                 return;
             }
 
+            // Retry budget still available? `retryCount` is the number of
+            // retries ALREADY consumed, so a job is requeueable while
+            // `retryCount < maxRetries`. The previous `+ 1 < maxRetries` was
+            // always false for `maxRetries: 1` (code_review /
+            // check_implementation): a first-ever stale job (retryCount 0)
+            // went straight to FAILED instead of being retried.
             const requeueable = stale.filter(
-                (job) =>
-                    (job.retryCount ?? 0) + 1 < (job.maxRetries ?? 3),
+                (job) => (job.retryCount ?? 0) < (job.maxRetries ?? 3),
             );
-            const dead = stale.filter((job) => !requeueable.includes(job));
+            // Set membership keeps the dead partition O(n) instead of the
+            // O(n²) `requeueable.includes(job)` scan over the whole batch.
+            const requeueableSet = new Set(requeueable);
+            const dead = stale.filter((job) => !requeueableSet.has(job));
             const requeueUuids = requeueable.map((job) => job.uuid);
             const deadUuids = dead.map((job) => job.uuid);
             const staleReason =
                 'Worker died while job was PROCESSING (job lease expired) — reclaimed by stale-job watchdog.';
 
-            const requeued =
-                requeueUuids.length > 0
-                    ? ((await this.jobRepository.requeueStaleJobs?.({
+            // Fire both writes concurrently and settle BOTH before counting:
+            // sequenced awaits meant a rejection on the first write skipped the
+            // second entirely, leaving half the stale batch unreclaimed.
+            const requeueTask =
+                requeueUuids.length > 0 && this.jobRepository.requeueStaleJobs
+                    ? this.jobRepository.requeueStaleJobs({
                           uuids: requeueUuids,
                           lastError: staleReason,
                           requeuedBy: this.constructor.name,
-                      })) ?? 0)
-                    : 0;
-            const permanentlyFailed =
-                deadUuids.length > 0
-                    ? ((await this.jobRepository.failStaleJobs?.({
+                      })
+                    : Promise.resolve(0);
+            const failTask =
+                deadUuids.length > 0 && this.jobRepository.failStaleJobs
+                    ? this.jobRepository.failStaleJobs({
                           uuids: deadUuids,
                           lastError: `${staleReason} Retry budget exhausted (${deadUuids.length} job(s)).`,
                           errorClassification: ErrorClassification.PERMANENT,
-                      })) ?? 0)
+                      })
+                    : Promise.resolve(0);
+
+            const [requeueResult, failResult] = await Promise.allSettled([
+                requeueTask,
+                failTask,
+            ]);
+
+            if (requeueResult.status === 'rejected') {
+                this.logger.error({
+                    message: 'Failed to requeue stale PROCESSING workflow jobs',
+                    context: OutboxRelayService.name,
+                    error:
+                        requeueResult.reason instanceof Error
+                            ? requeueResult.reason
+                            : new Error(String(requeueResult.reason)),
+                    metadata: { uuids: requeueUuids },
+                });
+            }
+            if (failResult.status === 'rejected') {
+                this.logger.error({
+                    message: 'Failed to permanently fail stale workflow jobs',
+                    context: OutboxRelayService.name,
+                    error:
+                        failResult.reason instanceof Error
+                            ? failResult.reason
+                            : new Error(String(failResult.reason)),
+                    metadata: { uuids: deadUuids },
+                });
+            }
+
+            const requeued =
+                requeueResult.status === 'fulfilled'
+                    ? (requeueResult.value ?? 0)
                     : 0;
+            const permanentlyFailed =
+                failResult.status === 'fulfilled' ? (failResult.value ?? 0) : 0;
 
             const reapedCount = requeued + permanentlyFailed;
             if (reapedCount === 0) {

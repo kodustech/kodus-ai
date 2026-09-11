@@ -224,4 +224,96 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
 
         expect(lock.release).toHaveBeenCalledTimes(1);
     });
+
+    it('requeues (not fails) a first-time stale job with maxRetries:1', async () => {
+        const service = build();
+        jobRepository.findStaleProcessing.mockResolvedValue([
+            {
+                uuid: 'job-impl',
+                workflowType: 'CHECK_IMPLEMENTATION',
+                organizationId: 'org-1',
+                startedAt: new Date(),
+                leaseExpiresAt: new Date(Date.now() - 1000),
+                retryCount: 0,
+                maxRetries: 1,
+            },
+        ]);
+        jobRepository.requeueStaleJobs.mockResolvedValue(1);
+
+        await service.reapStaleProcessingJobs();
+
+        // retryCount 0 < maxRetries 1 → still has its one retry left.
+        expect(jobRepository.requeueStaleJobs).toHaveBeenCalledTimes(1);
+        expect(
+            jobRepository.requeueStaleJobs.mock.calls[0][0].uuids,
+        ).toEqual(['job-impl']);
+        expect(jobRepository.failStaleJobs).not.toHaveBeenCalled();
+    });
+
+    it('runs the dead-letter write even when the requeue write rejects', async () => {
+        const service = build();
+        jobRepository.findStaleProcessing.mockResolvedValue([
+            {
+                uuid: 'job-retry',
+                workflowType: 'CODE_REVIEW',
+                organizationId: 'org-1',
+                startedAt: new Date(),
+                leaseExpiresAt: new Date(Date.now() - 1000),
+                retryCount: 0,
+                maxRetries: 3,
+            },
+            {
+                uuid: 'job-dead',
+                workflowType: 'CODE_REVIEW',
+                organizationId: 'org-1',
+                startedAt: new Date(),
+                leaseExpiresAt: new Date(Date.now() - 1000),
+                retryCount: 3,
+                maxRetries: 3,
+            },
+        ]);
+        jobRepository.requeueStaleJobs.mockRejectedValue(new Error('db down'));
+        jobRepository.failStaleJobs.mockResolvedValue(1);
+
+        await service.reapStaleProcessingJobs();
+
+        // The rejection on one write must not skip the other (Promise.allSettled).
+        expect(jobRepository.failStaleJobs).toHaveBeenCalledTimes(1);
+        expect(
+            jobRepository.failStaleJobs.mock.calls[0][0].uuids,
+        ).toEqual(['job-dead']);
+    });
+
+    it('runs the requeue write even when the dead-letter write rejects', async () => {
+        const service = build();
+        jobRepository.findStaleProcessing.mockResolvedValue([
+            {
+                uuid: 'job-retry',
+                workflowType: 'CODE_REVIEW',
+                organizationId: 'org-1',
+                startedAt: new Date(),
+                leaseExpiresAt: new Date(Date.now() - 1000),
+                retryCount: 0,
+                maxRetries: 3,
+            },
+            {
+                uuid: 'job-dead',
+                workflowType: 'CODE_REVIEW',
+                organizationId: 'org-1',
+                startedAt: new Date(),
+                leaseExpiresAt: new Date(Date.now() - 1000),
+                retryCount: 3,
+                maxRetries: 3,
+            },
+        ]);
+        jobRepository.requeueStaleJobs.mockResolvedValue(1);
+        jobRepository.failStaleJobs.mockRejectedValue(new Error('db down'));
+
+        await service.reapStaleProcessingJobs();
+
+        expect(jobRepository.requeueStaleJobs).toHaveBeenCalledTimes(1);
+        expect(
+            jobRepository.requeueStaleJobs.mock.calls[0][0].uuids,
+        ).toEqual(['job-retry']);
+    });
 });

@@ -135,9 +135,7 @@ describe('WorkflowJobRepository — lease-based stale-job reclaim (#1830)', () =
     });
 
     it('selects PROCESSING rows with an expired lease OR (no lease + old age)', async () => {
-        const stale = [
-            { uuid: 'job-expired', workflowType: 'CODE_REVIEW' },
-        ];
+        const stale = [{ uuid: 'job-expired', workflowType: 'CODE_REVIEW' }];
         qb.getRawMany.mockResolvedValue(stale);
 
         const result = await repo.findStaleProcessing({ now, olderThan });
@@ -171,6 +169,11 @@ describe('WorkflowJobRepository — lease-based stale-job reclaim (#1830)', () =
         expect(setArgs.leaseOwner).toBeNull();
         expect(setArgs.leaseExpiresAt).toBeNull();
         expect(qb.whereInIds).toHaveBeenCalledWith(['job-1']);
+        // Re-assert PROCESSING in the UPDATE so a job that completed between
+        // the SELECT and this write is not clobbered back to PENDING.
+        expect(qb.andWhere).toHaveBeenCalledWith('status = :status', {
+            status: JobStatus.PROCESSING,
+        });
     });
 
     it('requeue is a no-op for an empty uuid list', async () => {
@@ -201,5 +204,34 @@ describe('WorkflowJobRepository — lease-based stale-job reclaim (#1830)', () =
             }),
         );
         expect(qb.whereInIds).toHaveBeenCalledWith(['job-dead']);
+        // Only a still-PROCESSING row may be terminally failed.
+        expect(qb.andWhere).toHaveBeenCalledWith('status = :status', {
+            status: JobStatus.PROCESSING,
+        });
+    });
+
+    it('wraps the lease disjunction in its own parens so the status guard covers both branches', async () => {
+        await repo.findStaleProcessing({ now, olderThan });
+
+        const predicate = qb.andWhere.mock.calls[0][0] as string;
+        // Without the outer pair, SQL precedence parses
+        // `status = PROCESSING AND lease-expired OR legacy` and the legacy
+        // branch escapes the status guard entirely.
+        expect(predicate.startsWith('((')).toBe(true);
+        expect(predicate.trim().endsWith('))')).toBe(true);
+    });
+
+    it('quotes + alias-qualifies every selected column (no unquoted mixed-case)', async () => {
+        await repo.findStaleProcessing({ now, olderThan });
+
+        expect(qb.select).toHaveBeenCalledWith([
+            'job."uuid"',
+            'job."workflowType"',
+            'job."organizationId"',
+            'job."startedAt"',
+            'job."leaseExpiresAt"',
+            'job."retryCount"',
+            'job."maxRetries"',
+        ]);
     });
 });

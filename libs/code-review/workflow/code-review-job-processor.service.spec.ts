@@ -1,6 +1,7 @@
 import { CodeReviewJobProcessorService } from './code-review-job-processor.service';
 import { PrReviewInProgressError } from '@libs/code-review/domain/errors/pr-review-in-progress.error';
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
+import { JOB_LEASE_RENEW_INTERVAL_MS } from '@libs/core/workflow/infrastructure/job-lease.renewer';
 
 const TARGET = {
     organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
@@ -194,6 +195,41 @@ describe('CodeReviewJobProcessorService', () => {
                 'job-1',
                 expect.objectContaining({ status: JobStatus.COMPLETED }),
             );
+        });
+    });
+
+    describe('when the job lease is lost (repeated renewal failures)', () => {
+        it('aborts the run so the reaper cannot reclaim a live job twice', async () => {
+            jest.useFakeTimers();
+            try {
+                // State writes (PROCESSING / FAILED / COMPLETED carry a
+                // `status`) succeed; only the lease-renewal writes fail.
+                jobRepository.update.mockImplementation(
+                    (_id: string, data: any) =>
+                        data && data.status === undefined
+                            ? Promise.reject(new Error('db down'))
+                            : Promise.resolve(undefined),
+                );
+                runCodeReviewAutomationUseCase.execute.mockImplementation(
+                    () => new Promise(() => {}), // never settles
+                );
+
+                const run = service.process('job-1');
+                // Attach the rejection handler BEFORE the timers fire so the
+                // abort rejection is never momentarily unhandled.
+                const assertion = expect(run).rejects.toThrow(/aborted/i);
+
+                // Two consecutive renewal failures (30s cadence) → lease lost.
+                await jest.advanceTimersByTimeAsync(
+                    JOB_LEASE_RENEW_INTERVAL_MS * 3,
+                );
+
+                // The run must unblock (race against the lease-lost abort)
+                // instead of executing a job the reaper may already own.
+                await assertion;
+            } finally {
+                jest.useRealTimers();
+            }
         });
     });
 });
