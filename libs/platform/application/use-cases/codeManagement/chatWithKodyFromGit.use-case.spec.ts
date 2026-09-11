@@ -16,6 +16,10 @@ describe('ChatWithKodyFromGitUseCase', () => {
         addReactionToComment: jest.Mock;
         getPullRequestReviewComment: jest.Mock;
         createResponseToComment: jest.Mock;
+        createIssueComment: jest.Mock;
+        updateIssueComment: jest.Mock;
+        updateResponseToComment: jest.Mock;
+        removeReactionsFromComment: jest.Mock;
         getCloneParams: jest.Mock;
     };
     let conversationAgentUseCase: {
@@ -48,6 +52,10 @@ describe('ChatWithKodyFromGitUseCase', () => {
             addReactionToComment: jest.fn().mockResolvedValue(undefined),
             getPullRequestReviewComment: jest.fn().mockResolvedValue([]),
             createResponseToComment: jest.fn().mockResolvedValue({ id: 999 }),
+            createIssueComment: jest.fn().mockResolvedValue({ id: 998 }),
+            updateIssueComment: jest.fn().mockResolvedValue(undefined),
+            updateResponseToComment: jest.fn().mockResolvedValue(undefined),
+            removeReactionsFromComment: jest.fn().mockResolvedValue(undefined),
             getCloneParams: jest.fn().mockResolvedValue(undefined),
         };
         conversationAgentUseCase = {
@@ -205,6 +213,55 @@ describe('ChatWithKodyFromGitUseCase', () => {
                     }),
                 }),
             }),
+        );
+    });
+
+    // Regression: __NO_TASK_MCP__ is an internal marker the agent returns
+    // when no task-management MCP is connected — it must NEVER reach a PR
+    // comment verbatim. The pipeline path already guards it; this is the
+    // explicit @kody -v business-logic command path, which had no guard.
+    // Exercises the private handler directly — the full webhook dispatch
+    // (ack/reaction/posting branching) is covered by the other tests in this
+    // file; this one isolates the translation itself.
+    it('translates the NO_TASK_MCP sentinel into a readable message instead of returning it raw', async () => {
+        businessRulesValidationAgentUseCase.execute.mockResolvedValueOnce(
+            '__NO_TASK_MCP__',
+        );
+
+        const response = await (useCase as any).handleBusinessLogicValidation(
+            {
+                prepareContext: { userQuestion: '@kody -v business-logic' },
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                thread: undefined,
+            },
+        );
+
+        expect(response).not.toBe('__NO_TASK_MCP__');
+        expect(response).not.toContain('__NO_TASK_MCP__');
+        expect(response).toMatch(/no task-management mcp/i);
+    });
+
+    it('passes through a real business-logic result unchanged', async () => {
+        businessRulesValidationAgentUseCase.execute.mockResolvedValueOnce(
+            '## Business Rules Validation\n\nStatus: Issues Found',
+        );
+
+        const response = await (useCase as any).handleBusinessLogicValidation(
+            {
+                prepareContext: { userQuestion: '@kody -v business-logic' },
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                thread: undefined,
+            },
+        );
+
+        expect(response).toBe(
+            '## Business Rules Validation\n\nStatus: Issues Found',
         );
     });
 
