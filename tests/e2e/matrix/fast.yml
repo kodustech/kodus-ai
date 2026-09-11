@@ -63,6 +63,12 @@ scenarios:
     # snapshots + a live enqueue→poll→completed against a small public PR.
     # No tenant/provider — it only touches /cli/public/*.
     - public-pr-demo
+    # Prior-round decision memory (#1313): opens a PR with a deliberate
+    # missing-null-check bug, applies the real fix for real (a genuine 2nd
+    # commit, not a command re-trigger), and asserts round 2 doesn't suggest
+    # undoing the fix. github-only for now — needs pushFollowupCommit +
+    # listReviewCommentBodies, only implemented on the GitHub provider.
+    - review-decision-memory
 
 cells:
     # ---------- self-hosted ----------
