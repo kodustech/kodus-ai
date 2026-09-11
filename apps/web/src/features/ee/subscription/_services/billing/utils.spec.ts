@@ -202,13 +202,40 @@ describe("billingFetch signs what it sends", () => {
         );
     });
 
-    it("passes a form body through untouched on an unsigned route", async () => {
+    it("passes a form body through untouched, and unsigned, on an unsigned route", async () => {
         const { billingFetch } = await import("./utils");
         const form = new URLSearchParams({ a: "1" });
         await billingFetch("plans", { method: "POST", body: form } as never);
         const [, config] = typedFetchMock.mock.calls[0];
         // Not replaced by "{}" — the payload survives.
         expect(config.body).toBe(form);
+        // And no signature: one over "" would claim to cover bytes it never saw.
+        expect(config.headers?.["x-kodus-signature"]).toBeUndefined();
+    });
+
+    it("serializes anything JSON can represent, including a class instance", async () => {
+        const { billingFetch } = await import("./utils");
+        class DebitRequest {
+            constructor(
+                public organizationId: string,
+                public creditUsd: number,
+            ) {}
+        }
+        const dto = new DebitRequest("org-1", 20);
+        await billingFetch("credits/checkout", {
+            method: "POST",
+            body: dto,
+        } as never);
+        const [, config] = typedFetchMock.mock.calls[0];
+        expect(config.body).toBe(JSON.stringify(dto));
+        expect(config.headers["x-kodus-signature"]).toBe(
+            await expectedSignature(
+                "POST",
+                "credits/checkout",
+                JSON.stringify(dto),
+                config.headers["x-kodus-timestamp"],
+            ),
+        );
     });
 
     it("refuses a body it cannot sign on a credit route", async () => {

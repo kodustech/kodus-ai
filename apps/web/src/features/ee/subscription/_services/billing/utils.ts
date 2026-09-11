@@ -46,53 +46,68 @@ const withSignature = <
 ): C => {
     const signedTarget = addSearchParamsToUrl(path, config?.params);
     const body = config?.body;
-    // Sign the bytes that will be SENT. A plain object is serialized here and
-    // put back on the config, so `fetch` transmits the same string that was
-    // signed — passing it through would otherwise sign "" and send a coerced
-    // payload, and billing's 401 becomes a silent null.
+
+    // Sign the bytes that will be SENT. Anything `JSON.stringify` can turn
+    // into bytes — a plain object, an array, a DTO instance, a number — is
+    // serialized here and written back to the config, so `fetch` transmits
+    // the same string that was signed. Passing an object straight through
+    // would sign "" and send a coerced payload, and billing's 401 then
+    // surfaces as a wallet with no balance.
     //
-    // A streamed or form body (FormData, URLSearchParams, Blob, a stream)
-    // cannot be signed: there are no bytes to hash here, and serializing it
-    // would replace the payload with "{}". No credit route takes one, so
-    // rather than send something that is quietly wrong, say so.
-    const isPlainJson =
+    // What genuinely cannot be signed is a body with its own byte
+    // representation that we would have to consume to read: FormData,
+    // URLSearchParams, Blob, a buffer view, a stream. Those are detected by
+    // exclusion, never by "is it a plain object".
+    const isFormOrStreamBody =
+        body !== undefined &&
+        body !== null &&
+        ((typeof FormData !== "undefined" && body instanceof FormData) ||
+            (typeof URLSearchParams !== "undefined" &&
+                body instanceof URLSearchParams) ||
+            (typeof Blob !== "undefined" && body instanceof Blob) ||
+            body instanceof ArrayBuffer ||
+            ArrayBuffer.isView(body) ||
+            typeof (body as { getReader?: unknown }).getReader === "function");
+    const needsSerialization =
         body !== undefined &&
         body !== null &&
         typeof body !== "string" &&
-        (Array.isArray(body) ||
-            Object.getPrototypeOf(body) === Object.prototype ||
-            Object.getPrototypeOf(body) === null);
-    const isUnsignable =
-        body !== undefined &&
-        body !== null &&
-        typeof body !== "string" &&
-        !isPlainJson;
-    if (isUnsignable && /(^|\/)credits(\/|$)/.test(signedTarget)) {
+        !isFormOrStreamBody;
+    const canSign =
+        body === undefined ||
+        body === null ||
+        typeof body === "string" ||
+        needsSerialization;
+
+    // On a `/credits/*` path — the only signed surface — an unsignable body
+    // would mean a 401 nobody can explain, so say it instead of sending it.
+    if (!canSign && /(^|\/)credits(\/|$)/.test(signedTarget)) {
         throw new Error(
             `billing: a ${
                 (body as object)?.constructor?.name ?? typeof body
             } body cannot be signed for ${signedTarget} — send JSON to the credit routes`,
         );
     }
-    const rawBody =
-        body === undefined || body === null
-            ? ""
-            : typeof body === "string"
-              ? body
-              : isPlainJson
-                ? JSON.stringify(body)
-                : "";
-    const extra = billingSignatureHeader(
-        config?.method ?? "GET",
-        signedTarget,
-        rawBody,
-    );
+
+    const rawBody = !canSign
+        ? ""
+        : body === undefined || body === null
+          ? ""
+          : typeof body === "string"
+            ? body
+            : JSON.stringify(body);
+    // No signature at all when the body cannot be covered: a signature over
+    // "" would claim to authenticate bytes it never saw. Every route that
+    // takes such a body is unauthenticated anyway.
+    const extra = canSign
+        ? billingSignatureHeader(config?.method ?? "GET", signedTarget, rawBody)
+        : {};
     if (Object.keys(extra).length === 0) return (config ?? {}) as C;
     return {
         ...((config ?? {}) as C),
         // Only a body this function serialized is replaced; anything else is
         // passed through exactly as the caller built it.
-        ...(isPlainJson ? { body: rawBody } : {}),
+        ...(needsSerialization ? { body: rawBody } : {}),
         headers: {
             ...((config?.headers as Record<string, string>) ?? {}),
             ...extra,
