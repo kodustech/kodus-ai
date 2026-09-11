@@ -20,7 +20,10 @@ import { calculateBackoffInterval } from '@libs/common/utils/polling';
 import { SandboxLeaseRepository } from '../repositories/sandbox-lease.repository';
 import { SANDBOX_LEASE_CLEANUP_STATUS } from '../repositories/schemas/sandbox-lease.model';
 import { NULL_SANDBOX_INSTANCE } from '../providers/null-sandbox.service';
-import { buildE2BRemoteCommands } from '../providers/e2b-sandbox.service';
+import {
+    buildE2BRemoteCommands,
+    syncE2BSandboxRepo,
+} from '../providers/e2b-sandbox.service';
 import {
     isLocalSandboxPath,
     deleteLocalSandbox,
@@ -260,6 +263,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 consumer,
                 doc.state,
                 doc.sandboxId,
+                cloneParams,
             );
         } catch (err) {
             if (err instanceof SandboxStaleConnectionError) {
@@ -708,6 +712,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         consumer: string,
         state: string,
         sandboxId?: string,
+        cloneParams?: CreateSandboxParams,
     ): Promise<AcquireResult> {
         if (state === 'INVALIDATED') {
             // Finding 2 fix: do NOT delete the sandbox here — active leases
@@ -717,7 +722,13 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         }
 
         if (state === 'READY' && sandboxId) {
-            return this.connectToExisting(prKey, leaseId, consumer, sandboxId);
+            return this.connectToExisting(
+                prKey,
+                leaseId,
+                consumer,
+                sandboxId,
+                cloneParams,
+            );
         }
 
         // state === 'CREATING' (or PAUSED without sandboxId): poll until READY
@@ -748,6 +759,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                     leaseId,
                     consumer,
                     doc.sandboxId,
+                    cloneParams,
                 );
             }
         }
@@ -760,6 +772,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         leaseId: string,
         consumer: string,
         sandboxId: string,
+        cloneParams?: CreateSandboxParams,
     ): Promise<AcquireResult> {
         const apiKey = this.configService.get<string>('API_E2B_KEY');
 
@@ -801,6 +814,28 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             // the joiner here doesn't have them, so we throw a typed
             // error and let the caller retry with full params.
             throw new SandboxStaleConnectionError(prKey, sandboxId);
+        }
+
+        // Bring a reused sandbox's git checkout up to date with the CURRENT
+        // commit before handing it back — see syncE2BSandboxRepo's docstring
+        // for the stale-checkout bug this closes (#1313 e2e validation,
+        // 2026-09-11). Best-effort: a sync failure falls back to whatever
+        // was already on disk (the pre-fix behavior), it never fails the
+        // acquire.
+        if (cloneParams) {
+            try {
+                await syncE2BSandboxRepo(e2bSandbox, cloneParams, {
+                    logger: this.logger,
+                    logContext: SandboxLeaseManager.name,
+                });
+            } catch (err) {
+                this.logger.warn({
+                    message: `SandboxLeaseManager: syncE2BSandboxRepo threw for sandboxId="${sandboxId}" prKey="${prKey}" — sandbox keeps its previous checkout`,
+                    context: SandboxLeaseManager.name,
+                    error: err,
+                    metadata: { prKey, sandboxId },
+                });
+            }
         }
 
         const sandbox: SandboxInstance = this.buildSandboxInstance(
