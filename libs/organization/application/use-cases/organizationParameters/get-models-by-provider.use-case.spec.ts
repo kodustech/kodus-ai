@@ -291,7 +291,16 @@ describe('GetModelsByProviderUseCase — BYOK-aware model listing', () => {
     // ALREADY-SAVED Bedrock bearer token (the user retypes only the region, not
     // the token) was treated as lenient — a bad region silently degraded to the
     // curated Claude-only fallback instead of surfacing the real region error.
-    it('is STRICT when only the region is a candidate against an already-saved Bedrock bearer token', async () => {
+    // A region alone is NOT a credential candidate — the connect form seeds
+    // `awsRegion` from the saved credential on every edit of an existing
+    // Bedrock config, so it rides along on essentially every request whether
+    // or not the user typed a new one. Treating it as "the user is actively
+    // trying this credential" would flip the saved-credential path to strict
+    // on ANY edit: a lapsed saved bearer token, or a transient AWS hiccup,
+    // would 400 a user editing something unrelated (e.g. temperature) instead
+    // of degrading to the curated catalog like every other saved-credential
+    // path does.
+    it('degrades LENIENTLY (curated fallback) when only the region is a candidate against an already-saved Bedrock bearer token', async () => {
         mockedAxios.get.mockRejectedValue(new Error('403 unknown region'));
         const useCase = buildUseCase({
             version: 2,
@@ -305,13 +314,14 @@ describe('GetModelsByProviderUseCase — BYOK-aware model listing', () => {
             models: [],
         });
 
-        await expect(
-            useCase.execute(
-                BYOKProvider.AMAZON_BEDROCK,
-                { organizationId: 'org-1' },
-                { awsRegion: 'eu-west-99' }, // no bearer candidate — reuses the saved one
-            ),
-        ).rejects.toThrow(/Error fetching amazon_bedrock models/i);
+        const res = await useCase.execute(
+            BYOKProvider.AMAZON_BEDROCK,
+            { organizationId: 'org-1' },
+            { awsRegion: 'eu-west-99' }, // no bearer candidate — reuses the saved one
+        );
+
+        expect(res.exercisedCredential).toBe(false);
+        expect(res.models.length).toBeGreaterThan(0);
     });
 
     // Regression: awsBearerToken/awsRegion are Bedrock-specific fields, but the

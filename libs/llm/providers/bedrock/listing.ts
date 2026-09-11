@@ -87,14 +87,22 @@ const httpListing: ModelListing = {
         if (!Array.isArray(summaries)) return [];
         return summaries
             .map((s) => s as Record<string, unknown>)
-            // Only invocable models — LEGACY ones AWS is retiring shouldn't be
-            // offered as a fresh pick. Permissive when the field is absent
-            // rather than dropping everything on an unexpected shape.
             .filter((s) => {
+                // Only invocable models — LEGACY ones AWS is retiring shouldn't
+                // be offered as a fresh pick. Permissive when the field is
+                // absent rather than dropping everything on an unexpected shape.
                 const lifecycle = s.modelLifecycle as
                     | { status?: unknown }
                     | undefined;
-                return (lifecycle?.status ?? 'ACTIVE') === 'ACTIVE';
+                if ((lifecycle?.status ?? 'ACTIVE') !== 'ACTIVE') return false;
+                // ListFoundationModels also returns embedding models (Titan
+                // Embed, Cohere Embed) and image models (Nova Canvas, Stability)
+                // — none of them can serve a code review. Nothing downstream
+                // filters by modality, so an embedding/image id picked here
+                // would only fail once the review tries to invoke it.
+                // Permissive when the field is absent/malformed.
+                const out = s.outputModalities;
+                return !Array.isArray(out) || out.includes('TEXT');
             })
             .map((s) => {
                 const id = typeof s.modelId === 'string' ? s.modelId : '';

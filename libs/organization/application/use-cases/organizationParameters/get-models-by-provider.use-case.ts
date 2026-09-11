@@ -90,13 +90,19 @@ export class GetModelsByProviderUseCase {
         const candidateAwsRegion = isBedrockCandidate
             ? candidate?.awsRegion?.trim() || undefined
             : undefined;
-        // Any candidate makes this a "the user is actively trying THIS
-        // credential" request — strict-mode gate for both catch branches below.
-        // Region is included because a bad/unreachable region fails the live
-        // call regardless of how good the credential is — the user needs that
-        // error surfaced, not a silent degrade to the curated placeholder.
+        // A candidate CREDENTIAL makes this a "the user is actively trying
+        // THIS credential" request — strict-mode gate for both catch branches
+        // below. Region is deliberately NOT included: the connect form seeds
+        // `awsRegion` from the saved credential on every edit of an existing
+        // Bedrock config (page.client.tsx), so it rides along on essentially
+        // every request regardless of whether the user typed a new one.
+        // Counting it here would flip the saved-credential (edit form) path to
+        // strict on ANY edit — a lapsed saved bearer token or a transient AWS
+        // hiccup would 400 a user editing an unrelated field (e.g.
+        // temperature) instead of degrading to the curated catalog like every
+        // other saved-credential path does.
         const hasCandidateCredential =
-            !!candidateKey || !!candidateAwsBearerToken || !!candidateAwsRegion;
+            !!candidateKey || !!candidateAwsBearerToken;
 
         const providerModule = REGISTRY.has(provider)
             ? REGISTRY.get(provider)

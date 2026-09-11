@@ -117,6 +117,52 @@ describe('bedrockModelListing', () => {
         expect(models.map((m) => m.id)).toEqual(['moonshotai.kimi-k2.5']);
     });
 
+    // ListFoundationModels — unlike ListInferenceProfiles, which only ever
+    // returned Anthropic chat models — also lists embedding and image
+    // foundation models. None of them can serve a code review; nothing
+    // downstream filters by modality, so picking one from the dropdown would
+    // only fail once a review tries to invoke it.
+    it('excludes embedding and image models (non-TEXT outputModalities)', () => {
+        const models = listing().parse({
+            modelSummaries: [
+                {
+                    modelId: 'anthropic.claude-sonnet-4-5-20250929-v1:0',
+                    modelName: 'Claude Sonnet 4.5',
+                    modelLifecycle: { status: 'ACTIVE' },
+                    outputModalities: ['TEXT'],
+                },
+                {
+                    modelId: 'amazon.titan-embed-text-v2:0',
+                    modelName: 'Titan Embed Text v2',
+                    modelLifecycle: { status: 'ACTIVE' },
+                    outputModalities: ['EMBEDDING'],
+                },
+                {
+                    modelId: 'amazon.nova-canvas-v1:0',
+                    modelName: 'Nova Canvas',
+                    modelLifecycle: { status: 'ACTIVE' },
+                    outputModalities: ['IMAGE'],
+                },
+            ],
+        });
+        expect(models.map((m) => m.id)).toEqual([
+            'anthropic.claude-sonnet-4-5-20250929-v1:0',
+        ]);
+    });
+
+    it('is permissive when outputModalities is absent (does not drop the model)', () => {
+        const models = listing().parse({
+            modelSummaries: [
+                {
+                    modelId: 'moonshotai.kimi-k2.5',
+                    modelName: 'Kimi K2.5',
+                    modelLifecycle: { status: 'ACTIVE' },
+                },
+            ],
+        });
+        expect(models.map((m) => m.id)).toEqual(['moonshotai.kimi-k2.5']);
+    });
+
     it('parse tolerates a malformed body', () => {
         expect(listing().parse({})).toEqual([]);
         expect(listing().parse(null)).toEqual([]);
