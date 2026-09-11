@@ -364,6 +364,17 @@ function useDebouncedValue<T>(value: T, ms: number): T {
  * (e.g. OpenAI). The list comes from the JUST-TYPED key — no curated placeholder.
  * Before a key exists (fresh connect) it prompts for one; a stored credential
  * (edit / add-to-connected) lists live with no typed key.
+ *
+ * Amazon Bedrock is the one live-listing provider that does NOT authenticate
+ * with `apiKey` — it uses `awsBearerToken` (live) or `awsAccessKeyId` +
+ * `awsSecretAccessKey` (IAM, can only ever reach the curated fallback — SigV4
+ * needs request signing, not a static header). Gating "do we have something to
+ * authenticate with" on `apiKey` alone left a fresh Bedrock connect stuck on
+ * "Enter your API key to load models" forever, even though the backend already
+ * serves a curated fallback for a keyless Bedrock request. Every other
+ * live-listing provider (openai, anthropic, google_gemini, open_router,
+ * novita, moonshot) keeps using `apiKey` exactly as before — this only adds a
+ * Bedrock-specific OR branch, it doesn't touch their gate.
  */
 const ModelSelectLive = ({
     onUseManual,
@@ -376,19 +387,41 @@ const ModelSelectLive = ({
 }) => {
     const form = useFormContext<EditKeyForm>();
     const provider = form.watch("provider");
+    const isBedrock = provider === "amazon_bedrock";
     const typedKeyRaw = (form.watch("apiKey") ?? "").trim();
     const typedBaseURL = (form.watch("baseURL") ?? undefined) || undefined;
     const typedKey = useDebouncedValue(typedKeyRaw, 700);
     const hasKey = typedKey.length > 0;
 
+    const typedAwsBearerRaw = (form.watch("awsBearerToken") ?? "").trim();
+    const typedAwsAccessKeyIdRaw = (
+        form.watch("awsAccessKeyId") ?? ""
+    ).trim();
+    const typedAwsSecretRaw = (form.watch("awsSecretAccessKey") ?? "").trim();
+    const typedAwsRegionRaw = (form.watch("awsRegion") ?? "").trim();
+    const typedAwsBearer = useDebouncedValue(typedAwsBearerRaw, 700);
+    const typedAwsAccessKeyId = useDebouncedValue(typedAwsAccessKeyIdRaw, 700);
+    const typedAwsSecret = useDebouncedValue(typedAwsSecretRaw, 700);
+    const typedAwsRegion = useDebouncedValue(typedAwsRegionRaw, 700);
+    const hasAwsBearer = isBedrock && typedAwsBearer.length > 0;
+    // IAM creds can't drive a live call, but typing them should still surface
+    // the curated fallback the backend already returns for a keyless request —
+    // the pre-regression behavior for this auth path.
+    const hasAwsIam =
+        isBedrock &&
+        typedAwsAccessKeyId.length > 0 &&
+        typedAwsSecret.length > 0;
+
     // List live when we have SOMETHING to authenticate with: a typed key, or a
     // stored credential the server resolves on its own. Else prompt for the key.
-    const enabled = hasKey || credentialStored;
+    const enabled = hasKey || hasAwsBearer || hasAwsIam || credentialStored;
 
     const { data, isFetching, isError } = useLLMProviderModelsPreview({
         provider,
         apiKey: hasKey ? typedKey : undefined,
         baseURL: typedBaseURL,
+        awsBearerToken: hasAwsBearer ? typedAwsBearer : undefined,
+        awsRegion: isBedrock ? typedAwsRegion || undefined : undefined,
         enabled,
     });
 

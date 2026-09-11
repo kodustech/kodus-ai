@@ -14,6 +14,15 @@ confirmModulesPurge: false
 # Portado dos `resolutions` do yarn (segurança/compat). pnpm ignora
 # `resolutions`; usa `overrides`.
 overrides:
+  # @tiptap/pm@3.29.2 pins prosemirror-model@1.25.11 directly, but the
+  # sibling prosemirror-* packages it also depends on (view/state/transform/
+  # commands/gapcursor/tables/schema-list) resolve their own broader range to
+  # 1.25.9 — two live copies of the same classes (Node/Fragment/Schema) in
+  # the bundle. Cross-copy `instanceof` checks then fail inside ProseMirror,
+  # throwing "Can not convert ... to a Fragment" on every keystroke, so the
+  # transaction is dropped: the cursor moves but nothing is inserted/deleted.
+  # Force one copy for the whole tree.
+  prosemirror-model: 1.25.11
   flatted: ^3.4.2
   prismjs: ^1.30.0
   lodash: ^4.17.23
