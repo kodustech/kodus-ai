@@ -90,14 +90,24 @@ const withSignature = <
         typeof body === "string" ||
         needsSerialization;
 
-    // On a `/credits/*` path — the only signed surface — an unsignable body
-    // would mean a 401 nobody can explain, so say it instead of sending it.
-    if (!canSign && /(^|\/)credits(\/|$)/.test(signedTarget)) {
-        throw new Error(
-            `billing: a ${
-                (body as object)?.constructor?.name ?? typeof body
-            } body cannot be signed for ${signedTarget} — send JSON to the credit routes`,
-        );
+    // `/credits/*` is the signed surface, and not by convention: billing
+    // mounts its guard as `router.use("/credits", requireServiceToken)`, so
+    // the prefix IS the contract. An unsignable body there would mean a 401
+    // nobody can explain, so say it instead of sending it.
+    if (!canSign) {
+        const describe = `a ${
+            (body as object)?.constructor?.name ?? typeof body
+        } body cannot be signed`;
+        if (/(^|\/)credits(\/|$)/.test(signedTarget)) {
+            throw new Error(
+                `billing: ${describe} for ${signedTarget} — send JSON to the credit routes`,
+            );
+        }
+        // Elsewhere the request is still valid (those routes authenticate
+        // nothing), but the downgrade must not be invisible: if billing ever
+        // starts requiring a signature on another path, this line is the
+        // thing that says why the calls began failing.
+        console.warn(`[billing] ${describe}; sending ${signedTarget} unsigned`);
     }
 
     const rawBody = !canSign

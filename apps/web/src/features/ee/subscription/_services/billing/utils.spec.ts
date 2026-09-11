@@ -203,6 +203,9 @@ describe("billingFetch signs what it sends", () => {
     });
 
     it("passes a form body through untouched, and unsigned, on an unsigned route", async () => {
+        const warn = jest
+            .spyOn(console, "warn")
+            .mockImplementation(() => undefined);
         const { billingFetch } = await import("./utils");
         const form = new URLSearchParams({ a: "1" });
         await billingFetch("plans", { method: "POST", body: form } as never);
@@ -211,6 +214,10 @@ describe("billingFetch signs what it sends", () => {
         expect(config.body).toBe(form);
         // And no signature: one over "" would claim to cover bytes it never saw.
         expect(config.headers?.["x-kodus-signature"]).toBeUndefined();
+        expect(warn).toHaveBeenCalledWith(
+            expect.stringContaining("cannot be signed"),
+        );
+        warn.mockRestore();
     });
 
     it("serializes anything JSON can represent, including a class instance", async () => {
@@ -265,12 +272,20 @@ describe("billingFetch signs what it sends", () => {
             make: () => () => undefined,
         },
     ])("never serializes $name away", async ({ make }) => {
+        const warn = jest
+            .spyOn(console, "warn")
+            .mockImplementation(() => undefined);
         const { billingFetch } = await import("./utils");
         const body = make();
         await billingFetch("plans", { method: "POST", body } as never);
         const [, config] = typedFetchMock.mock.calls[0];
         expect(config.body).toBe(body);
         expect(config.headers?.["x-kodus-signature"]).toBeUndefined();
+        // Unsigned is allowed on an unauthenticated route, but never silent.
+        expect(warn).toHaveBeenCalledWith(
+            expect.stringContaining("cannot be signed"),
+        );
+        warn.mockRestore();
     });
 
     it("says so, loudly, when no secret is configured", async () => {
