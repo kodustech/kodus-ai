@@ -61,18 +61,29 @@ const withSignature = <
     const isFormOrStreamBody =
         body !== undefined &&
         body !== null &&
-        ((typeof FormData !== "undefined" && body instanceof FormData) ||
+        // An async iterable covers Node streams and the cross-realm bodies
+        // built by packages like `form-data`, which `instanceof` would miss.
+        (typeof (body as { [Symbol.asyncIterator]?: unknown })[
+            Symbol.asyncIterator
+        ] === "function" ||
+            (typeof FormData !== "undefined" && body instanceof FormData) ||
             (typeof URLSearchParams !== "undefined" &&
                 body instanceof URLSearchParams) ||
             (typeof Blob !== "undefined" && body instanceof Blob) ||
             body instanceof ArrayBuffer ||
             ArrayBuffer.isView(body) ||
             typeof (body as { getReader?: unknown }).getReader === "function");
-    const needsSerialization =
+    // Decide from the RESULT, not from a prediction: `JSON.stringify` answers
+    // `undefined` for a function or a symbol, and writing that back would
+    // drop the body while the signature covered "".
+    const serialized =
         body !== undefined &&
         body !== null &&
         typeof body !== "string" &&
-        !isFormOrStreamBody;
+        !isFormOrStreamBody
+            ? JSON.stringify(body)
+            : undefined;
+    const needsSerialization = typeof serialized === "string";
     const canSign =
         body === undefined ||
         body === null ||
@@ -95,7 +106,7 @@ const withSignature = <
           ? ""
           : typeof body === "string"
             ? body
-            : JSON.stringify(body);
+            : (serialized as string);
     // No signature at all when the body cannot be covered: a signature over
     // "" would claim to authenticate bytes it never saw. Every route that
     // takes such a body is unauthenticated anyway.

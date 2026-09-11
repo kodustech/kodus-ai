@@ -249,6 +249,30 @@ describe("billingFetch signs what it sends", () => {
         expect(typedFetchMock).not.toHaveBeenCalled();
     });
 
+    it.each([
+        {
+            name: "an async iterable (a stream, or cross-realm form-data)",
+            make: () => ({
+                async *[Symbol.asyncIterator]() {
+                    yield "chunk";
+                },
+            }),
+        },
+        {
+            // JSON.stringify answers undefined here: writing that back would
+            // drop the body while the signature covered "".
+            name: "a body JSON cannot represent",
+            make: () => () => undefined,
+        },
+    ])("never serializes $name away", async ({ make }) => {
+        const { billingFetch } = await import("./utils");
+        const body = make();
+        await billingFetch("plans", { method: "POST", body } as never);
+        const [, config] = typedFetchMock.mock.calls[0];
+        expect(config.body).toBe(body);
+        expect(config.headers?.["x-kodus-signature"]).toBeUndefined();
+    });
+
     it("says so, loudly, when no secret is configured", async () => {
         delete process.env.API_BILLING_WEBHOOK_SECRET;
         const error = jest
