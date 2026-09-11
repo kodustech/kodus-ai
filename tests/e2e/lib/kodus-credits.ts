@@ -70,6 +70,30 @@ export const billingAuth = (
     ...serviceToken(method, url, body),
 });
 
+/**
+ * A DIRECT billing call, signed over the URL it actually requests.
+ *
+ * Use this instead of pairing `http()` with `billingAuth()` by hand: the
+ * signature covers the query string, so signing a URL without the query it is
+ * then sent with answers 401 — a mistake that already happened here, in the
+ * API's axios client and in the web, all three times because the path and the
+ * query were assembled in two different places.
+ */
+export async function billingCall<T>(
+    session: KodusSession,
+    method: 'GET' | 'POST' | 'DELETE',
+    url: string,
+    body?: unknown,
+    timeoutMs = 30_000,
+) {
+    return http<T>(url, {
+        method,
+        headers: billingAuth(session, method, url, body),
+        ...(body === undefined ? {} : { body }),
+        timeoutMs,
+    });
+}
+
 /** Catalog model the scenarios route through Kodus. Override with
  *  KODUS_E2E_MODEL to run the same live cell on another catalog entry. */
 export const KODUS_E2E_MODEL =
@@ -139,17 +163,10 @@ export async function fetchCreditBalance(
     ctx: RunContext,
     session: KodusSession,
 ): Promise<CreditBalance> {
-    const resp = await http<CreditBalance>(
+    const resp = await billingCall<CreditBalance>(
+        session,
+        'GET',
         `${billingBase(ctx)}/credits/balance${orgQs(session)}`,
-        {
-            method: 'GET',
-            headers: billingAuth(
-                session,
-                'GET',
-                `${billingBase(ctx)}/credits/balance`,
-            ),
-            timeoutMs: 30_000,
-        },
     );
     ctx.assert(
         resp.status === 200 && typeof resp.body?.balanceUsd === 'number',
@@ -171,17 +188,10 @@ export async function fetchCreditLedger(
     ctx: RunContext,
     session: KodusSession,
 ): Promise<LedgerEntry[]> {
-    const resp = await http<{ entries?: LedgerEntry[] }>(
+    const resp = await billingCall<{ entries?: LedgerEntry[] }>(
+        session,
+        'GET',
         `${billingBase(ctx)}/credits/ledger${orgQs(session)}&limit=200`,
-        {
-            method: 'GET',
-            headers: billingAuth(
-                session,
-                'GET',
-                `${billingBase(ctx)}/credits/ledger`,
-            ),
-            timeoutMs: 30_000,
-        },
     );
     ctx.assert(
         resp.status === 200 && Array.isArray(resp.body?.entries),

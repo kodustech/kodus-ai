@@ -1,16 +1,16 @@
-import { http } from "../lib/http.js";
-import { logger } from "../lib/log.js";
+import { http } from '../lib/http.js';
+import { logger } from '../lib/log.js';
 import {
     auth,
-    billingAuth,
     billingBase,
+    billingCall,
     saveKodusByok,
-} from "../lib/kodus-credits.js";
+} from '../lib/kodus-credits.js';
 import {
     fetchOrgLicense,
     provisionFreshTrialOrg,
-} from "../lib/trial-provision.js";
-import type { RunContext, Scenario, TargetContext } from "../lib/types.js";
+} from '../lib/trial-provision.js';
+import type { RunContext, Scenario, TargetContext } from '../lib/types.js';
 
 // "Kodus as the provider" — the API-level contract that the review gate and
 // the web rely on, exercised on a FRESH org (no platform keys needed: nothing
@@ -34,22 +34,21 @@ type Balance = {
 };
 
 export const kodusCreditsGate: Scenario = {
-    id: "kodus-credits-gate",
-    title:
-        "Kodus credits: license carries a balance, keyless kodus credential saves, balance/ledger/checkout answer, debit is browser-unreachable",
-    priority: "P1",
+    id: 'kodus-credits-gate',
+    title: 'Kodus credits: license carries a balance, keyless kodus credential saves, balance/ledger/checkout answer, debit is browser-unreachable',
+    priority: 'P1',
     appliesTo: {
-        target: ["cloud"],
-        provider: ["github", "github-app"],
-        license: ["trial"],
+        target: ['cloud'],
+        provider: ['github', 'github-app'],
+        license: ['trial'],
     },
     timeoutSec: 180,
     async run(ctx: RunContext) {
-        const log = logger("kodus-credits-gate");
+        const log = logger('kodus-credits-gate');
         const target = ctx.target as TargetContext;
         const { email, session } = await provisionFreshTrialOrg(
             ctx,
-            "e2e-kodus-credits",
+            'e2e-kodus-credits',
         );
 
         // 1. The license payload carries the prepaid balance (0 on a fresh org).
@@ -58,7 +57,7 @@ export const kodusCreditsGate: Scenario = {
             unknown
         >;
         ctx.assert(
-            typeof license.creditBalanceUsd === "number",
+            typeof license.creditBalanceUsd === 'number',
             `validate-org-license must carry creditBalanceUsd (billing ledger deployed?): ${JSON.stringify(license)}`,
         );
         ctx.assert(
@@ -74,7 +73,7 @@ export const kodusCreditsGate: Scenario = {
         const providers = await http<{
             data?: { providers?: Array<{ id?: string }> };
         }>(`${target.apiBaseUrl}/organization-parameters/byok/providers`, {
-            method: "GET",
+            method: 'GET',
             headers: auth(session),
             timeoutMs: 25_000,
         });
@@ -83,28 +82,30 @@ export const kodusCreditsGate: Scenario = {
             `byok/providers must answer 200: HTTP ${providers.status} ${providers.raw.slice(0, 200)}`,
         );
         const kodusOffered = (providers.body?.data?.providers ?? []).some(
-            (p) => p.id === "kodus",
+            (p) => p.id === 'kodus',
         );
         if (!kodusOffered) {
             ctx.skip(
-                "the Kodus provider is not enabled on this environment " +
-                    "(private alpha: needs API_KODUS_PROVIDER_ALPHA_ORGS or the " +
-                    "`kodus-provider` PostHog flag + an alpha release track). " +
-                    "The provider being HIDDEN is the correct behavior here.",
+                'the Kodus provider is not enabled on this environment ' +
+                    '(private alpha: needs API_KODUS_PROVIDER_ALPHA_ORGS or the ' +
+                    '`kodus-provider` PostHog flag + an alpha release track). ' +
+                    'The provider being HIDDEN is the correct behavior here.',
             );
         }
 
         // 2. Keyless kodus credential persists (cloud-only path).
         await saveKodusByok(ctx, session);
         const status = await http<{
-            data?: { models?: Array<{ providerId?: string; resolvable?: boolean }> };
+            data?: {
+                models?: Array<{ providerId?: string; resolvable?: boolean }>;
+            };
         }>(`${target.apiBaseUrl}/organization-parameters/llm-config/status`, {
-            method: "GET",
+            method: 'GET',
             headers: auth(session),
             timeoutMs: 25_000,
         });
         const kodusModel = status.body?.data?.models?.find(
-            (m) => m.providerId === "kodus",
+            (m) => m.providerId === 'kodus',
         );
         ctx.assert(
             !!kodusModel,
@@ -121,21 +122,21 @@ export const kodusCreditsGate: Scenario = {
         // take a client-chosen organizationId and billing has no caller auth.
         for (const [path, init] of [
             [
-                "/credits/debit",
+                '/credits/debit',
                 {
-                    method: "POST",
+                    method: 'POST',
                     body: {
                         organizationId: session.organizationId,
-                        entries: [{ usageKey: "e2e:never", amountUsd: 1 }],
+                        entries: [{ usageKey: 'e2e:never', amountUsd: 1 }],
                     },
                 },
             ],
-            ["/credits/balance" + qs, { method: "GET" }],
-            ["/credits/ledger" + qs, { method: "GET" }],
+            ['/credits/balance' + qs, { method: 'GET' }],
+            ['/credits/ledger' + qs, { method: 'GET' }],
             [
-                "/credits/checkout",
+                '/credits/checkout',
                 {
-                    method: "POST",
+                    method: 'POST',
                     body: {
                         organizationId: session.organizationId,
                         teamId: session.teamId,
@@ -146,11 +147,15 @@ export const kodusCreditsGate: Scenario = {
         ] as const) {
             const viaProxy = await http(
                 `${target.webBaseUrl}/api/proxy/billing${path}`,
-                { ...(init as object), headers: auth(session), timeoutMs: 30_000 } as any,
+                {
+                    ...(init as object),
+                    headers: auth(session),
+                    timeoutMs: 30_000,
+                } as any,
             );
             ctx.assert(
                 viaProxy.status === 404,
-                `${path.split("?")[0]} must be unreachable through the browser proxy (expected 404, got ${viaProxy.status})`,
+                `${path.split('?')[0]} must be unreachable through the browser proxy (expected 404, got ${viaProxy.status})`,
             );
         }
 
@@ -163,9 +168,9 @@ export const kodusCreditsGate: Scenario = {
         const billingDirect = process.env.BILLING_ADMIN_BASE_URL?.trim();
         if (!billingDirect) {
             log.warn(
-                "BILLING_ADMIN_BASE_URL unset — skipping the direct billing assertions " +
-                    "(balance shape, empty ledger, Stripe quote). The product-surface " +
-                    "contract above was fully asserted.",
+                'BILLING_ADMIN_BASE_URL unset — skipping the direct billing assertions ' +
+                    '(balance shape, empty ledger, Stripe quote). The product-surface ' +
+                    'contract above was fully asserted.',
             );
             return {
                 email,
@@ -174,17 +179,10 @@ export const kodusCreditsGate: Scenario = {
             };
         }
 
-        const balance = await http<Balance>(
+        const balance = await billingCall<Balance>(
+            session,
+            'GET',
             `${billingBase(ctx)}/credits/balance${qs}`,
-            {
-                method: "GET",
-                headers: billingAuth(
-                    session,
-                    "GET",
-                    `${billingBase(ctx)}/credits/balance`,
-                ),
-                timeoutMs: 30_000,
-            },
         );
         ctx.assert(
             balance.status === 200 && balance.body?.balanceUsd === 0,
@@ -193,21 +191,14 @@ export const kodusCreditsGate: Scenario = {
         ctx.assert(
             Array.isArray(balance.body?.packsUsd) &&
                 balance.body!.packsUsd.length > 0 &&
-                typeof balance.body?.markupPct === "number",
+                typeof balance.body?.markupPct === 'number',
             `credits/balance must carry packs + markup: ${JSON.stringify(balance.body)}`,
         );
 
-        const ledger = await http<{ entries?: unknown[] }>(
+        const ledger = await billingCall<{ entries?: unknown[] }>(
+            session,
+            'GET',
             `${billingBase(ctx)}/credits/ledger${qs}`,
-            {
-                method: "GET",
-                headers: billingAuth(
-                    session,
-                    "GET",
-                    `${billingBase(ctx)}/credits/ledger`,
-                ),
-                timeoutMs: 30_000,
-            },
         );
         ctx.assert(
             ledger.status === 200 && Array.isArray(ledger.body?.entries),
@@ -219,38 +210,30 @@ export const kodusCreditsGate: Scenario = {
         );
 
         const pack = balance.body!.packsUsd[0];
-        const checkout = await http<{
+        const checkout = await billingCall<{
             url?: string;
             creditUsd?: number;
             chargeUsd?: number;
-        }>(`${billingBase(ctx)}/credits/checkout`, {
-            method: "POST",
-            headers: billingAuth(
-                session,
-                "POST",
-                `${billingBase(ctx)}/credits/checkout`,
-                {
-                    organizationId: session.organizationId,
-                    teamId: session.teamId,
-                    creditUsd: pack,
-                },
-            ),
-            body: {
+        }>(
+            session,
+            'POST',
+            `${billingBase(ctx)}/credits/checkout`,
+            {
                 organizationId: session.organizationId,
                 teamId: session.teamId,
                 creditUsd: pack,
             },
-            timeoutMs: 40_000,
-        });
+            40_000,
+        );
         ctx.assert(
             checkout.status === 200 &&
-                typeof checkout.body?.url === "string" &&
+                typeof checkout.body?.url === 'string' &&
                 /^https:\/\/checkout\.stripe\.com\//.test(checkout.body.url),
             `credits/checkout must return a Stripe Checkout URL: HTTP ${checkout.status} ${checkout.raw.slice(0, 250)}`,
         );
         ctx.assert(
             checkout.body!.creditUsd === pack &&
-                typeof checkout.body!.chargeUsd === "number" &&
+                typeof checkout.body!.chargeUsd === 'number' &&
                 checkout.body!.chargeUsd! > pack,
             `Quote must charge credit + markup: ${JSON.stringify(checkout.body)}`,
         );
