@@ -38,18 +38,38 @@ export function useLLMProviderModelsPreview({
     provider,
     apiKey,
     baseURL,
+    awsBearerToken,
+    awsRegion,
     enabled,
 }: {
     provider: string;
     apiKey?: string;
     baseURL?: string;
+    /** Amazon Bedrock's equivalent of `apiKey` — see fetch.ts. */
+    awsBearerToken?: string;
+    awsRegion?: string;
     enabled: boolean;
 }) {
     return useQuery({
-        // Key includes apiKey/baseURL so a rotated key refetches; the value never
-        // leaves the browser's query cache (client-only, no SSR data cache).
-        queryKey: ['byok-provider-models-preview', provider, apiKey, baseURL],
-        queryFn: () => previewLLMProviderModels({ provider, apiKey, baseURL }),
+        // Key includes every credential field so a rotated key/token refetches;
+        // the value never leaves the browser's query cache (client-only, no SSR
+        // data cache).
+        queryKey: [
+            'byok-provider-models-preview',
+            provider,
+            apiKey,
+            baseURL,
+            awsBearerToken,
+            awsRegion,
+        ],
+        queryFn: () =>
+            previewLLMProviderModels({
+                provider,
+                apiKey,
+                baseURL,
+                awsBearerToken,
+                awsRegion,
+            }),
         enabled,
         staleTime: 5 * 60 * 1000,
         retry: false,

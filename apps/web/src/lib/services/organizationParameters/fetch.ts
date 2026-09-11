@@ -293,6 +293,10 @@ export const previewLLMProviderModels = async (input: {
     provider: string;
     apiKey?: string;
     baseURL?: string;
+    /** Amazon Bedrock's equivalent of `apiKey` — Bedrock never authenticates
+     *  the connect form with a plain apiKey. */
+    awsBearerToken?: string;
+    awsRegion?: string;
 }): Promise<LLMProviderModel[]> => {
     const envelope = await axiosAuthorized.post<{
         data: { models: LLMProviderModel[] };
