@@ -19,7 +19,8 @@ import {
 } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import {
     budgetPatchForPersist,
-    MAX_TOTAL_EMBEDDED_PATCH_CHARS,
+    utf8ByteLength,
+    MAX_TOTAL_EMBEDDED_PATCH_BYTES,
 } from '@libs/platformData/domain/pullRequests/utils/diff-budget';
 import { PlatformType, PullRequestState } from '@libs/core/domain/enums';
 import { Repository } from '@libs/core/infrastructure/config/types/general/codeReview.type';
@@ -414,6 +415,13 @@ export class PullRequestsService implements IPullRequestsService {
 
     computeFileTotals(prUuid: string, organizationId: string) {
         return this.pullRequestsRepository.computeFileTotals(
+            prUuid,
+            organizationId,
+        );
+    }
+
+    computeEmbeddedPatchBytes(prUuid: string, organizationId: string) {
+        return this.pullRequestsRepository.computeEmbeddedPatchBytes(
             prUuid,
             organizationId,
         );
@@ -1185,19 +1193,64 @@ export class PullRequestsService implements IPullRequestsService {
                 });
             }
 
-            // Seed the aggregate diff budget with the bytes the document already
-            // carries from prior syncs, so the whole `pullRequests` document —
-            // not just this batch — stays under MongoDB's 16 MB BSON ceiling.
-            const existingEmbeddedPatchChars =
+            // Seed the aggregate diff budget with the bytes the document
+            // already carries from prior syncs, so the whole `pullRequests`
+            // document — not just this batch — stays under MongoDB's 16 MB
+            // BSON ceiling. Measured in UTF-8 bytes (the unit BSON/Mongo use),
+            // never in JS string length: a CJK-heavy diff measured in UTF-16
+            // code units understates its real footprint ~3× (#1841).
+            const existingEmbeddedPatchBytes =
                 existingPR.files?.reduce(
                     (sum, f) =>
-                        sum + ((f as { patch?: string }).patch?.length ?? 0),
+                        sum + utf8ByteLength((f as { patch?: string }).patch),
                     0,
                 ) ?? 0;
             let remainingTotalPatchBudget = Math.max(
                 0,
-                MAX_TOTAL_EMBEDDED_PATCH_CHARS - existingEmbeddedPatchChars,
+                MAX_TOTAL_EMBEDDED_PATCH_BYTES - existingEmbeddedPatchBytes,
             );
+
+            // Patch-bearing updateFile payloads, kept aside so the post-write
+            // verification pass below can re-budget *only* these. Re-emitting
+            // the non-idempotent addFile/addSuggestions ops on a retry would
+            // duplicate sub-documents.
+            const patchUpdates: Array<{
+                fileId: string;
+                rawPatch: string;
+                fields: Partial<
+                    Omit<
+                        IFile,
+                        'id' | 'suggestions' | 'patch' | 'patchTruncated'
+                    >
+                >;
+            }> = [];
+
+            const budgetPatchUpdates = (
+                budget: number,
+            ): { updateOps: FileBulkOp[]; consumed: number } => {
+                let remaining = budget;
+                const updateOps: FileBulkOp[] = [];
+                for (const pu of patchUpdates) {
+                    const budgeted = budgetPatchForPersist(
+                        pu.rawPatch,
+                        remaining,
+                    );
+                    remaining -= budgeted.consumed;
+                    updateOps.push({
+                        kind: 'updateFile',
+                        fileId: pu.fileId,
+                        data: {
+                            ...pu.fields,
+                            patch: budgeted.patch,
+                            // Always write the flag explicitly: a file that
+                            // was truncated on an earlier sync must not keep a
+                            // stale `true` once its patch fits again (#1841).
+                            patchTruncated: !!budgeted.truncated,
+                        },
+                    });
+                }
+                return { updateOps, consumed: budget - remaining };
+            };
 
             const ops: FileBulkOp[] = [];
             const seenInBatch = new Set<string>();
@@ -1205,6 +1258,8 @@ export class PullRequestsService implements IPullRequestsService {
             let skippedInvalidChangedFiles = 0;
             let newFilesCount = 0;
             let totalNewSuggestions = 0;
+            // Bytes of patch written by *this* batch (sum of `consumed`).
+            let ourPatchBytes = 0;
 
             for (const file of changedFiles ?? []) {
                 const filename: string | undefined = file?.filename;
@@ -1236,19 +1291,26 @@ export class PullRequestsService implements IPullRequestsService {
                     // the bytes already embedded on existing files. Oversized
                     // diffs are truncated (with a visible marker) or dropped,
                     // never failing the review (#1841).
-                    const budgeted = budgetPatchForPersist(
+                    //
+                    // updateFile *replaces* `files.$.patch` ($set), so the
+                    // bytes the old patch contributed to the seed must be
+                    // re-credited before the replacement is billed — otherwise
+                    // the same file is charged twice and later files get
+                    // needlessly truncated/dropped (#1841).
+                    remainingTotalPatchBudget += utf8ByteLength(
+                        (existing as { patch?: string }).patch,
+                    );
+                    const rawPatch =
                         PullRequestsService.sanitizePatchForPersist(
                             filename,
                             file.patch,
-                        ),
-                        remainingTotalPatchBudget,
-                    );
-                    remainingTotalPatchBudget -= budgeted.consumed;
-                    const fileFields = {
-                        patch: budgeted.patch,
-                        ...(budgeted.truncated
-                            ? { patchTruncated: true }
-                            : {}),
+                        );
+                    const fields: Partial<
+                        Omit<
+                            IFile,
+                            'id' | 'suggestions' | 'patch' | 'patchTruncated'
+                        >
+                    > = {
                         status: file.status ?? '',
                         added: file.additions ?? 0,
                         deleted: file.deletions ?? 0,
@@ -1257,11 +1319,28 @@ export class PullRequestsService implements IPullRequestsService {
                         codeReviewModelUsed: file.codeReviewModelUsed ?? '',
                         updatedAt: new Date().toISOString(),
                     };
+                    patchUpdates.push({
+                        fileId: existing.id,
+                        rawPatch,
+                        fields,
+                    });
+                    const budgeted = budgetPatchForPersist(
+                        rawPatch,
+                        remainingTotalPatchBudget,
+                    );
+                    remainingTotalPatchBudget -= budgeted.consumed;
+                    ourPatchBytes += budgeted.consumed;
 
                     ops.push({
                         kind: 'updateFile',
                         fileId: existing.id,
-                        data: fileFields,
+                        data: {
+                            ...fields,
+                            patch: budgeted.patch,
+                            // Explicit, not conditional: a file whose patch is
+                            // no longer capped must clear any stale flag (#1841).
+                            patchTruncated: !!budgeted.truncated,
+                        },
                     });
 
                     if (newSuggestionsForFile.length > 0) {
@@ -1307,6 +1386,109 @@ export class PullRequestsService implements IPullRequestsService {
                         organizationId,
                         ops,
                     );
+            }
+
+            // Enforce the aggregate embedded-diff ceiling against ground truth
+            // *after* the write. The in-memory seed above comes from a read of
+            // `existingPR.files` that can be stale — two syncs firing at once
+            // each see the same "remaining" budget and can both spend it,
+            // overshooting the cap even though each individual write looked
+            // safe (#1841). So we re-read the real byte total server-side and,
+            // if the document is over the cap, shrink and re-write only our
+            // patch updates (bounded retries). Files we did not touch, and
+            // patches added by a concurrent writer, are never rewritten.
+            if (patchUpdates.length > 0) {
+                const MAX_BUDGET_ENFORCEMENT_PASSES = 3;
+                for (
+                    let pass = 0;
+                    pass < MAX_BUDGET_ENFORCEMENT_PASSES;
+                    pass++
+                ) {
+                    let embeddedNow: number;
+                    try {
+                        embeddedNow =
+                            await this.pullRequestsRepository.computeEmbeddedPatchBytes(
+                                existingPR.uuid,
+                                organizationId,
+                            );
+                    } catch (error) {
+                        this.logger.warn({
+                            message: `Skipped embedded-diff ceiling verification for PR#${pullRequest?.number}`,
+                            context: PullRequestsService.name,
+                            error,
+                            metadata: {
+                                pullRequestNumber: pullRequest?.number,
+                                prUuid: existingPR.uuid,
+                            },
+                        });
+                        break;
+                    }
+
+                    const overflow =
+                        embeddedNow - MAX_TOTAL_EMBEDDED_PATCH_BYTES;
+                    if (overflow <= 0) {
+                        break; // under the cap — settled
+                    }
+                    if (ourPatchBytes <= 0) {
+                        // The overflow is not ours to reclaim (a concurrent
+                        // writer or a pre-existing oversized document). Log and
+                        // leave it rather than thrash.
+                        this.logger.warn({
+                            message: `pullRequests doc for PR#${pullRequest?.number} is over the embedded-diff ceiling but this batch owns none of it`,
+                            context: PullRequestsService.name,
+                            metadata: {
+                                pullRequestNumber: pullRequest?.number,
+                                prUuid: existingPR.uuid,
+                                embeddedPatchBytes: embeddedNow,
+                                maxTotalPatchBytes:
+                                    MAX_TOTAL_EMBEDDED_PATCH_BYTES,
+                            },
+                        });
+                        break;
+                    }
+
+                    // Keep every embedded byte that is not ours; hand our
+                    // patches the remainder. Always strictly shrinks because
+                    // `embeddedNow > MAX` implies `tightened < ourPatchBytes`.
+                    const tightened = Math.max(
+                        0,
+                        MAX_TOTAL_EMBEDDED_PATCH_BYTES -
+                            (embeddedNow - ourPatchBytes),
+                    );
+                    if (tightened >= ourPatchBytes) {
+                        break; // cannot make progress
+                    }
+
+                    const { updateOps, consumed } =
+                        budgetPatchUpdates(tightened);
+                    if (updateOps.length === 0) {
+                        break;
+                    }
+                    ourPatchBytes = consumed;
+
+                    this.logger.warn({
+                        message: `Embedded-diff ceiling exceeded after write for PR#${pullRequest?.number}; retrying with a tighter budget`,
+                        context: PullRequestsService.name,
+                        metadata: {
+                            pullRequestNumber: pullRequest?.number,
+                            prUuid: existingPR.uuid,
+                            embeddedPatchBytes: embeddedNow,
+                            tightenedBudgetBytes: tightened,
+                        },
+                    });
+
+                    const retryResult =
+                        await this.pullRequestsRepository.bulkApplyFileChanges(
+                            existingPR.uuid,
+                            organizationId,
+                            updateOps,
+                        );
+                    bulkResult = {
+                        attempted: bulkResult.attempted + retryResult.attempted,
+                        modified: bulkResult.modified + retryResult.modified,
+                        errors: [...bulkResult.errors, ...retryResult.errors],
+                    };
+                }
             }
 
             if (bulkResult.errors.length > 0) {
