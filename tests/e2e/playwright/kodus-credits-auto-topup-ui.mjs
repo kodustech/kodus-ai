@@ -47,7 +47,7 @@ const svc = (method, url, body) => {
     const parsed = new URL(url, 'http://placeholder');
     const query = new URLSearchParams(parsed.search);
     query.sort();
-    const raw = upper === 'GET' || upper === 'DELETE' ? '' : (body ?? '');
+    const raw = body ?? '';
     const timestamp = String(Date.now());
     return {
         'x-kodus-signature': createHmac('sha256', SERVICE_SECRET)

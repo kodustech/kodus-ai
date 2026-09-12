@@ -93,7 +93,8 @@ export const billingSignatureHeader = (
     }
     const upper = method.toUpperCase();
     const timestamp = String(now);
-    const body = upper === "GET" || upper === "DELETE" ? "" : rawBody;
+    // Every method signs the bytes it sends; no body signs the empty string.
+    const body = rawBody;
     return {
         [SIGNATURE_HEADER]: createHmac("sha256", secret)
             .update(billingSignaturePayload(upper, path, timestamp, body))
