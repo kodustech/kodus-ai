@@ -59,7 +59,13 @@ fi
 # implicitly via a lightweight vault read: if it works, we're
 # authenticated AND the vault is reachable. If it fails, we can't tell
 # which is which, so we print both possibilities.
-if ! op vault get "$VAULT" >/dev/null 2>&1; then
+# Under a service account (CI), this probe is not a reliable gate: the token
+# may be able to READ ITEMS in the vault without `op vault get` succeeding.
+# Let `op inject` below be the judge — its error names the actual problem.
+if [[ -n "${OP_SERVICE_ACCOUNT_TOKEN:-}" ]]; then
+    op vault get "$VAULT" >/dev/null 2>&1 \
+        || echo "note: service account cannot 'vault get' \"$VAULT\" — continuing, inject will tell us" >&2
+elif ! op vault get "$VAULT" >/dev/null 2>&1; then
     cat >&2 <<EOF
 error: cannot read the "$VAULT" 1Password vault.
 
