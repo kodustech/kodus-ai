@@ -645,6 +645,15 @@ export class SimpleLogger {
             logObject.error = {
                 message: sanitizeString(error.message),
                 stack: error.stack ? sanitizeString(error.stack) : undefined,
+                // #1829: provider/review errors carry actionable own props
+                // (statusCode, responseBody, url, requestHeaders + in-repo
+                // scalars like status / code / gate / contextWindow / modelName)
+                // as own props of the Error subclass. pino's default `err`
+                // serializer only keeps name/message/stack, so those were
+                // silently dropped from every log (the customer only ever saw
+                // "Unexpected error"). Surface the allowlisted props (see
+                // ERROR_LOG_PROPS), sanitized and truncated to a 2KB-ish line.
+                ...extractErrorProps(error, 2_000),
             };
         }
 
@@ -675,6 +684,72 @@ export class SimpleLogger {
         }
         return {};
     }
+}
+
+/**
+ * Provider-error fields worth surfacing in structured logs, allowlisted so a
+ * vendor error subclass like @ai-sdk/provider's `APICallError` never leaks its
+ * heavy own props (`requestBodyValues`, `data`) into a log line. `requestBodyValues`
+ * is the full request payload — for a review call that's the whole prompt,
+ * messages array included, and `data` is an arbitrary object; both would dump
+ * uncapped into the structured log. `Object.keys(error)` minus name/message/stack
+ * is too broad for that reason.
+ */
+const ERROR_LOG_PROPS = new Set([
+    'statusCode',
+    'responseBody',
+    'url',
+    'responseHeaders',
+    // Small scalar diagnostics attached in-repo that the previous generic
+    // merge surfaced and operators relied on: azure `status`, code-review job
+    // `gate`/`target`/`requestId`, mcp `code`, llm context-window errors
+    // `contextWindow`/`overheadTokens`/`estimatedTokens`/`contextWindowTokens`/
+    // `modelName`. All scalar (number/string) — they pass through
+    // sanitize/deepSanitize/truncate safely and stay small on the log line.
+    'status',
+    'code',
+    'gate',
+    'target',
+    'requestId',
+    'contextWindow',
+    'overheadTokens',
+    'estimatedTokens',
+    'contextWindowTokens',
+    'modelName',
+]);
+
+/**
+ * Collect the user-facing fields a provider error carries on itself.
+ *
+ * pino's default `err` serializer only keeps name/message/stack (which live on
+ * Error.prototype), so BYOK subclasses that attach `statusCode`, `responseBody`
+ * or `url` as own props were invisible in every structured log (#1829). This
+ * picks the allowlisted fields and truncates string values — and sanitizes
+ * (URL-embedded credential redaction) BEFORE truncating, so a long
+ * credential-shaped string can't skip redaction by being oversized.
+ */
+export function extractErrorProps(
+    error: Error,
+    maxStringLength: number,
+): Record<string, unknown> {
+    const props: Record<string, unknown> = {};
+    const source = error as unknown as Record<string, unknown>;
+    for (const key of ERROR_LOG_PROPS) {
+        const value = source[key];
+        if (value === undefined) {
+            continue;
+        }
+        if (typeof value === 'string') {
+            const sanitized = sanitizeString(value);
+            props[key] =
+                sanitized.length > maxStringLength
+                    ? `${sanitized.substring(0, maxStringLength)}…`
+                    : sanitized;
+        } else {
+            props[key] = deepSanitize(value);
+        }
+    }
+    return props;
 }
 
 /** Exported for testing only. */
