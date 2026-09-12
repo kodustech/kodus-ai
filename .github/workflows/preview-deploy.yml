@@ -89,6 +89,10 @@ jobs:
               env:
                   OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
                   PREVIEW_SEED_PASSWORD: ${{ secrets.PREVIEW_SEED_PASSWORD }}
+                  # unique per environment, identical across runs of the same
+                  # one: pushing to a PR must not invalidate the session of
+                  # whoever is looking at its preview
+                  PREVIEW_SECRET_SEED: ${{ secrets.PREVIEW_SEED_PASSWORD }}:${{ github.event.pull_request.head.ref }}
               run: |
                   # No token means previews are not configured for this
                   # repository (a fork, or before the secrets are added). That

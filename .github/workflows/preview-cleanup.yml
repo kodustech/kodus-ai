@@ -31,7 +31,11 @@ jobs:
             contents: read
             pull-requests: write
         steps:
+            # the PR's own merge ref can be gone once it is closed; the base
+            # branch is what still exists when the teardown runs
             - uses: actions/checkout@v6.0.2
+              with:
+                  ref: ${{ github.event.pull_request.base.ref }}
 
             - uses: oven-sh/setup-bun@v2
               with:
@@ -51,12 +55,11 @@ jobs:
                   RUNO_SSH_KEY: ${{ secrets.PREVIEW_RUNO_SSH_KEY }}
                   HEAD_REF: ${{ github.event.pull_request.head.ref }}
               run: |
-                  # A PR whose preview was never created has nothing to destroy;
-                  # that is a normal outcome, not a failure.
-                  $RUNO destroy --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml || {
-                    echo "::notice::no preview environment found for $HEAD_REF"
-                    exit 0
-                  }
+                  # `runo destroy` exits 0 when there is nothing to destroy (the
+                  # normal case for a PR that never got a preview) and non-zero
+                  # on a real failure — which must stay loud, or a leaked VM
+                  # bills forever in silence.
+                  $RUNO destroy --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml
 
             - name: Mark the preview as gone
               if: always()

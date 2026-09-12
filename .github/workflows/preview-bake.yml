@@ -40,7 +40,11 @@ jobs:
         environment: Preview
         timeout-minutes: 90
         steps:
+            # always main, even on a manual dispatch: an image baked from a
+            # feature branch would hand that branch's lockfile to every PR
             - uses: actions/checkout@v6.0.2
+              with:
+                  ref: main
 
             - uses: oven-sh/setup-bun@v2
               with:
@@ -56,9 +60,9 @@ jobs:
             - name: Install the 1Password CLI
               uses: 1password/install-cli-action@v1
 
-            # The bake VM runs the recipe's setup, which reads .env — but the
-            # image must not carry it, so the file is removed before the
-            # snapshot (see the last step of the recipe's setup below).
+            # The bake VM needs a .env for the build to run; runo deletes the
+            # recipe's files.copy entries from the VM before taking the
+            # snapshot, so the image never carries it.
             - name: Materialize the .env the build needs
               env:
                   OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}

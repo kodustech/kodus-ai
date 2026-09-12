@@ -9,9 +9,13 @@
 # default instead of leaking by default.
 #
 # Three treatments:
-#   - secrets the app needs in order to WORK (cookie/JWT/crypto keys) get a
-#     fresh random value per environment: a preview must never share a signing
-#     key with anything else, and sharing the dev one would do exactly that;
+#   - secrets the app needs in order to WORK (cookie/JWT/crypto keys) are
+#     derived from PREVIEW_SECRET_SEED and the environment's name: unique per
+#     environment, so a preview never shares a signing key with anything else,
+#     and STABLE across runs, so pushing to a pull request does not invalidate
+#     the session of whoever is looking at it (or the data already encrypted
+#     with the old key). Without a seed they are random, which is the right
+#     default for a one-off local run;
 #   - datastore URLs are emptied, which is what a developer's .env already does:
 #     the stack addresses its databases through the discrete API_*_DB_* values
 #     (container hostnames), while host-side tooling like migrations overrides
@@ -23,6 +27,8 @@
 #     real account.
 #
 # Usage: scripts/preview/neutralize-preview-env.sh [env-file] [template]
+#   PREVIEW_SECRET_SEED  makes the generated secrets reproducible for this
+#                        environment (CI passes a repo secret + the branch)
 set -euo pipefail
 
 ENV_FILE="${1:-.env}"
@@ -49,8 +55,20 @@ API_DOCS_BASIC_PASS
 "
 
 
+SEED="${PREVIEW_SECRET_SEED:-}"
+
+# Deterministic when seeded, random otherwise. Same key + same seed => same
+# value, so re-running against an existing environment keeps it working.
+derive() {
+    if [ -n "$SEED" ]; then
+        printf '%s' "$1" | openssl dgst -sha256 -hmac "$SEED" -r | cut -d' ' -f1
+    else
+        openssl rand -hex 32
+    fi
+}
+
 # NextAuth reads one and the app the other; they have to agree.
-NEXTAUTH=$(openssl rand -base64 32)
+NEXTAUTH=$(derive nextauth)
 
 OVERRIDES=$(mktemp)
 KEYS=$(grep -oE '^[A-Z0-9_]+=op://' "$TEMPLATE" | cut -d= -f1 | sort -u)
@@ -63,7 +81,7 @@ for key in $KEYS; do
             if echo "$GENERATED" | grep -qx "$key"; then
                 # 32 bytes of hex: API_CRYPTO_KEY is parsed as a 32-byte key and
                 # the others only need to be unguessable
-                value=$(openssl rand -hex 32)
+                value=$(derive "$key")
             else
                 value="$PLACEHOLDER"
             fi
