@@ -32,6 +32,7 @@ type RawAggRow = {
     cacheWrite: number;
     date?: string;
     prNumber?: number;
+    repositoryId?: string;
     review?: string;
     startedAt?: Date;
     area?: string;
@@ -269,10 +270,15 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                 : { 'attributes.tu.sys': false }),
         };
         if (query.prNumber) match['attributes.prNumber'] = query.prNumber;
-        // Repository scope, pre-resolved to PR numbers by the service. An
-        // empty list is a repo with no PRs → matches nothing, by design.
-        else if (query.prNumbers)
-            match['attributes.prNumber'] = { $in: query.prNumbers };
+        // Repository scope: matched directly against the span's own
+        // `attributes.repositoryId` (#1882) — NOT via a PR-number lookup.
+        // PR numbers are unique per repository, not per org, so joining on
+        // `attributes.prNumber` alone let a repository filter pull in spend
+        // from any other repo whose PR numbers happened to collide. Spans
+        // written before this field existed carry no repositoryId and simply
+        // don't match — the org-wide (unscoped) view is unaffected.
+        else if (query.repositoryId)
+            match['attributes.repositoryId'] = query.repositoryId;
         else if (prOnly)
             // `{$type:'number'}` — NOT `{$exists:true,$ne:null}`: $exists in the
             // match forces a FETCH of every candidate doc (docsExamined=1.27M,
@@ -460,16 +466,23 @@ export class TokenUsageRepository implements ITokenUsageRepository {
         const rows = await this._tuRows(
             query,
             thresholds,
-            { pr: '$attributes.prNumber' },
-            { prNumber: '$_id.pr' },
+            // Grouping on repositoryId too (not just the number) keeps two
+            // PRs on different repos that happen to share a number distinct
+            // — the collision #1882 flagged in the by-PR chart/table.
+            { pr: '$attributes.prNumber', repositoryId: '$attributes.repositoryId' },
+            { prNumber: '$_id.pr', repositoryId: '$_id.repositoryId' },
             true,
         );
 
         const merged = this._mergeTierRows<UsageByPrResultContract>(
             rows,
             thresholds,
-            (r) => `${r.prNumber}|${r.model}`,
-            (base, row) => ({ ...base, prNumber: row.prNumber! }),
+            (r) => `${r.repositoryId ?? ''}|${r.prNumber}|${r.model}`,
+            (base, row) => ({
+                ...base,
+                prNumber: row.prNumber!,
+                repositoryId: row.repositoryId,
+            }),
         );
         merged.sort((a, b) =>
             a.prNumber === b.prNumber
@@ -488,6 +501,7 @@ export class TokenUsageRepository implements ITokenUsageRepository {
             thresholds,
             {
                 prNumber: '$attributes.prNumber',
+                repositoryId: '$attributes.repositoryId',
                 date: {
                     $dateToString: {
                         format: '%Y-%m-%d',
@@ -496,17 +510,22 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                     },
                 },
             },
-            { prNumber: '$_id.prNumber', date: '$_id.date' },
+            {
+                prNumber: '$_id.prNumber',
+                repositoryId: '$_id.repositoryId',
+                date: '$_id.date',
+            },
             true,
         );
 
         const merged = this._mergeTierRows<DailyUsageByPrResultContract>(
             rows,
             thresholds,
-            (r) => `${r.prNumber}|${r.date}|${r.model}`,
+            (r) => `${r.repositoryId ?? ''}|${r.prNumber}|${r.date}|${r.model}`,
             (base, row) => ({
                 ...base,
                 prNumber: row.prNumber!,
+                repositoryId: row.repositoryId,
                 date: row.date!,
             }),
         );
@@ -631,6 +650,7 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                 model: '$attributes.tu.model',
                 tier: this._tierExpr(thresholds),
                 pr: '$attributes.prNumber',
+                repositoryId: '$attributes.repositoryId',
                 area: { $ifNull: ['$attributes.tu.area', AREA_FALLBACK] },
                 task: taskExpr({ $ifNull: ['$attributes.tu.area', AREA_FALLBACK] }),
                 date: {
@@ -698,7 +718,15 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                     daily: groupProject({ date: '$date' }, { date: '$_id.date' }),
                     byPr: [
                         prPresent,
-                        ...groupProject({ pr: '$pr' }, { prNumber: '$_id.pr' }),
+                        // Grouped by repositoryId too — two PRs on different
+                        // repos sharing a number stay distinct (#1882).
+                        ...groupProject(
+                            { pr: '$pr', repositoryId: '$repositoryId' },
+                            {
+                                prNumber: '$_id.pr',
+                                repositoryId: '$_id.repositoryId',
+                            },
+                        ),
                     ],
                     byArea: groupProject(
                         { area: '$area' },
@@ -797,8 +825,12 @@ export class TokenUsageRepository implements ITokenUsageRepository {
         const byPr = this._mergeTierRows<UsageByPrResultContract>(
             rows.byPr,
             thresholds,
-            (r) => `${r.prNumber}|${r.model}`,
-            (base, row) => ({ ...base, prNumber: row.prNumber! }),
+            (r) => `${r.repositoryId ?? ''}|${r.prNumber}|${r.model}`,
+            (base, row) => ({
+                ...base,
+                prNumber: row.prNumber!,
+                repositoryId: row.repositoryId,
+            }),
         ).sort((a, b) =>
             a.prNumber === b.prNumber
                 ? a.model.localeCompare(b.model)
