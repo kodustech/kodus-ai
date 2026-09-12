@@ -99,6 +99,13 @@ jobs:
                     exit 0
                   fi
                   echo "configured=true" >> "$GITHUB_OUTPUT"
+                  # says which side is wrong when rendering fails, without
+                  # printing anything secret (this repo's logs are public)
+                  if op vault get Kodus-Dev >/dev/null 2>&1; then
+                    echo "1Password: the service account can see the Kodus-Dev vault"
+                  else
+                    echo "::warning::the service account cannot 'vault get' Kodus-Dev — if the render fails below, the token is missing that vault grant (recreate it with: op service-account create <name> --vault Kodus-Dev:read_items)"
+                  fi
                   # the repo's own renderer, so the set of variables always
                   # matches .env.template
                   ./scripts/env/pull.sh --force
