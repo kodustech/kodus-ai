@@ -42,6 +42,26 @@ export const GOLDEN_VECTORS = [
         signature:
             '03692a4564a44ae550d2ed76e831bf783961fe94be767f3059a1293ac30c84f6',
     },
+    {
+        name: 'a query value carrying a literal "?" (split once, never twice)',
+        method: 'GET',
+        path: '/api/billing/credits/balance',
+        query: 'organizationId=o&returnTo=/byok?credits=success',
+        timestamp: '1789000000000',
+        rawBody: '',
+        signature:
+            'ca7fe2915861fc07dc4d947651841b2e4bcdd07f97ef4dafcca680a1739ca707',
+    },
+    {
+        name: 'a DELETE that carries a body (no longer signed as empty)',
+        method: 'DELETE',
+        path: '/api/billing/credits/payment-method',
+        query: 'organizationId=o',
+        timestamp: '1789000000000',
+        rawBody: JSON.stringify({ organizationId: 'o' }),
+        signature:
+            '9b9b420b6b6a7f29b6ee7fb1569f1f1e29f1376080b0faa85a0c856d1688d5e6',
+    },
 ] as const;
 
 describe('billing signature', () => {
@@ -93,27 +113,25 @@ describe('billing signature', () => {
         expect(mine).not.toBe(theirs);
     });
 
-    it('signs GET/DELETE over an empty body even if one is passed', () => {
-        for (const method of ['GET', 'DELETE']) {
-            expect(
-                billingSignatureHeaders({
-                    secret: GOLDEN_SECRET,
-                    method,
-                    path: '/api/billing/credits/payment-method',
-                    query: 'organizationId=o',
-                    rawBody: '{"ignored":true}',
-                    now: 1,
-                }),
-            ).toEqual(
-                billingSignatureHeaders({
-                    secret: GOLDEN_SECRET,
-                    method,
-                    path: '/api/billing/credits/payment-method',
-                    query: 'organizationId=o',
-                    now: 1,
-                }),
-            );
-        }
+    it('signs a DELETE body instead of zeroing it', () => {
+        const withBody = billingSignatureHeaders({
+            secret: GOLDEN_SECRET,
+            method: 'DELETE',
+            path: '/api/billing/credits/payment-method',
+            query: 'organizationId=o',
+            rawBody: '{"organizationId":"o"}',
+            now: 1,
+        });
+        const withoutBody = billingSignatureHeaders({
+            secret: GOLDEN_SECRET,
+            method: 'DELETE',
+            path: '/api/billing/credits/payment-method',
+            query: 'organizationId=o',
+            now: 1,
+        });
+        expect(withBody[BILLING_SIGNATURE_HEADER]).not.toBe(
+            withoutBody[BILLING_SIGNATURE_HEADER],
+        );
     });
 
     it('returns no headers with no secret (billing then fails closed)', () => {
