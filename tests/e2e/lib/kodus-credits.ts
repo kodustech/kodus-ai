@@ -38,8 +38,11 @@ export function serviceToken(
     // No body on the wire means an empty signed body — billing verifies the
     // bytes it received, and `{}` is not the same as nothing. A body IS signed
     // on any method, DELETE included.
+    // `null` too, not just `undefined`: the http helper skips a null body, so
+    // signing `JSON.stringify(null)` would cover "null" while the wire carries
+    // nothing — a 401 from the byte verifier.
     const raw =
-        body === undefined
+        body === undefined || body === null
             ? ''
             : typeof body === 'string'
               ? body
