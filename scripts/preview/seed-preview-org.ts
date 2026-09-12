@@ -12,7 +12,9 @@
  *
  * Credentials come from the environment; without PREVIEW_SEED_PASSWORD the
  * script does nothing, so a developer running the preview recipe by hand never
- * gets a login with a password that is public knowledge.
+ * gets a login with a password that is public knowledge. The password must
+ * satisfy the product's own policy (8+ chars, upper, lower, number, symbol) —
+ * signup rejects anything weaker.
  */
 import 'dotenv/config';
 
@@ -87,8 +89,11 @@ async function main(): Promise<void> {
     }
 
     const detail = await res.text().catch(() => '');
+    const hint = detail.includes('not strong enough')
+        ? ' — PREVIEW_SEED_PASSWORD needs 8+ chars with an uppercase, a lowercase, a number and a symbol'
+        : '';
     throw new Error(
-        `signUp failed (HTTP ${res.status}) and ${EMAIL} cannot log in: ${detail.slice(0, 400)}`,
+        `signUp failed (HTTP ${res.status}) and ${EMAIL} cannot log in: ${detail.slice(0, 400)}${hint}`,
     );
 }
 

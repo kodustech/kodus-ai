@@ -15,7 +15,9 @@ name: "Preview: Deploy"
 #   PREVIEW_RUNO_SSH_KEY   private key every run reuses to reach the VMs
 #   PREVIEW_DOTENV         the .env previews boot with — MUST NOT carry
 #                          production credentials: the URL is public
-#   PREVIEW_SEED_PASSWORD  password of the seeded login (preview@kodus.io)
+#   PREVIEW_SEED_PASSWORD  password of the seeded login (preview@kodus.io);
+#                          signup enforces 8+ chars with an uppercase, a
+#                          lowercase, a number and a symbol
 # =============================================================================
 
 on:
