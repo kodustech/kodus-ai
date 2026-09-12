@@ -15,7 +15,11 @@ import {
 import { Dialog, DialogContent } from "@components/ui/dialog";
 import { KODY_RULES_PATHS } from "@services/kodyRules";
 import { getMCPPlugins } from "@services/mcp-manager/fetch";
-import { PARAMETERS_PATHS } from "@services/parameters";
+import {
+    directoryScopeLabel,
+    rulePageHref,
+    useCodeReviewScopes,
+} from "@services/parameters/use-code-review-scopes";
 import { useQuery } from "@tanstack/react-query";
 import {
     ActivityIcon,
@@ -44,7 +48,6 @@ import {
     TerminalIcon,
     TriangleAlertIcon,
 } from "lucide-react";
-import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import {
     hasUnsavedChanges,
     triggerNavigationBlock,
@@ -242,14 +245,6 @@ type KodyRuleIndexEntry = {
     type?: string;
 };
 
-/** What /parameters/code-review-scopes returns per repository. */
-type CodeReviewScope = {
-    id: string;
-    name: string;
-    isSelected: boolean;
-    directories: Array<{ id: string; name: string; paths: string[] }>;
-};
-
 const settingsHref = (
     repositoryId: string,
     page: string,
@@ -257,33 +252,6 @@ const settingsHref = (
 ) => {
     const base = `/settings/code-review/${repositoryId}/${page}`;
     return directoryId ? `${base}?directoryId=${directoryId}` : base;
-};
-
-// Same label the settings scope switcher uses: the first linked folder's
-// path, or the directory name when it has none.
-const directoryLabel = (directory: CodeReviewScope["directories"][number]) => {
-    const paths = directory.paths ?? [];
-    const path = paths[0] ?? directory.name;
-    return paths.length > 1 ? `${path} +${paths.length - 1}` : path;
-};
-
-const ruleHref = (
-    rule: KodyRuleIndexEntry,
-    knownScopes: Map<string, string>,
-) => {
-    // A rule can outlive its repository's configuration (the repo was removed
-    // from the config, or its rules were imported from elsewhere). The
-    // settings shell has nothing to render for such a scope, so those rules
-    // open on Global, which lists every scope's rules.
-    const scoped =
-        rule.repositoryId &&
-        rule.repositoryId !== "global" &&
-        knownScopes.has(rule.repositoryId);
-    const params = new URLSearchParams();
-    if (rule.uuid) params.set("rule", rule.uuid);
-    if (rule.type === "memory") params.set("tab", "memories");
-    if (scoped && rule.directoryId) params.set("directoryId", rule.directoryId);
-    return `/settings/code-review/${scoped ? rule.repositoryId : "global"}/kody-rules?${params.toString()}`;
 };
 
 // cmdk's default fuzzy match lets "sso" hit "Issues" and half the rules.
@@ -325,7 +293,6 @@ export const CommandPalette = () => {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
     const router = useRouter();
-    const { teamId } = useSelectedTeamId();
     const gates = useFeatureGates();
 
     useEffect(() => {
@@ -352,15 +319,7 @@ export const CommandPalette = () => {
         open,
         { staleTime: 60_000 },
     );
-    // Scope list without the configuration payload: /code-review-parameter
-    // returns every scope's merged config and, by default, reads each
-    // repository's kodus-config.yml live from the git provider.
-    const { data: scopes } = useFetch<Array<CodeReviewScope>>(
-        PARAMETERS_PATHS.CODE_REVIEW_SCOPES,
-        { params: { teamId } },
-        open && Boolean(teamId),
-        { staleTime: 60_000 },
-    );
+    const scopes = useCodeReviewScopes(open);
 
     // MCP plugins (Jira, Linear, …): each opens its own page. Empty when the
     // MCP manager is not reachable.
@@ -373,7 +332,7 @@ export const CommandPalette = () => {
 
     const repositories = useMemo(
         () =>
-            (scopes ?? []).filter(
+            scopes.filter(
                 (scope) =>
                     scope.isSelected || (scope.directories?.length ?? 0) > 0,
             ),
@@ -382,7 +341,7 @@ export const CommandPalette = () => {
 
     // Repository ids the settings shell can actually open, and their names.
     const scopeNames = useMemo(
-        () => new Map((scopes ?? []).map((scope) => [scope.id, scope.name])),
+        () => new Map(scopes.map((scope) => [scope.id, scope.name])),
         [scopes],
     );
 
@@ -419,7 +378,7 @@ export const CommandPalette = () => {
                 key: directory.id,
                 repo,
                 directory,
-                value: `directory ${repo.name} ${directoryLabel(directory)}`,
+                value: `directory ${repo.name} ${directoryScopeLabel(directory)}`,
             })),
         ]);
         return topMatches(entries, (entry) => entry.value, query, 10);
@@ -547,7 +506,7 @@ export const CommandPalette = () => {
                                                             {repo.name}
                                                         </span>
                                                         <span className="text-text-tertiary min-w-0 truncate font-mono text-xs">
-                                                            {directoryLabel(
+                                                            {directoryScopeLabel(
                                                                 directory,
                                                             )}
                                                         </span>
@@ -610,7 +569,21 @@ export const CommandPalette = () => {
                                             key={rule.uuid ?? rule.title}
                                             value={`rule ${rule.title}`}
                                             onSelect={() =>
-                                                go(ruleHref(rule, scopeNames))
+                                                go(
+                                                    rulePageHref(
+                                                        {
+                                                            ruleId: rule.uuid,
+                                                            repositoryId:
+                                                                rule.repositoryId,
+                                                            directoryId:
+                                                                rule.directoryId,
+                                                            memories:
+                                                                rule.type ===
+                                                                "memory",
+                                                        },
+                                                        scopes,
+                                                    ),
+                                                )
                                             }>
                                             <ScrollTextIcon />
                                             <span className="truncate">

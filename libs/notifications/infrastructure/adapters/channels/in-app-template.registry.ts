@@ -1,3 +1,4 @@
+import { APP_LINKS, rulesPageLink } from '../../../domain/catalog/app-links';
 import { NotificationEvent } from '../../../domain/catalog/events';
 
 /**
@@ -41,13 +42,22 @@ export const IN_APP_TEMPLATE_REGISTRY: Partial<
         title: 'Team invitation',
         body: `You've been invited to join a team.`,
     }),
-    [NotificationEvent.KODY_RULES_GENERATED]: (m) => ({
-        title: 'Kody rules generated',
-        body: `New Kody rules have been generated for ${m.organizationName ?? 'your organization'}.`,
-    }),
+    [NotificationEvent.KODY_RULES_GENERATED]: (m) => {
+        const rules = Array.isArray(m.rules) ? (m.rules as string[]) : [];
+        return {
+            title: 'Kody rules generated',
+            body: rules.length
+                ? `${rules.length} ${rules.length === 1 ? 'rule was' : 'rules were'} generated for ${m.organizationName ?? 'your organization'}. Review them before they start shaping reviews.`
+                : `New Kody rules have been generated for ${m.organizationName ?? 'your organization'}.`,
+            // Generated rules land in the organization's own rules screen,
+            // not the public library the old link pointed at.
+            ctaUrl: rulesPageLink(),
+        };
+    },
     [NotificationEvent.SSO_DOMAIN_VERIFICATION]: (m) => ({
         title: 'Verify your SSO domain',
         body: `Verify your SSO domain: ${m.domain ?? ''}`,
+        ctaUrl: APP_LINKS.sso,
     }),
     [NotificationEvent.ORG_REPORT]: () => ({
         title: 'Your Kodus report is ready',
@@ -87,28 +97,35 @@ export const IN_APP_TEMPLATE_REGISTRY: Partial<
                 count != null
                     ? `${count} ${count === 1 ? 'rule' : 'rules'} synced from ${repo}.`
                     : `Rules synced from ${repo}.`,
+            ctaUrl: rulesPageLink({
+                repositoryId: m.repositoryId as string | undefined,
+            }),
         };
     },
 
     [NotificationEvent.IDE_RULES_SYNC_FAILED]: (m) => ({
         title: 'IDE rule sync failed',
         body: `Kody could not sync rules from ${m.repoName ?? 'your repository'}: ${m.reason ?? 'unknown error'}.`,
+        ctaUrl: rulesPageLink({
+            repositoryId: m.repositoryId as string | undefined,
+        }),
     }),
 
     [NotificationEvent.ORG_MEMBER_REMOVED]: (m) => {
         const removed = m.removedUser as
-            | { name?: string; email?: string }
-            | undefined;
+            { name?: string; email?: string } | undefined;
         const name = removed?.name ?? removed?.email ?? 'A member';
         return {
             title: 'Member removed',
             body: `${name} was removed from ${m.organizationName ?? 'the organization'}.`,
+            ctaUrl: APP_LINKS.organizationMembers,
         };
     },
 
     [NotificationEvent.ORG_ROLE_CHANGED]: (m) => ({
         title: 'Member role changed',
         body: `${m.affectedUserEmail ?? 'A member'}'s role in ${m.organizationName ?? 'the organization'} changed from ${m.previousRole ?? 'unknown'} to ${m.newRole ?? 'unknown'}${m.changedBy ? ` by ${m.changedBy}` : ''}.`,
+        ctaUrl: APP_LINKS.organizationMembers,
     }),
 
     [NotificationEvent.BILLING_PAYMENT_FAILED]: (m) => {
@@ -128,11 +145,7 @@ export const IN_APP_TEMPLATE_REGISTRY: Partial<
     [NotificationEvent.BILLING_TRIAL_EXPIRING]: (m) => {
         const days = m.daysRemaining as number | undefined;
         const remaining =
-            days == null
-                ? 'soon'
-                : days === 1
-                  ? 'tomorrow'
-                  : `in ${days} days`;
+            days == null ? 'soon' : days === 1 ? 'tomorrow' : `in ${days} days`;
         return {
             title: 'Trial expiring',
             body: `Your trial ends ${remaining}. Upgrade to keep Kody reviewing your pull requests.`,
@@ -143,27 +156,40 @@ export const IN_APP_TEMPLATE_REGISTRY: Partial<
     [NotificationEvent.BYOK_LLM_ERRORS_THRESHOLD]: (m) => ({
         title: 'BYOK LLM errors exceeded threshold',
         body: `Your ${m.provider ?? 'BYOK'} model returned ${m.errorCount ?? 0} errors in the recent window. Reviews may be impacted. Latest error: ${m.sampleError ?? 'n/a'}.`,
+        ctaUrl: APP_LINKS.models,
     }),
 
     [NotificationEvent.SPEND_LIMIT_THRESHOLD_REACHED]: (m) => ({
         title: `BYOK spend at ${m.percentage ?? 0}% of your monthly limit`,
         body: `Your BYOK model spend this month is $${m.spentUsd ?? 0} of your $${m.monthlyLimitUsd ?? 0} limit (${m.percentage ?? 0}%). This is an alert only — reviews keep running. Set a hard cap with your model provider to actually stop spend.`,
+        ctaUrl: APP_LINKS.tokenUsage,
     }),
 
     [NotificationEvent.SPEND_LIMIT_EXCEEDED_FINAL]: (m) => ({
         title: 'BYOK monthly spend limit exceeded',
         body: `Your BYOK spend ($${m.spentUsd ?? 0}) has passed your $${m.monthlyLimitUsd ?? 0} monthly limit. We won't notify you again this month. Reviews continue to run — set a hard cap with your model provider if you need to stop spend.`,
+        ctaUrl: APP_LINKS.tokenUsage,
     }),
 
     [NotificationEvent.RULE_FILE_REFERENCES_INVALID]: (m) => {
         const count = m.invalidCount as number | undefined;
         const repo = m.repoName ?? 'a repository';
+        const issues = Array.isArray(m.issues)
+            ? (m.issues as Array<{ ruleId?: string }>)
+            : [];
+        const repositoryId = m.repositoryId as string | undefined;
         return {
             title: 'Kody rule references are invalid',
             body:
                 count != null
                     ? `${count} ${count === 1 ? 'rule has' : 'rules have'} a file reference that no longer matches in ${repo}. Affected rules are skipped during review until fixed.`
                     : `Some Kody rules in ${repo} reference files that no longer match. Affected rules are skipped during review until fixed.`,
+            // One affected rule opens straight on it; several land on the
+            // repository's rules list, where the drawer also lists each one.
+            ctaUrl: rulesPageLink({
+                repositoryId,
+                ruleId: issues.length === 1 ? issues[0]?.ruleId : undefined,
+            }),
         };
     },
 };
