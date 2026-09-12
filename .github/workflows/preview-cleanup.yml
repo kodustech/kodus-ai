@@ -31,11 +31,14 @@ jobs:
             contents: read
             pull-requests: write
         steps:
-            # the PR's own merge ref can be gone once it is closed; the base
-            # branch is what still exists when the teardown runs
+            # Neither the PR's merge ref nor its base branch is guaranteed to
+            # exist here: deleting a branch auto-closes the PRs targeting it,
+            # and this job runs on exactly that event. The default branch is
+            # the one ref that outlives them — and the job needs a checkout,
+            # since destroy reads the recipe from it.
             - uses: actions/checkout@v6.0.2
               with:
-                  ref: ${{ github.event.pull_request.base.ref }}
+                  ref: ${{ github.event.repository.default_branch }}
 
             - uses: oven-sh/setup-bun@v2
               with:
