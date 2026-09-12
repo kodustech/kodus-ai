@@ -166,17 +166,22 @@ export class TestByokModelUseCase {
         // 2) No/curated catalog (or a changed region/location) → probe the provider
         // directly. baseURL stays the STORED one (never a caller override); the
         // region/location use the overridden value where the edit changed it.
-        return this.testByokConnectionUseCase.execute({
-            provider: input.provider,
-            model,
-            apiKey: slot.apiKey,
-            baseURL: slot.baseURL,
-            vertexLocation,
-            awsBearerToken: slot.awsBearerToken,
-            awsAccessKeyId: slot.awsAccessKeyId,
-            awsSecretAccessKey: slot.awsSecretAccessKey,
-            awsRegion,
-            awsSessionToken: slot.awsSessionToken,
-        });
+        return this.testByokConnectionUseCase.execute(
+            {
+                provider: input.provider,
+                model,
+                apiKey: slot.apiKey,
+                baseURL: slot.baseURL,
+                vertexLocation,
+                awsBearerToken: slot.awsBearerToken,
+                awsAccessKeyId: slot.awsAccessKeyId,
+                awsSecretAccessKey: slot.awsSecretAccessKey,
+                awsRegion,
+                awsSessionToken: slot.awsSessionToken,
+            },
+            // The Kodus provider's alpha gate needs the org; without it every
+            // saved-model probe on Kodus would be refused.
+            input.organizationAndTeamData?.organizationId,
+        );
     }
 }

@@ -1,6 +1,8 @@
 "use client";
 
 import { Link } from "@components/ui/link";
+import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
+import { useKodusCreditBalance } from "src/features/ee/byok/_hooks/use-kodus-credit-balance";
 import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
 
 const TrialExpiring = () => {
@@ -22,12 +24,30 @@ const TrialExpiring = () => {
 };
 
 const TrialExhausted = () => {
+    // Private alpha: the Kodus-credits path is offered only to orgs on the flag.
+    const { kodusProvider } = useFeatureFlags();
     return (
         <div className="bg-danger/30 py-2 text-center text-sm">
             You've used all the free PR reviews included in your trial.{" "}
-            <Link href="/byok" className="font-bold">
-                Connect your own AI key
-            </Link>{" "}
+            {kodusProvider ? (
+                <>
+                    <Link
+                        href="/byok/manual?provider=kodus"
+                        className="font-bold">
+                        Use Kodus credits
+                    </Link>{" "}
+                    (no API key) or{" "}
+                    <Link href="/byok" className="font-bold">
+                        connect your own AI key
+                    </Link>{" "}
+                </>
+            ) : (
+                <>
+                    <Link href="/byok" className="font-bold">
+                        Connect your own AI key
+                    </Link>{" "}
+                </>
+            )}
             to keep Kody reviewing — unlimited, on any plan.
         </div>
     );
@@ -58,9 +78,52 @@ const components: Partial<
     "payment-failed": SubscriptionInvalid,
 };
 
+const CreditsExhausted = ({ neverFunded }: { neverFunded: boolean }) => {
+    if (neverFunded) {
+        return (
+            <div className="bg-warning/25 py-2 text-center text-sm">
+                Your Kodus model has no credits yet — reviews won&apos;t run
+                until you{" "}
+                <Link href="/byok#kodus" className="font-bold">
+                    add credits
+                </Link>
+                .
+            </div>
+        );
+    }
+    return (
+        <div className="bg-danger/30 py-2 text-center text-sm">
+            Your Kodus credits are used up — reviews on Kodus-routed models are
+            paused.{" "}
+            <Link href="/byok#kodus" className="font-bold">
+                Top up credits
+            </Link>{" "}
+            or{" "}
+            <Link href="/byok" className="font-bold">
+                connect your own AI key
+            </Link>
+            .
+        </div>
+    );
+};
+
 export const SubscriptionStatusTopbar = () => {
     const { status } = useSubscriptionStatus();
+    const credits = useKodusCreditBalance();
     const Component = components[status];
+
+    // An exhausted prepaid balance blocks reviews regardless of the plan
+    // state, so it shows alongside (above) the plan banner — an expired plan
+    // is still expired. A never-funded org gets the "add credits to start"
+    // framing rather than "used up".
+    if (credits.usesKodusProvider && credits.exhausted) {
+        return (
+            <div>
+                <CreditsExhausted neverFunded={credits.neverFunded} />
+                {Component && <Component />}
+            </div>
+        );
+    }
 
     if (!Component) return null;
     return (

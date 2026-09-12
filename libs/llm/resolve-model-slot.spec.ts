@@ -284,3 +284,27 @@ describe('resolveModelSlot — Amazon Bedrock authenticates with aws* fields, NO
         ).toBeUndefined();
     });
 });
+
+describe('resolveModelSlot — platform-funded (`kodus`) credential', () => {
+    const v2: BYOKConfig = {
+        version: 2,
+        credentials: [{ id: 'kd', provider: 'kodus' }],
+        models: [{ id: 'm-kodus', credentialId: 'kd', model: 'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731' }],
+        routing: { defaultModelId: 'm-kodus' },
+    };
+
+    it('resolves to a routable slot with NO key (the module reads the platform key)', () => {
+        const slot = resolveModelSlot(v2, 'm-kodus');
+        expect(slot).toMatchObject({
+            provider: 'kodus',
+            apiKey: '',
+            model: 'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731',
+            byokModelId: 'm-kodus',
+            credentialId: 'kd',
+        });
+    });
+
+    it('is the effective default slot — it is real BYOK, not the managed/env path', () => {
+        expect(resolveDefaultSlot(v2)?.provider).toBe('kodus');
+    });
+});

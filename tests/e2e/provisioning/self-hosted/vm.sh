@@ -660,6 +660,17 @@ fi
 if [ -n "${API_LLM_PROVIDER_MODEL:-}" ]; then
     env_set API_LLM_PROVIDER_MODEL "${API_LLM_PROVIDER_MODEL:-}"
 fi
+# "Kodus as the provider" (prepaid credits) — cloud-only, private alpha.
+# ALPHA_ORGS opens the alpha on THIS disposable environment (no PostHog flag
+# and no alpha release track exist on a fresh env), and the platform key is
+# what the routed models actually run on. Both are opt-in: unset ⇒ the
+# provider stays hidden and the credits cells skip, exactly as in production.
+if [ -n "${API_KODUS_PROVIDER_ALPHA_ORGS:-}" ]; then
+    env_set API_KODUS_PROVIDER_ALPHA_ORGS "${API_KODUS_PROVIDER_ALPHA_ORGS:-}"
+fi
+if [ -n "${API_KODUS_PROVIDER_FIREWORKS_API_KEY:-}" ]; then
+    env_set API_KODUS_PROVIDER_FIREWORKS_API_KEY "${API_KODUS_PROVIDER_FIREWORKS_API_KEY:-}"
+fi
 REMOTE
 
 if [ -n "$LICENSE_KEY_TO_INJECT" ]; then

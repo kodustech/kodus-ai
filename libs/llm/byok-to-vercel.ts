@@ -23,6 +23,7 @@ export {
     getLimiterForSlot,
     runWithBYOKLimiter,
     __limiterCacheInternals,
+    __kodusPlatformLimiterInternals,
 } from './byok-limiter';
 
 // Wave 4 split: env/managed default resolution → ./managed-slot; managed/trial

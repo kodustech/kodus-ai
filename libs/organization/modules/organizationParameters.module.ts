@@ -26,6 +26,11 @@ import { PlatformModule } from '@libs/platform/modules/platform.module';
 import { CodebaseModule } from '@libs/code-review/modules/codebase.module';
 import { ProviderModule } from '@libs/core/infrastructure/services/providers/provider.module';
 import { ParametersModule } from './parameters.module';
+import { OrganizationModule } from './organization.module';
+import {
+    KODUS_PROVIDER_GATE_TOKEN,
+    KodusProviderGate,
+} from '@libs/core/infrastructure/services/providers/kodus-provider-gate.service';
 
 @Module({
     imports: [
@@ -33,6 +38,8 @@ import { ParametersModule } from './parameters.module';
         forwardRef(() => PlatformModule),
         forwardRef(() => CodebaseModule),
         forwardRef(() => ParametersModule),
+        // The Kodus provider gate reads the org's release track.
+        forwardRef(() => OrganizationModule),
         ProviderModule,
     ],
     providers: [
@@ -53,6 +60,7 @@ import { ParametersModule } from './parameters.module';
         DeleteByokConfigUseCase,
         GetLLMConfigStatusUseCase,
         GetByokProvidersUseCase,
+        { provide: KODUS_PROVIDER_GATE_TOKEN, useClass: KodusProviderGate },
         IgnoreBotsUseCase,
         GetModelsByProviderUseCase,
         GetModelCapabilitiesUseCase,

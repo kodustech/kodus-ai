@@ -5,7 +5,7 @@ import type { FeaturesSnapshot } from '../domain/snapshot.types';
 
 export const FEATURES_SNAPSHOT: FeaturesSnapshot = {
     "schema_version": 1,
-    "generated_at": "2026-08-11T19:06:02.620Z",
+    "generated_at": "2026-09-10T15:47:46.419Z",
     "source": "manual",
     "features": {
         "github-enterprise-server-pat": {
@@ -24,6 +24,15 @@ export const FEATURES_SNAPSHOT: FeaturesSnapshot = {
             "audience": [
                 "cloud",
                 "self-hosted"
+            ]
+        },
+        "kodus-provider": {
+            "name": "Kodus as a provider (prepaid credits)",
+            "stage": "alpha",
+            "description": "Pick a curated model and let Kodus run it on its own provider accounts — no API key to manage, usage billed from a prepaid credit balance you top up as you go.",
+            "documentation_url": "how_to_use/en/byok#kodus-credits",
+            "audience": [
+                "cloud"
             ]
         },
         "kodus-trace-review-context": {

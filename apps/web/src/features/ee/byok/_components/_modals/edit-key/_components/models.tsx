@@ -16,6 +16,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@components/ui/popover";
+import type { LLMProviderModel } from "@services/organizationParameters/fetch";
 import {
     useLLMProviderModelsPreview,
     useSuspenseGetLLMProviderModels,
@@ -28,6 +29,13 @@ import { ArrayHelpers } from "src/core/utils/array";
 
 import type { EditKeyForm } from "../_types";
 import { formatModelLabel } from "../../../../_data/model-label";
+
+/** "$2 in · $10 out / 1M" — only for a catalog that is also a price list. */
+const formatPerMillion = (p: NonNullable<LLMProviderModel["pricing"]>) => {
+    const usd = (n: number) =>
+        `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+    return `${usd(p.inputPerMillion)} in · ${usd(p.outputPerMillion)} out / 1M tokens`;
+};
 
 export const ByokModelSelect = ({
     excludeIds = [],
@@ -210,7 +218,7 @@ const ModelPickerPopover = ({
     models,
     onUseManual,
 }: {
-    models: Array<{ id: string; name: string }>;
+    models: LLMProviderModel[];
     onUseManual?: () => void;
 }) => {
     const form = useFormContext<EditKeyForm>();
@@ -281,26 +289,55 @@ const ModelPickerPopover = ({
                     <CommandList className="max-h-56 overflow-y-auto p-1">
                         <CommandEmpty>No model found.</CommandEmpty>
 
-                        {ArrayHelpers.sortAlphabetically(models, "name").map(
-                            (r) => (
-                                <CommandItem
-                                    key={r.id}
-                                    value={r.id}
-                                    onSelect={(v) => {
-                                        form.reset({
-                                            ...form.getValues(),
-                                            model: v,
-                                        });
-
-                                        resetErrorBoundary();
-                                        setOpen(false);
-                                    }}>
-                                    <span className="flex items-center gap-2">
-                                        {r.name}
-                                    </span>
-                                </CommandItem>
+                        {/* Recommended picks float to the top of a curated list;
+                            the rest stay alphabetical. A catalog that is also a
+                            price list (Kodus) shows the rate under each name. */}
+                        {[
+                            ...ArrayHelpers.sortAlphabetically(
+                                models.filter((m) => m.recommended),
+                                "name",
                             ),
-                        )}
+                            ...ArrayHelpers.sortAlphabetically(
+                                models.filter((m) => !m.recommended),
+                                "name",
+                            ),
+                        ].map((r) => (
+                            <CommandItem
+                                key={r.id}
+                                value={r.id}
+                                onSelect={(v) => {
+                                    form.reset({
+                                        ...form.getValues(),
+                                        model: v,
+                                    });
+
+                                    resetErrorBoundary();
+                                    setOpen(false);
+                                }}>
+                                <span className="flex min-w-0 flex-col gap-0.5">
+                                    <span className="flex items-center gap-2">
+                                        <span className="truncate">
+                                            {r.name}
+                                        </span>
+                                        {r.recommended && (
+                                            <span className="bg-primary-light/15 text-primary-light rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase">
+                                                Recommended
+                                            </span>
+                                        )}
+                                    </span>
+                                    {(r.description || r.pricing) && (
+                                        <span className="text-text-tertiary truncate text-xs">
+                                            {r.description}
+                                            {r.description && r.pricing
+                                                ? " · "
+                                                : ""}
+                                            {r.pricing &&
+                                                formatPerMillion(r.pricing)}
+                                        </span>
+                                    )}
+                                </span>
+                            </CommandItem>
+                        ))}
 
                         {/* Allow user to switch to manual input */}
                         <CommandItem

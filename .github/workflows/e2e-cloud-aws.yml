@@ -101,6 +101,13 @@ jobs:
                   API_LLM_PROVIDER: ${{ vars.E2E_LLM_PROVIDER || 'openai_compatible' }}
                   API_OPENAI_FORCE_BASE_URL: ${{ vars.E2E_LLM_BASE_URL || 'https://api.fireworks.ai/inference/v1' }}
                   API_LLM_PROVIDER_MODEL: ${{ vars.E2E_LLM_MODEL || 'accounts/fireworks/models/deepseek-v4-flash-0731' }}
+                  # "Kodus as the provider" (prepaid credits) is a private
+                  # alpha: on a fresh environment there is no PostHog flag and
+                  # no alpha release track, so the credits cells need the
+                  # deployment-level allow-list. The platform key is the same
+                  # Fireworks key the trial path already uses.
+                  API_KODUS_PROVIDER_ALPHA_ORGS: "*"
+                  API_KODUS_PROVIDER_FIREWORKS_API_KEY: ${{ secrets.E2E_LLM_API_KEY }}
               run: |
                   set -uo pipefail
                   bash tests/e2e/provisioning/cloud/aws-env.sh up | tee /tmp/env.out

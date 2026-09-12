@@ -7,6 +7,9 @@
  */
 export const FEATURE_FLAGS = {
     githubEnterpriseServerPat: "github-enterprise-server-pat",
+    /** "Kodus as a provider" (prepaid credits) — private alpha. Gates the
+     *  discovery copy only; the API hides the provider itself. */
+    kodusProvider: "kodus-provider",
 } as const;
 
 export type FeatureFlagKey = (typeof FEATURE_FLAGS)[keyof typeof FEATURE_FLAGS];

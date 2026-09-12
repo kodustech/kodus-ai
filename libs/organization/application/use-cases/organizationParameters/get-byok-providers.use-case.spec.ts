@@ -59,3 +59,23 @@ describe('GetByokProvidersUseCase', () => {
         }
     });
 });
+
+describe('GetByokProvidersUseCase — Kodus provider private alpha', () => {
+    it('hides `kodus` when no gate is wired (dependency-free descriptor stays closed)', async () => {
+        const { providers } = await new GetByokProvidersUseCase().execute('org-1');
+        expect(providers.map((p) => p.id)).not.toContain('kodus');
+    });
+
+    it('hides `kodus` for an org the gate refuses and shows it for one it allows', async () => {
+        const gate = { isEnabledFor: jest.fn(async (org?: string) => org === 'org-alpha') };
+        const off = await new GetByokProvidersUseCase(gate as any).execute('org-other');
+        expect(off.providers.map((p) => p.id)).not.toContain('kodus');
+        const on = await new GetByokProvidersUseCase(gate as any).execute('org-alpha');
+        expect(on.providers.map((p) => p.id)).toContain('kodus');
+        expect(gate.isEnabledFor).toHaveBeenCalledWith('org-alpha');
+        // Every other provider is unaffected by the gate.
+        expect(off.providers.map((p) => p.id)).toEqual(
+            on.providers.map((p) => p.id).filter((id) => id !== 'kodus'),
+        );
+    });
+});

@@ -1,0 +1,303 @@
+import { createHmac } from 'node:crypto';
+
+import { http } from './http.js';
+import type { KodusSession, RunContext, TargetContext } from './types.js';
+
+// Helpers for the "Kodus as the provider" scenarios: the keyless `kodus`
+// BYOK credential, the prepaid-credit endpoints (through the web proxy, as
+// the app uses them), the API's metering journal, and — for a LIVE cell — the
+// billing service's admin adjustment reached DIRECTLY (never via the proxy,
+// which denies it), so a test can seed and drain a balance without Stripe.
+
+export const auth = (session: KodusSession) => ({
+    Authorization: `Bearer ${session.accessToken}`,
+});
+
+/**
+ * Billing authenticates the callers of its `/credits/*` routes (money) with a
+ * shared secret — the same one that signs its outbound webhooks. The harness
+ * talks to billing directly, so it signs the same way the services do:
+ * HMAC-SHA256 in `x-kodus-signature` over
+ * `METHOD\n/path\n<canonical query>\n<timestamp>\n<body>`, with the
+ * timestamp in `x-kodus-timestamp` (billing rejects anything outside a
+ * 5-minute window). The query is signed because the credit reads carry
+ * organizationId there. BILLING_SERVICE_TOKEN is that secret (the
+ * deployment's webhook secret).
+ */
+export function serviceToken(
+    method: string,
+    url: string,
+    body?: unknown,
+): Record<string, string> {
+    const secret = (process.env.BILLING_SERVICE_TOKEN ?? '').trim();
+    if (!secret) return {};
+    const upper = method.toUpperCase();
+    const parsed = new URL(url, 'http://placeholder');
+    const query = new URLSearchParams(parsed.search);
+    query.sort();
+    // No body on the wire means an empty signed body — billing verifies the
+    // bytes it received, and `{}` is not the same as nothing.
+    const raw =
+        upper === 'GET' || upper === 'DELETE' || body === undefined
+            ? ''
+            : typeof body === 'string'
+              ? body
+              : JSON.stringify(body);
+    const timestamp = String(Date.now());
+    const payload = [
+        upper,
+        parsed.pathname,
+        query.toString(),
+        timestamp,
+        raw,
+    ].join('\n');
+    return {
+        'x-kodus-signature': createHmac('sha256', secret)
+            .update(payload)
+            .digest('hex'),
+        'x-kodus-timestamp': timestamp,
+    };
+}
+
+/** Headers for a DIRECT billing call: the tenant session + the signature. */
+export const billingAuth = (
+    session: KodusSession,
+    method: string,
+    url: string,
+    body?: unknown,
+): Record<string, string> => ({
+    ...auth(session),
+    ...serviceToken(method, url, body),
+});
+
+/**
+ * A DIRECT billing call, signed over the URL it actually requests.
+ *
+ * Use this instead of pairing `http()` with `billingAuth()` by hand: the
+ * signature covers the query string, so signing a URL without the query it is
+ * then sent with answers 401 — a mistake that already happened here, in the
+ * API's axios client and in the web, all three times because the path and the
+ * query were assembled in two different places.
+ */
+export async function billingCall<T>(
+    session: KodusSession,
+    method: 'GET' | 'POST' | 'DELETE',
+    url: string,
+    body?: unknown,
+    timeoutMs = 30_000,
+) {
+    return http<T>(url, {
+        method,
+        headers: billingAuth(session, method, url, body),
+        ...(body === undefined ? {} : { body }),
+        timeoutMs,
+    });
+}
+
+/** Catalog model the scenarios route through Kodus. Override with
+ *  KODUS_E2E_MODEL to run the same live cell on another catalog entry. */
+export const KODUS_E2E_MODEL =
+    process.env.KODUS_E2E_MODEL ||
+    'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731';
+
+/** Persist a v2 BYOK config whose only model is routed by Kodus (no key). */
+export async function saveKodusByok(
+    ctx: RunContext,
+    session: KodusSession,
+    model: string = KODUS_E2E_MODEL,
+): Promise<void> {
+    const target = ctx.target as TargetContext;
+    const configValue = {
+        version: 2,
+        credentials: [{ id: 'e2e-kodus-cred', provider: 'kodus' }],
+        models: [
+            { id: 'e2e-kodus-model', credentialId: 'e2e-kodus-cred', model },
+        ],
+        routing: {
+            mode: 'manual',
+            defaultModelId: 'e2e-kodus-model',
+            taskOverrides: {},
+        },
+    };
+    const save = await http(
+        `${target.apiBaseUrl}/organization-parameters/create-or-update`,
+        {
+            method: 'POST',
+            headers: auth(session),
+            body: { key: 'byok_config', configValue },
+            timeoutMs: 25_000,
+        },
+    );
+    ctx.assert(
+        save.status >= 200 && save.status < 300,
+        `Saving a keyless kodus credential must succeed on cloud (HTTP ${save.status}): ${save.raw.slice(0, 250)}`,
+    );
+}
+
+export type CreditBalance = {
+    balanceUsd: number;
+    lowThresholdUsd: number;
+    markupPct: number;
+    packsUsd: number[];
+    lifetimePurchasedUsd: number;
+    lifetimeDebitedUsd: number;
+};
+
+const orgQs = (session: KodusSession) =>
+    `?organizationId=${encodeURIComponent(session.organizationId)}&teamId=${encodeURIComponent(session.teamId)}`;
+
+/** Billing is reached DIRECTLY: the browser proxy denies every /credits/*
+ *  route (they take a client-chosen organizationId) and the app itself only
+ *  touches credits through server actions. The live cell already needs
+ *  `BILLING_ADMIN_BASE_URL` for the admin adjustment; reads use it too. */
+export function billingBase(ctx: RunContext): string {
+    const base = process.env.BILLING_ADMIN_BASE_URL;
+    ctx.assert(
+        !!base,
+        'kodus-credits scenarios need BILLING_ADMIN_BASE_URL (direct billing access; the browser proxy denies /credits/*)',
+    );
+    return base!.replace(/\/$/, '');
+}
+
+export async function fetchCreditBalance(
+    ctx: RunContext,
+    session: KodusSession,
+): Promise<CreditBalance> {
+    const resp = await billingCall<CreditBalance>(
+        session,
+        'GET',
+        `${billingBase(ctx)}/credits/balance${orgQs(session)}`,
+    );
+    ctx.assert(
+        resp.status === 200 && typeof resp.body?.balanceUsd === 'number',
+        `credits/balance must answer 200 with a numeric balance: HTTP ${resp.status} ${resp.raw.slice(0, 250)}`,
+    );
+    return resp.body!;
+}
+
+export type LedgerEntry = {
+    type: string;
+    amountUsd: number;
+    balanceAfterUsd: number;
+    usageKey: string;
+    metadata?: Record<string, unknown>;
+    createdAt: string;
+};
+
+export async function fetchCreditLedger(
+    ctx: RunContext,
+    session: KodusSession,
+): Promise<LedgerEntry[]> {
+    const resp = await billingCall<{ entries?: LedgerEntry[] }>(
+        session,
+        'GET',
+        `${billingBase(ctx)}/credits/ledger${orgQs(session)}&limit=200`,
+    );
+    ctx.assert(
+        resp.status === 200 && Array.isArray(resp.body?.entries),
+        `credits/ledger must answer 200 with entries[]: HTTP ${resp.status} ${resp.raw.slice(0, 250)}`,
+    );
+    return resp.body!.entries!;
+}
+
+export type Charge = {
+    spanId: string;
+    correlationId?: string;
+    prNumber?: number;
+    model: string;
+    amountUsd: number;
+    status: 'pending' | 'debited' | 'unpriced' | 'failed';
+    spanAt: string;
+};
+
+/** The API's metering journal (what each debit came from). */
+export async function fetchCreditCharges(
+    ctx: RunContext,
+    session: KodusSession,
+    prNumber?: number,
+): Promise<Charge[]> {
+    const target = ctx.target as TargetContext;
+    const qs = prNumber ? `?prNumber=${prNumber}&limit=500` : '?limit=500';
+    const resp = await http<{
+        data?: { charges?: Charge[] };
+        charges?: Charge[];
+    }>(`${target.apiBaseUrl}/credits/charges${qs}`, {
+        method: 'GET',
+        headers: auth(session),
+        timeoutMs: 30_000,
+    });
+    ctx.assert(
+        resp.status === 200,
+        `GET /credits/charges must answer 200: HTTP ${resp.status} ${resp.raw.slice(0, 250)}`,
+    );
+    return resp.body?.data?.charges ?? resp.body?.charges ?? [];
+}
+
+/**
+ * Admin adjustment on the billing service, reached DIRECTLY (the web proxy
+ * denies /credits/adjust on purpose). Needs BILLING_ADMIN_BASE_URL (e.g.
+ * http://localhost:3992/api/billing over an SSH tunnel) and
+ * BILLING_ADMIN_TOKEN. Only LIVE cells run this — it is how a test seeds a
+ * balance without a Stripe checkout and drains it to exercise the gate.
+ */
+export async function adminAdjustCredits(
+    ctx: RunContext,
+    session: KodusSession,
+    amountUsd: number,
+    usageKey: string,
+    reason: string,
+): Promise<{ applied: boolean; balanceUsd: number }> {
+    const base = process.env.BILLING_ADMIN_BASE_URL;
+    const adminToken = process.env.BILLING_ADMIN_TOKEN;
+    ctx.assert(
+        !!base && !!adminToken,
+        'kodus-credits live cell needs BILLING_ADMIN_BASE_URL + BILLING_ADMIN_TOKEN (direct billing access)',
+    );
+    const resp = await http<{ applied: boolean; balanceUsd: number }>(
+        `${base!.replace(/\/$/, '')}/credits/adjust`,
+        {
+            method: 'POST',
+            body: {
+                organizationId: session.organizationId,
+                teamId: session.teamId,
+                amountUsd,
+                usageKey,
+                reason,
+                adminToken,
+            },
+            headers: serviceToken(
+                'POST',
+                `${base!.replace(/\/$/, '')}/credits/adjust`,
+                {
+                    organizationId: session.organizationId,
+                    teamId: session.teamId,
+                    amountUsd,
+                    usageKey,
+                    reason,
+                    adminToken,
+                },
+            ),
+            timeoutMs: 30_000,
+        },
+    );
+    ctx.assert(
+        resp.status === 200 && typeof resp.body?.balanceUsd === 'number',
+        `credits/adjust must answer 200: HTTP ${resp.status} ${resp.raw.slice(0, 250)}`,
+    );
+    return resp.body!;
+}
+
+/** Poll until `pred` is true or the budget runs out. */
+export async function pollUntilTrue(
+    label: string,
+    pred: () => Promise<boolean>,
+    opts: { timeoutSec: number; intervalSec?: number },
+): Promise<boolean> {
+    const deadline = Date.now() + opts.timeoutSec * 1000;
+    const interval = (opts.intervalSec ?? 15) * 1000;
+    while (Date.now() < deadline) {
+        if (await pred()) return true;
+        await new Promise((r) => setTimeout(r, interval));
+    }
+    return false;
+}

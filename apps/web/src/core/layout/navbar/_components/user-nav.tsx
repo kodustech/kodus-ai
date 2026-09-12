@@ -4,6 +4,7 @@ import { Link } from "@components/ui/link";
 import { toast } from "@components/ui/toaster/use-toast";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
+import { formatUsd } from "@services/usage/format";
 import {
     ActivityIcon,
     ChartColumn,
@@ -12,8 +13,6 @@ import {
     SettingsIcon,
     UserIcon,
 } from "lucide-react";
-import { useAllTeams } from "src/core/providers/all-teams-context";
-import { useAuth } from "src/core/providers/auth.provider";
 import { Avatar, AvatarFallback } from "src/core/components/ui/avatar";
 import { Button } from "src/core/components/ui/button";
 import {
@@ -26,10 +25,13 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "src/core/components/ui/dropdown-menu";
+import { useAllTeams } from "src/core/providers/all-teams-context";
+import { useAuth } from "src/core/providers/auth.provider";
 import { useSubscriptionStatus } from "src/core/providers/byok.provider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { TEAM_STATUS } from "src/core/types";
 import { isSelfHosted } from "src/core/utils/self-hosted";
+import { useKodusCreditBalance } from "src/features/ee/byok/_hooks/use-kodus-credit-balance";
 
 import { VersionInfo } from "./version-info";
 
@@ -47,6 +49,26 @@ export function UserNav() {
         ResourceType.TokenUsage,
     );
     const { isBYOK, isTrial, isEnterprise } = useSubscriptionStatus();
+    // Orgs on the Kodus provider see their prepaid balance next to the BYOK
+    // entry — a quiet hint, not a navbar element; the wallet is the card.
+    const credits = useKodusCreditBalance();
+    const creditsHint = credits.usesKodusProvider ? (
+        <span
+            data-testid="user-nav-credits"
+            className={`ml-auto text-xs tabular-nums ${
+                credits.exhausted
+                    ? "text-danger"
+                    : credits.low
+                      ? "text-warning"
+                      : "text-text-tertiary"
+            }`}>
+            {credits.exhausted
+                ? "Top up"
+                : typeof credits.balanceUsd === "number"
+                  ? formatUsd(credits.balanceUsd)
+                  : ""}
+        </span>
+    ) : undefined;
 
     const handleChangeWorkspace = (teamId: string) => {
         setTeamId(teamId);
@@ -118,8 +140,10 @@ export function UserNav() {
                 )}
 
                 {canEditOrg && (
-                    <Link href="/byok">
-                        <DropdownMenuItem leftIcon={<KeyRoundIcon />}>
+                    <Link href={creditsHint ? "/byok#kodus" : "/byok"}>
+                        <DropdownMenuItem
+                            leftIcon={<KeyRoundIcon />}
+                            rightIcon={creditsHint}>
                             BYOK
                         </DropdownMenuItem>
                     </Link>
@@ -134,14 +158,14 @@ export function UserNav() {
                 )}
 
                 {canReadTokenUsage && (
-                        <Link href="/token-usage">
-                            <DropdownMenuItem
-                                data-testid="nav-token-usage"
-                                leftIcon={<ChartColumn />}>
-                                Token Usage
-                            </DropdownMenuItem>
-                        </Link>
-                    )}
+                    <Link href="/token-usage">
+                        <DropdownMenuItem
+                            data-testid="nav-token-usage"
+                            leftIcon={<ChartColumn />}>
+                            Token Usage
+                        </DropdownMenuItem>
+                    </Link>
+                )}
 
                 <Link href="/sign-out" replace>
                     <DropdownMenuItem leftIcon={<LogOutIcon />}>
