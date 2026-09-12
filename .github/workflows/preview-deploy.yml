@@ -74,14 +74,20 @@ jobs:
                   echo "RUNO=bun $RUNNER_TEMP/runo/bin/runo.ts" >> "$GITHUB_ENV"
 
             - name: Materialize the preview .env
+              id: env
               env:
                   PREVIEW_DOTENV: ${{ secrets.PREVIEW_DOTENV }}
                   PREVIEW_SEED_PASSWORD: ${{ secrets.PREVIEW_SEED_PASSWORD }}
               run: |
+                  # No env secret means previews are not configured for this
+                  # repository (a fork, or before the secrets are added). That
+                  # is not a broken pull request — skip quietly.
                   if [ -z "$PREVIEW_DOTENV" ]; then
-                    echo "::error::PREVIEW_DOTENV secret is empty — the stack cannot boot without an env file"
-                    exit 1
+                    echo "configured=false" >> "$GITHUB_OUTPUT"
+                    echo "::notice::PREVIEW_DOTENV is not set — skipping the preview environment"
+                    exit 0
                   fi
+                  echo "configured=true" >> "$GITHUB_OUTPUT"
                   printf '%s\n' "$PREVIEW_DOTENV" > .env
                   # the seed runs on the VM and reads these from the same file
                   {
@@ -92,6 +98,7 @@ jobs:
 
             - name: Bring the environment up
               id: up
+              if: steps.env.outputs.configured == 'true'
               env:
                   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
                   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -105,13 +112,13 @@ jobs:
                   # `up` only uploads code when it CREATES the VM; on every
                   # later push the environment already exists and the new
                   # commit travels with push (compose watch reloads it)
-                  $RUNO push --restart
-                  URL=$($RUNO url --branch "$HEAD_REF" | head -1)
+                  $RUNO push --restart --recipe .kodus/workspace.preview.yaml
+                  URL=$($RUNO url --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml | head -1)
                   echo "url=$URL" >> "$GITHUB_OUTPUT"
                   echo "Preview: $URL"
 
             - name: Comment the preview link
-              if: always()
+              if: always() && steps.env.outputs.configured == 'true'
               uses: actions/github-script@v9.0.0
               env:
                   URL: ${{ steps.up.outputs.url }}
