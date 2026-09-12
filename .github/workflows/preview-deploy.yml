@@ -122,6 +122,8 @@ jobs:
                   # each run a new environment as far as sessions go.
                   if [ -n "$PREVIEW_SECRET_SEED_BASE" ]; then
                     export PREVIEW_SECRET_SEED="$PREVIEW_SECRET_SEED_BASE:$HEAD_REF"
+                  else
+                    echo "::warning::PREVIEW_SECRET_SEED is not set — this preview's signing keys are random and change on every push, so anyone logged into it gets signed out. Set the secret to make them stable per environment."
                   fi
                   # ...and then nothing real survives into a public environment
                   ./scripts/preview/neutralize-preview-env.sh .env .env.template
