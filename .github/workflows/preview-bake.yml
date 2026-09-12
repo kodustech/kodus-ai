@@ -1,0 +1,81 @@
+name: "Preview: Bake base image"
+
+# =============================================================================
+# Bakes, nightly from main, the AMI that preview environments boot from.
+#
+# A cold preview spends most of its time on work that is identical for every
+# pull request: pulling base images, building kodus-ai-dev, installing
+# dependencies. Doing it once a night turns the first push of a PR from ~25
+# minutes into a few. The image is tagged for the repository, so a developer's
+# own `runo up` finds it too — nobody has to bake anything locally.
+#
+# Same secrets as the deploy workflow; the image only ever contains main's
+# dependencies and built layers, never a rendered .env.
+# =============================================================================
+
+on:
+    schedule:
+        # 05:10 UTC = a bit after 02:00 in São Paulo, so the image is fresh for
+        # the working day and the bake never competes with it
+        - cron: "10 5 * * *"
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: preview-bake
+    cancel-in-progress: false
+
+env:
+    RUNO_HOME: /home/runner/.runo-preview
+    RUNO_AWS_REGION: sa-east-1
+    RUNO_MAX_INSTANCES: "20"
+    RUNO_REF: main
+
+jobs:
+    bake:
+        name: Bake the preview base image
+        runs-on: ubuntu-latest
+        environment: Preview
+        timeout-minutes: 90
+        steps:
+            - uses: actions/checkout@v6.0.2
+
+            - uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: latest
+
+            - name: Install runo
+              run: |
+                  git clone --depth 1 --branch "$RUNO_REF" https://github.com/kodustech/runo.git "$RUNNER_TEMP/runo"
+                  cd "$RUNNER_TEMP/runo"
+                  bun install --frozen-lockfile
+                  echo "RUNO=bun $RUNNER_TEMP/runo/bin/runo.ts" >> "$GITHUB_ENV"
+
+            - name: Install the 1Password CLI
+              uses: 1password/install-cli-action@v1
+
+            # The bake VM runs the recipe's setup, which reads .env — but the
+            # image must not carry it, so the file is removed before the
+            # snapshot (see the last step of the recipe's setup below).
+            - name: Materialize the .env the build needs
+              env:
+                  OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+              run: |
+                  if [ -z "$OP_SERVICE_ACCOUNT_TOKEN" ]; then
+                    echo "::error::OP_SERVICE_ACCOUNT_TOKEN is not set"
+                    exit 1
+                  fi
+                  ./scripts/env/pull.sh --force
+                  ./scripts/preview/neutralize-preview-env.sh .env .env.template
+                  chmod 600 .env
+
+            - name: Bake
+              env:
+                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  RUNO_SSH_KEY: ${{ secrets.PREVIEW_RUNO_SSH_KEY }}
+              run: |
+                  set -euo pipefail
+                  $RUNO bake --warm --branch main --recipe .kodus/workspace.preview.yaml
