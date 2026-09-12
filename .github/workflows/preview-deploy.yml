@@ -12,12 +12,16 @@ name: "Preview: Deploy"
 #
 # Required secrets (environment "Preview"):
 #   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY  account the preview VMs live in
-#   PREVIEW_RUNO_SSH_KEY   private key every run reuses to reach the VMs
-#   PREVIEW_DOTENV         the .env previews boot with — MUST NOT carry
-#                          production credentials: the URL is public
-#   PREVIEW_SEED_PASSWORD  password of the seeded login (preview@kodus.io);
-#                          signup enforces 8+ chars with an uppercase, a
-#                          lowercase, a number and a symbol
+#   PREVIEW_RUNO_SSH_KEY       private key every run reuses to reach the VMs
+#   OP_SERVICE_ACCOUNT_TOKEN   renders .env from .env.template, the same way a
+#                              developer does — so a variable added to the
+#                              template does not silently break previews weeks
+#                              later. Every vault-backed value is then stripped
+#                              (see scripts/preview/neutralize-preview-env.sh):
+#                              a public URL never boots with real credentials.
+#   PREVIEW_SEED_PASSWORD      password of the seeded login (preview@kodus.io);
+#                              signup enforces 8+ chars with an uppercase, a
+#                              lowercase, a number and a symbol
 # =============================================================================
 
 on:
@@ -75,22 +79,31 @@ jobs:
                   bun install --frozen-lockfile
                   echo "RUNO=bun $RUNNER_TEMP/runo/bin/runo.ts" >> "$GITHUB_ENV"
 
+            # unconditional: the `secrets` context is not available in a
+            # step-level `if`, and the install is a couple of seconds
+            - name: Install the 1Password CLI
+              uses: 1password/install-cli-action@v1
+
             - name: Materialize the preview .env
               id: env
               env:
-                  PREVIEW_DOTENV: ${{ secrets.PREVIEW_DOTENV }}
+                  OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
                   PREVIEW_SEED_PASSWORD: ${{ secrets.PREVIEW_SEED_PASSWORD }}
               run: |
-                  # No env secret means previews are not configured for this
+                  # No token means previews are not configured for this
                   # repository (a fork, or before the secrets are added). That
                   # is not a broken pull request — skip quietly.
-                  if [ -z "$PREVIEW_DOTENV" ]; then
+                  if [ -z "$OP_SERVICE_ACCOUNT_TOKEN" ]; then
                     echo "configured=false" >> "$GITHUB_OUTPUT"
-                    echo "::notice::PREVIEW_DOTENV is not set — skipping the preview environment"
+                    echo "::notice::OP_SERVICE_ACCOUNT_TOKEN is not set — skipping the preview environment"
                     exit 0
                   fi
                   echo "configured=true" >> "$GITHUB_OUTPUT"
-                  printf '%s\n' "$PREVIEW_DOTENV" > .env
+                  # the repo's own renderer, so the set of variables always
+                  # matches .env.template
+                  ./scripts/env/pull.sh --force
+                  # ...and then nothing real survives into a public environment
+                  ./scripts/preview/neutralize-preview-env.sh .env .env.template
                   # the seed runs on the VM and reads these from the same file
                   {
                     echo "PREVIEW_SEED_EMAIL=preview@kodus.io"
