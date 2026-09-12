@@ -114,7 +114,7 @@ jobs:
                   # `up` only uploads code when it CREATES the VM; on every
                   # later push the environment already exists and the new
                   # commit travels with push (compose watch reloads it)
-                  $RUNO push --restart --recipe .kodus/workspace.preview.yaml
+                  $RUNO push --restart --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml
                   URL=$($RUNO url --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml | head -1)
                   echo "url=$URL" >> "$GITHUB_OUTPUT"
                   echo "Preview: $URL"
