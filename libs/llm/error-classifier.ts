@@ -382,7 +382,22 @@ function matchByMessage(lower: string): LlmErrorCategory {
         lower.includes('network error') ||
         lower.includes('fetch failed') ||
         lower.includes('timeout') ||
-        lower.includes('aborted')
+        lower.includes('aborted') ||
+        // Common 5xx phrasings. `matchByMessage` is the fallback when no HTTP
+        // status reached the classifier — e.g. an AI_RetryError (SDK retries
+        // exhausted) whose embedded text "Last error: AI_APICallError: Bad
+        // Gateway" carries no status (the default RetryError is a plain Error).
+        // Without these, a real upstream outage classifies UNKNOWN and the
+        // configured BYOK fallback is never tried (#1875).
+        lower.includes('bad gateway') ||
+        lower.includes('gateway timeout') ||
+        lower.includes('service unavailable') ||
+        lower.includes('internal server error') ||
+        // Status numbers can appear as text without a status field (Cloudflare's
+        // 530 over a 5xx, proxy passthrough). Word boundaries keep bare digits
+        // inside larger numbers (token counts like "5032", ids) from being read
+        // as an HTTP status and wrongly marking a permanent error TRANSIENT.
+        /\b(?:502|503|504|530)\b/.test(lower)
     ) {
         return LlmErrorCategory.TRANSIENT;
     }
