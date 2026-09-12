@@ -1,45 +1,80 @@
 name: "Preview: Cleanup"
 
 # =============================================================================
-# Updates PR comment when a PR is closed/merged.
-# - Railway: native PR environments auto-cleanup on PR close
-# - Vercel: auto-cleans (no action needed)
-# - This workflow only updates the PR comment
+# Terminates the pull request's preview VM when the PR closes.
+#
+# The runner that tears the environment down is never the one that created it,
+# so there is no local registry to look the instance up in — runo finds it by
+# the tags it wrote on the instance (repo + branch).
 # =============================================================================
+
+on:
+    pull_request:
+        types: [closed]
 
 permissions:
     contents: read
 
-on:
-    pull_request:
-        types: [ closed ]
+env:
+    RUNO_HOME: /home/runner/.runo-preview
+    RUNO_AWS_REGION: sa-east-1
+    RUNO_REF: main
 
 jobs:
-    cleanup-comment:
-        name: Update PR comment
+    destroy:
+        name: Destroy preview environment
+        if: github.event.pull_request.head.repo.full_name == github.repository
         runs-on: ubuntu-latest
+        environment: Preview
+        timeout-minutes: 15
         permissions:
+            contents: read
             pull-requests: write
         steps:
-            - name: Mark preview as closed
+            - uses: actions/checkout@v6.0.2
+
+            - uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: latest
+
+            - name: Install runo
+              run: |
+                  git clone --depth 1 --branch "$RUNO_REF" https://github.com/kodustech/runo.git "$RUNNER_TEMP/runo"
+                  cd "$RUNNER_TEMP/runo"
+                  bun install --frozen-lockfile
+                  echo "RUNO=bun $RUNNER_TEMP/runo/bin/runo.ts" >> "$GITHUB_ENV"
+
+            - name: Destroy the environment
+              env:
+                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  RUNO_SSH_KEY: ${{ secrets.PREVIEW_RUNO_SSH_KEY }}
+                  HEAD_REF: ${{ github.event.pull_request.head.ref }}
+              run: |
+                  # A PR whose preview was never created has nothing to destroy;
+                  # that is a normal outcome, not a failure.
+                  $RUNO destroy --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml || {
+                    echo "::notice::no preview environment found for $HEAD_REF"
+                    exit 0
+                  }
+
+            - name: Mark the preview as gone
+              if: always()
               uses: actions/github-script@v9.0.0
               with:
                   script: |
                       const marker = '## Preview Environment';
-
                       const { data: comments } = await github.rest.issues.listComments({
                         owner: context.repo.owner,
                         repo: context.repo.repo,
                         issue_number: context.issue.number,
                       });
-
-                      const existing = comments.find(c => c.body.includes(marker));
-
+                      const existing = comments.find((c) => c.body.includes(marker));
                       if (existing) {
                         await github.rest.issues.updateComment({
                           owner: context.repo.owner,
                           repo: context.repo.repo,
                           comment_id: existing.id,
-                          body: `## Preview Environment\n\n~~Preview environments have been cleaned up.~~`,
+                          body: `${marker}\n\n~~Preview environment destroyed with the pull request.~~`,
                         });
                       }
