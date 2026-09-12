@@ -36,9 +36,10 @@ export function serviceToken(
     const query = new URLSearchParams(parsed.search);
     query.sort();
     // No body on the wire means an empty signed body — billing verifies the
-    // bytes it received, and `{}` is not the same as nothing.
+    // bytes it received, and `{}` is not the same as nothing. A body IS signed
+    // on any method, DELETE included.
     const raw =
-        upper === 'GET' || upper === 'DELETE' || body === undefined
+        body === undefined
             ? ''
             : typeof body === 'string'
               ? body

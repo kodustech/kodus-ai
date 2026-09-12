@@ -19,7 +19,8 @@ import { createHmac } from 'crypto';
  *     leave it out and one leaked signature reads or mutates ANY org;
  *   · the timestamp, checked by billing against a 5-minute window, so a
  *     signature that leaks stops working instead of being valid forever;
- *   · the exact body bytes that go on the wire.
+ *   · the exact body bytes that go on the wire, whatever the method (no body
+ *     signs the empty string).
  *
  * The counterpart is `src/config/utils/serviceToken.ts` in
  * kodus-service-billing. The web has its own copy of this for its server-side
@@ -94,9 +95,10 @@ export function billingSignatureHeaders(args: {
     if (!args.secret) return {};
     const method = args.method.toUpperCase();
     const timestamp = String(args.now ?? Date.now());
-    // GET/DELETE send no body, so both sides sign an empty one.
-    const rawBody =
-        method === 'GET' || method === 'DELETE' ? '' : (args.rawBody ?? '');
+    // Whatever bytes go on the wire, for EVERY method. A request with no body
+    // signs the empty string; a DELETE that DOES carry one has it covered,
+    // which the old GET/DELETE special case silently skipped.
+    const rawBody = args.rawBody ?? '';
     const signature = createHmac('sha256', args.secret)
         .update(
             billingSignaturePayload({
