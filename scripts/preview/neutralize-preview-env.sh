@@ -12,9 +12,11 @@
 #   - secrets the app needs in order to WORK (cookie/JWT/crypto keys) get a
 #     fresh random value per environment: a preview must never share a signing
 #     key with anything else, and sharing the dev one would do exactly that;
-#   - datastore URLs are rebuilt from the compose-local host/user/password that
-#     are already plain text in the template, so the stack can only reach its
-#     own containers, never a shared database;
+#   - datastore URLs are emptied, which is what a developer's .env already does:
+#     the stack addresses its databases through the discrete API_*_DB_* values
+#     (container hostnames), while host-side tooling like migrations overrides
+#     the host to localhost. A single URL cannot be right for both, and filling
+#     one in points half the system at the wrong place;
 #   - everything else — model providers, git app credentials, email, billing,
 #     telemetry — becomes an obvious placeholder. A feature that needs one fails
 #     loudly in the preview instead of quietly spending money or writing to a
@@ -46,20 +48,6 @@ WEB_ANALYTICS_SECRET
 API_DOCS_BASIC_PASS
 "
 
-value_of() { grep -E "^$1=" "$ENV_FILE" | tail -1 | cut -d= -f2-; }
-
-PG_USER=$(value_of API_PG_DB_USERNAME)
-PG_PASS=$(value_of API_PG_DB_PASSWORD)
-PG_HOST=$(value_of API_PG_DB_HOST)
-PG_PORT=$(value_of API_PG_DB_PORT)
-PG_NAME=$(value_of API_PG_DB_DATABASE)
-MG_USER=$(value_of API_MG_DB_USERNAME)
-MG_PASS=$(value_of API_MG_DB_PASSWORD)
-MG_HOST=$(value_of API_MG_DB_HOST)
-MG_PORT=$(value_of API_MG_DB_PORT)
-MG_NAME=$(value_of API_MG_DB_DATABASE)
-PG_URL="postgresql://${PG_USER}:${PG_PASS}@${PG_HOST}:${PG_PORT}/${PG_NAME}"
-MG_URL="mongodb://${MG_USER}:${MG_PASS}@${MG_HOST}:${MG_PORT}/${MG_NAME}?authSource=admin"
 
 # NextAuth reads one and the app the other; they have to agree.
 NEXTAUTH=$(openssl rand -base64 32)
@@ -69,8 +57,7 @@ KEYS=$(grep -oE '^[A-Z0-9_]+=op://' "$TEMPLATE" | cut -d= -f1 | sort -u)
 count=0
 for key in $KEYS; do
     case "$key" in
-        DATABASE_URL | API_PG_DB_URL) value="$PG_URL" ;;
-        MONGODB_URI | API_MG_DB_URI) value="$MG_URL" ;;
+        DATABASE_URL | API_PG_DB_URL | MONGODB_URI | API_MG_DB_URI) value="" ;;
         NEXTAUTH_SECRET | WEB_NEXTAUTH_SECRET) value="$NEXTAUTH" ;;
         *)
             if echo "$GENERATED" | grep -qx "$key"; then
