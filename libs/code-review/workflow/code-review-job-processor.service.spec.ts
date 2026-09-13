@@ -215,17 +215,19 @@ describe('CodeReviewJobProcessorService', () => {
                 );
 
                 const run = service.process('job-1');
-                // Attach the rejection handler BEFORE the timers fire so the
-                // abort rejection is never momentarily unhandled.
-                const assertion = expect(run).rejects.toThrow(/aborted/i);
+                // Attach the resolve handler BEFORE the timers fire so the
+                // lease-lost unblock is never momentarily unhandled.
+                const assertion = expect(run).resolves.toBeUndefined();
 
                 // Two consecutive renewal failures (30s cadence) → lease lost.
                 await jest.advanceTimersByTimeAsync(
                     JOB_LEASE_RENEW_INTERVAL_MS * 3,
                 );
 
-                // The run must unblock (race against the lease-lost abort)
-                // instead of executing a job the reaper may already own.
+                // The run must unblock instead of executing a job the reaper
+                // may already own, and RESOLVE (not throw): throwing would let
+                // the router/consumer catch write FAILED/PERMANENT, and the
+                // lease reaper only reclaims PROCESSING rows.
                 await assertion;
 
                 // A lease-lost abort is a reclaimable, not a terminal,

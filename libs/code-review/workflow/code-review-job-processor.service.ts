@@ -346,14 +346,25 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
             // typed error, not the raw octokit shape.
             const error = classifyGitHubError(rawError) as Error;
 
-            // The lease was lost mid-run (transient renewal failures). The
-            // reaper reclaims the job once the lease expires, so writing
-            // FAILED/PERMANENT and notifying the author here would turn a
-            // recoverable blip (pool exhaustion, lock timeout) into terminal
-            // death — the exact outcome #1830 aims to remove. Leave the row
-            // PROCESSING and let the reaper requeue it (#1830).
+            // The lease was lost mid-run (transient renewal failures). This is
+            // reclaimable, not terminal: leave the row PROCESSING for the lease
+            // reaper to requeue once the lease expires. We must NOT throw here —
+            // the router/consumer catch (job-processor-router.service.ts,
+            // workflow-job-consumer.service.ts) would overwrite the row with
+            // FAILED/PERMANENT, and the lease reaper only reclaims rows still in
+            // PROCESSING, so the intended salvage would never happen and the
+            // author would get a bogus failure notice. Returning resolves the
+            // consumer (which acks the message) with the row left untouched
+            // (#1830).
             if (leaseLost) {
-                throw error;
+                this.logger.warn({
+                    message:
+                        'Job lease lost after repeated renewal failures — leaving the row PROCESSING for the lease reaper to reclaim',
+                    context: CodeReviewJobProcessorService.name,
+                    error,
+                    metadata: { jobId },
+                });
+                return;
             }
 
             // A user asked for this review and another run held the PR.
