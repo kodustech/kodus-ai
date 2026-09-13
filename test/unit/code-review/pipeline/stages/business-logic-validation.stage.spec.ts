@@ -483,6 +483,50 @@ describe('BusinessLogicValidationStage', () => {
             );
             expect(result).toBe(true);
         });
+
+        it('does NOT count a git-issue ref when only a Jira-style MCP (Rovo) is connected (#1908)', () => {
+            // Core bug: a bare `#N` on the linked issue is resolvable only by
+            // a git-issues MCP. With Atlassian Rovo connected but no
+            // git-issues MCP, the gate used to pass and the agent flailed into
+            // "Insufficient Task Context".
+            const result = (stage as any).hasRelevantBusinessSignals(
+                'Closes #1825\n\nImplements the fix for the linked issue.',
+                ['atlassianrovo'],
+            );
+            expect(result).toBe(false);
+        });
+
+        it('does NOT count a full issue URL when only a Jira-style MCP is connected (#1908)', () => {
+            const result = (stage as any).hasRelevantBusinessSignals(
+                'Fixes https://github.com/acme/proj/issues/1825',
+                ['jira'],
+            );
+            expect(result).toBe(false);
+        });
+
+        it('counts a git-issue ref when a git-issues MCP is connected (#1908)', () => {
+            const result = (stage as any).hasRelevantBusinessSignals(
+                'Closes #1825\n\nBody.',
+                ['gitissues'],
+            );
+            expect(result).toBe(true);
+        });
+
+        it('counts a full issue URL when a git-issues MCP is connected (#1908)', () => {
+            const result = (stage as any).hasRelevantBusinessSignals(
+                'Fixes https://github.com/acme/proj/issues/1825',
+                ['githubissues'],
+            );
+            expect(result).toBe(true);
+        });
+
+        it('still counts a Jira key alongside a git-issue ref when a Jira-style MCP is connected (#1908)', () => {
+            const result = (stage as any).hasRelevantBusinessSignals(
+                'LKDB-286 Closes #1825',
+                ['atlassianrovo'],
+            );
+            expect(result).toBe(true);
+        });
     });
 
     describe('skip when no task MCP connected', () => {
@@ -591,6 +635,66 @@ describe('BusinessLogicValidationStage', () => {
                     reason: 'no_task_mcp',
                 }),
             );
+        });
+    });
+
+    describe('evaluateSkip — git-issue ref vs connected MCP kind (#1908)', () => {
+        it('skips when the only reference is a git issue and only a Jira-style MCP (Rovo) is connected', async () => {
+            // The real-world case from the issue: org tracks work in GitHub
+            // issues, connected task MCP is Atlassian Rovo only, PR body says
+            // "Closes #1868". Pre-fix the gate passed, the agent flailed
+            // through the Jira tools and posted "Insufficient Task Context".
+            mcpManagerService.getConnections.mockResolvedValue([
+                {
+                    appName: 'Atlassian Rovo',
+                    provider: 'atlassianrovo',
+                    organizationId: 'org-1',
+                },
+            ]);
+            mcpManagerService.getIntegrations.mockResolvedValue([]);
+
+            const context = buildContext({
+                pullRequest: {
+                    number: 42,
+                    body: 'Closes #1868\n\nImplements the linked issue.',
+                    title: '',
+                    head: { ref: 'fix/1868' },
+                    base: { ref: 'main' },
+                },
+            });
+
+            const decision = await (stage as any).evaluateSkip(context);
+
+            expect(decision).toEqual(
+                expect.objectContaining({ reason: 'no_signals' }),
+            );
+        });
+
+        it('does not skip a git-issue ref when a git-issues MCP IS connected', async () => {
+            mcpManagerService.getConnections.mockResolvedValue([
+                {
+                    appName: 'Git Issues',
+                    provider: 'kodus',
+                    integrationId: 'kodus-issues-default',
+                    category: 'task-management',
+                    organizationId: 'org-1',
+                },
+            ]);
+            mcpManagerService.getIntegrations.mockResolvedValue([]);
+
+            const context = buildContext({
+                pullRequest: {
+                    number: 42,
+                    body: 'Closes #1825',
+                    title: '',
+                    head: { ref: 'fix/1825' },
+                    base: { ref: 'main' },
+                },
+            });
+
+            const decision = await (stage as any).evaluateSkip(context);
+
+            expect(decision).toBeNull();
         });
     });
 });
