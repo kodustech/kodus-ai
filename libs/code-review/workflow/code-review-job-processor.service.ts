@@ -1,5 +1,6 @@
 import { createLogger } from '@libs/core/log/logger';
 import { Injectable, Inject, Optional } from '@nestjs/common';
+import os from 'os';
 
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import {
@@ -20,6 +21,10 @@ import { ByokConcurrencyGateService } from './byok-concurrency-gate.service';
 import { DistributedLock } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 import { raceWithAbortSignal } from '@libs/core/workflow/infrastructure/abort-signal-race';
 import {
+    JOB_LEASE_TTL_MS,
+    startJobLeaseRenewal,
+} from '@libs/core/workflow/infrastructure/job-lease.renewer';
+import {
     IRateLimitGateService,
     RATE_LIMIT_GATE_SERVICE_TOKEN,
 } from '@libs/core/workflow/domain/contracts/rate-limit-gate.service.contract';
@@ -32,6 +37,10 @@ import { PrReviewDeferralService } from './pr-review-deferral.service';
 @Injectable()
 export class CodeReviewJobProcessorService implements IJobProcessorService {
     private readonly logger = createLogger(CodeReviewJobProcessorService.name);
+    // Stamp for the job-ownership lease: distinguishes "this worker is alive
+    // and renewing" from "the worker died", letting the stale-job reaper
+    // reclaim by expired lease (#1830).
+    private readonly instanceId = os.hostname();
 
     constructor(
         @Inject(WORKFLOW_JOB_REPOSITORY_TOKEN)
@@ -69,6 +78,15 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
 
         const startTime = Date.now();
         let acquiredLock: DistributedLock | null = null;
+
+        // Set when the lease is lost mid-run so the catch below can avoid
+        // terminally failing a job that a transient renewal blip
+        // (connection-pool exhaustion, lock/statement timeout) caused to look
+        // dead — the reaper reclaims it for retry instead of permanently
+        // failing it (#1830). Declared in `process` scope (not the try): the
+        // `catch` is a sibling lexical scope and would not see a `let` from
+        // inside the try.
+        let leaseLost = false;
 
         try {
             const jobPayload = job.payload || {};
@@ -208,7 +226,76 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
             await this.jobRepository.update(jobId, {
                 status: JobStatus.PROCESSING,
                 startedAt: new Date(),
+                // Acquire the job-ownership lease so the stale-job reaper can
+                // tell an actively-processing job (renewed lease) from a dead
+                // worker (expired lease → reclaimed in ~90s, #1830).
+                leaseOwner: this.instanceId,
+                leaseExpiresAt: new Date(Date.now() + JOB_LEASE_TTL_MS),
                 metadata: this.removeByokConcurrencyGateMetadata(job.metadata),
+            });
+
+            // A local controller mirrors the parent signal and can ALSO be
+            // aborted when the lease is lost: two consecutive renewal failures
+            // mean this worker may no longer own the job (the reaper is free to
+            // reclaim a lease older than the TTL), so we stop running it rather
+            // than race the reaper toward a double execution (#1830 review).
+            const runController = new AbortController();
+            const abortRun = () => runController.abort(signal?.reason);
+            if (signal) {
+                if (signal.aborted) {
+                    runController.abort(signal.reason);
+                } else {
+                    signal.addEventListener('abort', abortRun, { once: true });
+                }
+            }
+            const runSignal = runController.signal;
+
+            // Renew the lease on a ~30s cadence for as long as the review
+            // runs. A killed worker (OOM, ECS eviction, kill -9) cannot renew,
+            // so its lease lapses and the reaper reclaims instead of waiting
+            // out the 180-min in-process timeout that dies with the process.
+            const leaseRenewal = startJobLeaseRenewal({
+                signal: runSignal,
+                logger: this.logger,
+                jobId,
+                organizationId: organizationAndTeamData?.organizationId,
+                renew: () =>
+                    this.jobRepository.update(jobId, {
+                        leaseOwner: this.instanceId,
+                        leaseExpiresAt: new Date(
+                            Date.now() + JOB_LEASE_TTL_MS,
+                        ),
+                    }),
+                onRenewError: (error) =>
+                    this.logger.warn({
+                        message:
+                            'Could not renew workflow job lease — it will expire and be reclaimed if this worker is dead',
+                        context: CodeReviewJobProcessorService.name,
+                        error: error instanceof Error ? error : undefined,
+                        metadata: {
+                            jobId,
+                            instanceId: this.instanceId,
+                        },
+                    }),
+                onLeaseLost: (error) => {
+                    leaseLost = true;
+                    this.logger.error({
+                        message:
+                            'Job lease lost after repeated renewal failures — aborting the run so the reaper can reclaim it without a double execution',
+                        context: CodeReviewJobProcessorService.name,
+                        error:
+                            error instanceof Error
+                                ? error
+                                : new Error(String(error)),
+                        metadata: {
+                            jobId,
+                            instanceId: this.instanceId,
+                            organizationId:
+                                organizationAndTeamData?.organizationId,
+                        },
+                    });
+                    runController.abort(new Error('Job lease lost'));
+                },
             });
 
             // Race the use-case against the parent's AbortSignal. The use
@@ -219,21 +306,28 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
             // pending past the 1h45min router timeout, holding the worker
             // slot zombie. The race guarantees the processor unblocks
             // when the signal fires regardless of how deep the stall is.
-            await raceWithAbortSignal(
-                this.runCodeReviewAutomationUseCase.execute(
-                    {
-                        codeManagementPayload,
-                        event,
-                        platformType,
-                        correlationId,
-                        organizationAndTeamData,
-                        teamAutomationId,
-                        workflowJobId: jobId,
-                    },
-                    signal,
-                ),
-                signal,
-            );
+            try {
+                await raceWithAbortSignal(
+                    this.runCodeReviewAutomationUseCase.execute(
+                        {
+                            codeManagementPayload,
+                            event,
+                            platformType,
+                            correlationId,
+                            organizationAndTeamData,
+                            teamAutomationId,
+                            workflowJobId: jobId,
+                        },
+                        runSignal,
+                    ),
+                    runSignal,
+                );
+            } finally {
+                leaseRenewal.stop();
+                if (signal) {
+                    signal.removeEventListener('abort', abortRun);
+                }
+            }
 
             await this.markCompleted(jobId);
 
@@ -251,6 +345,16 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
             // version so the consumer (RabbitMQErrorHandler) sees the
             // typed error, not the raw octokit shape.
             const error = classifyGitHubError(rawError) as Error;
+
+            // The lease was lost mid-run (transient renewal failures). The
+            // reaper reclaims the job once the lease expires, so writing
+            // FAILED/PERMANENT and notifying the author here would turn a
+            // recoverable blip (pool exhaustion, lock timeout) into terminal
+            // death — the exact outcome #1830 aims to remove. Leave the row
+            // PROCESSING and let the reaper requeue it (#1830).
+            if (leaseLost) {
+                throw error;
+            }
 
             // A user asked for this review and another run held the PR.
             // Dropping it here is what made the request vanish (#1700), so
