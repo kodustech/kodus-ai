@@ -1260,6 +1260,14 @@ export class PullRequestsService implements IPullRequestsService {
             let totalNewSuggestions = 0;
             // Bytes of patch written by *this* batch (sum of `consumed`).
             let ourPatchBytes = 0;
+            // Patch bytes contributed by each op slot in `ops`, so the
+            // post-write enforcement pass can reconcile `ourPatchBytes`
+            // against the ops that actually landed: a patch op that was
+            // rejected in the bulk write (its opIndex appears in
+            // `bulkResult.errors`) never persisted its bytes, so counting
+            // them as embedded would inflate the retry budget by exactly
+            // the failed bytes (#1841).
+            const patchBytesByOpIndex = new Map<number, number>();
 
             for (const file of changedFiles ?? []) {
                 const filename: string | undefined = file?.filename;
@@ -1331,6 +1339,11 @@ export class PullRequestsService implements IPullRequestsService {
                     remainingTotalPatchBudget -= budgeted.consumed;
                     ourPatchBytes += budgeted.consumed;
 
+                    // Record the op slot that carries this patch payload so
+                    // the post-write enforcement pass can tell which patch
+                    // ops persisted vs. were rejected (#1841).
+                    patchBytesByOpIndex.set(ops.length, budgeted.consumed);
+
                     ops.push({
                         kind: 'updateFile',
                         fileId: existing.id,
@@ -1388,6 +1401,20 @@ export class PullRequestsService implements IPullRequestsService {
                     );
             }
 
+            // Reconcile `ourPatchBytes` with what actually landed. A patch op
+            // that the bulk write rejected (its opIndex is in
+            // `bulkResult.errors`) never persisted its bytes, so it must not
+            // count as embedded when we compute the retry budget below —
+            // otherwise we'd hand ourselves a budget inflated by exactly the
+            // failed bytes and re-write past the ceiling the enforcement pass
+            // exists to keep (#1841).
+            let failedPatchBytes = 0;
+            for (const e of bulkResult.errors) {
+                failedPatchBytes +=
+                    patchBytesByOpIndex.get(e.opIndex) ?? 0;
+            }
+            ourPatchBytes = Math.max(0, ourPatchBytes - failedPatchBytes);
+
             // Enforce the aggregate embedded-diff ceiling against ground truth
             // *after* the write. The in-memory seed above comes from a read of
             // `existingPR.files` that can be stale — two syncs firing at once
@@ -1419,6 +1446,7 @@ export class PullRequestsService implements IPullRequestsService {
                             metadata: {
                                 pullRequestNumber: pullRequest?.number,
                                 prUuid: existingPR.uuid,
+                                organizationId,
                             },
                         });
                         break;
@@ -1442,6 +1470,7 @@ export class PullRequestsService implements IPullRequestsService {
                                 embeddedPatchBytes: embeddedNow,
                                 maxTotalPatchBytes:
                                     MAX_TOTAL_EMBEDDED_PATCH_BYTES,
+                                organizationId,
                             },
                         });
                         break;
@@ -1474,6 +1503,7 @@ export class PullRequestsService implements IPullRequestsService {
                             prUuid: existingPR.uuid,
                             embeddedPatchBytes: embeddedNow,
                             tightenedBudgetBytes: tightened,
+                            organizationId,
                         },
                     });
 

@@ -981,5 +981,75 @@ describe('PullRequestsService — #1107 bulk file changes', () => {
                 retryOps.filter((op: any) => op.kind === 'addFile'),
             ).toHaveLength(0);
         });
+
+        it('subtracts the bytes of patch ops that FAILED the first bulk write from the retry budget (no double-charge)', async () => {
+            // Two updateFile ops (a: 100 KB, b: 50 KB). The first bulk write
+            // REJECTS the first op (its opIndex is in `errors` → per-op write
+            // hit the document-ceiling rejection this PR targets), while the
+            // other lands. Pre-fix, `ourPatchBytes` still counted the rejected
+            // op's bytes as embedded, inflating the retry budget by exactly
+            // `failedBytes` and re-writing past the ceiling.
+            const existingPR = {
+                uuid: 'pr-budget-failedop',
+                files: [
+                    makeExistingFile('src/a.ts', { patch: 'x'.repeat(10) }),
+                    makeExistingFile('src/b.ts', { patch: 'y'.repeat(10) }),
+                ],
+            };
+            // The failed op's bytes (100 KB) are NOT in the doc; ground truth
+            // is only ~10 KB over budget from the landed op + overhead.
+            pullRequestsRepository.bulkApplyFileChanges
+                .mockResolvedValueOnce({
+                    attempted: 2,
+                    modified: 1,
+                    errors: [
+                        {
+                            opIndex: 0,
+                            code: undefined,
+                            message: 'Resulting document larger than 16777216',
+                        },
+                    ],
+                })
+                .mockResolvedValueOnce({
+                    attempted: 2,
+                    modified: 0,
+                    errors: [],
+                });
+            pullRequestsRepository.computeEmbeddedPatchBytes
+                .mockResolvedValueOnce(
+                    MAX_TOTAL_EMBEDDED_PATCH_BYTES + 10_000,
+                )
+                .mockResolvedValueOnce(0);
+
+            await callHandleExisting({
+                existingPR,
+                changedFiles: [
+                    makeChangedFile('src/a.ts', { patch: 'z'.repeat(100_000) }),
+                    makeChangedFile('src/b.ts', { patch: 'w'.repeat(50_000) }),
+                ],
+            });
+
+            // Initial write + one tightening retry.
+            expect(
+                pullRequestsRepository.bulkApplyFileChanges,
+            ).toHaveBeenCalledTimes(2);
+
+            // The failed op (opIndex 0) was re-credited: it counts 0 bytes
+            // toward `ourPatchBytes`, so the retry budget is clamped well under
+            // the 150 KB we intended, not inflated to (150 KB − 100 KB) + slack.
+            const retryOps =
+                pullRequestsRepository.bulkApplyFileChanges.mock.calls[1][2];
+            const retryPatchBytes = retryOps.reduce(
+                (sum: number, op: any) =>
+                    sum + Buffer.byteLength(op.data.patch ?? '', 'utf8'),
+                0,
+            );
+            // 50 KB landed (b) + ~10 KB overhead → retry must carve only the
+            // ~10 KB overflow, NOT hand back the 100 KB that never persisted.
+            expect(retryPatchBytes).toBeLessThan(60_000);
+            expect(
+                retryOps.filter((op: any) => op.kind === 'addFile'),
+            ).toHaveLength(0);
+        });
     });
 });

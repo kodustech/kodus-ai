@@ -1666,6 +1666,13 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                     }> as any,
                 );
                 const $set: Record<string, unknown> = {};
+                // Storage-level clamp escalation is collected in a local flag
+                // and applied AFTER the loop: a `patchTruncated: false` entry
+                // processed later in the same iteration would otherwise clobber
+                // the escalation via the generic `$set[...]` line below,
+                // leaving a capped diff's sub-document claiming it is complete
+                // (#1841).
+                let patchWasClamped = false;
                 for (const [k, v] of Object.entries(sanitized)) {
                     // Last-resort per-file clamp: a future caller that
                     // bypasses the service-level aggregate budget can never
@@ -1678,12 +1685,13 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                     if (k === 'patch' && typeof v === 'string') {
                         const clamped = clampPatchForPersistWithFlag(v);
                         $set['files.$.patch'] = clamped.patch;
-                        if (clamped.truncated) {
-                            $set['files.$.patchTruncated'] = true;
-                        }
+                        patchWasClamped = clamped.truncated;
                         continue;
                     }
                     $set[`files.$.${k}`] = v;
+                }
+                if (patchWasClamped) {
+                    $set['files.$.patchTruncated'] = true;
                 }
                 return {
                     updateOne: {
