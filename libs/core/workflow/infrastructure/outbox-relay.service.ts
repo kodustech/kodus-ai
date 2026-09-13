@@ -579,7 +579,16 @@ export class OutboxRelayService
                         requeueResult.reason instanceof Error
                             ? requeueResult.reason
                             : new Error(String(requeueResult.reason)),
-                    metadata: { uuids: requeueUuids },
+                    metadata: {
+                        uuids: requeueUuids,
+                        organizationIds: [
+                            ...new Set(
+                                requeueable.map(
+                                    (job) => job.organizationId,
+                                ),
+                            ),
+                        ],
+                    },
                 });
             }
             if (failResult.status === 'rejected') {
