@@ -1,5 +1,9 @@
 import { PullRequestsRepository } from './pullRequests.repository';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+import {
+    MAX_PATCH_BYTES_PER_FILE,
+    TRUNCATED_DIFF_MARKER,
+} from '@libs/platformData/domain/pullRequests/utils/diff-budget';
 
 /**
  * Regression coverage for the cross-organization data leak that allowed
@@ -162,6 +166,61 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                 'files.id': 'file-id-1',
                 'organizationId': 'org-A',
             });
+        });
+    });
+
+    describe('translateFileBulkOp (updateFile) — storage-level patch clamp', () => {
+        function translate(prUuid: string, data: Record<string, unknown>) {
+            return (repo as any).translateFileBulkOp(prUuid, 'org-A', {
+                kind: 'updateFile',
+                fileId: 'file-1',
+                data,
+            }) as {
+                updateOne: {
+                    filter: Record<string, unknown>;
+                    update: { $set: Record<string, unknown> };
+                };
+            };
+        }
+
+        it('escalates patchTruncated when the storage clamp cuts the patch (a later `false` in the same payload cannot clobber it)', async () => {
+            // Overwhelm MAX_PATCH_BYTES_PER_FILE so the storage-level clamp
+            // truncates the patch and must mark it truncated. The payload
+            // carries an explicit `patchTruncated: false` AFTER `patch` in
+            // insertion order; pre-fix the generic `$set[files.$.patchTruncated]`
+            // line would overwrite the escalation and the sub-document would
+            // claim a capped diff is complete (#1841).
+            const huge = 'a'.repeat(MAX_PATCH_BYTES_PER_FILE + 10);
+            const doc = translate('pr-uuid-clamp', {
+                status: 'modified',
+                patch: huge,
+                patchTruncated: false,
+            });
+
+            const flat = Object.keys(doc.updateOne.update.$set);
+            expect(flat).toContain('files.$.patchTruncated');
+            expect(doc.updateOne.update.$set['files.$.patchTruncated']).toBe(
+                true,
+            );
+            expect(doc.updateOne.update.$set['files.$.patch']).toContain(
+                TRUNCATED_DIFF_MARKER,
+            );
+        });
+
+        it('passes through the payload patchTruncated when the storage clamp does not cut the patch', async () => {
+            const small = 'a'.repeat(100);
+            const doc = translate('pr-uuid-noclamp', {
+                status: 'modified',
+                patch: small,
+                patchTruncated: false,
+            });
+
+            // No clamp fired, so the payload's explicit `false` flows through
+            // unchanged — the flag reflects the actual diff completeness.
+            expect(
+                doc.updateOne.update.$set['files.$.patchTruncated'],
+            ).toBe(false);
+            expect(doc.updateOne.update.$set['files.$.patch']).toBe(small);
         });
     });
 

@@ -1,4 +1,9 @@
 import { PullRequestsService } from './pullRequests.service';
+import {
+    MAX_PATCH_BYTES_PER_FILE,
+    MAX_TOTAL_EMBEDDED_PATCH_BYTES,
+    TRUNCATED_DIFF_MARKER,
+} from '@libs/platformData/domain/pullRequests/utils/diff-budget';
 
 /**
  * Regression tests for issue #1107 — `aggregateAndSaveDataStructure`
@@ -33,6 +38,7 @@ describe('PullRequestsService — #1107 bulk file changes', () => {
         updateFile: jest.Mock;
         bulkApplyFileChanges: jest.Mock;
         computeFileTotals: jest.Mock;
+        computeEmbeddedPatchBytes: jest.Mock;
         newSubDocumentId: jest.Mock;
         update: jest.Mock;
     };
@@ -105,6 +111,7 @@ describe('PullRequestsService — #1107 bulk file changes', () => {
                 totalDeleted: 0,
                 totalChanges: 0,
             }),
+            computeEmbeddedPatchBytes: jest.fn().mockResolvedValue(0),
             newSubDocumentId: jest.fn(() => nextId()),
             update: jest.fn(async (entity: any, patch: any) => ({
                 ...entity,
@@ -682,9 +689,13 @@ describe('PullRequestsService — #1107 bulk file changes', () => {
                 makeExistingFile('docs/notpng.md'),      // ".md" — MUST keep patch
             ];
             const existingPR = { uuid: 'pr-uuid-case', files: existingFiles };
-            const huge = 'X'.repeat(1024 * 1024);
+            // Patch sized below the per-file embedded-diff budget so it is
+            // stored verbatim (only binary extensions are stripped). The new
+            // per-file/aggregate caps from #1841 are covered by the dedicated
+            // budget tests below.
+            const medium = 'X'.repeat(MAX_PATCH_BYTES_PER_FILE - 1000);
             const changedFiles = existingFiles.map((f) =>
-                makeChangedFile(f.path, { patch: huge }),
+                makeChangedFile(f.path, { patch: medium }),
             );
 
             await callHandleExisting({ existingPR, changedFiles });
@@ -701,8 +712,8 @@ describe('PullRequestsService — #1107 bulk file changes', () => {
 
             expect(byFile('docs/HERO.PNG').data.patch).toBe('');
             expect(byFile('design/Logo.Jpeg').data.patch).toBe('');
-            expect(byFile('src/png-utils.ts').data.patch).toBe(huge);
-            expect(byFile('docs/notpng.md').data.patch).toBe(huge);
+            expect(byFile('src/png-utils.ts').data.patch).toBe(medium);
+            expect(byFile('docs/notpng.md').data.patch).toBe(medium);
         });
 
         it('addFile op does NOT carry `patch` either (defense in depth — locks down today\'s behavior)', async () => {
@@ -753,6 +764,292 @@ describe('PullRequestsService — #1107 bulk file changes', () => {
             // + op envelope overhead. Should comfortably fit in <100KB total.
             expect(serializedSize).toBeLessThan(100 * 1024);
             expect(opsArg.length).toBe(100);
+        });
+    });
+
+    // ─────────────────────────────────────────────────────────
+    // C) Embedded-diff budget (#1841) — MongoDB 16MB BSON ceiling
+    // ─────────────────────────────────────────────────────────
+    describe('handleExistingPullRequest — embedded-diff budget (#1841)', () => {
+        it('caps a patch that exceeds the per-file limit and marks it truncated', async () => {
+            const existingPR = {
+                uuid: 'pr-budget-1',
+                files: [makeExistingFile('src/big.ts')],
+            };
+            const oversized = 'b'.repeat(MAX_PATCH_BYTES_PER_FILE * 2);
+            await callHandleExisting({
+                existingPR,
+                changedFiles: [makeChangedFile('src/big.ts', { patch: oversized })],
+            });
+
+            const ops = pullRequestsRepository.bulkApplyFileChanges.mock
+                .calls[0][2];
+            const updateOp = ops.find((op: any) => op.kind === 'updateFile');
+            expect(updateOp).toBeDefined();
+            const patch = updateOp.data.patch;
+            expect(patch.length).toBeLessThanOrEqual(
+                MAX_PATCH_BYTES_PER_FILE,
+            );
+            expect(patch.endsWith(TRUNCATED_DIFF_MARKER)).toBe(true);
+            expect(updateOp.data.patchTruncated).toBe(true);
+        });
+
+        it('measures the per-file cap in UTF-8 bytes, not UTF-16 code units (multibyte diff)', async () => {
+            // `'漢'.repeat(N).length === N` but its BSON footprint is 3·N, so a
+            // char-count cap would let this 600 KB patch through untouched.
+            const cjk = '漢'.repeat(MAX_PATCH_BYTES_PER_FILE);
+            const existingPR = {
+                uuid: 'pr-budget-bytes',
+                files: [makeExistingFile('src/cjk.ts')],
+            };
+            await callHandleExisting({
+                existingPR,
+                changedFiles: [makeChangedFile('src/cjk.ts', { patch: cjk })],
+            });
+
+            const ops = pullRequestsRepository.bulkApplyFileChanges.mock
+                .calls[0][2];
+            const updateOp = ops.find((op: any) => op.kind === 'updateFile');
+            expect(
+                Buffer.byteLength(updateOp.data.patch, 'utf8'),
+            ).toBeLessThanOrEqual(MAX_PATCH_BYTES_PER_FILE);
+            expect(updateOp.data.patchTruncated).toBe(true);
+        });
+
+        it('re-credits the replaced patch before billing the new one (no double count on updateFile)', async () => {
+            // The doc already holds a nearly-full embedded budget in one file,
+            // and the sync *replaces* that same file with a tiny patch. Because
+            // updateFile `$set`s `files.$.patch`, the old bytes are freed — the
+            // new small patch must NOT be truncated by a double-counted seed.
+            const leftover = TRUNCATED_DIFF_MARKER.length + 50;
+            const alreadyEmbedded = MAX_TOTAL_EMBEDDED_PATCH_BYTES - leftover;
+            const existingPR = {
+                uuid: 'pr-budget-recredit',
+                files: [
+                    makeExistingFile('src/first.ts', {
+                        patch: 'a'.repeat(alreadyEmbedded),
+                    }),
+                ],
+            };
+
+            await callHandleExisting({
+                existingPR,
+                changedFiles: [
+                    makeChangedFile('src/first.ts', {
+                        patch: 'c'.repeat(1000),
+                    }),
+                ],
+            });
+
+            const ops = pullRequestsRepository.bulkApplyFileChanges.mock
+                .calls[0][2];
+            const updateOp = ops.find((op: any) => op.kind === 'updateFile');
+            expect(updateOp.data.patch).toBe('c'.repeat(1000));
+            expect(updateOp.data.patchTruncated).toBe(false);
+        });
+
+        it('writes patchTruncated explicitly so a stale `true` is cleared once the patch fits again', async () => {
+            const existingPR = {
+                uuid: 'pr-budget-stale',
+                files: [
+                    makeExistingFile('src/small.ts', {
+                        patch: 'x'.repeat(100),
+                        patchTruncated: true,
+                    }),
+                ],
+            };
+
+            await callHandleExisting({
+                existingPR,
+                changedFiles: [
+                    makeChangedFile('src/small.ts', { patch: 'y'.repeat(50) }),
+                ],
+            });
+
+            const ops = pullRequestsRepository.bulkApplyFileChanges.mock
+                .calls[0][2];
+            const updateOp = ops.find((op: any) => op.kind === 'updateFile');
+            // Must be present and false — omitting the key would leave the
+            // stale `true` in Mongo (the repository only $sets present keys).
+            expect(updateOp.data).toHaveProperty('patchTruncated', false);
+        });
+
+        it('deducts untouched embedded diffs from the aggregate budget, truncating then dropping our updates', async () => {
+            // `src/keep.ts` is NOT part of this sync, so its embedded diff keeps
+            // consuming the aggregate budget (it is not re-credited). That
+            // leaves only a sliver for our two updateFiles: the first is
+            // truncated to the remaining bytes (marker kept) and the second is
+            // dropped entirely.
+            const leftover = TRUNCATED_DIFF_MARKER.length + 50;
+            const keepBytes = MAX_TOTAL_EMBEDDED_PATCH_BYTES - leftover;
+            const existingPR = {
+                uuid: 'pr-budget-2',
+                files: [
+                    makeExistingFile('src/keep.ts', {
+                        patch: 'a'.repeat(keepBytes),
+                    }),
+                    makeExistingFile('src/first.ts', {
+                        patch: 'x'.repeat(10),
+                    }),
+                    makeExistingFile('src/second.ts', {
+                        patch: 'y'.repeat(10),
+                    }),
+                ],
+            };
+
+            await callHandleExisting({
+                existingPR,
+                changedFiles: [
+                    makeChangedFile('src/first.ts', {
+                        patch: 'c'.repeat(1000),
+                    }),
+                    makeChangedFile('src/second.ts', {
+                        patch: 'd'.repeat(2000),
+                    }),
+                ],
+            });
+
+            const ops = pullRequestsRepository.bulkApplyFileChanges.mock
+                .calls[0][2];
+            const updateOps = ops.filter(
+                (op: any) => op.kind === 'updateFile',
+            );
+            // first.ts is truncated to the sliver of budget left (marker kept),
+            // and the embedded size stays bounded.
+            const firstOp = updateOps.find(
+                (op: any) => op.data.patch && op.data.patch.length > 0,
+            );
+            expect(firstOp).toBeDefined();
+            expect(firstOp.data.patchTruncated).toBe(true);
+            expect(firstOp.data.patch.endsWith(TRUNCATED_DIFF_MARKER)).toBe(
+                true,
+            );
+            expect(firstOp.data.patch.length).toBeLessThanOrEqual(leftover);
+            // second.ts is dropped once the aggregate budget is exhausted.
+            const secondOp = updateOps.find(
+                (op: any) => op.data.patch === '',
+            );
+            expect(secondOp).toBeDefined();
+            expect(secondOp.data.patchTruncated).toBe(true);
+        });
+
+        it('re-verifies the embedded byte total after the write and retries with a tighter budget when a concurrent sync pushed the doc over the cap', async () => {
+            const existingPR = {
+                uuid: 'pr-budget-verify',
+                files: [
+                    makeExistingFile('src/first.ts', {
+                        patch: 'a'.repeat(10),
+                    }),
+                ],
+            };
+
+            // First ground-truth read reports the document over the cap (as if
+            // another sync spent the budget concurrently); the retry settles it.
+            pullRequestsRepository.computeEmbeddedPatchBytes
+                .mockResolvedValueOnce(
+                    MAX_TOTAL_EMBEDDED_PATCH_BYTES + 100_000,
+                )
+                .mockResolvedValueOnce(0);
+
+            await callHandleExisting({
+                existingPR,
+                changedFiles: [
+                    makeChangedFile('src/first.ts', {
+                        patch: 'z'.repeat(100_000),
+                    }),
+                ],
+            });
+
+            expect(
+                pullRequestsRepository.computeEmbeddedPatchBytes,
+            ).toHaveBeenCalledWith('pr-budget-verify', 'org-1');
+            // Initial write + one tightening retry.
+            expect(
+                pullRequestsRepository.bulkApplyFileChanges,
+            ).toHaveBeenCalledTimes(2);
+
+            const retryOps =
+                pullRequestsRepository.bulkApplyFileChanges.mock.calls[1][2];
+            expect(retryOps).toHaveLength(1);
+            expect(retryOps[0].kind).toBe('updateFile');
+            // Budget was clamped to 0 => the patch is dropped and the bytes are
+            // freed so the next ground-truth read can settle under the cap.
+            expect(retryOps[0].data.patch).toBe('');
+            expect(retryOps[0].data.patchTruncated).toBe(true);
+            // The retry must never duplicate the non-idempotent addFile ops.
+            expect(
+                retryOps.filter((op: any) => op.kind === 'addFile'),
+            ).toHaveLength(0);
+        });
+
+        it('subtracts the bytes of patch ops that FAILED the first bulk write from the retry budget (no double-charge)', async () => {
+            // Two updateFile ops (a: 100 KB, b: 50 KB). The first bulk write
+            // REJECTS the first op (its opIndex is in `errors` → per-op write
+            // hit the document-ceiling rejection this PR targets), while the
+            // other lands. Pre-fix, `ourPatchBytes` still counted the rejected
+            // op's bytes as embedded, inflating the retry budget by exactly
+            // `failedBytes` and re-writing past the ceiling.
+            const existingPR = {
+                uuid: 'pr-budget-failedop',
+                files: [
+                    makeExistingFile('src/a.ts', { patch: 'x'.repeat(10) }),
+                    makeExistingFile('src/b.ts', { patch: 'y'.repeat(10) }),
+                ],
+            };
+            // The failed op's bytes (100 KB) are NOT in the doc; ground truth
+            // is only ~10 KB over budget from the landed op + overhead.
+            pullRequestsRepository.bulkApplyFileChanges
+                .mockResolvedValueOnce({
+                    attempted: 2,
+                    modified: 1,
+                    errors: [
+                        {
+                            opIndex: 0,
+                            code: undefined,
+                            message: 'Resulting document larger than 16777216',
+                        },
+                    ],
+                })
+                .mockResolvedValueOnce({
+                    attempted: 2,
+                    modified: 0,
+                    errors: [],
+                });
+            pullRequestsRepository.computeEmbeddedPatchBytes
+                .mockResolvedValueOnce(
+                    MAX_TOTAL_EMBEDDED_PATCH_BYTES + 10_000,
+                )
+                .mockResolvedValueOnce(0);
+
+            await callHandleExisting({
+                existingPR,
+                changedFiles: [
+                    makeChangedFile('src/a.ts', { patch: 'z'.repeat(100_000) }),
+                    makeChangedFile('src/b.ts', { patch: 'w'.repeat(50_000) }),
+                ],
+            });
+
+            // Initial write + one tightening retry.
+            expect(
+                pullRequestsRepository.bulkApplyFileChanges,
+            ).toHaveBeenCalledTimes(2);
+
+            // The failed op (opIndex 0) was re-credited: it counts 0 bytes
+            // toward `ourPatchBytes`, so the retry budget is clamped well under
+            // the 150 KB we intended, not inflated to (150 KB − 100 KB) + slack.
+            const retryOps =
+                pullRequestsRepository.bulkApplyFileChanges.mock.calls[1][2];
+            const retryPatchBytes = retryOps.reduce(
+                (sum: number, op: any) =>
+                    sum + Buffer.byteLength(op.data.patch ?? '', 'utf8'),
+                0,
+            );
+            // 50 KB landed (b) + ~10 KB overhead → retry must carve only the
+            // ~10 KB overflow, NOT hand back the 100 KB that never persisted.
+            expect(retryPatchBytes).toBeLessThan(60_000);
+            expect(
+                retryOps.filter((op: any) => op.kind === 'addFile'),
+            ).toHaveLength(0);
         });
     });
 });
