@@ -227,6 +227,26 @@ describe('CodeReviewJobProcessorService', () => {
                 // The run must unblock (race against the lease-lost abort)
                 // instead of executing a job the reaper may already own.
                 await assertion;
+
+                // A lease-lost abort is a reclaimable, not a terminal,
+                // outcome: the reaper requeues the job once the lease
+                // expires, so we must NOT write FAILED/PERMANENT nor tell
+                // the author — otherwise a transient renewal blip becomes
+                // the permanent failure #1830 removes (#1830 review).
+                const statusUpdates = jobRepository.update.mock.calls.filter(
+                    ([, data]: [string, any]) => data?.status !== undefined,
+                );
+                expect(
+                    statusUpdates.some(
+                        ([, data]: [string, any]) =>
+                            data.status === JobStatus.FAILED,
+                    ),
+                ).toBe(false);
+                const notifySpy = jest.spyOn(
+                    service as any,
+                    'notifyReviewFailed',
+                );
+                expect(notifySpy).not.toHaveBeenCalled();
             } finally {
                 jest.useRealTimers();
             }

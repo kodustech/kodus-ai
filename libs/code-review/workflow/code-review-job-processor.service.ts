@@ -79,6 +79,15 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
         const startTime = Date.now();
         let acquiredLock: DistributedLock | null = null;
 
+        // Set when the lease is lost mid-run so the catch below can avoid
+        // terminally failing a job that a transient renewal blip
+        // (connection-pool exhaustion, lock/statement timeout) caused to look
+        // dead — the reaper reclaims it for retry instead of permanently
+        // failing it (#1830). Declared in `process` scope (not the try): the
+        // `catch` is a sibling lexical scope and would not see a `let` from
+        // inside the try.
+        let leaseLost = false;
+
         try {
             const jobPayload = job.payload || {};
             const {
@@ -269,6 +278,7 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                         },
                     }),
                 onLeaseLost: (error) => {
+                    leaseLost = true;
                     this.logger.error({
                         message:
                             'Job lease lost after repeated renewal failures — aborting the run so the reaper can reclaim it without a double execution',
@@ -335,6 +345,16 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
             // version so the consumer (RabbitMQErrorHandler) sees the
             // typed error, not the raw octokit shape.
             const error = classifyGitHubError(rawError) as Error;
+
+            // The lease was lost mid-run (transient renewal failures). The
+            // reaper reclaims the job once the lease expires, so writing
+            // FAILED/PERMANENT and notifying the author here would turn a
+            // recoverable blip (pool exhaustion, lock timeout) into terminal
+            // death — the exact outcome #1830 aims to remove. Leave the row
+            // PROCESSING and let the reaper requeue it (#1830).
+            if (leaseLost) {
+                throw error;
+            }
 
             // A user asked for this review and another run held the PR.
             // Dropping it here is what made the request vanish (#1700), so
