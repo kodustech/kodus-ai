@@ -1401,19 +1401,28 @@ export class PullRequestsService implements IPullRequestsService {
                     );
             }
 
-            // Reconcile `ourPatchBytes` with what actually landed. A patch op
-            // that the bulk write rejected (its opIndex is in
-            // `bulkResult.errors`) never persisted its bytes, so it must not
-            // count as embedded when we compute the retry budget below —
-            // otherwise we'd hand ourselves a budget inflated by exactly the
-            // failed bytes and re-write past the ceiling the enforcement pass
-            // exists to keep (#1841).
-            let failedPatchBytes = 0;
-            for (const e of bulkResult.errors) {
-                failedPatchBytes +=
-                    patchBytesByOpIndex.get(e.opIndex) ?? 0;
-            }
-            ourPatchBytes = Math.max(0, ourPatchBytes - failedPatchBytes);
+            // Reconcile `ourPatchBytes` with what actually landed, so it counts
+            // only bytes that were truly persisted. A patch op that the bulk
+            // write rejected (its opIndex is in the error result) never mixed
+            // into the document, so it must be excluded from the retry-budget
+            // math below — otherwise we'd hand ourselves a budget inflated by
+            // exactly the failed bytes and re-write past the ceiling the
+            // enforcement pass exists to keep (#1841). Called after EVERY write
+            // (initial + each retry), because each retry reassigns
+            // `ourPatchBytes = consumed` and its own failed ops need the same
+            // treatment.
+            const reconcileFailedPatchBytes = (
+                errors: Array<{ opIndex: number }>,
+                bytesByOpIndex: Map<number, number>,
+            ) => {
+                let failedPatchBytes = 0;
+                for (const e of errors) {
+                    failedPatchBytes += bytesByOpIndex.get(e.opIndex) ?? 0;
+                }
+                ourPatchBytes = Math.max(0, ourPatchBytes - failedPatchBytes);
+            };
+
+            reconcileFailedPatchBytes(bulkResult.errors, patchBytesByOpIndex);
 
             // Enforce the aggregate embedded-diff ceiling against ground truth
             // *after* the write. The in-memory seed above comes from a read of
@@ -1513,6 +1522,23 @@ export class PullRequestsService implements IPullRequestsService {
                             organizationId,
                             updateOps,
                         );
+                    // The retry had its own op→byte map (each updateFile op
+                    // carries its patch). Reconcile THIS write's failures too:
+                    // ops rejected by the retry were never persisted, so they
+                    // cannot inflate the next iteration's `tightened` budget.
+                    const retryBytesByOpIndex = new Map<number, number>();
+                    updateOps.forEach((op: any, index: number) => {
+                        if (op?.kind === 'updateFile' && typeof op?.data?.patch === 'string') {
+                            retryBytesByOpIndex.set(
+                                index,
+                                utf8ByteLength(op.data.patch),
+                            );
+                        }
+                    });
+                    reconcileFailedPatchBytes(
+                        retryResult.errors,
+                        retryBytesByOpIndex,
+                    );
                     bulkResult = {
                         attempted: bulkResult.attempted + retryResult.attempted,
                         modified: bulkResult.modified + retryResult.modified,
