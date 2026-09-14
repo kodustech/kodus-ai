@@ -257,6 +257,23 @@ describe('classifyLLMError', () => {
             );
         });
 
+        it.each([
+            // The status is often glued to letters or an underscore rather than
+            // surrounded by whitespace. Word boundaries are defined over
+            // [A-Za-z0-9_], so `\b` rejected these and they fell back to
+            // UNKNOWN — which never triggers the BYOK fallback.
+            'upstream responded HTTP_503',
+            'proxy hop failed: ERR_502',
+            'cloudflare: upstream_530 reported by the edge',
+            'gateway returned http504',
+            'connect failed with 502badgateway via the mesh proxy',
+        ])('status glued to a word (%s) → TRANSIENT', (msg) => {
+            const err = new Error(msg);
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.TRANSIENT,
+            );
+        });
+
         it('unrecognized message → UNKNOWN', () => {
             const err = new Error('something weird happened in the SDK');
             expect(classifyLLMError(err).category).toBe(

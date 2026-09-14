@@ -394,10 +394,14 @@ function matchByMessage(lower: string): LlmErrorCategory {
         lower.includes('service unavailable') ||
         lower.includes('internal server error') ||
         // Status numbers can appear as text without a status field (Cloudflare's
-        // 530 over a 5xx, proxy passthrough). Word boundaries keep bare digits
-        // inside larger numbers (token counts like "5032", ids) from being read
-        // as an HTTP status and wrongly marking a permanent error TRANSIENT.
-        /\b(?:502|503|504|530)\b/.test(lower)
+        // 530 over a 5xx, proxy passthrough). Guard on ADJACENT DIGITS rather
+        // than word boundaries: `\b` also fails on a status glued to a letter
+        // or underscore (`HTTP_503`, `ERR_502`, `upstream_530`, `http503`),
+        // which then classifies UNKNOWN and — since UNKNOWN deliberately does
+        // not fail over — silently drops the BYOK fallback for the exact
+        // transient outage this branch exists to catch. The lookarounds stop
+        // only the digit-inside-a-larger-number case ("5032", "req_5301").
+        /(?<!\d)(?:502|503|504|530)(?!\d)/.test(lower)
     ) {
         return LlmErrorCategory.TRANSIENT;
     }
