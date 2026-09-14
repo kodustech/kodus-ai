@@ -3,7 +3,6 @@ import { AgentReviewStage } from './agent-review.stage';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { LLM } from '@libs/llm/llm';
 import { hasManagedModelKey } from '@libs/llm/managed-slot';
-import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 
 jest.mock(
     '@libs/code-review/infrastructure/agents/engine/classify-severity',
@@ -23,10 +22,9 @@ jest.mock('@libs/llm/managed-slot', () => {
  * inside AgentReviewStage. `is-usable-fix.spec.ts` covers `checkFix` in
  * isolation; this suite proves the stage actually calls it at the right
  * point, on the right fields, and produces the right observable outcome: a
- * bad-fix finding never reaches `fileAnalysisResults` (so it can never be
- * posted to the PR), lands in `discardedSuggestions` tagged
- * `DISCARDED_BY_BAD_FIX` with a delivery status (never a silent drop), and a
- * `BAD_FIX_DROPPED` review warning is attached to the context.
+ * bad-fix finding is never dropped — it is still published, with
+ * `improvedCode` stripped so the renderer skips the code block — and a
+ * `BAD_FIX_DOWNGRADED` review warning is attached to the context.
  */
 
 const sugg = (over: Record<string, unknown> = {}) => ({
@@ -99,6 +97,11 @@ const makeContext = (over: Record<string, unknown> = {}) =>
 const run = (stage: AgentReviewStage, ctx: CodeReviewPipelineContext) =>
     (stage as any).executeStage(ctx) as Promise<any>;
 
+const analyzedSuggestions = (result: any) =>
+    (result.fileAnalysisResults ?? []).flatMap(
+        (f: any) => f.validSuggestionsToAnalyze ?? [],
+    );
+
 let runSpy: jest.SpyInstance;
 beforeEach(() => {
     // Dedup's LLM.run: keep-all so every suggestion in the envelope survives
@@ -113,13 +116,8 @@ afterEach(() => {
     (hasManagedModelKey as jest.Mock).mockReturnValue(false);
 });
 
-const badFixDiscards = (result: any) =>
-    (result.discardedSuggestions ?? []).filter(
-        (s: any) => s.priorityStatus === PriorityStatus.DISCARDED_BY_BAD_FIX,
-    );
-
 describe('AgentReviewStage — improvedCode publication gate (#1833)', () => {
-    it('drops a suggestion whose improvedCode is empty', async () => {
+    it('downgrades an empty improvedCode to a plain comment instead of dropping it', async () => {
         const { stage, reviewOrchestrator } = makeStage();
         reviewOrchestrator.execute.mockResolvedValue(
             happyEnvelope([sugg({ improvedCode: '' })]),
@@ -127,19 +125,14 @@ describe('AgentReviewStage — improvedCode publication gate (#1833)', () => {
 
         const result = await run(stage, makeContext());
 
-        expect(result.validSuggestions ?? []).toHaveLength(0);
-        // The file still gets an entry (so its discarded suggestion is
-        // observable), just with nothing left to analyze/post.
-        expect(result.fileAnalysisResults).toHaveLength(1);
-        expect(
-            result.fileAnalysisResults[0].validSuggestionsToAnalyze,
-        ).toHaveLength(0);
-        const discarded = badFixDiscards(result);
-        expect(discarded).toHaveLength(1);
-        expect(discarded[0].deliveryStatus).toBe('not_sent');
+        // Nothing is discarded — the finding still ships, just without code.
+        expect(result.discardedSuggestions ?? []).toHaveLength(0);
+        const analyzed = analyzedSuggestions(result);
+        expect(analyzed).toHaveLength(1);
+        expect(analyzed[0].improvedCode).toBe('');
     });
 
-    it('drops a suggestion whose improvedCode is byte-identical to existingCode', async () => {
+    it('downgrades a byte-identical improvedCode to a plain comment', async () => {
         const { stage, reviewOrchestrator } = makeStage();
         reviewOrchestrator.execute.mockResolvedValue(
             happyEnvelope([
@@ -152,15 +145,13 @@ describe('AgentReviewStage — improvedCode publication gate (#1833)', () => {
 
         const result = await run(stage, makeContext());
 
-        expect(
-            (result.fileAnalysisResults ?? []).flatMap(
-                (f: any) => f.validSuggestionsToAnalyze,
-            ),
-        ).toHaveLength(0);
-        expect(badFixDiscards(result)).toHaveLength(1);
+        expect(result.discardedSuggestions ?? []).toHaveLength(0);
+        const analyzed = analyzedSuggestions(result);
+        expect(analyzed).toHaveLength(1);
+        expect(analyzed[0].improvedCode).toBe('');
     });
 
-    it('drops a truncated improvedCode (the literal issue #1833 example)', async () => {
+    it('downgrades a truncated improvedCode (the literal issue #1833 example)', async () => {
         const { stage, reviewOrchestrator } = makeStage();
         reviewOrchestrator.execute.mockResolvedValue(
             happyEnvelope([
@@ -175,25 +166,22 @@ describe('AgentReviewStage — improvedCode publication gate (#1833)', () => {
 
         const result = await run(stage, makeContext());
 
-        expect(
-            (result.fileAnalysisResults ?? []).flatMap(
-                (f: any) => f.validSuggestionsToAnalyze,
-            ),
-        ).toHaveLength(0);
-        expect(badFixDiscards(result)).toHaveLength(1);
+        expect(result.discardedSuggestions ?? []).toHaveLength(0);
+        const analyzed = analyzedSuggestions(result);
+        expect(analyzed).toHaveLength(1);
+        expect(analyzed[0].improvedCode).toBe('');
     });
 
-    it('keeps a suggestion with a real, usable fix', async () => {
+    it('keeps a suggestion with a real, usable fix untouched', async () => {
         const { stage, reviewOrchestrator } = makeStage();
         reviewOrchestrator.execute.mockResolvedValue(happyEnvelope([sugg()]));
 
         const result = await run(stage, makeContext());
 
-        expect(badFixDiscards(result)).toHaveLength(0);
-        expect(result.fileAnalysisResults).toHaveLength(1);
-        expect(
-            result.fileAnalysisResults[0].validSuggestionsToAnalyze,
-        ).toHaveLength(1);
+        expect(result.discardedSuggestions ?? []).toHaveLength(0);
+        const analyzed = analyzedSuggestions(result);
+        expect(analyzed).toHaveLength(1);
+        expect(analyzed[0].improvedCode).toBe('const name = user?.name;');
     });
 
     it('does not gate a PR-level Kody Rule finding with no existingCode to replace', async () => {
@@ -214,10 +202,14 @@ describe('AgentReviewStage — improvedCode publication gate (#1833)', () => {
 
         const result = await run(stage, makeContext());
 
-        expect(badFixDiscards(result)).toHaveLength(0);
+        expect(result.discardedSuggestions ?? []).toHaveLength(0);
+        const warnings = result.reviewWarnings ?? [];
+        expect(
+            warnings.find((w: any) => w.kind === 'BAD_FIX_DOWNGRADED'),
+        ).toBeUndefined();
     });
 
-    it('records a BAD_FIX_DROPPED review warning with the drop count, and keeps the usable suggestion alongside it', async () => {
+    it('records a BAD_FIX_DOWNGRADED review warning with the count, and publishes both suggestions', async () => {
         const { stage, reviewOrchestrator } = makeStage();
         reviewOrchestrator.execute.mockResolvedValue(
             happyEnvelope([
@@ -233,15 +225,17 @@ describe('AgentReviewStage — improvedCode publication gate (#1833)', () => {
 
         const result = await run(stage, makeContext());
 
-        expect(badFixDiscards(result)).toHaveLength(1);
+        expect(result.discardedSuggestions ?? []).toHaveLength(0);
         expect(result.fileAnalysisResults).toHaveLength(1);
+        const analyzed = analyzedSuggestions(result);
+        expect(analyzed).toHaveLength(2);
         expect(
-            result.fileAnalysisResults[0].validSuggestionsToAnalyze,
+            analyzed.filter((s: any) => s.improvedCode === ''),
         ).toHaveLength(1);
 
         const warnings = result.reviewWarnings ?? [];
         const badFixWarning = warnings.find(
-            (w: any) => w.kind === 'BAD_FIX_DROPPED',
+            (w: any) => w.kind === 'BAD_FIX_DOWNGRADED',
         );
         expect(badFixWarning).toBeDefined();
         expect(badFixWarning.detail).toContain('1 suggestion(s)');

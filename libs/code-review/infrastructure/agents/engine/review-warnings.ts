@@ -27,9 +27,10 @@ export type ReviewWarningKind =
     /** Kody Rules were not judged because the context they declared they need
      *  could not be retrieved from the repository. */
     | 'RULE_CONTEXT_UNAVAILABLE'
-    /** A finding was dropped because its `improvedCode` was empty, identical
-     *  to `existingCode`, prose-only, or syntactically truncated. */
-    | 'BAD_FIX_DROPPED';
+    /** A finding's `improvedCode` was empty, identical to `existingCode`, or
+     *  syntactically truncated, so it was published as a plain comment with
+     *  no code block instead of the (unusable) fix. */
+    | 'BAD_FIX_DOWNGRADED';
 
 export type ReviewWarningReason =
     | 'small_context_window'
@@ -178,17 +179,17 @@ export function buildRuleContextUnavailableWarning(params: {
  * the suggestion list. `contextWindowTokens` is 0 for the same reason as the
  * other capability-signal warnings above: it is not a fidelity trade-off.
  */
-export function buildBadFixDroppedWarning(params: {
+export function buildBadFixDowngradedWarning(params: {
     count: number;
     modelName: string;
     agentName?: string;
 }): ReviewWarning {
     return {
-        kind: 'BAD_FIX_DROPPED',
+        kind: 'BAD_FIX_DOWNGRADED',
         reason: 'unusable_fix',
         contextWindowTokens: 0,
         modelName: params.modelName,
-        detail: `${params.count} suggestion(s) were dropped because the proposed fix was empty, identical to the existing code, prose-only, or truncated`,
+        detail: `${params.count} suggestion(s) were published without their code suggestion because the proposed fix was empty, identical to the existing code, or truncated`,
         agentName: params.agentName,
     };
 }

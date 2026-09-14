@@ -21,7 +21,7 @@ import {
 import { buildPlatformEmbedder } from '@libs/common/utils/document';
 import {
     dedupReviewWarnings,
-    buildBadFixDroppedWarning,
+    buildBadFixDowngradedWarning,
     type ReviewWarning,
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import {
@@ -1284,13 +1284,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // with a broken "fix" reads as OUR mistake, not a miss. (Prose-
             // only detection was tried and removed — see is-usable-fix.ts's
             // header: no regex reliably tells English apart from code.)
-            // Runs AFTER the content formatter (which never touches
-            // improvedCode, only suggestionContent/llmPrompt) and BEFORE the
-            // Kody Rule link enrichment, so a dropped suggestion never pays
-            // for either.
+            // Rather than dropping the whole finding, strip the unusable
+            // improvedCode and publish as a plain comment: the renderer
+            // already omits the code block when improvedCode is empty
+            // (github.service.ts's `codeBlock = improvedCode ? ... : ''`),
+            // the same path PR-level Kody Rule findings with no existingCode
+            // already use. Runs AFTER the content formatter (which never
+            // touches improvedCode, only suggestionContent/llmPrompt) and
+            // BEFORE the Kody Rule link enrichment.
             {
                 const badFixCounts: Partial<Record<BadFixReason, number>> = {};
-                const kept: Partial<CodeSuggestion>[] = [];
                 for (const s of deduped) {
                     const reason = checkFix(
                         s.existingCode,
@@ -1298,21 +1301,18 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         s.language,
                     );
                     if (!reason) {
-                        kept.push(s);
                         continue;
                     }
                     badFixCounts[reason] = (badFixCounts[reason] ?? 0) + 1;
-                    allDiscarded.push({
-                        ...s,
-                        priorityStatus: PriorityStatus.DISCARDED_BY_BAD_FIX,
-                        deliveryStatus: DeliveryStatus.NOT_SENT,
-                    });
+                    s.improvedCode = '';
                 }
-                const totalBadFix = deduped.length - kept.length;
+                const totalBadFix = Object.values(badFixCounts).reduce(
+                    (sum: number, n) => sum + (n ?? 0),
+                    0,
+                );
                 if (totalBadFix > 0) {
-                    deduped = kept;
                     this.logger.log({
-                        message: `[AGENT] Dropped ${totalBadFix} suggestion(s) with unusable improvedCode`,
+                        message: `[AGENT] Downgraded ${totalBadFix} suggestion(s) with unusable improvedCode to plain comments`,
                         context: this.stageName,
                         metadata: {
                             prNumber,
@@ -1325,7 +1325,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     context = this.updateContext(context, (draft) => {
                         draft.reviewWarnings = dedupReviewWarnings([
                             ...(draft.reviewWarnings ?? []),
-                            buildBadFixDroppedWarning({
+                            buildBadFixDowngradedWarning({
                                 count: totalBadFix,
                                 modelName: getModelName(
                                     context.codeReviewConfig?.byokConfig,
