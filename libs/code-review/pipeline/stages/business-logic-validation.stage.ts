@@ -710,7 +710,7 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
             // Mirror the scheme-anchored pattern detectTicketKeys uses.
             const hasGitIssueRef =
                 /(?:^|[\s(])#\d+\b/.test(body) ||
-                /https?:\/\/[^\s)>\]"']*\/issues\/\d+/.test(body);
+                /https?:\/\/[^\s)>\]"']*\/issues\/\d+/i.test(body);
             if (hasGitIssueRef) {
                 return true;
             }

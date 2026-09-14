@@ -538,6 +538,25 @@ describe('BusinessLogicValidationStage', () => {
             ).toBe(false);
         });
 
+        it('counts a full issue URL whatever the scheme casing (#1908 review)', () => {
+            // detectTicketKeys matches the scheme case-insensitively (/gi), so
+            // a `HTTPS://...` reference is a resolvable issue link and must not
+            // be skipped: with a git-issues-only MCP setup, `#`-prefixed keys
+            // are discarded and detectTaskLinks is case-sensitive too.
+            expect(
+                (stage as any).hasRelevantBusinessSignals(
+                    'Fixes HTTPS://github.com/acme/proj/issues/1825',
+                    ['gitissues'],
+                ),
+            ).toBe(true);
+            expect(
+                (stage as any).hasRelevantBusinessSignals(
+                    'See Https://gitlab.com/acme/proj/issues/77',
+                    ['githubissues'],
+                ),
+            ).toBe(true);
+        });
+
         it('still counts a Jira key alongside a git-issue ref when a Jira-style MCP is connected (#1908)', () => {
             const result = (stage as any).hasRelevantBusinessSignals(
                 'LKDB-286 Closes #1825',
