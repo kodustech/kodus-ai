@@ -49,10 +49,9 @@ export function analyzerFindingsToSuggestions(
         relevantLinesEnd: finding.endLine,
         label: 'security',
         severity: SEVERITY_BY_LEVEL[finding.severity],
-        // Attribution is inlined as well as carried structurally on
-        // `evidence`: the reader needs to see which rule fired, and the
-        // comment renderer does not consume `evidence` yet.
-        suggestionContent: `${finding.message}\n\n_Reported by \`${finding.ruleId}\` (Kodus security rule pack), not by model inference._`,
+        // No attribution in the body: which rule fired is our telemetry, not
+        // something the PR author needs to read. It rides on `evidence`.
+        suggestionContent: finding.message,
         oneSentenceSummary: finding.message,
         // Deterministic findings carry no rewrite: the rule proves the pattern
         // is present, not what the correct replacement is here.

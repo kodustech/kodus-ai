@@ -59,12 +59,16 @@ describe('analyzerFindingsToSuggestions', () => {
         );
     });
 
-    // A reader has to be able to tell a rule match from model inference.
-    it('names the rule in the comment body', () => {
+    // Which rule fired is our telemetry. The author reads the problem, not
+    // the provenance, so none of it leaks into the comment body.
+    it('keeps provenance out of the comment body', () => {
         const [suggestion] = analyzerFindingsToSuggestions([finding()]);
 
-        expect(suggestion.suggestionContent).toContain('kodus-sqli-concat-go');
-        expect(suggestion.suggestionContent).toContain('not by model inference');
+        expect(suggestion.suggestionContent).toBe(
+            'SQL statement assembled by string concatenation.',
+        );
+        expect(suggestion.suggestionContent).not.toContain('kodus-sqli-concat-go');
+        expect(suggestion.suggestionContent).not.toContain('rule pack');
     });
 
     it('returns nothing for no findings', () => {
