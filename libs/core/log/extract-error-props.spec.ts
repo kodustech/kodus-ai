@@ -138,7 +138,64 @@ describe('extractErrorProps (#1829)', () => {
         expect(props.requestBodyValues).toBeUndefined();
     });
 
+    it('caps an oversized object prop instead of dumping it whole', () => {
+        // `target` is the CommandReviewFeedbackTarget object attached on a
+        // `@kody review` refusal. Non-scalar values used to bypass the 2KB cap
+        // entirely, so every refusal embedded the whole target on the line.
+        class ReviewRefusalError extends Error {
+            constructor(
+                readonly gate: string,
+                readonly target: unknown,
+            ) {
+                super('review refused');
+            }
+        }
+
+        const target = {
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            repository: { id: 'r1', name: 'repo' },
+            pullRequest: { number: 42, body: 'x'.repeat(10_000) },
+            triggerCommentId: 'c1',
+        };
+
+        const props = extractErrorProps(
+            new ReviewRefusalError('self-review', target),
+            2_000,
+        );
+
+        expect(props.gate).toBe('self-review');
+        expect(typeof props.target).toBe('string');
+        expect(props.target as string).toHaveLength(2000 + 1);
+        expect((props.target as string).endsWith('…')).toBe(true);
+    });
+
+    it('leaves a small object prop intact and keeps number values as numbers', () => {
+        // Only oversized values degrade to a truncated string: a compact target
+        // stays queryable as an object in the log pipeline.
+        class ReviewRefusalError extends Error {
+            constructor(
+                readonly statusCode: number,
+                readonly target: unknown,
+            ) {
+                super('review refused');
+            }
+        }
+
+        const props = extractErrorProps(
+            new ReviewRefusalError(429, { triggerCommentId: 'c1' }),
+            2_000,
+        );
+
+        expect(props.statusCode).toBe(429);
+        expect(props.target).toEqual({ triggerCommentId: 'c1' });
+    });
+
     it('returns nothing for a plain Error with no own extra props', () => {
-        expect(extractErrorProps(new Error('plain failure'), 2_000)).toEqual({});
+        expect(extractErrorProps(new Error('plain failure'), 2_000)).toEqual(
+            {},
+        );
     });
 });
