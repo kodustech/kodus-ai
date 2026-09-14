@@ -29,3 +29,23 @@ export const kodusTemplate = Template()
         'sudo sslocal -c config.json --protocol redir -b 0.0.0.0:12345 --daemonize && sudo ./iptables-rules.sh',
         waitForPort(12345),
     );
+
+/**
+ * Benchmark-only template: the review sandbox WITHOUT the egress proxy.
+ *
+ * The proxy exists so production traffic leaves through a fixed IP; a
+ * benchmark run has no such requirement, and requiring `config.json` (a
+ * gitignored secret) just to measure rule-pack quality blocks the measurement
+ * on infrastructure it does not need. Same base and the same analyzer, so what
+ * the benchmark exercises is what production runs.
+ *
+ * Built under its own alias — it must never replace the production template.
+ */
+export const kodusBenchmarkTemplate = Template()
+    .fromBaseImage()
+    .aptInstall(['git', 'ripgrep'])
+    .runCmd([
+        `wget -O opengrep ${opengrepUrl}`,
+        'chmod +x opengrep',
+        'sudo mv opengrep /usr/local/bin/',
+    ]);
