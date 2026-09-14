@@ -34,6 +34,7 @@ import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engi
 import type { DocumentationSearchAdapter } from '@libs/code-review/infrastructure/agents/engine/agent-tools.factory';
 import type { FindingsOutput } from '@libs/code-review/infrastructure/agents/core/findings-schema';
 import type { LinkedRepoAccess } from '@libs/ee/linked-repositories';
+import { CheckEvidence } from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
 
 export type { FindingsOutput } from '@libs/code-review/infrastructure/agents/core/findings-schema';
 
@@ -113,6 +114,12 @@ export interface PrReviewContext {
     prBody?: string;
     /** Base branch of the PR (e.g. "main"). Passed to tools for git diff. */
     baseBranch?: string;
+    /**
+     * CI results the repository's own pipeline reported for the head commit.
+     * Rendered as evidence so the agent does not re-derive — or re-report —
+     * what a deterministic tool already proved. Untrusted text: escape it.
+     */
+    ciEvidence?: CheckEvidence[];
 }
 
 /** How the agent investigates: sandbox + auth + call graph. */

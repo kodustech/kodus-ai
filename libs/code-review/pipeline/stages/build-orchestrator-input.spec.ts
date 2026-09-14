@@ -45,6 +45,19 @@ describe('buildOrchestratorInput — context→agent wiring', () => {
         expect(input.reviewDirective).toBe('the auth and session logic');
     });
 
+    it('forwards ciEvidence from context into the agent input', () => {
+        const ciEvidence = [
+            { id: 'c1', name: 'semgrep', status: 'completed' },
+        ] as CodeReviewPipelineContext['ciEvidence'];
+
+        const input = buildOrchestratorInput(
+            makeContext({ ciEvidence }),
+            computed,
+        );
+
+        expect(input.ciEvidence).toBe(ciEvidence);
+    });
+
     it('leaves reviewDirective undefined for a normal review (no directive)', () => {
         expect(
             buildOrchestratorInput(makeContext(), computed).reviewDirective,

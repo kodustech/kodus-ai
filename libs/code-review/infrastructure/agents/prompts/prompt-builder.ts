@@ -8,6 +8,7 @@
  * so the builders carry no `this` and are unit-testable.
  */
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import { CheckEvidence } from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { convertTiptapJSONToText } from '@libs/common/utils/tiptap-json';
 
@@ -122,6 +123,68 @@ export function formatReviewFocus(directive?: string): string {
     Spend your deepest analysis on the changed code matching this focus — trace its callers/callees and challenge it hardest.
     Still report any concrete bug, security, or performance issue you notice elsewhere in the diff; do NOT suppress findings outside the focus. The focus sets priority, not a filter.
   </ReviewFocus>`;
+}
+
+/** Caps that keep a noisy pipeline from crowding out the diff itself. */
+const MAX_CI_CHECKS = 5;
+const MAX_CI_ANNOTATIONS_PER_CHECK = 10;
+
+/**
+ * Renders the CI results the repository's own pipeline produced for this
+ * commit.
+ *
+ * Only checks that finished and did NOT pass are rendered: a green check is
+ * not evidence of anything the reviewer can act on, and listing greens invites
+ * the agent to treat them as proof the code is clean. Annotations are clipped
+ * to the files this PR touches.
+ *
+ * Every rendered string is escaped — annotation text is written by whatever
+ * tool the customer runs, so it is untrusted input arriving in a prompt.
+ */
+export function formatCiEvidence(
+    evidence: CheckEvidence[] | undefined,
+    changedFiles: FileChange[] | undefined,
+): string {
+    const conclusive = new Set(['failure', 'action_required', 'neutral']);
+
+    const failing = (evidence ?? []).filter(
+        (check) =>
+            check.status === 'completed' &&
+            check.conclusion !== null &&
+            conclusive.has(check.conclusion),
+    );
+
+    if (failing.length === 0) {
+        return '';
+    }
+
+    const touched = new Set(
+        (changedFiles ?? []).map((file) => file.filename).filter(Boolean),
+    );
+
+    const lines = failing.slice(0, MAX_CI_CHECKS).map((check) => {
+        const header = `    - ${escapeRecordedDecisionText(check.name)} (${escapeRecordedDecisionText(check.conclusion)})`;
+
+        const relevant = (check.annotations ?? [])
+            .filter((annotation) => touched.has(annotation.path))
+            .slice(0, MAX_CI_ANNOTATIONS_PER_CHECK)
+            .map((annotation) => {
+                const rule = annotation.title
+                    ? ` [${escapeRecordedDecisionText(annotation.title)}]`
+                    : '';
+                return `      - ${escapeRecordedDecisionText(annotation.path)}:${annotation.startLine}${rule} ${escapeRecordedDecisionText(annotation.message)}`;
+            });
+
+        return [header, ...relevant].join('\n');
+    });
+
+    return `\n  <CiEvidence>
+    These checks ran on this commit in the repository's own CI. Their findings are
+    already visible to the author, so do NOT repeat them as your own findings.
+    Use them as supporting evidence when they help explain a defect you found yourself.
+    A check passing — or saying nothing about a line — is NOT proof that line is correct.
+${lines.join('\n')}
+  </CiEvidence>`;
 }
 
 function escapeRecordedDecisionText(value: unknown): string {
@@ -405,7 +468,7 @@ export function buildUserPrompt(input: ReviewAgentInput, meta: PromptAgentMeta):
                   'issues introduced by these changes');
 
         return (
-            `<ReviewTask>${formatReviewFocus(input.reviewDirective)}
+            `<ReviewTask>${formatReviewFocus(input.reviewDirective)}${formatCiEvidence(input.ciEvidence, input.changedFiles)}
   ${prContextSection}${traceDecisionsSection}
 
   <Diffs>
@@ -520,7 +583,7 @@ export function buildCompactUserPrompt(input: ReviewAgentInput, meta: PromptAgen
             ? `\n    Label each finding as one of: ${allowedSuggestionLabels.join(', ')}.`
             : '';
 
-        return `<ReviewTask>${formatReviewFocus(input.reviewDirective)}
+        return `<ReviewTask>${formatReviewFocus(input.reviewDirective)}${formatCiEvidence(input.ciEvidence, input.changedFiles)}
   ${prContextSection}${traceDecisionsSection}
   <Diffs>
 ${diffsSection}
@@ -659,7 +722,7 @@ export function buildSelfContainedUserPrompt(input: ReviewAgentInput, meta: Prom
                   'issues introduced by these changes');
 
         return (
-            `<ReviewTask mode="self-contained">${formatReviewFocus(input.reviewDirective)}
+            `<ReviewTask mode="self-contained">${formatReviewFocus(input.reviewDirective)}${formatCiEvidence(input.ciEvidence, input.changedFiles)}
   ${prContextSection}${traceDecisionsSection}
 
   <Diffs>
