@@ -13,6 +13,7 @@ import {
     AzureRepoFileContent,
     AzureRepoFileItem,
     AzureRepoIteration,
+    AzureRepoPRBuildStatus,
     AzureRepoPRThread,
     AzureRepoReviewerWithVote,
     AzureRepoSubscription,
@@ -140,6 +141,24 @@ export class AzureReposRequestHelper {
         const instance = await this.azureRequest(params);
         const { data } = await instance.get(
             `/${params.projectId}/_apis/git/repositories/${params.repositoryId}/pullRequests/${params.prId}/threads?api-version=7.1`,
+        );
+        return data?.value ?? [];
+    }
+
+    /**
+     * Statuses posted against a pull request. Azure attaches these to the PR
+     * rather than to a commit, so callers pass `prId` and not a SHA.
+     */
+    async getPullRequestStatuses(params: {
+        orgName: string;
+        token: string;
+        projectId: string;
+        repositoryId: string;
+        prId: number | string;
+    }): Promise<AzureRepoPRBuildStatus[]> {
+        const instance = await this.azureRequest(params);
+        const { data } = await instance.get(
+            `/${params.projectId}/_apis/git/repositories/${params.repositoryId}/pullRequests/${params.prId}/statuses?api-version=7.1`,
         );
         return data?.value ?? [];
     }

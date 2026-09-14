@@ -79,6 +79,12 @@ import {
     ListIssuesParams,
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/issues.type';
 import {
+    CheckEvidence,
+    CheckEvidenceConclusion,
+    CheckEvidenceStatus,
+    GetCheckEvidenceParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
+import {
     PullRequest,
     PullRequestAuthor,
     PullRequestCodeReviewTime,
@@ -332,6 +338,104 @@ export class GitlabService implements Omit<
             queryTimeout: 600000,
             camelize: false,
         });
+    }
+
+    async getCheckEvidence(
+        params: GetCheckEvidenceParams,
+    ): Promise<CheckEvidence[]> {
+        const { organizationAndTeamData, repository, commitSha } = params;
+
+        const authDetail = await this.getAuthDetails(organizationAndTeamData);
+        if (!authDetail) {
+            return [];
+        }
+
+        const projectId = `${repository.owner}/${repository.name}`;
+
+        try {
+            const gitlabAPI = this.instanceGitlabApi(authDetail);
+            // One endpoint covers both pipeline jobs and externally posted
+            // commit statuses, so there is no second surface to merge here.
+            const statuses = await gitlabAPI.Commits.allStatuses(
+                projectId,
+                commitSha,
+            );
+
+            return (statuses ?? []).map((status) =>
+                this.mapGitlabCommitStatus(status),
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: 'Failed to read GitLab commit statuses',
+                context: GitlabService.name,
+                error,
+                metadata: { projectId, commitSha },
+            });
+            return [];
+        }
+    }
+
+    private mapGitlabCommitStatus(status: {
+        id: number;
+        name?: string;
+        status: string;
+        target_url?: string | null;
+        finished_at?: string | null;
+        allow_failure?: boolean;
+    }): CheckEvidence {
+        const state = this.mapGitlabStatusState(status.status);
+        const failedButAllowed =
+            status.status === 'failed' && status.allow_failure === true;
+
+        const conclusion: CheckEvidenceConclusion | null =
+            state !== 'completed'
+                ? null
+                : failedButAllowed
+                  ? 'neutral'
+                  : this.mapGitlabConclusion(status.status);
+
+        return {
+            id: String(status.id),
+            name: status.name ?? '',
+            status: state,
+            conclusion,
+            url: status.target_url ?? null,
+            completedAt:
+                state === 'completed' ? (status.finished_at ?? null) : null,
+            platform: PlatformType.GITLAB,
+        };
+    }
+
+    private mapGitlabStatusState(status: string): CheckEvidenceStatus {
+        if (
+            status === 'success' ||
+            status === 'failed' ||
+            status === 'canceled' ||
+            status === 'skipped'
+        ) {
+            return 'completed';
+        }
+        if (status === 'running') {
+            return 'in_progress';
+        }
+        // created / pending / manual / scheduled / waiting_for_resource /
+        // preparing all mean the job has not produced a result yet.
+        return 'queued';
+    }
+
+    private mapGitlabConclusion(status: string): CheckEvidenceConclusion | null {
+        switch (status) {
+            case 'success':
+                return 'success';
+            case 'failed':
+                return 'failure';
+            case 'canceled':
+                return 'cancelled';
+            case 'skipped':
+                return 'skipped';
+            default:
+                return null;
+        }
     }
 
     async listIssues(params: ListIssuesParams): Promise<CodeManagementIssue[]> {

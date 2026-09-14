@@ -63,6 +63,11 @@ import {
     GetIssueParams,
     ListIssuesParams,
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/issues.type';
+import {
+    CheckEvidence,
+    CheckEvidenceConclusion,
+    GetCheckEvidenceParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
 import { Organization } from '@libs/platform/domain/platformIntegrations/types/codeManagement/organization.type';
 import {
     OneSentenceSummaryItem,
@@ -104,6 +109,7 @@ import {
     issueGetIssue,
     issueGetIssueReactions,
     issueListIssues,
+    repoListStatusesByRef,
     issuePostCommentReaction,
     issuePostIssueReaction,
     orgListCurrentUserOrgs,
@@ -220,6 +226,81 @@ export class ForgejoService implements Omit<
                 name: comment.user?.full_name ?? comment.user?.login ?? '',
             },
         };
+    }
+
+    async getCheckEvidence(
+        params: GetCheckEvidenceParams,
+    ): Promise<CheckEvidence[]> {
+        const { organizationAndTeamData, repository, commitSha } = params;
+
+        const authDetail = await this.getAuthDetails(organizationAndTeamData);
+        if (!authDetail) {
+            return [];
+        }
+
+        try {
+            const client = this.createForgejoClient(authDetail);
+
+            const result = await repoListStatusesByRef({
+                client,
+                path: {
+                    owner: repository.owner,
+                    repo: repository.name,
+                    ref: commitSha,
+                },
+                query: { limit: 100 },
+            });
+
+            return (result.data ?? []).map((status) =>
+                this.mapForgejoCommitStatus(status),
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: 'Failed to read Forgejo commit statuses',
+                context: ForgejoService.name,
+                error,
+                metadata: { repository: repository.name, commitSha },
+            });
+            return [];
+        }
+    }
+
+    private mapForgejoCommitStatus(status: {
+        id?: number;
+        context?: string;
+        status?: string;
+        target_url?: string;
+        updated_at?: string;
+    }): CheckEvidence {
+        const pending = status.status === 'pending';
+
+        return {
+            id: String(status.id ?? ''),
+            name: status.context ?? '',
+            status: pending ? 'in_progress' : 'completed',
+            conclusion: pending
+                ? null
+                : this.mapForgejoConclusion(status.status),
+            url: status.target_url ?? null,
+            completedAt: pending ? null : (status.updated_at ?? null),
+            platform: PlatformType.FORGEJO,
+        };
+    }
+
+    private mapForgejoConclusion(
+        status: string | undefined,
+    ): CheckEvidenceConclusion | null {
+        switch (status) {
+            case 'success':
+                return 'success';
+            case 'failure':
+            case 'error':
+                return 'failure';
+            case 'warning':
+                return 'neutral';
+            default:
+                return null;
+        }
     }
 
     async listIssues(params: ListIssuesParams): Promise<CodeManagementIssue[]> {
