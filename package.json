@@ -189,6 +189,7 @@
         "docker:logs:analytics-worker": "docker compose -f docker-compose.dev.yml logs -f worker-analytics",
         "seed": "API_PG_DB_HOST=localhost TS_NODE_PROJECT=tsconfig.json ts-node -r tsconfig-paths/register libs/core/infrastructure/database/typeorm/seed/seed.ts",
         "seed:internal": "TS_NODE_PROJECT=tsconfig.json ts-node -r tsconfig-paths/register libs/core/infrastructure/database/typeorm/seed/seed.ts",
+        "seed:preview": "ts-node scripts/preview/seed-preview-org.ts",
         "seed:enriched-prs": "ts-node -r tsconfig-paths/register scripts/seed/seed-enriched-pull-requests.ts",
         "seed:prod": "node -r ./tsconfig-paths-bootstrap.js dist/libs/core/infrastructure/database/typeorm/seed/seed.js",
         "docker:build": "docker compose -f docker-compose.dev.yml build kodus-api && docker compose -f docker-compose.dev.yml build web && docker compose -f docker-compose.dev.yml build rabbitmq",
