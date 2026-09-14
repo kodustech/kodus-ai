@@ -155,14 +155,19 @@ describe('WorkflowJobRepository — lease-based stale-job reclaim (#1830)', () =
     });
 
     it('requeues a stale job to PENDING and increments retryCount, clearing the lease', async () => {
-        qb.execute.mockResolvedValue({ affected: 1 });
-        const count = await repo.requeueStaleJobs({
+        qb.execute.mockResolvedValue({
+            raw: [{ uuid: 'job-1' }],
+            affected: 1,
+        });
+        const requeued = await repo.requeueStaleJobs({
             uuids: ['job-1'],
             lastError: 'lease expired',
             requeuedBy: 'reaper',
         });
 
-        expect(count).toBe(1);
+        // Returns the UUID of the row actually flipped (Postgres RETURNING),
+        // so the watchdog republishes only what it truly requeued (#1902).
+        expect(requeued).toEqual(['job-1']);
         expect(qb.update).toHaveBeenCalledWith(WorkflowJobModel);
         const setArgs = qb.set.mock.calls[0][0];
         expect(setArgs.status).toBe(JobStatus.PENDING);
@@ -174,15 +179,16 @@ describe('WorkflowJobRepository — lease-based stale-job reclaim (#1830)', () =
         expect(qb.andWhere).toHaveBeenCalledWith('status = :status', {
             status: JobStatus.PROCESSING,
         });
+        expect(qb.returning).toHaveBeenCalledWith('uuid');
     });
 
     it('requeue is a no-op for an empty uuid list', async () => {
-        const count = await repo.requeueStaleJobs({
+        const requeued = await repo.requeueStaleJobs({
             uuids: [],
             lastError: 'x',
             requeuedBy: 'reaper',
         });
-        expect(count).toBe(0);
+        expect(requeued).toEqual([]);
         expect(qb.execute).not.toHaveBeenCalled();
     });
 

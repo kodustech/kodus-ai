@@ -388,9 +388,9 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
         uuids: string[];
         lastError: string;
         requeuedBy: string;
-    }): Promise<number> {
+    }): Promise<string[]> {
         if (params.uuids.length === 0) {
-            return 0;
+            return [];
         }
         try {
             const result = await this.repository
@@ -410,11 +410,31 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                 .whereInIds(params.uuids)
                 // Re-assert PROCESSING in the UPDATE: a job can complete (or be
                 // permanently failed) between the SELECT that listed it as stale
-                // and this write. Without the guard the UPDATE clobbers the
-                // newer terminal state back to PENDING and the job re-runs.
+                // and this write. Without the guard the UPDATE clears a newer
+                // terminal state to PENDING and the job re-runs.
                 .andWhere('status = :status', { status: JobStatus.PROCESSING })
+                // PostgreSQL RETURNING tells us exactly which rows we flipped —
+                // the watchdog republishes only these, never the full candidate
+                // batch, so a job that finished between the SELECT and this
+                // UPDATE is not re-driven (#1902).
+                .returning('uuid')
                 .execute();
-            return result.affected ?? 0;
+            const rows = (result.raw ?? []) as Array<{ uuid?: string }>;
+            const requeuedUuids = rows
+                .map((r) => r.uuid)
+                .filter((u): u is string => typeof u === 'string');
+            if (requeuedUuids.length > 0) {
+                this.logger.log({
+                    message: `Requeued ${requeuedUuids.length} stale PROCESSING workflow job(s) to PENDING`,
+                    context: WorkflowJobRepository.name,
+                    metadata: {
+                        requested: params.uuids.length,
+                        requeued: requeuedUuids.length,
+                        requeuedUuids,
+                    },
+                });
+            }
+            return requeuedUuids;
         } catch (error) {
             this.logger.error({
                 message: 'Failed to requeue stale PROCESSING workflow jobs',

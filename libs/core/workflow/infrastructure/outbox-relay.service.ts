@@ -556,7 +556,7 @@ export class OutboxRelayService
                           lastError: staleReason,
                           requeuedBy: this.constructor.name,
                       })
-                    : Promise.resolve(0);
+                    : Promise.resolve([] as string[]);
             const failTask =
                 deadUuids.length > 0 && this.jobRepository.failStaleJobs
                     ? this.jobRepository.failStaleJobs({
@@ -590,6 +590,51 @@ export class OutboxRelayService
                         ],
                     },
                 });
+            } else if (requeueResult.value.length > 0) {
+                // Re-publish the jobs that were ACTUALLY requeued (the repo
+                // returns only the UUIDs its guarded UPDATE flipped — a job
+                // that finished between the SELECT and the update is excluded
+                // and must NOT be re-driven). requeueStaleJobs only flips the
+                // row to PENDING; without a fresh broker message the consumer
+                // never re-runs it and the reclaimed job sits dead until an
+                // external trigger (issue #1902).
+                const typeByUuid = new Map(
+                    stale
+                        .filter((j) => requeueResult.value.includes(j.uuid))
+                        .map((j) => [j.uuid, j.workflowType]),
+                );
+                await Promise.all(
+                    requeueResult.value.map((uuid) => {
+                        const workflowType = typeByUuid.get(uuid);
+                        if (!workflowType) {
+                            return Promise.resolve();
+                        }
+                        const messageId = `reclaim-${uuid}-${now.getTime()}`;
+                        return this.messageBroker.publishMessage(
+                            {
+                                exchange: 'workflow.exchange',
+                                routingKey: `workflow.jobs.resumed.${workflowType}`,
+                            },
+                            {
+                                event_name: 'workflow.jobs.resumed',
+                                event_version: 1,
+                                occurred_on: new Date(),
+                                payload: { jobId: uuid },
+                                messageId,
+                            },
+                            {
+                                messageId,
+                                persistent: true,
+                                headers: {
+                                    'x-workflow-type': workflowType,
+                                    'x-job-id': uuid,
+                                    'x-resume-reason':
+                                        'stale-job.lease-reclaimed',
+                                },
+                            },
+                        );
+                    }),
+                );
             }
             if (failResult.status === 'rejected') {
                 this.logger.error({
@@ -605,7 +650,7 @@ export class OutboxRelayService
 
             const requeued =
                 requeueResult.status === 'fulfilled'
-                    ? (requeueResult.value ?? 0)
+                    ? requeueResult.value.length
                     : 0;
             const permanentlyFailed =
                 failResult.status === 'fulfilled' ? (failResult.value ?? 0) : 0;
