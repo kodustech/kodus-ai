@@ -700,12 +700,14 @@ const ERROR_LOG_PROPS = new Set([
     'responseBody',
     'url',
     'responseHeaders',
-    // Small scalar diagnostics attached in-repo that the previous generic
-    // merge surfaced and operators relied on: azure `status`, code-review job
+    // Diagnostics attached in-repo that the previous generic merge surfaced and
+    // operators relied on: azure `status`, code-review job
     // `gate`/`target`/`requestId`, mcp `code`, llm context-window errors
     // `contextWindow`/`overheadTokens`/`estimatedTokens`/`contextWindowTokens`/
-    // `modelName`. All scalar (number/string) — they pass through
-    // sanitize/deepSanitize/truncate safely and stay small on the log line.
+    // `modelName`. Mostly small scalars, with one deliberate exception: `target`
+    // carries the CommandReviewFeedbackTarget object, so the extractor caps the
+    // serialized form of every non-string value (see capSerialized) instead of
+    // relying on the values all being scalars.
     'status',
     'code',
     'gate',
@@ -746,10 +748,40 @@ export function extractErrorProps(
                     ? `${sanitized.substring(0, maxStringLength)}…`
                     : sanitized;
         } else {
-            props[key] = deepSanitize(value);
+            const sanitized = deepSanitize(value);
+            // The cap has to cover non-scalars too: `target` is a plain object
+            // (CommandReviewFeedbackTarget), so without this every `@kody
+            // review` refusal embeds the whole target, and any future object
+            // under these generic keys would dump uncapped — breaking the
+            // invariant that every allowlisted prop stays small on the line.
+            props[key] = capSerialized(sanitized, maxStringLength);
         }
     }
     return props;
+}
+
+/**
+ * Keep a non-string value's serialized form within `maxStringLength`. Values
+ * that already fit keep their original shape (numbers stay numbers, small
+ * objects stay objects); oversized ones degrade to a truncated JSON string,
+ * which is the only way to bound an arbitrarily nested object on a log line.
+ */
+function capSerialized(value: unknown, maxStringLength: number): unknown {
+    let serialized: string | undefined;
+    try {
+        serialized = JSON.stringify(value);
+    } catch {
+        // Circular or otherwise non-serializable: let the log serializer deal
+        // with it rather than dropping the prop.
+        return value;
+    }
+    if (
+        typeof serialized !== 'string' ||
+        serialized.length <= maxStringLength
+    ) {
+        return value;
+    }
+    return `${serialized.substring(0, maxStringLength)}…`;
 }
 
 /** Exported for testing only. */
