@@ -282,12 +282,15 @@ export interface ReviewAgentInput
      *  The pipeline/experiment sets it; everything below threads it down. */
     outlineFirst?: boolean;
     /**
-     * Commits that make up this PR (SHA + subject line), oldest→newest. Threaded
-     * so commit-hygiene rules ("don't mix mechanical and behavioral changes")
-     * are judged against real commit boundaries instead of the aggregated diff.
-     * (PR #1412.)
+     * Commits that make up this PR (SHA + subject line + author date),
+     * oldest→newest. Threaded so commit-hygiene rules ("don't mix mechanical
+     * and behavioral changes") are judged against real commit boundaries
+     * instead of the aggregated diff (PR #1412), and so the finder/verifier
+     * can correlate a `<PreviousReviewDecision>`'s `DecidedAt` against what
+     * actually landed since (issue #1313 follow-up: a decision has no
+     * anchor to which round/commit produced it, only a timestamp).
      */
-    commits?: Array<{ sha: string; message: string }>;
+    commits?: Array<{ sha: string; message: string; date?: string }>;
     /**
      * Optional per-review steering directive supplied by the user at trigger
      * time (e.g. `@kody review focus on the auth logic`). Free text. When set,

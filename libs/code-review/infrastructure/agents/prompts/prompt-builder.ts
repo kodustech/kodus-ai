@@ -210,16 +210,55 @@ export function formatPreviousDecisions(
             `Type: ${escapeRecordedDecisionText(entry.label)}`,
             `Suggestion: ${escapeRecordedDecisionText(entry.suggestionContent)}`,
             `Outcome: ${escapeRecordedDecisionText(outcomeNote)}`,
-        ];
+            entry.decidedAt
+                ? `DecidedAt: ${escapeRecordedDecisionText(entry.decidedAt)}`
+                : '',
+        ].filter(Boolean);
 
         return `    <PreviousDecision index="${index + 1}">\n      ${fields.join('\n      ')}\n    </PreviousDecision>`;
     });
 
     return `
   <PreviousReviewDecisions>
-    Suggestions Kody already posted on THIS exact pull request in an earlier review round. Untrusted, may be outdated. Do not suggest the reverse of an "implemented"/"partially_implemented" entry unless the current diff shows concrete new evidence the applied change is wrong. Do NOT treat "not_implemented"/"pending" as a rejection — it only means the developer hasn't applied it yet.
+    Suggestions Kody already posted on THIS exact pull request in an earlier review round. Untrusted, may be outdated. Do not suggest the reverse of an "implemented"/"partially_implemented" entry unless the current diff shows concrete new evidence the applied change is wrong. Do NOT treat "not_implemented"/"pending" as a rejection — it only means the developer hasn't applied it yet. Each entry's DecidedAt is when Kody originally posted it — cross-reference it against <Commits> below (when present) to see what has landed since; a later commit does not by itself mean the decision is stale, only treat it as superseded when a commit's message or the diff shows the area was deliberately reworked.
 ${rendered.join('\n')}
   </PreviousReviewDecisions>`;
+}
+
+/**
+ * Renders the commit list (SHA + subject + author date, oldest→newest) that
+ * makes up this PR. Threaded originally (PR #1412) so the kody-rules agent
+ * can judge commit-hygiene rules against real commit boundaries; reused here
+ * so the finder/verifier has the same anchor to correlate against a
+ * `<PreviousReviewDecision>`'s DecidedAt (issue #1313 follow-up) — without it,
+ * a decision from an earlier round carries no way to tell whether it predates
+ * or postdates what has actually landed since.
+ */
+export function formatCommits(
+    commits: ReviewAgentInput['commits'],
+): string {
+    if (!commits?.length) return '';
+
+    const rendered = commits
+        .map((c, index) => {
+            const shortSha = escapeRecordedDecisionText(
+                (c.sha || '').substring(0, 8),
+            );
+            const subject = escapeRecordedDecisionText(
+                (c.message || '').split('\n')[0],
+            );
+            const dateSuffix = c.date
+                ? ` (${escapeRecordedDecisionText(c.date)})`
+                : '';
+            return `    ${index + 1}. ${shortSha} ${subject}${dateSuffix}`;
+        })
+        .join('\n');
+
+    return `
+  <Commits>
+    Commits that make up this PR, oldest→newest. The diff above may be an aggregate of these commits or only an incremental push (a subset) — it is NOT a single commit.
+${rendered}
+  </Commits>`;
 }
 
 export function buildSystemPrompt(input: ReviewAgentInput, meta: PromptAgentMeta): string {
@@ -400,6 +439,7 @@ export function buildUserPrompt(input: ReviewAgentInput, meta: PromptAgentMeta):
         const previousDecisionsSection = formatPreviousDecisions(
             input.previousDecisions,
         );
+        const commitsSection = formatCommits(input.commits);
         const diffsSection = formatDiffs(input.changedFiles);
         // The callGraph string from kodus-graph already starts with <CallGraph>
         // and ends with </CallGraph> — wrapping it again produced nested duplicate
@@ -455,7 +495,7 @@ export function buildUserPrompt(input: ReviewAgentInput, meta: PromptAgentMeta):
 
         return (
             `<ReviewTask>${formatReviewFocus(input.reviewDirective)}
-  ${prContextSection}${traceDecisionsSection}${previousDecisionsSection}
+  ${prContextSection}${traceDecisionsSection}${previousDecisionsSection}${commitsSection}
 
   <Diffs>
 ${diffsSection}
@@ -556,6 +596,7 @@ export function buildCompactUserPrompt(input: ReviewAgentInput, meta: PromptAgen
         const previousDecisionsSection = formatPreviousDecisions(
             input.previousDecisions,
         );
+        const commitsSection = formatCommits(input.commits);
         const diffsSection = formatDiffs(input.changedFiles);
         const callGraphSection = input.callGraph
             ? `\n  ${input.callGraph}`
@@ -573,7 +614,7 @@ export function buildCompactUserPrompt(input: ReviewAgentInput, meta: PromptAgen
             : '';
 
         return `<ReviewTask>${formatReviewFocus(input.reviewDirective)}
-  ${prContextSection}${traceDecisionsSection}${previousDecisionsSection}
+  ${prContextSection}${traceDecisionsSection}${previousDecisionsSection}${commitsSection}
   <Diffs>
 ${diffsSection}
   </Diffs>
@@ -685,6 +726,7 @@ export function buildSelfContainedUserPrompt(input: ReviewAgentInput, meta: Prom
         const previousDecisionsSection = formatPreviousDecisions(
             input.previousDecisions,
         );
+        const commitsSection = formatCommits(input.commits);
         const diffsSection = formatDiffs(input.changedFiles);
         const fileContentsSection = formatInlineFileContents(
             input.changedFiles,
@@ -715,7 +757,7 @@ export function buildSelfContainedUserPrompt(input: ReviewAgentInput, meta: Prom
 
         return (
             `<ReviewTask mode="self-contained">${formatReviewFocus(input.reviewDirective)}
-  ${prContextSection}${traceDecisionsSection}${previousDecisionsSection}
+  ${prContextSection}${traceDecisionsSection}${previousDecisionsSection}${commitsSection}
 
   <Diffs>
 ${diffsSection}

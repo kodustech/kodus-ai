@@ -198,4 +198,73 @@ describe('buildOrchestratorInput — context→agent wiring', () => {
             );
         });
     });
+
+    describe('commits (issue #1313 follow-up)', () => {
+        it('maps sha/message/date from the nested Commit shape the type declares', () => {
+            const input = buildOrchestratorInput(
+                makeContext({
+                    prAllCommits: [
+                        {
+                            sha: 'abc123',
+                            commit: {
+                                message: 'fix: guard null user',
+                                author: { date: '2026-01-02T00:00:00.000Z' },
+                            },
+                        },
+                    ],
+                }),
+                computed,
+            );
+            expect(input.commits).toEqual([
+                {
+                    sha: 'abc123',
+                    message: 'fix: guard null user',
+                    date: '2026-01-02T00:00:00.000Z',
+                },
+            ]);
+        });
+
+        it('falls back to the flat message/created_at shape GitHub\'s own getCommitsForPullRequestForCodeReview actually returns', () => {
+            // Confirmed live (2026-09-11): that provider method returns
+            // {sha, message, created_at, author} with NO `commit` property at
+            // all — reading only `c.commit?.message` silently rendered every
+            // commit message as empty in the finder/verifier prompt.
+            const input = buildOrchestratorInput(
+                makeContext({
+                    prAllCommits: [
+                        {
+                            sha: 'def456',
+                            message: 'chore: unrelated formatting',
+                            created_at: '2026-01-03T00:00:00.000Z',
+                        } as any,
+                    ],
+                }),
+                computed,
+            );
+            expect(input.commits).toEqual([
+                {
+                    sha: 'def456',
+                    message: 'chore: unrelated formatting',
+                    date: '2026-01-03T00:00:00.000Z',
+                },
+            ]);
+        });
+
+        it('prefers prAllCommits over prCommits when both are present', () => {
+            const input = buildOrchestratorInput(
+                makeContext({
+                    prAllCommits: [{ sha: 'all-1', message: 'all' } as any],
+                    prCommits: [{ sha: 'new-1', message: 'new' } as any],
+                }),
+                computed,
+            );
+            expect(input.commits).toEqual([
+                { sha: 'all-1', message: 'all', date: undefined },
+            ]);
+        });
+
+        it('is undefined when neither prAllCommits nor prCommits exist', () => {
+            expect(buildOrchestratorInput(makeContext(), computed).commits).toBeUndefined();
+        });
+    });
 });
