@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { ssoDropletName } from "../lib/sso-droplet-name.js";
 import type { RunContext, Scenario } from "../lib/types.js";
 
 // SSO cookie-domain regression as a release-matrix scenario.
@@ -31,16 +32,9 @@ const PROVISION = resolve(
     "provision.sh",
 );
 
-// The droplet name is a fixed AWS resource name (key pair + EC2 Name
-// tag) with no per-run uniqueness, which is deliberate for local/manual
-// use: `--reuse` lets a dev provision once and keep poking the same
-// droplet across many matrix runs and manual `sso-e2e:droplet:*`
-// invocations. But that convenience becomes a collision when a human's
-// long-lived local "sso-e2e" droplet is alive at the exact moment CI
-// runs this scenario against the same fixed name — CI's import-key-pair
-// fails outright, misread as a stale-teardown bug in a real incident.
-// CI gets its own name so it can never collide with a person's droplet.
-const DROPLET_NAME = process.env.CI === "true" ? "sso-e2e-ci" : "sso-e2e";
+// See tests/e2e/lib/sso-droplet-name.ts for why CI and local/manual
+// runs must not share one fixed name.
+const DROPLET_NAME = ssoDropletName();
 
 interface ScriptResult {
     code: number;

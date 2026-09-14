@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { ssoDropletName } from "../lib/sso-droplet-name.js";
 import type { RunContext, Scenario } from "../lib/types.js";
 
 // SSO multi-user regression as a release-matrix scenario.
@@ -32,9 +33,10 @@ const DESTROY = resolve(
     "destroy.sh",
 );
 
-// Must match sso-cookie-domain's DROPLET_NAME exactly — this scenario
-// only reuses that droplet, it never provisions on its own.
-const DROPLET_NAME = process.env.CI === "true" ? "sso-e2e-ci" : "sso-e2e";
+// Same derivation as sso-cookie-domain (tests/e2e/lib/sso-droplet-name.ts)
+// — this scenario only reuses/destroys that droplet, it never
+// provisions on its own.
+const DROPLET_NAME = ssoDropletName();
 
 interface ScriptResult {
     code: number;
