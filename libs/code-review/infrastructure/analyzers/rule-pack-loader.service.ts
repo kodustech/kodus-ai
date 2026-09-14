@@ -25,26 +25,42 @@ export class RulePackLoader {
             return this.cached;
         }
 
-        const dir = join(__dirname, 'rule-pack');
+        // Webpack bundles every module into one file, so `__dirname` is the
+        // bundle's own directory (dist/apps/<app>), not this file's path in the
+        // source tree. Try the colocated path first for unbundled runs, then
+        // the copied dist location, then the source tree for local dev.
+        const relative = 'libs/code-review/infrastructure/analyzers/rule-pack';
+        const candidates = [
+            join(__dirname, 'rule-pack'),
+            join(process.cwd(), 'dist', relative),
+            join(process.cwd(), relative),
+        ];
+
         const pack: Record<string, string> = {};
 
-        try {
-            for (const name of readdirSync(dir)) {
-                if (!name.endsWith('.yaml') && !name.endsWith('.yml')) {
-                    continue;
+        for (const dir of candidates) {
+            try {
+                for (const name of readdirSync(dir)) {
+                    if (!name.endsWith('.yaml') && !name.endsWith('.yml')) {
+                        continue;
+                    }
+                    pack[name] = readFileSync(join(dir, name), 'utf8');
                 }
-                pack[name] = readFileSync(join(dir, name), 'utf8');
+            } catch {
+                continue;
             }
-        } catch (error) {
-            // An empty pack disables the analyzer pass rather than failing a
-            // review — same posture as a missing binary.
-            this.logger.warn({
-                message: 'Security rule pack not found on disk',
-                context: RulePackLoader.name,
-                error,
-                metadata: { dir },
-            });
+            if (Object.keys(pack).length > 0) {
+                return (this.cached = pack);
+            }
         }
+
+        // An empty pack disables the analyzer pass rather than failing a
+        // review — same posture as a missing binary.
+        this.logger.warn({
+            message: 'Security rule pack not found on disk',
+            context: RulePackLoader.name,
+            metadata: { candidates },
+        });
 
         this.cached = pack;
         return pack;
