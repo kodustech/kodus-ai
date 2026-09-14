@@ -13,6 +13,7 @@ import {
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { CheckEvidence } from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
 import { ManagedTool } from '@libs/code-review/infrastructure/adapters/services/ci-evidence/recognize-ci-analyzers';
+import { AnalyzerFinding } from '@libs/code-review/infrastructure/analyzers/analyzer-finding.type';
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { CollectCrossFileContextsResult } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import type { TraceContextDecision } from '@libs/cli-review/domain/types/trace-context.types';
@@ -245,6 +246,15 @@ export interface CodeReviewPipelineContext extends PipelineContext {
      * do not publish the same finding twice or pay to rediscover it.
      */
     ciCoveredTools?: ManagedTool[];
+
+    /** In-diff findings from Kody's own security rule pack. */
+    analyzerFindings?: AnalyzerFinding[];
+
+    /**
+     * Why the analyzer pass produced nothing. Set only when it did NOT run —
+     * absent findings with no reason means it ran and found nothing.
+     */
+    analyzerSkipped?: 'unavailable';
 
     /** Sandbox handle kept alive for safeguard agent verification */
     sandboxHandle?: SandboxInstance;

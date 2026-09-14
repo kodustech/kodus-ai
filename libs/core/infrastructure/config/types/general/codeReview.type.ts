@@ -328,6 +328,11 @@ export type CodeReviewConfig = {
     deterministicEvidence?: {
         /** Read check runs / statuses the customer's own pipeline produced. */
         ciChecks?: boolean;
+        /**
+         * Run Kody's own security rule pack. `auto` skips it when the
+         * customer's CI already runs an equivalent analyzer.
+         */
+        rulePack?: 'off' | 'auto' | 'on';
     };
     ignoredTitleKeywords: string[];
     baseBranches: string[];

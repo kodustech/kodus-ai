@@ -68,6 +68,29 @@ class CopySkillsPlugin {
     }
 }
 
+// RulePackLoader reads the security rule pack from `rule-pack/` beside its
+// compiled location. Webpack emits only .js for TS sources, so without this the
+// .yaml rules are missing at runtime and the analyzer pass silently no-ops.
+class CopyRulePackPlugin {
+    apply(compiler) {
+        compiler.hooks.afterEmit.tap('CopyRulePackPlugin', () => {
+            const sourceDir = path.resolve(
+                __dirname,
+                'libs/code-review/infrastructure/analyzers/rule-pack',
+            );
+            const targetDir = path.resolve(
+                __dirname,
+                'dist',
+                'libs/code-review/infrastructure/analyzers/rule-pack',
+            );
+
+            copyDir(sourceDir, targetDir, {
+                skip: (name) => name.endsWith('.ts') || name.endsWith('.md'),
+            });
+        });
+    }
+}
+
 module.exports = function (options, webpack) {
     // Detect watch mode from BOTH the options field (set by `nest start
     // --watch`) and the CLI argv (set by `nest build --watch`). Nest CLI
@@ -88,6 +111,7 @@ module.exports = function (options, webpack) {
 
     const plugins = [...options.plugins];
     plugins.push(new CopyDictionariesPlugin());
+    plugins.push(new CopyRulePackPlugin());
     plugins.push(new CopySkillsPlugin());
 
     // Only run the compiled output (and enable HMR) in watch mode.
