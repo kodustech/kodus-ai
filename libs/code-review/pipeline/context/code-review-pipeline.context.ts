@@ -11,6 +11,8 @@ import {
     CreateSandboxParams,
     SandboxInstance,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
+import { CheckEvidence } from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
+import { ManagedTool } from '@libs/code-review/infrastructure/adapters/services/ci-evidence/recognize-ci-analyzers';
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { CollectCrossFileContextsResult } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import type { TraceContextDecision } from '@libs/cli-review/domain/types/trace-context.types';
@@ -231,6 +233,18 @@ export interface CodeReviewPipelineContext extends PipelineContext {
 
     /** Graph JSON (nodes + edges) from kodus-graph parse, used by GraphContentFormatter for Tier 1 formatting */
     callGraphJson?: { nodes: any[]; edges: any[] };
+
+    /**
+     * CI results the customer's own pipeline reported for the head commit.
+     * Absent when the host cannot report them, or when there were none.
+     */
+    ciEvidence?: CheckEvidence[];
+
+    /**
+     * Managed tools whose analysis the customer's CI already covers, so we
+     * do not publish the same finding twice or pay to rediscover it.
+     */
+    ciCoveredTools?: ManagedTool[];
 
     /** Sandbox handle kept alive for safeguard agent verification */
     sandboxHandle?: SandboxInstance;

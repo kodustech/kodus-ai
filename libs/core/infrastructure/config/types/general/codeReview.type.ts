@@ -312,6 +312,16 @@ export type CodeReviewConfig = {
      *  review (CLI `--heavy` / PR `@kody review --heavy`). Off by default. */
     heavy?: boolean;
     reviewOptions: ReviewOptions;
+
+    /**
+     * Deterministic evidence sources. Off by default: reading a customer's CI
+     * costs API calls on every review, so it stays opt-in until something
+     * consumes the result.
+     */
+    deterministicEvidence?: {
+        /** Read check runs / statuses the customer's own pipeline produced. */
+        ciChecks?: boolean;
+    };
     ignoredTitleKeywords: string[];
     baseBranches: string[];
     automatedReviewActive: boolean;

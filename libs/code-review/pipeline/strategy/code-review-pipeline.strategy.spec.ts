@@ -18,6 +18,7 @@ const buildStrategy = (): CodeReviewPipelineStrategy =>
         mockStage('ValidateConfigStage') as any,
         mockStage('FetchChangedFilesStage') as any,
         mockStage('LoadExternalContextStage') as any,
+        mockStage('LoadCiEvidenceStage') as any,
         mockStage('InitialCommentStage') as any,
         mockStage('BusinessLogicValidationStage') as any,
         mockStage('CreateSandboxStage') as any,
@@ -38,6 +39,7 @@ const EXPECTED_ORDER = [
     'ValidateConfigStage',
     'FetchChangedFilesStage',
     'LoadExternalContextStage',
+    'LoadCiEvidenceStage',
     'InitialCommentStage',
     // agent engine (the only engine)
     'BusinessLogicValidationStage',

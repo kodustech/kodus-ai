@@ -1147,6 +1147,10 @@ reviewOptions:
     security: true
     business_logic: true
 
+# deterministic evidence (opt-in)
+deterministicEvidence:
+    ciChecks: false # read the CI results your own pipeline already produced
+
 # suggestion control
 suggestionControl:
     applyFiltersToKodyRules: false
