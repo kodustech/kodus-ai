@@ -1407,10 +1407,13 @@ export class PullRequestsService implements IPullRequestsService {
             // into the document, so it must be excluded from the retry-budget
             // math below — otherwise we'd hand ourselves a budget inflated by
             // exactly the failed bytes and re-write past the ceiling the
-            // enforcement pass exists to keep (#1841). Called after EVERY write
-            // (initial + each retry), because each retry reassigns
-            // `ourPatchBytes = consumed` and its own failed ops need the same
-            // treatment.
+            // enforcement pass exists to keep (#1841).
+            //
+            // This applies ONLY to the initial write: a rejected INITIAL op
+            // truly never contributed bytes. It deliberately does NOT apply
+            // to retries — a rejected retry op leaves the (larger) patch the
+            // initial write embedded still in the document and still ours, so
+            // subtracting its bytes would understate our ownership (see below).
             const reconcileFailedPatchBytes = (
                 errors: Array<{ opIndex: number }>,
                 bytesByOpIndex: Map<number, number>,
@@ -1522,23 +1525,17 @@ export class PullRequestsService implements IPullRequestsService {
                             organizationId,
                             updateOps,
                         );
-                    // The retry had its own op→byte map (each updateFile op
-                    // carries its patch). Reconcile THIS write's failures too:
-                    // ops rejected by the retry were never persisted, so they
-                    // cannot inflate the next iteration's `tightened` budget.
-                    const retryBytesByOpIndex = new Map<number, number>();
-                    updateOps.forEach((op: any, index: number) => {
-                        if (op?.kind === 'updateFile' && typeof op?.data?.patch === 'string') {
-                            retryBytesByOpIndex.set(
-                                index,
-                                utf8ByteLength(op.data.patch),
-                            );
-                        }
-                    });
-                    reconcileFailedPatchBytes(
-                        retryResult.errors,
-                        retryBytesByOpIndex,
-                    );
+                    // Deliberately do NOT subtract the retry's rejected bytes
+                    // from `ourPatchBytes`. A retry overwrites a patch that the
+                    // initial write of this same batch already embedded — the
+                    // larger original is still in the document and still ours.
+                    // Subtracting the rejected retry bytes understates our
+                    // ownership, shrinks `tightened` on the next pass, and if
+                    // it reaches 0 the loop bails out at the `ourPatchBytes`
+                    // guard with the doc still over the ceiling — a regression.
+                    // `ourPatchBytes = consumed` above therefore stays as is;
+                    // only the initial write reconciles failed ops (those truly
+                    // never contributed bytes).
                     bulkResult = {
                         attempted: bulkResult.attempted + retryResult.attempted,
                         modified: bulkResult.modified + retryResult.modified,
