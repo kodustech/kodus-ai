@@ -357,12 +357,20 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
             // consumer (which acks the message) with the row left untouched
             // (#1830).
             if (leaseLost) {
+                const orgId =
+                    (
+                        (job?.payload ?? {}) as {
+                            organizationAndTeamData?: {
+                                organizationId?: string;
+                            };
+                        }
+                    )?.organizationAndTeamData?.organizationId;
                 this.logger.warn({
                     message:
                         'Job lease lost after repeated renewal failures — leaving the row PROCESSING for the lease reaper to reclaim',
                     context: CodeReviewJobProcessorService.name,
                     error,
-                    metadata: { jobId },
+                    metadata: { jobId, organizationId: orgId },
                 });
                 return;
             }
