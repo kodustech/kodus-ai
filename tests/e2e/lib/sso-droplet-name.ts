@@ -17,9 +17,18 @@
 // a leftover from one run can never block a later one; the 6h reaper
 // sweep remains the backstop for whatever a leftover run's own
 // teardown misses.
+//
+// GITHUB_RUN_ID alone isn't enough: GitHub keeps it constant across a
+// "Re-run failed jobs" of the same workflow run — only
+// GITHUB_RUN_ATTEMPT increments. Without it, re-running a cancelled or
+// failed run reuses the previous attempt's leaked name and hits the
+// exact same collision on a fresh, stateless runner. Both scenarios
+// still agree on the name because they run within the same attempt.
 export function ssoDropletName(): string {
     if (process.env.CI !== "true") {
         return "sso-e2e";
     }
-    return `sso-e2e-ci-${process.env.GITHUB_RUN_ID ?? "local"}`;
+    const runId = process.env.GITHUB_RUN_ID ?? "local";
+    const attempt = process.env.GITHUB_RUN_ATTEMPT ?? "1";
+    return `sso-e2e-ci-${runId}-${attempt}`;
 }
