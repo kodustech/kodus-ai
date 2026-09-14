@@ -107,7 +107,15 @@ Detected: XSS 2/6, command injection 1/6, path traversal 1/6, unsafe
 deserialization 1/6, XXE 1/6. Nothing on SQL injection, SSRF, hardcoded
 credentials, weak crypto, or code injection.
 
-A curated pack has to beat this on recall without spending the noise budget.
+The Kodus rule pack (`libs/code-review/infrastructure/analyzers/rule-pack/`,
+27 hand-written rules) beats it on both axes:
+
+```
+RECALL    8/60   (13.3%)
+PRECISION 11/11 noise samples clean
+VERBOSITY 0.32 findings per sample
+          ~4s for the full dataset, versus ~10 min
+```
 
 ## Known limitations
 

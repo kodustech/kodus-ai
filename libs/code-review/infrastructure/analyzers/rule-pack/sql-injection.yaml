@@ -1,0 +1,93 @@
+# Kodus-authored rules. Written in-house rather than taken from a public pack:
+# semgrep's registry rules are licensed for internal use only, and the opengrep
+# fork carries LGPL-2.1 + Commons Clause, which forbids a product whose value
+# derives from them. These are ours.
+#
+# Precision over recall throughout. Every rule carries pattern-not clauses for
+# the safe form, because a finding we publish has to be right.
+rules:
+  - id: kodus-sqli-concat-go
+    languages: [go]
+    severity: ERROR
+    message: >-
+      SQL statement assembled by string concatenation. A value interpolated
+      here is parsed as SQL, not as data. Use placeholders and pass the value
+      as a query argument.
+    metadata:
+      cwe: 'CWE-89'
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: $BUF.WriteString("=~/(?i)(select|insert|update|delete|alter|drop)/" + $X)
+          - pattern: $DB.Query("=~/(?i)(select|insert|update|delete)/" + $X, ...)
+          - pattern: $DB.QueryContext($CTX, "=~/(?i)(select|insert|update|delete)/" + $X, ...)
+          - pattern: $DB.Exec("=~/(?i)(select|insert|update|delete|alter|drop)/" + $X, ...)
+      - pattern-not: $BUF.WriteString("..." + "...")
+
+  - id: kodus-sqli-concat-php
+    languages: [php]
+    severity: ERROR
+    message: >-
+      SQL statement assembled by string concatenation. Bind the value as a
+      parameter instead of splicing it into the statement text.
+    metadata:
+      cwe: 'CWE-89'
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: $DB->executeQuery("=~/(?i)(select|insert|update|delete|alter|drop)/" . $X, ...)
+      - pattern: $DB->query("=~/(?i)(select|insert|update|delete|alter|drop)/" . $X, ...)
+      - pattern: $DB->exec("=~/(?i)(select|insert|update|delete|alter|drop)/" . $X, ...)
+      - pattern: mysqli_query($C, "=~/(?i)(select|insert|update|delete)/" . $X)
+
+  - id: kodus-sqli-fstring-python
+    languages: [python]
+    severity: ERROR
+    message: >-
+      SQL statement built by interpolation. Pass the value as a query parameter
+      (`cursor.execute(sql, (value,))`) so the driver escapes it.
+    metadata:
+      cwe: 'CWE-89'
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: $CUR.execute(f"...{$X}...")
+          - pattern: $CUR.execute("..." % $X)
+          - pattern: $CUR.execute("..." + $X)
+          - pattern: $CUR.execute("...".format(...))
+      # Two-argument execute is the parameterized form and is safe.
+      - pattern-not: $CUR.execute($SQL, $PARAMS)
+
+  - id: kodus-sqli-concat-java
+    languages: [java]
+    severity: ERROR
+    message: >-
+      SQL statement assembled by concatenation. Use a PreparedStatement with
+      placeholders rather than splicing the value into the statement.
+    metadata:
+      cwe: 'CWE-89'
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: $ST.executeQuery("=~/(?i)(select|insert|update|delete)/" + $X)
+      - pattern: $ST.executeUpdate("=~/(?i)(select|insert|update|delete)/" + $X)
+      - pattern: $CONN.prepareStatement("=~/(?i)(select|insert|update|delete)/" + $X)
+
+  - id: kodus-sqli-template-js
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      SQL statement built from a template literal. Use parameterized query
+      placeholders and pass values in the arguments array.
+    metadata:
+      cwe: 'CWE-89'
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: $DB.query(`=~/(?i).*(select|insert|update|delete).*\$\{.*/`, ...)
+          - pattern: $DB.raw(`=~/(?i).*(select|insert|update|delete).*\$\{.*/`, ...)
+          - pattern: $DB.execute(`=~/(?i).*(select|insert|update|delete).*\$\{.*/`, ...)
+      - pattern-not: $DB.query($SQL, $PARAMS)
