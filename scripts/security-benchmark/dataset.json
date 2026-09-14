@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-14T14:39:17.661Z",
+  "generatedAt": "2026-09-14T18:28:33.918Z",
   "counts": {
     "vuln": 60,
-    "noise": 11
+    "noise": 14
   },
   "samples": [
     {
@@ -3422,6 +3422,54 @@
           "path": ".env.example",
           "patch": "@@ -0,0 +1,5 @@\n+# Copy to .env and fill in real values before running.\n+DATABASE_URL=postgresql://user:password@localhost:5432/appdb\n+SESSION_SECRET=replace-me-with-a-random-32-byte-string\n+STRIPE_API_KEY=sk_test_your_key_here\n+WEBHOOK_SIGNING_SECRET=whsec_placeholder_value_goes_here",
           "content": "# Copy to .env and fill in real values before running.\nDATABASE_URL=postgresql://user:password@localhost:5432/appdb\nSESSION_SECRET=replace-me-with-a-random-32-byte-string\nSTRIPE_API_KEY=sk_test_your_key_here\nWEBHOOK_SIGNING_SECRET=whsec_placeholder_value_goes_here"
+        }
+      ]
+    },
+    {
+      "id": "noise-hardened-xml-parser",
+      "tranche": "noise",
+      "language": "java",
+      "trap": "XML parser that DOES disable doctype declarations",
+      "summary": "XML parser that DOES disable doctype declarations",
+      "expected": [],
+      "golden_comments": [],
+      "files": [
+        {
+          "path": "src/main/java/com/example/xml/SafeParser.java",
+          "patch": "@@ -0,0 +1,14 @@\n+package com.example.xml;\n+\n+import javax.xml.parsers.DocumentBuilderFactory;\n+\n+public final class SafeParser {\n+    public static DocumentBuilderFactory factory() throws Exception {\n+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();\n+        // External entities cannot be declared, so XXE is not reachable.\n+        factory.setFeature(\"http://apache.org/xml/features/disallow-doctype-decl\", true);\n+        factory.setXIncludeAware(false);\n+        factory.setExpandEntityReferences(false);\n+        return factory;\n+    }\n+}",
+          "content": "package com.example.xml;\n\nimport javax.xml.parsers.DocumentBuilderFactory;\n\npublic final class SafeParser {\n    public static DocumentBuilderFactory factory() throws Exception {\n        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();\n        // External entities cannot be declared, so XXE is not reachable.\n        factory.setFeature(\"http://apache.org/xml/features/disallow-doctype-decl\", true);\n        factory.setXIncludeAware(false);\n        factory.setExpandEntityReferences(false);\n        return factory;\n    }\n}"
+        }
+      ]
+    },
+    {
+      "id": "noise-innerhtml-static-literal",
+      "tranche": "noise",
+      "language": "javascript",
+      "trap": "Raw HTML assignment whose value is an authored constant",
+      "summary": "Raw HTML assignment whose value is an authored constant",
+      "expected": [],
+      "golden_comments": [],
+      "files": [
+        {
+          "path": "src/ui/empty-state.js",
+          "patch": "@@ -0,0 +1,4 @@\n+export function renderEmptyState(el) {\n+    // Authored markup, no interpolation, nothing user-controlled.\n+    el.innerHTML = \"<p class='empty'>Nothing to show yet.</p>\";\n+}",
+          "content": "export function renderEmptyState(el) {\n    // Authored markup, no interpolation, nothing user-controlled.\n    el.innerHTML = \"<p class='empty'>Nothing to show yet.</p>\";\n}"
+        }
+      ]
+    },
+    {
+      "id": "noise-inline-parameterized-query",
+      "tranche": "noise",
+      "language": "python",
+      "trap": "Inline SQL string passed with bind parameters",
+      "summary": "Inline SQL string passed with bind parameters",
+      "expected": [],
+      "golden_comments": [],
+      "files": [
+        {
+          "path": "app/repositories/customers.py",
+          "patch": "@@ -0,0 +1,4 @@\n+def find_customer(conn, customer_id):\n+    with conn.cursor() as cursor:\n+        cursor.execute(\"SELECT id, email FROM customers WHERE id = %s\", (customer_id,))\n+        return cursor.fetchone()",
+          "content": "def find_customer(conn, customer_id):\n    with conn.cursor() as cursor:\n        cursor.execute(\"SELECT id, email FROM customers WHERE id = %s\", (customer_id,))\n        return cursor.fetchone()"
         }
       ]
     },

@@ -104,6 +104,49 @@ WEBHOOK_SIGNING_SECRET=whsec_placeholder_value_goes_here`,
     }),
 
     sample({
+        id: 'noise-hardened-xml-parser',
+        trap: 'XML parser that DOES disable doctype declarations',
+        language: 'java',
+        path: 'src/main/java/com/example/xml/SafeParser.java',
+        content: `package com.example.xml;
+
+import javax.xml.parsers.DocumentBuilderFactory;
+
+public final class SafeParser {
+    public static DocumentBuilderFactory factory() throws Exception {
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        // External entities cannot be declared, so XXE is not reachable.
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        factory.setXIncludeAware(false);
+        factory.setExpandEntityReferences(false);
+        return factory;
+    }
+}`,
+    }),
+
+    sample({
+        id: 'noise-innerhtml-static-literal',
+        trap: 'Raw HTML assignment whose value is an authored constant',
+        language: 'javascript',
+        path: 'src/ui/empty-state.js',
+        content: `export function renderEmptyState(el) {
+    // Authored markup, no interpolation, nothing user-controlled.
+    el.innerHTML = "<p class='empty'>Nothing to show yet.</p>";
+}`,
+    }),
+
+    sample({
+        id: 'noise-inline-parameterized-query',
+        trap: 'Inline SQL string passed with bind parameters',
+        language: 'python',
+        path: 'app/repositories/customers.py',
+        content: `def find_customer(conn, customer_id):
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT id, email FROM customers WHERE id = %s", (customer_id,))
+        return cursor.fetchone()`,
+    }),
+
+    sample({
         id: 'noise-safe-execfile',
         trap: 'Argument-array subprocess call — the safe form of command injection',
         language: 'javascript',
