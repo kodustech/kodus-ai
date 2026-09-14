@@ -78,6 +78,14 @@ import {
     GetIssueParams,
     ListIssuesParams,
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/issues.type';
+import {
+    CheckAnnotation,
+    CheckEvidence,
+    CheckEvidenceConclusion,
+    CheckEvidenceStatus,
+    CheckEvidenceSupport,
+    GetCheckEvidenceParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
 import {
     CodeManagementConnectionStatus,
@@ -154,6 +162,10 @@ export class GithubService
     private readonly TTL = 50 * 60 * 1000; // 50 minutes
 
     private readonly logger = createLogger(GithubService.name);
+
+    /** Caps on the extra annotation round trips a single review will make. */
+    private static readonly MAX_ANNOTATED_RUNS = 10;
+    private static readonly MAX_ANNOTATIONS_PER_RUN = 50;
 
     private readonly enterpriseOctokit = Octokit.plugin(
         enterpriseServer313,
@@ -2684,6 +2696,255 @@ export class GithubService
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<Octokit> {
         return this.instanceOctokit(organizationAndTeamData);
+    }
+
+    async getCheckEvidence(
+        params: GetCheckEvidenceParams,
+    ): Promise<CheckEvidence[]> {
+        const { organizationAndTeamData, repository, commitSha } = params;
+
+        const octokit = await this.getAuthenticatedOctokit(
+            organizationAndTeamData,
+        );
+
+        // Check runs and commit statuses are separate surfaces — modern
+        // integrations report through the former, older ones (and many
+        // self-hosted CIs) still only post the latter. Fetch both; a failure
+        // on one must not discard the other.
+        const [runs, statuses] = await Promise.allSettled([
+            octokit.rest.checks.listForRef({
+                owner: repository.owner,
+                repo: repository.name,
+                ref: commitSha,
+                per_page: 100,
+            }),
+            octokit.rest.repos.listCommitStatusesForRef({
+                owner: repository.owner,
+                repo: repository.name,
+                ref: commitSha,
+                per_page: 100,
+            }),
+        ]);
+
+        const evidence: CheckEvidence[] = [];
+        const needingAnnotations: Array<{
+            evidence: CheckEvidence;
+            runId: number;
+        }> = [];
+
+        if (runs.status === 'fulfilled') {
+            for (const run of runs.value.data?.check_runs ?? []) {
+                const mapped = this.mapGithubCheckRun(run);
+
+                if (params.includeAnnotations) {
+                    // The run reports its own annotation count, so a run with
+                    // none costs no extra round trip.
+                    if ((run.output?.annotations_count ?? 0) > 0) {
+                        needingAnnotations.push({
+                            evidence: mapped,
+                            runId: run.id,
+                        });
+                    } else {
+                        mapped.annotations = [];
+                    }
+                }
+
+                evidence.push(mapped);
+            }
+        } else {
+            this.logger.warn({
+                message: 'Failed to list GitHub check runs',
+                context: GithubService.name,
+                error: runs.reason,
+                metadata: { repository: repository.name, commitSha },
+            });
+        }
+
+        if (statuses.status === 'fulfilled') {
+            for (const status of statuses.value.data ?? []) {
+                evidence.push(this.mapGithubCommitStatus(status));
+            }
+        } else {
+            this.logger.warn({
+                message: 'Failed to list GitHub commit statuses',
+                context: GithubService.name,
+                error: statuses.reason,
+                metadata: { repository: repository.name, commitSha },
+            });
+        }
+
+        if (needingAnnotations.length > 0) {
+            await this.attachGithubAnnotations(
+                octokit,
+                repository,
+                needingAnnotations,
+            );
+        }
+
+        return evidence;
+    }
+
+    async supportsCheckEvidence(
+        _organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<CheckEvidenceSupport> {
+        return { statuses: true, annotations: true };
+    }
+
+    private async attachGithubAnnotations(
+        octokit: Awaited<ReturnType<GithubService['getAuthenticatedOctokit']>>,
+        repository: { owner: string; name: string },
+        targets: Array<{ evidence: CheckEvidence; runId: number }>,
+    ): Promise<void> {
+        const capped = targets.slice(0, GithubService.MAX_ANNOTATED_RUNS);
+
+        const results = await Promise.allSettled(
+            capped.map(({ runId }) =>
+                octokit.rest.checks.listAnnotations({
+                    owner: repository.owner,
+                    repo: repository.name,
+                    check_run_id: runId,
+                    per_page: GithubService.MAX_ANNOTATIONS_PER_RUN,
+                }),
+            ),
+        );
+
+        results.forEach((result, index) => {
+            if (result.status !== 'fulfilled') {
+                // Leave `annotations` unset: the caller must be able to tell a
+                // failed fetch from a run that genuinely reported nothing.
+                this.logger.warn({
+                    message: 'Failed to list GitHub check annotations',
+                    context: GithubService.name,
+                    error: result.reason,
+                    metadata: { checkRunId: capped[index].runId },
+                });
+                return;
+            }
+
+            capped[index].evidence.annotations = (result.value.data ?? [])
+                .slice(0, GithubService.MAX_ANNOTATIONS_PER_RUN)
+                .map((annotation) => this.mapGithubAnnotation(annotation));
+        });
+    }
+
+    private mapGithubAnnotation(annotation: {
+        path?: string | null;
+        start_line?: number | null;
+        end_line?: number | null;
+        annotation_level?: string | null;
+        message?: string | null;
+        title?: string | null;
+    }): CheckAnnotation {
+        const startLine = annotation.start_line ?? 0;
+
+        const mapped: CheckAnnotation = {
+            path: annotation.path ?? '',
+            startLine,
+            endLine: annotation.end_line ?? startLine,
+            level: this.mapGithubAnnotationLevel(annotation.annotation_level),
+            message: annotation.message ?? '',
+        };
+
+        if (annotation.title) {
+            mapped.title = annotation.title;
+        }
+
+        return mapped;
+    }
+
+    private mapGithubAnnotationLevel(
+        level: string | null | undefined,
+    ): CheckAnnotation['level'] {
+        if (level === 'notice' || level === 'warning' || level === 'failure') {
+            return level;
+        }
+        return 'warning';
+    }
+
+    private mapGithubCheckRun(run: {
+        id: number;
+        name: string;
+        status: string | null;
+        conclusion: string | null;
+        html_url?: string | null;
+        completed_at?: string | null;
+        app?: { slug?: string | null } | null;
+        output?: { annotations_count?: number | null } | null;
+    }): CheckEvidence {
+        const evidence: CheckEvidence = {
+            id: String(run.id),
+            name: run.name,
+            status: this.mapGithubCheckStatus(run.status),
+            conclusion: this.mapGithubCheckConclusion(run.conclusion),
+            url: run.html_url ?? null,
+            completedAt: run.completed_at ?? null,
+            platform: PlatformType.GITHUB,
+        };
+
+        if (run.app?.slug) {
+            evidence.reporter = run.app.slug;
+        }
+
+        return evidence;
+    }
+
+    private mapGithubCheckStatus(status: string | null): CheckEvidenceStatus {
+        if (status === 'completed') {
+            return 'completed';
+        }
+        // GitHub has grown extra pre-run states (waiting/requested/pending);
+        // they all mean "no result yet", same as queued.
+        if (
+            status === 'queued' ||
+            status === 'waiting' ||
+            status === 'requested' ||
+            status === 'pending'
+        ) {
+            return 'queued';
+        }
+        return 'in_progress';
+    }
+
+    private mapGithubCheckConclusion(
+        conclusion: string | null,
+    ): CheckEvidenceConclusion | null {
+        const known: CheckEvidenceConclusion[] = [
+            'success',
+            'failure',
+            'neutral',
+            'cancelled',
+            'timed_out',
+            'skipped',
+            'stale',
+            'action_required',
+        ];
+        return known.find((value) => value === conclusion) ?? null;
+    }
+
+    private mapGithubCommitStatus(status: {
+        id: number;
+        context: string;
+        state: string;
+        target_url?: string | null;
+        updated_at?: string | null;
+    }): CheckEvidence {
+        // Commit statuses have no queued/in-progress split: `pending` covers
+        // both, and every other state is terminal.
+        const pending = status.state === 'pending';
+
+        return {
+            id: String(status.id),
+            name: status.context,
+            status: pending ? 'in_progress' : 'completed',
+            conclusion: pending
+                ? null
+                : status.state === 'success'
+                  ? 'success'
+                  : 'failure',
+            url: status.target_url ?? null,
+            completedAt: pending ? null : (status.updated_at ?? null),
+            platform: PlatformType.GITHUB,
+        };
     }
 
     async listIssues(
