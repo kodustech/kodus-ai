@@ -222,18 +222,6 @@ const SETTINGS_TABS = [
         icon: MessageSquareTextIcon,
         keywords: "description summary",
     },
-    {
-        label: "Review filters",
-        href: "suggestion-control",
-        icon: ScanSearchIcon,
-        keywords: "severity suggestion control limit",
-    },
-    {
-        label: "Review categories",
-        href: "review-categories",
-        icon: ScanSearchIcon,
-        keywords: "bug performance security",
-    },
 ];
 
 /** What /kody-rules/index returns per rule. */

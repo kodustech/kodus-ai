@@ -60,7 +60,6 @@ import {
     useFullCodeReviewConfig,
     usePlatformConfig,
 } from "../../../../_components/context";
-import { useSettingsShellMode } from "../../../../_components/shell-mode-context";
 import { useCodeReviewRouteParams } from "../../../../_hooks";
 import { ActiveFiltersChips } from "./active-filters-chips";
 import { BulkActionToolbar } from "./bulk-action-toolbar";
@@ -920,19 +919,11 @@ const KodyRulesPageContent = () => {
     const headerDescription =
         "Review Rules run in the dedicated code review stage. Memories are injected across prompts and conversations to provide persistent context.";
 
-    // Tabs shell: scope + page are already in the header band, so the
-    // breadcrumb row is dropped instead of leaving an empty header.
-    const shellMode = useSettingsShellMode();
 
     const canShowDiscovery = activeTab === "review-rules";
 
     return (
         <Page.Root>
-            {shellMode !== "tabs" && (
-                <Page.Header>
-                    <CodeReviewPagesBreadcrumb pageName="Kody Rules" />
-                </Page.Header>
-            )}
             <Page.Header>
                 <Page.TitleContainer>
                     <Page.Title>Kody Rules</Page.Title>

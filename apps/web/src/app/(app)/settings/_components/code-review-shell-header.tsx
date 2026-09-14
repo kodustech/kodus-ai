@@ -40,7 +40,6 @@ import {
     CheckIcon,
     ChevronDownIcon,
     FileTextIcon,
-    FilterIcon,
     FolderIcon,
     FolderTreeIcon,
     GlobeIcon,
@@ -50,7 +49,6 @@ import {
     PlusIcon,
     ScanSearchIcon,
     Settings2Icon,
-    TagsIcon,
 } from "lucide-react";
 import { cn } from "src/core/utils/components";
 import {
@@ -137,10 +135,8 @@ const useFittingTabCount = (total: number) => {
 // One icon per settings page, same voice as the navbar (icon + label).
 const PAGE_ICONS: Record<string, typeof FolderIcon> = {
     "general": Settings2Icon,
-    "review-categories": TagsIcon,
     "review-scope": ScanSearchIcon,
     "output": MessageSquareTextIcon,
-    "suggestion-control": FilterIcon,
     "custom-prompts": MessageSquareTextIcon,
     "pr-summary": FileTextIcon,
     "kody-rules": BookOpenCheckIcon,

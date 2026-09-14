@@ -19,15 +19,7 @@ const CODE_REVIEW_ROUTE_OVERRIDE_PATH_PREFIXES: Record<string, string[]> = {
         "enableCommittableSuggestions",
     ],
     "linked-repositories": ["linkedRepositories"],
-    "review-categories": ["reviewOptions"],
     "custom-prompts": ["v2PromptOverrides"],
-    // The "Review Filters" tab lives under href=suggestion-control and
-    // edits `suggestionControl.*` fields (max suggestions, severity
-    // filter, grouping mode, etc.). The entry was dropped in
-    // c4749d680 assuming the page would be removed along with the
-    // sidebar rename, but the page is still there — without this entry
-    // the override-count badge silently reads as 0.
-    "suggestion-control": ["suggestionControl"],
     // Tabs shell: "What to review" = categories + their prompts + filters.
     "review-scope": [
         "reviewOptions",

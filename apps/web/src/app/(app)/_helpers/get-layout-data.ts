@@ -26,7 +26,6 @@ export const getLayoutData = cache(async (teamId: string) => {
         usersWithAssignedLicense,
         llmConfigStatus,
         githubEnterpriseServerPatFeatureFlag,
-        settingsTabsShellFeatureFlag,
     ] = await Promise.all([
         getPermissions().catch(() => ({})),
         getOrganizationName().catch(() => ""),
@@ -41,14 +40,6 @@ export const getLayoutData = cache(async (teamId: string) => {
                 }),
             )
             .catch(() => false),
-        releaseTrackPromise
-            .then((releaseTrack) =>
-                isFeatureEnabled({
-                    feature: FEATURE_FLAGS.settingsTabsShell,
-                    releaseTrack,
-                }),
-            )
-            .catch(() => false),
     ]);
 
     return {
@@ -59,7 +50,6 @@ export const getLayoutData = cache(async (teamId: string) => {
         llmConfigStatus,
         featureFlags: {
             githubEnterpriseServerPat: githubEnterpriseServerPatFeatureFlag,
-            settingsTabsShell: settingsTabsShellFeatureFlag,
         },
     };
 });
