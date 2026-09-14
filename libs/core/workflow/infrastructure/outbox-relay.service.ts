@@ -481,6 +481,44 @@ export class OutboxRelayService
     }
 
     /**
+     * Re-publish a fresh resume message for one reclaimed job. `async` on
+     * purpose: a synchronous throw from the broker client becomes a rejection
+     * the caller's allSettled can account for, instead of aborting the batch.
+     */
+    private async publishReclaimedJob(
+        uuid: string,
+        workflowType: string | undefined,
+        at: Date,
+    ): Promise<void> {
+        if (!workflowType) {
+            return;
+        }
+        const messageId = `reclaim-${uuid}-${at.getTime()}`;
+        await this.messageBroker.publishMessage(
+            {
+                exchange: 'workflow.exchange',
+                routingKey: `workflow.jobs.resumed.${workflowType}`,
+            },
+            {
+                event_name: 'workflow.jobs.resumed',
+                event_version: 1,
+                occurred_on: new Date(),
+                payload: { jobId: uuid },
+                messageId,
+            },
+            {
+                messageId,
+                persistent: true,
+                headers: {
+                    'x-workflow-type': workflowType,
+                    'x-job-id': uuid,
+                    'x-resume-reason': 'stale-job.lease-reclaimed',
+                },
+            },
+        );
+    }
+
+    /**
      * Reaper for workflow jobs orphaned in PROCESSING.
      *
      * A worker SIGKILLed mid-job (OOM / node eviction / /tmp overflow) never
@@ -555,6 +593,13 @@ export class OutboxRelayService
                           uuids: requeueUuids,
                           lastError: staleReason,
                           requeuedBy: this.constructor.name,
+                          // Tenant traceability: the uuid list alone cannot be
+                          // correlated to an organization in the log system.
+                          organizationIds: [
+                              ...new Set(
+                                  requeueable.map((job) => job.organizationId),
+                              ),
+                          ],
                       })
                     : Promise.resolve([] as string[]);
             const failTask =
@@ -583,9 +628,7 @@ export class OutboxRelayService
                         uuids: requeueUuids,
                         organizationIds: [
                             ...new Set(
-                                requeueable.map(
-                                    (job) => job.organizationId,
-                                ),
+                                requeueable.map((job) => job.organizationId),
                             ),
                         ],
                     },
@@ -598,43 +641,56 @@ export class OutboxRelayService
                 // row to PENDING; without a fresh broker message the consumer
                 // never re-runs it and the reclaimed job sits dead until an
                 // external trigger (issue #1902).
+                const requeuedUuidSet = new Set(requeueResult.value);
                 const typeByUuid = new Map(
                     stale
-                        .filter((j) => requeueResult.value.includes(j.uuid))
+                        .filter((j) => requeuedUuidSet.has(j.uuid))
                         .map((j) => [j.uuid, j.workflowType]),
                 );
-                await Promise.all(
-                    requeueResult.value.map((uuid) => {
-                        const workflowType = typeByUuid.get(uuid);
-                        if (!workflowType) {
-                            return Promise.resolve();
-                        }
-                        const messageId = `reclaim-${uuid}-${now.getTime()}`;
-                        return this.messageBroker.publishMessage(
-                            {
-                                exchange: 'workflow.exchange',
-                                routingKey: `workflow.jobs.resumed.${workflowType}`,
-                            },
-                            {
-                                event_name: 'workflow.jobs.resumed',
-                                event_version: 1,
-                                occurred_on: new Date(),
-                                payload: { jobId: uuid },
-                                messageId,
-                            },
-                            {
-                                messageId,
-                                persistent: true,
-                                headers: {
-                                    'x-workflow-type': workflowType,
-                                    'x-job-id': uuid,
-                                    'x-resume-reason':
-                                        'stale-job.lease-reclaimed',
-                                },
-                            },
-                        );
-                    }),
+                // Settle EVERY publish instead of failing fast: with Promise.all
+                // a single broker rejection aborted the batch (the remaining
+                // messages were never attempted and this cycle's heartbeat and
+                // reap report were skipped entirely), leaving jobs whose
+                // republish never happened PENDING with no broker message — the
+                // #1902 failure this block exists to prevent.
+                const publishResults = await Promise.allSettled(
+                    requeueResult.value.map((uuid) =>
+                        this.publishReclaimedJob(
+                            uuid,
+                            typeByUuid.get(uuid),
+                            now,
+                        ),
+                    ),
                 );
+                const failedPublishes = publishResults
+                    .map((result, index) => ({
+                        result,
+                        uuid: requeueResult.value[index],
+                    }))
+                    .filter(({ result }) => result.status === 'rejected');
+                if (failedPublishes.length > 0) {
+                    this.logger.error({
+                        message: `Failed to re-publish ${failedPublishes.length} reclaimed workflow job(s) — they stay PENDING until an external trigger`,
+                        context: OutboxRelayService.name,
+                        metadata: {
+                            uuids: failedPublishes.map(({ uuid }) => uuid),
+                            organizationIds: [
+                                ...new Set(
+                                    requeueable.map(
+                                        (job) => job.organizationId,
+                                    ),
+                                ),
+                            ],
+                            reasons: failedPublishes.map(({ result }) =>
+                                result.status === 'rejected'
+                                    ? result.reason instanceof Error
+                                        ? result.reason.message
+                                        : String(result.reason)
+                                    : '',
+                            ),
+                        },
+                    });
+                }
             }
             if (failResult.status === 'rejected') {
                 this.logger.error({

@@ -194,7 +194,8 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                 { operation: 'update', jobId: id },
             );
 
-            if (data.metadata !== undefined) updateData.metadata = patch.metadata;
+            if (data.metadata !== undefined)
+                updateData.metadata = patch.metadata;
             if (data.waitingForEvent !== undefined)
                 updateData.waitingForEvent = patch.waitingForEvent;
             if (data.pipelineState !== undefined)
@@ -388,6 +389,10 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
         uuids: string[];
         lastError: string;
         requeuedBy: string;
+        // Tenant(s) the batch belongs to. Logged next to the uuids so a reclaim
+        // can be traced back to an organization: a bare uuid list cannot be
+        // filtered per customer in the log system.
+        organizationIds?: string[];
     }): Promise<string[]> {
         if (params.uuids.length === 0) {
             return [];
@@ -428,6 +433,7 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                     message: `Requeued ${requeuedUuids.length} stale PROCESSING workflow job(s) to PENDING`,
                     context: WorkflowJobRepository.name,
                     metadata: {
+                        organizationIds: params.organizationIds ?? [],
                         requested: params.uuids.length,
                         requeued: requeuedUuids.length,
                         requeuedUuids,
