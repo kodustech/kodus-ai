@@ -1,0 +1,21 @@
+# Issue #1826 step 1 — what the whole-file shard COSTS
+# Ran 2026-09-08T21:03:52Z. Deterministic: no model call.
+# Corpus: 12 polyglot PRs / 162 files, real content at each PR head.
+
+corpus: 12 PRs / 162 files
+        162 with content fetched, 44 over the 40,000-char budget (omitted, never truncated)
+
+── shard prompt weight (INPUT tokens) ────────────────────
+shards             162  ->  162   (unchanged by design)
+input tokens       133,560  ->  247,681   (+85.4%)
+prompt chars       494,523  ->  963,319   (+94.8%)
+per shard, avg     824  ->  1,529 tokens
+per PR, avg        11,130  ->  20,640 tokens
+
+Note: shard COUNT is unchanged — step 1 makes each call heavier, it does
+not make more calls. Output tokens are unaffected.
+
+=== what the 40k budget omits ===
+within budget: 118 files, 411,771 chars
+omitted (>40k): 44 files, 6,734,572 chars
+share of changed-file code step 1 does NOT deliver: 94.2%

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { In, IsNull, Repository } from 'typeorm';
 
 import { mapSimpleModelToEntity } from '@libs/core/infrastructure/repositories/mappers';
 
@@ -132,14 +132,25 @@ export class UserNotificationRepository
             return;
         }
 
-        await this.repo.update(
-            {
+        // TypeORM's `update()` cannot resolve a nested relation path in its
+        // criteria — `where: { delivery: { organization: { uuid } } }` throws
+        // "Cannot find alias for relation at delivery" (the 500 since 2.2.1).
+        // Only `find*` supports nested criteria, so first confirm the
+        // notification is owned by (user, org) with a read, then update by a
+        // flat `uuid` predicate — join-safe and scoped exactly like before.
+        const [owned] = await this.repo.find({
+            select: { uuid: true },
+            where: {
                 uuid: notificationId,
                 user: { uuid: userId },
                 delivery: { organization: { uuid: organizationId } },
             },
-            { readAt: new Date() },
-        );
+            take: 1,
+        });
+        if (!owned) {
+            return;
+        }
+        await this.repo.update({ uuid: owned.uuid }, { readAt: new Date() });
     }
 
     /**
@@ -157,14 +168,24 @@ export class UserNotificationRepository
             return 0;
         }
 
-        const result = await this.repo.update(
-            {
+        // Same join-safe shape as markAsRead: `find` scopes by the nested
+        // (user, delivery.organization) criteria + unread, then `update` by a
+        // flat `In(ids)` list. An in-memory mock that just asserts the `update`
+        // criteria carries the nested filter is precisely what missed this
+        // regression — the real query builder rejects that shape.
+        const rows = await this.repo.find({
+            select: { uuid: true },
+            where: {
                 user: { uuid: userId },
                 delivery: { organization: { uuid: organizationId } },
                 readAt: IsNull(),
             },
-            { readAt: new Date() },
-        );
-        return result.affected ?? 0;
+        });
+        if (rows.length === 0) {
+            return 0;
+        }
+        const ids = rows.map((row) => row.uuid);
+        await this.repo.update({ uuid: In(ids) }, { readAt: new Date() });
+        return ids.length;
     }
 }

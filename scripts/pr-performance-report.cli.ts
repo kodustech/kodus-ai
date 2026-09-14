@@ -321,13 +321,8 @@ async function getLLMMetrics(
         timestamp: { $gte: startDate, $lte: endDate },
         name: {
             $in: [
-                'LLMAnalysisService::analyzeCodeWithAI',
-                'LLMAnalysisService::analyzeCodeWithAI_v2',
-                'LLMAnalysisService::selectReviewMode',
                 'LLMAnalysisService::filterSuggestionsSafeGuard',
                 'LLMAnalysisService::severityAnalysis',
-                'KodyRulesAnalysisService::kodyRulesAnalyzeCodeWithAI',
-                'KodyRulesPrLevelAnalysisService::prLevelKodyRulesAnalyzer',
                 'CommentManagerService::generateSummaryPR',
                 'CommentManagerService::repeatedCodeReviewSuggestionClustering',
             ],
@@ -406,13 +401,8 @@ async function getModelMetrics(
         timestamp: { $gte: startDate, $lte: endDate },
         name: {
             $in: [
-                'LLMAnalysisService::analyzeCodeWithAI',
-                'LLMAnalysisService::analyzeCodeWithAI_v2',
-                'LLMAnalysisService::selectReviewMode',
                 'LLMAnalysisService::filterSuggestionsSafeGuard',
                 'LLMAnalysisService::severityAnalysis',
-                'KodyRulesAnalysisService::kodyRulesAnalyzeCodeWithAI',
-                'KodyRulesPrLevelAnalysisService::prLevelKodyRulesAnalyzer',
                 'CommentManagerService::generateSummaryPR',
                 'CommentManagerService::repeatedCodeReviewSuggestionClustering',
             ],

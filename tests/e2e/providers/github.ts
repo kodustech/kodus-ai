@@ -67,7 +67,7 @@ export function classifyKodyComment(
     // your plan" / "BYOK" wording. Loose match so minor
     // copy edits don't silently flip the classification.
     if (
-        /trial.*ended|trial.*expired|byok|activate.*plan|talk.*to.*our.*founders/i.test(
+        /trial.*ended|trial.*expired|byok|activate.*plan|talk.*to.*our.*founders|kodus credits/i.test(
             body,
         )
     ) {

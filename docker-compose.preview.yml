@@ -1,0 +1,37 @@
+# Overlay for runo preview environments (one VM per PR).
+#
+# Layered on top of docker-compose.dev.yml — a preview runs the SAME stack the
+# team runs locally, so a reviewer sees what a developer sees. Only two things
+# genuinely differ:
+#
+#   1. the app is reached through a public tunnel hostname, not localhost, and
+#      it has to know that hostname to emit correct absolute URLs;
+#   2. the box is a 16GB VM, not a laptop that also runs a browser and an IDE —
+#      the two containers that OOM at the dev limits get room here.
+#
+# runo substitutes ${RUNO_PUBLIC_URL} / ${RUNO_PUBLIC_HOST} at up time, after
+# the tunnel exists and before the stack boots.
+services:
+    web:
+        environment:
+            # .env ships NEXTAUTH_URL=http://localhost:3000, so without this
+            # every visitor of the preview gets redirected to their own machine.
+            - NEXTAUTH_URL=${RUNO_PUBLIC_URL}
+            - AUTH_URL=${RUNO_PUBLIC_URL}
+            # Next 16 answers 403 on /_next/* for dev requests coming from an
+            # origin it was not told about — the tunnel hostname is one.
+            - ALLOWED_DEV_ORIGINS=${RUNO_PUBLIC_HOST}
+        deploy:
+            resources:
+                limits:
+                    # Turbopack dev compiling ~10 route slots at once gets
+                    # OOM-killed at the dev limit of 4G on a cold preview.
+                    memory: 8G
+
+    webhooks:
+        deploy:
+            resources:
+                limits:
+                    # ts-node boot + migrations + seeds exceeds the 1G dev
+                    # limit on a cold VM and the container crash-loops.
+                    memory: 2G

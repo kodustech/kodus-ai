@@ -1,0 +1,89 @@
+Issue #1826 — the first measurement taken through a REAL repository lookup
+═════════════════════════════════════════════════════════════════════════
+
+Ran 2026-09-09, kimi-k2.7-code@fireworks, 5 replicates, one sandbox per
+case-run, both providers. Every earlier #1826 number was taken with an
+in-memory fake standing in for the lookup, over a layer that was broken on both
+providers (see LOOKUP-CONFORMANCE-summary.txt). These supersede them.
+
+    node evals/kody-rules/context-fp-repro.js --cases=<corpus> \
+      --model=kimi-k2.7-code@fireworks --reps=5 --sandbox=<local|e2b>
+
+1. NEGATIVE CORPUS (cases-1826) — e2b, the production provider
+──────────────────────────────────────────────────────────────
+    0 of 20 case-runs published a comment that should not exist
+    0 of 20 failed to publish one the rule should have caught
+
+Baseline on the pre-change engine was 15 of 20. The result matches the earlier
+fake-lookup run, but the MECHANISM changed, and that is the point:
+
+    1724-scss-import   judged 1, claim-check dropped 1
+        claimed "v" is unused, but it is used at
+        app/assets/stylesheets/components/_card.scss:23
+    unused-symbol      claimed "formatDate" is unused, but it is used at
+                       src/shared/date.ts:1, src/orders/order-mapper.ts:28
+    missing-test       claimed ".../orders.controller.spec.ts" is missing,
+                       but this PR changes it
+    duplicate-helper   claimed "slugify" already exists, but it exists
+                       nowhere else in the repository
+
+Under the fake, the two `unused` cases came back `judged 0` — the model
+declined on its own, which is prompt behaviour and can regress with any model
+change. With a real `rg` in a real sandbox the model DOES assert them and the
+refutation drops them. The flagship #1724 case is now carried by deterministic
+evidence rather than by the model's restraint. That is a strictly stronger fix
+than the one the earlier number described.
+
+WHO THIS HELPS — and it is NOT only the rules that declare a need
+─────────────────────────────────────────────────────────────────
+checkClaims runs over EVERY violation (kody-rules-agent.provider.ts:623). It
+is not gated on contextNeed, and all four rules in this corpus declare none —
+they are DIFF-ONLY. So the whole 15/20 -> 0/20 is a gain on ordinary diff-only
+rules: "no unused imports" is diff-only, and #1724 is diff-only.
+
+What IS gated on the declared need is the retrieval (step 3). The two halves
+reach different populations:
+
+    claim checker (step 2)   every rule, every finding that declares a claim
+    retrieval (step 3)       only rules whose contextNeed is not diff-only
+
+2. POSITIVE / PAIRED CORPUS (cases-1826-need)
+─────────────────────────────────────────────
+                                          e2b            local
+  endpoint with no test    need declared  5/5            5/5
+                           diff-only      5/5            5/5
+  helper really duplicated need declared  5/5            5/5
+                           diff-only      5/5            4/5
+  guard (sibling exists)                  0 fired        0 fired
+
+    e2b   : 0 of 25 undue, 0 of 25 missed
+    local : 0 of 25 undue, 1 of 25 missed
+
+HONEST READING: the need-declared arm is 10/10 across both providers and the
+diff-only arm is 19/20. One miss is noise, not a signal. On kimi, declaring the
+context need does NOT reliably change whether the rule fires — it changes what
+the comment can cite (8 of 10 name the real file with retrieval, 0 of 8
+without; one fabricated "src/shared/slugify.ts"). The recall gap seen earlier
+on deepseek-v4-flash (3/5 vs 5/5) was measured against the fake and has NOT
+been re-run here.
+
+3. WHAT MADE THIS RUN TRUSTWORTHY
+─────────────────────────────────
+`--sandbox` builds the lookup the pipeline builds: a real repository, the
+production provider, buildRepoLookup on top. On e2b the fixture is written into
+the sandbox (its clone runs remotely, so a path on this machine exits git 128).
+
+A POSITIVE CONTROL runs before every case: the first fixture file is read back
+through the lookup, and the run aborts if it comes back empty. It earned its
+place immediately — the first e2b attempt wrote to /home/user instead of
+/home/user/repo, and without the control the run would have scored a perfect
+"clean corpus" against an empty repository. That is the same mistake that made
+every earlier measurement wrong, caught this time.
+
+4. STILL NOT MEASURED
+─────────────────────
+  - the fleet models named in the issue (gpt-5.4, gpt-5.4-mini): keys are 401
+  - deepseek re-run through a real lookup, to see if its recall gap survives
+  - anything at customer scale: this corpus is 5 synthetic cases
+  - step 1 (whole-file shard) stays out: -14pp recall, +85.4% input tokens,
+    94.2% of changed bytes never delivered, benefit measured at zero

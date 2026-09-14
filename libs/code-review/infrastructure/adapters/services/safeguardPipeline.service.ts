@@ -6,14 +6,17 @@ import { PromptRole } from '@libs/llm/prompt-role';
 import { getModelName } from '@libs/llm/byok-to-vercel';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { Inject, Injectable } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { z } from 'zod';
 
 import {
     CreateSandboxParams,
-    ISandboxProvider,
-    SANDBOX_PROVIDER_TOKEN,
     SandboxInstance,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
+import {
+    ISandboxLeaseManager,
+    SANDBOX_LEASE_MANAGER_TOKEN,
+} from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
 import {
     CrossFileContextSnippet,
     RemoteCommands,
@@ -65,6 +68,15 @@ interface SafeguardPipelineParams {
 }
 
 const MAX_AGENT_TURNS = 6;
+
+// The lease manager's own default (30 min) is sized for a PR-review
+// sandbox, but this renewal happens mid-pipeline and its lease must
+// outlive the REST of the safeguard run, not just its own creation — the
+// reaper kills any lease past its expiresAt regardless of leaseCount, so
+// the default risks killing the renewed sandbox mid-verification on a
+// long-running safeguard pass. Give it the same ceiling as the graph-build
+// consumers.
+const SAFEGUARD_RENEWAL_LEASE_TTL_MS = 2 * 60 * 60 * 1000; // 2h
 
 // Boolean feature matrix extracted per suggestion in `extractFeatures`. Hoisted
 // to module scope so the strict-wire governance suite can assert it stays
@@ -121,8 +133,8 @@ export class SafeguardPipelineService {
 
     constructor(
         private readonly observability: ObservabilityService,
-        @Inject(SANDBOX_PROVIDER_TOKEN)
-        private readonly sandboxProvider: ISandboxProvider,
+        @Inject(SANDBOX_LEASE_MANAGER_TOKEN)
+        private readonly leaseManager: ISandboxLeaseManager,
         private readonly documentationSearchExaService: DocumentationSearchExaService,
     ) {}
 
@@ -244,18 +256,18 @@ export class SafeguardPipelineService {
                 let renewedCleanup: (() => Promise<void>) | undefined;
 
                 const canRenew = !!(
-                    params.getFreshCloneParams && this.sandboxProvider
+                    params.getFreshCloneParams && this.leaseManager
                 );
                 this.logger.log({
-                    message: `[SAFEGUARD] PR#${prNumber} ${fileLabel} — Agent verification starting: ${toVerify.length} suggestions to verify, sandbox renewal ${canRenew ? 'available' : 'NOT available'}${!params.getFreshCloneParams ? ' (no getFreshCloneParams)' : ''}${!this.sandboxProvider ? ' (no sandboxProvider)' : ''}`,
+                    message: `[SAFEGUARD] PR#${prNumber} ${fileLabel} — Agent verification starting: ${toVerify.length} suggestions to verify, sandbox renewal ${canRenew ? 'available' : 'NOT available'}${!params.getFreshCloneParams ? ' (no getFreshCloneParams)' : ''}${!this.leaseManager ? ' (no leaseManager)' : ''}`,
                     context: SafeguardPipelineService.name,
                 });
 
                 // Closure to attempt sandbox renewal; returns true on success
                 const tryRenewSandbox = async (): Promise<boolean> => {
-                    if (!params.getFreshCloneParams || !this.sandboxProvider) {
+                    if (!params.getFreshCloneParams || !this.leaseManager) {
                         this.logger.warn({
-                            message: `[SAFEGUARD] PR#${prNumber} ${fileLabel} — Cannot renew sandbox: ${!params.getFreshCloneParams ? 'getFreshCloneParams is missing' : 'sandboxProvider is missing'}`,
+                            message: `[SAFEGUARD] PR#${prNumber} ${fileLabel} — Cannot renew sandbox: ${!params.getFreshCloneParams ? 'getFreshCloneParams is missing' : 'leaseManager is missing'}`,
                             context: SafeguardPipelineService.name,
                         });
                         return false;
@@ -264,10 +276,22 @@ export class SafeguardPipelineService {
                     try {
                         const freshCloneParams =
                             await params.getFreshCloneParams();
-                        newSandbox =
-                            await this.sandboxProvider.createSandboxWithRepo(
-                                freshCloneParams,
-                            );
+                        // Routed through the lease manager (not the raw
+                        // provider) so a worker crash mid-verification leaves
+                        // a lease doc the existing 30min TTL + 5min reaper
+                        // cron already cleans up. The prKey is unique per
+                        // renewal attempt (randomUUID suffix), so this always
+                        // takes the creator path — it deliberately does NOT
+                        // reuse the PR's own review lease (that sandbox may be
+                        // the stale one being replaced).
+                        const renewPrKey = `${organizationAndTeamData?.organizationId}:safeguard-renew:${prNumber}:${randomUUID()}`;
+                        const acquired = await this.leaseManager.acquire(
+                            renewPrKey,
+                            'safeguard-renewal',
+                            SAFEGUARD_RENEWAL_LEASE_TTL_MS,
+                            freshCloneParams,
+                        );
+                        newSandbox = acquired.sandbox;
                         currentRemoteCommands = newSandbox.remoteCommands;
                         if (renewedCleanup)
                             await renewedCleanup().catch(() => {});

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Alert, AlertDescription } from "@components/ui/alert";
@@ -20,6 +20,7 @@ import {
     type TestBYOKResult,
 } from "@services/organizationParameters/fetch";
 import { OrganizationParametersConfigKey } from "@services/parameters/types";
+import { formatUsd } from "@services/usage/format";
 import { QueryErrorResetBoundary } from "@tanstack/react-query";
 import {
     AlertTriangleIcon,
@@ -32,6 +33,7 @@ import {
 } from "lucide-react";
 import { ErrorBoundary } from "react-error-boundary";
 import { FormProvider, useForm } from "react-hook-form";
+import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
 import { ConfirmModal } from "src/core/components/ui/confirm-modal";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 
@@ -64,7 +66,12 @@ import {
 import { credentialSettingsOverride } from "../_components/credential-settings-override";
 import { SuccessClaim } from "../_components/success-claim";
 import { formatModelLabel } from "../_data/model-label";
+import { isPlatformFundedProvider } from "../_data/platform-funded";
 import { PROVIDER_LABELS } from "../_data/provider-labels";
+import {
+    KODUS_CREDITS_PATH,
+    useKodusCreditBalance,
+} from "../_hooks/use-kodus-credit-balance";
 import type { BYOKConfig, BYOKConnectInput } from "../_types";
 import { maskKey } from "../_utils";
 import { planAccountChanged } from "./plan-account";
@@ -113,6 +120,10 @@ export function ByokManualPageClient({
         ? existing?.credentials.find((c) => c.id === editModel.credentialId)
         : undefined;
     const isEditing = !!editModel && !!editCredential;
+    // Kodus provider: the balance the model will draw from (shown in the
+    // Billing card in place of a key field).
+    const kodusCredits = useKodusCreditBalance();
+    const { kodusProvider: kodusProviderFlag } = useFeatureFlags();
     const editSettings = (editCredential?.settings ?? {}) as Record<
         string,
         unknown
@@ -354,6 +365,24 @@ export function ByokManualPageClient({
         seededProvidersRef.current.add(picked);
     };
     const model = form.watch("model");
+    // Private alpha: the Kodus form is reachable only for an org on the flag
+    // (or one that already routes through Kodus) — whether Kodus came from
+    // the URL (?provider=) or was picked in the form. Anyone else bounces to
+    // the providers page: the API would refuse the save anyway, but the form
+    // must not advertise what the org cannot use.
+    const selectedProvider = form.watch("provider");
+    // The provider the form will actually save: the selection, else the URL
+    // preset. A non-entitled org never sees Kodus in the dropdown (the API
+    // hides it), so this only bites a direct ?provider=kodus URL — and
+    // switching that form to another provider lifts the bounce.
+    const effectiveProvider = selectedProvider || presetProvider;
+    const kodusFormAllowed =
+        !isPlatformFundedProvider(effectiveProvider) ||
+        kodusProviderFlag === true ||
+        kodusCredits.usesKodusProvider;
+    useEffect(() => {
+        if (!kodusFormAllowed) router.replace("/byok");
+    }, [kodusFormAllowed, router]);
     const apiKey = form.watch("apiKey");
     const watchedBaseURL = form.watch("baseURL");
     // Title label: derive from the id — so the header reads "Edit Kimi K2.6" /
@@ -672,7 +701,13 @@ export function ByokManualPageClient({
                 title: `${newConfig.model} ${isEditing ? "updated" : "saved"}`,
             });
             await revalidateServerSidePath("/byok");
-            router.push("/byok");
+            // A Kodus model lands on its card: the wallet strip is where the
+            // org funds it (an unfunded balance blocks the first review).
+            router.push(
+                isPlatformFundedProvider(newConfig.provider)
+                    ? "/byok#kodus"
+                    : "/byok",
+            );
         } catch {
             toast({
                 variant: "danger",
@@ -686,6 +721,8 @@ export function ByokManualPageClient({
     });
 
     const testing = testState.status === "testing";
+
+    if (!kodusFormAllowed) return null;
 
     return (
         <Page.Root>
@@ -711,9 +748,11 @@ export function ByokManualPageClient({
                     <Page.Description className="text-pretty">
                         {isEditing
                             ? "Update this model's endpoint or tuning. Leave the key blank to keep the stored one."
-                            : lockedProviderLabel
-                              ? `Type the model ID to enable${keyIsStored ? " — your key is already stored." : "."}`
-                              : "Pick any provider and model. Use this if your model isn't in the recommended list, or if you need a custom endpoint."}
+                            : isPlatformFundedProvider(lockedProvider)
+                              ? "Pick a model. Usage is billed to your Kodus credits at the provider's list price — no API key needed."
+                              : lockedProviderLabel
+                                ? `Type the model ID to enable${keyIsStored ? " — your key is already stored." : "."}`
+                                : "Pick any provider and model. Use this if your model isn't in the recommended list, or if you need a custom endpoint."}
                     </Page.Description>
                 </Page.TitleContainer>
             </Page.Header>
@@ -733,64 +772,109 @@ export function ByokManualPageClient({
                     {/* API key FIRST — the provider (in the title) is fixed, and a
                         provider's model list can only be fetched with the key, so
                         credentials lead, then the model. */}
-                    {provider?.trim().length > 0 && (
-                        <Card color="lv1">
-                            <CardHeader>
-                                <h3 className="text-text-primary text-sm font-semibold text-balance">
-                                    API key
-                                </h3>
-                            </CardHeader>
-                            <CardContent className="flex flex-col gap-4">
-                                {/* Show the key field when the user opened it OR the
+                    {provider?.trim().length > 0 &&
+                        (isPlatformFundedProvider(provider) ? (
+                            // Kodus as the provider: nothing to paste. Kodus
+                            // routes the model over its own upstream accounts
+                            // and bills the org's credits at the catalog's
+                            // list price — say so where the key field would be.
+                            <Card color="lv1">
+                                <CardHeader>
+                                    <h3 className="text-text-primary text-sm font-semibold text-balance">
+                                        Billing
+                                    </h3>
+                                </CardHeader>
+                                <CardContent className="flex flex-col gap-2">
+                                    <p className="text-text-secondary text-sm text-pretty">
+                                        No API key needed. Kodus runs this model
+                                        on its own provider accounts and bills
+                                        your Kodus credits at the list price
+                                        shown next to each model.
+                                    </p>
+                                    <p className="text-text-primary text-sm tabular-nums">
+                                        Balance:{" "}
+                                        {typeof kodusCredits.balanceUsd ===
+                                        "number"
+                                            ? formatUsd(kodusCredits.balanceUsd)
+                                            : "—"}
+                                        {kodusCredits.exhausted && " · used up"}
+                                        {" · "}
+                                        <Link
+                                            href={KODUS_CREDITS_PATH}
+                                            className="text-primary-light font-medium">
+                                            {kodusCredits.exhausted ||
+                                            kodusCredits.low
+                                                ? "Top up"
+                                                : "Manage credits"}
+                                        </Link>
+                                    </p>
+                                    <p className="text-text-tertiary text-xs text-pretty">
+                                        Prompt caching, retries and routing are
+                                        handled natively per provider — the same
+                                        transport as using your own key.
+                                    </p>
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            <Card color="lv1">
+                                <CardHeader>
+                                    <h3 className="text-text-primary text-sm font-semibold text-balance">
+                                        API key
+                                    </h3>
+                                </CardHeader>
+                                <CardContent className="flex flex-col gap-4">
+                                    {/* Show the key field when the user opened it OR the
                                     plan moved to a different account. Derived (not
                                     sticky state) so switching back to the stored
                                     account restores the "using stored key" view. */}
-                                {showKeyInput || planNeedsNewKey ? (
-                                    <ErrorBoundary
-                                        resetKeys={[provider, model]}
-                                        fallbackRender={() => null}>
-                                        {planNeedsNewKey && (
-                                            <p className="text-warning border-warning/30 bg-warning/10 mb-1 rounded-md border px-3 py-2 text-xs">
-                                                This plan runs on a different
-                                                account than your stored key —
-                                                paste the key for this plan.
-                                            </p>
-                                        )}
-                                        <Suspense fallback={null}>
-                                            <ByokCredentialsInput />
-                                        </Suspense>
-                                    </ErrorBoundary>
-                                ) : (
-                                    <FormControl.Root>
-                                        <FormControl.Label>
-                                            Key
-                                        </FormControl.Label>
-                                        <span className="text-text-secondary font-mono text-sm">
-                                            {maskKey(
-                                                editCredential?.apiKey ??
-                                                    storedCred?.apiKey,
+                                    {showKeyInput || planNeedsNewKey ? (
+                                        <ErrorBoundary
+                                            resetKeys={[provider, model]}
+                                            fallbackRender={() => null}>
+                                            {planNeedsNewKey && (
+                                                <p className="text-warning border-warning/30 bg-warning/10 mb-1 rounded-md border px-3 py-2 text-xs">
+                                                    This plan runs on a
+                                                    different account than your
+                                                    stored key — paste the key
+                                                    for this plan.
+                                                </p>
                                             )}
-                                        </span>
-                                        {/* The key is provider-level — changing it
+                                            <Suspense fallback={null}>
+                                                <ByokCredentialsInput />
+                                            </Suspense>
+                                        </ErrorBoundary>
+                                    ) : (
+                                        <FormControl.Root>
+                                            <FormControl.Label>
+                                                Key
+                                            </FormControl.Label>
+                                            <span className="text-text-secondary font-mono text-sm">
+                                                {maskKey(
+                                                    editCredential?.apiKey ??
+                                                        storedCred?.apiKey,
+                                                )}
+                                            </span>
+                                            {/* The key is provider-level — changing it
                                             belongs to "Edit provider", not to
                                             adding/editing a model that reuses it. */}
-                                        <FormControl.Helper>
-                                            Using your stored key. Change it in{" "}
-                                            <strong>Edit provider</strong>.
-                                        </FormControl.Helper>
-                                        {/* Provider-owned docs link (grab a key /
+                                            <FormControl.Helper>
+                                                Using your stored key. Change it
+                                                in{" "}
+                                                <strong>Edit provider</strong>.
+                                            </FormControl.Helper>
+                                            {/* Provider-owned docs link (grab a key /
                                             find model ids) — present here too, not
                                             only on the key-entry path. */}
-                                        <Suspense fallback={null}>
-                                            <ProviderDocLink
-                                                provider={lockedProvider}
-                                            />
-                                        </Suspense>
-                                    </FormControl.Root>
-                                )}
-                            </CardContent>
-                        </Card>
-                    )}
+                                            <Suspense fallback={null}>
+                                                <ProviderDocLink
+                                                    provider={lockedProvider}
+                                                />
+                                            </Suspense>
+                                        </FormControl.Root>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        ))}
 
                     <QueryErrorResetBoundary>
                         {({ reset }) => (

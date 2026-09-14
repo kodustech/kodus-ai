@@ -42,8 +42,13 @@ import { setLlmObservability } from '@libs/llm/llm-observability';
 import { SessionEventRepository } from '@libs/cli-review/infrastructure/repositories/session-event.repository';
 import { SessionEventModel } from '@libs/cli-review/infrastructure/repositories/schemas/session-event.model';
 import { tracedGenerateText } from '@libs/llm/llm-call';
+import { LLM_TASK } from '@libs/llm/byok-config';
 
 const mockGenerate = tracedGenerateText as unknown as jest.Mock;
+
+const mockPermissionValidationService = {
+    resolveTaskSlot: jest.fn().mockResolvedValue(undefined),
+} as any;
 
 // runAiSdkLLMInSpan just runs the exec and returns its result — one span path.
 const observabilityService = {
@@ -107,7 +112,16 @@ describe('ClassifySessionUseCase', () => {
         // LLM.run records its span through the observability port — register the mock.
         setLlmObservability(observabilityService);
 
-        useCase = new ClassifySessionUseCase(repo, observabilityService);
+        mockPermissionValidationService.resolveTaskSlot.mockReset();
+        mockPermissionValidationService.resolveTaskSlot.mockResolvedValue(
+            undefined,
+        );
+
+        useCase = new ClassifySessionUseCase(
+            repo,
+            observabilityService,
+            mockPermissionValidationService,
+        );
     });
 
     it('should skip if event not found', async () => {
@@ -192,6 +206,12 @@ describe('ClassifySessionUseCase', () => {
                 }),
             ]),
             'llm',
+        );
+        expect(
+            mockPermissionValidationService.resolveTaskSlot,
+        ).toHaveBeenCalledWith(
+            { organizationId: 'org-1', teamId: 'team-1' },
+            LLM_TASK.prSummary,
         );
     });
 
@@ -786,7 +806,7 @@ describe('ClassifySessionUseCase', () => {
 
             const decisions = await (useCase as any).extractWithLLM(
                 aggregated,
-                'org-123',
+                { organizationId: 'org-123' },
             );
 
             expect(decisions).toEqual([
@@ -822,7 +842,7 @@ describe('ClassifySessionUseCase', () => {
         it('routes through exactly one AI SDK span path (runAiSdkLLMInSpan), no LangChain wrapper', async () => {
             mockLLMDecisions(MODEL_DECISIONS);
 
-            await (useCase as any).extractWithLLM(aggregated, 'org-123');
+            await (useCase as any).extractWithLLM(aggregated, { organizationId: 'org-123' });
 
             expect(observabilityService.runAiSdkLLMInSpan).toHaveBeenCalledTimes(
                 1,
@@ -835,7 +855,7 @@ describe('ClassifySessionUseCase', () => {
 
             const decisions = await (useCase as any).extractWithLLM(
                 aggregated,
-                'org-123',
+                { organizationId: 'org-123' },
             );
 
             expect(decisions).toEqual([]);

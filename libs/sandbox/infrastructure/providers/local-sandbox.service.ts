@@ -302,28 +302,58 @@ export class LocalSandboxService implements ISandboxProvider {
                 path: string,
                 maxDepth: number,
             ): Promise<string> => {
-                await this.resolveSafePath(repoDir, path);
+                // A path that does not exist is a REAL ABSENCE, not a failure to
+                // look, and it is the ordinary case for this command's main
+                // caller: `RepoLookup.exists` lists the PARENT of a candidate,
+                // and a candidate like "<dir>/__tests__/<name>" usually has no
+                // parent directory at all. resolveSafePath lstat()s the path, so
+                // it raised ENOENT and the whole retrieval was abandoned — the
+                // customer's rule was then reported unmet and never judged
+                // (issue #1826).
+                //
+                // ENOENT is swallowed only AFTER resolveSafePath's validatePath
+                // has run, so the traversal guard still applies; the symlink and
+                // repo-boundary errors it raises are re-thrown untouched. This
+                // mirrors resolveSafeWritePath, which already separates "not
+                // there yet" from "not allowed".
+                try {
+                    await this.resolveSafePath(repoDir, path);
+                } catch (error: any) {
+                    if (error?.code === 'ENOENT') {
+                        return '';
+                    }
+                    throw error;
+                }
                 // Use relative path with cwd so output paths are relative (consistent with grep)
                 // -not -type l excludes symlinks from results
-                const { stdout } = await execFileAsync(
-                    'find',
-                    [
-                        path,
-                        '-maxdepth',
-                        String(maxDepth),
-                        '-type',
-                        'f',
-                        '-not',
-                        '-type',
-                        'l',
-                    ],
-                    {
-                        cwd: repoDir,
-                        timeout: CMD_TIMEOUT_MS,
-                        maxBuffer: MAX_BUFFER,
-                    },
-                );
-                return stdout;
+                try {
+                    const { stdout } = await execFileAsync(
+                        'find',
+                        [
+                            path,
+                            '-maxdepth',
+                            String(maxDepth),
+                            '-type',
+                            'f',
+                            '-not',
+                            '-type',
+                            'l',
+                        ],
+                        {
+                            cwd: repoDir,
+                            timeout: CMD_TIMEOUT_MS,
+                            maxBuffer: MAX_BUFFER,
+                        },
+                    );
+                    return stdout;
+                } catch (error: any) {
+                    // Absence was already answered above, by the ENOENT branch
+                    // of resolveSafePath. Reaching here means the path IS there
+                    // and `find` still failed — unreadable, timed out, buffer
+                    // exceeded. That is a broken lookup, and returning an empty
+                    // listing would let a caller read it as "not there".
+                    throw error;
+                }
             },
 
             exec: async (

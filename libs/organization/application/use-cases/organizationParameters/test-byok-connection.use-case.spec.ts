@@ -929,12 +929,59 @@ describe('slotFromInput — the persisted slot shape', () => {
             openrouterProviderOrder: ['anthropic', 'google'],
             openrouterAllowFallbacks: false,
             vertexLocation: 'global',
-            awsBearerToken: 'bt',
-            awsAccessKeyId: 'ak',
-            awsSecretAccessKey: 'sk2',
+            awsBearerToken: 'enc(bt)',
+            awsAccessKeyId: 'enc(ak)',
+            awsSecretAccessKey: 'enc(sk2)',
             awsRegion: 'us-east-1',
-            awsSessionToken: 'st',
+            awsSessionToken: 'enc(st)',
         });
+    });
+
+    // Regression: `bedrockModelFromCredentials` unconditionally decrypt()s
+    // every aws* field it receives. Forwarding the form's plaintext value
+    // straight into the slot (as apiKey used to be the only field spared from)
+    // meant `decrypt()` ran on a plaintext AWS credential — split on ':' it
+    // never produces a valid 16-byte IV, so a real Bedrock key blew up with
+    // "Invalid initialization vector" the moment a model was picked and the
+    // probe went through the runtime slot instead of the credential-only
+    // bearer/SigV4 checks.
+    it('encrypts the Bedrock aws* secrets (never hands the builder plaintext)', () => {
+        const s = slot({
+            provider: 'amazon_bedrock',
+            awsBearerToken: 'bearer-secret',
+            awsAccessKeyId: 'AKIA-secret',
+            awsSecretAccessKey: 'shh',
+            awsSessionToken: 'session-secret',
+            awsRegion: 'us-east-1',
+        });
+        expect(s.awsBearerToken).toBe('enc(bearer-secret)');
+        expect(s.awsAccessKeyId).toBe('enc(AKIA-secret)');
+        expect(s.awsSecretAccessKey).toBe('enc(shh)');
+        expect(s.awsSessionToken).toBe('enc(session-secret)');
+        // region is not a secret — passes through verbatim.
+        expect(s.awsRegion).toBe('us-east-1');
+    });
+
+    it('leaves absent Bedrock aws* fields undefined rather than encrypting an empty string', () => {
+        const s = slot({ provider: 'amazon_bedrock' });
+        expect(s.awsBearerToken).toBeUndefined();
+        expect(s.awsAccessKeyId).toBeUndefined();
+        expect(s.awsSecretAccessKey).toBeUndefined();
+        expect(s.awsSessionToken).toBeUndefined();
+    });
+
+    // Regression: gating encryption on `.trim()` truthiness (matching the
+    // downstream decrypt-side truthy check, which is on the RAW value, not its
+    // trim) left a whitespace-only secret unencrypted — `bedrockModelFromCredentials`
+    // still sees it as present (plain truthiness) and decrypts it, reproducing
+    // "Invalid initialization vector" for whitespace input specifically.
+    it('encrypts a whitespace-only Bedrock secret too, not just a value that survives trim()', () => {
+        const s = slot({
+            provider: 'amazon_bedrock',
+            awsBearerToken: '   ',
+        });
+        expect(s.awsBearerToken).toBe('enc(   )');
+        expect(s.awsBearerToken).not.toBe('   ');
     });
 });
 

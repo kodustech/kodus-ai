@@ -1,0 +1,56 @@
+reproduce: node evals/kody-rules/sandbox-lookup-repro.js --cases=cases-1826-need
+corpus: cases-1826-need.json — 5 case(s)
+sandbox: LocalSandboxService (real git + real rg), lookup: buildRepoLookup
+This harness uses NO in-memory lookup. Every grep/exists below is a
+process running inside a sandbox the production provider created.
+
+══ sibling-file-no-test-anywhere  [need: sibling-file]
+   sandbox type=local repoDir=set
+   lookup.available=true
+   probe(src/routes/payments.controller.ts) → ok, lookup still available=true
+   grep("slugify") → ""
+   exists("src/routes/definitely-not-here.spec.ts") → false
+   exists("src/routes/payments.controller.ts") → true
+   read("src/routes/payments.controller.ts",1,3) → "import { Controller, Get, Param } from '@nestjs/common';\nimport { PaymentsService } from './payments.service';\n\n"
+      warn: [rule-context] could not retrieve sibling-file for src/routes/payments.controller.ts; the rules that need it will not be judged: ENOENT: no such file or directory, lstat '/var/folders/32/4gr5mjmn7m11dbz4k8nsfgvr0000gn/T/kodus-sandbox-KEn5T0/src/routes/__tests__'
+   retrieveForShard → 0 slice(s), 1 unmet
+
+══ sibling-file-no-test-anywhere-CONTROL  [need: diff-only]
+   sandbox type=local repoDir=set
+   lookup.available=true
+   probe(src/routes/payments.controller.ts) → ok, lookup still available=true
+   grep("slugify") → ""
+   exists("src/routes/definitely-not-here.spec.ts") → false
+   exists("src/routes/payments.controller.ts") → true
+   read("src/routes/payments.controller.ts",1,3) → "import { Controller, Get, Param } from '@nestjs/common';\nimport { PaymentsService } from './payments.service';\n\n"
+
+══ symbol-references-helper-really-exists  [need: symbol-references]
+   sandbox type=local repoDir=set
+   lookup.available=true
+   probe(src/blog/slug.ts) → ok, lookup still available=true
+   grep("slugify") → "./src/blog/slug.ts:1:export function slugify(title: string): string {\n./src/shared/strings.ts:9:export function slugify(value: string): string {\n"
+   *** FAIL: Error: ENOENT: no such file or directory, lstat '/var/folders/32/4gr5mjmn7m11dbz4k8nsfgvr0000gn/T/kodus-sandbox-u0I6NA/src/routes'
+          at async lstat (node:internal/fs/promises:1030:18)
+          at async LocalSandboxService.resolveSafePath (/Users/wellingtonsantana/Documents/kodus-git/kodus-ai/libs/sandbox/infrastructure/providers/local-sandbox.service.ts:600:18)
+
+══ symbol-references-helper-really-exists-CONTROL  [need: diff-only]
+   sandbox type=local repoDir=set
+   lookup.available=true
+   probe(src/blog/slug.ts) → ok, lookup still available=true
+   grep("slugify") → "./src/blog/slug.ts:1:export function slugify(title: string): string {\n./src/shared/strings.ts:9:export function slugify(value: string): string {\n"
+   *** FAIL: Error: ENOENT: no such file or directory, lstat '/var/folders/32/4gr5mjmn7m11dbz4k8nsfgvr0000gn/T/kodus-sandbox-r2520L/src/routes'
+          at async lstat (node:internal/fs/promises:1030:18)
+          at async LocalSandboxService.resolveSafePath (/Users/wellingtonsantana/Documents/kodus-git/kodus-ai/libs/sandbox/infrastructure/providers/local-sandbox.service.ts:600:18)
+
+══ sibling-file-test-already-in-repo  [need: sibling-file]
+   sandbox type=local repoDir=set
+   lookup.available=true
+   probe(src/routes/refunds.controller.ts) → ok, lookup still available=true
+   grep("slugify") → ""
+   exists("src/routes/definitely-not-here.spec.ts") → false
+   exists("src/routes/refunds.controller.ts") → true
+   read("src/routes/refunds.controller.ts",1,3) → "import { Controller, Get, Param } from '@nestjs/common';\nimport { RefundsService } from './refunds.service';\n\n"
+      warn: [rule-context] could not retrieve sibling-file for src/routes/refunds.controller.ts; the rules that need it will not be judged: ENOENT: no such file or directory, lstat '/var/folders/32/4gr5mjmn7m11dbz4k8nsfgvr0000gn/T/kodus-sandbox-QoSf8Y/src/routes/__tests__'
+   retrieveForShard → 0 slice(s), 1 unmet
+
+TOTAL: 2 case(s) failed the real-sandbox path.

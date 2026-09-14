@@ -81,7 +81,9 @@ export const NavMenu = () => {
                 // layout.tsx), so the nav item shows a lock instead of hiding.
                 visible: true,
                 icon: <GaugeIcon className="size-6" />,
-                badge: isCockpitTierAllowed(subscription.license) ? undefined : (
+                badge: isCockpitTierAllowed(
+                    subscription.license,
+                ) ? undefined : (
                     <LockIcon className="size-3.5" />
                 ),
             },

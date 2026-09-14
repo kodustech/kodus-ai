@@ -137,6 +137,52 @@ describe('anthropicModule capability ↔ behavior (D-05)', () => {
     });
 });
 
+describe('anthropicModule x-opencode-session header (issue #1880 — OpenCode Go also exposes /v1/messages)', () => {
+    const HEX32 = /^[0-9a-f]{32}$/;
+
+    it('anthropic_compatible pointed at opencode.ai/zen gets the header', () => {
+        const model = anthropicModule.build({
+            provider: 'anthropic_compatible',
+            model: 'claude-sonnet-4-5-20250929',
+            apiKey: 'test-key',
+            baseURL: 'https://opencode.ai/zen/go',
+            byokModelId: 'model-123',
+        } as any) as any;
+
+        expect(model.config.headers()['x-opencode-session']).toMatch(HEX32);
+    });
+
+    it('native anthropic pointed at opencode.ai/zen gets the header too (it also accepts a baseURL override)', () => {
+        const model = anthropicModule.build({
+            provider: 'anthropic',
+            model: 'claude-sonnet-4-5-20250929',
+            apiKey: 'test-key',
+            baseURL: 'https://opencode.ai/zen/go/v1',
+            byokModelId: 'model-123',
+        } as any) as any;
+
+        expect(model.config.headers()['x-opencode-session']).toMatch(HEX32);
+    });
+
+    it('neither branch gets the header for a normal Anthropic/compatible baseURL', () => {
+        const compatible = anthropicModule.build({
+            provider: 'anthropic_compatible',
+            model: 'claude-sonnet-4-5-20250929',
+            apiKey: 'test-key',
+            baseURL: 'https://api.moonshot.ai/v1',
+            byokModelId: 'model-123',
+        } as any) as any;
+        expect(compatible.config.headers()).not.toHaveProperty(
+            'x-opencode-session',
+        );
+
+        const native = anthropicModule.build(anthropicNativeCfg) as any;
+        expect(native.config.headers()).not.toHaveProperty(
+            'x-opencode-session',
+        );
+    });
+});
+
 describe('anthropicModule offline conformance (real boundary: build → SDK → normalize)', () => {
     it('extended-thinking fixture: reasoning === 0 through the real SDK path; output not reduced', async () => {
         const run = await runConformance(

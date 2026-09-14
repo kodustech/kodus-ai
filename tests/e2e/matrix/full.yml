@@ -64,6 +64,20 @@ scenarios:
     # cell on Kodus-managed keys). See fast.yml for the full rationale.
     - trial-entitlement-gate
     - trial-credits-consume
+    - kodus-credits-gate
+    #   * kodus-credits-review: the WHOLE credit loop, live — a real
+    #     Kodus-routed review on a throwaway repo, the metering sweep
+    #     journaling its spans, the ledger debited per charge, then the
+    #     balance drained so `@kody review` is blocked. It is the only cell
+    #     that can catch a metering or pricing regression (the gate cell
+    #     stops at the contract). Nightly only: ~10-25 min, one real review.
+    #     Reports SKIPPED with the exact reason unless the environment has
+    #     (a) the provider enabled for the org — API_KODUS_PROVIDER_ALPHA_ORGS
+    #     or the `kodus-provider` PostHog flag + an alpha release track,
+    #     (b) API_KODUS_PROVIDER_FIREWORKS_API_KEY (the routed models run on
+    #     it), and (c) BILLING_ADMIN_BASE_URL + BILLING_ADMIN_TOKEN, which is
+    #     how a balance is seeded without going through Stripe.
+    - kodus-credits-review
     - trial-managed-review
     # Per-seat gate: appliesTo restricts to self-hosted × github × license-paid
     # (one cell). Skipped automatically when SH_LICENSE_KEY_PATH (default

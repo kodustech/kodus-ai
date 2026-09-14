@@ -1,0 +1,128 @@
+reproduce: node evals/kody-rules/context-fp-repro.js --model=kimi-k2.7-code@fireworks --reps=5 --out=NEED2-kimi-LOCAL.txt
+corpus: cases-1826-need.json — 8 case(s), 5 replicate(s)
+model:  kimi-k2.7-code@fireworks
+lookup: REAL sandbox (local) via buildRepoLookup
+Every case's CORRECT published count is 0. A non-zero count is a rule
+firing on a claim the diff window cannot support.
+
+══ sibling-file-no-test-anywhere  [claim: missing]
+   rule: Every new HTTP route handler ships with a test
+   file: src/routes/payments.controller.ts
+   why 0 is correct: The PR adds a new route handler and NO companion test exists — not in the PR, not in the repository. The rule is supposed to fire. Only a sibling-path existence check can establish that; the hunk shows the controller alone.
+   rep 1: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/routes/payments.controller.ts:8  The new GET /payments/:id handler is missing its required companion spec file.
+   rep 2: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/routes/payments.controller.ts:4  New GET /payments/:id route handler is missing an accompanying spec file.
+   rep 3: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/routes/payments.controller.ts:8  The new GET /payments/:id route handler is added without a corresponding .spec.ts test file.
+   rep 4: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/routes/payments.controller.ts:8  New GET /payments/:id route handler lacks an adjacent spec test file.
+   rep 5: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/routes/payments.controller.ts:8  New GET /payments/:id route handler is missing a companion spec file.
+   → per-replicate published: [1, 1, 1, 1, 1]
+
+══ sibling-file-no-test-anywhere-CONTROL  [claim: missing]
+   rule: Every new HTTP route handler ships with a test
+   file: src/routes/payments.controller.ts
+   why 0 is correct: The PR adds a new route handler and NO companion test exists — not in the PR, not in the repository. The rule is supposed to fire. Only a sibling-path existence check can establish that; the hunk shows the controller alone.
+   rep 1: published 1 (expected 1)  judged 4, claim-check dropped 0, kept 4 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/routes/payments.controller.ts:8  The new GET /payments/:id route has no adjacent spec file.
+   rep 2: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/routes/payments.controller.ts:8  New route handler findOne lacks a corresponding payments.controller.spec.ts test file.
+   rep 3: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/routes/payments.controller.ts:8  New route handler GET /payments/:id is missing a corresponding `payments.controller.spec.ts` test file.
+   rep 4: published 1 (expected 1)  judged 4, claim-check dropped 0, kept 4 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/routes/payments.controller.ts:8  New route handler is missing an accompanying test file.
+   rep 5: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/routes/payments.controller.ts:8  The new GET /payments/:id route handler is missing a corresponding payments.controller.spec.ts test file.
+   → per-replicate published: [1, 1, 1, 1, 1]
+
+══ symbol-references-helper-really-exists  [claim: duplicate]
+   rule: Do not reimplement a helper that already exists
+   file: src/blog/slug.ts
+   why 0 is correct: src/shared/strings.ts ALREADY exports `slugify`. The PR adds a second copy in src/blog/slug.ts, which is exactly what the rule forbids. Nothing in the hunk says so: only a repository grep does. The claim checker cannot help here — it can drop a finding, never create one.
+   rep 1: published 1 (expected 1)  judged 8, claim-check dropped 0, kept 8 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/blog/slug.ts:1  Reimplements slugify() which already exists in src/shared/strings.ts.
+   rep 2: published 1 (expected 1)  judged 8, claim-check dropped 0, kept 8 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/blog/slug.ts:1  Reimplements the slugify helper that already exists in src/shared/strings.ts.
+   rep 3: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/blog/slug.ts:1  Reimplements the existing `slugify` helper from `src/shared/strings.ts`.
+   rep 4: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/blog/slug.ts:1  Reimplements `slugify` which already exists in `src/shared/strings.ts`.
+   rep 5: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/blog/slug.ts:1  Reimplements existing `slugify` helper instead of reusing the one in `src/shared/strings.ts`.
+   → per-replicate published: [1, 1, 1, 1, 1]
+
+══ symbol-references-helper-really-exists-CONTROL  [claim: duplicate]
+   rule: Do not reimplement a helper that already exists
+   file: src/blog/slug.ts
+   why 0 is correct: src/shared/strings.ts ALREADY exports `slugify`. The PR adds a second copy in src/blog/slug.ts, which is exactly what the rule forbids. Nothing in the hunk says so: only a repository grep does. The claim checker cannot help here — it can drop a finding, never create one.
+   rep 1: published 0 (expected 1)  judged 0, claim-check dropped 0, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored
+   rep 2: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/blog/slug.ts:1  Reimplementing `slugify` in `src/blog` duplicates a helper that should live in `src/shared`.
+   rep 3: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/blog/slug.ts:1  Re-implements a generic slugify helper that should be imported from src/shared instead.
+   rep 4: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/blog/slug.ts:1  Do not reimplement slugify; re-export the helper already published in src/shared.
+   rep 5: published 0 (expected 1)  judged 0, claim-check dropped 0, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored
+   → per-replicate published: [0, 1, 1, 1, 0]
+
+══ sibling-file-test-already-in-repo  [claim: missing]
+   rule: Every new HTTP route handler ships with a test
+   file: src/routes/refunds.controller.ts
+   why 0 is correct: The companion spec ALREADY exists in the repository and this PR does not touch it. Correct output is 0. This guards the positive cases: a fix that makes the rule fire must not make it fire here.
+   rep 1: published 0 (expected 0)  judged 0, claim-check dropped 0, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored
+   rep 2: published 0 (expected 0)  judged 0, claim-check dropped 0, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored
+   rep 3: published 0 (expected 0)  judged 0, claim-check dropped 0, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored
+   rep 4: published 0 (expected 0)  judged 0, claim-check dropped 0, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored
+   rep 5: published 0 (expected 0)  judged 0, claim-check dropped 0, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored
+   → per-replicate published: [0, 0, 0, 0, 0]
+
+══ sibling-file-test-already-in-repo-CONTROL  [claim: missing]
+   rule: Every new HTTP route handler ships with a test
+   file: src/routes/refunds.controller.ts
+   why 0 is correct: Same world as its twin, judged diff-only. The shard sees a new route handler and no test in the PR, so a model that guesses fires here — and is WRONG, because the spec is in the repository. This is the direction the positive cases cannot see: guessing pays off there and costs here.
+   rep 1: published 0 (expected 0)  judged 1, claim-check dropped 1, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored
+      dropped: claimed "src/routes/refunds.controller.spec.ts" is missing, but it exists in the repository
+   rep 2: published 0 (expected 0)  judged 1, claim-check dropped 1, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored
+      dropped: claimed "src/routes/refunds.controller.spec.ts" is missing, but it exists in the repository
+   rep 3: published 0 (expected 0)  judged 1, claim-check dropped 1, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored
+      dropped: claimed "src/routes/refunds.controller.spec.ts" is missing, but it exists in the repository
+   rep 4: published 0 (expected 0)  judged 1, claim-check dropped 1, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored
+      dropped: claimed "src/routes/refunds.controller.spec.ts" is missing, but it exists in the repository
+   rep 5: published 0 (expected 0)  judged 1, claim-check dropped 1, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored
+      dropped: claimed "src/routes/refunds.controller.spec.ts" is missing, but it exists in the repository
+   → per-replicate published: [0, 0, 0, 0, 0]
+
+══ symbol-references-duplicate-in-an-unguessable-place  [claim: duplicate]
+   rule: Reuse an equivalent helper that already exists
+   file: src/checkout/phone.ts
+   why 0 is correct: `normalizePhoneNumber` already exists in src/legacy/contact-utils.ts. Unlike the other duplicate case, the rule text names NO location and the diff carries no hint, so there is nothing to guess from: a model without repository access can only stay silent. Firing here REQUIRES the grep. This is the case that separates knowing from guessing right.
+   rep 1: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/checkout/phone.ts:1  Adds a duplicate phone normalization helper instead of reusing the existing one.
+   rep 2: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/checkout/phone.ts:1  A duplicate normalizePhoneNumber already exists in src/legacy/contact-utils.ts and should be reused.
+   rep 3: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/checkout/phone.ts:1  An equivalent `normalizePhoneNumber` helper already exists in `src/legacy/contact-utils.ts`, so the new implem
+   rep 4: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/checkout/phone.ts:1  A duplicate phone-number normalization helper was added when an equivalent helper already exists.
+   rep 5: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/checkout/phone.ts:1  The new normalizePhoneNumber duplicates an equivalent helper in src/legacy/contact-utils.ts.
+   → per-replicate published: [1, 1, 1, 1, 1]
+
+══ symbol-references-duplicate-in-an-unguessable-place-CONTROL  [claim: duplicate]
+   rule: Reuse an equivalent helper that already exists
+   file: src/checkout/phone.ts
+   why 0 is correct: `normalizePhoneNumber` already exists in src/legacy/contact-utils.ts. Unlike the other duplicate case, the rule text names NO location and the diff carries no hint, so there is nothing to guess from: a model without repository access can only stay silent. Firing here REQUIRES the grep. This is the case that separates knowing from guessing right.
+   rep 1: published 0 (expected 1)  judged 0, claim-check dropped 0, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored
+   rep 2: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/checkout/phone.ts:1  Reuse the existing phone-normalization helper instead of adding a duplicate implementation.
+   rep 3: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/checkout/phone.ts:1  Re-implementing `normalizePhoneNumber` duplicates an existing helper; reuse the existing one instead.
+   rep 4: published 0 (expected 1)  judged 0, claim-check dropped 0, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored
+   rep 5: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored
+      src/checkout/phone.ts:1  The added `normalizePhoneNumber` utility may duplicate an existing repository helper.
+   → per-replicate published: [0, 1, 1, 0, 1]
+
+TOTAL: 0 of 40 case-runs published a comment that should not exist.
+       4 of 40 case-runs FAILED TO PUBLISH one the rule should have caught.

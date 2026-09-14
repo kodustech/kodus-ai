@@ -130,7 +130,8 @@ describe('TestByokModelUseCase', () => {
             model: 'some-model',
             organizationAndTeamData: org,
         });
-        expect(connectionUseCase.execute).toHaveBeenCalledWith(
+        // The probe now also receives the org id (alpha gate); assert on the input.
+        expect((connectionUseCase.execute as jest.Mock).mock.calls[0][0]).toEqual(
             expect.objectContaining({
                 provider: 'anthropic_compatible',
                 model: 'some-model',
@@ -165,7 +166,8 @@ describe('TestByokModelUseCase', () => {
             awsRegion: 'eu-west-1', // differs from the stored us-east-1
         });
         // Catalog shortcut skipped → a real probe ran against the NEW region.
-        expect(connectionUseCase.execute).toHaveBeenCalledWith(
+        // The probe now also receives the org id (alpha gate); assert on the input.
+        expect((connectionUseCase.execute as jest.Mock).mock.calls[0][0]).toEqual(
             expect.objectContaining({ awsRegion: 'eu-west-1' }),
         );
     });
@@ -198,7 +200,8 @@ describe('TestByokModelUseCase', () => {
             organizationAndTeamData: org,
             baseURL: 'https://evil.example/v1',
         } as any);
-        expect(connectionUseCase.execute).toHaveBeenCalledWith(
+        // The probe now also receives the org id (alpha gate); assert on the input.
+        expect((connectionUseCase.execute as jest.Mock).mock.calls[0][0]).toEqual(
             expect.objectContaining({
                 apiKey: 'dec:enc',
                 baseURL: 'https://api.moonshot.ai/v1',
@@ -249,7 +252,8 @@ describe('TestByokModelUseCase', () => {
             model: 'kimi-k2.7-code',
             organizationAndTeamData: org,
         });
-        expect(connectionUseCase.execute).toHaveBeenCalledWith(
+        // The probe now also receives the org id (alpha gate); assert on the input.
+        expect((connectionUseCase.execute as jest.Mock).mock.calls[0][0]).toEqual(
             expect.objectContaining({
                 provider: 'moonshot',
                 model: 'kimi-k2.7-code',

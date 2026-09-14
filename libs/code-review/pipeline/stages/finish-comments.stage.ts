@@ -213,6 +213,8 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                         false,
                         context.externalPromptContext,
                         platformType,
+                        lineComments,
+                        context.prLevelCommentResults,
                     );
 
                 await this.commentManagerService.updateSummarizationInPR(
@@ -326,6 +328,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 reviewHasPartialErrors,
                 reviewErrorCustomMessage,
                 context.linkedRepositoriesMetadata,
+                context.reviewWarnings,
             );
             return context;
         }
@@ -396,6 +399,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 reviewHasPartialErrors,
                 reviewErrorCustomMessage,
                 context.linkedRepositoriesMetadata,
+                context.reviewWarnings,
             );
             return context;
         }
@@ -433,6 +437,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 reviewErrorMessage,
                 reviewHasPartialErrors,
                 reviewErrorCustomMessage,
+                context.reviewWarnings,
             );
         }
 

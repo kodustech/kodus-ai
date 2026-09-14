@@ -1,0 +1,78 @@
+# Issue #1826 step 1b — rule-level fileScope, fan-out measurement
+# Ran 2026-09-08T19:47:45Z on a freshly harvested polyglot corpus.
+# Deterministic: no model call. runJudge is a counter that returns no violations.
+# corpus: harvest-polyglot-cases.js --per=20 --want=40 (34 PRs, 355 files, 17 exts)
+
+=== A. with a language-agnostic rule present (the realistic fleet shape) ===
+corpus: 34 PRs / 355 files
+        .rb:108 .json:77 .yml:38 .vue:36 .js:30 .tsx:14 .scss:11 .jsx:11 .erb:11 .ts:6 .yaml:4 .gjs:2 .sh:2 .liquid:2 .sql:1 .jbuilder:1 .md:1
+
+== Keep business logic out of Rails controllers
+   scope: [".rb",".rake",".gemspec",".ru",".erb"]
+   files reached  before 322  ->  after 104   (67.7% fewer)
+   wrong-language before 215 (66.8%)  ->  after 0 (0.0%)
+   after: .rb:94 .erb:10
+
+== Use design tokens, never raw colour literals
+   scope: [".css",".scss",".sass",".less"]
+   files reached  before 322  ->  after 10   (96.9% fewer)
+   wrong-language before 309 (96.0%)  ->  after 0 (0.0%)
+   after: .scss:10
+
+== No inline secrets in configuration
+   scope: [".yml",".yaml"]
+   files reached  before 322  ->  after 34   (89.4% fewer)
+   wrong-language before 285 (88.5%)  ->  after 0 (0.0%)
+   after: .yml:31 .yaml:3
+
+== Vue props must declare a type and a default
+   scope: [".vue"]
+   files reached  before 322  ->  after 35   (89.1% fewer)
+   wrong-language before 284 (88.2%)  ->  after 0 (0.0%)
+   after: .vue:35
+
+== No commented-out code
+   scope: (agnostic — control, must not narrow)
+   files reached  before 322  ->  after 322   (0.0% fewer)
+   wrong-language before 0 (0.0%)  ->  after 0 (0.0%)
+   after: .rb:94 .json:75 .vue:35 .yml:31 .js:30 .tsx:14 .scss:10 .erb:10 .jsx:7 .ts:5 .yaml:3 .gjs:2 .liquid:2 .sql:1 .sh:1 .jbuilder:1 .md:1
+
+── totals ────────────────────────────────────────────────
+shards issued (= LLM calls): 355  ->  355
+rule x file pairs judged:    1610  ->  505   (68.6% fewer)
+of those, wrong language:    1093 (67.9%)  ->  0 (0.0%)
+
+control "No commented-out code": 322 -> 322 files  OK (unchanged)
+
+=== B. scoped rules only (isolates the shard-COUNT effect) ===
+corpus: 34 PRs / 355 files
+        .rb:108 .json:77 .yml:38 .vue:36 .js:30 .tsx:14 .scss:11 .jsx:11 .erb:11 .ts:6 .yaml:4 .gjs:2 .sh:2 .liquid:2 .sql:1 .jbuilder:1 .md:1
+
+== Keep business logic out of Rails controllers
+   scope: [".rb",".rake",".gemspec",".ru",".erb"]
+   files reached  before 322  ->  after 104   (67.7% fewer)
+   wrong-language before 215 (66.8%)  ->  after 0 (0.0%)
+   after: .rb:94 .erb:10
+
+== Use design tokens, never raw colour literals
+   scope: [".css",".scss",".sass",".less"]
+   files reached  before 322  ->  after 10   (96.9% fewer)
+   wrong-language before 309 (96.0%)  ->  after 0 (0.0%)
+   after: .scss:10
+
+== No inline secrets in configuration
+   scope: [".yml",".yaml"]
+   files reached  before 322  ->  after 34   (89.4% fewer)
+   wrong-language before 285 (88.5%)  ->  after 0 (0.0%)
+   after: .yml:31 .yaml:3
+
+== Vue props must declare a type and a default
+   scope: [".vue"]
+   files reached  before 322  ->  after 35   (89.1% fewer)
+   wrong-language before 284 (88.2%)  ->  after 0 (0.0%)
+   after: .vue:35
+
+── totals ────────────────────────────────────────────────
+shards issued (= LLM calls): 355  ->  208
+rule x file pairs judged:    1288  ->  183   (85.8% fewer)
+of those, wrong language:    1093 (84.9%)  ->  0 (0.0%)

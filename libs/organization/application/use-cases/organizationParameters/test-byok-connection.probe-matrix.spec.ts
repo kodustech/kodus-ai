@@ -28,9 +28,12 @@ jest.mock('ai', () => ({
 }));
 
 function useCase() {
-    return new TestByokConnectionUseCase({
-        isProviderSupported: () => true,
-    } as any);
+    return new TestByokConnectionUseCase(
+        { isProviderSupported: () => true } as any,
+        // The Kodus provider is a private alpha; the matrix probes it as an
+        // allow-listed org would.
+        { isEnabledFor: async () => true } as any,
+    );
 }
 
 // Vertex and Bedrock validate auth material (SA JSON / STS) before any model
@@ -40,6 +43,14 @@ const AUTH_PREFLIGHT_IDS = new Set(['google_vertex', 'amazon_bedrock']);
 const PROBED_IDS = REGISTRY.ids()
     .filter((id) => !AUTH_PREFLIGHT_IDS.has(id))
     .sort();
+
+// Kodus is a CLOSED catalog (an unlisted id has no price, so build() refuses
+// it) and routes with a platform key from env — the probe must use a listed
+// id, and the key must exist for the offline build to construct.
+const MODEL_FOR: Record<string, string> = {
+    kodus: 'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731',
+};
+process.env.API_KODUS_PROVIDER_FIREWORKS_API_KEY = 'sk-kodus-platform-test';
 
 describe('connection probe covers every registered provider', () => {
     beforeEach(() => {
@@ -52,7 +63,7 @@ describe('connection probe covers every registered provider', () => {
             provider: id,
             apiKey: 'sk-test',
             baseURL: 'https://example.com/v1',
-            model: 'some-model',
+            model: MODEL_FOR[id] ?? 'some-model',
         });
 
         expect(result.ok).toBe(true);

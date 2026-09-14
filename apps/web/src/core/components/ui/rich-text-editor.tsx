@@ -6,6 +6,8 @@ import { Editor, EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { cn } from "src/core/utils/components";
 
+import { convertTiptapJSONToText } from "src/core/utils/tiptap-json-to-text";
+
 import { CodeBlock } from "./code-block-extension";
 import { MentionTrigger } from "./mention-trigger-extension";
 import { RichTextEditorSearch } from "./rich-text-editor-search";
@@ -51,6 +53,77 @@ function flattenMcpMentionNodes(node: any): any {
     return node;
 }
 
+// Inverse of applyInlineMarksAsMarkdown in tiptap-json-to-text.ts: reads the
+// same **bold** / *italic* / `code` / ~~strike~~ / [text](href) syntax back
+// into marked text nodes so formatting survives the save/reload round-trip
+// for saveFormat="text" fields. One line == one paragraph, so no block-level
+// syntax (headings, lists, quotes) is recognized here.
+const INLINE_MARK_PATTERN =
+    /`([^`]+)`|\*\*([^*]+)\*\*|~~([^~]+)~~|\*([^*]+)\*|\[([^\]]+)\]\(([^)]*)\)/;
+
+function parseInlineMarkdownLine(line: string): any[] {
+    if (!line) return [];
+
+    const nodes: any[] = [];
+    let rest = line;
+
+    while (rest) {
+        const match = rest.match(INLINE_MARK_PATTERN);
+        if (!match) {
+            nodes.push({ type: "text", text: rest });
+            break;
+        }
+
+        const [full, code, bold, strike, italic, linkText, linkHref] = match;
+        if (match.index) {
+            nodes.push({ type: "text", text: rest.slice(0, match.index) });
+        }
+
+        if (code !== undefined) {
+            nodes.push({
+                type: "text",
+                text: code,
+                marks: [{ type: "code" }],
+            });
+        } else if (bold !== undefined) {
+            nodes.push(
+                ...parseInlineMarkdownLine(bold).map((node) => ({
+                    ...node,
+                    marks: [...(node.marks ?? []), { type: "bold" }],
+                })),
+            );
+        } else if (strike !== undefined) {
+            nodes.push(
+                ...parseInlineMarkdownLine(strike).map((node) => ({
+                    ...node,
+                    marks: [...(node.marks ?? []), { type: "strike" }],
+                })),
+            );
+        } else if (italic !== undefined) {
+            nodes.push(
+                ...parseInlineMarkdownLine(italic).map((node) => ({
+                    ...node,
+                    marks: [...(node.marks ?? []), { type: "italic" }],
+                })),
+            );
+        } else if (linkText !== undefined) {
+            nodes.push(
+                ...parseInlineMarkdownLine(linkText).map((node) => ({
+                    ...node,
+                    marks: [
+                        ...(node.marks ?? []),
+                        { type: "link", attrs: { href: linkHref || "" } },
+                    ],
+                })),
+            );
+        }
+
+        rest = rest.slice(match.index! + full.length);
+    }
+
+    return nodes;
+}
+
 function parseValueToTiptapContent(
     value: string | object,
     _enableMentions: boolean,
@@ -66,37 +139,79 @@ function parseValueToTiptapContent(
 
     const text = typeof value === "string" ? value : "";
 
-    return {
-        type: "doc",
-        content: [
-            {
-                type: "paragraph",
-                content: [{ type: "text", text: text || "" }],
-            },
-        ],
-    };
+    return { type: "doc", content: parseBlocksFromLines(text.split("\n")) };
 }
 
-function serializeTiptapContent(editor: any, enableMentions: boolean): string {
-    if (!enableMentions) {
-        return editor.state.doc.textContent || "";
+const HEADING_PATTERN = /^(#{1,3})\s+(.*)$/;
+const BULLET_ITEM_PATTERN = /^-\s+(.*)$/;
+const ORDERED_ITEM_PATTERN = /^(\d+)\.\s+(.*)$/;
+
+function toParagraph(line: string) {
+    const content = parseInlineMarkdownLine(line);
+    return { type: "paragraph", ...(content.length ? { content } : {}) };
+}
+
+function toListItem(line: string) {
+    return { type: "listItem", content: [toParagraph(line)] };
+}
+
+// Groups plain lines back into heading / bulletList / orderedList blocks
+// using the same markdown-ish syntax convertTiptapJSONToText serializes to
+// (`# `, `- `, `1. `). Consecutive list-marker lines become one list with
+// multiple items; anything else is a plain paragraph, as before.
+function parseBlocksFromLines(lines: string[]): any[] {
+    const blocks: any[] = [];
+    let i = 0;
+
+    while (i < lines.length) {
+        const headingMatch = lines[i].match(HEADING_PATTERN);
+        if (headingMatch) {
+            const [, hashes, rest] = headingMatch;
+            const content = parseInlineMarkdownLine(rest);
+            blocks.push({
+                type: "heading",
+                attrs: { level: hashes.length },
+                ...(content.length ? { content } : {}),
+            });
+            i++;
+            continue;
+        }
+
+        if (BULLET_ITEM_PATTERN.test(lines[i])) {
+            const items: any[] = [];
+            while (i < lines.length) {
+                const match = lines[i].match(BULLET_ITEM_PATTERN);
+                if (!match) break;
+                items.push(toListItem(match[1]));
+                i++;
+            }
+            blocks.push({ type: "bulletList", content: items });
+            continue;
+        }
+
+        const orderedMatch = lines[i].match(ORDERED_ITEM_PATTERN);
+        if (orderedMatch) {
+            const start = parseInt(orderedMatch[1], 10);
+            const items: any[] = [];
+            while (i < lines.length) {
+                const match = lines[i].match(ORDERED_ITEM_PATTERN);
+                if (!match) break;
+                items.push(toListItem(match[2]));
+                i++;
+            }
+            blocks.push({ type: "orderedList", attrs: { start }, content: items });
+            continue;
+        }
+
+        blocks.push(toParagraph(lines[i]));
+        i++;
     }
 
-    const { state } = editor;
-    const { doc } = state;
-    let text = "";
+    return blocks;
+}
 
-    doc.descendants((node: any, pos: number) => {
-        if (node.type.name === "mcpMention") {
-            text += `@mcp<${node.attrs.app}|${node.attrs.tool}>`;
-            return false;
-        } else if (node.isText) {
-            text += node.text || "";
-        }
-        return true;
-    });
-
-    return text;
+function serializeTiptapContent(editor: any, _enableMentions: boolean): string {
+    return convertTiptapJSONToText(editor.getJSON());
 }
 
 export function getTextLengthFromTiptapJSON(json: any): number {

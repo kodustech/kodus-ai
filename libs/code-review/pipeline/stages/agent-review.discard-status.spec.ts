@@ -54,8 +54,9 @@ describe('agent-review.stage — discarded suggestions carry a delivery status',
 
     it('finds the discard sites it is meant to guard', () => {
         // If this number changes, a discard path was added or removed — read
-        // the new one before updating the count.
-        expect(discardBlocks()).toHaveLength(7);
+        // the new one before updating the count. 8: issue #1833's publication
+        // gate added a discard site for unusable `improvedCode`.
+        expect(discardBlocks()).toHaveLength(8);
     });
 
     it.each(discardBlocks().map((b, i) => [i, b] as const))(

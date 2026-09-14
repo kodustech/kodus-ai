@@ -11,6 +11,9 @@ import {
     FindMemoriesFilters,
     FindMemoriesResult,
     IKodyRule,
+    IKodyRuleContextNeed,
+    IKodyRuleFileScope,
+    IKodyRuleCompileAttempt,
     IKodyRuleDetector,
     IKodyRuleMemory,
     KodyRulesStatus,
@@ -87,6 +90,41 @@ export interface IKodyRulesService extends IKodyRulesRepository {
         organizationId: string,
         ruleId: string,
         detector: IKodyRuleDetector | null,
+    ): Promise<IKodyRule | null>;
+
+    /**
+     * Persist the rule's declared context need (#1826). Passing `null` clears
+     * a stale inference. An author-set need is never overwritten by an
+     * inferred one.
+     */
+    updateRuleContextNeed(
+        organizationId: string,
+        ruleId: string,
+        contextNeed: IKodyRuleContextNeed | null,
+    ): Promise<IKodyRule | null>;
+
+    /**
+     * Persist the rule's inferred language scope (#1826). Passing `null`
+     * clears it, which is how an edited rule that stopped naming a language
+     * gets un-narrowed. An author-set scope is never overwritten by an
+     * inferred one.
+     */
+    updateRuleFileScope(
+        organizationId: string,
+        ruleId: string,
+        fileScope: IKodyRuleFileScope | null,
+    ): Promise<IKodyRule | null>;
+
+    /**
+     * Record that the detector compiler ran on this rule. A cost gate only: it
+     * lets the nightly sweep skip a rule it already decided instead of paying
+     * for the same verdict every night. No author variant — nobody authors an
+     * attempt.
+     */
+    updateRuleCompileAttempt(
+        organizationId: string,
+        ruleId: string,
+        compileAttempt: IKodyRuleCompileAttempt | null,
     ): Promise<IKodyRule | null>;
 
     getRulesLimitStatus(

@@ -1,3 +1,11 @@
+//
+// SCOPE — this harness has NO repository behind it. Its cases are diff
+// fixtures, so `judgeKodyRulesSharded` is called without `fileContents` and the
+// shard prompt is the DIFF-ONLY shape. Production always sends the changed file
+// whole (kody-rules-agent.provider.ts, issue #1826 step 1), so a number from
+// here says nothing about a rule whose verdict needs the rest of the file. Only
+// context-fp-repro.js builds a real repository (--sandbox) and mirrors the full
+// provider sequence; measure full-file behaviour there.
 /**
  * BEHAVIORAL test of the SHIPPED sharded kody-rules path (#1449).
  *

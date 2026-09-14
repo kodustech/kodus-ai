@@ -16,6 +16,7 @@ import {
     SelfHostedLicensePayload,
     SubscriptionStatus,
     UserWithLicense,
+    DebitCreditsResult,
 } from './interfaces/license.interface';
 
 // Ed25519 public key used to verify self-hosted license JWTs.
@@ -311,6 +312,32 @@ export class SelfHostedLicenseService implements ILicenseService {
         _byok: boolean,
     ): Promise<boolean> {
         return false;
+    }
+
+    // Prepaid credits are a cloud product: self-hosted has no Kodus-routed
+    // provider (the id is hidden by isKodusProviderAvailable), so there is
+    // never a balance to gate on or a debit to send.
+    async getCreditBalance(): Promise<null> {
+        return null;
+    }
+
+    async listCreditLedger(): Promise<[]> {
+        return [];
+    }
+
+    async debitCredits(): Promise<DebitCreditsResult> {
+        return {
+            applied: 0,
+            skipped: 0,
+            appliedUsd: 0,
+            balanceUsd: 0,
+            lowBalance: false,
+            exhausted: false,
+        };
+    }
+
+    async createCreditCheckout(): Promise<null> {
+        return null;
     }
 
     private async getAssignedUsers(

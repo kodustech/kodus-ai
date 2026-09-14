@@ -1,0 +1,173 @@
+{
+  "__doc": "Issue #1826 — the row the issue itself calls the majority: \"the rest of the same file\".\n\nThe issue lists `unused import, max function length, every public class has a\ndocstring` as broken because the shard only sees a hunk. The claim checker\ncovers the first of those and only the first: `unused` is a verifiable\nassertion. Length and in-file duplication assert nothing a grep can refute, so\nnothing downstream can rescue them — the judge has to SEE the scope or it\ncannot apply the rule at all.\n\nEach rule runs twice: with `contextNeed: full-file` declared, and\nbyte-identical without. Run this BEFORE implementing full-file as well:\nneedOf() does not know that value today and falls through to diff-only, so\nboth arms measure the broken state, and the same unedited file measures the\nfix afterwards.\n\nF2 is the guard. A \"fix\" that merely makes the length rule fire more often\npasses F1 and fails F2.",
+  "cases": [
+    {
+      "caseId": "full-file-function-is-too-long",
+      "claimFamily": "none",
+      "why": "buildMonthlyReport is 58 lines long. The hunk shows 4 of them, from the middle. Nothing in the diff carries the length, so a shard judging the hunk cannot apply this rule at all — it can only guess. The enclosing function is the whole of what is needed.",
+      "expectedPublished": 1,
+      "prTitle": "feat(reports): split audited orders",
+      "prBody": "Adds an audited/pending split to the monthly report.",
+      "rule": {
+        "uuid": "rule-max-function-length",
+        "title": "Functions must not exceed 40 lines",
+        "rule": "A function longer than 40 lines must be split into smaller ones. Long functions hide branches and are hard to test.",
+        "path": "",
+        "severity": "medium",
+        "contextNeed": {
+          "need": "full-file",
+          "sourceHash": "eval-fixture",
+          "source": "author",
+          "inferredAt": "2026-09-09T00:00:00.000Z"
+        }
+      },
+      "changedFiles": [
+        {
+          "filename": "src/reports/build-report.ts",
+          "patch": "@@ -53,2 +53,4 @@\n     const line49 = orders[49] ? orders[49].total : 0;\n+    const audited = orders.filter((o) => o.audited);\n+    const pending = orders.filter((o) => !o.audited);\n     const total = orders.reduce((a, o) => a + o.total, 0);",
+          "patchWithLinesStr": "## file: 'src/reports/build-report.ts'\n\n@@ -53,2 +53,4 @@\n__new hunk__\n53      const line49 = orders[49] ? orders[49].total : 0;\n54 +    const audited = orders.filter((o) => o.audited);\n55 +    const pending = orders.filter((o) => !o.audited);\n56      const total = orders.reduce((a, o) => a + o.total, 0);"
+        }
+      ],
+      "repoFiles": {
+        "src/reports/build-report.ts": "import { Order } from './order.entity';\n\nexport function buildMonthlyReport(orders: Order[], locale: string): string {\n    const line0 = orders[0] ? orders[0].total : 0;\n    const line1 = orders[1] ? orders[1].total : 0;\n    const line2 = orders[2] ? orders[2].total : 0;\n    const line3 = orders[3] ? orders[3].total : 0;\n    const line4 = orders[4] ? orders[4].total : 0;\n    const line5 = orders[5] ? orders[5].total : 0;\n    const line6 = orders[6] ? orders[6].total : 0;\n    const line7 = orders[7] ? orders[7].total : 0;\n    const line8 = orders[8] ? orders[8].total : 0;\n    const line9 = orders[9] ? orders[9].total : 0;\n    const line10 = orders[10] ? orders[10].total : 0;\n    const line11 = orders[11] ? orders[11].total : 0;\n    const line12 = orders[12] ? orders[12].total : 0;\n    const line13 = orders[13] ? orders[13].total : 0;\n    const line14 = orders[14] ? orders[14].total : 0;\n    const line15 = orders[15] ? orders[15].total : 0;\n    const line16 = orders[16] ? orders[16].total : 0;\n    const line17 = orders[17] ? orders[17].total : 0;\n    const line18 = orders[18] ? orders[18].total : 0;\n    const line19 = orders[19] ? orders[19].total : 0;\n    const line20 = orders[20] ? orders[20].total : 0;\n    const line21 = orders[21] ? orders[21].total : 0;\n    const line22 = orders[22] ? orders[22].total : 0;\n    const line23 = orders[23] ? orders[23].total : 0;\n    const line24 = orders[24] ? orders[24].total : 0;\n    const line25 = orders[25] ? orders[25].total : 0;\n    const line26 = orders[26] ? orders[26].total : 0;\n    const line27 = orders[27] ? orders[27].total : 0;\n    const line28 = orders[28] ? orders[28].total : 0;\n    const line29 = orders[29] ? orders[29].total : 0;\n    const line30 = orders[30] ? orders[30].total : 0;\n    const line31 = orders[31] ? orders[31].total : 0;\n    const line32 = orders[32] ? orders[32].total : 0;\n    const line33 = orders[33] ? orders[33].total : 0;\n    const line34 = orders[34] ? orders[34].total : 0;\n    const line35 = orders[35] ? orders[35].total : 0;\n    const line36 = orders[36] ? orders[36].total : 0;\n    const line37 = orders[37] ? orders[37].total : 0;\n    const line38 = orders[38] ? orders[38].total : 0;\n    const line39 = orders[39] ? orders[39].total : 0;\n    const line40 = orders[40] ? orders[40].total : 0;\n    const line41 = orders[41] ? orders[41].total : 0;\n    const line42 = orders[42] ? orders[42].total : 0;\n    const line43 = orders[43] ? orders[43].total : 0;\n    const line44 = orders[44] ? orders[44].total : 0;\n    const line45 = orders[45] ? orders[45].total : 0;\n    const line46 = orders[46] ? orders[46].total : 0;\n    const line47 = orders[47] ? orders[47].total : 0;\n    const line48 = orders[48] ? orders[48].total : 0;\n    const line49 = orders[49] ? orders[49].total : 0;\n    const audited = orders.filter((o) => o.audited);\n    const pending = orders.filter((o) => !o.audited);\n    const total = orders.reduce((a, o) => a + o.total, 0);\n    const tax = total * 0.2;\n    const net = total - tax;\n    return [total, tax, net].join(' | ');\n}\n"
+      }
+    },
+    {
+      "caseId": "full-file-function-is-too-long-CONTROL",
+      "claimFamily": "none",
+      "why": "buildMonthlyReport is 58 lines long. The hunk shows 4 of them, from the middle. Nothing in the diff carries the length, so a shard judging the hunk cannot apply this rule at all — it can only guess. The enclosing function is the whole of what is needed.",
+      "expectedPublished": 1,
+      "prTitle": "feat(reports): split audited orders",
+      "prBody": "Adds an audited/pending split to the monthly report.",
+      "rule": {
+        "uuid": "rule-max-function-length",
+        "title": "Functions must not exceed 40 lines",
+        "rule": "A function longer than 40 lines must be split into smaller ones. Long functions hide branches and are hard to test.",
+        "path": "",
+        "severity": "medium"
+      },
+      "changedFiles": [
+        {
+          "filename": "src/reports/build-report.ts",
+          "patch": "@@ -53,2 +53,4 @@\n     const line49 = orders[49] ? orders[49].total : 0;\n+    const audited = orders.filter((o) => o.audited);\n+    const pending = orders.filter((o) => !o.audited);\n     const total = orders.reduce((a, o) => a + o.total, 0);",
+          "patchWithLinesStr": "## file: 'src/reports/build-report.ts'\n\n@@ -53,2 +53,4 @@\n__new hunk__\n53      const line49 = orders[49] ? orders[49].total : 0;\n54 +    const audited = orders.filter((o) => o.audited);\n55 +    const pending = orders.filter((o) => !o.audited);\n56      const total = orders.reduce((a, o) => a + o.total, 0);"
+        }
+      ],
+      "repoFiles": {
+        "src/reports/build-report.ts": "import { Order } from './order.entity';\n\nexport function buildMonthlyReport(orders: Order[], locale: string): string {\n    const line0 = orders[0] ? orders[0].total : 0;\n    const line1 = orders[1] ? orders[1].total : 0;\n    const line2 = orders[2] ? orders[2].total : 0;\n    const line3 = orders[3] ? orders[3].total : 0;\n    const line4 = orders[4] ? orders[4].total : 0;\n    const line5 = orders[5] ? orders[5].total : 0;\n    const line6 = orders[6] ? orders[6].total : 0;\n    const line7 = orders[7] ? orders[7].total : 0;\n    const line8 = orders[8] ? orders[8].total : 0;\n    const line9 = orders[9] ? orders[9].total : 0;\n    const line10 = orders[10] ? orders[10].total : 0;\n    const line11 = orders[11] ? orders[11].total : 0;\n    const line12 = orders[12] ? orders[12].total : 0;\n    const line13 = orders[13] ? orders[13].total : 0;\n    const line14 = orders[14] ? orders[14].total : 0;\n    const line15 = orders[15] ? orders[15].total : 0;\n    const line16 = orders[16] ? orders[16].total : 0;\n    const line17 = orders[17] ? orders[17].total : 0;\n    const line18 = orders[18] ? orders[18].total : 0;\n    const line19 = orders[19] ? orders[19].total : 0;\n    const line20 = orders[20] ? orders[20].total : 0;\n    const line21 = orders[21] ? orders[21].total : 0;\n    const line22 = orders[22] ? orders[22].total : 0;\n    const line23 = orders[23] ? orders[23].total : 0;\n    const line24 = orders[24] ? orders[24].total : 0;\n    const line25 = orders[25] ? orders[25].total : 0;\n    const line26 = orders[26] ? orders[26].total : 0;\n    const line27 = orders[27] ? orders[27].total : 0;\n    const line28 = orders[28] ? orders[28].total : 0;\n    const line29 = orders[29] ? orders[29].total : 0;\n    const line30 = orders[30] ? orders[30].total : 0;\n    const line31 = orders[31] ? orders[31].total : 0;\n    const line32 = orders[32] ? orders[32].total : 0;\n    const line33 = orders[33] ? orders[33].total : 0;\n    const line34 = orders[34] ? orders[34].total : 0;\n    const line35 = orders[35] ? orders[35].total : 0;\n    const line36 = orders[36] ? orders[36].total : 0;\n    const line37 = orders[37] ? orders[37].total : 0;\n    const line38 = orders[38] ? orders[38].total : 0;\n    const line39 = orders[39] ? orders[39].total : 0;\n    const line40 = orders[40] ? orders[40].total : 0;\n    const line41 = orders[41] ? orders[41].total : 0;\n    const line42 = orders[42] ? orders[42].total : 0;\n    const line43 = orders[43] ? orders[43].total : 0;\n    const line44 = orders[44] ? orders[44].total : 0;\n    const line45 = orders[45] ? orders[45].total : 0;\n    const line46 = orders[46] ? orders[46].total : 0;\n    const line47 = orders[47] ? orders[47].total : 0;\n    const line48 = orders[48] ? orders[48].total : 0;\n    const line49 = orders[49] ? orders[49].total : 0;\n    const audited = orders.filter((o) => o.audited);\n    const pending = orders.filter((o) => !o.audited);\n    const total = orders.reduce((a, o) => a + o.total, 0);\n    const tax = total * 0.2;\n    const net = total - tax;\n    return [total, tax, net].join(' | ');\n}\n"
+      }
+    },
+    {
+      "caseId": "full-file-function-is-short-enough",
+      "claimFamily": "none",
+      "why": "buildDailySummary is 6 lines long, so the rule must NOT fire. The hunk has the same shape as the long-function case, which is the point: this is the guard that catches a \"fix\" that merely makes the rule fire more often.",
+      "expectedPublished": 0,
+      "prTitle": "fix(reports): apply tax to the daily summary",
+      "prBody": "Adds the tax line.",
+      "rule": {
+        "uuid": "rule-max-function-length",
+        "title": "Functions must not exceed 40 lines",
+        "rule": "A function longer than 40 lines must be split into smaller ones. Long functions hide branches and are hard to test.",
+        "path": "",
+        "severity": "medium",
+        "contextNeed": {
+          "need": "full-file",
+          "sourceHash": "eval-fixture",
+          "source": "author",
+          "inferredAt": "2026-09-09T00:00:00.000Z"
+        }
+      },
+      "changedFiles": [
+        {
+          "filename": "src/reports/daily.ts",
+          "patch": "@@ -4,2 +4,3 @@\n     const total = orders.reduce((a, o) => a + o.total, 0);\n+    const tax = total * 0.2;\n     const net = total - tax;",
+          "patchWithLinesStr": "## file: 'src/reports/daily.ts'\n\n@@ -4,2 +4,3 @@\n__new hunk__\n4      const total = orders.reduce((a, o) => a + o.total, 0);\n5 +    const tax = total * 0.2;\n6      const net = total - tax;"
+        }
+      ],
+      "repoFiles": {
+        "src/reports/daily.ts": "import { Order } from './order.entity';\n\nexport function buildDailySummary(orders: Order[]): string {\n    const total = orders.reduce((a, o) => a + o.total, 0);\n    const tax = total * 0.2;\n    const net = total - tax;\n    return [total, tax, net].join(' | ');\n}\n"
+      }
+    },
+    {
+      "caseId": "full-file-function-is-short-enough-CONTROL",
+      "claimFamily": "none",
+      "why": "buildDailySummary is 6 lines long, so the rule must NOT fire. The hunk has the same shape as the long-function case, which is the point: this is the guard that catches a \"fix\" that merely makes the rule fire more often.",
+      "expectedPublished": 0,
+      "prTitle": "fix(reports): apply tax to the daily summary",
+      "prBody": "Adds the tax line.",
+      "rule": {
+        "uuid": "rule-max-function-length",
+        "title": "Functions must not exceed 40 lines",
+        "rule": "A function longer than 40 lines must be split into smaller ones. Long functions hide branches and are hard to test.",
+        "path": "",
+        "severity": "medium"
+      },
+      "changedFiles": [
+        {
+          "filename": "src/reports/daily.ts",
+          "patch": "@@ -4,2 +4,3 @@\n     const total = orders.reduce((a, o) => a + o.total, 0);\n+    const tax = total * 0.2;\n     const net = total - tax;",
+          "patchWithLinesStr": "## file: 'src/reports/daily.ts'\n\n@@ -4,2 +4,3 @@\n__new hunk__\n4      const total = orders.reduce((a, o) => a + o.total, 0);\n5 +    const tax = total * 0.2;\n6      const net = total - tax;"
+        }
+      ],
+      "repoFiles": {
+        "src/reports/daily.ts": "import { Order } from './order.entity';\n\nexport function buildDailySummary(orders: Order[]): string {\n    const total = orders.reduce((a, o) => a + o.total, 0);\n    const tax = total * 0.2;\n    const net = total - tax;\n    return [total, tax, net].join(' | ');\n}\n"
+      }
+    },
+    {
+      "caseId": "full-file-duplicate-block-in-the-same-file",
+      "claimFamily": "none",
+      "why": "The four added lines are byte-identical to renderHeader, ten lines above and outside the hunk. The duplication is visible only with the rest of the file, and the claim checker cannot help: a repo-wide grep has no symbol to refute.",
+      "expectedPublished": 1,
+      "prTitle": "feat(billing): render an invoice footer",
+      "prBody": "Adds a footer to the invoice.",
+      "rule": {
+        "uuid": "rule-no-duplicated-block",
+        "title": "Do not duplicate a block of statements in a file",
+        "rule": "A repeated sequence of statements inside the same file must be extracted into a named helper and reused.",
+        "path": "",
+        "severity": "medium",
+        "contextNeed": {
+          "need": "full-file",
+          "sourceHash": "eval-fixture",
+          "source": "author",
+          "inferredAt": "2026-09-09T00:00:00.000Z"
+        }
+      },
+      "changedFiles": [
+        {
+          "filename": "src/billing/invoice.service.ts",
+          "patch": "@@ -12,2 +12,6 @@\n     renderFooter(inv: any): string {\n+        const name = inv.customer.name.trim().toUpperCase();\n+        const doc = inv.customer.document.replace(/[^0-9]/g, '');\n+        const city = inv.customer.address.city.trim();\n+        return `${name} ${doc} ${city}`;\n     }",
+          "patchWithLinesStr": "## file: 'src/billing/invoice.service.ts'\n\n@@ -12,2 +12,6 @@\n__new hunk__\n12      renderFooter(inv: any): string {\n13 +        const name = inv.customer.name.trim().toUpperCase();\n14 +        const doc = inv.customer.document.replace(/[^0-9]/g, '');\n15 +        const city = inv.customer.address.city.trim();\n16 +        return `${name} ${doc} ${city}`;\n17      }"
+        }
+      ],
+      "repoFiles": {
+        "src/billing/invoice.service.ts": "export class InvoiceService {\n    renderHeader(inv: any): string {\n        const name = inv.customer.name.trim().toUpperCase();\n        const doc = inv.customer.document.replace(/[^0-9]/g, '');\n        const city = inv.customer.address.city.trim();\n        return `${name} ${doc} ${city}`;\n    }\n\n    renderTotals(inv: any): string {\n        return String(inv.total);\n    }\n\n    renderFooter(inv: any): string {\n        const name = inv.customer.name.trim().toUpperCase();\n        const doc = inv.customer.document.replace(/[^0-9]/g, '');\n        const city = inv.customer.address.city.trim();\n        return `${name} ${doc} ${city}`;\n    }\n}\n"
+      }
+    },
+    {
+      "caseId": "full-file-duplicate-block-in-the-same-file-CONTROL",
+      "claimFamily": "none",
+      "why": "The four added lines are byte-identical to renderHeader, ten lines above and outside the hunk. The duplication is visible only with the rest of the file, and the claim checker cannot help: a repo-wide grep has no symbol to refute.",
+      "expectedPublished": 1,
+      "prTitle": "feat(billing): render an invoice footer",
+      "prBody": "Adds a footer to the invoice.",
+      "rule": {
+        "uuid": "rule-no-duplicated-block",
+        "title": "Do not duplicate a block of statements in a file",
+        "rule": "A repeated sequence of statements inside the same file must be extracted into a named helper and reused.",
+        "path": "",
+        "severity": "medium"
+      },
+      "changedFiles": [
+        {
+          "filename": "src/billing/invoice.service.ts",
+          "patch": "@@ -12,2 +12,6 @@\n     renderFooter(inv: any): string {\n+        const name = inv.customer.name.trim().toUpperCase();\n+        const doc = inv.customer.document.replace(/[^0-9]/g, '');\n+        const city = inv.customer.address.city.trim();\n+        return `${name} ${doc} ${city}`;\n     }",
+          "patchWithLinesStr": "## file: 'src/billing/invoice.service.ts'\n\n@@ -12,2 +12,6 @@\n__new hunk__\n12      renderFooter(inv: any): string {\n13 +        const name = inv.customer.name.trim().toUpperCase();\n14 +        const doc = inv.customer.document.replace(/[^0-9]/g, '');\n15 +        const city = inv.customer.address.city.trim();\n16 +        return `${name} ${doc} ${city}`;\n17      }"
+        }
+      ],
+      "repoFiles": {
+        "src/billing/invoice.service.ts": "export class InvoiceService {\n    renderHeader(inv: any): string {\n        const name = inv.customer.name.trim().toUpperCase();\n        const doc = inv.customer.document.replace(/[^0-9]/g, '');\n        const city = inv.customer.address.city.trim();\n        return `${name} ${doc} ${city}`;\n    }\n\n    renderTotals(inv: any): string {\n        return String(inv.total);\n    }\n\n    renderFooter(inv: any): string {\n        const name = inv.customer.name.trim().toUpperCase();\n        const doc = inv.customer.document.replace(/[^0-9]/g, '');\n        const city = inv.customer.address.city.trim();\n        return `${name} ${doc} ${city}`;\n    }\n}\n"
+      }
+    }
+  ]
+}

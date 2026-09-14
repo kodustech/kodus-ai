@@ -710,6 +710,35 @@ describe('ValidatePrerequisitesStage', () => {
             expect(body).not.toContain('trial has ended');
         });
 
+        it('posts a top-up comment (not BYOK-required, not trial-ended) when Kodus credits are exhausted', async () => {
+            const context = makeContext();
+
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: false,
+                    errorType: ValidationErrorType.CREDITS_EXHAUSTED,
+                    subscriptionStatus: 'active',
+                    metadata: { creditsExhausted: true, creditBalanceUsd: 0 },
+                },
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            await stage.execute(context);
+
+            const body =
+                mockCodeManagementService.createIssueComment.mock.calls[0][0]
+                    .body;
+            expect(body).toContain('Kodus credits');
+            expect(body).toContain('/byok#kodus');
+            expect(body).not.toContain('BYOK Configuration Required');
+            expect(body).not.toContain('trial has ended');
+        });
+
         it('posts a "subscription check unavailable" message (not credits, not trial-ended) on a transient billing failure', async () => {
             const context = makeContext();
 

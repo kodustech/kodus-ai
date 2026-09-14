@@ -146,6 +146,16 @@ jobs:
             # specs read it (one also accepts API_FIREWORKS_API_KEY, the name
             # the product itself reads, but this is the secret we actually
             # have wired).
+            # `repo-lookup.contract.spec.ts` drives the REAL LocalSandbox, which
+            # shells out to ripgrep the same way it does in production - the
+            # product image installs it (docker/Dockerfile). A runner without it
+            # fails the spec with `spawn rg ENOENT`, which says nothing about the
+            # contract under test. Installing it here keeps the spec measuring
+            # the lookup instead of the runner's package list.
+            - name: Install ripgrep (the local sandbox shells out to it)
+              if: always()
+              run: sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep
+
             - name: LLM provider contracts
               id: llm
               # Run even if the previous step failed — the two tiers are

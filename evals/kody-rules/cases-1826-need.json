@@ -1,0 +1,237 @@
+{
+  "__doc": "Issue #1826 — the POSITIVE corpus for step 3 (contextNeed + deterministic retrieval).\n\ncases-1826.json is 100% negative: every correct answer is 0. It proved the claim\nchecker (step 2), which can only DROP a finding. It cannot prove step 3, because\nno case in it declares a contextNeed at all — needOf() falls through to diff-only,\nso retrieveForShard never runs there.\n\nHere the correct answer is 1 for the paired A/B cases: a rule the customer wrote\nthat CANNOT fire without repository context. Each is run twice — once with the\nneed declared, once without (the -CONTROL twin, byte-identical otherwise). The\ngap between the two IS the value of step 3; if there is no gap, the feature does\nnothing.\n\nC is the guard in the other direction: retrieval must not manufacture a finding\nwhere the sibling really exists.\n\nNOTE: these cases carry a raw `patch` as well as `patchWithLinesStr`, the way\nproduction FileChange objects do. `diffOf` in rule-context.retriever.ts prefers\n`patch`, and symbol extraction cannot parse the line-numbered format — a case\nwith only patchWithLinesStr reports symbol-references as UNMET.",
+  "cases": [
+    {
+      "caseId": "sibling-file-no-test-anywhere",
+      "claimFamily": "missing",
+      "why": "The PR adds a new route handler and NO companion test exists — not in the PR, not in the repository. The rule is supposed to fire. Only a sibling-path existence check can establish that; the hunk shows the controller alone.",
+      "expectedPublished": 1,
+      "prTitle": "feat(payments): expose payment lookup",
+      "prBody": "Adds GET /payments/:id.",
+      "rule": {
+        "uuid": "rule-endpoint-needs-a-test",
+        "title": "Every new HTTP route handler ships with a test",
+        "rule": "A new HTTP route handler must be accompanied by a test file next to it (`<name>.spec.ts`). Untested endpoints are the most common source of regressions.",
+        "path": "",
+        "severity": "medium",
+        "contextNeed": {
+          "need": "sibling-file",
+          "sourceHash": "eval-fixture",
+          "source": "author",
+          "inferredAt": "2026-09-08T00:00:00.000Z"
+        }
+      },
+      "changedFiles": [
+        {
+          "filename": "src/routes/payments.controller.ts",
+          "patch": "@@ -0,0 +1,12 @@\n+import { Controller, Get, Param } from '@nestjs/common';\n+import { PaymentsService } from './payments.service';\n+\n+@Controller('payments')\n+export class PaymentsController {\n+    constructor(private readonly payments: PaymentsService) {}\n+\n+    @Get(':id')\n+    async findOne(@Param('id') id: string) {\n+        return this.payments.findOne(id);\n+    }\n+}",
+          "patchWithLinesStr": "## file: 'src/routes/payments.controller.ts'\n\n@@ -0,0 +1,12 @@\n__new hunk__\n1 +import { Controller, Get, Param } from '@nestjs/common';\n2 +import { PaymentsService } from './payments.service';\n3 +\n4 +@Controller('payments')\n5 +export class PaymentsController {\n6 +    constructor(private readonly payments: PaymentsService) {}\n7 +\n8 +    @Get(':id')\n9 +    async findOne(@Param('id') id: string) {\n10 +        return this.payments.findOne(id);\n11 +    }\n12 +}"
+        }
+      ],
+      "repoFiles": {
+        "src/routes/payments.controller.ts": "import { Controller, Get, Param } from '@nestjs/common';\nimport { PaymentsService } from './payments.service';\n\n@Controller('payments')\nexport class PaymentsController {\n    constructor(private readonly payments: PaymentsService) {}\n\n    @Get(':id')\n    async findOne(@Param('id') id: string) {\n        return this.payments.findOne(id);\n    }\n}\n"
+      }
+    },
+    {
+      "caseId": "sibling-file-no-test-anywhere-CONTROL",
+      "claimFamily": "missing",
+      "why": "The PR adds a new route handler and NO companion test exists — not in the PR, not in the repository. The rule is supposed to fire. Only a sibling-path existence check can establish that; the hunk shows the controller alone.",
+      "expectedPublished": 1,
+      "prTitle": "feat(payments): expose payment lookup",
+      "prBody": "Adds GET /payments/:id.",
+      "rule": {
+        "uuid": "rule-endpoint-needs-a-test",
+        "title": "Every new HTTP route handler ships with a test",
+        "rule": "A new HTTP route handler must be accompanied by a test file next to it (`<name>.spec.ts`). Untested endpoints are the most common source of regressions.",
+        "path": "",
+        "severity": "medium"
+      },
+      "changedFiles": [
+        {
+          "filename": "src/routes/payments.controller.ts",
+          "patch": "@@ -0,0 +1,12 @@\n+import { Controller, Get, Param } from '@nestjs/common';\n+import { PaymentsService } from './payments.service';\n+\n+@Controller('payments')\n+export class PaymentsController {\n+    constructor(private readonly payments: PaymentsService) {}\n+\n+    @Get(':id')\n+    async findOne(@Param('id') id: string) {\n+        return this.payments.findOne(id);\n+    }\n+}",
+          "patchWithLinesStr": "## file: 'src/routes/payments.controller.ts'\n\n@@ -0,0 +1,12 @@\n__new hunk__\n1 +import { Controller, Get, Param } from '@nestjs/common';\n2 +import { PaymentsService } from './payments.service';\n3 +\n4 +@Controller('payments')\n5 +export class PaymentsController {\n6 +    constructor(private readonly payments: PaymentsService) {}\n7 +\n8 +    @Get(':id')\n9 +    async findOne(@Param('id') id: string) {\n10 +        return this.payments.findOne(id);\n11 +    }\n12 +}"
+        }
+      ],
+      "repoFiles": {
+        "src/routes/payments.controller.ts": "import { Controller, Get, Param } from '@nestjs/common';\nimport { PaymentsService } from './payments.service';\n\n@Controller('payments')\nexport class PaymentsController {\n    constructor(private readonly payments: PaymentsService) {}\n\n    @Get(':id')\n    async findOne(@Param('id') id: string) {\n        return this.payments.findOne(id);\n    }\n}\n"
+      }
+    },
+    {
+      "caseId": "symbol-references-helper-really-exists",
+      "claimFamily": "duplicate",
+      "why": "src/shared/strings.ts ALREADY exports `slugify`. The PR adds a second copy in src/blog/slug.ts, which is exactly what the rule forbids. Nothing in the hunk says so: only a repository grep does. The claim checker cannot help here — it can drop a finding, never create one.",
+      "expectedPublished": 1,
+      "prTitle": "feat(blog): render post slugs",
+      "prBody": "Adds slug generation for blog posts.",
+      "rule": {
+        "uuid": "rule-no-duplicate-helpers",
+        "title": "Do not reimplement a helper that already exists",
+        "rule": "Before adding a small utility function, use the one already published in `src/shared`. Duplicated helpers drift apart and the two behaviours diverge silently.",
+        "path": "",
+        "severity": "medium",
+        "contextNeed": {
+          "need": "symbol-references",
+          "sourceHash": "eval-fixture",
+          "source": "author",
+          "inferredAt": "2026-09-08T00:00:00.000Z"
+        }
+      },
+      "changedFiles": [
+        {
+          "filename": "src/blog/slug.ts",
+          "patch": "@@ -0,0 +1,8 @@\n+export function slugify(title: string): string {\n+    return title\n+        .toLowerCase()\n+        .normalize('NFD')\n+        .replace(/[\\u0300-\\u036f]/g, '')\n+        .replace(/[^a-z0-9]+/g, '-')\n+        .replace(/^-|-$/g, '');\n+}",
+          "patchWithLinesStr": "## file: 'src/blog/slug.ts'\n\n@@ -0,0 +1,8 @@\n__new hunk__\n1 +export function slugify(title: string): string {\n2 +    return title\n3 +        .toLowerCase()\n4 +        .normalize('NFD')\n5 +        .replace(/[\\u0300-\\u036f]/g, '')\n6 +        .replace(/[^a-z0-9]+/g, '-')\n7 +        .replace(/^-|-$/g, '');\n8 +}"
+        }
+      ],
+      "repoFiles": {
+        "src/blog/slug.ts": "export function slugify(title: string): string {\n    return title\n        .toLowerCase()\n        .normalize('NFD')\n        .replace(/[\\u0300-\\u036f]/g, '')\n        .replace(/[^a-z0-9]+/g, '-')\n        .replace(/^-|-$/g, '');\n}\n",
+        "src/shared/strings.ts": "export function titleCase(value: string): string {\n    return value.replace(/\\b\\w/g, (c) => c.toUpperCase());\n}\n\nexport function truncate(value: string, max: number): string {\n    return value.length <= max ? value : `${value.slice(0, max - 1)}\\u2026`;\n}\n\nexport function slugify(value: string): string {\n    return value\n        .toLowerCase()\n        .replace(/[^a-z0-9]+/g, '-')\n        .replace(/^-|-$/g, '');\n}\n"
+      }
+    },
+    {
+      "caseId": "symbol-references-helper-really-exists-CONTROL",
+      "claimFamily": "duplicate",
+      "why": "src/shared/strings.ts ALREADY exports `slugify`. The PR adds a second copy in src/blog/slug.ts, which is exactly what the rule forbids. Nothing in the hunk says so: only a repository grep does. The claim checker cannot help here — it can drop a finding, never create one.",
+      "expectedPublished": 1,
+      "prTitle": "feat(blog): render post slugs",
+      "prBody": "Adds slug generation for blog posts.",
+      "rule": {
+        "uuid": "rule-no-duplicate-helpers",
+        "title": "Do not reimplement a helper that already exists",
+        "rule": "Before adding a small utility function, use the one already published in `src/shared`. Duplicated helpers drift apart and the two behaviours diverge silently.",
+        "path": "",
+        "severity": "medium"
+      },
+      "changedFiles": [
+        {
+          "filename": "src/blog/slug.ts",
+          "patch": "@@ -0,0 +1,8 @@\n+export function slugify(title: string): string {\n+    return title\n+        .toLowerCase()\n+        .normalize('NFD')\n+        .replace(/[\\u0300-\\u036f]/g, '')\n+        .replace(/[^a-z0-9]+/g, '-')\n+        .replace(/^-|-$/g, '');\n+}",
+          "patchWithLinesStr": "## file: 'src/blog/slug.ts'\n\n@@ -0,0 +1,8 @@\n__new hunk__\n1 +export function slugify(title: string): string {\n2 +    return title\n3 +        .toLowerCase()\n4 +        .normalize('NFD')\n5 +        .replace(/[\\u0300-\\u036f]/g, '')\n6 +        .replace(/[^a-z0-9]+/g, '-')\n7 +        .replace(/^-|-$/g, '');\n8 +}"
+        }
+      ],
+      "repoFiles": {
+        "src/blog/slug.ts": "export function slugify(title: string): string {\n    return title\n        .toLowerCase()\n        .normalize('NFD')\n        .replace(/[\\u0300-\\u036f]/g, '')\n        .replace(/[^a-z0-9]+/g, '-')\n        .replace(/^-|-$/g, '');\n}\n",
+        "src/shared/strings.ts": "export function titleCase(value: string): string {\n    return value.replace(/\\b\\w/g, (c) => c.toUpperCase());\n}\n\nexport function truncate(value: string, max: number): string {\n    return value.length <= max ? value : `${value.slice(0, max - 1)}\\u2026`;\n}\n\nexport function slugify(value: string): string {\n    return value\n        .toLowerCase()\n        .replace(/[^a-z0-9]+/g, '-')\n        .replace(/^-|-$/g, '');\n}\n"
+      }
+    },
+    {
+      "caseId": "sibling-file-test-already-in-repo",
+      "claimFamily": "missing",
+      "why": "The companion spec ALREADY exists in the repository and this PR does not touch it. Correct output is 0. This guards the positive cases: a fix that makes the rule fire must not make it fire here.",
+      "expectedPublished": 0,
+      "prTitle": "refactor(refunds): tidy the lookup handler",
+      "prBody": "No behaviour change.",
+      "rule": {
+        "uuid": "rule-endpoint-needs-a-test",
+        "title": "Every new HTTP route handler ships with a test",
+        "rule": "A new HTTP route handler must be accompanied by a test file next to it (`<name>.spec.ts`). Untested endpoints are the most common source of regressions.",
+        "path": "",
+        "severity": "medium",
+        "contextNeed": {
+          "need": "sibling-file",
+          "sourceHash": "eval-fixture",
+          "source": "author",
+          "inferredAt": "2026-09-08T00:00:00.000Z"
+        }
+      },
+      "changedFiles": [
+        {
+          "filename": "src/routes/refunds.controller.ts",
+          "patch": "@@ -0,0 +1,12 @@\n+import { Controller, Get, Param } from '@nestjs/common';\n+import { RefundsService } from './refunds.service';\n+\n+@Controller('refunds')\n+export class RefundsController {\n+    constructor(private readonly refunds: RefundsService) {}\n+\n+    @Get(':id')\n+    async findOne(@Param('id') id: string) {\n+        return this.refunds.findOne(id);\n+    }\n+}",
+          "patchWithLinesStr": "## file: 'src/routes/refunds.controller.ts'\n\n@@ -0,0 +1,12 @@\n__new hunk__\n1 +import { Controller, Get, Param } from '@nestjs/common';\n2 +import { RefundsService } from './refunds.service';\n3 +\n4 +@Controller('refunds')\n5 +export class RefundsController {\n6 +    constructor(private readonly refunds: RefundsService) {}\n7 +\n8 +    @Get(':id')\n9 +    async findOne(@Param('id') id: string) {\n10 +        return this.refunds.findOne(id);\n11 +    }\n12 +}"
+        }
+      ],
+      "repoFiles": {
+        "src/routes/refunds.controller.ts": "import { Controller, Get, Param } from '@nestjs/common';\nimport { RefundsService } from './refunds.service';\n\n@Controller('refunds')\nexport class RefundsController {\n    constructor(private readonly refunds: RefundsService) {}\n\n    @Get(':id')\n    async findOne(@Param('id') id: string) {\n        return this.refunds.findOne(id);\n    }\n}\n",
+        "src/routes/refunds.controller.spec.ts": "import { RefundsController } from './refunds.controller';\n\ndescribe('RefundsController', () => {\n    it('returns a refund by id', async () => {\n        expect(new RefundsController({ findOne: async () => ({ id: '1' }) })).toBeDefined();\n    });\n});\n"
+      }
+    },
+    {
+      "caseId": "sibling-file-test-already-in-repo-CONTROL",
+      "claimFamily": "missing",
+      "why": "Same world as its twin, judged diff-only. The shard sees a new route handler and no test in the PR, so a model that guesses fires here — and is WRONG, because the spec is in the repository. This is the direction the positive cases cannot see: guessing pays off there and costs here.",
+      "expectedPublished": 0,
+      "prTitle": "refactor(refunds): tidy the lookup handler",
+      "prBody": "No behaviour change.",
+      "rule": {
+        "uuid": "rule-endpoint-needs-a-test",
+        "title": "Every new HTTP route handler ships with a test",
+        "rule": "A new HTTP route handler must be accompanied by a test file next to it (`<name>.spec.ts`). Untested endpoints are the most common source of regressions.",
+        "path": "",
+        "severity": "medium"
+      },
+      "changedFiles": [
+        {
+          "filename": "src/routes/refunds.controller.ts",
+          "patch": "@@ -0,0 +1,12 @@\n+import { Controller, Get, Param } from '@nestjs/common';\n+import { RefundsService } from './refunds.service';\n+\n+@Controller('refunds')\n+export class RefundsController {\n+    constructor(private readonly refunds: RefundsService) {}\n+\n+    @Get(':id')\n+    async findOne(@Param('id') id: string) {\n+        return this.refunds.findOne(id);\n+    }\n+}",
+          "patchWithLinesStr": "## file: 'src/routes/refunds.controller.ts'\n\n@@ -0,0 +1,12 @@\n__new hunk__\n1 +import { Controller, Get, Param } from '@nestjs/common';\n2 +import { RefundsService } from './refunds.service';\n3 +\n4 +@Controller('refunds')\n5 +export class RefundsController {\n6 +    constructor(private readonly refunds: RefundsService) {}\n7 +\n8 +    @Get(':id')\n9 +    async findOne(@Param('id') id: string) {\n10 +        return this.refunds.findOne(id);\n11 +    }\n12 +}"
+        }
+      ],
+      "repoFiles": {
+        "src/routes/refunds.controller.ts": "import { Controller, Get, Param } from '@nestjs/common';\nimport { RefundsService } from './refunds.service';\n\n@Controller('refunds')\nexport class RefundsController {\n    constructor(private readonly refunds: RefundsService) {}\n\n    @Get(':id')\n    async findOne(@Param('id') id: string) {\n        return this.refunds.findOne(id);\n    }\n}\n",
+        "src/routes/refunds.controller.spec.ts": "import { RefundsController } from './refunds.controller';\n\ndescribe('RefundsController', () => {\n    it('returns a refund by id', async () => {\n        expect(new RefundsController({ findOne: async () => ({ id: '1' }) })).toBeDefined();\n    });\n});\n"
+      }
+    },
+    {
+      "caseId": "symbol-references-duplicate-in-an-unguessable-place",
+      "claimFamily": "duplicate",
+      "why": "`normalizePhoneNumber` already exists in src/legacy/contact-utils.ts. Unlike the other duplicate case, the rule text names NO location and the diff carries no hint, so there is nothing to guess from: a model without repository access can only stay silent. Firing here REQUIRES the grep. This is the case that separates knowing from guessing right.",
+      "expectedPublished": 1,
+      "prTitle": "feat(checkout): normalise phone input",
+      "prBody": "Strips formatting from phone numbers before validation.",
+      "rule": {
+        "uuid": "rule-no-duplicate-helpers-anywhere",
+        "title": "Reuse an equivalent helper that already exists",
+        "rule": "Before adding a utility function, reuse an equivalent one that already exists anywhere in this repository instead of writing a second implementation.",
+        "path": "",
+        "severity": "medium",
+        "contextNeed": {
+          "need": "symbol-references",
+          "sourceHash": "eval-fixture",
+          "source": "author",
+          "inferredAt": "2026-09-09T00:00:00.000Z"
+        }
+      },
+      "changedFiles": [
+        {
+          "filename": "src/checkout/phone.ts",
+          "patch": "@@ -0,0 +1,3 @@\n+export function normalizePhoneNumber(raw: string): string {\n+    return raw.replace(/[^0-9+]/g, );\n+}",
+          "patchWithLinesStr": "## file: src/checkout/phone.ts\n\n@@ -0,0 +1,3 @@\n__new hunk__\n1 +export function normalizePhoneNumber(raw: string): string {\n2 +    return raw.replace(/[^0-9+]/g, );\n3 +}"
+        }
+      ],
+      "repoFiles": {
+        "src/checkout/phone.ts": "export function normalizePhoneNumber(raw: string): string {\n    return raw.replace(/[^0-9+]/g, );\n}\n",
+        "src/legacy/contact-utils.ts": "export function formatAddress(a: string): string {\n    return a.trim();\n}\n\nexport function normalizePhoneNumber(value: string): string {\n    return value.replace(/[^0-9+]/g, );\n}\n",
+        "src/shared/strings.ts": "export function titleCase(v: string): string {\n    return v.replace(/\\b\\w/g, (c) => c.toUpperCase());\n}\n"
+      }
+    },
+    {
+      "caseId": "symbol-references-duplicate-in-an-unguessable-place-CONTROL",
+      "claimFamily": "duplicate",
+      "why": "`normalizePhoneNumber` already exists in src/legacy/contact-utils.ts. Unlike the other duplicate case, the rule text names NO location and the diff carries no hint, so there is nothing to guess from: a model without repository access can only stay silent. Firing here REQUIRES the grep. This is the case that separates knowing from guessing right.",
+      "expectedPublished": 1,
+      "prTitle": "feat(checkout): normalise phone input",
+      "prBody": "Strips formatting from phone numbers before validation.",
+      "rule": {
+        "uuid": "rule-no-duplicate-helpers-anywhere",
+        "title": "Reuse an equivalent helper that already exists",
+        "rule": "Before adding a utility function, reuse an equivalent one that already exists anywhere in this repository instead of writing a second implementation.",
+        "path": "",
+        "severity": "medium"
+      },
+      "changedFiles": [
+        {
+          "filename": "src/checkout/phone.ts",
+          "patch": "@@ -0,0 +1,3 @@\n+export function normalizePhoneNumber(raw: string): string {\n+    return raw.replace(/[^0-9+]/g, );\n+}",
+          "patchWithLinesStr": "## file: src/checkout/phone.ts\n\n@@ -0,0 +1,3 @@\n__new hunk__\n1 +export function normalizePhoneNumber(raw: string): string {\n2 +    return raw.replace(/[^0-9+]/g, );\n3 +}"
+        }
+      ],
+      "repoFiles": {
+        "src/checkout/phone.ts": "export function normalizePhoneNumber(raw: string): string {\n    return raw.replace(/[^0-9+]/g, );\n}\n",
+        "src/legacy/contact-utils.ts": "export function formatAddress(a: string): string {\n    return a.trim();\n}\n\nexport function normalizePhoneNumber(value: string): string {\n    return value.replace(/[^0-9+]/g, );\n}\n",
+        "src/shared/strings.ts": "export function titleCase(v: string): string {\n    return v.replace(/\\b\\w/g, (c) => c.toUpperCase());\n}\n"
+      }
+    }
+  ]
+}

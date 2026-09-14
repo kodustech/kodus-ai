@@ -228,6 +228,7 @@ export const maskKey = (key?: string): string => {
  * so the same provider reads with the same colour everywhere on the screen.
  */
 export const PROVIDER_AVATAR: Record<string, string> = {
+    kodus: "bg-primary-light/15 text-primary-light",
     anthropic: "bg-pink-500/15 text-pink-300",
     anthropic_compatible: "bg-pink-500/15 text-pink-300",
     openai: "bg-emerald-500/15 text-emerald-300",
@@ -245,10 +246,12 @@ export const PROVIDER_AVATAR: Record<string, string> = {
 
 /** Avatar tint for a provider, falling back to a neutral card tint. */
 export const providerAvatarTint = (provider?: string): string =>
-    (provider && PROVIDER_AVATAR[provider]) ?? "bg-card-lv2 text-text-secondary";
+    (provider && PROVIDER_AVATAR[provider]) ??
+    "bg-card-lv2 text-text-secondary";
 
 /** Single-letter glyph per provider for the avatar badge. */
 const PROVIDER_LETTER: Record<string, string> = {
+    kodus: "K",
     anthropic: "A",
     anthropic_compatible: "A",
     openai: "O",

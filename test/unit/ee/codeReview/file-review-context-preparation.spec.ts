@@ -8,9 +8,7 @@ import {
 
 describe('FileReviewContextPreparation (EE)', () => {
     let service: FileReviewContextPreparation;
-    const mockAiAnalysisService = {
-        selectReviewMode: jest.fn(),
-    };
+    const mockAiAnalysisService = {};
 
     beforeEach(async () => {
         const module: TestingModule = await Test.createTestingModule({
@@ -106,9 +104,6 @@ describe('FileReviewContextPreparation (EE)', () => {
 
             const result = await (service as any).determineReviewMode(options);
 
-            expect(
-                mockAiAnalysisService.selectReviewMode,
-            ).not.toHaveBeenCalled();
             expect(result).toBe(ReviewModeResponse.HEAVY_MODE);
         });
     });

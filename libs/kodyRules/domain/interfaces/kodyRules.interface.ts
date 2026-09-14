@@ -94,6 +94,43 @@ export interface IKodyRule {
      * no migration).
      */
     atoms?: IKodyRuleAtoms;
+    /**
+     * What this rule must SEE to be judged honestly (issue #1826). Absent means
+     * `diff-only`, i.e. today's behavior — every rule judged against one file's
+     * hunks and about three lines of context. Inferred once at save by the same
+     * compile call that decides the detector, or set by the author; stored
+     * inline on the embedded rule, like `detector`, `summary` and `atoms`.
+     */
+    contextNeed?: IKodyRuleContextNeed;
+    /**
+     * The file kinds this rule's own text scopes it to (issue #1826).
+     *
+     * Distinct from `path`, which the AUTHOR writes as a glob, and from
+     * `scope`, which says file-level vs PR-level. This is the language scope
+     * the rule states in prose — "Ruby does not require semicolons", "in our
+     * migrations", "in React components" — inferred once at save by the same
+     * compile call that decides the detector, or set by the author.
+     *
+     * Why it lives on the RULE and not inside `detector.extensions`, where
+     * #1831 first put it: a detector exists only for MECHANICAL rules. Measured
+     * on the fleet, that is 816 of 10.918 active rules (7,5%) — so as long as
+     * the scope lived in the detector plan, the other 92,5% had nowhere to
+     * record it and the semantic judge sharded every rule against every file
+     * regardless of what the rule said about itself. `detector.extensions`
+     * stays as the mechanical router's copy; both narrow through the same
+     * `extensionScopeAppliesToFile` predicate.
+     */
+    fileScope?: IKodyRuleFileScope;
+    /**
+     * Record that the detector compiler already ran on this exact rule text and
+     * examples. Purely a cost gate — it changes no review behavior.
+     *
+     * Without it the nightly sweep asked "does this rule have a detector?" to
+     * decide what to compile, and a DECLINED rule never gets one: 92,5% of the
+     * fleet was therefore recompiled every night forever, on the customer's own
+     * BYOK key, to reach the same verdict. See `ruleCompileHash`.
+     */
+    compileAttempt?: IKodyRuleCompileAttempt;
     repositoryId: string;
     /**
      * For rules synced into the global scope (`repositoryId="global"`,
@@ -182,6 +219,110 @@ export interface IKodyRulesExtendedContext {
 export interface IKodyRulesExample {
     snippet: string;
     isCorrect: boolean;
+}
+
+/**
+ * The context a rule needs beyond the diff to be judged (issue #1826).
+ *
+ * Rules whose truth lives outside the hunk either fire wrongly ("this import is
+ * unused" when it is used twenty lines below) or cannot fire at all ("every new
+ * endpoint has a test"). Declaring the need is what lets the pipeline retrieve
+ * exactly that slice — and, when it cannot, skip the rule instead of judging it
+ * blind.
+ *
+ * `diff-only` is the safe direction and the default: an over-declared need
+ * means the customer's rule stops being judged on a sandbox-less review.
+ */
+export type KodyRuleContextNeed =
+    | 'diff-only'
+    /**
+     * The rest of THIS file. The issue's own table calls this the majority
+     * case: "is this import used later", "is this function too long", "does
+     * every class here have a docstring", "is this block already written above".
+     * None of them can be judged from a hunk, and only the first leaves an
+     * assertion a grep could refute afterwards — so for the rest, seeing the
+     * scope is the only thing that works.
+     *
+     * It was tried once as an unconditional whole-file attachment on every
+     * shard instead of a declared need, and measured worse on every axis:
+     * -14pp recall (untouched code invites comments on untouched code),
+     * +85.4% input tokens on every shard including the ones that never needed
+     * it, and 94.2% of changed bytes never delivered anyway because a file over
+     * the budget was dropped whole. Declared and sliced, the cost lands only on
+     * the rules that asked and a large file degrades to its enclosing scope
+     * instead of to nothing.
+     */
+    | 'full-file'
+    | 'symbol-references'
+    | 'sibling-file'
+    | 'cited-file';
+
+export interface IKodyRuleContextNeed {
+    need: KodyRuleContextNeed;
+    /** sha256 of the exact `rule` text the inference was made from. */
+    sourceHash: string;
+    /**
+     * Who decided. An `author` value is never overwritten by inference — the
+     * rule's owner outranks the compiler's guess about their own rule.
+     */
+    source: 'compiler' | 'author';
+    inferredAt: Date;
+    /** Model id that inferred it. Absent for an author-set value. */
+    model?: string;
+}
+
+/**
+ * A rule's inferred language scope (see `IKodyRule.fileScope`). Same envelope
+ * as `IKodyRuleContextNeed` — hash-gated against the rule text, and an author
+ * value the compiler never overwrites — because it is inferred by the same
+ * call, from the same text, and must go stale on the same edit.
+ */
+export interface IKodyRuleFileScope {
+    /**
+     * Lowercase, dot-prefixed suffixes: ['.rb', '.rake', '.erb'], and compound
+     * kinds like '.blade.php' or '.spec.ts'. Matched by SUFFIX, so '.ts'
+     * covers 'a.spec.ts' while '.spec.ts' covers only the spec files.
+     *
+     * Never empty: an empty list would be indistinguishable from "scoped to
+     * nothing", so a rule that is genuinely language-agnostic ("no hardcoded
+     * credentials") carries NO `fileScope` at all.
+     */
+    extensions: string[];
+    /** sha256 of the exact `rule` text the inference was made from. */
+    sourceHash: string;
+    /**
+     * Who decided. An `author` value is never overwritten by inference — the
+     * rule's owner outranks the compiler's guess about their own rule.
+     */
+    source: 'compiler' | 'author';
+    inferredAt: Date;
+    /** Model id that inferred it. Absent for an author-set value. */
+    model?: string;
+}
+
+/**
+ * A record that the compiler RAN, independent of what it concluded.
+ *
+ * Deliberately not merged into `detector`: the whole point is to remember the
+ * attempt on the rules that got no detector, which is most of them. And
+ * deliberately not merged into `fileScope` or `contextNeed` either — those
+ * record a RESULT and are absent when the result is "nothing", so neither can
+ * distinguish "never asked" from "asked, answer was none".
+ */
+export interface IKodyRuleCompileAttempt {
+    /** `ruleCompileHash` of the rule text + examples this attempt ran on. */
+    sourceHash: string;
+    attemptedAt: Date;
+    /**
+     * What the gate concluded. `declined` is the normal outcome and is exactly
+     * the case the marker exists for; an ERRORED attempt is never recorded, so
+     * a transport failure cannot freeze a rule out of ever being compiled.
+     */
+    outcome: 'compiled' | 'declined';
+    /** Why, when declined — the same vocabulary `CompileResult` reports. */
+    declineReason?: string;
+    /** Model marker that ran it ('byok' | 'system'). */
+    model?: string;
 }
 
 export interface IKodyRuleSummary {

@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler.ts"
+        ],
+        "createdAt": "2026-09-09T15:31:58.492Z",
+        "reason": "L66 is prose inside an LLM prompt string: the rule-classifier lists \"use next/image instead of <img>\" as an example of a rule that is judged from one line. There is no markup in this file — it builds a prompt, not a page."
+      }
+    ]
+  }
+}

@@ -1,4 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import {
     SUPPORTED_LANGUAGES,
     ValidationCandidate,
@@ -93,6 +94,7 @@ export class ValidateSuggestionsStage extends BasePipelineStage<CodeReviewPipeli
                 candidates,
                 organizationAndTeamData,
                 prNumber,
+                context.codeReviewConfig?.resolvedModelSlot,
             );
 
             const updatedSuggestions = this.mapValidationResults(
@@ -181,6 +183,7 @@ export class ValidateSuggestionsStage extends BasePipelineStage<CodeReviewPipeli
         candidates: ValidationCandidate[],
         orgData: OrganizationAndTeamData,
         prNumber: number,
+        byokConfig?: NormalizedModel,
     ): Promise<Set<string>> {
         // Step 1: Syntax validation via kodus-graph parse in a dedicated sandbox
         const syntaxValidIds =
@@ -199,6 +202,7 @@ export class ValidateSuggestionsStage extends BasePipelineStage<CodeReviewPipeli
                     candidate,
                     orgData,
                     prNumber,
+                    byokConfig,
                 );
                 return isValid ? candidate.id : null;
             }),
@@ -216,6 +220,7 @@ export class ValidateSuggestionsStage extends BasePipelineStage<CodeReviewPipeli
         candidate: ValidationCandidate,
         orgData: OrganizationAndTeamData,
         prNumber: number,
+        byokConfig?: NormalizedModel,
     ): Promise<boolean> {
         try {
             const code = Buffer.from(candidate.encodedData, 'base64').toString(
@@ -230,6 +235,7 @@ export class ValidateSuggestionsStage extends BasePipelineStage<CodeReviewPipeli
                 },
                 orgData,
                 prNumber,
+                byokConfig,
             );
             return !!res?.isValid;
         } catch (error) {
@@ -420,6 +426,7 @@ export class ValidateSuggestionsStage extends BasePipelineStage<CodeReviewPipeli
                             context.organizationAndTeamData,
                             context.pullRequest.number,
                             suggestion,
+                            context.codeReviewConfig?.resolvedModelSlot,
                         );
 
                     if (isSimple) return suggestion;

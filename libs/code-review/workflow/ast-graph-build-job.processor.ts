@@ -9,11 +9,11 @@ import {
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
 import { PlatformType } from '@libs/core/domain/enums';
+import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import {
-    ISandboxProvider,
-    SANDBOX_PROVIDER_TOKEN,
-    SandboxInstance,
-} from '@libs/sandbox/domain/contracts/sandbox.provider';
+    ISandboxLeaseManager,
+    SANDBOX_LEASE_MANAGER_TOKEN,
+} from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { GraphIndexerService } from '@libs/code-review/infrastructure/adapters/services/graph/graph-indexer.service';
 import {
@@ -23,6 +23,14 @@ import {
 import { AstGraphStatus } from '@libs/code-review/infrastructure/adapters/repositories/schemas/repository.model';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { raceWithAbortSignal } from '@libs/core/workflow/infrastructure/abort-signal-race';
+
+// The lease manager's own default (30 min) is sized for a PR-review
+// sandbox. A full-repo AST build on a large repo can legitimately run
+// longer than that, and the reaper kills any lease past its expiresAt
+// regardless of leaseCount — so the default would kill an actively
+// building sandbox mid-index, not just a crash orphan. Give this consumer
+// a ceiling well past any realistic build instead.
+const GRAPH_BUILD_LEASE_TTL_MS = 2 * 60 * 60 * 1000; // 2h
 
 interface AstGraphBuildJobPayload {
     repositoryId: string;
@@ -40,8 +48,8 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
     constructor(
         @Inject(WORKFLOW_JOB_REPOSITORY_TOKEN)
         private readonly jobRepository: IWorkflowJobRepository,
-        @Inject(SANDBOX_PROVIDER_TOKEN)
-        private readonly sandboxProvider: ISandboxProvider,
+        @Inject(SANDBOX_LEASE_MANAGER_TOKEN)
+        private readonly leaseManager: ISandboxLeaseManager,
         private readonly codeManagementService: CodeManagementService,
         private readonly graphIndexer: GraphIndexerService,
         @Inject(REPOSITORY_SERVICE_TOKEN)
@@ -149,14 +157,28 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
             const branchRaw = repoRecord.defaultBranch || payload.defaultBranch;
             const branch = branchRaw.replace(/^refs\/heads\//, '');
 
-            sandbox = await this.sandboxProvider.createSandboxWithRepo({
-                cloneUrl: cloneParams.url || payload.cloneUrl,
-                authToken: cloneParams.auth?.token || '',
-                authUsername: cloneParams.auth?.username,
-                branch,
-                platform: payload.platform as PlatformType,
-                sandboxMetadata: { stage: 'graph-build' },
-            });
+            // Routed through the lease manager (not the raw provider) so a
+            // worker crash mid-build leaves a lease doc the GRAPH_BUILD_LEASE_TTL_MS
+            // + 5min reaper cron already cleans up. The prKey is unique
+            // per job (jobId), so this always takes the creator path — never
+            // joins another job's sandbox, same as the direct-create call it
+            // replaces. No PR is involved here (repo-level graph build), so
+            // the key uses "graph" in the prNumber slot instead.
+            const prKey = `${payload.organizationAndTeamData?.organizationId}:${payload.repositoryId}:graph:${jobId}`;
+            const acquired = await this.leaseManager.acquire(
+                prKey,
+                'graph-build',
+                GRAPH_BUILD_LEASE_TTL_MS,
+                {
+                    cloneUrl: cloneParams.url || payload.cloneUrl,
+                    authToken: cloneParams.auth?.token || '',
+                    authUsername: cloneParams.auth?.username,
+                    branch,
+                    platform: payload.platform as PlatformType,
+                    sandboxMetadata: { stage: 'graph-build' },
+                },
+            );
+            sandbox = acquired.sandbox;
 
             sandboxId =
                 (sandbox as any)?.sandboxId ||

@@ -437,29 +437,48 @@ describe('buildE2BRemoteCommands', () => {
     });
 
     describe('listDir', () => {
-        it('builds the find command with the exact maxdepth and returns raw stdout', async () => {
+        // These two used to pin the opposite of each behaviour below, which is
+        // why the divergence survived: the listing was asserted ABSOLUTE while
+        // every caller compares repo-relative paths, and a permission error was
+        // asserted to come back as an empty listing. `RepoLookup.exists` reads
+        // an empty listing as "the file is not there", so both were bugs with a
+        // test holding them in place (issue #1826).
+        it('cds into the repo and lists RELATIVE paths, like grep does', async () => {
             const run = jest.fn().mockResolvedValue({
-                stdout: '/home/user/repo/a.ts\n/home/user/repo/b.ts',
+                stdout: 'src/a.ts\nsrc/b.ts',
                 stderr: '',
                 exitCode: 0,
             });
             const rc = buildE2BRemoteCommands(makeSandbox(run));
             const out = await rc.listDir('src', 3);
-            expect(out).toBe('/home/user/repo/a.ts\n/home/user/repo/b.ts');
+            expect(out).toBe('src/a.ts\nsrc/b.ts');
             expect(run).toHaveBeenCalledWith(
-                `find '${REPO_DIR}/src' -maxdepth 3 -type f`,
+                `cd ${REPO_DIR} && [ -e 'src' ] && find 'src' -maxdepth 3 -type f`,
                 { timeoutMs: 30_000 },
             );
         });
 
-        it('returns stdout untouched even when it is empty', async () => {
+        it('answers an empty listing for a path that is simply not there', async () => {
+            // The `[ -e ]` guard short-circuits: exit 1, and NO stderr.
+            const run = jest.fn().mockResolvedValue({
+                stdout: '',
+                stderr: '',
+                exitCode: 1,
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            expect(await rc.listDir('nope', 1)).toBe('');
+        });
+
+        it('reports a failure as an error instead of an empty listing', async () => {
             const run = jest.fn().mockResolvedValue({
                 stdout: '',
                 stderr: 'find: permission denied',
                 exitCode: 1,
             });
             const rc = buildE2BRemoteCommands(makeSandbox(run));
-            expect(await rc.listDir('src', 1)).toBe('');
+            expect(await rc.listDir('src', 1)).toBe(
+                'Error: find: permission denied',
+            );
         });
     });
 

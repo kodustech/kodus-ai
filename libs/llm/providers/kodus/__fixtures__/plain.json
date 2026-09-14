@@ -1,0 +1,10 @@
+{
+    "_note": "Recorded generate result for a Kodus-routed Anthropic call (kodus:anthropic/claude-sonnet-5 → native @ai-sdk/anthropic). The kodus module delegates usage extraction to the shared SDK normalizer, so a non-thinking call reports reasoning=0 (a number, never null) and output is the full completion count.",
+    "text": "{\"decisions\":[]}",
+    "finishReason": "stop",
+    "usage": {
+        "inputTokens": 1210,
+        "outputTokens": 96,
+        "totalTokens": 1306
+    }
+}

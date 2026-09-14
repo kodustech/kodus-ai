@@ -1,0 +1,47 @@
+# Preview environment: one VM per pull request, driven by CI.
+#
+# Separate from workspace.yaml on purpose — a developer box and a PR preview
+# are not the same machine. The dev recipe is optimized for someone SSH-ing in
+# and port-forwarding to localhost; this one is optimized for a link a reviewer
+# clicks. Select it with: runo up --here --recipe .kodus/workspace.preview.yaml
+version: 1
+setup:
+  - docker network create kodus-backend-services 2>/dev/null || true
+  - docker network create shared-network 2>/dev/null || true
+  # sequential build of the shared image (api/worker/webhooks share the SAME
+  # tag; a parallel compose build races on export — same as the repo scripts)
+  - docker compose -f docker-compose.dev.yml build kodus-api
+  - pnpm install
+files:
+  copy: [.env]
+services:
+  compose:
+    # the overlay adds what a public, non-laptop environment needs: the app's
+    # own public URL in its env, and memory limits sized for a 16GB VM
+    files: [docker-compose.dev.yml, docker-compose.preview.yml]
+    # the web app is what a reviewer opens; it proxies to the API over the
+    # compose network, so the API needs no public address of its own
+    public: web
+    health_timeout: 1800
+    env:
+      RUNO_PUBLIC_URL: "${RUNO_PUBLIC_URL}"
+      RUNO_PUBLIC_HOST: "${RUNO_PUBLIC_HOST}"
+data:
+  migrate: pnpm run migration:run
+  # seed:preview adds an onboarded organization + a login, so the link opens on
+  # something usable instead of an empty signup screen
+  seed: pnpm run seed && pnpm run seed:preview
+expose:
+  # Zero-setup HTTPS on the VM's sslip.io name. TODO: switch to
+  #   mode: tunnel
+  #   domain: preview.kodus.io
+  # once CLOUDFLARE_API_TOKEN is in the repo secrets — a named tunnel keeps ONE
+  # hostname across suspend/resume, which is what a link in a PR comment needs.
+  mode: https
+limits:
+  instance: m7i-flex.xlarge  # non-burstable: the image build never throttles
+  disk: 100gb
+  # a reviewer comes back to the link minutes or hours later; while the
+  # hostname still carries the IP, a resume invalidates the posted link, so
+  # previews idle longer than a dev box does
+  idle_suspend: 60m

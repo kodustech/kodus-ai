@@ -271,7 +271,19 @@ export const listByokProviders = async (): Promise<
     return response?.providers ?? [];
 };
 
-export type LLMProviderModel = { id: string; name: string };
+export type LLMProviderModel = {
+    id: string;
+    name: string;
+    /** Catalog extras (Kodus provider): curation + list price per 1M tokens. */
+    recommended?: boolean;
+    description?: string;
+    pricing?: {
+        inputPerMillion: number;
+        outputPerMillion: number;
+        cacheReadPerMillion?: number;
+        cacheWritePerMillion?: number;
+    };
+};
 
 export const getLLMProviderModels = async (
     provider: string,
@@ -293,6 +305,10 @@ export const previewLLMProviderModels = async (input: {
     provider: string;
     apiKey?: string;
     baseURL?: string;
+    /** Amazon Bedrock's equivalent of `apiKey` — Bedrock never authenticates
+     *  the connect form with a plain apiKey. */
+    awsBearerToken?: string;
+    awsRegion?: string;
 }): Promise<LLMProviderModel[]> => {
     const envelope = await axiosAuthorized.post<{
         data: { models: LLMProviderModel[] };

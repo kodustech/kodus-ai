@@ -9,6 +9,7 @@ import {
     COMPILER_SYSTEM_PROMPT,
     buildDetectorCandidates,
     normalizeDetectorExtensions,
+    detectorAppliesToFile,
 } from './kody-rules-detector.compiler';
 
 const rule = (over: any = {}): any => ({
@@ -850,6 +851,97 @@ describe('#1831 — a detector cannot publish, and cannot leave its language', (
         expect(normalizeDetectorExtensions(['*.rb', 'app/models/', 'ruby files'])).toBeUndefined();
         expect(normalizeDetectorExtensions([])).toBeUndefined();
         expect(normalizeDetectorExtensions(undefined)).toBeUndefined();
+    });
+
+    // Measured against production, 08/09/2026: over a sample of 60 real rules
+    // that name a language in their own text, the compiler returned a usable
+    // scope for 38 of 47 that answered. One of the misses was this shape:
+    //
+    //   "Avoid N+1 SQL Queries Inside Loops"
+    //     -> ["<.sql>","<.rb>","<.py>","<.js>","<.java>"]
+    //
+    // The model knew the languages and copied the ANGLE BRACKETS from the
+    // prompt's own JSON template (`"extensions": ["<.ext>", …]`). Every entry
+    // then failed the extension pattern and a correct answer was discarded, so
+    // the rule shipped unscoped. This is recovered data, not a guess: the
+    // brackets are the template's punctuation, never part of an extension.
+    it('recovers extensions the model wrapped in the prompt template brackets', () => {
+        expect(
+            normalizeDetectorExtensions([
+                '<.sql>',
+                '<.rb>',
+                '<.py>',
+                '<.js>',
+                '<.java>',
+            ]),
+        ).toEqual(['.sql', '.rb', '.py', '.js', '.java']);
+
+        // Bracket-stripping must not resurrect the shapes that are genuinely
+        // not extensions — a glob is still a glob once unwrapped.
+        expect(
+            normalizeDetectorExtensions(['<*.rb>', '<app/models/>', '<>']),
+        ).toBeUndefined();
+    });
+
+    // Compound suffixes. Whole ecosystems name files with two segments, and the
+    // single-segment pattern silently dropped the second half: one real rule
+    // answered [".php", ".blade.php"] and kept only the first. Nothing below
+    // enumerates a language — the SHAPE is all that is checked, so a technology
+    // nobody anticipated works the day a rule names it.
+    describe('compound extensions', () => {
+        it('keeps a two-segment suffix instead of discarding it', () => {
+            expect(
+                normalizeDetectorExtensions(['.php', '.blade.php']),
+            ).toEqual(['.php', '.blade.php']);
+            expect(normalizeDetectorExtensions(['.spec.ts', '.d.ts'])).toEqual([
+                '.spec.ts',
+                '.d.ts',
+            ]);
+            expect(normalizeDetectorExtensions(['.tar.gz'])).toEqual(['.tar.gz']);
+        });
+
+        it('still refuses globs, paths and prose', () => {
+            expect(
+                normalizeDetectorExtensions([
+                    '*.rb',
+                    'app/models/',
+                    'ruby files',
+                    '.a.b.c.d.e',
+                ]),
+            ).toBeUndefined();
+        });
+
+        it('matches by SUFFIX, so a broad scope still covers a compound name', () => {
+            const d = (extensions: string[]) =>
+                ({ type: 'regex', pattern: 'x', extensions }) as any;
+
+            // `.ts` covers every TypeScript file, spec files included.
+            expect(detectorAppliesToFile('src/a.spec.ts', d(['.ts']))).toBe(true);
+            expect(detectorAppliesToFile('src/a.ts', d(['.ts']))).toBe(true);
+        });
+
+        it('lets a rule scope itself to ONLY the compound kind', () => {
+            // This is the distinction a last-segment comparison could never
+            // express, and it is the one the "do not apply this to tests" axis
+            // needs: 24% of rule thumbs-down in production land on spec/test
+            // files.
+            const specOnly = {
+                type: 'regex',
+                pattern: 'x',
+                extensions: ['.spec.ts'],
+            } as any;
+
+            expect(detectorAppliesToFile('src/a.spec.ts', specOnly)).toBe(true);
+            expect(detectorAppliesToFile('src/a.ts', specOnly)).toBe(false);
+        });
+
+        it('does not confuse a shorter extension with the tail of a longer one', () => {
+            const js = { type: 'regex', pattern: 'x', extensions: ['.js'] } as any;
+            // "app.mjs" ends in "mjs", not in ".js" — the dot is part of the
+            // compared string, so this is not a match.
+            expect(detectorAppliesToFile('app.mjs', js)).toBe(false);
+            expect(detectorAppliesToFile('app.min.js', js)).toBe(true);
+        });
     });
 
     it('a scoped detector still covers extensionless files (Rakefile, Gemfile, Dockerfile)', () => {

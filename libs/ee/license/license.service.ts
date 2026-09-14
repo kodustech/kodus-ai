@@ -7,6 +7,12 @@ import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/
 
 import {
     ConsumeTrialReviewCreditResult,
+    CreditBalance,
+    CreditCheckoutResult,
+    CreditLedgerEntry,
+    CreditLedgerEntryType,
+    DebitCreditsEntry,
+    DebitCreditsResult,
     ILicenseService,
     OrganizationLicenseValidationResult,
     UserWithLicense,
@@ -313,6 +319,97 @@ export class LicenseService implements ILicenseService {
                 },
             });
             return { revoked: [], failed: userGitIds };
+        }
+    }
+
+    // ── Prepaid credits ("Kodus as the provider") ────────────────────────
+
+    async getCreditBalance(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<CreditBalance | null> {
+        try {
+            return await this.licenseRequest.get('credits/balance', {
+                params: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                },
+            });
+        } catch (error) {
+            this.logger.error({
+                message: 'GetCreditBalance not working',
+                context: LicenseService.name,
+                error,
+                serviceName: 'LicenseService getCreditBalance',
+                metadata: { ...organizationAndTeamData },
+            });
+            return null;
+        }
+    }
+
+    async listCreditLedger(
+        organizationAndTeamData: OrganizationAndTeamData,
+        options: {
+            limit?: number;
+            before?: string;
+            types?: CreditLedgerEntryType[];
+        } = {},
+    ): Promise<CreditLedgerEntry[]> {
+        try {
+            const response = await this.licenseRequest.get('credits/ledger', {
+                params: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                    limit: options.limit,
+                    before: options.before,
+                    types: options.types?.join(','),
+                },
+            });
+            return response?.entries ?? [];
+        } catch (error) {
+            this.logger.error({
+                message: 'ListCreditLedger not working',
+                context: LicenseService.name,
+                error,
+                serviceName: 'LicenseService listCreditLedger',
+                metadata: { ...organizationAndTeamData },
+            });
+            return [];
+        }
+    }
+
+    // Deliberately NOT swallowed: the metering sweep keys retries on this
+    // throwing. A duplicate usageKey is a `skipped` count in the 200 body,
+    // never an error, so a retried batch is safe.
+    async debitCredits(
+        organizationAndTeamData: OrganizationAndTeamData,
+        entries: DebitCreditsEntry[],
+    ): Promise<DebitCreditsResult> {
+        return this.licenseRequest.post('credits/debit', {
+            organizationId: organizationAndTeamData.organizationId,
+            teamId: organizationAndTeamData.teamId,
+            entries,
+        });
+    }
+
+    async createCreditCheckout(
+        organizationAndTeamData: OrganizationAndTeamData,
+        creditUsd: number,
+    ): Promise<CreditCheckoutResult | null> {
+        try {
+            return await this.licenseRequest.post('credits/checkout', {
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+                creditUsd,
+            });
+        } catch (error) {
+            this.logger.error({
+                message: 'CreateCreditCheckout not working',
+                context: LicenseService.name,
+                error,
+                serviceName: 'LicenseService createCreditCheckout',
+                metadata: { ...organizationAndTeamData, creditUsd },
+            });
+            return null;
         }
     }
 }
