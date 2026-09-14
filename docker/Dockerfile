@@ -118,6 +118,27 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
 # BUN_VERSION is declared as a global ARG at the top of this file.
 FROM docker.io/oven/bun:${BUN_VERSION}-debian AS bun-source
 
+# The security rule pass (RunAnalyzersStage) shells out to opengrep inside the
+# sandbox. Downloaded in its own stage so no curl lingers in the runtime image —
+# same pattern as the bun binary above. Pinned: an unpinned engine would change
+# findings between reviews. TARGETARCH matters because prod/QA build arm64 and
+# self-hosted builds both arches. Pinned to BUILDPLATFORM so the download
+# runs natively and needs no QEMU — only the fetched binary is target-arch.
+FROM --platform=$BUILDPLATFORM docker.io/library/debian:bookworm-slim AS opengrep-source
+ARG TARGETARCH
+ARG OPENGREP_VERSION=1.30.0
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates curl \
+  && case "$TARGETARCH" in \
+       amd64) asset=opengrep_manylinux_x86 ;; \
+       arm64) asset=opengrep_manylinux_aarch64 ;; \
+       *) echo "opengrep: unsupported TARGETARCH '$TARGETARCH'" >&2; exit 1 ;; \
+     esac \
+  && curl -fsSL -o /opengrep \
+       "https://github.com/opengrep/opengrep/releases/download/v${OPENGREP_VERSION}/${asset}" \
+  && chmod +x /opengrep \
+  && test -s /opengrep
+
 FROM docker.io/library/node:22.22.2-slim AS runtime-common
 LABEL org.opencontainers.image.source="https://github.com/kodustech/kodus-ai"
 WORKDIR /usr/src/app
@@ -181,6 +202,9 @@ CMD ["node", "dist/apps/api/main.js"]
 FROM runtime-common AS webhooks
 CMD ["node", "dist/apps/webhooks/main.js"]
 FROM runtime-common AS worker
+# Only the worker runs the code-review pipeline, so only it needs the analyzer.
+# RunAnalyzersStage resolves it from PATH.
+COPY --from=opengrep-source /opengrep /usr/local/bin/opengrep
 CMD ["node", "dist/apps/worker/main.js"]
 FROM runtime-common AS mcp-manager
 ENTRYPOINT ["/usr/local/bin/prod-entrypoint-mcp-manager"]
