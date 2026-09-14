@@ -520,6 +520,24 @@ describe('BusinessLogicValidationStage', () => {
             expect(result).toBe(true);
         });
 
+        it('does NOT count a bare /issues/N substring when a git-issues MCP is connected (#1908 review)', () => {
+            // The git-issue URL detector must be anchored to a real URL: a
+            // bare `/issues/\d+` also matches fixture paths, branch names and
+            // prose, none of which is a resolvable issue link.
+            expect(
+                (stage as any).hasRelevantBusinessSignals(
+                    'see issues/2024 for the plan',
+                    ['gitissues'],
+                ),
+            ).toBe(false);
+            expect(
+                (stage as any).hasRelevantBusinessSignals(
+                    'path: test/fixtures/issues/123.json',
+                    ['githubissues'],
+                ),
+            ).toBe(false);
+        });
+
         it('still counts a Jira key alongside a git-issue ref when a Jira-style MCP is connected (#1908)', () => {
             const result = (stage as any).hasRelevantBusinessSignals(
                 'LKDB-286 Closes #1825',

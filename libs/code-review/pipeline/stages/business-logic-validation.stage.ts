@@ -703,9 +703,14 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
             connectedMcps.includes('gitissues') ||
             connectedMcps.includes('githubissues')
         ) {
+            // URL forms must be anchored to an actual URL: a bare
+            // /issues/digits also matches test/fixtures/issues/123.json,
+            // branch names like fix/issues/191, or the prose phrase
+            // "see issues/2024" — none of which is a resolvable issue link.
+            // Mirror the scheme-anchored pattern detectTicketKeys uses.
             const hasGitIssueRef =
                 /(?:^|[\s(])#\d+\b/.test(body) ||
-                /\/issues\/\d+/.test(body);
+                /https?:\/\/[^\s)>\]"']*\/issues\/\d+/.test(body);
             if (hasGitIssueRef) {
                 return true;
             }
