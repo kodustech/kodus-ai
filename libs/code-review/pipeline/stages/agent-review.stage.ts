@@ -52,6 +52,7 @@ import {
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import { AgentProgressEvent } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { analyzerFindingsToSuggestions } from '@libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions';
 import {
     LazyLinkedRepoAccess,
     evaluateCrossRepoBoundaryGate,
@@ -1023,8 +1024,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     severity: this.normalizeSeverity(suggestion.severity),
                 }));
 
+            // Rule-pack findings join the non-rule stream so they dedupe
+            // against the model's findings instead of arriving as a parallel
+            // set of comments on the same lines. Their severity is already on
+            // the v2 scale, so they skip normalizeSeverity.
+            const analyzerSuggestions = analyzerFindingsToSuggestions(
+                context.analyzerFindings ?? [],
+            );
+
             const severityNormalized: Partial<CodeSuggestion>[] = [
                 ...severityNormalizedNonRules,
+                ...analyzerSuggestions,
                 ...kodyRulesWithSeverity,
             ];
 

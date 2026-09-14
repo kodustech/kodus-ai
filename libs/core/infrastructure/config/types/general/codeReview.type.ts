@@ -185,6 +185,21 @@ export type CodeSuggestion = {
      * where a rule like "this function is too long" has always died silently.
      */
     fileAnchored?: boolean;
+    /**
+     * Where a finding came from, when it was not the model. Present on
+     * findings a deterministic analyzer or the customer's CI produced, so a
+     * published comment can name its source and rule instead of implying Kody
+     * reasoned its way there.
+     */
+    evidence?: {
+        /** e.g. "kodus-rule-pack", or "ci:semgrep". */
+        source: string;
+        ruleId?: string;
+        ruleUrl?: string;
+        /** Severity as the producing tool reported it, before normalization. */
+        analyzerSeverity?: string;
+    };
+
     isCommittable?: boolean;
     validatedData?: {
         code: string;
