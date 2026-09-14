@@ -32,6 +32,10 @@ const DESTROY = resolve(
     "destroy.sh",
 );
 
+// Must match sso-cookie-domain's DROPLET_NAME exactly — this scenario
+// only reuses that droplet, it never provisions on its own.
+const DROPLET_NAME = process.env.CI === "true" ? "sso-e2e-ci" : "sso-e2e";
+
 interface ScriptResult {
     code: number;
     stdout: string;
@@ -47,6 +51,7 @@ function runScript(script: string): Promise<ScriptResult> {
                 SSO_E2E_HEADLESS: "1",
                 // See sso-cookie-domain: the shared SSO topology runs on EC2.
                 TEST_VM_PROVIDER: "aws",
+                SSO_E2E_DROPLET_NAME: DROPLET_NAME,
             },
             stdio: ["ignore", "pipe", "pipe"],
         });
@@ -112,13 +117,13 @@ export const ssoMultiUser: Scenario = {
         }
 
         return {
-            droplet: "sso-e2e",
+            droplet: DROPLET_NAME,
             subFlowsPassed: passLines.length,
             evidence: passLines.map((l) => l.trim()),
             note:
                 process.env.CI === "true"
                     ? "Dedicated SSO droplet cleaned up after the final SSO scenario."
-                    : "Droplet kept alive for follow-up debugging. Tear down with `pnpm run sso-e2e:droplet:destroy --name sso-e2e`.",
+                    : `Droplet kept alive for follow-up debugging. Tear down with \`pnpm run sso-e2e:droplet:destroy --name ${DROPLET_NAME}\`.`,
         };
     },
 };
