@@ -22,6 +22,11 @@ import {
     ICodeManagementService,
     PullRequestFileChange,
 } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
+import {
+    CheckEvidence,
+    CheckEvidenceSupport,
+    GetCheckEvidenceParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
 import { GitCloneParams } from '@libs/platform/domain/platformIntegrations/types/codeManagement/gitCloneParams.type';
 import {
     CodeManagementIssue,
@@ -159,6 +164,88 @@ export class CodeManagementService implements ICodeManagementService {
         }
 
         return true;
+    }
+
+    /**
+     * CI results the customer's own pipeline produced for a commit.
+     *
+     * Unlike `listIssues`, this never throws: nobody asked for this evidence,
+     * it only enriches a review, and a host that cannot supply it — or an API
+     * that is briefly unavailable — must not take the review down with it.
+     */
+    async getCheckEvidence(
+        params: GetCheckEvidenceParams,
+        type?: PlatformType,
+    ): Promise<CheckEvidence[]> {
+        if (!type) {
+            type = await this.getTypeIntegration(
+                params.organizationAndTeamData,
+            );
+        }
+
+        if (!type) {
+            return [];
+        }
+
+        const codeManagementService =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+
+        if (typeof codeManagementService.getCheckEvidence !== 'function') {
+            return [];
+        }
+
+        try {
+            return await codeManagementService.getCheckEvidence(params);
+        } catch (error) {
+            this.logger.warn({
+                message: 'Failed to read CI check evidence',
+                context: CodeManagementService.name,
+                error,
+                metadata: {
+                    platform: type,
+                    commitSha: params.commitSha,
+                },
+            });
+            return [];
+        }
+    }
+
+    /**
+     * What the team's host can report. Absent probe with a reader present is
+     * read as status-only — claiming annotation support we cannot deliver
+     * would make callers treat an empty result as "clean".
+     */
+    async supportsCheckEvidence(
+        organizationAndTeamData: OrganizationAndTeamData,
+        type?: PlatformType,
+    ): Promise<CheckEvidenceSupport> {
+        const none: CheckEvidenceSupport = {
+            statuses: false,
+            annotations: false,
+        };
+
+        if (!type) {
+            type = await this.getTypeIntegration(organizationAndTeamData);
+        }
+
+        if (!type) {
+            return none;
+        }
+
+        const codeManagementService =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+
+        if (typeof codeManagementService.getCheckEvidence !== 'function') {
+            return none;
+        }
+
+        if (typeof codeManagementService.supportsCheckEvidence === 'function') {
+            return codeManagementService.supportsCheckEvidence(
+                organizationAndTeamData,
+            );
+        }
+
+        return { statuses: true, annotations: false };
     }
 
     async findRepositoryByName(

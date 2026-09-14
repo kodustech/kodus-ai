@@ -7,6 +7,11 @@ import { TreeItem } from '@libs/core/infrastructure/config/types/general/tree.ty
 import { IntegrationConfigEntity } from '@libs/integrations/domain/integrationConfigs/entities/integration-config.entity';
 
 import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
+import {
+    CheckEvidence,
+    CheckEvidenceSupport,
+    GetCheckEvidenceParams,
+} from '../types/codeManagement/checkEvidence.type';
 import { GitCloneParams } from '../types/codeManagement/gitCloneParams.type';
 import {
     CodeManagementIssue,
@@ -62,6 +67,21 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
     supportsIssues?(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<boolean>;
+
+    /**
+     * Read the CI results the customer's own pipeline produced for a commit.
+     * Optional: implemented per provider, and at two depths — every host can
+     * report check names and pass/fail, only some expose per-line findings.
+     * The facade degrades to no evidence rather than failing the review.
+     */
+    getCheckEvidence?(params: GetCheckEvidenceParams): Promise<CheckEvidence[]>;
+    /**
+     * What this host can actually report. Absent means status-only, which is
+     * the conservative reading of "the reader exists but says nothing more".
+     */
+    supportsCheckEvidence?(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<CheckEvidenceSupport>;
 
     findRepositoryByName(params: {
         organizationAndTeamData: OrganizationAndTeamData;
