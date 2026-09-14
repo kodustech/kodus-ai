@@ -20,30 +20,33 @@ import { CreateKodyRuleDto } from '@libs/ee/kodyRules/dtos/create-kody-rule.dto'
 
 /**
  * Languages recognised on import, mapped to the file extensions a glob for
- * that language should cover. Mirrors the canonical `SUPPORTED_LANGUAGES`
- * table in the code-review domain (kept local to avoid a cross-domain import
- * from the kody-rules use-case into code-review): when a library rule declares
- * a `language` but ships no `path`, the engine's only scoping mechanism
- * (`if (!rule.path) return true`) would otherwise apply the rule to EVERY
- * file in every PR (#1832).
+ * that language should cover. Keyed exactly like the `ProgrammingLanguage`
+ * keys the library payload carries
+ * (`apps/web/src/core/enums/programming-language.ts`: `jsts` covers JS/TS,
+ * plus `dart`/`kotlin`) — those are the values the web client forwards as
+ * `language` when importing a rule from the library. When a rule declares a
+ * `language` but ships no `path`, the engine's only scoping mechanism
+ * (`if (!rule.path) return true`) would otherwise apply the rule to EVERY file
+ * in every PR (#1832).
  */
-const LANGUAGE_EXTENSIONS: Record<string, string[]> = {
-    typescript: ['.ts', '.tsx'],
-    javascript: ['.js', '.jsx'],
-    python: ['.py'],
-    java: ['.java'],
-    go: ['.go'],
-    ruby: ['.rb', '.rake', '.erb', '.gemspec'],
-    php: ['.php'],
-    csharp: ['.cs'],
-    rust: ['.rs'],
-};
+const LANGUAGE_EXTENSIONS = new Map<string, string[]>([
+    ['jsts', ['.js', '.jsx', '.ts', '.tsx']],
+    ['python', ['.py']],
+    ['java', ['.java']],
+    ['csharp', ['.cs']],
+    ['dart', ['.dart']],
+    ['ruby', ['.rb', '.rake', '.erb', '.gemspec']],
+    ['php', ['.php']],
+    ['go', ['.go']],
+    ['kotlin', ['.kt', '.kts']],
+    ['rust', ['.rs']],
+]);
 
 /**
  * Resolve the path glob an imported rule should be persisted with. Prefer an
  * explicit `path`; fall back to a language-derived glob when the rule carries
- * a `language`; otherwise keep whatever was given (this preserves current
- * behaviour for installs that rely on an empty path).
+ * a known `language`; otherwise keep whatever was given (this preserves
+ * current behaviour for installs that rely on an empty path).
  */
 export function resolveLibraryRulePath(
     path: string | undefined,
@@ -52,7 +55,12 @@ export function resolveLibraryRulePath(
     if (path) {
         return path;
     }
-    const extensions = language ? LANGUAGE_EXTENSIONS[language] : undefined;
+    // A Map lookup keeps unknown/prototype-shaped values (e.g. `__proto__`,
+    // `constructor`) inert: they simply miss and fall back to `path`.
+    const extensions =
+        typeof language === 'string'
+            ? LANGUAGE_EXTENSIONS.get(language.trim().toLowerCase())
+            : undefined;
     if (!extensions || extensions.length === 0) {
         return path;
     }
