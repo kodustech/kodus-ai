@@ -29,7 +29,14 @@ import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/servic
 
 const execFileAsync = promisify(execFile);
 
-const CLONE_TIMEOUT_MS = 120_000;
+/**
+ * Clone budget. 120s is tight for large monorepos — a shallow fetch of a PR
+ * ref on a repo the size of Keycloak or cal.com can exceed it, and the review
+ * then runs with no sandbox at all. Overridable so a deployment that reviews
+ * big repositories can raise it.
+ */
+const CLONE_TIMEOUT_MS =
+    Number(process.env.API_SANDBOX_CLONE_TIMEOUT_MS) || 120_000;
 const CMD_TIMEOUT_MS = 30_000;
 const MAX_BUFFER = 5 * 1024 * 1024; // 5 MB — cap output to prevent memory issues
 
