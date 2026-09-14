@@ -6,6 +6,7 @@ import {
 } from '@libs/automation/domain/automationExecution/contracts/automation-execution.service';
 import { IAutomationExecution } from '@libs/automation/domain/automationExecution/interfaces/automation-execution.interface';
 import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
+import { SUMMARY_GENERATION_FAILED_REASON } from '@libs/code-review/pipeline/stages/finish-comments.stage';
 import { describePipelineError } from '@libs/code-review/utils/describe-pipeline-error';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
 import {
@@ -137,7 +138,18 @@ export class CodeReviewPipelineObserver implements IPipelineObserver {
         // logic, PR-level comments, summary, verify, kody-rules agent) and
         // should degrade the review to PARTIAL_ERROR / neutral rather than
         // red-flagging the whole run.
-        const errors = context.errors || [];
+        //
+        // A SUMMARY_GENERATION_FAILED_REASON error is excluded here too
+        // (#1844): RequestChangesOrApproveStage already approves through it,
+        // so landing the check on NEUTRAL anyway would show an approved PR
+        // next to a non-green check — a confusing, inconsistent pair for the
+        // exact case this fix exists to make unremarkable. Still counts if
+        // it co-occurs with any other error (unfiltered elsewhere in
+        // `errors`), since that other failure is real and does degrade the
+        // check.
+        const errors = (context.errors || []).filter(
+            (e) => e?.metadata?.reason !== SUMMARY_GENERATION_FAILED_REASON,
+        );
         const hasCriticalError =
             context.statusInfo.status === AutomationStatus.ERROR ||
             errors.some((e) => (e.severity ?? 'critical') === 'critical');
