@@ -40,11 +40,13 @@ const makeContext = (
     }) as unknown as CodeReviewPipelineContext;
 
 describe('LoadCiEvidenceStage', () => {
-    const makeStage = (getCheckEvidence: jest.Mock) => {
+    const makeStage = (getCheckEvidence: jest.Mock, gateEnabled = true) => {
         const codeManagementService = {
             getCheckEvidence,
         } as unknown as CodeManagementService;
-        return new LoadCiEvidenceStage(codeManagementService);
+        return new LoadCiEvidenceStage(codeManagementService, {
+            isEnabled: jest.fn().mockResolvedValue(gateEnabled),
+        } as never);
     };
 
     const run = (stage: LoadCiEvidenceStage, context: CodeReviewPipelineContext) =>
@@ -178,6 +180,17 @@ describe('LoadCiEvidenceStage', () => {
 
         const result = await run(stage, makeContext());
 
+        expect(result.ciEvidence).toBeUndefined();
+    });
+
+    // Beta feature: an org outside the release track gets none of it.
+    it('reads nothing when the beta gate is closed', async () => {
+        const getCheckEvidence = jest.fn();
+        const stage = makeStage(getCheckEvidence, false);
+
+        const result = await run(stage, makeContext());
+
+        expect(getCheckEvidence).not.toHaveBeenCalled();
         expect(result.ciEvidence).toBeUndefined();
     });
 

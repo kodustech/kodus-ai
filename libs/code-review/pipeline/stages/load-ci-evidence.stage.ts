@@ -7,6 +7,7 @@ import {
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
 import { createLogger } from '@libs/core/log/logger';
+import { DeterministicEvidenceGate } from '@libs/code-review/infrastructure/analyzers/deterministic-evidence.gate';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
@@ -28,7 +29,10 @@ export class LoadCiEvidenceStage extends BasePipelineStage<CodeReviewPipelineCon
 
     private readonly logger = createLogger(LoadCiEvidenceStage.name);
 
-    constructor(private readonly codeManagementService: CodeManagementService) {
+    constructor(
+        private readonly codeManagementService: CodeManagementService,
+        private readonly gate: DeterministicEvidenceGate,
+    ) {
         super();
     }
 
@@ -38,6 +42,10 @@ export class LoadCiEvidenceStage extends BasePipelineStage<CodeReviewPipelineCon
         if (
             context.codeReviewConfig?.deterministicEvidence?.ciChecks !== true
         ) {
+            return context;
+        }
+
+        if (!(await this.gate.isEnabled(context.organizationAndTeamData))) {
             return context;
         }
 

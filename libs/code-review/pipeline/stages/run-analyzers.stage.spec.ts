@@ -57,8 +57,13 @@ const makeContext = (
     }) as unknown as CodeReviewPipelineContext;
 
 describe('RunAnalyzersStage', () => {
-    const makeStage = (rulePack: Record<string, string> = { 'sql.yaml': 'rules: []' }) =>
-        new RunAnalyzersStage({ load: () => rulePack } as never);
+    const makeStage = (
+        rulePack: Record<string, string> = { 'sql.yaml': 'rules: []' },
+        gateEnabled = true,
+    ) =>
+        new RunAnalyzersStage({ load: () => rulePack } as never, {
+            isEnabled: jest.fn().mockResolvedValue(gateEnabled),
+        } as never);
 
     const run = (stage: RunAnalyzersStage, context: CodeReviewPipelineContext) =>
         (
@@ -122,7 +127,41 @@ describe('RunAnalyzersStage', () => {
         expect(context.sandboxHandle.run).toHaveBeenCalled();
     });
 
+    // The providers disagree about relative paths — LocalSandbox resolves them
+    // against the repo, E2B against the sandbox home — so every path must be
+    // absolute and under repoDir. A mocked sandbox accepts anything, which is
+    // exactly why this needs asserting.
+    it('addresses every sandbox path absolutely, under the repo', async () => {
+        const context = makeContext();
+
+        await run(makeStage(), context);
+
+        const writes = (context.sandboxHandle.writeFile as jest.Mock).mock.calls;
+        expect(writes.length).toBeGreaterThan(0);
+        for (const [path] of writes) {
+            expect(path.startsWith('/repo/')).toBe(true);
+        }
+
+        const [[command]] = (context.sandboxHandle.run as jest.Mock).mock.calls;
+        expect(command).toContain("--config '/repo/");
+        expect(command).toContain("--output '/repo/");
+
+        const [[readPath]] = (context.sandboxHandle.readFile as jest.Mock).mock
+            .calls;
+        expect(readPath.startsWith('/repo/')).toBe(true);
+    });
+
     describe('gating', () => {
+        // Beta feature: outside the release track nothing runs, whatever the
+        // repository config says.
+        it('does nothing when the beta gate is closed', async () => {
+            const context = makeContext();
+
+            await run(makeStage(undefined, false), context);
+
+            expect(context.sandboxHandle.run).not.toHaveBeenCalled();
+        });
+
         it('does nothing when the rule pack is off', async () => {
             const context = makeContext({
                 codeReviewConfig: { deterministicEvidence: { rulePack: 'off' } },

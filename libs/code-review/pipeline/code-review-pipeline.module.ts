@@ -74,6 +74,7 @@ import { CreateSandboxStage } from './stages/create-sandbox.stage';
 import { LoadCiEvidenceStage } from './stages/load-ci-evidence.stage';
 import { RunAnalyzersStage } from './stages/run-analyzers.stage';
 import { RulePackLoader } from '@libs/code-review/infrastructure/analyzers/rule-pack-loader.service';
+import { DeterministicEvidenceGate } from '@libs/code-review/infrastructure/analyzers/deterministic-evidence.gate';
 import { AgentReviewStage } from './stages/agent-review.stage';
 import { BugAgentProvider } from '../infrastructure/agents/providers/bug-agent.provider';
 import { SecurityAgentProvider } from '../infrastructure/agents/providers/security-agent.provider';
@@ -170,6 +171,7 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         LoadCiEvidenceStage,
         RunAnalyzersStage,
         RulePackLoader,
+        DeterministicEvidenceGate,
         AgentReviewStage,
         BugAgentProvider,
         SecurityAgentProvider,

@@ -6,6 +6,7 @@ import {
     addedLinesFromPatch,
     parseAnalyzerSarif,
 } from '@libs/code-review/infrastructure/analyzers/analyzer-finding.type';
+import { DeterministicEvidenceGate } from '@libs/code-review/infrastructure/analyzers/deterministic-evidence.gate';
 import { RulePackLoader } from '@libs/code-review/infrastructure/analyzers/rule-pack-loader.service';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
@@ -13,8 +14,21 @@ import { createLogger } from '@libs/core/log/logger';
 
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 
-const RULE_DIR = '/tmp/kodus-rule-pack';
-const REPORT_PATH = '/tmp/kodus-analyzer.sarif';
+/**
+ * Scratch directory, resolved ABSOLUTE under the sandbox repo.
+ *
+ * The two providers disagree about relative paths: LocalSandbox resolves them
+ * against the repo, E2B against the sandbox home. Absolute-under-repo is the
+ * only form both accept — LocalSandbox permits it explicitly, and E2B has
+ * nothing to resolve. The directory is never a scan target (the scan is given
+ * the changed files explicitly), so it cannot report on itself.
+ */
+const WORK_DIR = '.kodus-analyzer';
+/**
+ * Analyzer binary. Overridable so a self-hosted deployment can point at its
+ * own install instead of requiring one on PATH inside the sandbox.
+ */
+const ANALYZER_BIN = process.env.API_OPENGREP_BIN || 'opengrep';
 const SCAN_TIMEOUT_MS = 60_000;
 
 /** Shell-quote a single argument. */
@@ -37,7 +51,10 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
 
     private readonly logger = createLogger(RunAnalyzersStage.name);
 
-    constructor(private readonly rulePackLoader: RulePackLoader) {
+    constructor(
+        private readonly rulePackLoader: RulePackLoader,
+        private readonly gate: DeterministicEvidenceGate,
+    ) {
         super();
     }
 
@@ -45,7 +62,32 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
         context: CodeReviewPipelineContext,
     ): Promise<CodeReviewPipelineContext> {
         const mode = context.codeReviewConfig?.deterministicEvidence?.rulePack;
+
+        // One line saying why the pass did or did not run. Without it a silent
+        // early return is indistinguishable from a clean scan in the logs.
+        this.logger.log({
+            message: `Rule pack gate: mode=${mode ?? 'unset'}`,
+            context: this.stageName,
+            metadata: {
+                mode: mode ?? null,
+                hasSandbox: Boolean(context.sandboxHandle),
+                changedFiles: context.changedFiles?.length ?? 0,
+                filesWithPatch: (context.changedFiles ?? []).filter(
+                    (f) => f.filename && f.patch,
+                ).length,
+                rulePackFiles: Object.keys(this.rulePackLoader.load()).length,
+            },
+        });
+
         if (mode !== 'on' && mode !== 'auto') {
+            return context;
+        }
+
+        if (!(await this.gate.isEnabled(context.organizationAndTeamData))) {
+            this.logger.log({
+                message: 'Rule pack skipped — deterministic evidence is in beta',
+                context: this.stageName,
+            });
             return context;
         }
 
@@ -77,8 +119,12 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
         }
 
         try {
+            const workDir = `${sandbox.repoDir}/${WORK_DIR}`;
+            const ruleDir = `${workDir}/rules`;
+            const reportPath = `${workDir}/report.sarif`;
+
             for (const [name, contents] of Object.entries(pack)) {
-                await sandbox.writeFile(`${RULE_DIR}/${name}`, contents);
+                await sandbox.writeFile(`${ruleDir}/${name}`, contents);
             }
 
             const targets = changedFiles
@@ -86,8 +132,8 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
                 .join(' ');
 
             const result = await sandbox.run(
-                `cd ${quote(sandbox.repoDir)} && opengrep scan --config ${RULE_DIR} ` +
-                    `--sarif --output ${REPORT_PATH} --quiet ${targets}`,
+                `cd ${quote(sandbox.repoDir)} && ${quote(ANALYZER_BIN)} scan --config ${quote(ruleDir)} ` +
+                    `--sarif --output ${quote(reportPath)} --quiet ${targets}`,
                 { timeoutMs: SCAN_TIMEOUT_MS },
             );
 
@@ -108,7 +154,7 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
                 });
             }
 
-            const report = await sandbox.readFile(REPORT_PATH);
+            const report = await sandbox.readFile(reportPath);
             const findings = this.clipToDiff(
                 parseAnalyzerSarif(report, sandbox.repoDir),
                 changedFiles,
