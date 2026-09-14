@@ -114,11 +114,12 @@ scenarios:
     # Full-tier, not fast: needs a GCP service account + a Model-Garden-enabled
     # Claude model (real LLM cost). Each SKIPS (not fails) when its secret is
     # absent, so runners without Vertex wired stay green.
-    #   * code-review-vertex-byok: the v5 (Vercel SDK) review path. Needs
-    #     VERTEX_SA_JSON (+ optional VERTEX_REGION/VERTEX_MODEL).
-    #   * conversation-vertex-byok: the v2 (langchain) path via the legacy
-    #     conversation agent — @kody mention. Also needs CONVERSATION_USER_TOKEN
-    #     (a non-"kody/kodus" GitHub account with PR R/W on the fixture repo).
+    #   * code-review-vertex-byok: the review path (AI SDK).
+    #     Needs VERTEX_SA_JSON (+ optional VERTEX_REGION/VERTEX_MODEL).
+    #   * conversation-vertex-byok: the conversation agent (same AI SDK stack,
+    #     different routing task) — @kody mention. Also needs
+    #     CONVERSATION_USER_TOKEN (a non-"kody/kodus" GitHub account with PR
+    #     R/W on the fixture repo).
     - code-review-vertex-byok
     - conversation-vertex-byok
 
