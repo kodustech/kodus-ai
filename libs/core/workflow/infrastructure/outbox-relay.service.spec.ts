@@ -41,11 +41,13 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
     let lock: { release: jest.Mock };
     let distributedLockService: { acquire: jest.Mock };
     let incidentManager: { failHeartbeat: jest.Mock };
+    let messageBroker: { publishMessage: jest.Mock };
 
     const build = () => {
+        messageBroker = { publishMessage: jest.fn().mockResolvedValue(undefined) };
         jobRepository = {
             findStaleProcessing: jest.fn().mockResolvedValue([]),
-            requeueStaleJobs: jest.fn().mockResolvedValue(0),
+            requeueStaleJobs: jest.fn().mockResolvedValue([]),
             failStaleJobs: jest.fn().mockResolvedValue(0),
         };
         lock = { release: jest.fn().mockResolvedValue(undefined) };
@@ -62,7 +64,7 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
             {} as any, // outboxRepository
             {} as any, // inboxRepository
             jobRepository as any, // jobRepository
-            {} as any, // messageBroker
+            messageBroker as any, // messageBroker
             {} as any, // observability
             configService as any,
             distributedLockService as any,
@@ -88,7 +90,7 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
                 maxRetries: 3,
             },
         ]);
-        jobRepository.requeueStaleJobs.mockResolvedValue(1);
+        jobRepository.requeueStaleJobs.mockResolvedValue(['job-alive-claim']);
 
         await service.reapStaleProcessingJobs();
 
@@ -187,7 +189,14 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
                 maxRetries: 3,
             })),
         );
-        jobRepository.requeueStaleJobs.mockResolvedValue(6);
+        jobRepository.requeueStaleJobs.mockResolvedValue([
+            'job-1',
+            'job-2',
+            'job-3',
+            'job-4',
+            'job-5',
+            'job-6',
+        ]);
 
         await service.reapStaleProcessingJobs();
 
@@ -207,7 +216,7 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
                 maxRetries: 3,
             },
         ]);
-        jobRepository.requeueStaleJobs.mockResolvedValue(1);
+        jobRepository.requeueStaleJobs.mockResolvedValue(['job-1']);
 
         await service.reapStaleProcessingJobs();
 
@@ -238,7 +247,7 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
                 maxRetries: 1,
             },
         ]);
-        jobRepository.requeueStaleJobs.mockResolvedValue(1);
+        jobRepository.requeueStaleJobs.mockResolvedValue(['job-impl']);
 
         await service.reapStaleProcessingJobs();
 
@@ -306,7 +315,7 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
                 maxRetries: 3,
             },
         ]);
-        jobRepository.requeueStaleJobs.mockResolvedValue(1);
+        jobRepository.requeueStaleJobs.mockResolvedValue(['job-retry']);
         jobRepository.failStaleJobs.mockRejectedValue(new Error('db down'));
 
         await service.reapStaleProcessingJobs();
@@ -315,5 +324,76 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
         expect(
             jobRepository.requeueStaleJobs.mock.calls[0][0].uuids,
         ).toEqual(['job-retry']);
+    });
+
+    it('republishes a workflow.jobs.resumed message for each job actually requeued', async () => {
+        const service = build();
+        jobRepository.findStaleProcessing.mockResolvedValue([
+            {
+                uuid: 'job-code',
+                workflowType: 'CODE_REVIEW',
+                organizationId: 'org-1',
+                startedAt: new Date(),
+                leaseExpiresAt: new Date(Date.now() - 1000),
+                retryCount: 0,
+                maxRetries: 3,
+            },
+            {
+                uuid: 'job-impl',
+                workflowType: 'CHECK_IMPLEMENTATION',
+                organizationId: 'org-1',
+                startedAt: new Date(),
+                leaseExpiresAt: new Date(Date.now() - 1000),
+                retryCount: 0,
+                maxRetries: 3,
+            },
+        ]);
+        jobRepository.requeueStaleJobs.mockResolvedValue([
+            'job-code',
+            'job-impl',
+        ]);
+
+        await service.reapStaleProcessingJobs();
+
+        expect(messageBroker.publishMessage).toHaveBeenCalledTimes(2);
+        const keys = messageBroker.publishMessage.mock.calls.map(
+            (c: any[]) => c[0].routingKey,
+        );
+        expect(keys).toEqual([
+            'workflow.jobs.resumed.CODE_REVIEW',
+            'workflow.jobs.resumed.CHECK_IMPLEMENTATION',
+        ]);
+        // Each message envelopes the mutated jobId and re-drives via a fresh
+        // messageId so the inbox claim is not a no-op.
+        for (const [, msg, opts] of messageBroker.publishMessage.mock
+            .calls as any) {
+            expect(msg.payload.jobId).toBeDefined();
+            expect(msg.messageId).toMatch(/^reclaim-/);
+            expect(opts.persistent).toBe(true);
+            expect(opts.headers['x-resume-reason']).toBe(
+                'stale-job.lease-reclaimed',
+            );
+        }
+    });
+
+    it('does not republish a requeued uuid that the repo did not return (TOCTOU guard)', async () => {
+        const service = build();
+        jobRepository.findStaleProcessing.mockResolvedValue([
+            {
+                uuid: 'job-code',
+                workflowType: 'CODE_REVIEW',
+                organizationId: 'org-1',
+                startedAt: new Date(),
+                leaseExpiresAt: new Date(Date.now() - 1000),
+                retryCount: 0,
+                maxRetries: 3,
+            },
+        ]);
+        // The guarded UPDATE returned no rows (it flipped none).
+        jobRepository.requeueStaleJobs.mockResolvedValue([]);
+
+        await service.reapStaleProcessingJobs();
+
+        expect(messageBroker.publishMessage).not.toHaveBeenCalled();
     });
 });

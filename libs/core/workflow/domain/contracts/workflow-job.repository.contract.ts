@@ -43,12 +43,18 @@ export interface IWorkflowJobRepository {
      * Returns a reclaimed job to PENDING with retryCount incremented and the
      * lease/run state cleared so a fresh trigger re-processes it, instead of
      * permanently failing it.
+     *
+     * Returns the UUIDs of the jobs that were actually requeued (those that
+     * were still PROCESSING at write time). The stale-job watchdog MUST
+     * republish a broker message for exactly these — never for the full
+     * candidate batch — because a job that finished (or was permanently
+     * failed) between the SELECT and this UPDATE must not be re-driven.
      */
     requeueStaleJobs?(params: {
         uuids: string[];
         lastError: string;
         requeuedBy: string;
-    }): Promise<number>;
+    }): Promise<string[]>;
     /**
      * Terminally fails reclaimed jobs whose retry budget is exhausted.
      */
