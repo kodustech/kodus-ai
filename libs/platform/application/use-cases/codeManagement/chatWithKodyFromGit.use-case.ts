@@ -3,6 +3,7 @@ import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 
 import { BusinessRulesValidationAgentUseCase } from '@libs/agents/application/use-cases/business-rules-validation-agent.use-case';
+import { BusinessRulesValidationAgentProvider } from '@libs/agents/infrastructure/services/agents/business-rules-validation/businessRulesValidationAgent';
 import { ConversationAgentUseCase } from '@libs/agents/application/use-cases/conversation-agent.use-case';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -45,6 +46,18 @@ const ACKNOWLEDGMENT_MESSAGES = {
     MARKDOWN_SUFFIX: '<!-- kody-codereview -->\n&#8203;',
     BUSINESS_LOGIC_INVALID_CONTEXT:
         'The "@kody -v business-logic" command can only be used in the general PR conversation, not in code suggestions or inline comments. Please use it in the main PR discussion thread.',
+    // The agent returns NO_TASK_MCP_SENTINEL (an internal marker, never meant
+    // to reach a user) when no task-management MCP is connected. The
+    // AUTOMATIC pipeline path (BusinessLogicValidationStage) already checks
+    // for it and skips silently — this EXPLICIT command path has no silent
+    // option (an explicit ask deserves a visible reply, same reasoning as
+    // CONVERSATION_PLAN_GATE_MESSAGE below), so it must translate the
+    // sentinel into this message instead of ever posting it raw.
+    BUSINESS_LOGIC_NO_TASK_MCP:
+        'No task-management MCP (Jira, GitHub Issues, Linear, Notion, ' +
+        'ClickUp, etc.) is connected for this organization, so business ' +
+        'rules validation has nothing to compare the PR against. Connect ' +
+        'one in the Kodus settings to use this command.',
 } as const;
 
 /**
@@ -2097,7 +2110,20 @@ export class ChatWithKodyFromGitUseCase {
         organizationAndTeamData: OrganizationAndTeamData;
         thread: any;
     }): Promise<string> {
-        return await this.businessRulesValidationAgentUseCase.execute(context);
+        const result =
+            await this.businessRulesValidationAgentUseCase.execute(context);
+
+        // NO_TASK_MCP_SENTINEL is an internal marker, never meant to reach a
+        // PR comment — the pipeline path guards it, this explicit-command
+        // path did not (#leak: it was reaching users verbatim as literal
+        // "__NO_TASK_MCP__" text). Translate it into a readable message.
+        if (
+            result === BusinessRulesValidationAgentProvider.NO_TASK_MCP_SENTINEL
+        ) {
+            return ACKNOWLEDGMENT_MESSAGES.BUSINESS_LOGIC_NO_TASK_MCP;
+        }
+
+        return result;
     }
 
     private async handleConversation(context: {
