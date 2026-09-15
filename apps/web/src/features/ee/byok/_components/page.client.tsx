@@ -17,7 +17,10 @@ import {
     PackageIcon,
     WalletIcon,
 } from "lucide-react";
-import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
+import {
+    hasUnsavedChanges,
+    triggerNavigationBlock,
+} from "src/core/utils/navigation-guard";
 import {
     Tabs,
     TabsContent,
@@ -163,9 +166,6 @@ export const ByokPageClient = ({
     const usesKodusProvider = (config?.credentials ?? []).some((c) =>
         isPlatformFundedProvider(c.provider),
     );
-    // Private alpha: the Kodus-credits framing shows for orgs on the flag
-    // (or that already route through Kodus).
-    const { kodusProvider: kodusProviderFlag } = useFeatureFlags();
     const searchParams = useSearchParams();
     const requestedTab = searchParams.get("tab");
 
@@ -210,9 +210,23 @@ export const ByokPageClient = ({
     // `routingAnchor` on mount, then clears it via `onScrolled`.
     const [routingAnchor, setRoutingAnchor] = useState<string | null>(null);
     const openRouting = (anchor: string) => {
+        if (!changeTab("routing")) return;
         setRoutingAnchor(anchor);
-        setTab("routing");
     };
+
+    // Radix unmounts the panel it leaves, and each tab re-seeds its state from
+    // `config` on mount — so a tab switch silently threw away an unsaved
+    // routing edit. Every switch now goes through the same guard that stops a
+    // nav link or the command palette. Returns whether the switch happened.
+    function changeTab(next: string): boolean {
+        if (next === tab) return true;
+        if (hasUnsavedChanges()) {
+            triggerNavigationBlock();
+            return false;
+        }
+        setTab(next);
+        return true;
+    }
 
     return (
         <Page.Root>
@@ -223,7 +237,7 @@ export const ByokPageClient = ({
                     </Page.Title>
                     <Page.Description className="flex flex-col gap-2 text-pretty">
                         <span>
-                            {kodusProviderFlag || usesKodusProvider
+                            {usesKodusProvider
                                 ? "Connect the providers your team uses — Kodus credits with no key, or your own keys — then choose which model runs each task."
                                 : "Connect the providers your team uses, then choose which model runs each task."}
                         </span>
@@ -269,7 +283,7 @@ export const ByokPageClient = ({
 
                 <ModelOverridesBanner teamId={teamId} />
 
-                <Tabs value={tab} onValueChange={setTab}>
+                <Tabs value={tab} onValueChange={changeTab}>
                     <TabsList>
                         <TabsTrigger value="providers">
                             <span className="flex items-center gap-2">
@@ -315,14 +329,17 @@ export const ByokPageClient = ({
                             config={config}
                             llmConfigStatus={llmConfigStatus}
                             teamId={teamId}
-                            onGoToProviders={() => setTab("providers")}
+                            onGoToProviders={() => changeTab("providers")}
                             scrollAnchor={routingAnchor}
                             onScrolled={() => setRoutingAnchor(null)}
                         />
                     </TabsContent>
 
                     <TabsContent value="budget">
-                        <SpendLimitSection teamId={teamId} />
+                        <SpendLimitSection
+                            teamId={teamId}
+                            onGoToProviders={() => changeTab("providers")}
+                        />
                     </TabsContent>
                 </Tabs>
             </Page.Content>

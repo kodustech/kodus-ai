@@ -125,7 +125,11 @@ export function ProviderGroupHeader({
                     {platformFunded && (
                         <Button
                             size="xs"
-                            variant={credits.exhausted ? "primary" : "helper"}
+                            // Never primary: this only expands the group and
+                            // scrolls to the wallet below, where the actual
+                            // top-up buttons are. Two primaries on one row made
+                            // the shortcut look like the payment itself.
+                            variant="helper"
                             leftIcon={<CoinsIcon />}
                             onClick={openWallet}>
                             {credits.neverFunded ? "Add credits" : "Top up"}

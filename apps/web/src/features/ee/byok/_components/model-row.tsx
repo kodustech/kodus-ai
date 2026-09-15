@@ -243,7 +243,7 @@ export function ModelRow({
                                                     </span>
                                                 )}
                                                 <span className="text-primary-light inline-flex items-center gap-1 group-hover:underline">
-                                                    View breakdown
+                                                    Open Costs
                                                     <ArrowUpRightIcon
                                                         size={11}
                                                     />

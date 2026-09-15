@@ -198,6 +198,32 @@ export const SettingsPageSkeleton = ({ cards = 3 }: { cards?: number }) => (
     </Page.Root>
 );
 
+/**
+ * AI providers: two description lines, a three-tab strip, then the connected
+ * provider cards. Shaped like the real page so the tabs don't jump when the
+ * data lands.
+ */
+export const AiProvidersPageSkeleton = () => (
+    <Page.Root>
+        <Page.Header>
+            <Page.TitleContainer>
+                <Skeleton className="h-7 w-44" />
+                <Skeleton className="mt-2 h-4 w-[34rem] max-w-full" />
+                <Skeleton className="mt-1.5 h-4 w-[24rem] max-w-full" />
+            </Page.TitleContainer>
+        </Page.Header>
+        <Page.Content>
+            <SkeletonTabs count={3} />
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <Skeleton className="h-5 w-56" />
+                <Skeleton className="h-8 w-44 rounded-lg" />
+            </div>
+            <SkeletonCard lines={2} />
+            <SkeletonCard lines={2} />
+        </Page.Content>
+    </Page.Root>
+);
+
 /** Organization settings: title + actions, then fixed-width cards. */
 export const OrganizationPageSkeleton = () => (
     <Page.Root>
