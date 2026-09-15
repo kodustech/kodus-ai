@@ -250,6 +250,14 @@ describe('classifyLLMError', () => {
             // failure to TRANSIENT, defeating the purpose of the fallback.
             'The input token count (5032) exceeds the maximum allowed for this model',
             'Request id req_5301 rejected by the gateway',
+            // A 5xx glued to arbitrary letters is a request id / hash / base64
+            // blob, not a status. Only an explicit status keyword (http/err/
+            // error/status/code) counts as adjacency; anything else must stay
+            // UNKNOWN so a permanent failure does not wrongly cascade to the
+            // paid fallback (#1898 review).
+            'Failed: request id req_a503b on the model call',
+            'the deployment 05d503ee45x is not reachable',
+            'blob payload ...d504e2f... failed to parse',
         ])('bare digit inside a larger number (%s) → not TRANSIENT', (msg) => {
             const err = new Error(msg);
             expect(classifyLLMError(err).category).not.toBe(

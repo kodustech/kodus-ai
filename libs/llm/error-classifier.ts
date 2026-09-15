@@ -394,14 +394,17 @@ function matchByMessage(lower: string): LlmErrorCategory {
         lower.includes('service unavailable') ||
         lower.includes('internal server error') ||
         // Status numbers can appear as text without a status field (Cloudflare's
-        // 530 over a 5xx, proxy passthrough). Guard on ADJACENT DIGITS rather
-        // than word boundaries: `\b` also fails on a status glued to a letter
-        // or underscore (`HTTP_503`, `ERR_502`, `upstream_530`, `http503`),
-        // which then classifies UNKNOWN and — since UNKNOWN deliberately does
-        // not fail over — silently drops the BYOK fallback for the exact
-        // transient outage this branch exists to catch. The lookarounds stop
-        // only the digit-inside-a-larger-number case ("5032", "req_5301").
-        /(?<!\d)(?:502|503|504|530)(?!\d)/.test(lower)
+        // 530 over a 5xx, proxy passthrough). Guard so a standalone 5xx is not
+        // flanked by digits (a number "5032" is not a status), and allow the
+        // letter/underscore adjacency ONLY when it sits behind an explicit
+        // status keyword (`HTTP_503`, `ERR_502`, `http504`, `status: 530`,
+        // `code_503`). A bare digit glued to arbitrary letters is a request id,
+        // hash or base64 blob (`req_a503b`, `...d503e...`), NOT a status —
+        // matching it would mis-classify a permanent failure as TRANSIENT,
+        // wrongly cascade to the paid fallback and surface a wrong message.
+        /(?<![a-z0-9])(?:502|503|504|530)(?!\d)|(?<![a-z0-9])(?:http|err|error|status|code)[_-]?(?:502|503|504|530)(?!\d)/.test(
+            lower,
+        )
     ) {
         return LlmErrorCategory.TRANSIENT;
     }
