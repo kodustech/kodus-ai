@@ -382,7 +382,29 @@ function matchByMessage(lower: string): LlmErrorCategory {
         lower.includes('network error') ||
         lower.includes('fetch failed') ||
         lower.includes('timeout') ||
-        lower.includes('aborted')
+        lower.includes('aborted') ||
+        // Common 5xx phrasings. `matchByMessage` is the fallback when no HTTP
+        // status reached the classifier — e.g. an AI_RetryError (SDK retries
+        // exhausted) whose embedded text "Last error: AI_APICallError: Bad
+        // Gateway" carries no status (the default RetryError is a plain Error).
+        // Without these, a real upstream outage classifies UNKNOWN and the
+        // configured BYOK fallback is never tried (#1875).
+        lower.includes('bad gateway') ||
+        lower.includes('gateway timeout') ||
+        lower.includes('service unavailable') ||
+        lower.includes('internal server error') ||
+        // Status numbers can appear as text without a status field (Cloudflare's
+        // 530 over a 5xx, proxy passthrough). Guard so a standalone 5xx is not
+        // flanked by digits (a number "5032" is not a status), and allow the
+        // letter/underscore adjacency ONLY when it sits behind an explicit
+        // status keyword (`HTTP_503`, `ERR_502`, `http504`, `status: 530`,
+        // `code_503`). A bare digit glued to arbitrary letters is a request id,
+        // hash or base64 blob (`req_a503b`, `...d503e...`), NOT a status —
+        // matching it would mis-classify a permanent failure as TRANSIENT,
+        // wrongly cascade to the paid fallback and surface a wrong message.
+        /(?<![a-z0-9])(?:502|503|504|530)(?!\d)|(?<![a-z0-9])(?:http|err|error|status|code)[_-]?(?:502|503|504|530)(?!\d)/.test(
+            lower,
+        )
     ) {
         return LlmErrorCategory.TRANSIENT;
     }
