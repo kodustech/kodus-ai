@@ -756,7 +756,12 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
         const issueUrls =
             text.match(/https?:\/\/[^\s)>\]"']*\/issues\/(\d+)/gi) ?? [];
         for (const url of issueUrls) {
-            const num = url.match(/\/issues\/(\d+)/)?.[1];
+            // The /gi capture above also matches case-mixed paths such as
+            // `/ISSUES/`; re-extract the number case-insensitively so the
+            // signal (#N) is still produced — otherwise a mixed-case URL
+            // passes the /i gate but yields no number, sending the agent
+            // empty signals (#1908).
+            const num = url.match(/\/issues\/(\d+)/i)?.[1];
             if (num) {
                 keys.push(`#${num}`);
             }

@@ -564,6 +564,38 @@ describe('BusinessLogicValidationStage', () => {
             );
             expect(result).toBe(true);
         });
+
+        it('counts a case-mixed issue URL and extracts its number when a git-issues MCP is connected (#1908 review)', () => {
+            // The gate URL matcher and the ticket-key extractor both use a
+            // case-insensitive flag (/i and /gi). A URL like
+            // `HTTPS://.../ISSUES/1825` must therefore pass the gate AND
+            // still yield the issue number — otherwise the agent receives
+            // empty signals and reproducers claim #1908.
+            expect(
+                (stage as any).hasRelevantBusinessSignals(
+                    'Fixes HTTPS://github.com/acme/proj/ISSUES/1825',
+                    ['gitissues'],
+                ),
+            ).toBe(true);
+            expect(
+                (stage as any).hasRelevantBusinessSignals(
+                    'See Https://gitlab.com/acme/proj/Issues/1825',
+                    ['githubissues'],
+                ),
+            ).toBe(true);
+            // The extractor must pull the number out of the case-mixed URL so
+            // the agent gets `#1825`, not nothing (#1908).
+            expect(
+                (stage as any).detectTicketKeys(
+                    'Fixes HTTPS://github.com/acme/proj/ISSUES/1825',
+                ),
+            ).toEqual(['#1825']);
+            expect(
+                (stage as any).detectTicketKeys(
+                    'See Https://gitlab.com/acme/proj/Issues/1825',
+                ),
+            ).toEqual(['#1825']);
+        });
     });
 
     describe('skip when no task MCP connected', () => {
