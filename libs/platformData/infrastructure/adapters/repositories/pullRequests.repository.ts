@@ -28,6 +28,7 @@ import {
 import { PullRequestsEntity } from '@libs/platformData/domain/pullRequests/entities/pullRequests.entity';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enums/implementationStatus.enum';
+import { clampPatchForPersistWithFlag } from '@libs/platformData/domain/pullRequests/utils/diff-budget';
 import { UNRESOLVED_RANK_BONUS } from '@libs/platformData/domain/pullRequests/deep-link-rank';
 
 @Injectable()
@@ -1569,6 +1570,60 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         };
     }
 
+    /**
+     * Server-side sum of the UTF-8 bytes actually embedded in
+     * `files[].patch` for one PR. Uses `$strLenBytes` (which counts UTF-8
+     * bytes, exactly like `Buffer.byteLength` and BSON) so the caller gets
+     * ground truth on how close the document is to MongoDB's 16 MB ceiling,
+     * without transferring the patches themselves.
+     *
+     * The service uses this to *enforce* the aggregate embedded-diff budget
+     * after a write: the in-memory seed derived from a previously-read
+     * `existingPR.files` can be stale under concurrent syncs, so the write is
+     * only considered settled once this server-side total is back under the
+     * cap (#1841).
+     */
+    async computeEmbeddedPatchBytes(
+        prUuid: string,
+        organizationId: string,
+    ): Promise<number> {
+        if (!organizationId) {
+            throw new Error(
+                'computeEmbeddedPatchBytes requires organizationId for tenant isolation',
+            );
+        }
+        // Aggregation does NOT auto-cast string → ObjectId the way standard
+        // query operators do — mirror `computeFileTotals`.
+        const match: Record<string, unknown> = {
+            organizationId,
+            ...(mongoose.Types.ObjectId.isValid(prUuid)
+                ? { _id: new mongoose.Types.ObjectId(prUuid) }
+                : { _id: prUuid }),
+        };
+        const result = await this.pullRequestsModel
+            .aggregate<{ embeddedPatchBytes: number }>([
+                { $match: match },
+                {
+                    $project: {
+                        _id: 0,
+                        embeddedPatchBytes: {
+                            $sum: {
+                                $map: {
+                                    input: { $ifNull: ['$files.patch', []] },
+                                    as: 'p',
+                                    in: {
+                                        $strLenBytes: { $ifNull: ['$$p', ''] },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            ])
+            .exec();
+        return result?.[0]?.embeddedPatchBytes ?? 0;
+    }
+
     private translateFileBulkOp(
         prUuid: string,
         organizationId: string,
@@ -1611,8 +1666,32 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                     }> as any,
                 );
                 const $set: Record<string, unknown> = {};
+                // Storage-level clamp escalation is collected in a local flag
+                // and applied AFTER the loop: a `patchTruncated: false` entry
+                // processed later in the same iteration would otherwise clobber
+                // the escalation via the generic `$set[...]` line below,
+                // leaving a capped diff's sub-document claiming it is complete
+                // (#1841).
+                let patchWasClamped = false;
                 for (const [k, v] of Object.entries(sanitized)) {
+                    // Last-resort per-file clamp: a future caller that
+                    // bypasses the service-level aggregate budget can never
+                    // embed a single unbounded patch that pushes the document
+                    // past MongoDB's 16 MB BSON ceiling (#1841). When this
+                    // storage-level clamp actually cuts the patch we mirror
+                    // `patchTruncated: true` so the flag can never be stale
+                    // (service already writes an explicit boolean; we only
+                    // ever escalate it here).
+                    if (k === 'patch' && typeof v === 'string') {
+                        const clamped = clampPatchForPersistWithFlag(v);
+                        $set['files.$.patch'] = clamped.patch;
+                        patchWasClamped = clamped.truncated;
+                        continue;
+                    }
                     $set[`files.$.${k}`] = v;
+                }
+                if (patchWasClamped) {
+                    $set['files.$.patchTruncated'] = true;
                 }
                 return {
                     updateOne: {

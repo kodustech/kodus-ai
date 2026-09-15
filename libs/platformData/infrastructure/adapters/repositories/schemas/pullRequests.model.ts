@@ -72,6 +72,7 @@ export class PullRequestsModel extends CoreDocument {
         added?: number;
         deleted?: number;
         changes?: number;
+        patchTruncated?: boolean;
         reviewMode: ReviewModeResponse;
         codeReviewModelUsed: {
             generateSuggestions: string;

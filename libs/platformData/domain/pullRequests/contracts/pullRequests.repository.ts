@@ -236,6 +236,17 @@ export interface IPullRequestsRepository {
         totalChanges: number;
     }>;
 
+    /**
+     * Server-side sum of the UTF-8 bytes embedded in `files[].patch` for one
+     * PR (`$strLenBytes`). Lets the caller enforce the aggregate embedded-diff
+     * budget against ground truth after a write instead of trusting a
+     * potentially stale in-memory read of `existingPR.files` (#1841).
+     */
+    computeEmbeddedPatchBytes(
+        prUuid: string,
+        organizationId: string,
+    ): Promise<number>;
+
     /** Generates a stable id for file/suggestion sub-documents. */
     newSubDocumentId(): string;
 
