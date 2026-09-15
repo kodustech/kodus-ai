@@ -8,7 +8,6 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@components/ui/dropdown-menu";
-import { Heading } from "@components/ui/heading";
 import { Label } from "@components/ui/label";
 import { Markdown } from "@components/ui/markdown";
 import {
@@ -28,6 +27,7 @@ import { ChevronDownIcon } from "lucide-react";
 import { RuleType } from "markdown-to-jsx";
 import { useDefaultCodeReviewConfig } from "src/app/(app)/settings/_components/context";
 import { useCurrentConfigLevel } from "src/app/(app)/settings/_hooks";
+import { cn } from "src/core/utils/components";
 
 import { OverrideIndicator } from "../../../_components/override";
 import { FormattedConfig, FormattedConfigLevel } from "../../../_types";
@@ -37,7 +37,7 @@ import { dropdownItems, VARIABLE_REGEX } from "./options";
 // A faithful sample of Kody's default error comment (the `withErrors` template
 // in the i18n dictionaries, with a representative reason). Shown in the Error
 // preview so teams see exactly what their note gets appended to.
-const DEFAULT_ERROR_COMMENT_SAMPLE = `## Code Review Could Not Complete ⚠️
+export const DEFAULT_ERROR_COMMENT_SAMPLE = `## Code Review Could Not Complete ⚠️
 
 The review failed before suggestions could be generated.
 
@@ -49,7 +49,7 @@ After fixing the issue, comment \`@kody review\` on this PR to re-run the review
 // error alike), generated server-side by generateConfigReviewMarkdown. It is
 // NOT part of the custom message and can't be edited — shown here (static) only
 // so the preview matches what actually lands on the PR.
-const KODY_GUIDE_FOOTER_SAMPLE = `<details><summary>Kody Guide: Usage and Configuration</summary>
+export const KODY_GUIDE_FOOTER_SAMPLE = `<details><summary>Kody Guide: Usage and Configuration</summary>
 
 - Interacting with Kody
 - Current Kody Configuration
@@ -58,11 +58,11 @@ const KODY_GUIDE_FOOTER_SAMPLE = `<details><summary>Kody Guide: Usage and Config
 // The error note preserves the author's line breaks: single \n collapse in
 // Markdown, so convert each to a hard break (two trailing spaces) — mirrors the
 // runtime so the preview matches what lands on the PR.
-const preserveLineBreaks = (md: string) => md.replace(/\n/g, "  \n");
+export const preserveLineBreaks = (md: string) => md.replace(/\n/g, "  \n");
 
 // Renders a message body with the same @variable substitution the live comment
 // uses, so the preview matches what Kody actually posts.
-const MessagePreview = ({ content }: { content: string }) => (
+export const MessagePreview = ({ content }: { content: string }) => (
     <Markdown
         options={{
             renderRule: (next, node) => {
@@ -78,9 +78,7 @@ const MessagePreview = ({ content }: { content: string }) => (
 
                     if (!dropdownItems[key]) return next();
 
-                    return (
-                        <span key={key}>{dropdownItems[key]?.example}</span>
-                    );
+                    return <span key={key}>{dropdownItems[key]?.example}</span>;
                 }
 
                 return next();
@@ -90,14 +88,14 @@ const MessagePreview = ({ content }: { content: string }) => (
     </Markdown>
 );
 
-const getStatusLabel = (status: PullRequestMessageStatus): string => {
+export const getStatusLabel = (status: PullRequestMessageStatus): string => {
     switch (status) {
         case PullRequestMessageStatus.EVERY_PUSH:
-            return "Every push";
+            return "On every push";
         case PullRequestMessageStatus.ONLY_WHEN_OPENED:
-            return "Only when opened";
+            return "Only when the PR opens";
         case PullRequestMessageStatus.OFF:
-            return "Off";
+            return "Never";
         case PullRequestMessageStatus.ACTIVE:
             return "Active (Legacy)";
         case PullRequestMessageStatus.INACTIVE:
@@ -113,7 +111,10 @@ export const TabContent = (props: {
     initialState: FormattedConfig<CustomMessageConfig["startReviewMessage"]>;
     onChangeAction: (value: CustomMessageConfig["startReviewMessage"]) => void;
     canEdit: boolean;
+    /** Hosts with their own PR preview (the Output tab) hide the inline one. */
+    showPreview?: boolean;
 }) => {
+    const showPreview = props.showPreview ?? true;
     const defaults = useDefaultCodeReviewConfig()?.customMessages;
     const currentLevel = useCurrentConfigLevel();
     const hasParent = currentLevel !== FormattedConfigLevel.GLOBAL;
@@ -158,6 +159,67 @@ export const TabContent = (props: {
         });
     };
 
+    const resetMenu = (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button
+                    size="xs"
+                    variant="cancel"
+                    rightIcon={<ChevronDownIcon className="-mr-1" />}
+                    className="text-tertiary-light min-h-auto self-end"
+                    disabled={!props.canEdit}>
+                    Reset to…
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+                {hasParent && (
+                    <DropdownMenuItem
+                        disabled={
+                            !props.canEdit ||
+                            inheritedContentTarget === undefined ||
+                            currentContent.trim() ===
+                                (inheritedContentTarget || "").trim()
+                        }
+                        onClick={() => {
+                            if (inheritedContentTarget === undefined) return;
+                            props.onChangeAction({
+                                status: contentStatus,
+                                content: inheritedContentTarget,
+                            });
+                        }}>
+                        <div>
+                            Inherited message
+                            <p className="text-text-tertiary text-xs">
+                                Restore content from parent scope
+                            </p>
+                        </div>
+                    </DropdownMenuItem>
+                )}
+                {isGlobalScope && (
+                    <DropdownMenuItem
+                        disabled={
+                            !props.canEdit ||
+                            currentContent.trim() ===
+                                (defaultContentTarget || "").trim()
+                        }
+                        onClick={() => {
+                            props.onChangeAction({
+                                status: contentStatus,
+                                content: defaultContentTarget,
+                            });
+                        }}>
+                        <div>
+                            Default message
+                            <p className="text-text-tertiary text-xs">
+                                Restore platform default content
+                            </p>
+                        </div>
+                    </DropdownMenuItem>
+                )}
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+
     return (
         <div className="flex flex-1 flex-col gap-4">
             {isErrorMessage && (
@@ -169,81 +231,77 @@ export const TabContent = (props: {
             )}
 
             {!isErrorMessage && (
-            <Card color="lv3">
-                <CardHeader className="flex flex-col gap-4 p-4">
-                    <div className="flex items-center justify-between gap-6">
-                        <div className="flex-1">
-                            <Heading variant="h3">Message settings</Heading>
-                            <OverrideIndicator
-                                currentValue={props.value.status.value}
-                                initialState={props.initialState.status}
-                                handleRevert={handleStatusRevert}
-                            />
-                        </div>
+                <div className="flex max-w-md flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                        <Label>Post this message</Label>
+                        <OverrideIndicator
+                            currentValue={props.value.status.value}
+                            initialState={props.initialState.status}
+                            handleRevert={handleStatusRevert}
+                        />
                     </div>
-
-                    <div className="flex flex-col gap-2">
-                        <Label>Message behavior</Label>
-                        <Select
-                            value={props.value.status.value}
-                            onValueChange={(value: PullRequestMessageStatus) =>
-                                props.onChangeAction({
-                                    content: props.value.content.value,
-                                    status: value,
-                                })
-                            }
-                            disabled={!props.canEdit}>
-                            <SelectTrigger>
-                                <SelectValue>
-                                    {getStatusLabel(props.value.status.value)}
-                                </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem
-                                    value={PullRequestMessageStatus.EVERY_PUSH}>
-                                    {getStatusLabel(
-                                        PullRequestMessageStatus.EVERY_PUSH,
-                                    )}
-                                </SelectItem>
-                                <SelectItem
-                                    value={
-                                        PullRequestMessageStatus.ONLY_WHEN_OPENED
-                                    }>
-                                    {getStatusLabel(
-                                        PullRequestMessageStatus.ONLY_WHEN_OPENED,
-                                    )}
-                                </SelectItem>
-                                <SelectItem value={PullRequestMessageStatus.OFF}>
-                                    {getStatusLabel(PullRequestMessageStatus.OFF)}
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <p className="text-text-tertiary text-xs">
-                            {props.value.status.value ===
-                                PullRequestMessageStatus.EVERY_PUSH &&
-                                "Kody will send a message every time code is pushed to the PR"}
-                            {props.value.status.value ===
-                                PullRequestMessageStatus.ONLY_WHEN_OPENED &&
-                                "Kody will send a message only when the PR is opened"}
-                            {props.value.status.value ===
-                                PullRequestMessageStatus.OFF &&
-                                "Kody won't send any messages"}
-                            {props.value.status.value ===
-                                PullRequestMessageStatus.ACTIVE &&
-                                "Will be migrated to 'every_push'"}
-                            {props.value.status.value ===
-                                PullRequestMessageStatus.INACTIVE &&
-                                "Will be migrated to 'off'"}
-                        </p>
-                    </div>
-                </CardHeader>
-            </Card>
+                    <Select
+                        value={props.value.status.value}
+                        onValueChange={(value: PullRequestMessageStatus) =>
+                            props.onChangeAction({
+                                content: props.value.content.value,
+                                status: value,
+                            })
+                        }
+                        disabled={!props.canEdit}>
+                        <SelectTrigger>
+                            <SelectValue>
+                                {getStatusLabel(props.value.status.value)}
+                            </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem
+                                value={PullRequestMessageStatus.EVERY_PUSH}>
+                                {getStatusLabel(
+                                    PullRequestMessageStatus.EVERY_PUSH,
+                                )}
+                            </SelectItem>
+                            <SelectItem
+                                value={
+                                    PullRequestMessageStatus.ONLY_WHEN_OPENED
+                                }>
+                                {getStatusLabel(
+                                    PullRequestMessageStatus.ONLY_WHEN_OPENED,
+                                )}
+                            </SelectItem>
+                            <SelectItem value={PullRequestMessageStatus.OFF}>
+                                {getStatusLabel(PullRequestMessageStatus.OFF)}
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <p className="text-text-tertiary text-xs">
+                        {props.value.status.value ===
+                            PullRequestMessageStatus.EVERY_PUSH &&
+                            "Posted again every time new code is pushed to the PR."}
+                        {props.value.status.value ===
+                            PullRequestMessageStatus.ONLY_WHEN_OPENED &&
+                            "Posted once, when the PR is opened."}
+                        {props.value.status.value ===
+                            PullRequestMessageStatus.OFF &&
+                            "Not posted. The text below is kept for later."}
+                        {props.value.status.value ===
+                            PullRequestMessageStatus.ACTIVE &&
+                            "Legacy value — will be migrated to “On every push”."}
+                        {props.value.status.value ===
+                            PullRequestMessageStatus.INACTIVE &&
+                            "Legacy value — will be migrated to “Never”."}
+                    </p>
+                </div>
             )}
 
-            <div className="mt-4 flex flex-1">
-                <div className="flex flex-2 shrink-0 flex-col gap-2">
+            <div className="mt-2 flex flex-1">
+                <div
+                    className={cn(
+                        "flex shrink-0 flex-col gap-2",
+                        showPreview ? "flex-2" : "min-h-56 flex-1",
+                    )}>
                     <div className="flex h-7 items-center gap-2">
-                        <Label htmlFor="custom-message">Custom message</Label>
+                        <Label htmlFor="custom-message">Message</Label>
 
                         {!isErrorMessage && (
                             <CustomMessagesOptionsDropdown
@@ -259,14 +317,22 @@ export const TabContent = (props: {
                             initialState={props.initialState.content}
                             handleRevert={handleContentRevert}
                         />
+                        {!showPreview && (
+                            <span className="ml-auto">{resetMenu}</span>
+                        )}
                     </div>
 
-                    <Card color="lv3" className="flex-1 rounded-r-none">
+                    <Card
+                        color="lv3"
+                        className={cn(
+                            "flex-1",
+                            showPreview && "rounded-r-none",
+                        )}>
                         <CardHeader className="h-full p-0 *:h-full">
                             <Textarea
                                 value={props.value.content.value}
                                 id="custom-message"
-                                placeholder="Write your custom message here..."
+                                placeholder="Write the message…"
                                 className="h-full resize-none rounded-none bg-transparent p-6"
                                 disabled={
                                     !props.canEdit ||
@@ -287,152 +353,90 @@ export const TabContent = (props: {
                     </Card>
                 </div>
 
-                <div className="flex flex-3 shrink-0 flex-col gap-2">
-                    <div className="flex h-7 items-center justify-between">
-                        <Label>Preview</Label>
+                {showPreview && (
+                    <div className="flex flex-3 shrink-0 flex-col gap-2">
+                        <div className="flex h-7 items-center justify-between">
+                            <Label>Preview</Label>
 
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    size="xs"
-                                    variant="cancel"
-                                    rightIcon={
-                                        <ChevronDownIcon className="-mr-1" />
-                                    }
-                                    className="text-tertiary-light min-h-auto self-end"
-                                    disabled={!props.canEdit}>
-                                    Reset to…
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                {hasParent && (
-                                    <DropdownMenuItem
-                                        disabled={
-                                            !props.canEdit ||
-                                            inheritedContentTarget ===
-                                                undefined ||
-                                            currentContent.trim() ===
-                                                (
-                                                    inheritedContentTarget || ""
-                                                ).trim()
-                                        }
-                                        onClick={() => {
-                                            if (
-                                                inheritedContentTarget ===
-                                                undefined
-                                            )
-                                                return;
-                                            props.onChangeAction({
-                                                status: contentStatus,
-                                                content: inheritedContentTarget,
-                                            });
-                                        }}>
-                                        <div>
-                                            Inherited message
-                                            <p className="text-text-tertiary text-xs">
-                                                Restore content from parent
-                                                scope
-                                            </p>
-                                        </div>
-                                    </DropdownMenuItem>
-                                )}
-                                {isGlobalScope && (
-                                    <DropdownMenuItem
-                                        disabled={
-                                            !props.canEdit ||
-                                            currentContent.trim() ===
-                                                (
-                                                    defaultContentTarget || ""
-                                                ).trim()
-                                        }
-                                        onClick={() => {
-                                            props.onChangeAction({
-                                                status: contentStatus,
-                                                content: defaultContentTarget,
-                                            });
-                                        }}>
-                                        <div>
-                                            Default message
-                                            <p className="text-text-tertiary text-xs">
-                                                Restore platform default content
-                                            </p>
-                                        </div>
-                                    </DropdownMenuItem>
-                                )}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </div>
+                            {resetMenu}
+                        </div>
 
-                    <Card className="flex-1 rounded-l-none">
-                        <CardHeader className="h-full overflow-auto">
-                            {isErrorMessage ? (
-                                <div className="flex flex-col gap-4">
-                                    <div className="flex flex-col gap-2">
-                                        <span className="text-text-tertiary text-[11px] font-medium tracking-wide uppercase">
-                                            Kody's default error comment
-                                        </span>
-                                        <Card color="lv2" className="p-4">
+                        <Card className="flex-1 rounded-l-none">
+                            <CardHeader className="h-full overflow-auto">
+                                {isErrorMessage ? (
+                                    <div className="flex flex-col gap-4">
+                                        <div className="flex flex-col gap-2">
+                                            <span className="text-text-tertiary text-[11px] font-medium tracking-wide uppercase">
+                                                Kody's default error comment
+                                            </span>
+                                            <Card color="lv2" className="p-4">
+                                                <MessagePreview
+                                                    content={
+                                                        DEFAULT_ERROR_COMMENT_SAMPLE
+                                                    }
+                                                />
+                                            </Card>
+                                        </div>
+
+                                        <div className="text-text-tertiary flex items-center gap-3 text-[11px] font-medium tracking-wide uppercase">
+                                            <span className="bg-card-lv3 h-px flex-1" />
+                                            Your custom message
+                                            <span className="bg-card-lv3 h-px flex-1" />
+                                        </div>
+
+                                        {currentContent.trim().length > 0 ? (
+                                            <Card color="lv2" className="p-4">
+                                                <MessagePreview
+                                                    content={preserveLineBreaks(
+                                                        props.value.content
+                                                            .value,
+                                                    )}
+                                                />
+                                            </Card>
+                                        ) : (
+                                            <p className="text-text-secondary text-sm italic">
+                                                Write a message on the left — it
+                                                will be appended right here,
+                                                below the default comment.
+                                            </p>
+                                        )}
+
+                                        <div className="text-text-tertiary flex items-center gap-3 text-[11px] font-medium tracking-wide uppercase">
+                                            <span className="bg-card-lv3 h-px flex-1" />
+                                            Always appended (not editable)
+                                            <span className="bg-card-lv3 h-px flex-1" />
+                                        </div>
+
+                                        <Card
+                                            color="lv2"
+                                            className="p-4 opacity-70">
                                             <MessagePreview
                                                 content={
-                                                    DEFAULT_ERROR_COMMENT_SAMPLE
+                                                    KODY_GUIDE_FOOTER_SAMPLE
                                                 }
                                             />
                                         </Card>
                                     </div>
-
-                                    <div className="text-text-tertiary flex items-center gap-3 text-[11px] font-medium tracking-wide uppercase">
-                                        <span className="bg-card-lv3 h-px flex-1" />
-                                        Your custom message
-                                        <span className="bg-card-lv3 h-px flex-1" />
-                                    </div>
-
-                                    {currentContent.trim().length > 0 ? (
-                                        <Card color="lv2" className="p-4">
-                                            <MessagePreview
-                                                content={preserveLineBreaks(
-                                                    props.value.content.value,
-                                                )}
-                                            />
-                                        </Card>
-                                    ) : (
-                                        <p className="text-text-secondary text-sm italic">
-                                            Write a message on the left — it will
-                                            be appended right here, below the
-                                            default comment.
-                                        </p>
-                                    )}
-
-                                    <div className="text-text-tertiary flex items-center gap-3 text-[11px] font-medium tracking-wide uppercase">
-                                        <span className="bg-card-lv3 h-px flex-1" />
-                                        Always appended (not editable)
-                                        <span className="bg-card-lv3 h-px flex-1" />
-                                    </div>
-
-                                    <Card color="lv2" className="p-4 opacity-70">
+                                ) : (
+                                    <>
                                         <MessagePreview
-                                            content={KODY_GUIDE_FOOTER_SAMPLE}
+                                            content={props.value.content.value}
                                         />
-                                    </Card>
-                                </div>
-                            ) : (
-                                <>
-                                    <MessagePreview
-                                        content={props.value.content.value}
-                                    />
 
-                                    <div className="flex h-full items-center justify-center">
-                                        {props.value.content.value.trim()
-                                            .length === 0 && (
-                                            <p className="text-text-secondary text-sm">
-                                                No content to preview
-                                            </p>
-                                        )}
-                                    </div>
-                                </>
-                            )}
-                        </CardHeader>
-                    </Card>
-                </div>
+                                        <div className="flex h-full items-center justify-center">
+                                            {props.value.content.value.trim()
+                                                .length === 0 && (
+                                                <p className="text-text-secondary text-sm">
+                                                    No content to preview
+                                                </p>
+                                            )}
+                                        </div>
+                                    </>
+                                )}
+                            </CardHeader>
+                        </Card>
+                    </div>
+                )}
             </div>
         </div>
     );

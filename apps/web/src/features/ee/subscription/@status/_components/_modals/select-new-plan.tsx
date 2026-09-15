@@ -26,9 +26,9 @@ import { Separator } from "@components/ui/separator";
 import { Switch } from "@components/ui/switch";
 import { toast } from "@components/ui/toaster/use-toast";
 import { useAsyncAction } from "@hooks/use-async-action";
+import { useConfig } from "@providers/ConfigProvider";
 import { BadgeDollarSignIcon, CheckIcon, ExternalLinkIcon } from "lucide-react";
 import { useAuth } from "src/core/providers/auth.provider";
-import { useConfig } from "@providers/ConfigProvider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import type { AwaitedReturnType } from "src/core/types";
 import { cn } from "src/core/utils/components";
@@ -178,7 +178,7 @@ const FreePlan = ({ plan }: { plan: Plan }) => {
             <CardContent className="flex-none py-4">
                 <Button
                     size="md"
-                    variant="primary"
+                    variant="primary-dark"
                     className="w-full"
                     leftIcon={<BadgeDollarSignIcon />}
                     loading={loading}
@@ -350,7 +350,7 @@ const EnterprisePlan = ({ plan }: { plan: Plan }) => {
                     <Button
                         size="md"
                         decorative
-                        variant="primary"
+                        variant="helper"
                         className="w-full"
                         leftIcon={<ExternalLinkIcon />}>
                         Talk to sales

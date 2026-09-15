@@ -14,6 +14,7 @@ import { Textarea } from "@components/ui/textarea";
 import { toast } from "@components/ui/toaster/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAsyncAction } from "@hooks/use-async-action";
+import { useConfig } from "@providers/ConfigProvider";
 import {
     confirmSSODomainVerification,
     createOrUpdateSSOConfig,
@@ -23,7 +24,6 @@ import {
 } from "@services/ssoConfig/fetch";
 import { AlertCircle, Save, Upload } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
-import { useConfig } from "@providers/ConfigProvider";
 import { useAuth } from "src/core/providers/auth.provider";
 import { publicDomainsSet } from "src/core/utils/email";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
@@ -685,8 +685,8 @@ export const ClientSsoOrganizationSettingsPage = (props: {
                     <Page.HeaderActions>
                         <Button
                             type="button"
-                            size="md"
-                            variant="secondary"
+                            size="sm"
+                            variant="helper"
                             onClick={handleConnectionTest}
                             loading={isTestingConnection}
                             disabled={
@@ -696,7 +696,7 @@ export const ClientSsoOrganizationSettingsPage = (props: {
                         </Button>
                         <Button
                             type="submit"
-                            size="md"
+                            size="sm"
                             variant="primary"
                             leftIcon={<Save />}
                             disabled={
@@ -794,7 +794,7 @@ export const ClientSsoOrganizationSettingsPage = (props: {
                                                         />
                                                         <Button
                                                             type="button"
-                                                            variant="primary"
+                                                            variant="helper"
                                                             size="md"
                                                             onClick={
                                                                 handleMetadataFetch
@@ -822,7 +822,7 @@ export const ClientSsoOrganizationSettingsPage = (props: {
                                                 <div>
                                                     <Button
                                                         type="button"
-                                                        variant="secondary"
+                                                        variant="helper"
                                                         size="md"
                                                         onClick={
                                                             handleUploadClick
@@ -878,7 +878,7 @@ export const ClientSsoOrganizationSettingsPage = (props: {
                                                             />
                                                             <Button
                                                                 type="button"
-                                                                variant="secondary"
+                                                                variant="helper"
                                                                 size="md"
                                                                 onClick={() => {
                                                                     navigator.clipboard.writeText(
@@ -1083,15 +1083,14 @@ export const ClientSsoOrganizationSettingsPage = (props: {
                                                                     (prev) => ({
                                                                         ...prev,
                                                                         [record.domain]:
-                                                                        {
-                                                                            domain: record.domain,
-                                                                            verified:
-                                                                                true,
-                                                                            verifiedAt:
-                                                                                record.verifiedAt,
-                                                                            verifiedByEmail:
-                                                                                record.contactEmail,
-                                                                        },
+                                                                            {
+                                                                                domain: record.domain,
+                                                                                verified: true,
+                                                                                verifiedAt:
+                                                                                    record.verifiedAt,
+                                                                                verifiedByEmail:
+                                                                                    record.contactEmail,
+                                                                            },
                                                                     }),
                                                                 )
                                                             }

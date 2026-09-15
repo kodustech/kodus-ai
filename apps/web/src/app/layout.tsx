@@ -1,15 +1,13 @@
 import { DM_Sans, Overpass_Mono } from "next/font/google";
 import { Toaster } from "@components/ui/toaster/toaster";
 import { TooltipProvider } from "@components/ui/tooltip";
+import type { PublicConfig } from "@config/publicConfig";
 import { GoogleTagManager } from "@next/third-parties/google";
+import { ConfigProvider } from "@providers/ConfigProvider";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import QueryProvider from "src/core/providers/query.provider";
 import { getApiPublicUrl } from "src/core/utils/api-public-url";
 import { cn } from "src/core/utils/components";
-import { createUrl } from "src/core/utils/helpers";
-
-import { ConfigProvider } from "@providers/ConfigProvider";
-import type { PublicConfig } from "@config/publicConfig";
 
 import "./globals.css";
 
@@ -56,8 +54,10 @@ export default function RootLayout({ children }: React.PropsWithChildren) {
         gitlabOauthUrl: process.env.WEB_GITLAB_OAUTH_URL ?? "",
         termsAndConditions: process.env.WEB_TERMS_AND_CONDITIONS ?? "",
         supportDocsUrl: process.env.WEB_SUPPORT_DOCS_URL ?? "",
-        supportDiscordInviteUrl: process.env.WEB_SUPPORT_DISCORD_INVITE_URL ?? "",
-        supportTalkToFounderUrl: process.env.WEB_SUPPORT_TALK_TO_FOUNDER_URL ?? "",
+        supportDiscordInviteUrl:
+            process.env.WEB_SUPPORT_DISCORD_INVITE_URL ?? "",
+        supportTalkToFounderUrl:
+            process.env.WEB_SUPPORT_TALK_TO_FOUNDER_URL ?? "",
         tokenDocsGithub: process.env.WEB_TOKEN_DOCS_GITHUB ?? "",
         tokenDocsGitlab: process.env.WEB_TOKEN_DOCS_GITLAB ?? "",
         tokenDocsBitbucket: process.env.WEB_TOKEN_DOCS_BITBUCKET ?? "",
@@ -67,13 +67,6 @@ export default function RootLayout({ children }: React.PropsWithChildren) {
         releaseVersion: process.env.RELEASE_VERSION ?? "",
         nodeEnv: process.env.WEB_NODE_ENV ?? "",
         apiPublicUrl: getApiPublicUrl(),
-        helpdeskUrl: process.env.WEB_HOSTNAME_HELPDESK
-            ? createUrl(
-                  process.env.WEB_HOSTNAME_HELPDESK,
-                  process.env.WEB_PORT_HELPDESK,
-                  "/auth/cloud",
-              )
-            : "",
     };
 
     // Expose publicConfig as window.__KODUS_PUBLIC_CONFIG__ so module-scope

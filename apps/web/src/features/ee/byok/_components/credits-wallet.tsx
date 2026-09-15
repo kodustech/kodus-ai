@@ -36,7 +36,9 @@ import {
     RefreshCwIcon,
     SparklesIcon,
 } from "lucide-react";
+import { SkeletonRows } from "@components/system/page-skeletons";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
+import { cn } from "src/core/utils/components";
 import {
     createCreditCheckoutAction,
     createCreditPaymentMethodCheckoutAction,
@@ -158,13 +160,21 @@ export const CreditsWalletStrip = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [creditsParam]);
 
+    // Which amount is being checked out, so the spinner lands on the button
+    // that was pressed instead of every pack at once.
+    const [pendingAmount, setPendingAmount] = useState<number | null>(null);
     const [topUp, { loading: checkingOut }] = useAsyncAction(
         async (creditUsd: number) => {
-            const { url } = await createCreditCheckoutAction({
-                teamId,
-                creditUsd,
-            });
-            window.location.href = url;
+            setPendingAmount(creditUsd);
+            try {
+                const { url } = await createCreditCheckoutAction({
+                    teamId,
+                    creditUsd,
+                });
+                window.location.href = url;
+            } finally {
+                setPendingAmount(null);
+            }
         },
     );
 
@@ -234,7 +244,7 @@ export const CreditsWalletStrip = () => {
                     </span>
                 </div>
 
-                <div className="flex shrink-0 flex-col items-end gap-2">
+                <div className="flex min-w-0 flex-col items-stretch gap-2 sm:shrink-0 sm:items-end">
                     <div className="flex flex-wrap justify-end gap-2">
                         {packs.map((pack) => (
                             <Button
@@ -244,26 +254,36 @@ export const CreditsWalletStrip = () => {
                                     pack === primaryPack ? "primary" : "helper"
                                 }
                                 disabled={!canEdit || checkingOut}
-                                loading={checkingOut}
+                                loading={pendingAmount === pack}
                                 onClick={() => topUp(pack)}>
                                 +{usd(pack, 0)}
                             </Button>
                         ))}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
                         <Input
                             size="md"
-                            className="w-36"
+                            className="w-32 sm:w-36"
                             inputMode="decimal"
                             placeholder="Custom amount"
                             aria-label={`Custom amount, ${usd(min, 0)} to ${usd(max, 0)}`}
                             value={customAmount}
                             onChange={(e) => setCustomAmount(e.target.value)}
                         />
+                        {/* The escape hatch beside the packs, not a rival to
+                            them: the packs carry the weight and exactly one of
+                            them is primary. `cancel` also recedes while
+                            disabled — the filled variants brighten instead,
+                            which made an unusable button the loudest control
+                            in the row. */}
                         <Button
                             size="md"
-                            variant="helper"
+                            variant="cancel"
                             disabled={!canEdit || checkingOut || !customValid}
+                            loading={
+                                pendingAmount !== null &&
+                                pendingAmount === Math.round(custom * 100) / 100
+                            }
                             onClick={() =>
                                 topUp(Math.round(custom * 100) / 100)
                             }>
@@ -286,11 +306,18 @@ export const CreditsWalletStrip = () => {
             </div>
 
             {credits.exhausted && !credits.neverFunded && (
-                <div className="bg-danger/10 text-text-primary flex items-start gap-2 rounded-md px-3 py-2 text-xs">
+                <div
+                    className={cn(
+                        "text-text-primary flex items-start gap-2 rounded-md px-3 py-2 text-xs",
+                        credits.routedThroughKodus
+                            ? "bg-danger/10"
+                            : "bg-card-lv2",
+                    )}>
                     <SparklesIcon size={14} className="mt-0.5 shrink-0" />
                     <span>
-                        Reviews on the models below are paused until you top up.
-                        Your own provider keys keep working.
+                        {credits.routedThroughKodus
+                            ? "Reviews on the models below are paused until you top up. Your own provider keys keep working."
+                            : "Nothing routes here right now, so an empty balance changes nothing. Top up before you send a task to one of the models below."}
                     </span>
                 </div>
             )}
@@ -610,21 +637,20 @@ export const CreditsLedgerDrawer = ({
                     </SheetDescription>
                 </SheetHeader>
 
-                <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-5">
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-6 overflow-y-auto px-6 py-5">
                     <section className="flex flex-col gap-2">
                         <h3 className="text-text-primary text-sm font-semibold">
                             Money movements
                         </h3>
                         {ledgerQuery.isLoading ? (
-                            <p className="text-text-tertiary text-xs">
-                                Loading…
-                            </p>
+                            <SkeletonRows rows={3} />
                         ) : ledger.length === 0 ? (
                             <p className="text-text-tertiary text-xs">
                                 No top-ups or debits yet.
                             </p>
                         ) : (
-                            <table className="w-full text-xs">
+                            <div className="-mx-1 overflow-x-auto px-1">
+                                <table className="w-full min-w-[26rem] text-xs">
                                 <thead>
                                     <tr className="text-text-tertiary border-card-lv3 border-b text-left">
                                         <th className="py-2 pr-4 font-medium">
@@ -676,6 +702,7 @@ export const CreditsLedgerDrawer = ({
                                     ))}
                                 </tbody>
                             </table>
+                            </div>
                         )}
                     </section>
 
@@ -683,16 +710,19 @@ export const CreditsLedgerDrawer = ({
                         <h3 className="text-text-primary text-sm font-semibold">
                             Charges by review
                         </h3>
-                        <p className="text-text-tertiary text-xs">
-                            {chargesQuery.isLoading
-                                ? "Loading…"
-                                : runs.length === 0
-                                  ? "No Kodus-routed usage metered yet."
-                                  : `${runs.length} run${runs.length === 1 ? "" : "s"} · ${formatUsd(total)} in the last ${chargesQuery.data?.length ?? 0} charges, newest first.`}
-                        </p>
+                        {chargesQuery.isLoading ? (
+                            <SkeletonRows rows={3} />
+                        ) : (
+                            <p className="text-text-tertiary text-xs">
+                                {runs.length === 0
+                                    ? "No Kodus-routed usage metered yet."
+                                    : `${runs.length} run${runs.length === 1 ? "" : "s"} · ${formatUsd(total)} in the last ${chargesQuery.data?.length ?? 0} charges, newest first.`}
+                            </p>
+                        )}
                         {runs.length > 0 && (
                             <>
-                                <table className="w-full text-xs">
+                                <div className="-mx-1 overflow-x-auto px-1">
+                                <table className="w-full min-w-[26rem] text-xs">
                                     <thead>
                                         <tr className="text-text-tertiary border-card-lv3 border-b text-left">
                                             <th className="py-2 pr-4 font-medium">
@@ -743,6 +773,7 @@ export const CreditsLedgerDrawer = ({
                                         ))}
                                     </tbody>
                                 </table>
+                            </div>
                                 {runs.length > INITIAL_RUNS && (
                                     <div className="flex items-center justify-center">
                                         <Button

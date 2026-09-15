@@ -66,21 +66,22 @@ export class FastSyncIdeRulesUseCase {
                 throw new Error('Repository not found');
             }
 
-            const result = await this.kodyRulesSyncService.syncRepositoryMainFast({
-                organizationAndTeamData,
-                repository: {
-                    id: String(repository.id),
-                    name: repository.name,
-                    fullName:
-                        (repository as any)?.fullName ||
-                        `${(repository as any)?.organizationName || ''}/${repository.name}`,
-                    defaultBranch: (repository as any)?.default_branch,
-                },
-                maxFiles: params.maxFiles,
-                maxFileSizeBytes: params.maxFileSizeBytes,
-                maxTotalBytes: params.maxTotalBytes,
-                maxConcurrent: params.maxConcurrent,
-            });
+            const result =
+                await this.kodyRulesSyncService.syncRepositoryMainFast({
+                    organizationAndTeamData,
+                    repository: {
+                        id: String(repository.id),
+                        name: repository.name,
+                        fullName:
+                            (repository as any)?.fullName ||
+                            `${(repository as any)?.organizationName || ''}/${repository.name}`,
+                        defaultBranch: (repository as any)?.default_branch,
+                    },
+                    maxFiles: params.maxFiles,
+                    maxFileSizeBytes: params.maxFileSizeBytes,
+                    maxTotalBytes: params.maxTotalBytes,
+                    maxConcurrent: params.maxConcurrent,
+                });
 
             await this.notifySynced(
                 organizationId,
@@ -88,6 +89,7 @@ export class FastSyncIdeRulesUseCase {
                 Array.isArray((result as any)?.rules)
                     ? (result as any).rules.length
                     : 0,
+                String(params.repositoryId),
             );
 
             // Validate external file references against the repo's current
@@ -119,6 +121,7 @@ export class FastSyncIdeRulesUseCase {
                 organizationId,
                 params.repositoryId,
                 error instanceof Error ? error.message : String(error),
+                String(params.repositoryId),
             );
 
             throw error;
@@ -129,6 +132,7 @@ export class FastSyncIdeRulesUseCase {
         organizationId: string,
         repoName: string,
         rulesCount: number,
+        repositoryId?: string,
     ): Promise<void> {
         try {
             const userId = this.request.user?.uuid;
@@ -137,6 +141,7 @@ export class FastSyncIdeRulesUseCase {
                 event: NotificationEvent.IDE_RULES_SYNCED,
                 payload: {
                     repoName: repoName ?? '',
+                    repositoryId,
                     rulesCount,
                     syncMode: 'fast',
                 },
@@ -146,7 +151,8 @@ export class FastSyncIdeRulesUseCase {
         } catch (error) {
             this.logger.error({
                 message: 'Failed to emit ide.rules_synced notification',
-                error: error instanceof Error ? error : new Error(String(error)),
+                error:
+                    error instanceof Error ? error : new Error(String(error)),
                 context: FastSyncIdeRulesUseCase.name,
             });
         }
@@ -156,6 +162,7 @@ export class FastSyncIdeRulesUseCase {
         organizationId: string,
         repoName: string,
         reason: string,
+        repositoryId?: string,
     ): Promise<void> {
         try {
             // Owners are the config-driven audience (defaultRoles); only the
@@ -168,6 +175,7 @@ export class FastSyncIdeRulesUseCase {
                 event: NotificationEvent.IDE_RULES_SYNC_FAILED,
                 payload: {
                     repoName: repoName ?? '',
+                    repositoryId,
                     reason,
                     correlationId: uuid(),
                 },
@@ -177,7 +185,8 @@ export class FastSyncIdeRulesUseCase {
         } catch (error) {
             this.logger.error({
                 message: 'Failed to emit ide.rules_sync_failed notification',
-                error: error instanceof Error ? error : new Error(String(error)),
+                error:
+                    error instanceof Error ? error : new Error(String(error)),
                 context: FastSyncIdeRulesUseCase.name,
             });
         }

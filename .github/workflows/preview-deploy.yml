@@ -151,6 +151,14 @@ jobs:
                   # later push the environment already exists and the new
                   # commit travels with push (compose watch reloads it)
                   $RUNO push --restart --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml
+                  # ...which means `up` ran the seed against the PREVIOUS
+                  # commit's code. Re-run it here, after the sync, so a change
+                  # to the seed takes effect on the deploy that carries it
+                  # instead of the one after. Idempotent by design, and
+                  # best-effort: a preview that is already usable must not fail
+                  # the deploy over a second seed pass.
+                  $RUNO exec --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml \
+                      -- pnpm run seed:preview || echo "::warning::post-sync seed:preview failed — the environment may be running the previous commit's seed"
                   URL=$($RUNO url --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml | head -1)
                   echo "url=$URL" >> "$GITHUB_OUTPUT"
                   echo "Preview: $URL"

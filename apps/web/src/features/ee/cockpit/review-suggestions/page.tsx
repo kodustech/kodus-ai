@@ -56,7 +56,7 @@ export default async function ReviewSuggestionsPage({
 
     return (
         <Page.Root>
-            <Page.Header className="max-w-full px-6">
+            <Page.Header>
                 <Breadcrumb>
                     <BreadcrumbList>
                         <BreadcrumbItem>
@@ -72,14 +72,14 @@ export default async function ReviewSuggestionsPage({
                 </Breadcrumb>
             </Page.Header>
 
-            <Page.Header className="max-w-full px-6">
+            <Page.Header>
                 <Page.Title>Suggestions</Page.Title>
                 <span className="text-text-tertiary ml-auto text-xs">
                     {startDate} → {endDate} (cockpit date range)
                 </span>
             </Page.Header>
 
-            <Page.Content className="max-w-full px-6">
+            <Page.Content>
                 <ExplorerFilters params={params} />
 
                 <div className="text-text-secondary flex gap-5 px-1 text-sm">

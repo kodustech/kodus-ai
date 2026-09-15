@@ -34,7 +34,7 @@ export const LLMPromptToggle = (props: {
                     <div>
                         <div className="mb-2 flex flex-row items-center gap-2">
                             <Heading variant="h3">
-                                Enable LLM Prompt
+                                Add a copyable prompt to each suggestion
                                 <span className="ml-1.5 inline-flex items-center rounded-md bg-red-800 px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-blue-700/10 ring-inset">
                                     Not available on Bitbucket
                                 </span>
@@ -46,8 +46,8 @@ export const LLMPromptToggle = (props: {
                             />
                         </div>
                         <p className="text-text-secondary">
-                            When enabled, each suggestions will have a prompt
-                            the user can copy to use with an LLM.
+                            Each suggestion gets a prompt the developer can
+                            paste into an AI assistant to apply the fix.
                         </p>
                     </div>
                     <Switch

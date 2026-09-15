@@ -1,6 +1,6 @@
 import { Card } from "@components/ui/card";
 import { Page } from "@components/ui/page";
-import { greeting } from "src/core/utils/helpers";
+import { Greeting } from "@components/system/greeting";
 
 // Static sample values only — this preview renders behind the
 // LockedFeatureOverlay blur for orgs whose tier doesn't include the
@@ -18,15 +18,15 @@ const SAMPLE_BARS = [35, 55, 42, 68, 50, 74, 61, 80];
 export const CockpitLockedPreview = () => {
     return (
         <Page.Root>
-            <Page.Header className="max-w-full px-6">
-                <Page.Title>{greeting()}</Page.Title>
+            <Page.Header>
+                <Page.Title><Greeting /></Page.Title>
                 <div className="ml-auto flex items-center gap-2">
                     <div className="bg-card-lv2 h-8 w-40 rounded-lg" />
                     <div className="bg-card-lv2 h-8 w-52 rounded-lg" />
                 </div>
             </Page.Header>
 
-            <Page.Content className="max-w-full px-6">
+            <Page.Content>
                 <div className="flex flex-col gap-4">
                     <div className="flex gap-2">
                         <div className="bg-card-lv2 h-9 w-32 rounded-lg" />

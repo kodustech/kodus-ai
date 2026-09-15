@@ -116,7 +116,7 @@ export const UserLogsPageClient = () => {
 
     return (
         <Page.Root className="overflow-hidden pb-0">
-            <Page.Header className="max-w-full">
+            <Page.Header>
                 <Page.TitleContainer>
                     <Page.Title>User Activity Logs</Page.Title>
                     <Page.Description>
@@ -142,7 +142,7 @@ export const UserLogsPageClient = () => {
                 </Page.HeaderActions>
             </Page.Header>
 
-            <Page.Content className="max-w-full overflow-auto px-0">
+            <Page.Content className="overflow-auto px-0">
                 <DataTable
                     columns={columns}
                     data={filteredLogs ?? []}

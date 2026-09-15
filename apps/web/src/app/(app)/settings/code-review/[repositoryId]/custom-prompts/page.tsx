@@ -136,8 +136,14 @@ function CustomPromptsContent() {
         repositoryId,
     );
 
+    // The per-category prompts live on "What to review", next to the
+    // category toggles; this page keeps only the voice.
     const promptSections = useMemo(
-        () => (defaults ? buildPromptSections(defaults) : []),
+        () =>
+            (defaults ? buildPromptSections(defaults) : []).filter(
+                (section) =>
+                    section.fieldName !== "v2PromptOverrides.categories",
+            ),
         [defaults],
     );
     const promptFieldConfigs = useMemo(

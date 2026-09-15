@@ -66,14 +66,26 @@ export const mcpManagerFetch = async <Data>(
         });
     } catch (error) {
         // Service unavailable — MCP Manager might not be running.
+        // 502/504 from our own proxy means IT could not reach the manager —
+        // the browser never sees ECONNREFUSED, because its request to
+        // /api/proxy/mcp succeeds and the failure happens upstream of it. The
+        // string checks below only ever matched server-side direct calls, so
+        // without this a self-hosted install that never deployed the manager
+        // looked like a manager that was merely erroring.
+        const proxyCouldNotReachIt =
+            typeof (error as { statusCode?: unknown })?.statusCode ===
+                "number" &&
+            [502, 503, 504].includes((error as { statusCode: number }).statusCode);
+
         if (
-            error instanceof Error &&
-            (error.message.includes("ENOTFOUND") ||
-                error.message.includes("ECONNREFUSED") ||
-                error.message.includes("Failed to fetch") ||
-                error.message.includes("fetch failed"))
+            proxyCouldNotReachIt ||
+            (error instanceof Error &&
+                (error.message.includes("ENOTFOUND") ||
+                    error.message.includes("ECONNREFUSED") ||
+                    error.message.includes("Failed to fetch") ||
+                    error.message.includes("fetch failed")))
         ) {
-            console.warn("[MCP Manager] Service unavailable:", error.message);
+            console.warn("[MCP Manager] Service unavailable:", (error as Error)?.message);
             throw new MCPServiceUnavailableError();
         }
         throw error;

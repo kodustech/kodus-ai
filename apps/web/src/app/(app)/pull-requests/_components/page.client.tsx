@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef } from "react";
+import { ReviewsSourceTabs } from "@components/system/reviews-source-tabs";
 import { Button } from "@components/ui/button";
 import { Page } from "@components/ui/page";
 import {
@@ -23,8 +24,8 @@ import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { cn } from "src/core/utils/components";
 
-import { AwaitingList } from "./pr-awaiting-list";
 import { PrAuthorSearch } from "./pr-author-search";
+import { AwaitingList } from "./pr-awaiting-list";
 import { PrDataTable } from "./pr-data-table";
 import { type PullRequestsScope } from "./pr-view-switcher";
 import { PullRequestsFilters } from "./pull-requests-filters";
@@ -487,7 +488,7 @@ export function PullRequestsPageClient() {
 
     return (
         <Page.Root scrollable={false} className="min-h-0 gap-3 pt-6 pb-0">
-            <Page.Header className="max-w-full">
+            <Page.Header>
                 {/* Compact command bar. The whole meta-zone is folded into one
                     band: title + count on the left, the "pulse" shortcuts
                     (reviewed today / awaiting / needs attention) as small filter
@@ -499,10 +500,8 @@ export function PullRequestsPageClient() {
                     those stacked bands into this single strip lets the table own
                     the viewport and start near the top. */}
                 <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
-                    <div className="flex items-baseline gap-2">
-                        <Page.Title variant="h2" className="text-balance">
-                            Pull Requests
-                        </Page.Title>
+                    <div className="flex items-center gap-3">
+                        <ReviewsSourceTabs />
                         {totalCount > 0 && (
                             <span className="text-text-tertiary text-sm tabular-nums">
                                 {totalCount}
@@ -563,130 +562,124 @@ export function PullRequestsPageClient() {
                 </div>
             </Page.Header>
 
-            <Page.Content className="max-w-full min-h-0 gap-3 px-6">
+            <Page.Content className="min-h-0 gap-3">
                 {/* Filter toolbar — search + structured filters on ONE wrapping
                     row so the table gets more vertical room; wraps to a second
                     line only on narrow widths. Search scopes: Title / Number /
                     Author (Title & Number drive `q`; Author drives the author
                     filter). */}
                 <div className="flex flex-wrap items-center gap-2">
-                        <div className="border-card-lv3 bg-card-lv2 focus-within:border-primary-light/50 focus-within:ring-primary-light/15 flex h-9 min-w-[18rem] flex-1 items-center gap-2 rounded-xl border pr-1.5 pl-3 transition focus-within:ring-3">
-                            {showAuthorSearch ? (
-                                <UserIcon className="text-text-tertiary size-4 shrink-0" />
-                            ) : (
-                                <SearchIcon className="text-text-tertiary size-4 shrink-0" />
-                            )}
-                            {showAuthorSearch ? (
-                                <PrAuthorSearch
-                                    teamId={teamId}
-                                    onSelect={(name) =>
-                                        setAuthorFilter(name || null)
-                                    }
-                                />
-                            ) : (
-                                <input
-                                    ref={searchRef}
-                                    className="text-text-primary placeholder:text-text-tertiary/70 h-full min-w-0 flex-1 bg-transparent text-sm outline-none"
-                                    inputMode={
+                    <div className="border-card-lv3 bg-card-lv2 focus-within:border-primary-light/50 focus-within:ring-primary-light/15 flex h-9 min-w-[18rem] flex-1 items-center gap-2 rounded-xl border pr-1.5 pl-3 transition focus-within:ring-3">
+                        {showAuthorSearch ? (
+                            <UserIcon className="text-text-tertiary size-4 shrink-0" />
+                        ) : (
+                            <SearchIcon className="text-text-tertiary size-4 shrink-0" />
+                        )}
+                        {showAuthorSearch ? (
+                            <PrAuthorSearch
+                                teamId={teamId}
+                                onSelect={(name) =>
+                                    setAuthorFilter(name || null)
+                                }
+                            />
+                        ) : (
+                            <input
+                                ref={searchRef}
+                                className="text-text-primary placeholder:text-text-tertiary/70 h-full min-w-0 flex-1 bg-transparent text-sm outline-none"
+                                inputMode={
+                                    searchMode === "number" ? "numeric" : "text"
+                                }
+                                placeholder={
+                                    searchMode === "number"
+                                        ? "Search by PR number…"
+                                        : "Search by title…"
+                                }
+                                value={searchQuery}
+                                onChange={(event) => {
+                                    setSearchQuery(
                                         searchMode === "number"
-                                            ? "numeric"
-                                            : "text"
-                                    }
-                                    placeholder={
-                                        searchMode === "number"
-                                            ? "Search by PR number…"
-                                            : "Search by title…"
-                                    }
-                                    value={searchQuery}
-                                    onChange={(event) => {
-                                        setSearchQuery(
-                                            searchMode === "number"
-                                                ? event.target.value.replace(
-                                                      /[^\d]/g,
-                                                      "",
-                                                  )
-                                                : event.target.value,
-                                        );
+                                            ? event.target.value.replace(
+                                                  /[^\d]/g,
+                                                  "",
+                                              )
+                                            : event.target.value,
+                                    );
+                                }}
+                            />
+                        )}
+                        <div className="bg-card-lv1/80 flex shrink-0 items-center gap-0.5 rounded-lg p-0.5">
+                            {searchModes.map((mode) => (
+                                <button
+                                    key={mode}
+                                    type="button"
+                                    onClick={() => {
+                                        // Switching scope starts a fresh
+                                        // search — clear both the text
+                                        // query and the author filter.
+                                        setSearchMode(mode);
+                                        setSearchQuery("");
+                                        setAuthorFilter(null);
                                     }}
-                                />
-                            )}
-                            <div className="bg-card-lv1/80 flex shrink-0 items-center gap-0.5 rounded-lg p-0.5">
-                                {searchModes.map(
-                                    (mode) => (
-                                        <button
-                                            key={mode}
-                                            type="button"
-                                            onClick={() => {
-                                                // Switching scope starts a fresh
-                                                // search — clear both the text
-                                                // query and the author filter.
-                                                setSearchMode(mode);
-                                                setSearchQuery("");
-                                                setAuthorFilter(null);
-                                            }}
-                                            className={cn(
-                                                "rounded-md px-2.5 py-1 text-xs font-medium capitalize transition",
-                                                searchMode === mode
-                                                    ? "bg-card-lv3 text-text-primary"
-                                                    : "text-text-tertiary hover:text-text-secondary",
-                                            )}>
-                                            {mode}
-                                        </button>
-                                    ),
-                                )}
-                            </div>
+                                    className={cn(
+                                        "rounded-md px-2.5 py-1 text-xs font-medium capitalize transition",
+                                        searchMode === mode
+                                            ? "bg-card-lv3 text-text-primary"
+                                            : "text-text-tertiary hover:text-text-secondary",
+                                    )}>
+                                    {mode}
+                                </button>
+                            ))}
                         </div>
+                    </div>
 
                     <PullRequestsFilters
-                            teamId={teamId}
-                            selectedRepository={selectedRepository ?? undefined}
-                            onRepositoryChange={(value) =>
-                                setSelectedRepository(value ?? null)
-                            }
-                            suggestionsFilter={suggestionsFilter}
-                            onSuggestionsFilterChange={(value) =>
-                                setSuggestionsFilter(value)
-                            }
-                            authorPolicy={authorPolicy}
-                            onAuthorPolicyChange={(value) =>
-                                setAuthorPolicy(value)
-                            }
-                            createdAtFrom={createdAtFrom}
-                            createdAtTo={createdAtTo}
-                            onCreatedAtFromChange={(value) =>
-                                setCreatedAtFrom(value || null)
-                            }
-                            onCreatedAtToChange={(value) =>
-                                setCreatedAtTo(value || null)
-                            }
-                        />
+                        teamId={teamId}
+                        selectedRepository={selectedRepository ?? undefined}
+                        onRepositoryChange={(value) =>
+                            setSelectedRepository(value ?? null)
+                        }
+                        suggestionsFilter={suggestionsFilter}
+                        onSuggestionsFilterChange={(value) =>
+                            setSuggestionsFilter(value)
+                        }
+                        authorPolicy={authorPolicy}
+                        onAuthorPolicyChange={(value) => setAuthorPolicy(value)}
+                        createdAtFrom={createdAtFrom}
+                        createdAtTo={createdAtTo}
+                        onCreatedAtFromChange={(value) =>
+                            setCreatedAtFrom(value || null)
+                        }
+                        onCreatedAtToChange={(value) =>
+                            setCreatedAtTo(value || null)
+                        }
+                    />
 
-                        <Select
-                            value={statusFilter ?? "all"}
-                            onValueChange={(value) =>
-                                setStatusFilter(
-                                    value === "all"
-                                        ? null
-                                        : (value as (typeof STATUSES)[number]),
-                                )
-                            }>
-                            <SelectTrigger
-                                size="sm"
-                                className={cn(
-                                    "h-9 w-auto gap-1.5 rounded-lg",
-                                    statusFilter && "border-primary-light/50",
-                                )}>
-                                <SelectValue placeholder="Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">Status</SelectItem>
-                                {STATUSES.map((s) => (
-                                    <SelectItem key={s} value={s}>
-                                        {STATUS_LABEL[s]}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                    <Select
+                        value={statusFilter ?? "all"}
+                        onValueChange={(value) =>
+                            setStatusFilter(
+                                value === "all"
+                                    ? null
+                                    : (value as (typeof STATUSES)[number]),
+                            )
+                        }>
+                        <SelectTrigger
+                            size="sm"
+                            className={cn(
+                                "h-9 w-auto gap-1.5 rounded-lg",
+                                statusFilter && "border-primary-light/50",
+                            )}>
+                            <SelectValue placeholder="Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Status</SelectItem>
+                            {STATUSES.map((s) => (
+                                <SelectItem key={s} value={s}>
+                                    {STATUS_LABEL[s]}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 </div>
 
                 {activeChips.length > 0 && (

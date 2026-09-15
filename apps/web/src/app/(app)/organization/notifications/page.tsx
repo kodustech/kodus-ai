@@ -7,12 +7,7 @@ import { Heading } from "@components/ui/heading";
 import { Page } from "@components/ui/page";
 import { Skeleton } from "@components/ui/skeleton";
 import { Switch } from "@components/ui/switch";
-import {
-    Tabs,
-    TabsContent,
-    TabsList,
-    TabsTrigger,
-} from "@components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
 import { toast } from "@components/ui/toaster/use-toast";
 import {
     Tooltip,
@@ -20,16 +15,6 @@ import {
     TooltipTrigger,
 } from "@components/ui/tooltip";
 import { useAsyncAction } from "@hooks/use-async-action";
-import { RotateCcwIcon, Save, Undo2 } from "lucide-react";
-import {
-    Controller,
-    FormProvider,
-    useFormContext,
-    useForm,
-    useWatch,
-} from "react-hook-form";
-import { cn } from "src/core/utils/components";
-
 import {
     useNotificationConfig,
     useRoutingRules,
@@ -42,6 +27,15 @@ import type {
     RoutingRule,
     UpsertRoutingRulePayload,
 } from "@services/notifications/types";
+import { RotateCcwIcon, Save, Undo2 } from "lucide-react";
+import {
+    Controller,
+    FormProvider,
+    useForm,
+    useFormContext,
+    useWatch,
+} from "react-hook-form";
+import { cn } from "src/core/utils/components";
 
 type EventDef = EventCatalogEntry;
 
@@ -57,8 +51,7 @@ const CRITICALITY_BADGE_CLASS: Record<EventCriticality, string> = {
     informational: "bg-blue-500/15 text-blue-400 border-blue-500/30",
 };
 
-const ROW_GRID =
-    "grid items-center gap-4 px-4 py-3";
+const ROW_GRID = "grid items-center gap-4 px-4 py-3";
 
 type ChannelMap = Record<string, boolean>;
 type EventMap = Record<string, ChannelMap>;
@@ -339,15 +332,15 @@ function NotificationsForm({
                         <Page.TitleContainer>
                             <Page.Title>Notification settings</Page.Title>
                             <Page.Description>
-                                Configure which notification channels are
-                                active for each event and role.
+                                Configure which notification channels are active
+                                for each event and role.
                             </Page.Description>
                         </Page.TitleContainer>
                         <Page.HeaderActions>
                             <Button
                                 type="button"
-                                size="md"
-                                variant="secondary"
+                                size="sm"
+                                variant="cancel"
                                 leftIcon={<RotateCcwIcon />}
                                 onClick={() => reset()}
                                 disabled={!isDirty || isSaving}>
@@ -355,7 +348,7 @@ function NotificationsForm({
                             </Button>
                             <Button
                                 type="submit"
-                                size="md"
+                                size="sm"
                                 variant="primary"
                                 leftIcon={<Save />}
                                 disabled={!isDirty || isSaving}
@@ -513,7 +506,7 @@ function EventRow({
     return (
         <div className={ROW_GRID} style={rowGridStyle}>
             <div className="flex items-center gap-2">
-                <span className="text-text-primary text-pretty text-sm">
+                <span className="text-text-primary text-sm text-pretty">
                     {event.label}
                 </span>
                 <span

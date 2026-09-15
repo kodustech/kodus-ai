@@ -103,7 +103,9 @@ export function ProviderGroupHeader({
                                             {credits.neverFunded
                                                 ? `No credits yet · add some to start reviewing`
                                                 : credits.exhausted
-                                                  ? `Credits used up · reviews paused`
+                                                  ? credits.routedThroughKodus
+                                                    ? `Credits used up · reviews paused`
+                                                    : `Credits used up · nothing routed here`
                                                   : `${balanceLabel} credits · no key needed`}
                                         </span>
                                     ) : (
@@ -122,10 +124,16 @@ export function ProviderGroupHeader({
                         </button>
                     </CollapsibleTrigger>
 
-                    {platformFunded && (
+                    {/* Only a shortcut to the wallet below, so it earns its
+                        place only while the group is closed. Expanded, the real
+                        top-up buttons are a few pixels away and this repeated
+                        their label — two "Top up" buttons on one card, doing
+                        different things. Never primary either: the payment is
+                        down there, not here. */}
+                    {platformFunded && !open && (
                         <Button
                             size="xs"
-                            variant={credits.exhausted ? "primary" : "helper"}
+                            variant="helper"
                             leftIcon={<CoinsIcon />}
                             onClick={openWallet}>
                             {credits.neverFunded ? "Add credits" : "Top up"}

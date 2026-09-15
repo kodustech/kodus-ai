@@ -1,16 +1,22 @@
 "use client";
 
+import NextLink from "next/link";
+import { SvgDiscord } from "@components/ui/icons/SvgDiscord";
+import { SvgFounder } from "@components/ui/icons/SvgFounder";
 import { Link } from "@components/ui/link";
 import { toast } from "@components/ui/toaster/use-toast";
+import { useConfig } from "@providers/ConfigProvider";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
-import { formatUsd } from "@services/usage/format";
 import {
     ActivityIcon,
+    Building2Icon,
     ChartColumn,
-    KeyRoundIcon,
+    CreditCardIcon,
+    FileTextIcon,
+    GitBranchIcon,
+    LockIcon,
     LogOutIcon,
-    SettingsIcon,
     UserIcon,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "src/core/components/ui/avatar";
@@ -27,11 +33,10 @@ import {
 } from "src/core/components/ui/dropdown-menu";
 import { useAllTeams } from "src/core/providers/all-teams-context";
 import { useAuth } from "src/core/providers/auth.provider";
-import { useSubscriptionStatus } from "src/core/providers/byok.provider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { TEAM_STATUS } from "src/core/types";
 import { isSelfHosted } from "src/core/utils/self-hosted";
-import { useKodusCreditBalance } from "src/features/ee/byok/_hooks/use-kodus-credit-balance";
+import { useFeatureGates } from "src/features/ee/subscription/_hooks/use-feature-gates";
 
 import { VersionInfo } from "./version-info";
 
@@ -44,31 +49,19 @@ export function UserNav() {
         ResourceType.OrganizationSettings,
     );
     const canReadLogs = usePermission(Action.Read, ResourceType.Logs);
+    const canReadGitSettings = usePermission(
+        Action.Read,
+        ResourceType.GitSettings,
+    );
+    const canReadBilling = usePermission(Action.Read, ResourceType.Billing);
     const canReadTokenUsage = usePermission(
         Action.Read,
         ResourceType.TokenUsage,
     );
-    const { isBYOK, isTrial, isEnterprise } = useSubscriptionStatus();
-    // Orgs on the Kodus provider see their prepaid balance next to the BYOK
-    // entry — a quiet hint, not a navbar element; the wallet is the card.
-    const credits = useKodusCreditBalance();
-    const creditsHint = credits.usesKodusProvider ? (
-        <span
-            data-testid="user-nav-credits"
-            className={`ml-auto text-xs tabular-nums ${
-                credits.exhausted
-                    ? "text-danger"
-                    : credits.low
-                      ? "text-warning"
-                      : "text-text-tertiary"
-            }`}>
-            {credits.exhausted
-                ? "Top up"
-                : typeof credits.balanceUsd === "number"
-                  ? formatUsd(credits.balanceUsd)
-                  : ""}
-        </span>
-    ) : undefined;
+    const cfg = useConfig();
+    // Gated entries stay listed with a padlock; each page shows its locked
+    // preview.
+    const gates = useFeatureGates();
 
     const handleChangeWorkspace = (teamId: string) => {
         setTeamId(teamId);
@@ -133,26 +126,33 @@ export function UserNav() {
 
                 {canEditOrg && (
                     <Link href="/organization/general">
-                        <DropdownMenuItem leftIcon={<SettingsIcon />}>
-                            Settings
+                        <DropdownMenuItem leftIcon={<Building2Icon />}>
+                            Organization
                         </DropdownMenuItem>
                     </Link>
                 )}
 
-                {canEditOrg && (
-                    <Link href={creditsHint ? "/byok#kodus" : "/byok"}>
-                        <DropdownMenuItem
-                            leftIcon={<KeyRoundIcon />}
-                            rightIcon={creditsHint}>
-                            BYOK
+                {canReadGitSettings && (
+                    <Link href="/settings/git">
+                        <DropdownMenuItem leftIcon={<GitBranchIcon />}>
+                            Git Settings
                         </DropdownMenuItem>
                     </Link>
                 )}
 
-                {(isEnterprise || isTrial) && canReadLogs && (
+                {canReadBilling && (
+                    <Link href="/settings/subscription">
+                        <DropdownMenuItem leftIcon={<CreditCardIcon />}>
+                            Subscription
+                        </DropdownMenuItem>
+                    </Link>
+                )}
+
+                {canReadLogs && (
                     <Link href="/user-logs">
                         <DropdownMenuItem leftIcon={<ActivityIcon />}>
                             Activity Logs
+                            {!gates.activityLogs && <LockedTag />}
                         </DropdownMenuItem>
                     </Link>
                 )}
@@ -166,6 +166,34 @@ export function UserNav() {
                         </DropdownMenuItem>
                     </Link>
                 )}
+
+                <DropdownMenuSeparator />
+
+                <DropdownMenuLabel>Help</DropdownMenuLabel>
+
+                <NextLink target="_blank" href={cfg.supportDocsUrl || ""}>
+                    <DropdownMenuItem leftIcon={<FileTextIcon />}>
+                        View docs
+                    </DropdownMenuItem>
+                </NextLink>
+
+                <NextLink
+                    target="_blank"
+                    href={cfg.supportDiscordInviteUrl || ""}>
+                    <DropdownMenuItem leftIcon={<SvgDiscord />}>
+                        Our Discord
+                    </DropdownMenuItem>
+                </NextLink>
+
+                <NextLink
+                    target="_blank"
+                    href={cfg.supportTalkToFounderUrl || ""}>
+                    <DropdownMenuItem leftIcon={<SvgFounder />}>
+                        Talk to a Founder
+                    </DropdownMenuItem>
+                </NextLink>
+
+                <DropdownMenuSeparator />
 
                 <Link href="/sign-out" replace>
                     <DropdownMenuItem leftIcon={<LogOutIcon />}>
@@ -181,3 +209,11 @@ export function UserNav() {
         </DropdownMenu>
     );
 }
+
+/** Padlock at the end of a menu row whose page needs a higher plan. */
+const LockedTag = () => (
+    <LockIcon
+        aria-label="Enterprise plan"
+        className="text-text-tertiary ml-auto size-3.5"
+    />
+);

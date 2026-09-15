@@ -16,6 +16,7 @@ import { FindLibraryKodyRulesUseCase } from '@libs/kodyRules/application/use-cas
 import { FindRecommendedKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/find-recommended-kody-rules.use-case';
 import { CountRulesByRepositoryUseCase } from '@libs/kodyRules/application/use-cases/count-rules-by-repository.use-case';
 import { FindRulesInOrganizationByRuleFilterKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/find-rules-in-organization-by-filter.use-case';
+import { GetKodyRulesIndexUseCase } from '@libs/kodyRules/application/use-cases/get-kody-rules-index.use-case';
 import { FindSuggestionsByRuleUseCase } from '@libs/kodyRules/application/use-cases/find-suggestions-by-rule.use-case';
 import { GenerateKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/generate-kody-rules.use-case';
 import { GetInheritedRulesKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/get-inherited-kody-rules.use-case';
@@ -108,6 +109,7 @@ export class KodyRulesController {
         private readonly createOrUpdateKodyRulesUseCase: CreateOrUpdateKodyRulesUseCase,
         private readonly findByOrganizationIdKodyRulesUseCase: FindByOrganizationIdKodyRulesUseCase,
         private readonly findRulesInOrganizationByRuleFilterKodyRulesUseCase: FindRulesInOrganizationByRuleFilterKodyRulesUseCase,
+        private readonly getKodyRulesIndexUseCase: GetKodyRulesIndexUseCase,
         private readonly deleteRuleInOrganizationByIdKodyRulesUseCase: DeleteRuleInOrganizationByIdKodyRulesUseCase,
         private readonly findLibraryKodyRulesUseCase: FindLibraryKodyRulesUseCase,
         private readonly findLibraryKodyRulesWithFeedbackUseCase: FindLibraryKodyRulesWithFeedbackUseCase,
@@ -172,6 +174,30 @@ export class KodyRulesController {
     }
 
     @ApiBearerAuth('jwt')
+    @Get('/index')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.KodyRules,
+        }),
+    )
+    @ApiOperation({
+        summary: 'List rule ids, titles and scopes',
+        description:
+            'Projected listing for pickers and search: no rule body, examples or detector. Use /find-rules-in-organization-by-filter when the full rules are needed.',
+    })
+    @ApiOkResponse({ type: ApiArrayResponseDto })
+    public async getKodyRulesIndex() {
+        const organizationId = this.request?.user?.organization?.uuid;
+
+        if (!organizationId) {
+            throw new Error('Organization ID is missing from request');
+        }
+
+        return this.getKodyRulesIndexUseCase.execute(organizationId);
+    }
+
     @Get('/find-by-organization-id')
     @UseGuards(PolicyGuard)
     @CheckPolicies(
@@ -668,9 +694,7 @@ export class KodyRulesController {
             'Return the repositories currently selected as sources of global Kody Rules.',
     })
     @ApiQuery({ name: 'teamId', type: String, required: true })
-    public async getGlobalSourceRepositories(
-        @Query('teamId') teamId: string,
-    ) {
+    public async getGlobalSourceRepositories(@Query('teamId') teamId: string) {
         return this.getGlobalRulesSourceRepositoriesUseCase.execute({ teamId });
     }
 
@@ -689,9 +713,7 @@ export class KodyRulesController {
             'Return the plan tier (free/trial/paid), the import limit, and how many global rules are already imported, so the UI can gate the control.',
     })
     @ApiQuery({ name: 'teamId', type: String, required: true })
-    public async getGlobalRulesImportStatus(
-        @Query('teamId') teamId: string,
-    ) {
+    public async getGlobalRulesImportStatus(@Query('teamId') teamId: string) {
         return this.getGlobalRulesImportStatusUseCase.execute({ teamId });
     }
 

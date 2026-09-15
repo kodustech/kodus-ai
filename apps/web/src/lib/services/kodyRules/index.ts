@@ -8,6 +8,8 @@ export const KODY_RULES_PATHS = {
     FIND_BY_ORGANIZATION_ID_AND_FILTER: pathToApiUrl(
         "/kody-rules/find-rules-in-organization-by-filter",
     ),
+    // Projected listing (id, title, scope) for pickers — no rule bodies.
+    INDEX: pathToApiUrl("/kody-rules/index"),
     DELETE_BY_ORGANIZATION_ID_AND_ROLE_UUID: pathToApiUrl(
         "/kody-rules/delete-rule-in-organization-by-id",
     ),

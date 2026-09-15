@@ -65,6 +65,26 @@ const SubscriptionInvalid = () => {
     );
 };
 
+/**
+ * The plan could not be verified — billing did not answer.
+ *
+ * This is NOT the same as billing answering "inactive", but both collapse to
+ * the same state today, and the map below had no entry for it. A cloud
+ * customer whose billing service is briefly unreachable therefore watched
+ * every paid feature turn into a padlock with no explanation anywhere: it
+ * reads as a silent downgrade instead of an outage. Gating is unchanged —
+ * this only stops the app from going quiet about it.
+ */
+const SubscriptionUnverified = () => {
+    return (
+        <div className="bg-warning/25 py-2 text-center text-sm">
+            We couldn&apos;t check your plan just now, so paid features are
+            temporarily locked. Nothing changed on your subscription — this
+            usually clears on its own.
+        </div>
+    );
+};
+
 const components: Partial<
     Record<
         ReturnType<typeof useSubscriptionStatus>["status"],
@@ -76,6 +96,8 @@ const components: Partial<
     "expired": SubscriptionInvalid,
     "canceled": SubscriptionInvalid,
     "payment-failed": SubscriptionInvalid,
+    // Was missing, which is why an unverifiable plan said nothing at all.
+    "inactive": SubscriptionUnverified,
 };
 
 const CreditsExhausted = ({ neverFunded }: { neverFunded: boolean }) => {
@@ -116,7 +138,13 @@ export const SubscriptionStatusTopbar = () => {
     // state, so it shows alongside (above) the plan banner — an expired plan
     // is still expired. A never-funded org gets the "add credits to start"
     // framing rather than "used up".
-    if (credits.usesKodusProvider && credits.exhausted) {
+    //
+    // `usesKodusProvider` only says a Kodus model is configured. An org that
+    // connected Kodus but left its own key as the org default routes nothing
+    // through it, so a zero balance pauses nothing — announcing paused reviews
+    // there is a false alarm on every page. The banner waits for routing to
+    // confirm it.
+    if (credits.exhausted && credits.routedThroughKodus) {
         return (
             <div>
                 <CreditsExhausted neverFunded={credits.neverFunded} />
