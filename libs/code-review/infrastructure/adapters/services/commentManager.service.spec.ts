@@ -284,16 +284,17 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 PlatformType.AZURE_REPOS,
             );
 
-            const systemPrompt =
-                capturedPrompts.find((p) => p.role === 'system')?.prompt ??
-                capturedPrompts.map((p) => p.prompt).join('\n');
+            const userPrompt = capturedPrompts.find(
+                (p) => p.role === 'user',
+            )?.prompt;
 
-            expect(systemPrompt).toContain('Length Constraint (Azure DevOps)');
+            expect(userPrompt).toBeDefined();
+            expect(userPrompt).toContain('Length Constraint (Azure DevOps)');
             // Target = 80% of 4000 → 3,200. The literal value is what
             // the prompt formatter emits via toLocaleString.
-            expect(systemPrompt).toContain('3,200');
+            expect(userPrompt).toContain('3,200');
             // The hard limit appears too — same toLocaleString format.
-            expect(systemPrompt).toContain('4,000');
+            expect(userPrompt).toContain('4,000');
         });
 
         it('omits the Length Constraint block when platformType is GITHUB', async () => {
@@ -310,11 +311,12 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 PlatformType.GITHUB,
             );
 
-            const systemPrompt =
-                capturedPrompts.find((p) => p.role === 'system')?.prompt ??
-                capturedPrompts.map((p) => p.prompt).join('\n');
+            const userPrompt = capturedPrompts.find(
+                (p) => p.role === 'user',
+            )?.prompt;
 
-            expect(systemPrompt).not.toContain('Length Constraint');
+            expect(userPrompt).toBeDefined();
+            expect(userPrompt).not.toContain('Length Constraint');
         });
 
         it('omits the Length Constraint block when platformType is undefined', async () => {
@@ -331,11 +333,12 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 /* platformType */ undefined,
             );
 
-            const systemPrompt =
-                capturedPrompts.find((p) => p.role === 'system')?.prompt ??
-                capturedPrompts.map((p) => p.prompt).join('\n');
+            const userPrompt = capturedPrompts.find(
+                (p) => p.role === 'user',
+            )?.prompt;
 
-            expect(systemPrompt).not.toContain('Length Constraint');
+            expect(userPrompt).toBeDefined();
+            expect(userPrompt).not.toContain('Length Constraint');
         });
     });
 
