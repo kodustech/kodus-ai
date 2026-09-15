@@ -17,6 +17,7 @@ import type { TraceContextDecision } from '@libs/cli-review/domain/types/trace-c
 import { LlmErrorCategory } from '@libs/llm/error-classifier';
 import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import type { LinkedRepositoriesReviewMetadata } from '@libs/ee/linked-repositories';
+import type { ReviewExecutionSnapshot } from '@libs/code-review/domain/review-policy/review-execution-snapshot';
 import { PlatformType } from '@libs/core/domain/enums';
 import {
     AnalysisContext,
@@ -281,6 +282,9 @@ export interface CodeReviewPipelineContext extends PipelineContext {
      * review ran at full fidelity.
      */
     reviewWarnings?: ReviewWarning[];
+
+    /** Immutable, secret-free record of the policy/config/model/rules used. */
+    reviewExecutionSnapshot?: ReviewExecutionSnapshot;
 
     /**
      * Cross-repo context (#1576): which linked repositories were consulted

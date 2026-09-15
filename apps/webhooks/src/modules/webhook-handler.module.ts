@@ -24,6 +24,7 @@ import { ForgejoController } from '../controllers/forgejo.controller';
 import { GithubController } from '../controllers/github.controller';
 import { GitlabController } from '../controllers/gitlab.controller';
 import { WebhookHealthController } from '../controllers/webhook-health.controller';
+import { WebhookSignatureService } from '../services/webhook-signature.service';
 
 @Module({
     imports: [
@@ -52,6 +53,6 @@ import { WebhookHealthController } from '../controllers/webhook-health.controlle
         WebhookHealthController,
         BillingController,
     ],
-    providers: [LangfuseShutdownProvider],
+    providers: [LangfuseShutdownProvider, WebhookSignatureService],
 })
 export class WebhookHandlerModule {}
