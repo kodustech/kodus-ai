@@ -268,13 +268,25 @@ const KodyRulesPageContent = () => {
         setOnlyIdeSynced(parsed.onlyOrphans);
         // Deep link from the command palette (and shareable URLs): open the
         // rule straight in the detail sheet.
-        const deepLinkedRule = params.get("rule");
-        if (deepLinkedRule) setDetailRuleId(deepLinkedRule);
         setHasReadUrl(true);
         // Run only on mount; subsequent URL syncs flow the OTHER way
-        // (state → URL) via the effect below.
+        // (state → URL) via the effect below. The `rule` param is the one
+        // exception — see the effect right after this one.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // Deep link from the command palette, a notification, or a shared URL.
+    //
+    // Watched rather than read once on mount: arriving from another page
+    // mounts this component, but jumping here from the palette while ALREADY
+    // on a rules page is a client-side navigation that does not. A mount-only
+    // read left the param in the address bar and opened nothing at all.
+    //
+    // The state → URL effect below never writes `rule`, so this cannot loop.
+    const deepLinkedRule = searchParams?.get("rule") ?? null;
+    useEffect(() => {
+        if (deepLinkedRule) setDetailRuleId(deepLinkedRule);
+    }, [deepLinkedRule]);
 
     // Push filter state into the URL whenever it changes so refresh / share
     // restores it. Skips the very first run (before initial URL was parsed)
@@ -1319,7 +1331,25 @@ const KodyRulesPageContent = () => {
                         isGlobalView ? undefined : ideRulesSyncEnabledForRepo
                     }
                     context={rowContext}
-                    onClose={() => setDetailRuleId(null)}
+                    onClose={() => {
+                        setDetailRuleId(null);
+                        // Drop the deep-link param on close, so the address
+                        // bar stops pointing at a sheet that is shut and the
+                        // SAME rule can be opened again from the palette.
+                        const next = new URLSearchParams(
+                            window.location.search,
+                        );
+                        if (next.has("rule")) {
+                            next.delete("rule");
+                            const qs = next.toString();
+                            window.history.replaceState(
+                                null,
+                                "",
+                                window.location.pathname +
+                                    (qs ? `?${qs}` : ""),
+                            );
+                        }
+                    }}
                     onNavigate={navigateDetail}
                     hasPrevious={detailIndex > 0}
                     hasNext={
