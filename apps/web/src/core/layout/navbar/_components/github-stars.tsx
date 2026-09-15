@@ -79,8 +79,11 @@ const GithubStarsContent = () => {
                 </Button>
             </Link>
 
+            {/* The count links to the repository, not to /stargazers:
+                GitHub stopped serving that list to anyone outside the org, so
+                it 404'd for exactly the visitors it was meant to impress. */}
             {data ? (
-                <Link target="_blank" href={`${repositoryUrl}/stargazers`}>
+                <Link target="_blank" href={repositoryUrl}>
                     <Button
                         active
                         decorative
