@@ -2,11 +2,11 @@
 name: Work item
 about: Propose work that is not a defect, such as a capability, an improvement, a spec or a refactor
 title: ''
-labels: ['✨ feature']
+labels: ['✨ feature', '🚨 needs approval']
 assignees: ''
 ---
 
-<!-- Maintainer template. If you are not a maintainer, use "Feature request" instead. -->
+<!-- Maintainer template. Maintainers remove the "needs approval" label when opening their own work items. If you are not a maintainer, use "Feature request" instead. -->
 
 ### Problem
 
