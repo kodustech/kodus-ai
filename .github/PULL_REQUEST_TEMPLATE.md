@@ -10,6 +10,19 @@
 
 <!-- 1–3 sentences. What changes for the user (or for us, if internal)? -->
 
+## Eval evidence
+
+<!--
+  Required when the PR touches libs/code-review, libs/agent-harness, libs/kodyRules,
+  libs/ee/codeReview, libs/ee/kodyRules or evals/. Keep it here, right under Summary:
+  the review rule only reads the first 1000 characters of this description.
+  Delete the section otherwise.
+-->
+
+- Run: <link to the code-review evals workflow run on this branch>, or `Not applicable: <concrete reason>`
+- Proof (feat/perf only): <metric> on <subset>, main <value> → branch <value>
+- Design: <link to the design comment on the issue>
+
 ## Changelog routing (driven by the PR title prefix)
 
 The prefix in your PR title decides where this change appears in the public changelog. No labels needed — the title is the source of truth.
