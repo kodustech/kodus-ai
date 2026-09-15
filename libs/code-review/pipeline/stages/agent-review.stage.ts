@@ -2003,13 +2003,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 organizationId: telemetryMeta?.organizationId,
                 telemetryMetadata: telemetryMeta,
                 // Parity with the old recordAgentRunUsage: the dedup span keeps
-                // its type + per-PR/team attribution (the model/credential keys
-                // are derived from the slot inside LLM.run).
+                // its type + per-PR/team/repo attribution (the model/credential
+                // keys are derived from the slot inside LLM.run).
                 attrs: {
                     type: dedupSlot ? 'byok' : 'system',
                     prNumber,
                     ...(telemetryMeta?.teamId
                         ? { teamId: telemetryMeta.teamId }
+                        : {}),
+                    ...(telemetryMeta?.repositoryId
+                        ? { repositoryId: telemetryMeta.repositoryId }
                         : {}),
                 },
             })) as any;
