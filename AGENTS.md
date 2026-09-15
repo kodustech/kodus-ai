@@ -68,3 +68,16 @@ Everything runs via Docker (`docker-compose.dev.yml`):
 - Project management integrations: Jira, Linear, Azure Boards
 - "Dry Run" is a preview mode to test code review rules before enabling
 - CLI reviews via team API keys (`x-team-key` header or `Bearer kodus_*`)
+
+## Issues
+
+- Issues are opened with the `bug-report` (defect) or `issue-draft` (everything else) skill, and built after `issue-design` has posted a design comment on them. All three live in the kodus-growth repository and install with `./bin/sync-skills.sh --global`.
+- An issue body carries what was observed, measured and read in the code. It is not a specification of the fix. A cause stated in an issue holds only for the version it was read at: confirm it in the current code before changing anything, and correct the issue when it no longer holds. Never ship a fix for a cause you did not confirm yourself.
+- The approach is decided in the design comment, not in the issue and not silently in code. Anything the issue or the design left as an open question gets resolved with its author before it is built.
+- A PR that touches the review pipeline, the agent harness or Kody Rules carries eval evidence: the run link, and for an improvement, the metric the issue named against its baseline.
+- Templates live in `.github/ISSUE_TEMPLATE/`. Blank issues are disabled on the web form, but `gh issue create` bypasses templates, which is why the skills exist.
+
+## PRs and comments
+
+- A PR description fits in 20 lines: what changed, why, how it was verified, with links. An issue comment fits in 25 lines. Design comments carry a Mermaid diagram when the change crosses stages or services.
+- No preamble, no restatement of the task, no closing summary. Cite `path/file.ts:line` instead of pasting code. Delete every sentence that does not change what the reader will do next.
