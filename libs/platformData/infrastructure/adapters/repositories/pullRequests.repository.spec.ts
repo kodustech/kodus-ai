@@ -502,4 +502,24 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
             );
         });
     });
+
+    describe('newSubDocumentId (suggestion ids, #1846)', () => {
+        let model: any;
+        let repo: PullRequestsRepository;
+
+        beforeEach(() => {
+            model = {
+                findOneAndUpdate: jest.fn().mockReturnValue({ exec }),
+                aggregate: jest.fn().mockReturnValue({ exec }),
+            };
+            repo = new PullRequestsRepository(model as any);
+        });
+
+        it('generates a UUID-shaped id the fine-tuning ingest accepts', () => {
+            const id = repo.newSubDocumentId();
+            expect(id).toMatch(
+                /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
+            );
+        });
+    });
 });
