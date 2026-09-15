@@ -215,7 +215,106 @@ describe('AutomationCodeReviewService', () => {
         });
     });
 
+    describe('business logic marker carry-over', () => {
+        const markers = {
+            businessLogicValidatedAt: '2026-09-01T00:00:00.000Z',
+            businessLogicHash: 'delivered-hash',
+        };
+
+        beforeEach(() => {
+            automationExecutionService.findLatestExecutionByFilters.mockImplementation(
+                async (filters) => {
+                    expect(
+                        automationExecutionService.createCodeReview,
+                    ).not.toHaveBeenCalled();
+                    return {
+                        dataExecution: filters.status
+                            ? { lastAnalyzedCommit: { sha: 'successful-sha' } }
+                            : {
+                                  ...markers,
+                                  lastAnalyzedCommit: { sha: 'failed-sha' },
+                              },
+                    };
+                },
+            );
+        });
+
+        it('uses failed-run markers without advancing the successful commit baseline', async () => {
+            await service.run!(makePayload());
+            expect(
+                codeReviewHandlerService.handlePullRequest.mock.calls[0][12],
+            ).toEqual({
+                ...markers,
+                lastAnalyzedCommit: { sha: 'successful-sha' },
+            });
+        });
+
+        it.each(['throw', 'validation', 'empty', 'error', 'skipped'])(
+            'preserves markers when the next run ends with %s',
+            async (outcome) => {
+                if (outcome === 'throw') {
+                    codeReviewHandlerService.handlePullRequest.mockRejectedValue(
+                        new Error('offline'),
+                    );
+                } else {
+                    codeReviewHandlerService.handlePullRequest.mockResolvedValue(
+                        outcome === 'empty'
+                            ? undefined
+                            : { statusInfo: { status: outcome } },
+                    );
+                }
+                await service.run!(
+                    makePayload(
+                        outcome === 'validation'
+                            ? {
+                                  validationError: {
+                                      errorType: 'invalid-config',
+                                  },
+                              }
+                            : {},
+                    ),
+                ).catch(() => undefined);
+                expect(
+                    automationExecutionService.updateCodeReview.mock.calls[0][1]
+                        .dataExecution,
+                ).toEqual(expect.objectContaining(markers));
+            },
+        );
+    });
+
     describe('failure propagation', () => {
+        it('passes a marker first produced by an errored run into the following review', async () => {
+            let previous: any = null;
+            automationExecutionService.findLatestExecutionByFilters.mockImplementation(
+                async (filters) => (filters.status ? null : previous),
+            );
+            automationExecutionService.updateCodeReview.mockImplementation(
+                async (_filter, update) => {
+                    previous = update;
+                },
+            );
+            codeReviewHandlerService.handlePullRequest
+                .mockResolvedValueOnce({
+                    businessLogicValidatedAt: '2026-09-15T00:00:00.000Z',
+                    statusInfo: {
+                        status: 'error',
+                        message: 'Later stage failed',
+                    },
+                })
+                .mockResolvedValueOnce({ statusInfo: { status: 'success' } });
+
+            await expect(service.run!(makePayload())).rejects.toThrow(
+                'Later stage failed',
+            );
+            await service.run!(makePayload());
+
+            expect(
+                codeReviewHandlerService.handlePullRequest.mock.calls[1][12],
+            ).toEqual({
+                businessLogicValidatedAt: '2026-09-15T00:00:00.000Z',
+            });
+        });
+
         it('rethrows execution persistence failures without masking the cause', async () => {
             automationExecutionService.createCodeReview.mockRejectedValue(
                 new Error('execution database unavailable'),

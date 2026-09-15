@@ -219,6 +219,7 @@ export class AutomationCodeReviewService implements Omit<
         }
 
         let execution: IAutomationExecution | null = null;
+        let lastExecutionData: Record<string, any> | undefined;
 
         try {
             const existingExecution = await this.getActiveExecution(
@@ -245,6 +246,33 @@ export class AutomationCodeReviewService implements Omit<
                 );
                 return 'Code review already in progress for this PR';
             }
+
+            // Read carry-over before inserting this run, so it cannot select itself.
+            // Successful review data remains the incremental baseline; only the
+            // one-shot markers may come from a failed or skipped execution.
+            const executionFilters = {
+                teamAutomation: { uuid: teamAutomationId },
+                pullRequestNumber: pullRequest?.number,
+                repositoryId: repository?.id,
+            };
+            const [lastSuccessfulExecution, previousExecution] =
+                await Promise.all([
+                    this.automationExecutionService.findLatestExecutionByFilters(
+                        {
+                            ...executionFilters,
+                            status: AutomationStatus.SUCCESS,
+                        },
+                    ),
+                    this.automationExecutionService.findLatestExecutionByFilters(
+                        executionFilters,
+                    ),
+                ]);
+            lastExecutionData = {
+                ...lastSuccessfulExecution?.dataExecution,
+                ...this.carriedBusinessLogicMarkers(
+                    previousExecution?.dataExecution,
+                ),
+            };
 
             execution = await this.createAutomationExecution(
                 payload,
@@ -280,7 +308,11 @@ export class AutomationCodeReviewService implements Omit<
                     execution,
                     AutomationStatus.ERROR,
                     `Blocked by validation: ${payload.validationError.errorType}`,
-                    this._buildExecutionData(payload),
+                    this._buildExecutionData(
+                        payload,
+                        undefined,
+                        lastExecutionData,
+                    ),
                 );
                 const validationError = new CodeReviewRunFailedError(
                     `Automation blocked: ${payload.validationError.errorType}`,
@@ -292,17 +324,6 @@ export class AutomationCodeReviewService implements Omit<
                 ).executionAlreadyFinalized = true;
                 throw validationError;
             }
-
-            // Fetch the last successful execution to pass to the handler
-            const lastExecution =
-                await this.automationExecutionService.findLatestExecutionByFilters(
-                    {
-                        status: AutomationStatus.SUCCESS,
-                        teamAutomation: { uuid: teamAutomationId },
-                        pullRequestNumber: pullRequest?.number,
-                        repositoryId: repository?.id,
-                    },
-                );
 
             const result =
                 await this.codeReviewHandlerService.handlePullRequest(
@@ -321,7 +342,7 @@ export class AutomationCodeReviewService implements Omit<
                     triggerCommentId,
                     userGitId,
                     undefined, // workflowJobId
-                    lastExecution?.dataExecution, // Pass last execution data
+                    lastExecutionData,
                     correlationId,
                     signal, // parentSignal — forwarded to pipeline context
                     reviewDirective, // @kody review <directive> steering text
@@ -332,7 +353,7 @@ export class AutomationCodeReviewService implements Omit<
                 execution,
                 result,
                 payload,
-                lastExecution?.dataExecution,
+                lastExecutionData,
             );
 
             if (
@@ -363,7 +384,12 @@ export class AutomationCodeReviewService implements Omit<
                 !(error as { executionAlreadyFinalized?: boolean })
                     ?.executionAlreadyFinalized
             ) {
-                await this._handleExecutionError(execution, error, payload);
+                await this._handleExecutionError(
+                    execution,
+                    error,
+                    payload,
+                    lastExecutionData,
+                );
             }
             throw error;
         } finally {
@@ -759,6 +785,7 @@ export class AutomationCodeReviewService implements Omit<
         execution: IAutomationExecution | null,
         error: any,
         payload: any,
+        lastExecutionData?: Record<string, any>,
     ) {
         const errorMessage =
             error.message ||
@@ -776,7 +803,7 @@ export class AutomationCodeReviewService implements Omit<
                 execution,
                 AutomationStatus.ERROR,
                 errorMessage,
-                this._buildExecutionData(payload),
+                this._buildExecutionData(payload, undefined, lastExecutionData),
             );
         }
     }
