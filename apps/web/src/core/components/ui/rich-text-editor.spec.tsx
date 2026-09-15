@@ -22,6 +22,65 @@ describe("RichTextEditor controlled synchronization", () => {
         if (instance) editor = instance;
     };
 
+    it.each(["abcde", "abc"])(
+        "enforces maxLength independently of parent echoes from %s",
+        async (initial) => {
+            const emitted = jest.fn();
+            function Controlled() {
+                const [value, setValue] = useState<string | object>(initial);
+                return (
+                    <RichTextEditor
+                        value={value}
+                        saveFormat="text"
+                        maxLength={5}
+                        editorInstanceAction={capture}
+                        onChangeAction={(next) => {
+                            emitted(next);
+                            setValue(next);
+                        }}
+                    />
+                );
+            }
+            render(<Controlled />);
+            await waitFor(() => expect(editor).toBeDefined());
+            for (const insertion of ["XYZ", "Q", "R"]) {
+                act(() => {
+                    editor.commands.insertContentAt(
+                        editor.state.doc.content.size - 1,
+                        insertion,
+                    );
+                });
+                expect(editor.getText()).toBe(
+                    initial === "abcde" ? "abcde" : "abcXY",
+                );
+                expect(editor.state.selection.from).toBe(6);
+                expect(emitted.mock.calls.at(-1)?.[0]).toBe(editor.getText());
+            }
+            expect(emitted).toHaveBeenCalledTimes(3);
+        },
+    );
+
+    it("preserves a middle-of-text caret while truncating overflow", async () => {
+        const onChange = jest.fn();
+        render(
+            <RichTextEditor
+                value="abcde"
+                saveFormat="text"
+                maxLength={5}
+                editorInstanceAction={capture}
+                onChangeAction={onChange}
+            />,
+        );
+        await waitFor(() => expect(editor).toBeDefined());
+        act(() => {
+            editor.commands.insertContentAt(3, "X");
+        });
+        expect(editor.getText()).toBe("abXcd");
+        expect(editor.state.selection.from).toBe(4);
+        expect(onChange).toHaveBeenCalledTimes(1);
+        expect(onChange).toHaveBeenCalledWith("abXcd");
+    });
+
     it("loads an external value without emitting a user edit", async () => {
         const onChange = jest.fn();
         const props = {

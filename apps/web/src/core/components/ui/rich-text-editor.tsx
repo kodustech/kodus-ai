@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Placeholder from "@tiptap/extension-placeholder";
+import { TextSelection } from "@tiptap/pm/state";
 import { Editor, EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { cn } from "src/core/utils/components";
@@ -404,10 +405,26 @@ export function RichTextEditor(props: RichTextEditorProps) {
                     currentMaxLength && text.length > currentMaxLength
                         ? text.slice(0, currentMaxLength)
                         : text;
-                // A controlled-value echo must not replace the live document
-                // (serialized text can omit a trailing empty paragraph).
-                // Keep length enforcement working when final differs from text.
-                lastEmittedValue.current = text;
+                if (final !== text) {
+                    // Enforce locally even when the parent already holds final
+                    // and React therefore does not render another value change.
+                    const { anchor, head } = editor.state.selection;
+                    editor.commands.setContent(
+                        parseValueToTiptapContent(final, currentEnableMentions),
+                        { emitUpdate: false },
+                    );
+                    const { doc, tr } = editor.state;
+                    editor.view.dispatch(
+                        tr.setSelection(
+                            TextSelection.between(
+                                doc.resolve(Math.min(anchor, doc.content.size)),
+                                doc.resolve(Math.min(head, doc.content.size)),
+                            ),
+                        ),
+                    );
+                }
+                // Track exactly the value sent to the controlled parent.
+                lastEmittedValue.current = final;
                 onChangeRef.current?.(final);
             }
         },
