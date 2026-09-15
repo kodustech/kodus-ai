@@ -25,6 +25,7 @@
  * signup rejects anything weaker.
  */
 import 'dotenv/config';
+import { execFileSync } from 'node:child_process';
 
 const API = (
     process.env.PREVIEW_SEED_API_URL ?? 'http://localhost:3001'
@@ -74,7 +75,7 @@ async function login(): Promise<string | null> {
  * blob is dropped. Best-effort: a preview that seeded a login is still worth
  * more than one that failed to deploy over this.
  */
-async function finishOnboarding(token: string): Promise<void> {
+async function finishOnboarding(token: string): Promise<string | null> {
     const auth = {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
@@ -100,7 +101,7 @@ async function finishOnboarding(token: string): Promise<void> {
 
     if (configValue.finishOnboard === true) {
         console.log('seed:preview: onboarding already finished');
-        return;
+        return teamId;
     }
 
     const res = await fetch(`${API}/parameters/create-or-update`, {
@@ -120,6 +121,37 @@ async function finishOnboarding(token: string): Promise<void> {
         );
     }
     console.log('seed:preview: onboarding marked finished');
+    return teamId;
+}
+
+/**
+ * Activate the seeded team.
+ *
+ * The app layout redirects to /setup unless the organization has an ACTIVE
+ * team, and that check runs BEFORE the finishOnboard one — so marking
+ * onboarding done is not enough on its own. Nothing activates a team except
+ * `create-repositories`, which needs a connected git provider and a chosen
+ * repository; there is no route for it, and a preview has no provider to
+ * connect. So this is SQL, on purpose: it is the only path, it runs on the
+ * VM against the environment's own throwaway database, and it reads the
+ * credentials from the container's environment instead of hardcoding them.
+ */
+function activateTeam(teamId: string): void {
+    const sql = `update teams set status = 'active' where uuid = '${teamId}' and status <> 'active'`;
+    const out = execFileSync(
+        'docker',
+        [
+            'exec',
+            'db_postgres',
+            'sh',
+            '-c',
+            `PGPASSWORD=$POSTGRES_PASSWORD psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "${sql}"`,
+        ],
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    console.log(
+        `seed:preview: team activated (${out.trim().split('\n').pop()})`,
+    );
 }
 
 async function main(): Promise<void> {
@@ -175,7 +207,8 @@ async function main(): Promise<void> {
         return;
     }
     try {
-        await finishOnboarding(token);
+        const teamId = await finishOnboarding(token);
+        if (teamId) activateTeam(teamId);
     } catch (e: any) {
         console.warn(
             `seed:preview: could not finish onboarding (${e?.message ?? e}) — the preview will open on the setup wizard`,
