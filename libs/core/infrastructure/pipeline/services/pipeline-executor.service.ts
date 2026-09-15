@@ -321,6 +321,8 @@ export class PipelineExecutor<TContext extends PipelineContext> {
                 metadata: {
                     ...context?.pipelineMetadata,
                     correlationId: (context as any)?.correlationId ?? null,
+                    organizationAndTeamData:
+                        (context as any)?.organizationAndTeamData ?? null,
                     status: context.statusInfo,
                 },
             });
