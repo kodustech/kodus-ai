@@ -172,12 +172,12 @@ describe('extractErrorProps (#1829)', () => {
         expect((props.target as string).endsWith('…')).toBe(true);
     });
 
-    it('emits non-scalar props as a bounded JSON string even when small; scalars keep their type', () => {
-        // Deterministic-shape contract (#4003924218): a non-scalar allowlisted
-        // prop is ALWAYS a bounded JSON string — never the raw object — so
-        // downstream readers (`error.target.organizationAndTeamData`,
-        // `error.responseHeaders`) resolve identically for small and large
-        // values regardless of size.
+    it('keeps small non-scalar props as objects; oversizing degrades to a bounded string', () => {
+        // Shape contract (#4003924218 + #4012208372): a small non-scalar
+        // allowlisted prop keeps its SANITIZED object shape so nested log
+        // queries (`error.target.organizationAndTeamData`) keep resolving;
+        // only an oversized value degrades to a bounded JSON string. Shape is
+        // deterministic by size, never by luck of the payload.
         class ReviewRefusalError extends Error {
             constructor(
                 readonly statusCode: number,
@@ -193,7 +193,7 @@ describe('extractErrorProps (#1829)', () => {
         );
 
         expect(props.statusCode).toBe(429); // scalar stays a number
-        expect(props.target).toBe('{"triggerCommentId":"c1"}');
+        expect(props.target).toEqual({ triggerCommentId: 'c1' }); // small → object
     });
 
     it('reports (warns, not silent) when a non-scalar prop cannot be serialized', () => {
@@ -228,9 +228,32 @@ describe('extractErrorProps (#1829)', () => {
                 organizationId: 'org-1',
             }),
         );
-        // The prop is not dropped entirely — it falls back to the raw value,
-        // and the drop is now logged upstream instead of being invisible.
+        // The prop is not dropped entirely — it falls back to the sanitized
+        // clone, and the drop is now logged upstream instead of being invisible.
         expect(props.target).toBeDefined();
+    });
+
+    it('still redacts secrets from a non-serializable prop instead of leaking the raw value', () => {
+        // #4012208143: signing sub-errors that can't serialize (BigInt) must
+        // fall back to the SANITIZED clone, never the raw value. Otherwise a
+        // credential that deepSanitize redacted is emitted back in cleartext.
+        class WeirdError extends Error {
+            constructor(readonly target: unknown) {
+                super('weird prop');
+            }
+        }
+
+        const props = extractErrorProps(
+            new WeirdError({
+                authorization: 'Bearer sk-secret-123',
+                token: 'leak-me',
+            }),
+            2_000,
+        );
+
+        const emitted = JSON.stringify(props.target);
+        expect(emitted).not.toContain('sk-secret-123');
+        expect(emitted).not.toContain('leak-me');
     });
 
     it('returns nothing for a plain Error with no own extra props', () => {
