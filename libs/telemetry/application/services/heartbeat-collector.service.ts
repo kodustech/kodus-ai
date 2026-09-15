@@ -268,6 +268,12 @@ function readKodusVersion(): string {
 }
 
 function detectKodusVersion(): string {
+    // Release images carry the actual tag; package.json can lag behind it.
+    // Keep prerelease/build suffixes so those deployments remain distinguishable.
+    const releaseVersion = process.env.RELEASE_VERSION?.trim();
+    if (releaseVersion && releaseVersion !== 'local') {
+        return releaseVersion.replace(/^(?:selfhosted-|v)/, '');
+    }
     return KODUS_VERSION;
 }
 
