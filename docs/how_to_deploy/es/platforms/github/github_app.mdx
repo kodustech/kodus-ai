@@ -59,6 +59,22 @@ El webhook notifica a Kodus sobre los eventos en tus pull requests.
 
 - Asegúrate de que la opción **Active** esté marcada
 
+## Configurar permisos del repositorio y eventos
+
+En **Repository permissions**, configura los siguientes permisos según las funciones habilitadas. No dejes todos en **No access**.
+
+| Permission | Access |
+| --- | --- |
+| Contents | Solo lectura |
+| Pull requests | Lectura y escritura |
+| Issues | Lectura y escritura |
+| Checks | Lectura y escritura |
+| Metadata | Solo lectura |
+
+La escritura de Contents solo es necesaria para funciones que crean commits; para leer código basta con solo lectura. Instala la app en los repositorios deseados y aprueba los nuevos permisos en instalaciones existentes.
+
+Suscríbete a **Pull request**, **Pull request review comment**, **Issue comment** y **Push**. El controlador actual acepta estos cuatro eventos; otros pueden devolver 200 aunque se ignoren.
+
 ## Paso 4: Recopilar credenciales y agregarlas al .env
 
 <img src="https://kodus.io/wp-content/uploads/2026/01/gthubapp-env.gif" alt="Webhook de GitHub App" />
@@ -117,3 +133,14 @@ WEB_GITHUB_INSTALL_URL="https://github.com/apps/your-app/installations/new"
 ```
 
 Haz clic en **Save Changes** en GitHub y reinicia tu aplicación Kodus para aplicar los cambios.
+
+
+## Verificar la conexión
+
+La URL del webhook debe llegar al servicio de webhooks, no al inicio de sesión del frontend. Usa `API_DOMAIN` solo si su proxy dirige `/github/webhook` a ese servicio; ni `WEB_DOMAIN` ni una respuesta 200/307 garantizan la entrega correcta.
+
+Mantén **Redirect on update** activado. Tras instalar o cambiar el acceso a repositorios, completa el retorno del navegador a Kodus mediante la **Setup URL**. Un `ping` exitoso o un evento `installation` ignorado no crea la integración en Kodus.
+
+En Git Settings de Kodus, confirma que el repositorio esperado esté conectado. Abre un pull request de prueba y revisa la respuesta de entrega de GitHub y los registros de webhooks/worker de Kodus. Si falta la conexión, revisa repositorios autorizados, permisos aprobados, Setup URL y proxy.
+
+[Referencia de registro en GitHub](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app).
