@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { SkeletonRows } from "@components/system/page-skeletons";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
+import { cn } from "src/core/utils/components";
 import {
     createCreditCheckoutAction,
     createCreditPaymentMethodCheckoutAction,
@@ -299,11 +300,18 @@ export const CreditsWalletStrip = () => {
             </div>
 
             {credits.exhausted && !credits.neverFunded && (
-                <div className="bg-danger/10 text-text-primary flex items-start gap-2 rounded-md px-3 py-2 text-xs">
+                <div
+                    className={cn(
+                        "text-text-primary flex items-start gap-2 rounded-md px-3 py-2 text-xs",
+                        credits.routedThroughKodus
+                            ? "bg-danger/10"
+                            : "bg-card-lv2",
+                    )}>
                     <SparklesIcon size={14} className="mt-0.5 shrink-0" />
                     <span>
-                        Reviews on the models below are paused until you top up.
-                        Your own provider keys keep working.
+                        {credits.routedThroughKodus
+                            ? "Reviews on the models below are paused until you top up. Your own provider keys keep working."
+                            : "Nothing routes here right now, so an empty balance changes nothing. Top up before you send a task to one of the models below."}
                     </span>
                 </div>
             )}

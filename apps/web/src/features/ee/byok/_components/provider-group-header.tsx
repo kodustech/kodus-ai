@@ -103,7 +103,9 @@ export function ProviderGroupHeader({
                                             {credits.neverFunded
                                                 ? `No credits yet · add some to start reviewing`
                                                 : credits.exhausted
-                                                  ? `Credits used up · reviews paused`
+                                                  ? credits.routedThroughKodus
+                                                    ? `Credits used up · reviews paused`
+                                                    : `Credits used up · nothing routed here`
                                                   : `${balanceLabel} credits · no key needed`}
                                         </span>
                                     ) : (

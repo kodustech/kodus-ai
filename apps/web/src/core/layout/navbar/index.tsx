@@ -123,13 +123,16 @@ export const NavMenu = () => {
                         data-testid="nav-credits"
                         className={cn(
                             "text-xs tabular-nums",
-                            credits.exhausted
+                            // Urgent only when routing actually reaches Kodus;
+                            // otherwise an empty balance costs the org nothing
+                            // and the chip just states it.
+                            credits.exhausted && credits.routedThroughKodus
                                 ? "text-danger"
                                 : credits.low
                                   ? "text-warning"
                                   : "text-text-tertiary",
                         )}>
-                        {credits.exhausted
+                        {credits.exhausted && credits.routedThroughKodus
                             ? "Top up"
                             : typeof credits.balanceUsd === "number"
                               ? formatUsd(credits.balanceUsd)

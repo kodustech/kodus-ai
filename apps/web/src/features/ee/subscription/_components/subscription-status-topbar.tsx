@@ -116,7 +116,13 @@ export const SubscriptionStatusTopbar = () => {
     // state, so it shows alongside (above) the plan banner — an expired plan
     // is still expired. A never-funded org gets the "add credits to start"
     // framing rather than "used up".
-    if (credits.usesKodusProvider && credits.exhausted) {
+    //
+    // `usesKodusProvider` only says a Kodus model is configured. An org that
+    // connected Kodus but left its own key as the org default routes nothing
+    // through it, so a zero balance pauses nothing — announcing paused reviews
+    // there is a false alarm on every page. The banner waits for routing to
+    // confirm it.
+    if (credits.exhausted && credits.routedThroughKodus) {
         return (
             <div>
                 <CreditsExhausted neverFunded={credits.neverFunded} />

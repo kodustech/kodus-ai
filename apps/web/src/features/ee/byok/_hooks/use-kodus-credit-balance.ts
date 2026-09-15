@@ -1,5 +1,6 @@
 "use client";
 
+import { getBYOK } from "@services/organizationParameters/fetch";
 import { useQuery } from "@tanstack/react-query";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { getCreditBalanceAction } from "src/features/ee/subscription/_actions/credits";
@@ -8,6 +9,8 @@ import type {
     CreditAutoTopUp,
     CreditBalance,
 } from "src/features/ee/subscription/_services/billing/types";
+
+import { routesThroughKodus } from "../_utils";
 
 /** Default commercial parameters until billing answers (mirrors the billing
  *  service's creditPricing config; only used to render, never to charge). */
@@ -20,8 +23,13 @@ const FALLBACK = {
 };
 
 export type KodusCreditBalanceView = {
-    /** The org routes at least one model through the Kodus provider. */
+    /** A model on the Kodus provider is CONFIGURED. Cheap, and true even when
+     *  nothing routes to it — do not raise an alarm on this alone. */
     usesKodusProvider: boolean;
+    /** Routing actually reaches a Kodus model (org default, fallback or a
+     *  per-task override), so an empty balance really does pause reviews.
+     *  Only resolved when it can change what the user is told. */
+    routedThroughKodus: boolean;
     /** Live balance from billing, falling back to the license snapshot. */
     balanceUsd: number | undefined;
     /** Balance known and at or below zero. */
@@ -78,8 +86,20 @@ export const useKodusCreditBalance = (): KodusCreditBalanceView => {
     const known = typeof balanceUsd === "number";
 
     const exhausted = known && balanceUsd <= 0;
+
+    // Connecting Kodus is not the same as routing to it. Asked only when the
+    // balance is gone on an org that has Kodus configured — the one case where
+    // the answer decides between "reviews are paused" and "nothing happened".
+    const routingQuery = useQuery({
+        queryKey: ["kodus-credits", "routing", teamId],
+        queryFn: () => getBYOK(),
+        enabled: credits.usesKodusProvider && exhausted,
+        staleTime: 60_000,
+    });
+
     return {
         usesKodusProvider: credits.usesKodusProvider,
+        routedThroughKodus: routesThroughKodus(routingQuery.data),
         balanceUsd,
         exhausted,
         low: known && balanceUsd > 0 && balanceUsd <= lowThresholdUsd,
