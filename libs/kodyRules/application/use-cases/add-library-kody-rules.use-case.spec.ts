@@ -40,6 +40,16 @@ describe('resolveLibraryRulePath (#1832)', () => {
         );
     });
 
+    it('still resolves the legacy typescript/javascript spellings', () => {
+        // API consumers / older library entries may send these before the
+        // client's `jsts` key — they must not silently fall back to an empty
+        // path (which re-scopes the rule to every file) (#1832).
+        expect(resolveLibraryRulePath(undefined, 'typescript')).toBe(
+            '**/*{.ts,.tsx}',
+        );
+        expect(resolveLibraryRulePath('', 'javascript')).toBe('**/*{.js,.jsx}');
+    });
+
     it('keeps an unknown or absent language as-is (empty path → current behaviour)', () => {
         // Unknown language: no glob can be derived, preserve the empty path
         // (the pre-fix behaviour) rather than inventing a scope.

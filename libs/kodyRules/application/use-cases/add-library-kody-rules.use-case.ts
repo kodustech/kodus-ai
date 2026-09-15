@@ -31,6 +31,13 @@ import { CreateKodyRuleDto } from '@libs/ee/kodyRules/dtos/create-kody-rule.dto'
  */
 const LANGUAGE_EXTENSIONS = new Map<string, string[]>([
     ['jsts', ['.js', '.jsx', '.ts', '.tsx']],
+    // Legacy spellings: library entries and API consumers predating the
+    // client's `jsts` key may still send `typescript`/`javascript`. Treat them
+    // as aliases so a rule declared with either spelling still gets a scope —
+    // otherwise it silently falls back to an empty path and applies to every
+    // file in every PR (#1832).
+    ['typescript', ['.ts', '.tsx']],
+    ['javascript', ['.js', '.jsx']],
     ['python', ['.py']],
     ['java', ['.java']],
     ['csharp', ['.cs']],
