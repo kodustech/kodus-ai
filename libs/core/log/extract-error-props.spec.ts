@@ -172,9 +172,12 @@ describe('extractErrorProps (#1829)', () => {
         expect((props.target as string).endsWith('…')).toBe(true);
     });
 
-    it('leaves a small object prop intact and keeps number values as numbers', () => {
-        // Only oversized values degrade to a truncated string: a compact target
-        // stays queryable as an object in the log pipeline.
+    it('emits non-scalar props as a bounded JSON string even when small; scalars keep their type', () => {
+        // Deterministic-shape contract (#4003924218): a non-scalar allowlisted
+        // prop is ALWAYS a bounded JSON string — never the raw object — so
+        // downstream readers (`error.target.organizationAndTeamData`,
+        // `error.responseHeaders`) resolve identically for small and large
+        // values regardless of size.
         class ReviewRefusalError extends Error {
             constructor(
                 readonly statusCode: number,
@@ -189,8 +192,45 @@ describe('extractErrorProps (#1829)', () => {
             2_000,
         );
 
-        expect(props.statusCode).toBe(429);
-        expect(props.target).toEqual({ triggerCommentId: 'c1' });
+        expect(props.statusCode).toBe(429); // scalar stays a number
+        expect(props.target).toBe('{"triggerCommentId":"c1"}');
+    });
+
+    it('reports (warns, not silent) when a non-scalar prop cannot be serialized', () => {
+        // #4003923790: a catch that just returns the raw value is a silent
+        // failure. A non-serializable leaf (BigInt) must surface through the
+        // reporter — in production that is warnSerializeFailure, a module-local
+        // pino warn (no PinoLoggerService import → no core→app dependency
+        // cycle), carrying maxStringLength + org id when available.
+        class WeirdError extends Error {
+            constructor(readonly target: unknown) {
+                super('weird prop');
+            }
+        }
+
+        const onSerializeFailed = jest.fn();
+        const props = extractErrorProps(
+            new WeirdError({
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                payload: { big: 12345678901234567890n },
+            }),
+            2_000,
+            onSerializeFailed,
+        );
+
+        expect(onSerializeFailed).toHaveBeenCalledTimes(1);
+        expect(onSerializeFailed).toHaveBeenCalledWith(
+            expect.objectContaining({
+                maxStringLength: 2_000,
+                organizationId: 'org-1',
+            }),
+        );
+        // The prop is not dropped entirely — it falls back to the raw value,
+        // and the drop is now logged upstream instead of being invisible.
+        expect(props.target).toBeDefined();
     });
 
     it('returns nothing for a plain Error with no own extra props', () => {

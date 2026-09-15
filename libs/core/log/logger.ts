@@ -494,11 +494,23 @@ function isRedirectableRequest(obj: any): boolean {
     );
 }
 
-function deepSanitize(obj: any, seen?: WeakSet<object>, depth = 0): any {
+function deepSanitize(
+    obj: any,
+    seen?: WeakSet<object>,
+    depth = 0,
+    maxStringLength?: number,
+): any {
     if (obj === null || typeof obj !== 'object') {
         if (typeof obj === 'string') {
             const sanitized = sanitizeString(obj);
-            return sanitized !== obj ? sanitized : obj;
+            let result = sanitized !== obj ? sanitized : obj;
+            // Optional leaf clamp (used by capSerialized): bound long string
+            // leaves DURING the depth-first walk so a subsequent JSON.stringify
+            // never allocates an uncapped payload just to truncate it.
+            if (maxStringLength && result.length > maxStringLength) {
+                result = `${result.substring(0, maxStringLength)}…`;
+            }
+            return result;
         }
         return obj;
     }
@@ -561,7 +573,12 @@ function deepSanitize(obj: any, seen?: WeakSet<object>, depth = 0): any {
         let changed = false;
         const out: any[] = [];
         for (const item of obj) {
-            const sanitized = deepSanitize(item, refs, depth + 1);
+            const sanitized = deepSanitize(
+                item,
+                refs,
+                depth + 1,
+                maxStringLength,
+            );
             out.push(sanitized);
             if (sanitized !== item) changed = true;
         }
@@ -576,7 +593,12 @@ function deepSanitize(obj: any, seen?: WeakSet<object>, depth = 0): any {
             out[key] = '[REDACTED]';
             changed = true;
         } else {
-            const val = deepSanitize(obj[key], refs, depth + 1);
+            const val = deepSanitize(
+                obj[key],
+                refs,
+                depth + 1,
+                maxStringLength,
+            );
             out[key] = val;
             if (val !== obj[key]) changed = true;
         }
@@ -826,6 +848,72 @@ const ERROR_LOG_PROPS = new Set([
 ]);
 
 /**
+ * Context surfaced when a non-scalar prop fails to serialize, so the warn
+ * carries enough to be operational (max cap + org id when the value is a
+ * `target`-shaped object).
+ */
+interface SerializeFailureContext {
+    maxStringLength: number;
+    organizationId?: string;
+    error: unknown;
+}
+
+type SerializeFailureReporter = (ctx: SerializeFailureContext) => void;
+
+/**
+ * Best-effort pull of an org id off the failing value, so the drop-warning is
+ * attributable. Mirrors the in-repo `target` shape
+ * (`target.organizationAndTeamData.organizationId`), falling back to a
+ * top-level `organizationId` when present.
+ */
+function organizationIdOf(value: unknown): string | undefined {
+    if (!value || typeof value !== 'object') {
+        return undefined;
+    }
+    const record = value as Record<string, unknown>;
+    const nested = record.organizationAndTeamData;
+    if (
+        nested &&
+        typeof nested === 'object' &&
+        typeof (nested as Record<string, unknown>).organizationId === 'string'
+    ) {
+        return (nested as Record<string, unknown>).organizationId as string;
+    }
+    return typeof record.organizationId === 'string'
+        ? (record.organizationId as string)
+        : undefined;
+}
+
+/**
+ * Module-local reporter for a failed non-serializable prop. Never imports
+ * PinoLoggerService (that would create a core→app dependency cycle); it uses
+ * the same pino logger this module already owns. Self-contained so a logging
+ * failure can never bubble into the caller's log call.
+ */
+function warnSerializeFailure(ctx: SerializeFailureContext): void {
+    let baseLogger: pino.Logger;
+    try {
+        baseLogger = getPinoLogger();
+    } catch {
+        return;
+    }
+    const err = ctx.error instanceof Error ? ctx.error : undefined;
+    const payload: Record<string, unknown> = {
+        context: 'logger.errorProps',
+        errorMessage: err?.message ?? String(ctx.error),
+        maxStringLength: ctx.maxStringLength,
+    };
+    if (ctx.organizationId) {
+        payload.organizationId = ctx.organizationId;
+    }
+    try {
+        baseLogger.warn(payload, 'Circular or non-serializable prop dropped');
+    } catch {
+        // Never let a drop-warning bring down the caller's log emission.
+    }
+}
+
+/**
  * Collect the user-facing fields a provider error carries on itself.
  *
  * pino's default `err` serializer only keeps name/message/stack (which live on
@@ -838,6 +926,7 @@ const ERROR_LOG_PROPS = new Set([
 export function extractErrorProps(
     error: Error,
     maxStringLength: number,
+    onSerializeFailed: SerializeFailureReporter = warnSerializeFailure,
 ): Record<string, unknown> {
     const props: Record<string, unknown> = {};
     const source = error as unknown as Record<string, unknown>;
@@ -853,40 +942,77 @@ export function extractErrorProps(
                     ? `${sanitized.substring(0, maxStringLength)}…`
                     : sanitized;
         } else {
-            const sanitized = deepSanitize(value);
-            // The cap has to cover non-scalars too: `target` is a plain object
-            // (CommandReviewFeedbackTarget), so without this every `@kody
-            // review` refusal embeds the whole target, and any future object
-            // under these generic keys would dump uncapped — breaking the
-            // invariant that every allowlisted prop stays small on the line.
-            props[key] = capSerialized(sanitized, maxStringLength);
+            // Non-scalar (object/array/…). capSerialized handles sanitize +
+            // clamp in a single depth-first walk and always returns a bounded
+            // JSON string, so every downstream reader gets a deterministic
+            // shape regardless of size (#4003924218).
+            props[key] = capSerialized(
+                value,
+                maxStringLength,
+                onSerializeFailed,
+            );
         }
     }
     return props;
 }
 
 /**
- * Keep a non-string value's serialized form within `maxStringLength`. Values
- * that already fit keep their original shape (numbers stay numbers, small
- * objects stay objects); oversized ones degrade to a truncated JSON string,
- * which is the only way to bound an arbitrarily nested object on a log line.
+ * Emit a non-scalar prop as a deterministically-shaped, bounded JSON string.
+ *
+ * Scalars (number / boolean / null) pass through unchanged so e.g. a
+ * `statusCode` number stays a number. Every non-scalar (object / array / …)
+ * is ALWAYS emitted as a bounded JSON string — never the raw object — so
+ * readers like `error.target.organizationAndTeamData` or
+ * `error.responseHeaders` always resolve, even for oversized values
+ * (#4003924218). Long string leaves are pre-clamped to `maxStringLength`
+ * during the depth-first sanitize walk so JSON.stringify never allocates an
+ * uncapped payload just to truncate it afterwards (#4003924486).
  */
-function capSerialized(value: unknown, maxStringLength: number): unknown {
-    let serialized: string | undefined;
-    try {
-        serialized = JSON.stringify(value);
-    } catch {
-        // Circular or otherwise non-serializable: let the log serializer deal
-        // with it rather than dropping the prop.
-        return value;
-    }
+function capSerialized(
+    value: unknown,
+    maxStringLength: number,
+    onSerializeFailed: SerializeFailureReporter,
+): unknown {
     if (
-        typeof serialized !== 'string' ||
-        serialized.length <= maxStringLength
+        value === null ||
+        typeof value === 'number' ||
+        typeof value === 'boolean'
     ) {
         return value;
     }
-    return `${serialized.substring(0, maxStringLength)}…`;
+
+    // Sanitize (redaction, depth/cycle bound) + leaf clamp in one bounded walk.
+    const clamped = deepSanitize(value as any, undefined, 0, maxStringLength);
+
+    let serialized: string;
+    try {
+        serialized = JSON.stringify(clamped);
+    } catch (error) {
+        // #4003923790: never fail silently — report the drop so the module
+        // logger can warn (module-local, no PinoLoggerService import → no cycle).
+        onSerializeFailed({
+            maxStringLength,
+            organizationId: organizationIdOf(value),
+            error,
+        });
+        return value;
+    }
+    if (typeof serialized !== 'string') {
+        // Top-level stringify of a function/undefined yields `undefined`, not a
+        // string — report it rather than silently emitting an unusable prop.
+        onSerializeFailed({
+            maxStringLength,
+            organizationId: organizationIdOf(value),
+            error: new TypeError('value is not JSON-serializable'),
+        });
+        return value;
+    }
+    if (serialized.length > maxStringLength) {
+        // Safety net: leaf clamping bounds each leaf, but a wide object with
+        // many in-range leaves could still cross the cap — trim the final line.
+        serialized = `${serialized.substring(0, maxStringLength)}…`;
+    }
+    return serialized;
 }
 
 /** Exported for testing only. */
