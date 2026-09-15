@@ -157,14 +157,13 @@ describe('PipelineExecutor', () => {
             const stageB = makeStage('StageB');
             const stageC = makeStage('StageC');
 
-            const result = await executor.execute(
-                context,
-                [stageA, stageB, stageC],
-            );
+            const result = await executor.execute(context, [
+                stageA,
+                stageB,
+                stageC,
+            ]);
 
-            expect(result.statusInfo.status).toBe(
-                AutomationStatus.IN_PROGRESS,
-            );
+            expect(result.statusInfo.status).toBe(AutomationStatus.IN_PROGRESS);
         });
 
         it('bypasses multiple named stages in one run', async () => {
@@ -366,6 +365,44 @@ describe('PipelineExecutor', () => {
 
             expect(mockObserver.onStageStart).toHaveBeenCalledTimes(1);
             expect(mockObserver.onStageFinish).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    describe('when an unexpected error escapes the stage loop (#1849)', () => {
+        it('forces the pipeline to ERROR and still fires onPipelineFinish', async () => {
+            const context: PipelineContext = {
+                statusInfo: {
+                    status: AutomationStatus.SKIPPED, // SKIPPED triggers handleSkipOrJump below
+                },
+                errors: [],
+            } as any;
+
+            const boom = new Error('unexpected skip failure');
+            // Simulate a throw between stages, outside any stage's own
+            // try/catch — the exact #1849 path (skip/jump logic or an
+            // observer leaking during onStageStart) that previously bypassed
+            // onPipelineFinish and left the GitHub check IN_PROGRESS forever.
+            (executor as any).handleSkipOrJump = jest
+                .fn()
+                .mockRejectedValue(boom);
+
+            const result = await executor.execute(
+                context,
+                [mockStage],
+                'TestPipeline',
+                undefined,
+                undefined,
+                [mockObserver],
+            );
+
+            expect(mockObserver.onPipelineFinish).toHaveBeenCalledTimes(1);
+            expect(result.statusInfo.status).toBe(AutomationStatus.ERROR);
+            expect(result.statusInfo.message).toContain(
+                'unexpected skip failure',
+            );
+            expect(
+                result.errors.some((e: any) => e.severity === 'critical'),
+            ).toBe(true);
         });
     });
 });
