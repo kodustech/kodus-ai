@@ -852,16 +852,18 @@ export function extractErrorProps(
 }
 
 /**
- * Emit a non-scalar prop as a deterministically-shaped, bounded JSON string.
+ * Emit a non-scalar prop with a deterministic, size-bounded shape.
  *
  * Scalars (number / boolean / null) pass through unchanged so e.g. a
- * `statusCode` number stays a number. Every non-scalar (object / array / …)
- * is ALWAYS emitted as a bounded JSON string — never the raw object — so
- * readers like `error.target.organizationAndTeamData` or
- * `error.responseHeaders` always resolve, even for oversized values
- * (#4003924218). Long string leaves are pre-clamped to `maxStringLength`
- * during the depth-first sanitize walk so JSON.stringify never allocates an
- * uncapped payload just to truncate it afterwards (#4003924486).
+ * `statusCode` number stays a number. A non-scalar (object / array / …) keeps
+ * its SANITIZED object shape while its JSON stays under `maxStringLength`
+ * (so nested log queries like `error.target.organizationAndTeamData` keep
+ * resolving); only oversized values degrade to a bounded JSON string. The
+ * value is always sanitized first (redaction, depth/cycle bound — long string
+ * leaves pre-clamped to `maxStringLength` during the depth-first walk so
+ * JSON.stringify never allocates an uncapped payload just to truncate it).
+ * Failure to serialize reports a warning and falls back to the sanitized clone,
+ * never to the raw (unredacted) value (#4003924218, #4003924486, #4012208143).
  */
 function capSerialized(
     value: unknown,
@@ -890,7 +892,11 @@ function capSerialized(
             organizationId: organizationIdOf(value),
             error,
         });
-        return value;
+        // Return the SANITIZED clone, not the raw `value`: the caller passed
+        // `value` (unredacted); falling back to it would leak secrets
+        // (authorization/token/cookie) that deepSanitize already redacted in
+        // `clamped` (#4012208143).
+        return clamped;
     }
     if (typeof serialized !== 'string') {
         // Top-level stringify of a function/undefined yields `undefined`, not a
@@ -900,14 +906,19 @@ function capSerialized(
             organizationId: organizationIdOf(value),
             error: new TypeError('value is not JSON-serializable'),
         });
-        return value;
+        return clamped;
     }
-    if (serialized.length > maxStringLength) {
-        // Safety net: leaf clamping bounds each leaf, but a wide object with
-        // many in-range leaves could still cross the cap — trim the final line.
-        serialized = `${serialized.substring(0, maxStringLength)}…`;
+    if (serialized.length <= maxStringLength) {
+        // Small non-scalars keep their OBJECT shape (sanitized) so nested log
+        // queries like `error.target.organizationAndTeamData` keep resolving —
+        // only oversized values degrade to a bounded JSON string. Shape is
+        // deterministic by size, not by luck of the payload (#4012208372).
+        return clamped;
     }
-    return serialized;
+    // Oversized: degrade to a bounded JSON string. (Leaf clamping bounds each
+    // leaf in `clamped`, but a wide object with many in-range leaves could
+    // still cross the cap — this safety net trims the final line.)
+    return `${serialized.substring(0, maxStringLength)}…`;
 }
 
 /** Exported for testing only. */
