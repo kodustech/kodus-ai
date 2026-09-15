@@ -244,7 +244,30 @@ async function forward(
         (init as RequestInit & { duplex?: string }).duplex = "half";
     }
 
-    const upstream = await fetch(url, init);
+    let upstream: Response;
+    try {
+        upstream = await fetch(url, init);
+    } catch (error) {
+        // The browser aborted: nothing is listening for this response, and
+        // turning it into a gateway error would invent a failure that never
+        // reached anyone.
+        if (req.signal?.aborted) throw error;
+
+        // The upstream is not answering — wrong host, nothing listening, DNS
+        // miss. That is a DIFFERENT fact from "the upstream returned an
+        // error", and callers need to tell them apart: a self-hosted install
+        // that simply did not deploy an optional service should be able to
+        // hide its entry instead of offering a screen that always fails.
+        // Unhandled, this threw and Next answered a generic 500, which is
+        // indistinguishable from the upstream itself failing.
+        return NextResponse.json(
+            {
+                error: "Bad Gateway",
+                message: "The upstream service is not reachable.",
+            },
+            { status: 502 },
+        );
+    }
 
     // undici transparently decompresses — strip encoding-related
     // headers or the browser tries to decode plaintext and fails.
