@@ -109,12 +109,28 @@ export interface ModelResult {
     raw: unknown;
 }
 
+/** List price per ONE MILLION tokens, in USD. Declared only by a catalog that
+ *  is also a price list (the `kodus` provider bills the org for exactly these
+ *  rates); every other provider's cost is resolved from the analytics catalog. */
+export interface CatalogModelPricing {
+    inputPerMillion: number;
+    outputPerMillion: number;
+    cacheReadPerMillion?: number;
+    cacheWritePerMillion?: number;
+}
+
 /** One entry in a provider's model catalog (populates the model picker). */
 export interface CatalogModel {
     id: string;
     name: string;
     supportsReasoning?: boolean;
     reasoningConfig?: ReasoningConfig;
+    /** Curated pick for code review — the picker shows a badge. */
+    recommended?: boolean;
+    /** One-line positioning shown under the name in the picker. */
+    description?: string;
+    /** USD per 1M tokens (see CatalogModelPricing). Absent = not a price list. */
+    pricing?: CatalogModelPricing;
 }
 
 /** Credentials resolved by the caller (org saved slot → env fallback) before a

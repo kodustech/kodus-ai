@@ -325,6 +325,67 @@ describe('ValidateSuggestionsStage', () => {
             expect(suggestion?.isCommittable).toBe(true);
             expect(suggestion?.validatedData).toBeDefined();
         });
+
+        it("threads the pipeline's resolved BYOK slot into both validator calls", async () => {
+            mockSuggestionLLMValidator.checkSuggestionSimplicity.mockResolvedValue({
+                isSimple: true,
+                reason: null,
+            });
+            mockSuggestionLLMValidator.validateWithLLM.mockResolvedValue({
+                isValid: true,
+            });
+            mockSandboxSyntaxValidator.validateFiles.mockResolvedValue(new Set(['s1']));
+
+            (applyEdit as jest.Mock).mockResolvedValue({
+                mergedCode: 'const x = 1;',
+                udiff: `--- a/test.ts
++++ b/test.ts
+@@ -1 +1 @@
+-var x;
++const x = 1;`,
+            });
+
+            const byokConfig = { provider: 'openai', model: 'gpt-4o' } as any;
+            const context = createBaseContext({
+                codeReviewConfig: {
+                    enableCommittableSuggestions: true,
+                    resolvedModelSlot: byokConfig,
+                } as any,
+                validSuggestions: [
+                    {
+                        id: 's1',
+                        relevantFile: 'test.ts',
+                        improvedCode: 'const x = 1;',
+                        llmPrompt: 'Use const',
+                    },
+                ],
+                changedFiles: [
+                    {
+                        filename: 'test.ts',
+                        fileContent: 'var x;',
+                    } as any,
+                ],
+            });
+
+            await (stage as any).executeStage(context);
+
+            expect(
+                mockSuggestionLLMValidator.checkSuggestionSimplicity,
+            ).toHaveBeenCalledWith(
+                mockOrganizationAndTeamData,
+                123,
+                expect.objectContaining({ id: 's1' }),
+                byokConfig,
+            );
+            expect(
+                mockSuggestionLLMValidator.validateWithLLM,
+            ).toHaveBeenCalledWith(
+                expect.anything(),
+                mockOrganizationAndTeamData,
+                123,
+                byokConfig,
+            );
+        });
     });
 
     describe('isLanguageSupported', () => {

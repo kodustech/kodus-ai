@@ -10,6 +10,7 @@
  * the blob and calls `describeLLMConfigStatus`.
  */
 import { BYOKProvider } from './model-providers';
+import { isPlatformFundedProvider } from '@libs/llm/platform-funded-provider';
 import {
     isByokConfig,
     type BYOKConfig,
@@ -51,6 +52,11 @@ export function isByokSlotConfigured(
             slot.awsBearerToken ||
                 (slot.awsAccessKeyId && slot.awsSecretAccessKey),
         );
+    }
+
+    // Platform-funded (`kodus`): no material of its own, by design.
+    if (isPlatformFundedProvider(slot.provider)) {
+        return true;
     }
 
     return Boolean(slot.apiKey);

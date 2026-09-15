@@ -20,7 +20,6 @@
  * namespace the SDK reads. It does not get to define what a model is. So the
  * question is asked of the model layer, once, by both paths.
  *
- * Input is an `LLMModelProvider` enum value (`"<vendor>:<model>"`, e.g.
  * `"google:gemini-2.5-pro"`). Returns `undefined` for a bare BYOK model string
  * (no vendor prefix) or a model the mirror does not know — the caller then falls
  * back to its own default budget. BYOK slots carry their own `maxInputTokens`

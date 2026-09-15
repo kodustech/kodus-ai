@@ -15,9 +15,7 @@ import { UserCoreModule } from '@libs/identity/modules/user-core.module';
 
 import { RequestChangesOrApproveStage } from './stages/finish-process-review.stage';
 import { InitialCommentStage } from './stages/initial-comment.stage';
-import { ProcessFilesPrLevelReviewStage } from './stages/process-files-pr-level-review.stage';
 import { BusinessLogicValidationStage } from './stages/business-logic-validation.stage';
-import { ProcessFilesReview } from './stages/process-files-review.stage';
 import { ResolveConfigStage } from './stages/resolve-config.stage';
 import { ValidateConfigStage } from './stages/validate-config.stage';
 import { ValidateNewCommitsStage } from './stages/validate-new-commits.stage';
@@ -159,9 +157,7 @@ import { ReviewRiskPlanner } from '../domain/review-policy/review-risk-planner';
         ValidateConfigStage,
         FetchChangedFilesStage,
         InitialCommentStage,
-        ProcessFilesPrLevelReviewStage,
         BusinessLogicValidationStage,
-        ProcessFilesReview,
         SandboxSyntaxValidator,
         GraphContentFormatter,
         SuggestionLLMValidator,
@@ -234,9 +230,7 @@ import { ReviewRiskPlanner } from '../domain/review-policy/review-risk-planner';
         CreateFileCommentsStage,
         CreatePrLevelCommentsStage,
         UpdateCommentsAndGenerateSummaryStage,
-        ProcessFilesPrLevelReviewStage,
         BusinessLogicValidationStage,
-        ProcessFilesReview,
         ResolveConfigStage,
         ValidateConfigStage,
         ValidateNewCommitsStage,

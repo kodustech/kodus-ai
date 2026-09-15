@@ -45,6 +45,11 @@ scenarios:
     #     Kodus-managed keys; every other review cell is BYOK.
     - trial-entitlement-gate
     - trial-credits-consume
+    #   * kodus-credits-gate: API-level "Kodus as the provider" contract —
+    #     license carries the prepaid balance, a keyless kodus credential
+    #     saves, balance/ledger/checkout answer, debit is browser-unreachable.
+    #     No LLM call, no platform keys needed.
+    - kodus-credits-gate
     - trial-managed-review
     # Per-seat gate: appliesTo restricts to self-hosted × github × license-paid
     # (one cell). Skipped automatically when SH_LICENSE_KEY_PATH (default

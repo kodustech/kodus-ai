@@ -25,7 +25,6 @@ jest.mock('tiktoken', () => ({
 
 import { encoding_for_model } from 'tiktoken';
 import { TokenChunkingService } from './tokenChunking.service';
-import { LLMModelProvider } from '@libs/llm/model-providers';
 import { estimateTextTokens } from '@libs/llm/token-estimate';
 
 describe('TokenChunkingService', () => {
@@ -46,32 +45,32 @@ describe('TokenChunkingService', () => {
     describe('isOpenAIModel', () => {
         it('returns true for exactly the four listed OpenAI models', () => {
             expect(
-                (svc as any).isOpenAIModel(LLMModelProvider.OPENAI_GPT_4O),
+                (svc as any).isOpenAIModel('openai:gpt-4o'),
             ).toBe(true);
             expect(
-                (svc as any).isOpenAIModel(LLMModelProvider.OPENAI_GPT_4O_MINI),
+                (svc as any).isOpenAIModel('openai:gpt-4o-mini'),
             ).toBe(true);
             expect(
-                (svc as any).isOpenAIModel(LLMModelProvider.OPENAI_GPT_4_1),
+                (svc as any).isOpenAIModel('openai:gpt-4.1'),
             ).toBe(true);
             expect(
-                (svc as any).isOpenAIModel(LLMModelProvider.OPENAI_GPT_O4_MINI),
+                (svc as any).isOpenAIModel('openai:o4-mini'),
             ).toBe(true);
         });
 
         it('returns false for an OpenAI model NOT in the list (GPT_5_1)', () => {
             // Proves the allow-list is an exact set, not a prefix match.
             expect(
-                (svc as any).isOpenAIModel(LLMModelProvider.OPENAI_GPT_5_1),
+                (svc as any).isOpenAIModel('openai:gpt-5.1'),
             ).toBe(false);
         });
 
         it('returns false for non-OpenAI models and arbitrary strings', () => {
             expect(
-                (svc as any).isOpenAIModel(LLMModelProvider.CLAUDE_SONNET_4_5),
+                (svc as any).isOpenAIModel('anthropic:claude-sonnet-4-5-20250929'),
             ).toBe(false);
             expect(
-                (svc as any).isOpenAIModel(LLMModelProvider.GEMINI_2_5_PRO),
+                (svc as any).isOpenAIModel('google:gemini-2.5-pro'),
             ).toBe(false);
             expect((svc as any).isOpenAIModel('openai:gpt-4o')).toBe(true);
             expect((svc as any).isOpenAIModel('some-byok-model')).toBe(false);
@@ -81,16 +80,16 @@ describe('TokenChunkingService', () => {
     describe('getOpenAIModelName', () => {
         it('returns the tail after the colon', () => {
             expect(
-                (svc as any).getOpenAIModelName(LLMModelProvider.OPENAI_GPT_4O),
+                (svc as any).getOpenAIModelName('openai:gpt-4o'),
             ).toBe('gpt-4o');
             expect(
                 (svc as any).getOpenAIModelName(
-                    LLMModelProvider.OPENAI_GPT_4_1,
+                    'openai:gpt-4.1',
                 ),
             ).toBe('gpt-4.1');
             expect(
                 (svc as any).getOpenAIModelName(
-                    LLMModelProvider.OPENAI_GPT_O4_MINI,
+                    'openai:o4-mini',
                 ),
             ).toBe('o4-mini');
         });
@@ -161,7 +160,7 @@ describe('TokenChunkingService', () => {
             expect(
                 (svc as any).countTokensForItem(
                     strOf(8),
-                    LLMModelProvider.GEMINI_2_5_PRO,
+                    'google:gemini-2.5-pro',
                 ),
             ).toBe(tokensOf(strOf(8)));
             expect(encoding_for_model).not.toHaveBeenCalled();
@@ -188,7 +187,7 @@ describe('TokenChunkingService', () => {
             });
             const result = (svc as any).countTokensForItem(
                 strOf(400),
-                LLMModelProvider.OPENAI_GPT_4O,
+                'openai:gpt-4o',
             );
             // 42 comes from tiktoken, not from the estimator → branch proven.
             expect(result).toBe(42);
@@ -203,7 +202,7 @@ describe('TokenChunkingService', () => {
             expect(
                 (svc as any).countTokensForItem(
                     strOf(8),
-                    LLMModelProvider.OPENAI_GPT_4O,
+                    'openai:gpt-4o',
                 ),
             ).toBe(tokensOf(strOf(8)));
             expect(encoding_for_model).toHaveBeenCalled();
@@ -256,7 +255,7 @@ describe('TokenChunkingService', () => {
             // It was 1_000_000 while this read a hand-typed registry entry.
             const res = svc.chunkDataByTokens({
                 data: [strOf(4)],
-                model: LLMModelProvider.GEMINI_2_5_PRO,
+                model: 'google:gemini-2.5-pro',
                 usagePercentage: 1,
             });
             expect(res.tokenLimit).toBe(10485);
@@ -267,7 +266,7 @@ describe('TokenChunkingService', () => {
             // floor(1000 * 50 / 100) = 500.
             const res = svc.chunkDataByTokens({
                 data: [strOf(4)],
-                model: LLMModelProvider.GEMINI_2_5_PRO,
+                model: 'google:gemini-2.5-pro',
                 overrideMaxTokens: 1000,
                 usagePercentage: 50,
             });

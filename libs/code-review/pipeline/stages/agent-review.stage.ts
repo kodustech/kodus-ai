@@ -21,8 +21,13 @@ import {
 import { buildPlatformEmbedder } from '@libs/common/utils/document';
 import {
     dedupReviewWarnings,
+    buildBadFixDowngradedWarning,
     type ReviewWarning,
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
+import {
+    checkFix,
+    type BadFixReason,
+} from '@libs/code-review/infrastructure/agents/engine/is-usable-fix';
 import { getModelName } from '@libs/llm/byok-to-vercel';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { buildKodyRuleLink } from '@libs/code-review/utils/build-kody-rule-link';
@@ -80,6 +85,8 @@ import {
 import { KodyRuleSummaryService } from '@libs/kodyRules/infrastructure/adapters/services/kody-rule-summary.service';
 import {
     CodeReviewPipelineContext,
+    resolvedModel,
+    resolvedProvider,
     DedupTraceGroupSummary,
     DedupTraceSuggestionSummary,
     DedupTraceSummary,
@@ -816,15 +823,20 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             const failures = result.failures ?? [];
 
             if (failures.length > 0) {
-                const reviewProvider =
-                    typeof context.codeReviewConfig?.resolvedModelSlot
-                        ?.provider === 'string'
-                        ? (context.codeReviewConfig.resolvedModelSlot
-                              .provider as string)
-                        : undefined;
+                // Classify against the provider that ANSWERED, not the one
+                // resolved before the run. The friendly sentence names the
+                // provider inline ("the key (openai) appears invalid"), so
+                // classifying with the pre-run slot after a cascade puts one
+                // provider in the prose and another in the facts line — the
+                // same never-co-occurred pair, split across two fields.
+                // A classification already attached by byok-model-wrapper is
+                // anchored to the attempt that raised it, so it is preferred.
                 const classifyFailure = (f: (typeof failures)[number]) =>
                     getClassification(f.error) ??
-                    classifyLLMError(f.error, reviewProvider);
+                    classifyLLMError(
+                        f.error,
+                        resolvedProvider(context, f.error),
+                    );
                 const criticalFailures = failures.filter((f) =>
                     CRITICAL_AGENTS.has(f.agentName),
                 );
@@ -847,8 +859,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 context = this.updateContext(context, (draft) => {
                     draft.lastReviewError = {
                         category: classification.category,
-                        provider: classification.provider,
+                        provider:
+                            classification.provider ??
+                            resolvedProvider(context, chosen.error),
                         friendlyMessage: classification.friendlyMessage,
+                        httpStatus: classification.httpStatus,
+                        providerMessage: classification.providerMessage,
+                        model: resolvedModel(context, chosen.error),
                         agentName: chosen.agentName,
                         occurredAt: new Date(),
                     };
@@ -933,6 +950,29 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             const changedFilesByName = new Map(
                 changedFiles.map((f) => [f.filename, f]),
             );
+            // Rules that declared they need more than the diff (issue #1826).
+            // Only such a rule has earned the right to point at a line this PR
+            // did not change: "this function is too long" is true of the whole
+            // function, most of which is unchanged. Every other out-of-hunk
+            // finding is still dropped, exactly as before — nothing else in the
+            // pipeline can tell the two apart, which is why the snap drops both
+            // today.
+            const contextNeedingRuleUuids = new Set(
+                (context.codeReviewConfig?.kodyRules ?? [])
+                    .filter(
+                        (rule) =>
+                            !!rule.uuid &&
+                            !!(rule as Partial<IKodyRule>).contextNeed?.need &&
+                            (rule as Partial<IKodyRule>).contextNeed!.need !==
+                                'diff-only',
+                    )
+                    .map((rule) => rule.uuid!),
+            );
+            const isFileAnchored = (s: Partial<CodeSuggestion>): boolean =>
+                s.label === 'kody_rules' &&
+                (s.brokenKodyRulesIds ?? []).some((uuid) =>
+                    contextNeedingRuleUuids.has(uuid),
+                );
             const validatedSuggestions = result.suggestions
                 .map((s) => {
                     const file = changedFilesByName.get(s.relevantFile);
@@ -940,6 +980,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     const validRanges = extractValidDiffLines(file.patch);
                     const snapped = snapLinesToDiff(s, validRanges);
                     if (snapped === null) {
+                        if (isFileAnchored(s)) {
+                            this.logger.log({
+                                message: `[AGENT] File-anchored finding for ${s.relevantFile}: lines ${s.relevantLinesStart}-${s.relevantLinesEnd} sit outside every hunk, but the rule declared it needs context beyond the diff — delivering it as a PR-level comment`,
+                                context: this.stageName,
+                            });
+                            return { ...s, fileAnchored: true };
+                        }
                         this.logger.log({
                             message: `[AGENT] Dropped out-of-diff suggestion for ${s.relevantFile}: lines ${s.relevantLinesStart}-${s.relevantLinesEnd} do not overlap any changed hunk`,
                             context: this.stageName,
@@ -1261,6 +1308,65 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 });
             }
 
+            // Publication gate (issue #1833): four weeks of production
+            // thumbs-down showed 38% had no usable fix — empty, identical to
+            // existingCode, or syntactically truncated. A correct diagnosis
+            // with a broken "fix" reads as OUR mistake, not a miss. (Prose-
+            // only detection was tried and removed — see is-usable-fix.ts's
+            // header: no regex reliably tells English apart from code.)
+            // Rather than dropping the whole finding, strip the unusable
+            // improvedCode and publish as a plain comment: the renderer
+            // already omits the code block when improvedCode is empty
+            // (github.service.ts's `codeBlock = improvedCode ? ... : ''`),
+            // the same path PR-level Kody Rule findings with no existingCode
+            // already use. Runs AFTER the content formatter (which never
+            // touches improvedCode, only suggestionContent/llmPrompt) and
+            // BEFORE the Kody Rule link enrichment.
+            {
+                const badFixCounts: Partial<Record<BadFixReason, number>> = {};
+                for (const s of deduped) {
+                    const reason = checkFix(
+                        s.existingCode,
+                        s.improvedCode,
+                        s.language,
+                    );
+                    if (!reason) {
+                        continue;
+                    }
+                    badFixCounts[reason] = (badFixCounts[reason] ?? 0) + 1;
+                    s.improvedCode = '';
+                }
+                const totalBadFix = Object.values(badFixCounts).reduce(
+                    (sum: number, n) => sum + (n ?? 0),
+                    0,
+                );
+                if (totalBadFix > 0) {
+                    this.logger.log({
+                        message: `[AGENT] Downgraded ${totalBadFix} suggestion(s) with unusable improvedCode to plain comments`,
+                        context: this.stageName,
+                        metadata: {
+                            prNumber,
+                            organizationId:
+                                context.organizationAndTeamData
+                                    ?.organizationId,
+                            ...badFixCounts,
+                        },
+                    });
+                    context = this.updateContext(context, (draft) => {
+                        draft.reviewWarnings = dedupReviewWarnings([
+                            ...(draft.reviewWarnings ?? []),
+                            buildBadFixDowngradedWarning({
+                                count: totalBadFix,
+                                modelName: getModelName(
+                                    context.codeReviewConfig?.byokConfig,
+                                ),
+                                agentName: 'agent-review',
+                            }),
+                        ]);
+                    });
+                }
+            }
+
             // Enrich kody_rules suggestions with markdown links to the rule
             // page. Runs AFTER the content formatter so the formatter LLM
             // cannot drop the "Kody rule violation: ..." appendix while
@@ -1309,19 +1415,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
 
             // Separate PR-level kody rules (no file/lines) from file-level suggestions.
             // PR-level suggestions go to validSuggestionsByPR → CreatePrLevelCommentsStage.
-            const prLevelSuggestions = deduped.filter(
-                (s) =>
-                    s.label === 'kody_rules' &&
-                    !s.relevantFile &&
-                    !s.relevantLinesStart,
-            );
+            // A file-anchored finding takes the same route: it is about the
+            // file, so there is no line in the diff to hang it on.
+            const isPrLevelSuggestion = (s: Partial<CodeSuggestion>): boolean =>
+                s.label === 'kody_rules' &&
+                ((!s.relevantFile && !s.relevantLinesStart) ||
+                    s.fileAnchored === true);
+            const prLevelSuggestions = deduped.filter(isPrLevelSuggestion);
             const fileLevelSuggestions = deduped.filter(
-                (s) =>
-                    !(
-                        s.label === 'kody_rules' &&
-                        !s.relevantFile &&
-                        !s.relevantLinesStart
-                    ),
+                (s) => !isPrLevelSuggestion(s),
             );
 
             // Sort file-level suggestions: kody_rules first, then by severity
@@ -1440,7 +1542,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             id:
                                 s.brokenKodyRulesIds?.[0] ||
                                 crypto.randomUUID(),
-                            suggestionContent: s.suggestionContent || '',
+                            // A file-anchored finding has to say WHERE, since
+                            // a PR-level comment carries no anchor of its own.
+                            suggestionContent: s.fileAnchored
+                                ? `\`${s.relevantFile}:${s.relevantLinesStart ?? 1}\` — ${s.suggestionContent || ''}`
+                                : s.suggestionContent || '',
                             oneSentenceSummary: s.oneSentenceSummary || '',
                             label: (s.label as any) || 'kody_rules',
                             severity: this.normalizeSeverity(
@@ -1477,10 +1583,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 getClassification(stageError) ??
                 classifyLLMError(
                     stageError,
-                    typeof context.codeReviewConfig?.resolvedModelSlot
-                        ?.provider === 'string'
-                        ? context.codeReviewConfig.resolvedModelSlot.provider
-                        : undefined,
+                    resolvedProvider(context, stageError),
                 );
 
             // Keep going so the end-review comment still gets posted and the
@@ -1506,8 +1609,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 if (!draft.lastReviewError) {
                     draft.lastReviewError = {
                         category: classification.category,
-                        provider: classification.provider,
+                        provider:
+                            classification.provider ??
+                            resolvedProvider(context, stageError),
                         friendlyMessage: classification.friendlyMessage,
+                        httpStatus: classification.httpStatus,
+                        providerMessage: classification.providerMessage,
+                        model: resolvedModel(context, stageError),
                         occurredAt: new Date(),
                     };
                 }

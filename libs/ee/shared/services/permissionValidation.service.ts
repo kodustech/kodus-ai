@@ -34,6 +34,7 @@ import {
     ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 import { createLogger } from '@libs/core/log/logger';
+import { isPlatformFundedProvider } from '@libs/llm/platform-funded-provider';
 
 export enum PlanType {
     FREE = 'free',
@@ -47,6 +48,9 @@ export enum ValidationErrorType {
     USER_NOT_LICENSED = 'USER_NOT_LICENSED',
     BYOK_REQUIRED = 'BYOK_REQUIRED',
     PLAN_LIMIT_EXCEEDED = 'PLAN_LIMIT_EXCEEDED',
+    /** The review would run on the Kodus provider and the org's prepaid
+     *  credit balance is at or below zero. */
+    CREDITS_EXHAUSTED = 'CREDITS_EXHAUSTED',
     NOT_ERROR = 'NOT_ERROR',
 }
 
@@ -107,6 +111,51 @@ export class PermissionValidationService {
     ) {
         this.isCloud = environment.API_CLOUD_MODE;
         this.isDevelopment = environment.API_DEVELOPMENT_MODE;
+    }
+
+    /**
+     * Prepaid-credit gate for a slot routed by the Kodus provider ("Kodus as
+     * the provider"). Blocks only on a KNOWN non-positive balance: when billing
+     * did not return a number (older billing, transport hiccup) the review
+     * runs and the metering sweep bills it after the fact — a flaky read must
+     * never skip a paying customer's review. Returns null when the gate does
+     * not apply or passes.
+     */
+    private gateKodusCredits(
+        slot: NormalizedModel | undefined,
+        validation: OrganizationLicenseValidationResult,
+        organizationAndTeamData: OrganizationAndTeamData,
+        contextName?: string,
+    ): ValidationResult | null {
+        if (!slot || !isPlatformFundedProvider(slot.provider)) {
+            return null;
+        }
+        const balance = validation.creditBalanceUsd;
+        if (typeof balance !== 'number' || !Number.isFinite(balance)) {
+            return null;
+        }
+        if (balance > 0) {
+            return null;
+        }
+        this.logger.warn({
+            message: 'Kodus credits exhausted — review blocked',
+            context: contextName || PermissionValidationService.name,
+            metadata: {
+                organizationAndTeamData,
+                creditBalanceUsd: balance,
+                model: slot.model,
+            },
+        });
+        return {
+            allowed: false,
+            errorType: ValidationErrorType.CREDITS_EXHAUSTED,
+            metadata: {
+                creditBalanceUsd: balance,
+                creditsExhausted: true,
+                model: slot.model,
+            },
+            subscriptionStatus: validation.subscriptionStatus,
+        };
     }
 
     /**
@@ -313,6 +362,20 @@ export class PermissionValidationService {
                 // must not be blocked by a flaky read — fail open on BYOK.
                 const noByok = !trialByokConfig && !byokLookupFailed;
 
+                // Kodus-routed slot on a trial: the review is paid from the
+                // org's prepaid credits, not from trial credits — so the
+                // credit balance is the gate, and the trial-credit gate below
+                // is skipped (the slot is real BYOK, `noByok` is false).
+                const trialCreditsGate = this.gateKodusCredits(
+                    trialByokConfig,
+                    validation,
+                    organizationAndTeamData,
+                    contextName,
+                );
+                if (trialCreditsGate) {
+                    return trialCreditsGate;
+                }
+
                 // Divergence alarm: billing still reports BYOK (its `byok` flag
                 // is plan-derived, so a `*_byok` trial keeps it set) while the
                 // local config is gone. The two sources never reconcile — the
@@ -472,6 +535,17 @@ export class PermissionValidationService {
                 organizationAndTeamData,
                 LLM_TASK.codeReview,
             );
+
+            // 3b. Kodus-routed slot: prepaid credits must cover the review.
+            const creditsGate = this.gateKodusCredits(
+                byokConfig,
+                validation,
+                organizationAndTeamData,
+                contextName,
+            );
+            if (creditsGate) {
+                return creditsGate;
+            }
 
             // 4. Managed plans use our keys
             // if (identifiedPlanType === PlanType.MANAGED) {

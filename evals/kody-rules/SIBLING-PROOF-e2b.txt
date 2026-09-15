@@ -1,0 +1,28 @@
+provider: e2b
+repo:     https://github.com/kodustech/kodus-ai.git (public), branch main
+
+sandbox.type=e2b  sandboxId=i4zzdgjckviitf5cdq0cp
+metadata   = {"prNumber":"ISSUE-1826-PROOF","stage":"review","probe":"ISSUE-1826-FINAL"}
+lookup.available=true
+
+STEP 1 — the SAME sandbox proves the spec file exists
+  read("libs/code-review/infrastructure/agents/collaborators/call-graph.helper.spec.ts", 1, 2)
+    | import * as fs from 'fs';
+    | import * as os from 'os';
+    | 
+  grep("call-graph.helper.spec", "libs/code-review/infrastructure/agents/collaborators") → "No matches found."
+
+STEP 2 — the production lookup is asked whether that same file exists
+  lookup.exists("libs/code-review/infrastructure/agents/collaborators/call-graph.helper.spec.ts") → true
+
+STEP 3 — retrieveForShard(), the function the Kody Rules judge calls,
+         for a rule declaring the sibling-file need on the source file
+  → 1 slice(s), 0 unmet
+  [sibling-file] companion files of libs/code-review/infrastructure/agents/collaborators/call-graph.helper.ts
+      - libs/code-review/infrastructure/agents/collaborators/call-graph.helper.spec.ts: exists
+      - libs/code-review/infrastructure/agents/collaborators/call-graph.helper.test.ts: does not exist
+      - libs/code-review/infrastructure/agents/collaborators/call-graph.helper_test.ts: does not exist
+      - libs/code-review/infrastructure/agents/collaborators/__tests__/call-graph.helper.ts: does not exist
+
+VERDICT
+  Slice reports the sibling correctly.

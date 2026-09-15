@@ -43,3 +43,13 @@ features:
         description: >-
             Use sanitized decisions distilled from local coding-agent sessions
             as repository-scoped context for Kody code reviews.
+
+    kodus-provider:
+        name: "Kodus as a provider (prepaid credits)"
+        stage: alpha
+        audience: [cloud]
+        description: >-
+            Pick a curated model and let Kodus run it on its own provider
+            accounts — no API key to manage, usage billed from a prepaid
+            credit balance you top up as you go.
+        documentation_url: how_to_use/en/byok#kodus-credits

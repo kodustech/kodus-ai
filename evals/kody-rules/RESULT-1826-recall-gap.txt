@@ -1,0 +1,54 @@
+Issue #1826 — does declaring a context need actually change whether a rule fires?
+════════════════════════════════════════════════════════════════════════════════
+
+Ran 2026-09-09. Real sandbox (local provider), 8 cases x 5 replicates, two
+models. Every case runs TWICE: once with `contextNeed` declared, once
+byte-identical without.
+
+WHY THE FIRST ANSWER WAS "NO", AND WAS WRONG
+────────────────────────────────────────────
+The first version of this corpus had two positive cases, and a model could
+answer both by guessing: a new controller with no test in the diff, and a helper
+whose rule text points at `src/shared`. kimi fired in both arms, so the arms
+tied and the conclusion was "retrieval buys no recall".
+
+That measured luck, not knowledge. Retrieval's unique value is exactly one
+quadrant — the rule SHOULD fire and the model cannot know it should — and the
+corpus had no case in it. The claim checker covers the other direction (it can
+only drop a finding, never create one), so wherever a guess is right or a wrong
+guess is refutable, retrieval is redundant by construction.
+
+Two cases were added:
+
+  - `symbol-references-duplicate-in-an-unguessable-place`
+    The duplicate lives in src/legacy/contact-utils.ts and the rule text names
+    NO location. Nothing in the diff hints at it. There is nothing to guess.
+  - `sibling-file-test-already-in-repo-CONTROL`
+    The guard, judged diff-only: the other direction, where a guess is wrong.
+
+RESULT
+──────
+                                            kimi        deepseek-v4-flash
+                                         need  ctrl      need  ctrl
+  endpoint with no test anywhere          5/5   5/5       5/5   5/5
+  helper duplicated (guessable location)  5/5   3/5       5/5   2/5
+  helper duplicated (unguessable)         5/5   3/5       5/5   0/5
+  guard: sibling exists, must stay silent 0     0         0     0
+
+  cases that should fire                 15/15 11/15     15/15  7/15
+  comments published that should not      0/40            0/40
+
+Combined: the declared-need arm is 30/30. The diff-only arm is 18/30. Every
+miss is in the diff-only arm, and the unguessable case is the sharpest: 0/5
+without retrieval and 5/5 with it, on deepseek.
+
+The guard holds in both arms on both models, so the gain is not "fires more
+often" — it is "fires when it should".
+
+READ THIS BEFORE QUOTING THE NUMBER
+───────────────────────────────────
+Eight synthetic cases, five replicates, two models, one provider. It
+establishes that the gap is real and that it widens as the answer gets harder
+to guess. It does not size the gap on customer rules, and the earlier
+fake-lookup runs of this corpus are superseded — the lookup under them was
+broken on both providers.

@@ -16,6 +16,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@components/ui/popover";
+import type { LLMProviderModel } from "@services/organizationParameters/fetch";
 import {
     useLLMProviderModelsPreview,
     useSuspenseGetLLMProviderModels,
@@ -28,6 +29,13 @@ import { ArrayHelpers } from "src/core/utils/array";
 
 import type { EditKeyForm } from "../_types";
 import { formatModelLabel } from "../../../../_data/model-label";
+
+/** "$2 in · $10 out / 1M" — only for a catalog that is also a price list. */
+const formatPerMillion = (p: NonNullable<LLMProviderModel["pricing"]>) => {
+    const usd = (n: number) =>
+        `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+    return `${usd(p.inputPerMillion)} in · ${usd(p.outputPerMillion)} out / 1M tokens`;
+};
 
 export const ByokModelSelect = ({
     excludeIds = [],
@@ -210,7 +218,7 @@ const ModelPickerPopover = ({
     models,
     onUseManual,
 }: {
-    models: Array<{ id: string; name: string }>;
+    models: LLMProviderModel[];
     onUseManual?: () => void;
 }) => {
     const form = useFormContext<EditKeyForm>();
@@ -281,26 +289,55 @@ const ModelPickerPopover = ({
                     <CommandList className="max-h-56 overflow-y-auto p-1">
                         <CommandEmpty>No model found.</CommandEmpty>
 
-                        {ArrayHelpers.sortAlphabetically(models, "name").map(
-                            (r) => (
-                                <CommandItem
-                                    key={r.id}
-                                    value={r.id}
-                                    onSelect={(v) => {
-                                        form.reset({
-                                            ...form.getValues(),
-                                            model: v,
-                                        });
-
-                                        resetErrorBoundary();
-                                        setOpen(false);
-                                    }}>
-                                    <span className="flex items-center gap-2">
-                                        {r.name}
-                                    </span>
-                                </CommandItem>
+                        {/* Recommended picks float to the top of a curated list;
+                            the rest stay alphabetical. A catalog that is also a
+                            price list (Kodus) shows the rate under each name. */}
+                        {[
+                            ...ArrayHelpers.sortAlphabetically(
+                                models.filter((m) => m.recommended),
+                                "name",
                             ),
-                        )}
+                            ...ArrayHelpers.sortAlphabetically(
+                                models.filter((m) => !m.recommended),
+                                "name",
+                            ),
+                        ].map((r) => (
+                            <CommandItem
+                                key={r.id}
+                                value={r.id}
+                                onSelect={(v) => {
+                                    form.reset({
+                                        ...form.getValues(),
+                                        model: v,
+                                    });
+
+                                    resetErrorBoundary();
+                                    setOpen(false);
+                                }}>
+                                <span className="flex min-w-0 flex-col gap-0.5">
+                                    <span className="flex items-center gap-2">
+                                        <span className="truncate">
+                                            {r.name}
+                                        </span>
+                                        {r.recommended && (
+                                            <span className="bg-primary-light/15 text-primary-light rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase">
+                                                Recommended
+                                            </span>
+                                        )}
+                                    </span>
+                                    {(r.description || r.pricing) && (
+                                        <span className="text-text-tertiary truncate text-xs">
+                                            {r.description}
+                                            {r.description && r.pricing
+                                                ? " · "
+                                                : ""}
+                                            {r.pricing &&
+                                                formatPerMillion(r.pricing)}
+                                        </span>
+                                    )}
+                                </span>
+                            </CommandItem>
+                        ))}
 
                         {/* Allow user to switch to manual input */}
                         <CommandItem
@@ -364,6 +401,17 @@ function useDebouncedValue<T>(value: T, ms: number): T {
  * (e.g. OpenAI). The list comes from the JUST-TYPED key — no curated placeholder.
  * Before a key exists (fresh connect) it prompts for one; a stored credential
  * (edit / add-to-connected) lists live with no typed key.
+ *
+ * Amazon Bedrock is the one live-listing provider that does NOT authenticate
+ * with `apiKey` — it uses `awsBearerToken` (live) or `awsAccessKeyId` +
+ * `awsSecretAccessKey` (IAM, can only ever reach the curated fallback — SigV4
+ * needs request signing, not a static header). Gating "do we have something to
+ * authenticate with" on `apiKey` alone left a fresh Bedrock connect stuck on
+ * "Enter your API key to load models" forever, even though the backend already
+ * serves a curated fallback for a keyless Bedrock request. Every other
+ * live-listing provider (openai, anthropic, google_gemini, open_router,
+ * novita, moonshot) keeps using `apiKey` exactly as before — this only adds a
+ * Bedrock-specific OR branch, it doesn't touch their gate.
  */
 const ModelSelectLive = ({
     onUseManual,
@@ -376,19 +424,41 @@ const ModelSelectLive = ({
 }) => {
     const form = useFormContext<EditKeyForm>();
     const provider = form.watch("provider");
+    const isBedrock = provider === "amazon_bedrock";
     const typedKeyRaw = (form.watch("apiKey") ?? "").trim();
     const typedBaseURL = (form.watch("baseURL") ?? undefined) || undefined;
     const typedKey = useDebouncedValue(typedKeyRaw, 700);
     const hasKey = typedKey.length > 0;
 
+    const typedAwsBearerRaw = (form.watch("awsBearerToken") ?? "").trim();
+    const typedAwsAccessKeyIdRaw = (
+        form.watch("awsAccessKeyId") ?? ""
+    ).trim();
+    const typedAwsSecretRaw = (form.watch("awsSecretAccessKey") ?? "").trim();
+    const typedAwsRegionRaw = (form.watch("awsRegion") ?? "").trim();
+    const typedAwsBearer = useDebouncedValue(typedAwsBearerRaw, 700);
+    const typedAwsAccessKeyId = useDebouncedValue(typedAwsAccessKeyIdRaw, 700);
+    const typedAwsSecret = useDebouncedValue(typedAwsSecretRaw, 700);
+    const typedAwsRegion = useDebouncedValue(typedAwsRegionRaw, 700);
+    const hasAwsBearer = isBedrock && typedAwsBearer.length > 0;
+    // IAM creds can't drive a live call, but typing them should still surface
+    // the curated fallback the backend already returns for a keyless request —
+    // the pre-regression behavior for this auth path.
+    const hasAwsIam =
+        isBedrock &&
+        typedAwsAccessKeyId.length > 0 &&
+        typedAwsSecret.length > 0;
+
     // List live when we have SOMETHING to authenticate with: a typed key, or a
     // stored credential the server resolves on its own. Else prompt for the key.
-    const enabled = hasKey || credentialStored;
+    const enabled = hasKey || hasAwsBearer || hasAwsIam || credentialStored;
 
     const { data, isFetching, isError } = useLLMProviderModelsPreview({
         provider,
         apiKey: hasKey ? typedKey : undefined,
         baseURL: typedBaseURL,
+        awsBearerToken: hasAwsBearer ? typedAwsBearer : undefined,
+        awsRegion: isBedrock ? typedAwsRegion || undefined : undefined,
         enabled,
     });
 

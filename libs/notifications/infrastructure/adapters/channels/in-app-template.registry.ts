@@ -145,6 +145,23 @@ export const IN_APP_TEMPLATE_REGISTRY: Partial<
         body: `Your ${m.provider ?? 'BYOK'} model returned ${m.errorCount ?? 0} errors in the recent window. Reviews may be impacted. Latest error: ${m.sampleError ?? 'n/a'}.`,
     }),
 
+    [NotificationEvent.CREDITS_PURCHASED]: (m) => ({
+        title: 'Kodus credits added',
+        body: `$${m.creditUsd ?? 0} of credits were added. Your balance is now $${m.balanceUsd ?? 0}.`,
+    }),
+
+    [NotificationEvent.CREDITS_LOW]: (m) => ({
+        title: 'Kodus credits running low',
+        body: `Your prepaid balance is $${m.balanceUsd ?? 0}, below the $${m.thresholdUsd ?? 0} threshold. Top up to keep reviews running on Kodus-routed models.`,
+        ctaUrl: m.topUpUrl as string | undefined,
+    }),
+
+    [NotificationEvent.CREDITS_EXHAUSTED]: (m) => ({
+        title: 'Kodus credits exhausted',
+        body: `Your prepaid balance is $${m.balanceUsd ?? 0}. Reviews on Kodus-routed models are paused until you top up (or connect your own AI key).`,
+        ctaUrl: m.topUpUrl as string | undefined,
+    }),
+
     [NotificationEvent.SPEND_LIMIT_THRESHOLD_REACHED]: (m) => ({
         title: `BYOK spend at ${m.percentage ?? 0}% of your monthly limit`,
         body: `Your BYOK model spend this month is $${m.spentUsd ?? 0} of your $${m.monthlyLimitUsd ?? 0} limit (${m.percentage ?? 0}%). This is an alert only — reviews keep running. Set a hard cap with your model provider to actually stop spend.`,

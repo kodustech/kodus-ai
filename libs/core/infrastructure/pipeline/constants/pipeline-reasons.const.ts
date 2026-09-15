@@ -75,6 +75,10 @@ export const PipelineReasons = {
             message: 'Trial Reviews Used Up',
             action: 'Connect your own AI key to keep reviewing (unlimited, any plan)',
         } as PipelineReason,
+        CREDITS_EXHAUSTED: {
+            message: 'Kodus Credits Exhausted',
+            action: 'Top up your Kodus credits (or connect your own AI key) to keep reviewing',
+        } as PipelineReason,
         LICENSE_UNAVAILABLE: {
             message: 'Subscription Check Unavailable',
             action: 'The license service is temporarily unreachable — re-run the review in a few minutes',

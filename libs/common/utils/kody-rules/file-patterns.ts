@@ -217,13 +217,17 @@ export function splitRulePathGlobs(rulePath: string): string[] {
             bracketDepth === 0 &&
             parenDepth === 0
         ) {
-            if (current.trim()) globs.push(current.trim());
+            if (current.trim()) {
+                globs.push(current.trim());
+            }
             current = '';
             continue;
         }
         current += char;
     }
-    if (current.trim()) globs.push(current.trim());
+    if (current.trim()) {
+        globs.push(current.trim());
+    }
 
     return globs;
 }
@@ -237,10 +241,14 @@ export function splitRulePathGlobs(rulePath: string): string[] {
 export function pathMatchesIdeRuleDir(
     candidatePath: string | null | undefined,
 ): boolean {
-    if (!candidatePath) return false;
+    if (!candidatePath) {
+        return false;
+    }
     // Comma-separated list (KodyRules supports OR-joined globs)
     const globs = splitRulePathGlobs(candidatePath);
-    if (globs.length === 0) return false;
+    if (globs.length === 0) {
+        return false;
+    }
 
     return globs.some((glob) => {
         // The glob is "IDE-y" if its fixed prefix is one of the markers
@@ -251,7 +259,9 @@ export function pathMatchesIdeRuleDir(
         const dir = fixedPrefix.endsWith('/')
             ? fixedPrefix.slice(0, -1)
             : path.posix.dirname(fixedPrefix);
-        if (!dir || dir === '.') return false;
+        if (!dir || dir === '.') {
+            return false;
+        }
         return IDE_RULE_DIR_MARKERS.some(
             (marker) => dir === marker || dir.endsWith('/' + marker),
         );
@@ -381,10 +391,56 @@ export function fileMatchesRulePath(
     filePath: string,
     pattern: string,
 ): boolean {
-    if (filePath === pattern) return true;
+    if (filePath === pattern) {
+        return true;
+    }
     return splitRulePathGlobs(pattern).some((glob) => {
-        if (filePath === glob) return true;
-        if (glob.endsWith('/') && filePath.startsWith(glob)) return true;
+        if (filePath === glob) {
+            return true;
+        }
+        if (glob.endsWith('/') && filePath.startsWith(glob)) {
+            return true;
+        }
         return isFileMatchingGlob(filePath, [glob]);
     });
+}
+
+/**
+ * Does a rule scoped to a set of file extensions apply to this file?
+ *
+ * The extension list is the rule's own language scope — inferred once at save
+ * from the rule's text ("Ruby does not require semicolons" → `.rb/.rake/.erb`)
+ * or set by the author. Lives here, not next to either caller, because BOTH
+ * the mechanical router (`detectorAppliesToFile`) and the semantic judge
+ * (`rulesForFile`) narrow by it, and the last time this kind of predicate was
+ * mirrored in two places the fix landed in one and the bug survived in the
+ * other (see `fileMatchesRulePath` above).
+ *
+ * Two deliberate choices:
+ *
+ * 1. SUFFIX, not last segment. `foo.spec.ts` ends in `.ts`, so a `.ts` scope
+ *    covers it — and a `.spec.ts` scope covers ONLY spec files, which is how a
+ *    rule says "not in tests". The dot is part of the compared string, so
+ *    `.js` does not match `app.mjs`.
+ * 2. An EXTENSIONLESS file (Rakefile, Gemfile, Dockerfile, Makefile, LICENSE)
+ *    always passes. We cannot tell its language, and excluding it would be a
+ *    SILENT enforcement loss: the rule would simply never fire there and
+ *    nothing downstream would notice. The scope is a cost filter, so when it
+ *    cannot decide it abstains and lets the judge rule.
+ *
+ * Nothing here enumerates a language. The shape is all that is checked, so a
+ * technology nobody anticipated works the day a rule names it.
+ */
+export function extensionScopeAppliesToFile(
+    filePath: string,
+    extensions?: string[],
+): boolean {
+    if (!extensions?.length) {
+        return true;
+    }
+    const lower = String(filePath).toLowerCase();
+    if (!/\.[^./]+$/.test(lower)) {
+        return true;
+    }
+    return extensions.some((ext) => lower.endsWith(ext));
 }

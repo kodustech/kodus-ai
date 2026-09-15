@@ -1,3 +1,4 @@
+import { extractProviderMessage } from './review-error-diagnostics';
 import {
     AgentContextWindowTooSmallError,
     AgentPromptTooLargeError,
@@ -39,6 +40,13 @@ export interface ClassifiedErrorInfo {
     httpStatus?: number;
     /** Short, human-readable message safe to surface to the end user. */
     friendlyMessage: string;
+    /**
+     * The provider's OWN sentence, already redacted and capped for a public
+     * comment. Carried separately from `friendlyMessage` because the two answer
+     * different questions — ours says what to do, theirs says what happened —
+     * and dropping theirs is what left a failed review with nothing to act on.
+     */
+    providerMessage?: string;
 }
 
 const CLASSIFICATION_KEY = Symbol('reviewErrorClassification');
@@ -98,7 +106,8 @@ export function classifyLLMError(
     // detail (e.g. Vertex's "your project does not have access to it") lives
     // in the upstream `responseBody`/`data`. Classifying on `message` alone
     // misses it and mislabels access-denied as a plain model-not-found.
-    const lower = extractErrorText(err).toLowerCase() || rawMessage.toLowerCase();
+    const lower =
+        extractErrorText(err).toLowerCase() || rawMessage.toLowerCase();
     const httpStatus = extractHttpStatus(err);
 
     let category = matchByHttpStatus(httpStatus, lower);
@@ -119,7 +128,8 @@ export function classifyLLMError(
         friendlyMessage:
             category === LlmErrorCategory.CONTEXT_OVERFLOW
                 ? buildContextOverflowMessage(err, provider)
-                : buildFriendlyMessage(category, provider),
+                : buildFriendlyMessage(category, provider, lower),
+        providerMessage: extractProviderMessage(err),
     };
 }
 
@@ -189,7 +199,9 @@ export function isTerminalCategory(category: LlmErrorCategory): boolean {
  * `error`. Pure — safe to call in any catch block.
  */
 export function llmErrorLogLevel(err: unknown): 'warn' | 'error' {
-    return isTerminalCategory(classifyLLMError(err).category) ? 'warn' : 'error';
+    return isTerminalCategory(classifyLLMError(err).category)
+        ? 'warn'
+        : 'error';
 }
 
 /**
@@ -377,11 +389,45 @@ function matchByMessage(lower: string): LlmErrorCategory {
     return LlmErrorCategory.UNKNOWN;
 }
 
+/**
+ * A 404 that is about ROUTING, not about the model id.
+ *
+ * Aggregators (OpenRouter today) answer a perfectly valid model with a 404 when
+ * the account's allowed-providers list has no overlap with the upstreams serving
+ * it. The status is identical to "no such model"; only the body distinguishes
+ * them, so the body is what has to be read.
+ */
+function isRoutingRefusal(providerText?: string): boolean {
+    const said = (providerText ?? '').toLowerCase();
+    if (!said) return false;
+    return (
+        said.includes('allowed-providers') ||
+        said.includes('allowed providers') ||
+        (said.includes('no allowed') && said.includes('provider'))
+    );
+}
+
 function buildFriendlyMessage(
     category: LlmErrorCategory,
     provider?: string,
+    providerText?: string,
 ): string {
     const providerLabel = provider ? ` (${provider})` : '';
+
+    // A 404 can mean the model id is wrong, or that the model is fine and there
+    // is simply nowhere to send it. Aggregators separate those, and telling them
+    // apart is the difference between a fix and a wild goose chase: a customer
+    // spent a day rewriting a model name and regenerating keys because we said
+    // "verify the model name" while OpenRouter had replied that their account's
+    // allowed-providers setting permitted no upstream serving that model. The
+    // name was right. The key was right. Only the routing was closed.
+    if (
+        category === LlmErrorCategory.MODEL_NOT_FOUND &&
+        isRoutingRefusal(providerText)
+    ) {
+        return `The model is fine, but your provider account${providerLabel} allows no upstream that serves it, so the request has nowhere to route. Allow one of the providers that serves this model, or pick a model your current ones serve.`;
+    }
+
     switch (category) {
         case LlmErrorCategory.AUTH_INVALID:
             return `The configured API key${providerLabel} appears invalid or lacks permission. Check the key in your settings.`;

@@ -1096,3 +1096,145 @@ describe('KodyRulesSyncService.getRuleId — result envelope parser (A rows)', (
         expect(getRuleId(input as any)).toBeUndefined();
     });
 });
+
+/**
+ * Guards the "every record, not just the first" contract of the
+ * sourcePath-scoped delete/depin passes. A sourcePath can carry several
+ * records (duplicates from concurrent syncs — observed live: two identical
+ * rules from one merge). `Array.find` soft-deleted ONE of them and left the
+ * survivor ACTIVE for a file that no longer existed; the same `.find` served
+ * the @kody-ignore path, so a marker added to an already-imported file left
+ * survivors too.
+ */
+describe('KodyRulesSyncService — deleteRuleBySourcePath / depinRuleBySourcePath', () => {
+    const ORG = { organizationId: 'org-1', teamId: 'team-1' };
+    const PATH = '.kody/rules/x.md';
+
+    const makeService = (rules: any[]) => {
+        const kodyRulesService = {
+            findByOrganizationId: jest
+                .fn()
+                .mockResolvedValue({ uuid: 'doc-1', rules }),
+            createOrUpdate: jest.fn().mockResolvedValue({}),
+        };
+        const deps: any[] = new Array(KodyRulesSyncService.length).fill({});
+        deps[0] = kodyRulesService;
+        const service = new (KodyRulesSyncService as any)(...deps);
+        return { service, kodyRulesService };
+    };
+
+    const rule = (uuid: string, extra: Record<string, unknown> = {}) => ({
+        uuid,
+        repositoryId: 'repo-1',
+        sourcePath: PATH,
+        status: KodyRulesStatus.ACTIVE,
+        ...extra,
+    });
+
+    const writtenDtos = (kodyRulesService: { createOrUpdate: jest.Mock }) =>
+        kodyRulesService.createOrUpdate.mock.calls.map(
+            ([, dto]: [unknown, any]) => dto,
+        );
+
+    it('soft-deletes EVERY live record for (repositoryId, sourcePath), not just the first', async () => {
+        const { service, kodyRulesService } = makeService([
+            rule('dup-1'),
+            rule('dup-2', { status: KodyRulesStatus.PAUSED }),
+            // Multi-rule files carry an anchor after '#': still the same file.
+            rule('dup-3', { sourcePath: `${PATH}#anchor` }),
+            rule('other-repo', { repositoryId: 'repo-2' }),
+            rule('other-path', { sourcePath: '.kody/rules/y.md' }),
+        ]);
+
+        await service.deleteRuleBySourcePath({
+            organizationAndTeamData: ORG,
+            repositoryId: 'repo-1',
+            sourcePath: PATH,
+        });
+
+        const written = writtenDtos(kodyRulesService);
+        expect(written.map((d) => d.uuid).sort()).toEqual([
+            'dup-1',
+            'dup-2',
+            'dup-3',
+        ]);
+        expect(written.every((d) => d.status === KodyRulesStatus.DELETED)).toBe(
+            true,
+        );
+    });
+
+    it('skips records that are already DELETED (no redundant writes)', async () => {
+        const { service, kodyRulesService } = makeService([
+            rule('gone', { status: KodyRulesStatus.DELETED }),
+            rule('live'),
+        ]);
+
+        await service.deleteRuleBySourcePath({
+            organizationAndTeamData: ORG,
+            repositoryId: 'repo-1',
+            sourcePath: PATH,
+        });
+
+        expect(writtenDtos(kodyRulesService).map((d) => d.uuid)).toEqual([
+            'live',
+        ]);
+    });
+
+    it('keeps going when one record fails to write — the rest still end DELETED', async () => {
+        const { service, kodyRulesService } = makeService([
+            rule('boom'),
+            rule('ok'),
+        ]);
+        kodyRulesService.createOrUpdate
+            .mockRejectedValueOnce(new Error('write failed'))
+            .mockResolvedValue({});
+
+        await service.deleteRuleBySourcePath({
+            organizationAndTeamData: ORG,
+            repositoryId: 'repo-1',
+            sourcePath: PATH,
+        });
+
+        expect(writtenDtos(kodyRulesService).map((d) => d.uuid)).toEqual([
+            'boom',
+            'ok',
+        ]);
+    });
+
+    it('is a no-op when nothing matches', async () => {
+        const { service, kodyRulesService } = makeService([
+            rule('other-path', { sourcePath: '.kody/rules/y.md' }),
+        ]);
+
+        await service.deleteRuleBySourcePath({
+            organizationAndTeamData: ORG,
+            repositoryId: 'repo-1',
+            sourcePath: PATH,
+        });
+
+        expect(kodyRulesService.createOrUpdate).not.toHaveBeenCalled();
+    });
+
+    it('depins EVERY pinned record for the path, even when the first match is unpinned', async () => {
+        const { service, kodyRulesService } = makeService([
+            // The old `.find` hit this one first and returned early.
+            rule('unpinned', { pinnedSync: false }),
+            rule('pinned-1', { pinnedSync: true }),
+            rule('pinned-2', { pinnedSync: true }),
+            rule('other-repo-pinned', { repositoryId: 'repo-2', pinnedSync: true }),
+        ]);
+
+        await service.depinRuleBySourcePath({
+            organizationAndTeamData: ORG,
+            repositoryId: 'repo-1',
+            sourcePath: PATH,
+        });
+
+        const written = writtenDtos(kodyRulesService);
+        expect(written.map((d) => d.uuid).sort()).toEqual([
+            'pinned-1',
+            'pinned-2',
+        ]);
+        expect(written.every((d) => d.pinnedSync === false)).toBe(true);
+    });
+});

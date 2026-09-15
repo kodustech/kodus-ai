@@ -398,3 +398,10 @@ describe('describeLLMConfigStatus — effective config projection', () => {
         expect(describeLLMConfigStatus(config).models[0].baseUrl).toBeUndefined();
     });
 });
+
+describe('isByokSlotConfigured — platform-funded (`kodus`) needs no material', () => {
+    it('answers true with no apiKey (Kodus routes with its own upstream key)', () => {
+        expect(isByokSlotConfigured({ provider: BYOKProvider.KODUS })).toBe(true);
+        expect(isByokSlotConfigured({ provider: BYOKProvider.KODUS, apiKey: '' })).toBe(true);
+    });
+});

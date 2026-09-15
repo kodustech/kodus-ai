@@ -1,5 +1,4 @@
 import { AIEngineModule } from '@libs/ai-engine/modules/ai-engine.module';
-import { CodeAnalysisOrchestrator } from '@libs/ee/codeBase/codeAnalysisOrchestrator.service';
 import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
 import { forwardRef, Module } from '@nestjs/common';
 
@@ -9,14 +8,6 @@ import { PullRequestsModule } from '@libs/code-review/modules/pull-requests.modu
 import { CodeReviewPipelineModule } from '@libs/code-review/pipeline/code-review-pipeline.module';
 import { TokenChunkingModule } from '@libs/core/infrastructure/services/tokenChunking/tokenChunking.module';
 import CodeBaseConfigService from '@libs/ee/codeBase/codeBaseConfig.service';
-import {
-    KODY_RULES_ANALYSIS_SERVICE_TOKEN,
-    KodyRulesAnalysisService,
-} from '@libs/ee/codeBase/kodyRulesAnalysis.service';
-import {
-    KODY_RULES_PR_LEVEL_ANALYSIS_SERVICE_TOKEN,
-    KodyRulesPrLevelAnalysisService,
-} from '@libs/ee/codeBase/kodyRulesPrLevelAnalysis.service';
 import { FileReviewModule } from '@libs/ee/codeReview/fileReviewContextPreparation/fileReview.module';
 import { LicenseModule } from '@libs/ee/license/license.module';
 import { PermissionValidationModule } from '@libs/ee/shared/permission-validation.module';
@@ -103,18 +94,9 @@ import { DocumentationContextModule } from './documentation-context.module';
             useClass: CommentManagerService,
         },
         {
-            provide: KODY_RULES_ANALYSIS_SERVICE_TOKEN,
-            useClass: KodyRulesAnalysisService,
-        },
-        {
-            provide: KODY_RULES_PR_LEVEL_ANALYSIS_SERVICE_TOKEN,
-            useClass: KodyRulesPrLevelAnalysisService,
-        },
-        {
             provide: SUGGESTION_SERVICE_TOKEN,
             useClass: SuggestionService,
         },
-        CodeAnalysisOrchestrator,
         CodeReviewHandlerService,
         KodyFineTuningService,
         CommentAnalysisService,
@@ -128,11 +110,8 @@ import { DocumentationContextModule } from './documentation-context.module';
         LLM_ANALYSIS_SERVICE_TOKEN,
         COMMENT_MANAGER_SERVICE_TOKEN,
         CODE_BASE_CONFIG_SERVICE_TOKEN,
-        KODY_RULES_ANALYSIS_SERVICE_TOKEN,
-        KODY_RULES_PR_LEVEL_ANALYSIS_SERVICE_TOKEN,
         SUGGESTION_SERVICE_TOKEN,
         SandboxModule,
-        CodeAnalysisOrchestrator,
         KodyFineTuningService,
         CodeReviewHandlerService,
         CommentAnalysisService,

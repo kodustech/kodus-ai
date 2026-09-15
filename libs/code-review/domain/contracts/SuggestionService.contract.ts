@@ -41,15 +41,6 @@ export interface ISuggestionService {
         prNumber?: number,
     ): Promise<any>;
 
-    /**
-     * Removes suggestions related to files that already have saved suggestions
-     */
-    removeSuggestionsRelatedToSavedFiles(
-        organizationAndTeamData: OrganizationAndTeamData,
-        prNumber: string,
-        savedSuggestions: Partial<CodeSuggestion>[],
-        newSuggestions: Partial<CodeSuggestion>[],
-    ): Promise<Partial<CodeSuggestion>[]>;
 
     /**
      * Filters suggestions by review options configured by the user

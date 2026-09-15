@@ -9,6 +9,10 @@ jest.mock('@libs/common/utils/crypto', () => ({
 function build(opts: {
     configValue: unknown;
     catalog?: Array<{ id: string; name: string }> | Error;
+    /** Whether producing the catalog used the org's key. Live listings do;
+     *  static and curated-fallback lists do not, and a hit from those must not
+     *  stand in for a real probe. Defaults to a live listing. */
+    exercisedCredential?: boolean;
 }) {
     const orgParams = {
         findByKey: jest.fn().mockResolvedValue(
@@ -21,7 +25,14 @@ function build(opts: {
     const getModels = {
         execute: jest.fn(async () => {
             if (opts.catalog instanceof Error) throw opts.catalog;
-            return { models: opts.catalog ?? [] };
+            // A LIVE listing by default: these cases are about the catalog fast
+            // path, which only applies when producing the list authenticated.
+            // The curated/static case has its own suite, where a hit must fall
+            // through to a real probe because the key was never used.
+            return {
+                models: opts.catalog ?? [],
+                exercisedCredential: opts.exercisedCredential ?? true,
+            };
         }),
     } as any;
     return {
@@ -119,7 +130,8 @@ describe('TestByokModelUseCase', () => {
             model: 'some-model',
             organizationAndTeamData: org,
         });
-        expect(connectionUseCase.execute).toHaveBeenCalledWith(
+        // The probe now also receives the org id (alpha gate); assert on the input.
+        expect((connectionUseCase.execute as jest.Mock).mock.calls[0][0]).toEqual(
             expect.objectContaining({
                 provider: 'anthropic_compatible',
                 model: 'some-model',
@@ -154,7 +166,8 @@ describe('TestByokModelUseCase', () => {
             awsRegion: 'eu-west-1', // differs from the stored us-east-1
         });
         // Catalog shortcut skipped → a real probe ran against the NEW region.
-        expect(connectionUseCase.execute).toHaveBeenCalledWith(
+        // The probe now also receives the org id (alpha gate); assert on the input.
+        expect((connectionUseCase.execute as jest.Mock).mock.calls[0][0]).toEqual(
             expect.objectContaining({ awsRegion: 'eu-west-1' }),
         );
     });
@@ -187,7 +200,8 @@ describe('TestByokModelUseCase', () => {
             organizationAndTeamData: org,
             baseURL: 'https://evil.example/v1',
         } as any);
-        expect(connectionUseCase.execute).toHaveBeenCalledWith(
+        // The probe now also receives the org id (alpha gate); assert on the input.
+        expect((connectionUseCase.execute as jest.Mock).mock.calls[0][0]).toEqual(
             expect.objectContaining({
                 apiKey: 'dec:enc',
                 baseURL: 'https://api.moonshot.ai/v1',
@@ -238,7 +252,8 @@ describe('TestByokModelUseCase', () => {
             model: 'kimi-k2.7-code',
             organizationAndTeamData: org,
         });
-        expect(connectionUseCase.execute).toHaveBeenCalledWith(
+        // The probe now also receives the org id (alpha gate); assert on the input.
+        expect((connectionUseCase.execute as jest.Mock).mock.calls[0][0]).toEqual(
             expect.objectContaining({
                 provider: 'moonshot',
                 model: 'kimi-k2.7-code',

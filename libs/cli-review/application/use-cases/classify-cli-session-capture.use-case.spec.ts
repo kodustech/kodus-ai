@@ -70,11 +70,15 @@ const observabilityService = {
 } as any;
 
 const cliSessionCaptureRepository = {} as any;
+const mockPermissionValidationService = {
+    resolveTaskSlot: jest.fn().mockResolvedValue(undefined),
+} as any;
 
 function buildUseCase(): ClassifyCliSessionCaptureUseCase {
     return new ClassifyCliSessionCaptureUseCase(
         cliSessionCaptureRepository,
         observabilityService,
+        mockPermissionValidationService,
     );
 }
 
@@ -172,12 +176,18 @@ describe('ClassifyCliSessionCaptureUseCase.extractWithLLM — migration parity (
  */
 describe('ClassifyCliSessionCaptureUseCase — LLM.run I/O contract matrix', () => {
     let runSpy: jest.SpyInstance;
+    const matrixPermissionValidationService = {
+        resolveTaskSlot: jest.fn(),
+    } as any;
 
     beforeEach(() => {
         jest.clearAllMocks();
         // Fully replace the boundary: the executor/tracer are bypassed so each
         // test controls exactly what LLM.run returns or throws.
         runSpy = jest.spyOn(LLM as any, 'run');
+        matrixPermissionValidationService.resolveTaskSlot.mockResolvedValue(
+            undefined,
+        );
     });
 
     afterEach(() => {
@@ -207,7 +217,11 @@ describe('ClassifyCliSessionCaptureUseCase — LLM.run I/O contract matrix', () 
     };
 
     function useCase(): ClassifyCliSessionCaptureUseCase {
-        return new ClassifyCliSessionCaptureUseCase({} as any, {} as any);
+        return new ClassifyCliSessionCaptureUseCase(
+            {} as any,
+            {} as any,
+            matrixPermissionValidationService,
+        );
     }
 
     // The seven keys the mapping is contracted to always emit.
@@ -552,7 +566,11 @@ describe('ClassifyCliSessionCaptureUseCase — LLM.run I/O contract matrix', () 
         };
 
         function build(repo: any) {
-            return new ClassifyCliSessionCaptureUseCase(repo, {} as any);
+            return new ClassifyCliSessionCaptureUseCase(
+                repo,
+                {} as any,
+                matrixPermissionValidationService,
+            );
         }
 
         it('Row 1 (pipeline) — valid decisions → markCompleted origin "llm"', async () => {

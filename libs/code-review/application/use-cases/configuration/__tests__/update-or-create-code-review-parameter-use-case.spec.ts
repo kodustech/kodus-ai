@@ -95,6 +95,79 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
         );
     });
 
+    it('creates global config when the org has no repositories connected (integration config returns null)', async () => {
+        const createOrUpdateParametersUseCase = {
+            execute: jest.fn().mockResolvedValue(true),
+        };
+
+        const useCase = new UpdateOrCreateCodeReviewParameterUseCase(
+            {
+                findByKey: jest.fn().mockResolvedValue(null),
+            } as any,
+            createOrUpdateParametersUseCase as any,
+            {
+                findIntegrationConfigFormatted: jest
+                    .fn()
+                    .mockResolvedValue(null),
+            } as any,
+            {
+                emit: jest.fn(),
+            } as any,
+            {
+                ensure: jest.fn(),
+            } as any,
+            {
+                detectAndSaveReferences: jest.fn(),
+            } as any,
+            {
+                buildConfigKey: jest.fn().mockReturnValue('config-key'),
+            } as any,
+            buildCentralizedConfigPrServiceMock() as any,
+            { find: jest.fn().mockResolvedValue([]) } as any,
+            {
+                getBYOKConfig: jest.fn(),
+                getSubscriptionStatus: jest.fn(),
+            } as any,
+            { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            {
+                validateOrganizationLicense: jest.fn().mockResolvedValue({
+                    valid: true,
+                    subscriptionStatus: 'active',
+                    planType: 'teams_byok',
+                }),
+            } as any,
+        );
+
+        await useCase.execute({
+            actor: {
+                source: 'web',
+                organizationId: 'org-1',
+                userId: 'kody',
+                userEmail: 'kody@kodus.io',
+            },
+            configValue: {},
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            skipAuthorization: true,
+        } as any);
+
+        expect(createOrUpdateParametersUseCase.execute).toHaveBeenCalledWith(
+            'code_review_config',
+            expect.objectContaining({
+                id: 'global',
+                name: 'Global',
+                isSelected: true,
+                repositories: [],
+            }),
+            {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+        );
+    });
+
     it('creates repository settings without request.user when invoked by CLI', async () => {
         const createOrUpdateParametersUseCase = {
             execute: jest.fn().mockResolvedValue(true),
