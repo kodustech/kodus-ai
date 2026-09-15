@@ -12,6 +12,7 @@ import {
     CoinsIcon,
     LinkIcon,
     PencilIcon,
+    TagIcon,
     ThermometerIcon,
     TrashIcon,
 } from "lucide-react";
@@ -28,6 +29,16 @@ import type {
 import { TASK_LABELS } from "../_utils";
 import { DeleteRejectionAlert, useDeleteModel } from "./delete-model-flow";
 import { ProviderLogo } from "./provider-logo";
+
+export type CatalogPricing = {
+    inputPerMillion: number;
+    outputPerMillion: number;
+    cacheReadPerMillion?: number;
+    cacheWritePerMillion?: number;
+};
+
+const perMillion = (n: number) =>
+    `$${n.toLocaleString("en-US", { maximumFractionDigits: 3 })}`;
 
 const formatThinking = (effort?: ReasoningEffort): string | null => {
     if (!effort || effort === "none") return null;
@@ -101,6 +112,7 @@ export function ModelRow({
     onEdit,
     onDeleted,
     onOpenRouting,
+    catalog,
 }: {
     model: BYOKModelConfig;
     config?: BYOKConfig | null;
@@ -111,8 +123,11 @@ export function ModelRow({
     onDeleted?: () => void;
     /** Deep-link a "Used in" chip to its row on the Routing tab. */
     onOpenRouting?: (anchor: string) => void;
+    /** Catalog entry for this model id (Kodus provider): the curated name and
+     *  the list price the org is billed at. Absent for other providers. */
+    catalog?: { name: string; pricing?: CatalogPricing };
 }) {
-    const displayName = formatModelLabel(model.model);
+    const displayName = catalog?.name ?? formatModelLabel(model.model);
     const thinking = formatThinking(model.reasoningEffort);
 
     const credential = (config?.credentials ?? []).find(
@@ -174,6 +189,27 @@ export function ModelRow({
                                     <span className="flex items-center gap-1.5">
                                         <BrainCircuitIcon size={12} /> Thinking:{" "}
                                         {thinking}
+                                    </span>
+                                )}
+                                {catalog?.pricing && (
+                                    <span
+                                        className="flex items-center gap-1.5 tabular-nums"
+                                        title="List price you are billed at, per 1M tokens"
+                                        data-testid="kodus-model-tariff">
+                                        <TagIcon size={12} />
+                                        {perMillion(
+                                            catalog.pricing.inputPerMillion,
+                                        )}{" "}
+                                        in ·{" "}
+                                        {perMillion(
+                                            catalog.pricing.outputPerMillion,
+                                        )}{" "}
+                                        out
+                                        {typeof catalog.pricing
+                                            .cacheReadPerMillion === "number"
+                                            ? ` · ${perMillion(catalog.pricing.cacheReadPerMillion)} cached`
+                                            : ""}{" "}
+                                        / 1M tokens
                                     </span>
                                 )}
                                 {model.temperature != null && (

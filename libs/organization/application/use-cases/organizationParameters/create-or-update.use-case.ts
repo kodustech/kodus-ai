@@ -7,6 +7,13 @@ import {
 } from '@libs/llm/byok-config';
 import { validateByokConfigRefs } from '@libs/llm/validate-byok-config-refs';
 import { BYOKProvider } from '@libs/llm/model-providers';
+import { isPlatformFundedProvider } from '@libs/llm/platform-funded-provider';
+import { isProviderAvailableHere } from '@libs/core/infrastructure/services/providers/kodus-provider-availability';
+import {
+    KODUS_PROVIDER_GATE_TOKEN,
+    KODUS_PROVIDER_NOT_ENABLED_MESSAGE,
+    KodusProviderGate,
+} from '@libs/core/infrastructure/services/providers/kodus-provider-gate.service';
 import { assertSafeOpenAICompatibleUrl } from './test-byok-connection.use-case';
 import { describeProtocolMismatch } from '@libs/llm/base-url-hygiene';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
@@ -23,6 +30,7 @@ import {
     HttpException,
     Inject,
     Injectable,
+    Optional,
 } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -51,6 +59,10 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
 
         private readonly eventEmitter: EventEmitter2,
         private readonly telemetry: TelemetryService,
+        // Last, so positional construction in specs stays valid.
+        @Optional()
+        @Inject(KODUS_PROVIDER_GATE_TOKEN)
+        private readonly kodusGate?: KodusProviderGate,
     ) {}
 
     async execute(
@@ -179,6 +191,11 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
             // new one is still validated in full, so nothing can slip in.
             await this.assertSafeByokBaseURLs(
                 configValue,
+                isByokConfig(existingConfig) ? existingConfig : undefined,
+            );
+            // Private alpha: a new `kodus` credential needs the org on the flag.
+            await this.assertKodusProviderAllowed(
+                configValue as BYOKConfig,
                 isByokConfig(existingConfig) ? existingConfig : undefined,
             );
         }
@@ -349,6 +366,37 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
     }
 
     /**
+     * Private alpha: a NEW `kodus` credential may only be persisted by an org
+     * the gate allows. A credential the org already has keeps saving (so an
+     * org that loses the flag can still edit its other providers); the
+     * runtime keeps routing existing slots regardless.
+     */
+    private async assertKodusProviderAllowed(
+        next: BYOKConfig,
+        existing?: BYOKConfig,
+    ): Promise<void> {
+        const alreadyConnected = (existing?.credentials ?? []).some((c) =>
+            isPlatformFundedProvider(c?.provider),
+        );
+        const wantsKodus = (next?.credentials ?? []).some(
+            (c) => !c?.managed && isPlatformFundedProvider(c?.provider),
+        );
+        // Connecting the provider is what the alpha gates; an org that has it
+        // connected keeps saving its config (and there is only ever one Kodus
+        // credential per org — the connect flow reuses it).
+        if (!wantsKodus || alreadyConnected) return;
+        const organizationId = this.request?.user?.organization?.uuid;
+        if (!(await this.kodusGate?.isEnabledFor(organizationId))) {
+            this.logger.warn({
+                message: 'Refused to connect the Kodus provider: org outside the private alpha',
+                context: CreateOrUpdateOrganizationParametersUseCase.name,
+                metadata: { organizationId, provider: 'kodus' },
+            });
+            throw new BadRequestException(KODUS_PROVIDER_NOT_ENABLED_MESSAGE);
+        }
+    }
+
+    /**
      * v2 encrypt/keep. For each incoming credential, encrypt/keep its secret
      * fields against the matching prior credential (matched by `id`, else by
      * `provider`): a blank/empty field keeps the prior ciphertext, a real value
@@ -471,6 +519,17 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
      */
     private validateCredentialAuth(cred: BYOKCredential): void {
         if (cred?.managed) {
+            return;
+        }
+        // Platform-funded (`kodus`): no secret by design — Kodus's own upstream
+        // key is read at build time. Cloud-only, so a self-hosted save of one
+        // is refused here rather than persisted as a credential nothing can run.
+        if (isPlatformFundedProvider(cred?.provider)) {
+            if (!isProviderAvailableHere(cred.provider)) {
+                throw new BadRequestException(
+                    'The Kodus provider is only available on Kodus Cloud',
+                );
+            }
             return;
         }
         const has = (v: unknown): boolean =>

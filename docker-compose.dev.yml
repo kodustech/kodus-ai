@@ -302,7 +302,11 @@ services:
         deploy:
             resources:
                 limits:
-                    memory: 1G
+                    # 2G: `nest build webhooks --watch` (webpack) on top of the
+                    # startup migrations was OOM-killed at 1G (exit 137) on a
+                    # remote dev VM — twice — and a dead webhooks service means
+                    # no PR review ever starts, which looks like a product bug.
+                    memory: 2G
                 reservations:
                     memory: 256M
         healthcheck:

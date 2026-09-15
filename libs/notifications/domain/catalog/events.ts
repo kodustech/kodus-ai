@@ -47,6 +47,11 @@ export enum NotificationEvent {
     SPEND_LIMIT_THRESHOLD_REACHED = 'spend_limit.threshold_reached',
     SPEND_LIMIT_EXCEEDED_FINAL = 'spend_limit.exceeded_final',
 
+    // ── Prepaid credits (Kodus as the provider) ────────────────
+    CREDITS_PURCHASED = 'credits.purchased',
+    CREDITS_LOW = 'credits.low',
+    CREDITS_EXHAUSTED = 'credits.exhausted',
+
     // ── Kody Rules (continued) ─────────────────────────────────
     RULE_FILE_REFERENCES_INVALID = 'rule.file_references_invalid',
 
@@ -203,6 +208,24 @@ export interface NotificationPayloadMap {
         monthlyLimitUsd: number;
         spentUsd: number;
         periodKey: string;
+    };
+
+    // ── Prepaid credits (Kodus as the provider) ────────────────
+
+    [NotificationEvent.CREDITS_PURCHASED]: {
+        creditUsd: number;
+        balanceUsd: number;
+    };
+
+    [NotificationEvent.CREDITS_LOW]: {
+        balanceUsd: number;
+        thresholdUsd: number;
+        topUpUrl?: string;
+    };
+
+    [NotificationEvent.CREDITS_EXHAUSTED]: {
+        balanceUsd: number;
+        topUpUrl?: string;
     };
 
     // ── Kody Rules (file reference validation) ────────────────

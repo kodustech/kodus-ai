@@ -67,6 +67,7 @@ describe('OrganizationParametersController.testByokConnection — body passthrou
                 temperature: 0.3,
                 reasoningEffort: 'high',
             }),
+            undefined,
         );
     });
 
@@ -93,6 +94,7 @@ describe('OrganizationParametersController.testByokConnection — body passthrou
                 awsSessionToken: 'session',
                 vertexLocation: 'global',
             }),
+            undefined,
         );
     });
 

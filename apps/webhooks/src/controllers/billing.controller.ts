@@ -48,6 +48,23 @@ interface PlanChangedBody {
     subscriptionStatus?: string;
 }
 
+interface CreditsPurchasedBody {
+    organizationId?: string;
+    teamId?: string;
+    creditUsd?: number;
+    balanceUsd?: number;
+}
+
+interface CreditsLowBody {
+    organizationId?: string;
+    teamId?: string;
+    balanceUsd?: number;
+    thresholdUsd?: number;
+    exhausted?: boolean;
+}
+
+const TOP_UP_URL = 'https://app.kodus.io/byok#kodus';
+
 /**
  * Receives outbound notifications from kodus-service-billing.
  *
@@ -185,6 +202,81 @@ export class BillingController {
      * body using HMAC-SHA256 with the shared secret. Constant-time
      * comparison so timing attacks can't enumerate valid bytes.
      */
+    // ── Prepaid credits ("Kodus as the provider") ────────────────────────
+
+    @Post('/credits-purchased')
+    async creditsPurchased(
+        @Req() req: WebhookRequest,
+        @Res() res: Response,
+    ): Promise<Response> {
+        const verification = this.verifySignature(req);
+        if (verification.status !== 'ok') {
+            return res.status(verification.status).send(verification.reason);
+        }
+
+        const body = req.body as CreditsPurchasedBody;
+        if (!body?.organizationId) {
+            return res
+                .status(HttpStatus.BAD_REQUEST)
+                .send('Missing organizationId');
+        }
+
+        await this.safeEmit(() =>
+            this.notificationService.emit({
+                event: NotificationEvent.CREDITS_PURCHASED,
+                payload: {
+                    creditUsd: Number(body.creditUsd ?? 0),
+                    balanceUsd: Number(body.balanceUsd ?? 0),
+                },
+                organizationId: body.organizationId,
+            }),
+        );
+
+        return res.status(HttpStatus.OK).send('ok');
+    }
+
+    /** One webhook, two events: `exhausted` (balance ≤ 0, critical, sticky
+     *  banner) vs `low` (under the threshold, informational). The billing
+     *  service fires each once per crossing, so no rate limiting here. */
+    @Post('/credits-low')
+    async creditsLow(
+        @Req() req: WebhookRequest,
+        @Res() res: Response,
+    ): Promise<Response> {
+        const verification = this.verifySignature(req);
+        if (verification.status !== 'ok') {
+            return res.status(verification.status).send(verification.reason);
+        }
+
+        const body = req.body as CreditsLowBody;
+        if (!body?.organizationId) {
+            return res
+                .status(HttpStatus.BAD_REQUEST)
+                .send('Missing organizationId');
+        }
+
+        const balanceUsd = Number(body.balanceUsd ?? 0);
+        await this.safeEmit(() =>
+            body.exhausted
+                ? this.notificationService.emit({
+                      event: NotificationEvent.CREDITS_EXHAUSTED,
+                      payload: { balanceUsd, topUpUrl: TOP_UP_URL },
+                      organizationId: body.organizationId!,
+                  })
+                : this.notificationService.emit({
+                      event: NotificationEvent.CREDITS_LOW,
+                      payload: {
+                          balanceUsd,
+                          thresholdUsd: Number(body.thresholdUsd ?? 0),
+                          topUpUrl: TOP_UP_URL,
+                      },
+                      organizationId: body.organizationId!,
+                  }),
+        );
+
+        return res.status(HttpStatus.OK).send('ok');
+    }
+
     private verifySignature(
         req: WebhookRequest,
     ): { status: 'ok' } | { status: HttpStatus; reason: string } {

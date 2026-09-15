@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { KODUS_PROVIDER_ID } from "../../../_data/platform-funded";
 import type { EditKeyForm } from "./_types";
 
 /**
@@ -38,6 +39,9 @@ export const PROVIDER_SETTING_KEYS = {
 type CredsPresent = (data: Partial<EditKeyForm>) => boolean;
 
 const CREDS_PRESENT: Record<string, CredsPresent> = {
+    // Kodus routes with ITS OWN upstream keys — there is nothing to enter, so
+    // the form is always "complete enough" to probe and save.
+    [KODUS_PROVIDER_ID]: () => true,
     amazon_bedrock: (d) =>
         !!(
             d.awsBearerToken?.trim() ||
@@ -247,6 +251,8 @@ const refineBedrock: CreateRefiner = (data, ctx) => {
 
 const CREATE_REFINERS: Record<string, CreateRefiner> = {
     amazon_bedrock: refineBedrock,
+    // Handled with no issues: a keyless credential IS the valid shape here.
+    [KODUS_PROVIDER_ID]: () => true,
 };
 
 /**

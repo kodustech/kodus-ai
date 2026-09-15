@@ -1,6 +1,7 @@
 import {
     getBYOK,
     getLLMConfigStatus,
+    getLLMProviderModels,
 } from "@services/organizationParameters/fetch";
 import {
     resolveByokModelCost,
@@ -64,6 +65,25 @@ export default async function ByokPage() {
     // wouldn't match.
     const costRangeQuery = `start=${dateRange.startDate}&end=${dateRange.endDate}`;
 
+    // The Kodus catalog carries the curated names and the list prices the org
+    // is billed at; the rows show both so the tariff is visible after saving,
+    // not only in the picker. Fetched only when a Kodus credential exists.
+    const hasKodus = (byokConfig?.credentials ?? []).some(
+        (c) => c.provider === "kodus",
+    );
+    const kodusCatalog = hasKodus
+        ? await getLLMProviderModels("kodus")
+              .then((models) =>
+                  Object.fromEntries(
+                      models.map((m) => [
+                          m.id,
+                          { name: m.name, pricing: m.pricing },
+                      ]),
+                  ),
+              )
+              .catch(() => undefined)
+        : undefined;
+
     return (
         <ByokPageClient
             config={byokConfig}
@@ -72,6 +92,7 @@ export default async function ByokPage() {
             costByModelId={costByModelId}
             periodLabel={periodLabel}
             costRangeQuery={costRangeQuery}
+            kodusCatalog={kodusCatalog}
         />
     );
 }

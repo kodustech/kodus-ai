@@ -4,6 +4,7 @@ import { EmailFrom } from '@libs/common/email/from';
 import ByokErrorsThresholdEmail, {
     byokErrorsThresholdEmailMeta,
 } from '@libs/common/email/templates/byok-errors-threshold';
+import CreditsEmail, { creditsEmailMeta } from '@libs/common/email/templates/credits';
 import SpendLimitThresholdEmail, {
     spendLimitThresholdEmailMeta,
 } from '@libs/common/email/templates/spend-limit-threshold';
@@ -127,6 +128,14 @@ export function normaliseRuleList(value: unknown): string[] {
         })
         .filter((entry): entry is string => Boolean(entry));
 }
+
+/** "$12.34" for a number-ish metadata value; "$0" when it isn't one. */
+const usdLabel = (value: unknown): string => {
+    const n = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(n)
+        ? `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        : '$0';
+};
 
 export const EMAIL_TEMPLATE_REGISTRY: Partial<
     Record<NotificationEvent, EmailTemplateBuilder>
@@ -418,6 +427,34 @@ export const EMAIL_TEMPLATE_REGISTRY: Partial<
             }),
         };
     },
+
+    [NotificationEvent.CREDITS_PURCHASED]: (metadata) => ({
+        ...creditsEmailMeta('purchased'),
+        react: CreditsEmail({
+            kind: 'purchased',
+            balanceLabel: usdLabel(metadata.balanceUsd),
+            amountLabel: usdLabel(metadata.creditUsd),
+        }),
+    }),
+
+    [NotificationEvent.CREDITS_LOW]: (metadata) => ({
+        ...creditsEmailMeta('low'),
+        react: CreditsEmail({
+            kind: 'low',
+            balanceLabel: usdLabel(metadata.balanceUsd),
+            thresholdLabel: usdLabel(metadata.thresholdUsd),
+            topUpUrl: metadata.topUpUrl as string | undefined,
+        }),
+    }),
+
+    [NotificationEvent.CREDITS_EXHAUSTED]: (metadata) => ({
+        ...creditsEmailMeta('exhausted'),
+        react: CreditsEmail({
+            kind: 'exhausted',
+            balanceLabel: usdLabel(metadata.balanceUsd),
+            topUpUrl: metadata.topUpUrl as string | undefined,
+        }),
+    }),
 
     [NotificationEvent.SPEND_LIMIT_THRESHOLD_REACHED]: (metadata) => {
         const percentage = (metadata.percentage as number) ?? 0;
