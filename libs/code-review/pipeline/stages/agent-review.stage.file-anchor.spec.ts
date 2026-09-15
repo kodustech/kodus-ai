@@ -242,3 +242,27 @@ describe('#1826 — a whole-file finding is delivered as a PR comment', () => {
         expect(result.validSuggestions ?? []).toEqual([]);
     });
 });
+
+/**
+ * A kody_rules finding with a line but no file used to fall through to
+ * file-level grouping keyed on the empty string, which never matches a
+ * real changed file and silently discarded the finding as
+ * DISCARDED_BY_CODE_DIFF. `isPrLevelSuggestion` originally required BOTH
+ * fields missing (`&&`); a missing file alone already means the finding
+ * cannot be anchored to a diff position, so it must route to
+ * validSuggestionsByPR instead.
+ */
+describe('a kody_rules finding with a line but no file goes PR-level, not discarded', () => {
+    it('is delivered as a PR-level comment instead of DISCARDED_BY_CODE_DIFF', async () => {
+        const result = await run([
+            ruleFinding({ relevantFile: undefined, relevantLinesStart: 120 }),
+        ]);
+
+        expect(result.validSuggestionsByPR).toHaveLength(1);
+        expect(
+            (result.discardedSuggestions ?? []).some(
+                (s: any) => s.brokenKodyRulesIds?.[0] === CONTEXT_RULE,
+            ),
+        ).toBe(false);
+    });
+});
