@@ -54,6 +54,9 @@ export interface IWorkflowJobRepository {
         uuids: string[];
         lastError: string;
         requeuedBy: string;
+        // Tenant traceability: logged alongside the uuids so a reclaim can be
+        // traced back to an organization in the log system.
+        organizationIds?: string[];
     }): Promise<string[]>;
     /**
      * Terminally fails reclaimed jobs whose retry budget is exhausted.
