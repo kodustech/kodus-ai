@@ -124,13 +124,15 @@ export function ProviderGroupHeader({
                         </button>
                     </CollapsibleTrigger>
 
-                    {platformFunded && (
+                    {/* Only a shortcut to the wallet below, so it earns its
+                        place only while the group is closed. Expanded, the real
+                        top-up buttons are a few pixels away and this repeated
+                        their label — two "Top up" buttons on one card, doing
+                        different things. Never primary either: the payment is
+                        down there, not here. */}
+                    {platformFunded && !open && (
                         <Button
                             size="xs"
-                            // Never primary: this only expands the group and
-                            // scrolls to the wallet below, where the actual
-                            // top-up buttons are. Two primaries on one row made
-                            // the shortcut look like the payment itself.
                             variant="helper"
                             leftIcon={<CoinsIcon />}
                             onClick={openWallet}>

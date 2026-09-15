@@ -272,14 +272,18 @@ export function ModelRow({
                                 Edit model
                             </Button>
                         )}
+                        {/* Icon-only, like every other destructive row action
+                            in the app: a labelled red "Remove" on each row pulled
+                            more attention than the edit next to it. */}
                         {onDeleted && (
                             <Button
-                                size="xs"
+                                size="icon-xs"
                                 variant="cancel"
-                                leftIcon={<TrashIcon />}
-                                className="text-danger [--button-foreground:var(--color-danger)]"
+                                aria-label="Remove model"
+                                title="Remove model"
+                                className="[--button-foreground:var(--color-danger)]"
                                 onClick={confirmAndDelete}>
-                                Remove
+                                <TrashIcon />
                             </Button>
                         )}
                     </div>

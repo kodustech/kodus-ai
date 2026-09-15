@@ -77,3 +77,36 @@ describe('greeting source', () => {
         }
     });
 });
+
+describe('Kodus provider card button hierarchy', () => {
+    it('does not repeat the Top up label while the group is open', () => {
+        const source = read(
+            'apps/web/src/features/ee/byok/_components/provider-group-header.tsx',
+        );
+
+        // The header button only scrolls to the wallet below it, so expanded
+        // it duplicated the wallet's own "Top up" with a different action.
+        expect(source).toContain('platformFunded && !open');
+        expect(source).not.toContain('variant={credits.exhausted ? "primary"');
+    });
+
+    it('keeps one primary in the wallet: the recommended pack', () => {
+        const source = read(
+            'apps/web/src/features/ee/byok/_components/credits-wallet.tsx',
+        );
+
+        expect(source).toContain('pack === primaryPack ? "primary" : "helper"');
+        // The custom-amount action recedes instead of competing, and unlike
+        // the filled variants it also recedes while disabled.
+        expect(source).not.toContain('variant="helper"\n                            disabled={!canEdit || checkingOut || !customValid}');
+    });
+
+    it('uses the app-wide icon-only form for the destructive row action', () => {
+        const source = read(
+            'apps/web/src/features/ee/byok/_components/model-row.tsx',
+        );
+
+        expect(source).toContain('aria-label="Remove model"');
+        expect(source).not.toContain('leftIcon={<TrashIcon />}');
+    });
+});

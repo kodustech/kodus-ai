@@ -270,9 +270,15 @@ export const CreditsWalletStrip = () => {
                             value={customAmount}
                             onChange={(e) => setCustomAmount(e.target.value)}
                         />
+                        {/* The escape hatch beside the packs, not a rival to
+                            them: the packs carry the weight and exactly one of
+                            them is primary. `cancel` also recedes while
+                            disabled — the filled variants brighten instead,
+                            which made an unusable button the loudest control
+                            in the row. */}
                         <Button
                             size="md"
-                            variant="helper"
+                            variant="cancel"
                             disabled={!canEdit || checkingOut || !customValid}
                             loading={
                                 pendingAmount !== null &&
