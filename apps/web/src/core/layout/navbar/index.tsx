@@ -13,6 +13,7 @@ import {
 import { useMCPAvailability } from "@services/mcp-manager/hooks";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
+import { formatUsd } from "@services/usage/format";
 import { useQueryClient } from "@tanstack/react-query";
 import {
     BlocksIcon,
@@ -25,6 +26,7 @@ import {
 import { ErrorBoundary } from "react-error-boundary";
 import { UserNav } from "src/core/layout/navbar/_components/user-nav";
 import { cn } from "src/core/utils/components";
+import { useKodusCreditBalance } from "src/features/ee/byok/_hooks/use-kodus-credit-balance";
 import { isCockpitTierAllowed } from "src/features/ee/cockpit/_helpers/tier-policy";
 import { SubscriptionBadge } from "src/features/ee/subscription/_components/subscription-badge";
 import { useSubscriptionContext } from "src/features/ee/subscription/_providers/subscription-context";
@@ -65,6 +67,7 @@ export const NavMenu = () => {
         Action.Update,
         ResourceType.OrganizationSettings,
     );
+    const credits = useKodusCreditBalance();
     const { data: isMCPAvailable = true } = useMCPAvailability(canReadPlugins);
 
     // Four destinations. Reviews folds Pull Requests + CLI Reviews (tabs on
@@ -106,13 +109,33 @@ export const NavMenu = () => {
             {
                 // Which model reviews the code and whose key pays for it —
                 // a first-order product decision, so it sits in the main nav
-                // under a name that says what it is (the page used to be
-                // reachable only as "BYOK" in the avatar menu).
-                label: "Models",
+                // instead of being reachable only from the avatar menu. The
+                // label matches the page's own title.
+                label: "AI providers",
                 icon: <SparklesIcon className="size-5" />,
-                href: "/byok",
+                href: credits.usesKodusProvider ? "/byok#kodus" : "/byok",
                 visible: canEditOrg,
                 matcher: (path) => path.startsWith("/byok"),
+                // Orgs on the Kodus provider carry their prepaid balance
+                // here, where the entry they'd click already is.
+                badge: credits.usesKodusProvider ? (
+                    <span
+                        data-testid="nav-credits"
+                        className={cn(
+                            "text-xs tabular-nums",
+                            credits.exhausted
+                                ? "text-danger"
+                                : credits.low
+                                  ? "text-warning"
+                                  : "text-text-tertiary",
+                        )}>
+                        {credits.exhausted
+                            ? "Top up"
+                            : typeof credits.balanceUsd === "number"
+                              ? formatUsd(credits.balanceUsd)
+                              : ""}
+                    </span>
+                ) : undefined,
             },
             {
                 label: "Settings",

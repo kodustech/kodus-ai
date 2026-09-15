@@ -20,7 +20,16 @@ import {
  * org, reusing the same gate+persist as the save hook.
  *
  * Idempotent (onlyMissing) so steady-state runs are cheap — only rules created
- * since the last pass do any LLM work. Distributed-lock guarded so only ONE
+ * or edited since the last pass do any LLM work.
+ *
+ * That sentence used to be false. Eligibility asked "does this rule have a
+ * detector?", and the compiler DECLINES most rules — 816 of 10.918 active rules
+ * in production carry a detector, so 92,5% are declined and never get one. Every
+ * one of them came back eligible the next night, and the night after, capped at
+ * `maxRulesPerRun` and cycling through the fleet forever, spending the
+ * customer's own BYOK budget to re-reach a verdict we already had. The rule now
+ * records the ATTEMPT (`compileAttempt`, keyed on the rule text AND examples),
+ * which is what finally makes the promise above hold. Distributed-lock guarded so only ONE
  * worker runs it (prod runs N replicas). Gated behind an env flag so an
  * operator can disable it (e.g. to avoid compile cost on a fresh cloud tenant
  * fleet before the first controlled backfill).
@@ -61,7 +70,15 @@ export class KodyRuleDetectorSweepService {
         if (!lock) return; // another replica holds it — skip
 
         const start = Date.now();
-        const totals = { orgs: 0, processed: 0, compiled: 0, errored: 0 };
+        const totals = {
+            orgs: 0,
+            processed: 0,
+            compiled: 0,
+            errored: 0,
+            // Rules skipped without a model call. On a settled fleet this is
+            // almost everything, and that is the point.
+            skipped: 0,
+        };
         let budget = this.maxRulesPerRun;
         try {
             // Projected org-id list — the per-org rules load happens inside
@@ -87,6 +104,7 @@ export class KodyRuleDetectorSweepService {
                     totals.processed += r.processed;
                     totals.compiled += r.compiled;
                     totals.errored += r.errored;
+                    totals.skipped += r.skipped;
                     budget -= r.processed;
                 } catch (error) {
                     this.logger.warn({
@@ -98,7 +116,7 @@ export class KodyRuleDetectorSweepService {
                 }
             }
             this.logger.log({
-                message: `Detector sweep complete: ${totals.orgs} orgs, ${totals.compiled} compiled / ${totals.processed} processed (${totals.errored} errored) in ${Date.now() - start}ms`,
+                message: `Detector sweep complete: ${totals.orgs} orgs, ${totals.compiled} compiled / ${totals.processed} processed, ${totals.skipped} already decided (no model call) — ${totals.errored} errored in ${Date.now() - start}ms`,
                 context: KodyRuleDetectorSweepService.name,
                 metadata: totals,
             });

@@ -122,7 +122,7 @@ const PAGES: Array<{
         keywords: "marketplace kody rules packs",
     },
     {
-        label: "Models",
+        label: "AI providers",
         href: "/byok",
         icon: SparklesIcon,
         keywords: "byok bring your own key api key model provider llm routing",

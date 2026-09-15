@@ -1,0 +1,40 @@
+AFTER the fix (issue #1831) — same command, same corpus as BASELINE-1831.txt
+judge layer measured on gemini-3-flash-preview; run --judge yourself to reproduce
+
+corpus: 40 PRs / 400 files / 5415 added lines
+rules:  1 with a compiled detector
+
+══ Avoid unnecessary semicolons
+   pattern=;\s*(?:#.*)?$  path=""  language=ruby
+
+   L1 compile gate: DECLINED as cosmetic — no detector is compiled, so nothing downstream can fire
+   L2 unscoped detector (as shipped today): 606 candidates — 567 (93.6%) on the wrong language
+      .tsx:280 .scss:128 .jsx:112 .erb:37 .js:21 .gjs:14 .ts:12 .rb:2
+   L2 recompiled with extensions [".rb",".rake",".gemspec",".ru",".erb"]: 39 candidates — 0 (0.0%) on the wrong language
+      .erb:37 .rb:2
+
+   L3 judge: not run (pass --judge). 39 candidate(s) would be offered to it.
+      cost: 4 of 400 files reach a model (1.0%).
+      app/views/events/show.html.erb:80  const chatFrame = document.getElementById("chat-frame");
+      app/views/events/show.html.erb:81  if (!chatFrame) return;
+      app/views/events/show.html.erb:85  (localStorage.getItem("config_body_class") || "").includes("dark-theme");
+      app/views/events/show.html.erb:90  const url = new URL(chatFrame.src);
+      app/views/events/show.html.erb:91  const dark = isDark();
+      app/views/events/show.html.erb:95  url.searchParams.set("dark_theme", "1");
+
+
+POSITIVE CONTROL (the judge must still confirm true violations):
+   L2 unscoped detector (as shipped today): 12 candidates — 0 (0.0%) on the wrong language
+      .ts:12
+   L2 recompiled with extensions [".ts",".tsx",".js",".jsx",".mjs"]: 12 candidates — 0 (0.0%) on the wrong language
+      .ts:12
+
+   L3 judge: not run (pass --judge). 12 candidate(s) would be offered to it.
+      cost: 6 of 159 files reach a model (3.8%).
+      packages/core/js-sdk/src/admin/product-option.ts:225  *   console.log(product_option_values)
+      packages/core/js-sdk/src/admin/product-option.ts:255  *   console.log(product_option_value)
+      packages/core/js-sdk/src/admin/product-option.ts:289  *   console.log(product_option_value)
+      packages/core/js-sdk/src/admin/product-option.ts:322  *   console.log(deleted)
+      packages/twenty-apps/public/call-recorder/src/logic-functions/flows/handle-recall-webhook.util.ts:266  console.log(
+      packages/twenty-apps/public/call-recorder/src/logic-functions/flows/ingest-call-recording-media.util.ts:100  console.log(
+

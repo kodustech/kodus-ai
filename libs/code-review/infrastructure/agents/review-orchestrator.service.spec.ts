@@ -6,6 +6,7 @@
  * It used to be a lens inside the single generalist pass, so a vulnerability
  * competed for attention with bug and performance hunting in the same run.
  */
+import { AgentDegradedError } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import { ReviewOrchestratorService } from '@libs/code-review/infrastructure/agents/review-orchestrator.service';
 import type { ReviewOptions } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
@@ -131,5 +132,43 @@ describe('ReviewOrchestratorService dispatch', () => {
         expect(security.execute).not.toHaveBeenCalled();
         expect(generalist.execute).not.toHaveBeenCalled();
         expect(out.suggestions).toEqual([]);
+    });
+});
+
+describe('ReviewOrchestratorService — warnings from an agent that threw', () => {
+    // allSettled keeps only a fulfilled agent's `warnings`, so an agent that
+    // degrades hard enough to throw used to lose whatever it wanted the PR to
+    // say. Kody Rules hits this: when every rule is skipped for missing
+    // repository context it escalates, and its message names the skipped rules
+    // — but that message renders only for a FAILED review, and kody-rules is
+    // not critical, so the review is partial and the names never surfaced
+    // (Verifier round 2, gap 2).
+    it('harvests the warnings an AgentDegradedError carried', async () => {
+        const { service, generalist } = setup();
+        const carried = {
+            kind: 'RULE_CONTEXT_UNAVAILABLE',
+            reason: 'lookup_unavailable',
+            contextWindowTokens: 0,
+            modelName: 'test-model',
+            detail: '2 rules not evaluated: No unused imports, Shared logger',
+        } as any;
+        generalist.execute = jest.fn(async () => {
+            throw new AgentDegradedError('every rule skipped', [carried]);
+        });
+
+        const result = await service.execute(inputFor(ALL_ON));
+
+        expect(result.warnings).toContainEqual(carried);
+    });
+
+    it('leaves warnings untouched when a thrown error carries none', async () => {
+        const { service, generalist } = setup();
+        generalist.execute = jest.fn(async () => {
+            throw new Error('plain failure');
+        });
+
+        const result = await service.execute(inputFor(ALL_ON));
+
+        expect(result.warnings).toEqual([]);
     });
 });

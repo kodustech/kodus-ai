@@ -117,3 +117,67 @@ describe('readFile — clear signal when a read produces no content', () => {
         expect(out.toLowerCase()).toMatch(/empty/);
     });
 });
+
+// REGRESSION (issue #1762): the searchDocs tool must not claim "No
+// documentation found" when the search backend is actually unavailable — the
+// model then treats "tool broken" as "there is no documentation for this
+// library" and falls back to its prior, which produced false-positive findings
+// on third-party API claims. When the service reports it is unavailable, the
+// tool must say so explicitly.
+describe('searchDocs — distinguishes "backend unavailable" from "no docs"', () => {
+    it('says the search backend is unavailable instead of fabricating a "no docs" result', async () => {
+        const unavailableDocs: any = {
+            isSearchAvailable: () => false,
+            searchByFilePlan: async () => ({}),
+        };
+        const tools = buildAgentTools(
+            makeRemote(),
+            undefined,
+            undefined,
+            unavailableDocs,
+        );
+
+        const out = await tools.searchDocs.execute({
+            packageName: 'jest',
+            query: 'v30 renamed --testPathPattern to --testPathPatterns',
+        });
+
+        expect(out).toContain(
+            'Documentation search is not available right now',
+        );
+        expect(out).not.toContain('No documentation found');
+        // The agent must not conflate "tool down" with "no docs exist".
+        expect(out).toContain(
+            'Do NOT conclude the package has no documentation',
+        );
+    });
+
+    it('says the search ran but returned nothing when a configured backend yields empty docs', async () => {
+        // #1762 cause (b): the backend has a key (isSearchAvailable => true)
+        // but every query fails at runtime, so searchByFilePlan returns empty.
+        // A successful Exa search always returns a doc item, so empty docs here
+        // means "backend failing", not "no docs" — the tool must not fabricate
+        // a definitive "No documentation found".
+        const failingDocs: any = {
+            isSearchAvailable: () => true,
+            searchByFilePlan: async () => ({}),
+        };
+        const tools = buildAgentTools(
+            makeRemote(),
+            undefined,
+            undefined,
+            failingDocs,
+        );
+
+        const out = await tools.searchDocs.execute({
+            packageName: 'jest',
+            query: 'v30 renamed --testPathPattern to --testPathPatterns',
+        });
+
+        expect(out).toContain('search ran but returned no documentation');
+        expect(out).not.toContain('No documentation found');
+        expect(out).toContain(
+            'Do NOT conclude the package has no documentation',
+        );
+    });
+});

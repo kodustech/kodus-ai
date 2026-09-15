@@ -194,9 +194,13 @@ export class CapabilityResourcePlanService {
         if (normalized.includes('clickup')) {
             candidates.push('clickup');
         }
+        // The Kodus "Git Issues" MCP reaches the runtime as `gitissues` (it is
+        // provider-agnostic — GitHub, GitLab, Bitbucket, Forgejo), so a rule
+        // keyed on "github" never matched it and its seed order never loaded.
         if (
             normalized.includes('kodus-github-issues') ||
             compact.includes('kodusgithubissues') ||
+            compact.includes('gitissues') ||
             (compact.includes('github') && compact.includes('issues'))
         ) {
             candidates.push('kodus-github-issues');

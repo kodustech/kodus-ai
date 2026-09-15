@@ -47,6 +47,13 @@ export interface DocumentationSearchAdapter {
             }>
         >
     >;
+    /**
+     * True when the search backend is actually usable (e.g. an Exa API key is
+     * configured). Lets the agent-visible tool distinguish "no docs exist"
+     * from "search is not available right now" instead of silently reporting
+     * the former for the latter (#1762).
+     */
+    isSearchAvailable?: () => boolean;
 }
 
 /**
@@ -708,7 +715,16 @@ export function buildAgentTools(
                     }
                 }
 
-                let result = await remoteCommands.listDir(dirPath, depth);
+                let result: string;
+                try {
+                    result = await remoteCommands.listDir(dirPath, depth);
+                } catch (err) {
+                    // Same contract as grep/readFile above: a failed listing is
+                    // reported to the model as a tool error, never thrown past
+                    // the tool boundary. Reachable since the null sandbox stopped
+                    // answering '' for a repository it cannot see (#1826).
+                    return `Error listing ${dirPath}: ${err instanceof Error ? err.message : String(err)}`;
+                }
                 // Filter out common noise directories
                 const IGNORE_DIRS = [
                     'node_modules',
@@ -825,10 +841,14 @@ export function buildAgentTools(
                     }
 
                     // Fallback: listDir + filter (slower, no .gitignore)
-                    const allFiles = await remoteCommands.listDir(
-                        searchPath,
-                        4,
-                    );
+                    let allFiles: string;
+                    try {
+                        allFiles = await remoteCommands.listDir(searchPath, 4);
+                    } catch (err) {
+                        // See the listDir tool above: tool errors are reported,
+                        // not thrown past the boundary (#1826).
+                        return `Error searching for files under ${searchPath}: ${err instanceof Error ? err.message : String(err)}`;
+                    }
                     const matching = allFiles
                         .split('\n')
                         .filter(
@@ -1479,6 +1499,18 @@ fi
                 }
 
                 try {
+                    // Distinguish "search cannot run" from "no docs exist".
+                    // Previously an unconfigured/broken backend produced the
+                    // same "No documentation found" as a genuine empty result,
+                    // so the agent could not tell "tool unavailable" from "the
+                    // library has no docs" and fell back to its prior (#1762).
+                    const available =
+                        documentationSearchService.isSearchAvailable?.() ??
+                        true;
+                    if (!available) {
+                        return `Documentation search is not available right now (no configured search backend). Do NOT conclude the package has no documentation: this means the tool did not run. If the finding depends on framework documentation, state that verification is unavailable.`;
+                    }
+
                     const planByFile = {
                         agent: { queryTasks: [{ packageName, query }] },
                     };
@@ -1490,7 +1522,13 @@ fi
 
                     const docs = results['agent'] || [];
                     if (docs.length === 0) {
-                        return `No documentation found for "${packageName}" with query "${query}".`;
+                        // A successful Exa search always returns a doc item
+                        // (even a 0-result query yields url:"unknown" + a
+                        // fallback snippet), so empty docs with a configured
+                        // backend means every query failed at runtime (#1762
+                        // cause b) — NOT "the library has no docs". Say so,
+                        // matching the unconfigured-backend branch above.
+                        return `Documentation search ran but returned no documentation for "${packageName}" with query "${query}" (the search backend answered nothing). Do NOT conclude the package has no documentation: this usually means the backend is failing at runtime. If the finding depends on framework documentation, state that verification is unavailable.`;
                     }
 
                     const formatted = docs

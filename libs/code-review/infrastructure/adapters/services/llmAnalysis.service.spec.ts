@@ -1,52 +1,18 @@
 /**
  * LLMAnalysisService — migrated-consumer parity spec (Phase 3, plan 03-06).
  *
- * llmAnalysis is the core code-review analyzer and sits on the customer review
- * hot path, so this parity spec is mandatory (not a grep-only gate). It proves
- * the "no behavior change on the happy path" contract after migrating the
- * structured call-sites off the legacy BYOKPromptRunner LangChain path
- * onto the AI SDK path (runStructuredReviewCall).
+ * llmAnalysis sits on the customer review hot path for its surviving methods
+ * (severityAnalysisAssignment, validateImplementedSuggestions,
+ * filterSuggestionsSafeGuard), so this spec is mandatory for those (not a
+ * grep-only gate). It proves the "no behavior change on the happy path"
+ * contract after migrating the structured call-sites off the legacy
+ * BYOKPromptRunner LangChain path onto the AI SDK path
+ * (runStructuredReviewCall).
  *
- * The primary analysis call is `analyzeCodeWithAI_v2` (the standard review path
- * — `codeAnalysisOrchestrator` calls `standardLLMAnalysisService.analyzeCodeWithAI_v2`).
- * Parity is on the parsed `codeSuggestions` mapping: a fixed structured result,
- * returned through the REAL runStructuredReviewCall (real model resolution + span),
- * maps byte-for-byte to the same AIAnalysisResult the pre-migration mapping produced,
- * and the model is invoked exactly once (one span path — no leftover runLLMInSpan
- * double-count, Q4).
- *
- * NOTE: this mocks `tracedGenerateText` (the same seam structured-review-call.spec.ts
- * and the 03-01 tracer parity spec use) rather than driving generateText+Output.object
- * against a MockLanguageModelV4 — that structured-output path HANGS against an offline
- * model double (Phase 0 + 03-01). Parity here targets the codeSuggestions mapping,
- * which is exactly the migration's behavior-change risk.
+ * `analyzeCodeWithAI` / `analyzeCodeWithAI_v2` / `generateCodeSuggestions` /
+ * `selectReviewMode` were deleted as unreachable — see the note above
+ * `LLMAnalysisService — secondary analysis methods` below.
  */
-
-const MODEL_SUGGESTIONS = {
-    codeSuggestions: [
-        {
-            id: 'sug-1',
-            relevantFile: 'src/payments/charge.ts',
-            language: 'typescript',
-            suggestionContent: 'Guard against a null customer before charging.',
-            existingCode: 'charge(customer.id)',
-            improvedCode: 'if (customer) charge(customer.id)',
-            oneSentenceSummary: 'Null-guard the customer',
-            relevantLinesStart: 42,
-            relevantLinesEnd: 42,
-            label: 'potential_error',
-            severity: 'high',
-        },
-        {
-            id: 'sug-2',
-            relevantFile: 'src/payments/charge.ts',
-            language: 'typescript',
-            suggestionContent: 'Extract the retry constant.',
-            improvedCode: 'const MAX_RETRIES = 3;',
-            label: 'maintainability',
-        },
-    ],
-};
 
 // Model builders return sentinels — no real model/network is touched.
 jest.mock('@libs/llm/byok-to-vercel', () => ({
@@ -73,16 +39,12 @@ import {
     LLMAnalysisService,
     severityAnalysisSchema,
     validateImplementedSchema,
-    codeReviewAnalysisSchema,
 } from './llmAnalysis.service';
 import { setLlmObservability } from '@libs/llm/llm-observability';
-import { tracedGenerateText } from '@libs/llm/llm-call';
 import { LLM } from '@libs/llm/llm';
 import { ReviewModeResponse } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { prompt_severity_analysis_user } from '@libs/common/utils/prompts/severityAnalysis';
 import { prompt_validateImplementedSuggestions } from '@libs/common/utils/prompts';
-
-const mockGenerate = tracedGenerateText as unknown as jest.Mock;
 
 // runAiSdkLLMInSpan just runs the exec and returns its result — one span path.
 // runLLMInSpan is the OLD LangChain wrapper; it must never be touched (Q4).
@@ -130,94 +92,22 @@ const byokConfig = {
     model: 'gpt-4o',
 } as any;
 
-describe('LLMAnalysisService.analyzeCodeWithAI_v2 — migration parity (AI SDK path)', () => {
-    beforeEach(() => {
-        mockGenerate.mockReset();
-        observability.runAiSdkLLMInSpan.mockClear();
-        // LLM.run records its span through the observability port — register the mock.
-        setLlmObservability(observability);
-        observability.runLLMInSpan.mockClear();
-        mockGenerate.mockResolvedValue({
-            experimental_output: MODEL_SUGGESTIONS,
-        });
-    });
-
-    it('maps the model codeSuggestions[] byte-for-byte into AIAnalysisResult', async () => {
-        const service = buildService();
-
-        const result = await service.analyzeCodeWithAI_v2(
-            organizationAndTeamData,
-            77,
-            fileContext,
-            'heavy_mode' as any,
-            context,
-            byokConfig,
-        );
-
-        expect(result).toEqual({
-            codeSuggestions: MODEL_SUGGESTIONS.codeSuggestions,
-            codeReviewModelUsed: {
-                // The ACTUAL resolved model name (getModelName(slot)) — the same
-                // name runStructuredReviewCall traces — not a hardcoded provider
-                // label. Mock returns 'byok-main'.
-                generateSuggestions: 'byok-main',
-            },
-        });
-    });
-
-    it('routes through exactly one AI SDK span (runAiSdkLLMInSpan), no LangChain runLLMInSpan wrapper (Q4)', async () => {
-        const service = buildService();
-
-        await service.analyzeCodeWithAI_v2(
-            organizationAndTeamData,
-            77,
-            fileContext,
-            'heavy_mode' as any,
-            context,
-            byokConfig,
-        );
-
-        expect(observability.runAiSdkLLMInSpan).toHaveBeenCalledTimes(1);
-        expect(mockGenerate).toHaveBeenCalledTimes(1);
-        // No leftover LangChain span path — single-span billing.
-        expect(observability.runLLMInSpan).not.toHaveBeenCalled();
-    });
-
-    it('records the real resolved model name (getModelName) even with no BYOK, not a hardcoded label', async () => {
-        const service = buildService();
-
-        const result = await service.analyzeCodeWithAI_v2(
-            organizationAndTeamData,
-            77,
-            fileContext,
-            'heavy_mode' as any,
-            context,
-            {} as any,
-        );
-
-        // Telemetry-truth: the field reports whatever model actually resolved
-        // (getModelName → mock 'byok-main'), NOT the old GEMINI_2_5_PRO label
-        // that lied for the no-BYOK path (reported Gemini while DeepSeek ran).
-        expect(result?.codeReviewModelUsed?.generateSuggestions).toBe(
-            'byok-main',
-        );
-        expect(result?.codeSuggestions).toEqual(
-            MODEL_SUGGESTIONS.codeSuggestions,
-        );
-    });
-});
-
 /**
- * The secondary analysis methods — severity, implemented-check, safeguard and
- * review-mode. The parity block above only covers analyzeCodeWithAI_v2; these
- * four each own a fail-safe contract (a provider failure must degrade to the
- * INPUT suggestions, never drop them) and a distinct request shape (severity
- * carries the org's BYOK slot; the implemented-check deliberately runs on the
- * managed default with byokConfig undefined). A regression that swallows the
- * fallback or crosses the wires is invisible to the parity spec.
+ * The secondary analysis methods — severity, implemented-check and safeguard.
+ * `analyzeCodeWithAI` / `analyzeCodeWithAI_v2` / `generateCodeSuggestions` /
+ * `selectReviewMode` were deleted as unreachable: their only callers were
+ * `CodeAnalysisOrchestrator` and the pre-agent-v4 `ProcessFilesReview` /
+ * `ProcessFilesPrLevelReviewStage`, none of which appear in either active
+ * pipeline strategy (`CodeReviewPipelineStrategy`, `CliReviewPipelineStrategy`).
  *
- * We spy on LLM.run directly (restored after each test so the parity block keeps
- * using the real span path) and, for the success paths, stub the internal
+ * These three each own a fail-safe contract (a provider failure must degrade to
+ * the INPUT suggestions, never drop them) and a distinct request shape (severity
+ * carries the org's BYOK slot; the implemented-check runs on whatever slot the
+ * caller resolves — `undefined` when the org has none configured for the task —
+ * never a hardcoded provider). A regression that swallows the fallback or
+ * crosses the wires is invisible elsewhere.
+ *
+ * We spy on LLM.run directly and, for the success paths, stub the internal
  * response processor.
  */
 describe('LLMAnalysisService — secondary analysis methods', () => {
@@ -246,7 +136,6 @@ describe('LLMAnalysisService — secondary analysis methods', () => {
             await service.severityAnalysisAssignment(
                 org,
                 77,
-                'openai' as any,
                 suggestions,
                 byokConfig,
             );
@@ -270,7 +159,6 @@ describe('LLMAnalysisService — secondary analysis methods', () => {
             const out = await service.severityAnalysisAssignment(
                 org,
                 77,
-                'openai' as any,
                 suggestions,
                 byokConfig,
             );
@@ -284,7 +172,6 @@ describe('LLMAnalysisService — secondary analysis methods', () => {
             const out = await service.severityAnalysisAssignment(
                 org,
                 77,
-                'openai' as any,
                 suggestions,
                 byokConfig,
             );
@@ -298,7 +185,6 @@ describe('LLMAnalysisService — secondary analysis methods', () => {
             const out = await service.severityAnalysisAssignment(
                 org,
                 77,
-                'openai' as any,
                 suggestions,
                 byokConfig,
             );
@@ -318,7 +204,7 @@ describe('LLMAnalysisService — secondary analysis methods', () => {
             await service.validateImplementedSuggestions(
                 org,
                 77,
-                'openai' as any,
+                undefined,
                 'diff',
                 suggestions,
             );
@@ -332,7 +218,9 @@ describe('LLMAnalysisService — secondary analysis methods', () => {
                 }),
             );
             expect(arg.runName).toBe('validateImplementedSuggestions');
-            // Deliberate: this check runs on the managed default, never a slot.
+            // Whatever byokConfig the caller resolved is forwarded verbatim —
+            // undefined here means the org has no BYOK slot for this task, so
+            // LLM.run falls back to the managed default.
             expect(arg.byokConfig).toBeUndefined();
         });
 
@@ -350,7 +238,7 @@ describe('LLMAnalysisService — secondary analysis methods', () => {
             const out = await service.validateImplementedSuggestions(
                 org,
                 77,
-                'openai' as any,
+                undefined,
                 'diff',
                 suggestions,
             );
@@ -364,7 +252,7 @@ describe('LLMAnalysisService — secondary analysis methods', () => {
             const out = await service.validateImplementedSuggestions(
                 org,
                 77,
-                'openai' as any,
+                undefined,
                 'diff',
                 suggestions,
             );
@@ -378,7 +266,7 @@ describe('LLMAnalysisService — secondary analysis methods', () => {
             const out = await service.validateImplementedSuggestions(
                 org,
                 77,
-                'openai' as any,
+                undefined,
                 'diff',
                 suggestions,
             );
@@ -459,19 +347,6 @@ describe('LLMAnalysisService — secondary analysis methods', () => {
         });
     });
 
-    describe('selectReviewMode', () => {
-        it('always resolves to HEAVY_MODE', async () => {
-            const service = buildService();
-            const out = await service.selectReviewMode(
-                org,
-                77,
-                'openai' as any,
-                { filename: 'f.ts' } as any,
-                'diff',
-            );
-            expect(out).toBe(ReviewModeResponse.HEAVY_MODE);
-        });
-    });
 });
 
 /**
@@ -485,7 +360,9 @@ describe('LLMAnalysisService — secondary analysis methods', () => {
  * (`if (!x) …` guard), the `JSON.stringify(result) → processResponse` re-parse,
  * and the guaranteed return shape. Model decision QUALITY is out of scope.
  *
- * The four analyzer boundaries share ONE parse shape:
+ * The two surviving analyzer boundaries (severityAnalysisAssignment,
+ * validateImplementedSuggestions — analyzeCodeWithAI/_v2/generateCodeSuggestions
+ * were deleted as unreachable) share ONE parse shape:
  *   LLM.run(schema) → object → JSON.stringify(object) → processResponse()
  * where `processResponse` only recognises a payload whose top-level
  * `codeSuggestions` is an array (llmResponseProcessor.transform.ts:32,49,61).
@@ -495,11 +372,10 @@ describe('LLMAnalysisService — secondary analysis methods', () => {
  * right-data-wrong-key, primitive, error object, refusal prose …) is NOT falsy,
  * so it skips the `if (!result)` fail-safe-to-INPUT guard, then fails the
  * `Array.isArray(codeSuggestions)` recognition inside processResponse, and the
- * `?.codeSuggestions || []` defaults (llmAnalysis.service.ts:437-438 severity,
- * :580-581 validate; :253 analyzeCodeWithAI_v2 undefined; :173 analyze v1) SILENTLY
- * DROP every input suggestion to [] / undefined with no signal. The correct
- * behavior is to RECOVER the payload OR fall back to the INPUT suggestions (the
- * documented safe default the throw path already produces) — never a silent [].
+ * `?.codeSuggestions || []` defaults SILENTLY DROP every input suggestion to
+ * [] with no signal. The correct behavior is to RECOVER the payload OR fall
+ * back to the INPUT suggestions (the documented safe default the throw path
+ * already produces) — never a silent [].
  * The pin `expect(out).not.toEqual([])` turns red the moment either fix lands.
  *
  * A second structural degradation: because every path calls JSON.stringify()
@@ -508,8 +384,7 @@ describe('LLMAnalysisService — secondary analysis methods', () => {
  * markdown/prose/JSON5-repair machinery inside processResponse is defeated
  * (rows 7/8/9/28/29/33).
  *
- * We spy on the REAL LLM.run boundary and restore after each test so the parity
- * block above keeps exercising the real span path.
+ * We spy on the REAL LLM.run boundary and restore after each test.
  */
 describe('LLMAnalysisService — LLM.run I/O contract matrix', () => {
     const org = organizationAndTeamData;
@@ -530,13 +405,7 @@ describe('LLMAnalysisService — LLM.run I/O contract matrix', () => {
     // processResponse re-parse AND owns the fail-safe-to-INPUT contract, so both
     // the recover branch and the #1786 silent-drop are observable on it.
     const runSeverity = (service: LLMAnalysisService, input = inputSuggestions) =>
-        service.severityAnalysisAssignment(
-            org,
-            77,
-            'openai' as any,
-            input,
-            byokConfig,
-        );
+        service.severityAnalysisAssignment(org, 77, input, byokConfig);
 
     // ── A. Output-shape zoo ────────────────────────────────────────────────
 
@@ -924,7 +793,7 @@ describe('LLMAnalysisService — LLM.run I/O contract matrix', () => {
         await service.validateImplementedSuggestions(
             org,
             77,
-            'openai' as any,
+            undefined,
             weirdPatch,
             inputSuggestions,
         );
@@ -968,7 +837,6 @@ describe('LLMAnalysisService — LLM.run I/O contract matrix', () => {
         await buildService().severityAnalysisAssignment(
             org,
             77,
-            'openai' as any,
             inputSuggestions,
             strictSlot,
         );
@@ -980,7 +848,6 @@ describe('LLMAnalysisService — LLM.run I/O contract matrix', () => {
         await buildService().severityAnalysisAssignment(
             org,
             77,
-            'deepseek' as any,
             inputSuggestions,
             fallbackSlot,
         );
@@ -1002,7 +869,6 @@ describe('LLMAnalysisService — LLM.run I/O contract matrix', () => {
                 const out = await buildService().severityAnalysisAssignment(
                     org,
                     77,
-                    'p' as any,
                     inputSuggestions,
                     slot,
                 );
@@ -1010,124 +876,4 @@ describe('LLMAnalysisService — LLM.run I/O contract matrix', () => {
             },
         );
     }
-});
-
-/**
- * Return-shape closure for the other three boundaries. Each guarantees a distinct
- * declared type; these assert the type/shape holds across the happy, off-schema
- * and fail-safe layers (the A/B/C zoo is exercised in full on severity above;
- * here we pin the DECLARED-SHAPE invariant that each method must never violate).
- */
-describe('LLMAnalysisService — declared-return-shape across boundaries', () => {
-    const org = organizationAndTeamData;
-    let runSpy: jest.SpyInstance;
-    beforeEach(() => {
-        jest.clearAllMocks();
-        setLlmObservability(observability);
-        runSpy = jest.spyOn(LLM, 'run');
-    });
-    afterEach(() => runSpy.mockRestore());
-
-    describe('analyzeCodeWithAI_v2', () => {
-        it('A1 — assembles the request with the analysis schema, runName, slot, org and attrs', async () => {
-            runSpy.mockResolvedValue({
-                codeSuggestions: [
-                    {
-                        id: 'x',
-                        relevantFile: 'a.ts',
-                        language: 'ts',
-                        suggestionContent: 'c',
-                        improvedCode: 'i',
-                        label: 'l',
-                    },
-                ],
-            } as any);
-            await buildService().analyzeCodeWithAI_v2(
-                organizationAndTeamData,
-                77,
-                fileContext,
-                'heavy_mode' as any,
-                context,
-                byokConfig,
-            );
-            const arg = runSpy.mock.calls[0][0];
-            expect(arg.schema).toBe(codeReviewAnalysisSchema);
-            expect(arg.runName).toBe('analyzeCodeWithAI_v2');
-            expect(arg.byokConfig).toBe(byokConfig);
-            expect(arg.organizationId).toBe('org-1');
-            expect(arg.attrs.prNumber).toBe(77);
-        });
-
-        it('C30/A17 — a null structured result throws (fail-safe by escalation, never a silent empty result)', async () => {
-            runSpy.mockResolvedValue(null as any);
-            await expect(
-                buildService().analyzeCodeWithAI_v2(
-                    organizationAndTeamData,
-                    77,
-                    fileContext,
-                    'heavy_mode' as any,
-                    context,
-                    byokConfig,
-                ),
-            ).rejects.toThrow(/No analysis result/);
-        });
-
-        it.failing(
-            'A2 — a truthy off-schema envelope (bare array) must not yield an undefined codeSuggestions on the declared AIAnalysisResult',
-            async () => {
-                runSpy.mockResolvedValue([{ id: 'x' }] as any);
-                const out = await buildService().analyzeCodeWithAI_v2(
-                    organizationAndTeamData,
-                    77,
-                    fileContext,
-                    'heavy_mode' as any,
-                    context,
-                    byokConfig,
-                );
-                expect(out.codeSuggestions).toBeDefined();
-            },
-        );
-    });
-
-    describe('generateCodeSuggestions', () => {
-        it('A1 — returns the re-serialized JSON string on success', async () => {
-            const structured = {
-                codeSuggestions: [{ id: 'g1', label: 'l' }],
-            };
-            runSpy.mockResolvedValue(structured as any);
-            const out = await buildService().generateCodeSuggestions(
-                organizationAndTeamData,
-                'sess-1',
-                'why?',
-                {},
-            );
-            expect(out).toBe(JSON.stringify(structured));
-        });
-
-        it('A17/C30 — a falsy structured result throws (never returns a null/empty string silently)', async () => {
-            runSpy.mockResolvedValue(null as any);
-            await expect(
-                buildService().generateCodeSuggestions(
-                    organizationAndTeamData,
-                    'sess-1',
-                    'why?',
-                    {},
-                ),
-            ).rejects.toThrow(/No code suggestions generated/);
-        });
-
-        it('A1 — request carries no BYOK slot (system-provider path) with the analysis schema', async () => {
-            runSpy.mockResolvedValue({ codeSuggestions: [] } as any);
-            await buildService().generateCodeSuggestions(
-                organizationAndTeamData,
-                'sess-1',
-                'why?',
-                {},
-            );
-            const arg = runSpy.mock.calls[0][0];
-            expect(arg.schema).toBe(codeReviewAnalysisSchema);
-            expect(arg.byokConfig).toBeUndefined();
-            expect(arg.runName).toBe('generateCodeSuggestions');
-        });
-    });
 });

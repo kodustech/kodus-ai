@@ -32,6 +32,7 @@ import { novitaModule } from '../novita/index';
 import { moonshotModule } from '../moonshot/index';
 import { azureModule } from '../azure/index';
 import { zaiModule } from '../zai/index';
+import { kodusModule } from '../kodus';
 
 import openaiPlain from '../openai/__fixtures__/plain.json';
 import openaiReasoning from '../openai/__fixtures__/reasoning.json';
@@ -43,6 +44,7 @@ import bedrockPlain from '../bedrock/__fixtures__/plain.json';
 import novitaPlain from '../novita/__fixtures__/plain.json';
 import moonshotPlain from '../moonshot/__fixtures__/plain.json';
 import azurePlain from '../azure/__fixtures__/plain.json';
+import kodusPlain from '../kodus/__fixtures__/plain.json';
 
 interface ProviderCase {
     module: ProviderModule;
@@ -116,6 +118,19 @@ const CASES: ProviderCase[] = [
         module: zaiModule,
         model: 'glm-5.2',
         fixtures: [
+            {
+                name: 'reasoning',
+                fixture: anthropicReasoning as ProviderFixture,
+            },
+        ],
+    },
+    {
+        // Kodus routes over the native upstream modules and shares the SDK usage
+        // normalizer, so the same no-double-count invariant holds per upstream.
+        module: kodusModule,
+        model: 'anthropic/claude-sonnet-5',
+        fixtures: [
+            { name: 'plain', fixture: kodusPlain as ProviderFixture },
             {
                 name: 'reasoning',
                 fixture: anthropicReasoning as ProviderFixture,

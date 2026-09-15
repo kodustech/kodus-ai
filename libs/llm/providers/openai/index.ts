@@ -19,6 +19,7 @@ import {
     openAiCompatibleHonorsJsonSchema,
     isNeverDowngradeModel,
 } from '@libs/llm/structured-output-gate';
+import { isOpenCodeGoBaseUrl, openCodeSessionId } from '@libs/llm/opencode-go';
 import { registerProvider } from '../kernel/registry';
 import { isOpenAiReasoner, openaiReasoningConfig } from './reasoning';
 import { openAiModelListing } from './listing';
@@ -116,6 +117,13 @@ export const openaiModule: ProviderModule = {
                 apiKey,
                 baseURL,
                 ...(opts?.fetch ? { fetch: opts.fetch } : {}),
+                ...(isOpenCodeGoBaseUrl(baseURL)
+                    ? {
+                          headers: {
+                              'x-opencode-session': openCodeSessionId(cfg),
+                          },
+                      }
+                    : {}),
                 // OpenAI's own API REJECTS `max_tokens` on a reasoning model:
                 //
                 //   Unsupported parameter: 'max_tokens' is not supported with
@@ -163,10 +171,18 @@ export const openaiModule: ProviderModule = {
 
         // Native OpenAI (id 'openai'). Only pass baseURL when set — the native
         // SDK has a sensible default and an empty string throws "Invalid URL".
+        // Still gated on the SAME OpenCode Go check as the compatible branch
+        // above: 'openai' also accepts a baseURL override (e.g. Azure OpenAI
+        // proxies), so a slot pointed at opencode.ai/zen through THIS provider
+        // id needs the header too, or it 400s exactly like the compatible one
+        // did before #1880.
         return createOpenAI({
             apiKey,
             ...(baseURL ? { baseURL } : {}),
             ...(opts?.fetch ? { fetch: opts.fetch } : {}),
+            ...(isOpenCodeGoBaseUrl(baseURL)
+                ? { headers: { 'x-opencode-session': openCodeSessionId(cfg) } }
+                : {}),
         })(cfg.model);
     },
 

@@ -248,6 +248,27 @@ describe('resolveManagedSlot — env → managed slot / inline exception', () =>
         );
     });
 
+    it('env openai_compat pointed at OpenCode Go (opencode.ai/zen) → INLINE exception carries an x-opencode-session header (issue #1880)', () => {
+        process.env.API_LLM_PROVIDER_MODEL = 'deepseek-v4-flash';
+        process.env.API_OPEN_AI_API_KEY = 'sk-x';
+        process.env.API_OPENAI_FORCE_BASE_URL = 'https://opencode.ai/zen/go/v1';
+
+        resolveManagedSlot('x', {});
+
+        const call = (createOpenAICompatible as jest.Mock).mock.calls.at(-1)![0];
+        expect(call.headers['x-opencode-session']).toMatch(/^[0-9a-f]{32}$/);
+    });
+
+    it('env openai_compat pointed anywhere else (default api.openai.com) never carries an x-opencode-session header', () => {
+        process.env.API_LLM_PROVIDER_MODEL = 'llama-3.3-70b';
+        process.env.API_OPEN_AI_API_KEY = 'sk-x';
+
+        resolveManagedSlot('x', {});
+
+        const call = (createOpenAICompatible as jest.Mock).mock.calls.at(-1)![0];
+        expect(call).not.toHaveProperty('headers');
+    });
+
     it('cloud + fireworks default model → INLINE fireworks (the managed default)', () => {
         process.env.API_FIREWORKS_API_KEY = 'fw-key';
         const r = resolveManagedSlot(

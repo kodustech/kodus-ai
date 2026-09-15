@@ -69,6 +69,7 @@ type NoActiveSubscriptionType =
     | 'general'
     | 'byok_required'
     | 'trial_credits_exhausted'
+    | 'credits_exhausted'
     | 'license_unavailable'
     | 'no_error';
 
@@ -80,6 +81,7 @@ const ERROR_TO_MESSAGE_TYPE: Record<
     [ValidationErrorType.USER_NOT_LICENSED]: 'user',
     [ValidationErrorType.BYOK_REQUIRED]: 'byok_required',
     [ValidationErrorType.PLAN_LIMIT_EXCEEDED]: 'general',
+    [ValidationErrorType.CREDITS_EXHAUSTED]: 'credits_exhausted',
     [ValidationErrorType.NOT_ERROR]: 'no_error',
 };
 
@@ -427,6 +429,8 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                         : PipelineReasons.PREREQUISITES.LICENSE_UNAVAILABLE;
                 }
                 return PipelineReasons.PREREQUISITES.PLAN_LIMIT;
+            case ValidationErrorType.CREDITS_EXHAUSTED:
+                return PipelineReasons.PREREQUISITES.CREDITS_EXHAUSTED;
             case ValidationErrorType.USER_NOT_LICENSED:
                 return PipelineReasons.PREREQUISITES.USER_NO_LICENSE;
             case ValidationErrorType.INVALID_LICENSE:
@@ -961,6 +965,8 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             params.noActiveSubscriptionType === 'trial_credits_exhausted'
         ) {
             message = await this.trialCreditsExhaustedMessage();
+        } else if (params.noActiveSubscriptionType === 'credits_exhausted') {
+            message = await this.creditsExhaustedMessage();
         } else if (params.noActiveSubscriptionType === 'license_unavailable') {
             message = await this.licenseUnavailableMessage();
         }
@@ -1001,6 +1007,19 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             'to keep Kody reviewing — unlimited reviews, on any plan (Free included).\n\n' +
             'Want more trial reviews to finish evaluating before adding a key? ' +
             '[Talk to our founders](https://cal.com/gabrielmalinosqui/30min). 😎\n\n' +
+            '<!-- kody-codereview -->'
+        );
+    }
+
+    private async creditsExhaustedMessage(): Promise<string> {
+        return (
+            '## Your Kodus credits are used up 💳\n\n' +
+            'This repository reviews with a model routed by Kodus, and your ' +
+            "organization's prepaid credit balance is at zero.\n\n" +
+            '**[Top up credits](https://app.kodus.io/byok#kodus)** ' +
+            'and re-run the review (or push a new commit) — or ' +
+            '[connect your own AI key](https://app.kodus.io/byok) to review ' +
+            'on your provider account instead.\n\n' +
             '<!-- kody-codereview -->'
         );
     }

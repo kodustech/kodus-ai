@@ -161,16 +161,25 @@ export class AiSdkAgentRunner implements AgentRunner {
                 out.activeTools = merged.activeTools;
             }
             // injectNote -> trailing message (cache-prefix friendly)
+            // The base conversation is the compressed window when a policy
+            // provided one (merged.messages); the steering note is APPENDED to
+            // it, never substituted for it. Previously the note branch rebuilt
+            // from the uncompressed original (msgs ?? messages), so a
+            // concurrent compression was discarded and the hard per-request
+            // context clamp was bypassed (#1808).
+            const baseMessages = merged.messages
+                ? merged.messages.map(toModelMessage)
+                : ((msgs ?? messages) as ModelMessage[]);
             if (merged.injectNote) {
                 out.messages = [
-                    ...(msgs ?? messages),
+                    ...baseMessages,
                     {
                         role: merged.injectNote.role,
                         content: merged.injectNote.content,
                     },
                 ];
             } else if (merged.messages) {
-                out.messages = merged.messages.map(toModelMessage);
+                out.messages = baseMessages;
             }
             // HARD invariant: the conversation array must NEVER contain a
             // system-role message — Google Gemini rejects any system message that

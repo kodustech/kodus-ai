@@ -26,6 +26,7 @@ import {
     scoreNormalizedContext,
 } from './task-context/scoring';
 import { extractTaskContextFromToolResult } from './task-context/result-normalization';
+import { matchesRequestedTask } from './task-context/task-identity';
 import { buildToolAliasKey } from './task-context/tool-aliases';
 import { buildTaskContextArgsCandidates } from './task-context/arg-building';
 import { resolveTaskContextSiteHints } from './task-context/site-resolution';
@@ -193,7 +194,11 @@ export async function fetchTaskContext(
             discovery.cachedTools,
         );
 
-        if (agenticFirst.value && isUsableTaskContext(agenticFirst.value)) {
+        if (
+            agenticFirst.value &&
+            isUsableTaskContext(agenticFirst.value) &&
+            matchesRequestedTask(agenticFirst.value, hints)
+        ) {
             return {
                 normalized: agenticFirst.value,
                 raw: agenticFirst.value.description ?? '',
@@ -266,7 +271,9 @@ export async function fetchTaskContext(
     // bogus context to the downstream analyzer and generate a false
     // 'Need Task Information' finding — treat it as empty instead.
     const fallbackValue =
-        agenticFallback.value && isUsableTaskContext(agenticFallback.value)
+        agenticFallback.value &&
+        isUsableTaskContext(agenticFallback.value) &&
+        matchesRequestedTask(agenticFallback.value, hints)
             ? agenticFallback.value
             : undefined;
 
@@ -413,9 +420,16 @@ function resolveTaskContextHints(
         .filter((value): value is string => typeof value === 'string')
         .join('\n');
 
+    // `#993` arrives as a "ticket key" but is a number, not an identifier any
+    // tracker accepts. Left in, it is offered to key/query parameters where it
+    // resolves nothing, and its mere presence suppresses the free-text query
+    // fallback. The number reaches the hints via issueNumbers either way.
+    // A caller-supplied taskId is kept as-is — provider ids are free-form.
     const explicitTaskIds = uniqueNonEmpty([
         params.taskId ?? '',
-        ...(params.businessSignals?.ticketKeys ?? []),
+        ...(params.businessSignals?.ticketKeys ?? []).filter(
+            (key) => !key.trim().startsWith('#'),
+        ),
     ]);
     const explicitTaskLinks = uniqueNonEmpty([
         params.taskUrl ?? '',
@@ -609,6 +623,27 @@ async function resolveDeterministicTaskContext(input: {
                 continue;
             }
 
+            // A list/search tool answers with whatever it holds, and the richest
+            // entry wins the score — which is how an unrelated issue ends up
+            // being validated against the PR. Drop anything that is not the task
+            // the PR referenced instead of ranking it.
+            if (!matchesRequestedTask(result.value, input.hints)) {
+                input.logger.warn({
+                    message:
+                        '[task.context.read] discarded a task that does not match the PR reference',
+                    context: 'TaskContextReadCapability',
+                    metadata: {
+                        organizationId: input.params.organizationId,
+                        toolName,
+                        fetchedId: result.value.id,
+                        fetchedTitle: result.value.title,
+                        requestedKeys: input.hints.issueKeys,
+                        requestedNumbers: input.hints.issueNumbers,
+                    },
+                });
+                continue;
+            }
+
             result.value.sourceProvider = input.providerType;
             const normalizedScore = scoreNormalizedContext(result.value);
             if (normalizedScore > bestScore) {
@@ -792,6 +827,17 @@ USER_LANGUAGE: ${userLanguage}
 
 When calling tools that require repository data, prioritize KNOWN_REPOSITORY_OWNER and KNOWN_REPOSITORY_NAME.
 When a tool requires a tenant/site/cloud identifier, use a value from KNOWN_SITE_IDS. Never invent one; if it is (none), prefer a tool that does not require it.
+${
+    hints.issueNumbers.length > 0
+        ? 'MANDATORY: resolve ONLY the issue(s) listed in KNOWN_ISSUE_NUMBERS. ' +
+          'Use them directly as the issue ID/key argument of the fetch tool. ' +
+          'Do NOT call issue-list/search tools to "discover" an issue, and do ' +
+          'NOT return a different issue from the ones listed. If you cannot ' +
+          'fetch those exact numbers, return an empty taskContext.'
+        : 'When a tool lets you discover issues by query, prefer the issue ' +
+          'referenced by KNOWN_TOKENS / KNOWN_ISSUE_NUMBERS over an arbitrary ' +
+          'result from a list/search.'
+}
 
 Return ONLY JSON:
 {

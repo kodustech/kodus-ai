@@ -8,11 +8,12 @@ import type { ByokModelCost } from "@services/usage/byok-cost";
 import { PlusIcon } from "lucide-react";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 
+import { isPlatformFundedProvider } from "../../_data/platform-funded";
 import type { BYOKConfig, BYOKCredential, BYOKModelConfig } from "../../_types";
 import { groupModelsByProvider, hasVisibleModels } from "../../_utils";
 import { ConnectProviderFlow } from "../connect-provider-flow";
 import { FirstRunCard } from "../first-run-card";
-import { ModelRow } from "../model-row";
+import { ModelRow, type CatalogPricing } from "../model-row";
 import { ProviderGroupHeader } from "../provider-group-header";
 
 type ModelsTabProps = {
@@ -25,6 +26,8 @@ type ModelsTabProps = {
     llmConfigStatus: LLMConfigStatus | null;
     /** Deep-link a model's "Used in" chip to its Routing-tab row. */
     onOpenRouting?: (anchor: string) => void;
+    /** Kodus catalog keyed by model id: curated names + list prices. */
+    kodusCatalog?: Record<string, { name: string; pricing?: CatalogPricing }>;
 };
 
 type View =
@@ -45,6 +48,7 @@ export const ModelsTab = ({
     periodLabel,
     costRangeQuery,
     onOpenRouting,
+    kodusCatalog,
 }: ModelsTabProps) => {
     const router = useRouter();
     const [view, setView] = useState<View>({ mode: "list" });
@@ -153,6 +157,13 @@ export const ModelsTab = ({
                                 onEdit={() => openEdit(model, credential)}
                                 onDeleted={handleDeleted}
                                 onOpenRouting={onOpenRouting}
+                                catalog={
+                                    isPlatformFundedProvider(
+                                        credential.provider,
+                                    )
+                                        ? kodusCatalog?.[model.model]
+                                        : undefined
+                                }
                             />
                         ))}
                         <div className="flex justify-end">

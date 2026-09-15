@@ -67,6 +67,154 @@ rss: true
 
     <div className="kodus-changelog-release">
         <div className="kodus-changelog-meta">
+            <span className="kodus-changelog-date">September 8, 2026</span>
+        </div>
+
+        <div className="kodus-changelog-content">
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">Improvements</div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-ai-engine filter-kody-rules">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Turn conversations with Kody into lasting context</div>
+                    <p className="kodus-changelog-copy">Kody now takes a more proactive role when you talk to her in a PR. When you explain a team convention, clarify why a suggestion doesn’t apply, or share context worth keeping, she can suggest creating a memory or creating or updating a Kody Rule, without waiting for you to ask.</p>
+                    <p className="kodus-changelog-copy">This helps turn everyday feedback into knowledge that can guide future reviews. Kody proposes the action and asks for your confirmation before saving changes.</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-byok filter-ai-engine">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">More flexible BYOK configuration</div>
+                    <p className="kodus-changelog-copy">You’re no longer tied to a single AI provider. You can now mix providers and models across repositories and specific agents, choosing the setup that best fits each task. This gives your team more flexibility to balance review quality and cost, using more capable models where they matter most and more economical options elsewhere.</p>
+                    <p className="kodus-changelog-copy">We also rebuilt the configuration experience around that flexibility. Setup adapts to each provider’s credentials and advanced settings, and supported integrations fetch available models directly from the provider’s API. You can configure primary and fallback models and fine-tune their settings from the updated flow.</p>
+                    <video autoPlay loop muted playsInline preload="auto" className="kodus-changelog-video">
+                        <source src="https://kodus.io/wp-content/uploads/2026/09/byok-conf-final.mp4" type="video/mp4" />
+                    </video>
+                </div>
+            </div>
+
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">Bug Fixes</div>
+
+                <div className="kodus-changelog-fix-list">
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-byok filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Reasoning settings now respect the selected model:</strong> We fixed how the configured reasoning level is applied across different providers and model families, including compatibility with temperature settings.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-byok filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Review sizing now respects model capacity:</strong> We improved context-window handling so reviews are split according to the available capacity of the selected model.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-byok filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">OpenRouter provider preferences:</strong> You can now enter multiple providers without commas disappearing as you type. Saved preferences also remain intact when you reopen and edit the configuration.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-byok">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Existing BYOK configurations remain intact:</strong> We fixed migration cases that could remove Bedrock configurations, setups containing only fallback models, or OpenRouter options. We also restored fallback model references affected by the migration.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-byok filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">More reliable model fallback:</strong> Tool compatibility now takes both the primary and fallback models into account. Reviews also correctly switch to the fallback model when rate-limit retries are exhausted.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine filter-performance">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Stalled model calls no longer wait indefinitely:</strong> We added timeouts to operations that could previously get stuck, including review processing and BYOK connection checks.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-byok filter-ai-engine filter-notifications">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Clearer handling of unavailable models:</strong> Reviews that cannot obtain an available BYOK model are now reported as failed instead of appearing to complete successfully. We also prevent duplicate notifications for the same model-exhaustion failure.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-byok filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Fewer unnecessary retries after provider billing errors:</strong> Errors that require changes to the provider account or payment setup no longer trigger repeated retries that cannot resolve the issue.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Better recovery from unexpected model responses:</strong> We improved how reviews handle responses that contain useful content in an unexpected format, reducing failures caused by response structure.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">More complete suggestion formatting:</strong> We fixed cases where the formatting step could leave suggestions out of the final review.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Cleaner review comments:</strong> Internal labels used during generation and auxiliary numbered structures are now removed more consistently before suggestions are published, without rewriting normal explanatory text.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Manual review requests are preserved:</strong> When you request a review while the PR is already being processed, the request is deferred to a new attempt instead of being silently dropped.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Correct branch selection for reviews:</strong> Reviews now consistently take the repository’s default branch, configured branch patterns, and explicit exclusions into account when deciding whether a PR should be reviewed.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Bitbucket repository configuration:</strong> We fixed how Kodus reads configuration files from Bitbucket repositories, ensuring repository settings are loaded during reviews.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-mcp filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">More reliable task context retrieval:</strong> We fixed cases where issue identifiers were sent to integration fields that only accept predefined options, causing task-context requests to fail.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider filter-performance">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">More reliable reaction counts:</strong> We fixed reaction synchronization to prevent stale counts and reduced the number of simultaneous requests sent to Git providers.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-cockpit">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Cache write costs are easier to identify:</strong> Usage related to cache writes now appears separately in token charts and cost breakdowns.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-cockpit">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Token usage is recorded even when operations fail:</strong> We fixed cases where an error could prevent token usage from being saved, leaving consumption reports incomplete.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-notifications">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Notifications follow the selected organization:</strong> The notification feed, unread count, and mark-as-read actions now consistently apply to the organization you are currently viewing.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-cockpit">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Dashboard pagination no longer skips records:</strong> We fixed how subsequent pages resume loading results, preventing records from being missed between pages.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-cockpit">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Cockpit cards respect the selected date range:</strong> We fixed analytics cards that were using their own date ranges instead of the dashboard’s shared filter.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-cockpit filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Date filters remain accurate after midnight:</strong> Date-picker presets and the current-day selection now remain correct when the page stays open across midnight.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Faster access to review findings:</strong> Clicking the suggestion count in the PR list now takes you directly to the first finding.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Easier workspace selection:</strong> The workspace selection screen now supports scrolling through longer lists and uses less space at the top of the screen.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Clearer Git integration errors:</strong> Repository connection and selection flows now show more useful error messages, making it easier to understand why an integration could not be completed.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Better keyboard navigation:</strong> We improved focus visibility and made interactive table rows accessible using Enter and Space.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Reduced-motion preferences are respected:</strong> Interface animations now reduce motion when that preference is enabled on your device.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-self-hosted">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">More reliable self-hosted startup:</strong> We updated the MongoDB versions used in Docker Compose to avoid an identified kernel compatibility issue. Dependent services now wait for the database to become healthy before starting.</p>
+                    </div>
+
+                </div>
+            </div>
+
+            <p className="kodus-changelog-empty">No changelog entries for this filter yet.</p>
+        </div>
+    </div>
+
+    <div className="kodus-changelog-release">
+        <div className="kodus-changelog-meta">
             <span className="kodus-changelog-date">August 24, 2026</span>
         </div>
 

@@ -1591,7 +1591,7 @@ describe('SandboxLeaseReaperService', () => {
         expect(leaseRepo.delete).toHaveBeenCalledTimes(10);
     });
 
-    it('reapExpiredLeases: continues processing after one item fails', async () => {
+    it('reapExpiredLeases: one item failing to kill does not block the other two, and its own lease is preserved for retry', async () => {
         const leaseRepo = makeMockLeaseRepo();
         const configService = makeMockConfigService('test-e2b-key');
 
@@ -1620,8 +1620,14 @@ describe('SandboxLeaseReaperService', () => {
 
         await reaper.reapExpiredLeases();
 
-        // All 3 leases were deleted despite one kill failure
-        expect(leaseRepo.delete).toHaveBeenCalledTimes(3);
+        // The two leases whose kill succeeded are deleted; the one whose
+        // kill genuinely failed is left in place (still expired) so the
+        // NEXT tick retries the kill instead of permanently orphaning the
+        // E2B sandbox with no Mongo trace left to reconcile against.
+        expect(leaseRepo.delete).toHaveBeenCalledTimes(2);
+        expect(leaseRepo.delete).toHaveBeenCalledWith('org:repo:1');
+        expect(leaseRepo.delete).toHaveBeenCalledWith('org:repo:3');
+        expect(leaseRepo.delete).not.toHaveBeenCalledWith('org:repo:2');
     });
 
     it('reapExpiredLeases: treats E2B "already gone" as successful cleanup', async () => {
@@ -1758,7 +1764,7 @@ describe('SandboxLeaseReaperService', () => {
         expect(leaseRepo.delete).toHaveBeenCalledWith('org-uuid:repo:1');
     });
 
-    it('killIdleSandboxes: continues processing after one item fails', async () => {
+    it('killIdleSandboxes: one item failing to kill does not block the other two, and its own lease is preserved for retry', async () => {
         const leaseRepo = makeMockLeaseRepo();
         const configService = makeMockConfigService('test-e2b-key');
 
@@ -1802,8 +1808,14 @@ describe('SandboxLeaseReaperService', () => {
 
         await reaper.killIdleSandboxes();
 
-        // All 3 leases were deleted despite one kill failure
-        expect(leaseRepo.delete).toHaveBeenCalledTimes(3);
+        // The two leases whose kill succeeded are deleted; the one whose
+        // kill genuinely failed is left in place (killAt still <= now) so
+        // the NEXT 30s tick retries the kill instead of permanently
+        // orphaning the E2B sandbox with no lease left to reconcile against.
+        expect(leaseRepo.delete).toHaveBeenCalledTimes(2);
+        expect(leaseRepo.delete).toHaveBeenCalledWith('org-uuid:repo:1');
+        expect(leaseRepo.delete).toHaveBeenCalledWith('org-uuid:repo:3');
+        expect(leaseRepo.delete).not.toHaveBeenCalledWith('org-uuid:repo:2');
     });
 
     it('reaper force-cleans expired local lease with leaked leaseCount', async () => {
@@ -1979,17 +1991,23 @@ describe('SandboxLeaseManager reconnect RemoteCommands (blind-read fix)', () => 
         );
     });
 
-    it('listDir resolves against the repo root', async () => {
+    it('listDir cds into the repo root and lists RELATIVE paths', async () => {
+        // The reconnect path shares buildE2BRemoteCommands with the creator, so
+        // it inherits the shape `grep` already used: `cd <repo> && ... '<rel>'`.
+        // This test used to pin the ABSOLUTE form, which is exactly what made
+        // RepoLookup.exists — it compares repo-relative paths — answer false
+        // for every file that was in fact there (issue #1826).
         const fake = makeFakeE2bSandbox(async (cmd: string) =>
-            cmd.includes(`${REPO_DIR}/src`)
-                ? { stdout: `${REPO_DIR}/src/a.ts\n`, stderr: '', exitCode: 0 }
+            cmd.startsWith(`cd ${REPO_DIR} &&`) && cmd.includes("'src'")
+                ? { stdout: 'src/a.ts\n', stderr: '', exitCode: 0 }
                 : { stdout: '', stderr: '', exitCode: 0 },
         );
         const { remoteCommands } = buildReconnectCommands(fake);
 
         const out = await remoteCommands.listDir('src', 2);
 
-        expect(out).toContain('src/a.ts');
+        expect(out).toBe('src/a.ts\n');
+        expect(out).not.toContain(REPO_DIR);
     });
 
     it('read propagates real errors instead of silently returning empty', async () => {

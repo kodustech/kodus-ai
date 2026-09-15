@@ -8,9 +8,15 @@ import {
     listByokProviders,
     type ByokProviderDescriptor,
 } from "@services/organizationParameters/fetch";
-import { ArrowLeftIcon, CheckCircle2Icon, LinkIcon } from "lucide-react";
+import {
+    ArrowLeftIcon,
+    CheckCircle2Icon,
+    LinkIcon,
+    SparklesIcon,
+} from "lucide-react";
 import { cn } from "src/core/utils/components";
 
+import { isPlatformFundedProvider } from "../_data/platform-funded";
 import { PROVIDER_LABELS } from "../_data/provider-labels";
 import { ProviderLogo } from "./provider-logo";
 
@@ -91,6 +97,9 @@ function ProviderGridCard({
     // Not auto-listable ⇒ a custom endpoint the user must point at their own
     // deployment (base URL first), vs. a listable provider.
     const needsEndpoint = !provider.autoListModels;
+    // Kodus routes with its own upstream keys and bills the org's credits —
+    // the one card where "no key" is the feature, so say it on the tile.
+    const platformFunded = isPlatformFundedProvider(provider.id);
     return (
         <button
             type="button"
@@ -121,6 +130,11 @@ function ProviderGridCard({
                                 {connectedCount === 1 ? "model" : "models"}
                             </span>
                         ) : null}
+                    </span>
+                ) : platformFunded ? (
+                    <span className="text-primary-light flex items-center gap-1 text-xs">
+                        <SparklesIcon size={10} className="shrink-0" />
+                        No API key · pay with credits
                     </span>
                 ) : (
                     needsEndpoint && (
@@ -237,7 +251,14 @@ export function ConnectProviderFlow({
     // takes a typed model id (driven by the registry per provider).
     const onPickProvider = (p: ProviderChoice) =>
         router.push(`/byok/manual?provider=${encodeURIComponent(p.id)}`);
-    const mainProviders = providers.filter((p) => !isCustomProvider(p.id));
+    // Kodus leads the grid: it is the zero-setup path (no key, pay with
+    // credits), and the registry order would otherwise bury it last.
+    const mainProviders = [
+        ...providers.filter((p) => isPlatformFundedProvider(p.id)),
+        ...providers.filter(
+            (p) => !isCustomProvider(p.id) && !isPlatformFundedProvider(p.id),
+        ),
+    ];
     const customProviders = providers.filter((p) => isCustomProvider(p.id));
     // Providers the org already connected (a stored non-managed key), normalized
     // so `open_router`/`openrouter`-style id variants match the grid's ids.

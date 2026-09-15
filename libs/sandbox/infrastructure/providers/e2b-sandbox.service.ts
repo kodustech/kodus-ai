@@ -164,11 +164,31 @@ export function buildE2BRemoteCommands(
             path: string,
             maxDepth: number,
         ): Promise<string> => {
-            const escapedPath = resolveRepoPath(path).replace(/'/g, "'\\''");
+            // Same shape as `grep` above, deliberately: validate, then `cd` into
+            // REPO_DIR and pass the ORIGINAL RELATIVE path, so the listing comes
+            // back relative to the repo root.
+            //
+            // This used to run `find` on the ABSOLUTE path with no `cd`, which
+            // made the listing absolute ("/home/user/repo/./README") while every
+            // caller compares against a repo-relative path. `RepoLookup.exists`
+            // does exactly that comparison, so it answered false for EVERY file,
+            // including files it had just read — sibling-file retrieval then told
+            // the judge a test was missing when it was there (issue #1826).
+            resolveRepoPath(path);
+            const safeRelativePath = path.replace(/'/g, "'\\''");
+            // `find` exits 1 both for "that path is not there" and for
+            // "I could not read it", so the exit code alone cannot separate a
+            // real absence from a broken lookup — and `RepoLookup.exists` must
+            // never confuse the two. The `[ -e ]` guard does separate them: a
+            // missing path short-circuits with NO stderr, while anything find
+            // itself complains about arrives WITH stderr.
             const result = await runCmd(
-                `find '${escapedPath}' -maxdepth ${maxDepth} -type f`,
+                `cd ${REPO_DIR} && [ -e '${safeRelativePath}' ] && find '${safeRelativePath}' -maxdepth ${maxDepth} -type f`,
                 { timeoutMs: TIMEOUTS.COMMAND_LONG_MS },
             );
+            if (!result.stdout && result.stderr) {
+                return `Error: ${result.stderr}`;
+            }
             return result.stdout;
         },
 

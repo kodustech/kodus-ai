@@ -556,8 +556,10 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         >(IntegrationConfigKey.REPOSITORIES, organizationAndTeamData);
     }
 
-    private filterRepositoryInfo(codeRepositories: ICodeRepository[]) {
-        return codeRepositories.map((repository) => ({
+    private filterRepositoryInfo(
+        codeRepositories: ICodeRepository[] | null | undefined,
+    ) {
+        return (codeRepositories ?? []).map((repository) => ({
             id: repository.id,
             name: repository.name,
             isSelected: false,

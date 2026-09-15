@@ -234,11 +234,210 @@ describe('BusinessLogicValidationStage', () => {
         });
     });
 
-    describe('computePrBodyHash', () => {
-        it('only depends on the PR body — title-only edits should not re-trigger reviews', () => {
-            const hash1 = (stage as any).computePrBodyHash('same body');
-            const hash2 = (stage as any).computePrBodyHash('same body');
-            expect(hash1).toBe(hash2);
+    describe('one-shot gate', () => {
+        const withTicket = (overrides: Record<string, unknown> = {}) =>
+            buildContext({
+                pullRequest: {
+                    number: 42,
+                    body: 'Implements DL-2773',
+                    title: '',
+                    head: { ref: '' },
+                    base: { ref: 'main' },
+                },
+                ...overrides,
+            });
+
+        it('runs when the PR has never been validated', async () => {
+            const decision = await (stage as any).evaluateSkip(withTicket());
+            expect(decision).toBeNull();
+        });
+
+        it('skips once the PR has already been validated', async () => {
+            const decision = await (stage as any).evaluateSkip(
+                withTicket({
+                    pipelineMetadata: {
+                        lastExecution: {
+                            businessLogicValidatedAt: '2026-09-02T17:23:23.000Z',
+                        },
+                    },
+                }),
+            );
+
+            expect(decision).toEqual(
+                expect.objectContaining({ reason: 'already_validated' }),
+            );
+        });
+
+        it('still skips when the PR body changed after the first validation', async () => {
+            const decision = await (stage as any).evaluateSkip(
+                withTicket({
+                    pullRequest: {
+                        number: 42,
+                        body: 'Implements DL-2773 — description rewritten since',
+                        title: '',
+                        head: { ref: '' },
+                        base: { ref: 'main' },
+                    },
+                    pipelineMetadata: {
+                        lastExecution: {
+                            businessLogicValidatedAt: '2026-09-02T17:23:23.000Z',
+                        },
+                    },
+                }),
+            );
+
+            expect(decision).toEqual(
+                expect.objectContaining({ reason: 'already_validated' }),
+            );
+        });
+
+        it('re-runs for @kody review --force even when already validated', async () => {
+            const decision = await (stage as any).evaluateSkip(
+                withTicket({
+                    origin: 'command-force',
+                    pipelineMetadata: {
+                        lastExecution: {
+                            businessLogicValidatedAt: '2026-09-02T17:23:23.000Z',
+                        },
+                    },
+                }),
+            );
+
+            expect(decision).toBeNull();
+        });
+
+        it('does not re-run on a force-push, which sets forceFullRerun without a user asking', async () => {
+            const decision = await (stage as any).evaluateSkip(
+                withTicket({
+                    origin: 'automation',
+                    pipelineMetadata: {
+                        forceFullRerun: true,
+                        lastExecution: {
+                            businessLogicValidatedAt: '2026-09-02T17:23:23.000Z',
+                        },
+                    },
+                }),
+            );
+
+            expect(decision).toEqual(
+                expect.objectContaining({ reason: 'already_validated' }),
+            );
+        });
+
+        it('honours the legacy body-hash marker left by earlier releases', async () => {
+            const decision = await (stage as any).evaluateSkip(
+                withTicket({
+                    pipelineMetadata: {
+                        lastExecution: { businessLogicHash: 'a-stored-hash' },
+                    },
+                }),
+            );
+
+            expect(decision).toEqual(
+                expect.objectContaining({ reason: 'already_validated' }),
+            );
+        });
+    });
+
+    describe('validation marker', () => {
+        const ticketContext = () =>
+            buildContext({
+                pullRequest: {
+                    number: 42,
+                    body: 'Implements DL-2773',
+                    title: '',
+                    head: { ref: '' },
+                    base: { ref: 'main' },
+                },
+            });
+
+        it('marks the PR as validated when a gap is reported', async () => {
+            agentProvider.execute.mockResolvedValue('Business logic gap found');
+
+            const result = await stage.execute(ticketContext() as any);
+
+            expect(result.businessLogicValidatedAt).toEqual(expect.any(String));
+        });
+
+        it('marks the PR as validated when the PR is aligned', async () => {
+            agentProvider.execute.mockResolvedValue('No gaps found');
+
+            const result = await stage.execute(ticketContext() as any);
+
+            expect(result.businessLogicValidatedAt).toEqual(expect.any(String));
+        });
+
+        it('marks the PR as validated when weak task context is reported to the author', async () => {
+            agentProvider.execute.mockResolvedValue(
+                `${BusinessRulesValidationAgentProvider.WEAK_TASK_CONTEXT_MARKER}\n## Need Task Information`,
+            );
+
+            const result = await stage.execute(ticketContext() as any);
+
+            expect(result.businessLogicResults).toHaveLength(1);
+            expect(result.businessLogicValidatedAt).toEqual(expect.any(String));
+        });
+
+        it('leaves the PR unmarked when the agent fails, so a transient error stays retryable', async () => {
+            agentProvider.execute.mockRejectedValue(new Error('boom'));
+
+            const result = await stage.execute(ticketContext() as any);
+
+            expect(result.businessLogicValidatedAt).toBeUndefined();
+        });
+
+        it('leaves the PR unmarked when nothing was posted to the author', async () => {
+            agentProvider.execute.mockResolvedValue(
+                'MCP connection failed while reading the task',
+            );
+
+            const result = await stage.execute(ticketContext() as any);
+
+            expect(result.businessLogicResults).toEqual([]);
+            expect(result.businessLogicValidatedAt).toBeUndefined();
+        });
+    });
+
+    describe('automatic-run footer', () => {
+        it('tells the author how to re-run the validation on demand', async () => {
+            agentProvider.execute.mockResolvedValue('Business logic gap found');
+
+            const result = await stage.execute(
+                buildContext({
+                    pullRequest: {
+                        number: 42,
+                        body: 'Implements DL-2773',
+                        title: '',
+                        head: { ref: '' },
+                        base: { ref: 'main' },
+                    },
+                }) as any,
+            );
+
+            expect(result.businessLogicResults?.[0].suggestionContent).toContain(
+                '@kody -v business-logic',
+            );
+        });
+
+        it('omits the footer when the user asked for this run explicitly', async () => {
+            agentProvider.execute.mockResolvedValue('Business logic gap found');
+
+            const result = await stage.execute(
+                buildContext({
+                    origin: 'command-force',
+                    pullRequest: {
+                        number: 42,
+                        body: 'Implements DL-2773',
+                        title: '',
+                        head: { ref: '' },
+                        base: { ref: 'main' },
+                    },
+                }) as any,
+            );
+
+            expect(
+                result.businessLogicResults?.[0].suggestionContent,
+            ).not.toContain('@kody -v business-logic');
         });
     });
 

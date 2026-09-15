@@ -1,5 +1,4 @@
 import { TokenChunkingService } from '@libs/core/infrastructure/services/tokenChunking/tokenChunking.service';
-import { LLMModelProvider } from '@libs/llm/model-providers';
 import { managedModelMaxInputTokens } from '@libs/llm/managed-model-window';
 import { estimateTextTokens } from '@libs/llm/token-estimate';
 
@@ -9,7 +8,7 @@ import { estimateTextTokens } from '@libs/llm/token-estimate';
 // service reads keeps the test about the RULE (limit = window x usage) instead
 // of about a literal.
 const GEMINI_2_5_PRO_MAX_INPUT = managedModelMaxInputTokens(
-    LLMModelProvider.GEMINI_2_5_PRO,
+    'google:gemini-2.5-pro',
 )!;
 
 // Mock logger
@@ -81,7 +80,7 @@ describe('TokenChunkingService – overrideMaxTokens', () => {
 
             // Single small item that fits in any budget
             const result = service.chunkDataByTokens({
-                model: LLMModelProvider.GEMINI_2_5_PRO,
+                model: 'google:gemini-2.5-pro',
                 data: ['small item'],
                 usagePercentage: 90,
             });
@@ -125,7 +124,7 @@ describe('TokenChunkingService – overrideMaxTokens', () => {
             const overrideValue = 20000;
 
             const result = service.chunkDataByTokens({
-                model: LLMModelProvider.GEMINI_2_5_PRO,
+                model: 'google:gemini-2.5-pro',
                 data: ['small item'],
                 usagePercentage: 90,
                 overrideMaxTokens: overrideValue,
@@ -138,7 +137,7 @@ describe('TokenChunkingService – overrideMaxTokens', () => {
 
         it('should apply usagePercentage on top of overrideMaxTokens', () => {
             const result = service.chunkDataByTokens({
-                model: LLMModelProvider.GEMINI_2_5_PRO,
+                model: 'google:gemini-2.5-pro',
                 data: ['small item'],
                 usagePercentage: 50,
                 overrideMaxTokens: 10000,
@@ -172,7 +171,7 @@ describe('TokenChunkingService – overrideMaxTokens', () => {
                 GEMINI_2_5_PRO_MAX_INPUT;
 
             const result = service.chunkDataByTokens({
-                model: LLMModelProvider.GEMINI_2_5_PRO,
+                model: 'google:gemini-2.5-pro',
                 data: ['small item'],
                 usagePercentage: 90,
                 overrideMaxTokens: 0,
@@ -187,7 +186,7 @@ describe('TokenChunkingService – overrideMaxTokens', () => {
                 GEMINI_2_5_PRO_MAX_INPUT;
 
             const result = service.chunkDataByTokens({
-                model: LLMModelProvider.GEMINI_2_5_PRO,
+                model: 'google:gemini-2.5-pro',
                 data: ['small item'],
                 usagePercentage: 90,
                 overrideMaxTokens: undefined,
@@ -227,7 +226,7 @@ describe('TokenChunkingService – overrideMaxTokens', () => {
 
             // With model strategy (1M tokens) — everything fits in 1 chunk
             const resultDefault = service.chunkDataByTokens({
-                model: LLMModelProvider.GEMINI_2_5_PRO,
+                model: 'google:gemini-2.5-pro',
                 data: items,
                 usagePercentage: 90,
             });
@@ -235,7 +234,7 @@ describe('TokenChunkingService – overrideMaxTokens', () => {
             // With overrideMaxTokens=800, tokenLimit = floor(800 * 0.9) = 720
             // Each item ≈ 500 tokens, so each item gets its own chunk
             const resultOverride = service.chunkDataByTokens({
-                model: LLMModelProvider.GEMINI_2_5_PRO,
+                model: 'google:gemini-2.5-pro',
                 data: items,
                 usagePercentage: 90,
                 overrideMaxTokens: 800,
@@ -350,7 +349,7 @@ describe('TokenChunkingService – overrideMaxTokens', () => {
                 GEMINI_2_5_PRO_MAX_INPUT;
 
             const result = service.chunkDataByTokens({
-                model: LLMModelProvider.GEMINI_2_5_PRO,
+                model: 'google:gemini-2.5-pro',
                 data: ['small item'],
                 usagePercentage: 90,
                 overrideMaxTokens: -100,

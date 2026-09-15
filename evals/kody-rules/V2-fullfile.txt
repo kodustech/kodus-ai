@@ -1,0 +1,94 @@
+reproduce: node evals/kody-rules/context-fp-repro.js --model=kimi-k2.7-code@fireworks --reps=5 --out=V2-fullfile.txt
+corpus: cases-1826-fullfile.json — 6 case(s), 5 replicate(s)
+model:  kimi-k2.7-code@fireworks
+lookup: REAL sandbox (e2b) via buildRepoLookup
+Every case's CORRECT published count is 0. A non-zero count is a rule
+firing on a claim the diff window cannot support.
+
+══ full-file-function-is-too-long  [claim: none]
+   rule: Functions must not exceed 40 lines
+   file: src/reports/build-report.ts
+   why 0 is correct: buildMonthlyReport is 58 lines long. The hunk shows 4 of them, from the middle. Nothing in the diff carries the length, so a shard judging the hunk cannot apply this rule at all — it can only guess. The enclosing function is the whole of what is needed.
+   rep 1: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+      src/reports/build-report.ts:54  buildMonthlyReport exceeds the 40-line function limit after adding the audited/pending split, so split the lon
+   rep 2: published 1 (expected 1)  judged 2, claim-check dropped 0, kept 2 → 1 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+      src/reports/build-report.ts:54  buildMonthlyReport is longer than 40 lines and needs to be split.
+   rep 3: published 1 (expected 1)  judged 2, claim-check dropped 0, kept 2 → 1 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+      src/reports/build-report.ts:54  The newly added audited/pending lines extend an already over-length buildMonthlyReport function that violates 
+   rep 4: published 1 (expected 1)  judged 2, claim-check dropped 0, kept 2 → 1 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+      src/reports/build-report.ts:54  buildMonthlyReport exceeds the 40-line function limit.
+   rep 5: published 1 (expected 1)  judged 2, claim-check dropped 0, kept 2 → 1 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+      src/reports/build-report.ts:54  buildMonthlyReport exceeds the 40-line function limit.
+   → per-replicate published: [1, 1, 1, 1, 1]
+
+══ full-file-function-is-too-long-CONTROL  [claim: none]
+   rule: Functions must not exceed 40 lines
+   file: src/reports/build-report.ts
+   why 0 is correct: buildMonthlyReport is 58 lines long. The hunk shows 4 of them, from the middle. Nothing in the diff carries the length, so a shard judging the hunk cannot apply this rule at all — it can only guess. The enclosing function is the whole of what is needed.
+   rep 1: published 1 (expected 1)  judged 2, claim-check dropped 0, kept 2 → 1 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+      src/reports/build-report.ts:54  Added line is inside a function that exceeds the 40-line limit.
+   rep 2: published 1 (expected 1)  judged 2, claim-check dropped 0, kept 2 → 1 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+      src/reports/build-report.ts:54  This added line is inside buildMonthlyReport, which is already longer than 40 lines.
+   rep 3: published 0 (expected 1)  judged 0, claim-check dropped 0, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+   rep 4: published 1 (expected 1)  judged 2, claim-check dropped 0, kept 2 → 1 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+      src/reports/build-report.ts:54  Added line extends a function that already exceeds the 40-line limit.
+   rep 5: published 1 (expected 1)  judged 2, claim-check dropped 0, kept 2 → 1 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+      src/reports/build-report.ts:54  This added line is inside a function that exceeds the 40-line limit.
+   → per-replicate published: [1, 1, 0, 1, 1]
+
+══ full-file-function-is-short-enough  [claim: none]
+   rule: Functions must not exceed 40 lines
+   file: src/reports/daily.ts
+   why 0 is correct: buildDailySummary is 6 lines long, so the rule must NOT fire. The hunk has the same shape as the long-function case, which is the point: this is the guard that catches a "fix" that merely makes the rule fire more often.
+   rep 1: published 0 (expected 0)  judged 0, claim-check dropped 0, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+   rep 2: published 0 (expected 0)  judged 0, claim-check dropped 0, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+   rep 3: published 0 (expected 0)  judged 0, claim-check dropped 0, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+   rep 4: published 0 (expected 0)  judged 0, claim-check dropped 0, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+   rep 5: published 0 (expected 0)  judged 0, claim-check dropped 0, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+   → per-replicate published: [0, 0, 0, 0, 0]
+
+══ full-file-function-is-short-enough-CONTROL  [claim: none]
+   rule: Functions must not exceed 40 lines
+   file: src/reports/daily.ts
+   why 0 is correct: buildDailySummary is 6 lines long, so the rule must NOT fire. The hunk has the same shape as the long-function case, which is the point: this is the guard that catches a "fix" that merely makes the rule fire more often.
+   rep 1: published 0 (expected 0)  judged 0, claim-check dropped 0, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+   rep 2: published 0 (expected 0)  judged 0, claim-check dropped 0, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+   rep 3: published 0 (expected 0)  judged 0, claim-check dropped 0, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+   rep 4: published 0 (expected 0)  judged 0, claim-check dropped 0, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+   rep 5: published 0 (expected 0)  judged 0, claim-check dropped 0, kept 0 → 0 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+   → per-replicate published: [0, 0, 0, 0, 0]
+
+══ full-file-duplicate-block-in-the-same-file  [claim: none]
+   rule: Do not duplicate a block of statements in a file
+   file: src/billing/invoice.service.ts
+   why 0 is correct: The four added lines are byte-identical to renderHeader, ten lines above and outside the hunk. The duplication is visible only with the rest of the file, and the claim checker cannot help: a repo-wide grep has no symbol to refute.
+   rep 1: published 1 (expected 1)  judged 4, claim-check dropped 0, kept 4 → 1 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+      src/billing/invoice.service.ts:13  This added statement repeats an existing block in renderHeader and should be extracted into a shared helper.
+   rep 2: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+      src/billing/invoice.service.ts:13  The added footer body duplicates the existing header body and should be extracted into a shared helper.
+   rep 3: published 1 (expected 1)  judged 4, claim-check dropped 0, kept 4 → 1 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+      src/billing/invoice.service.ts:13  This added line duplicates a statement already present in renderHeader, violating the no-duplicate-block rule.
+   rep 4: published 1 (expected 1)  judged 4, claim-check dropped 0, kept 4 → 1 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+      src/billing/invoice.service.ts:13  New footer code duplicates the customer-info formatting block already present in renderHeader.
+   rep 5: published 1 (expected 1)  judged 4, claim-check dropped 0, kept 4 → 1 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+      src/billing/invoice.service.ts:13  renderFooter repeats the customer-formatting block already defined in renderHeader.
+   → per-replicate published: [1, 1, 1, 1, 1]
+
+══ full-file-duplicate-block-in-the-same-file-CONTROL  [claim: none]
+   rule: Do not duplicate a block of statements in a file
+   file: src/billing/invoice.service.ts
+   why 0 is correct: The four added lines are byte-identical to renderHeader, ten lines above and outside the hunk. The duplication is visible only with the rest of the file, and the claim checker cannot help: a repo-wide grep has no symbol to refute.
+   rep 1: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+      src/billing/invoice.service.ts:13  Extract the duplicated customer-formatting block into a shared helper and reuse it.
+   rep 2: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+      src/billing/invoice.service.ts:13  renderFooter repeats the customer-formatting block from renderHeader; extract a shared helper instead.
+   rep 3: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+      src/billing/invoice.service.ts:13  Added renderFooter duplicates the body of renderHeader instead of reusing it.
+   rep 4: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+      src/billing/invoice.service.ts:13  The footer repeats the same customer formatting block already present in renderHeader.
+   rep 5: published 1 (expected 1)  judged 1, claim-check dropped 0, kept 1 → 1 after rule-dedup  shards 1 run / 0 errored  SENT whole-file:1 slices:0
+      src/billing/invoice.service.ts:13  renderFooter duplicates the customer-formatting block from renderHeader; extract a shared helper instead.
+   → per-replicate published: [1, 1, 1, 1, 1]
+
+TOTAL: 0 of 30 case-runs published a comment that should not exist.
+       1 of 30 case-runs FAILED TO PUBLISH one the rule should have caught.

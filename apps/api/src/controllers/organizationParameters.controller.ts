@@ -250,13 +250,15 @@ export class OrganizationParametersController {
                 provider: { type: 'string' },
                 apiKey: { type: 'string' },
                 baseURL: { type: 'string' },
+                awsBearerToken: { type: 'string' },
+                awsRegion: { type: 'string' },
             },
         },
     })
     @ApiOperation({
         summary: 'List models with a candidate key',
         description:
-            "Live-list a provider's models using a just-typed (unsaved) API key + base URL — for the connect form, before the credential is saved. The key travels in the body (never a query string). Falls back to the org's saved credential when no key is supplied. Strict: an http provider with a candidate key does a live `/models` call and surfaces the error instead of a curated placeholder.",
+            "Live-list a provider's models using a just-typed (unsaved) credential — for the connect form, before it's saved. The credential travels in the body (never a query string): `apiKey`(+`baseURL`) for most providers, `awsBearerToken`(+`awsRegion`) for Amazon Bedrock, which never authenticates with an apiKey. Falls back to the org's saved credential when none is supplied. Strict: an http provider with a candidate credential does a live `/models` call and surfaces the error instead of a curated placeholder.",
     })
     @ApiOkResponse({ type: OrganizationProviderModelsResponseDto })
     public async listModelsWithKey(
@@ -265,13 +267,20 @@ export class OrganizationParametersController {
             provider: string;
             apiKey?: string;
             baseURL?: string;
+            awsBearerToken?: string;
+            awsRegion?: string;
         },
     ): Promise<ModelResponse> {
         const organizationId = this.request?.user?.organization?.uuid;
         return await this.getModelsByProviderUseCase.execute(
             body.provider,
             organizationId ? { organizationId } : undefined,
-            { apiKey: body.apiKey, baseURL: body.baseURL },
+            {
+                apiKey: body.apiKey,
+                baseURL: body.baseURL,
+                awsBearerToken: body.awsBearerToken,
+                awsRegion: body.awsRegion,
+            },
         );
     }
 
@@ -395,7 +404,10 @@ export class OrganizationParametersController {
             awsSessionToken?: string;
         },
     ): Promise<TestByokResult> {
-        return await this.testByokConnectionUseCase.execute(body);
+        return await this.testByokConnectionUseCase.execute(
+            body,
+            this.request?.user?.organization?.uuid,
+        );
     }
 
     @Post('/test-byok-model')
@@ -589,7 +601,9 @@ export class OrganizationParametersController {
             'Return the registry-driven list of connectable BYOK providers (id, label, aliases). Static and non-sensitive — never returns any credential.',
     })
     public async getByokProviders(): Promise<ByokProvidersResult> {
-        return await this.getByokProvidersUseCase.execute();
+        return await this.getByokProvidersUseCase.execute(
+            this.request?.user?.organization?.uuid,
+        );
     }
 
 

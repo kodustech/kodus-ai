@@ -4,6 +4,7 @@
  * a provider id renders as a friendly name instead of its raw id.
  */
 export const PROVIDER_LABELS: Record<string, string> = {
+    kodus: 'Kodus',
     anthropic: 'Anthropic',
     openai: 'OpenAI',
     google_gemini: 'Google',

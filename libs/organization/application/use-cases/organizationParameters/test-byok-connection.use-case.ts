@@ -3,6 +3,7 @@ import {
     describeProtocolMismatch,
 } from '@libs/llm/base-url-hygiene';
 import { BYOKProvider } from '@libs/llm/model-providers';
+import { isPlatformFundedProvider } from '@libs/llm/platform-funded-provider';
 import { REGISTRY } from '@libs/llm/providers';
 import { probeSlotCall } from '@libs/llm/probe-slot-call';
 import {
@@ -13,9 +14,14 @@ import { LLM_ERROR_TAG, LLM_SUCCESS_TAG } from '@libs/llm/log-tags';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { encrypt } from '@libs/common/utils/crypto';
 import { validateModelTuning } from '@libs/llm/validate-model-tuning';
+import {
+    KODUS_PROVIDER_GATE_TOKEN,
+    KODUS_PROVIDER_NOT_ENABLED_MESSAGE,
+    KodusProviderGate,
+} from '@libs/core/infrastructure/services/providers/kodus-provider-gate.service';
 import { ProviderService } from '@libs/core/infrastructure/services/providers/provider.service';
 import { createLogger } from '@libs/core/log/logger';
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional, Inject } from '@nestjs/common';
 import axios, { AxiosError } from 'axios';
 import { lookup } from 'dns/promises';
 
@@ -111,6 +117,44 @@ function isPrivateOrReservedIp(ip: string): boolean {
     return false;
 }
 
+/**
+ * What a 404 means — asked of the provider first, guessed at only in silence.
+ *
+ * A status code alone cannot distinguish a wrong base URL from a model nobody
+ * can route to, so the old fixed sentence ("the base URL is wrong, or the API
+ * path isn't on your plan") was a guess dressed as a diagnosis — and it was
+ * wrong in the case that actually reached a customer. OpenRouter had answered,
+ * in full, that the account's allowed-providers setting permitted no upstream
+ * serving the requested model, and named the page to change it. We replaced
+ * that with the guess, and the customer spent the day regenerating a key that
+ * was never the problem.
+ *
+ * So: when the provider explained itself, defer to it and say only what the
+ * status adds. The fixed sentence survives for the case it was written for —
+ * a 404 with no explanation at all, where a wrong endpoint really is the most
+ * likely cause.
+ */
+export function notFoundAdvice(providerMessage: string | undefined): string {
+    const said = (providerMessage ?? '').toLowerCase();
+
+    // Routing was refused, not addressing: the model exists and the key is
+    // valid, but the account allows no upstream that serves it. Naming the
+    // setting is the whole fix — nothing about the key or the URL will help.
+    if (
+        said.includes('allowed-providers') ||
+        said.includes('allowed providers') ||
+        (said.includes('no allowed') && said.includes('provider'))
+    ) {
+        return "Your provider account allows no upstream that serves this model, so the request has nowhere to route. Allow one of the providers the model is served by, or choose a model your current ones serve — this is a routing setting on the provider account, not a problem with the key.";
+    }
+
+    if (said.trim()) {
+        return 'The provider returned 404 for this request. Its own explanation is below — it names the cause more precisely than the status code can.';
+    }
+
+    return "The provider returned 404. Either the base URL is wrong for this provider, or the API path isn't exposed on your plan.";
+}
+
 export type TestByokResultCode =
     | 'ok'
     | 'auth'
@@ -132,6 +176,23 @@ export type TestByokResult = {
     providerMessage?: string;
     /** HTTP status returned by the provider, when applicable. */
     httpStatus?: number;
+    /**
+     * HOW a successful result was established, because the two are not the same
+     * promise and the screen must not make the stronger one on the weaker
+     * evidence.
+     *
+     * `'catalog'` — the provider's model list was fetched with the org's own
+     * credentials and the model was in it. That proves the key authenticates and
+     * the id exists; it does NOT prove the model can be run, because listing is
+     * not routing. A model can sit in the catalog and still be unreachable for
+     * this account.
+     *
+     * `'probe'` — a real one-token request was sent and answered. That is the
+     * strong claim.
+     *
+     * Absent on failures, and on successes from paths that always probe.
+     */
+    verifiedBy?: 'catalog' | 'probe';
     /** Set on a SUCCESSFUL test whose Custom reasoning override was partly (or
      *  wholly) ignored by the provider's adapter. The connection is fine; the
      *  config is not doing what the user thinks. Advisory on purpose — a working
@@ -176,7 +237,12 @@ const TEST_TIMEOUT_MS = 15_000;
 export class TestByokConnectionUseCase {
     private readonly logger = createLogger(TestByokConnectionUseCase.name);
 
-    constructor(private readonly providerService: ProviderService) {}
+    constructor(
+        private readonly providerService: ProviderService,
+        @Optional()
+        @Inject(KODUS_PROVIDER_GATE_TOKEN)
+        private readonly kodusGate?: KodusProviderGate,
+    ) {}
 
     /**
      * Public entry: run the connection test and emit ONE greppable observability
@@ -185,11 +251,32 @@ export class TestByokConnectionUseCase {
      * HTTP status / provider message) instead of dying silently in the UI. Input
      * rejections (BadRequestException) are logged too, then re-thrown unchanged.
      */
-    async execute(input: TestByokInput): Promise<TestByokResult> {
+    async execute(
+        input: TestByokInput,
+        organizationId?: string,
+    ): Promise<TestByokResult> {
         try {
+            // Private alpha: no probe on Kodus's own accounts for an org
+            // outside it (the probe is a real, billed upstream call).
+            if (
+                isPlatformFundedProvider(input?.provider) &&
+                !(await this.kodusGate?.isEnabledFor(organizationId))
+            ) {
+                this.logger.warn({
+                    message: 'Refused to probe the Kodus provider: org outside the private alpha',
+                    context: TestByokConnectionUseCase.name,
+                    metadata: { organizationId, provider: input?.provider },
+                });
+                throw new BadRequestException(KODUS_PROVIDER_NOT_ENABLED_MESSAGE);
+            }
             const result = await this.runTest(input);
             this.logTestOutcome(input, result);
-            return result;
+            // Everything this use case does is a REAL call to the provider, so
+            // a pass here is the strong claim. Stamping it once at the boundary
+            // rather than on each of the six success returns keeps the next one
+            // honest by default — an unstamped pass would silently read as the
+            // weaker catalog check on the screen.
+            return result.ok ? { verifiedBy: 'probe' as const, ...result } : result;
         } catch (err) {
             this.logger.warn({
                 message: `${LLM_ERROR_TAG} BYOK connection test rejected: provider=${input?.provider} model=${input?.model ?? '(none)'} — ${(err as Error)?.message ?? 'invalid request'}`,
@@ -309,7 +396,9 @@ export class TestByokConnectionUseCase {
             });
         }
 
-        if (!apiKey?.trim()) {
+        // A platform-funded (`kodus`) slot has no key to type — the probe still
+        // runs the real call, with the platform key resolved inside build().
+        if (!apiKey?.trim() && !isPlatformFundedProvider(byokProvider)) {
             throw new BadRequestException('apiKey is required');
         }
 
@@ -470,15 +559,29 @@ export class TestByokConnectionUseCase {
     }
 
     /**
-     * The form's values as the runtime slot they will become. `apiKey` is
-     * re-encrypted because a slot carries ciphertext by contract (the model build
-     * decrypts it downstream) — the probe must not be the one path that hands the
-     * builder a raw secret and quietly changes that invariant.
+     * The form's values as the runtime slot they will become. Every secret is
+     * re-encrypted because a slot carries ciphertext by contract (the model
+     * build decrypts it downstream) — the probe must not be the one path that
+     * hands the builder a raw secret and quietly changes that invariant.
+     * `apiKey` was the only field this covered; the Bedrock aws* secrets were
+     * forwarded as plaintext, and `bedrockModelFromCredentials` unconditionally
+     * decrypt()s them, so a real Bedrock credential blew up
+     * `createDecipheriv` on a plaintext value with "Invalid initialization
+     * vector" the moment a model was picked and the probe went through the
+     * runtime slot instead of the credential-only bearer/SigV4 checks.
      */
     private slotFromInput(
         input: TestByokInput,
         baseURL?: string,
     ): NormalizedModel {
+        // Encrypts whenever a value is present, even whitespace-only — gating on
+        // `.trim()` truthiness here while `bedrockModelFromCredentials` decrypts
+        // on plain truthiness would leave a whitespace-only secret unencrypted,
+        // reintroducing the exact "Invalid initialization vector" crash this
+        // method exists to prevent.
+        const encryptIfPresent = (v?: string): string | undefined =>
+            v !== undefined ? encrypt(v) : undefined;
+
         return {
             provider: input.provider as BYOKProvider,
             apiKey: encrypt(input.apiKey ?? ''),
@@ -491,11 +594,11 @@ export class TestByokConnectionUseCase {
             openrouterProviderOrder: input.openrouterProviderOrder,
             openrouterAllowFallbacks: input.openrouterAllowFallbacks,
             vertexLocation: input.vertexLocation,
-            awsBearerToken: input.awsBearerToken,
-            awsAccessKeyId: input.awsAccessKeyId,
-            awsSecretAccessKey: input.awsSecretAccessKey,
+            awsBearerToken: encryptIfPresent(input.awsBearerToken),
+            awsAccessKeyId: encryptIfPresent(input.awsAccessKeyId),
+            awsSecretAccessKey: encryptIfPresent(input.awsSecretAccessKey),
             awsRegion: input.awsRegion,
-            awsSessionToken: input.awsSessionToken,
+            awsSessionToken: encryptIfPresent(input.awsSessionToken),
         } as NormalizedModel;
     }
 
@@ -931,8 +1034,7 @@ export class TestByokConnectionUseCase {
                 ok: false,
                 code: 'not_found',
                 ...base,
-                message:
-                    "The provider returned 404. Either the base URL is wrong for this provider, or the API path isn't exposed on your plan.",
+                message: notFoundAdvice(providerMessage),
             };
         }
         if (status === 400) {

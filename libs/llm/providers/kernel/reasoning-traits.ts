@@ -182,7 +182,8 @@ export function resolveCompatibleReasoningTraits(
         // Bounded to the GLM version token. `includes('5.3')` matched the digits
         // anywhere in the id, so any model whose name happened to carry them was
         // pinned as always-thinking and denied a `thinking: disabled` it accepts.
-        const alwaysThinking = /glm-?5[.\-_]?3/.test(m);
+        // `p` is Fireworks' version separator (`glm-5p3-flash`) — the same model.
+        const alwaysThinking = /glm-?5[.\-_p]?3/.test(m);
         return {
             thinksByDefault: true,
             canDisableThinking: !alwaysThinking,
@@ -214,7 +215,7 @@ export function resolveCompatibleReasoningTraits(
         // rule onto them from a sibling is the move this table exists to avoid —
         // even though omitting would be the safer guess.
         const temperatureNotModifiable =
-            /k2[.\-_]?6/.test(m) || m.includes('code');
+            /k2[.\-_p]?6/.test(m) || m.includes('code');
         return {
             thinksByDefault: true,
             canDisableThinking: !alwaysThinking,
