@@ -97,8 +97,39 @@ export class NotificationQueryService {
     async seedFakeNotifications(
         userId: string,
         organizationId: string,
+        /**
+         * Rules the organization really has, so the links in the drawer open
+         * a rule instead of a dead id. The caller supplies them: the rules
+         * service is not in this module's graph (rules already depend on
+         * notifications, and importing it back would close the cycle).
+         */
+        sampleRules: Array<{
+            uuid?: string;
+            title?: string;
+            repositoryId?: string;
+        }> = [],
     ): Promise<{ created: number }> {
         const correlationId = `dev-seed-${randomUUID()}`;
+
+        // Global rules first: they resolve in every scope, while a rule
+        // whose repository is no longer configured has no page to open.
+        const realRules = sampleRules
+            .filter((rule) => rule.uuid)
+            .sort(
+                (a, b) =>
+                    Number(b.repositoryId === 'global') -
+                    Number(a.repositoryId === 'global'),
+            );
+        const sampleRule = (index: number) => {
+            const rule = realRules[index];
+            return {
+                ruleId: rule?.uuid ?? randomUUID(),
+                ruleName: rule?.title ?? 'A Kody rule',
+                repositoryId: rule?.repositoryId,
+            };
+        };
+        const firstRule = sampleRule(0);
+        const secondRule = sampleRule(1);
 
         const samples: Array<{
             event: NotificationEvent;
@@ -120,17 +151,18 @@ export class NotificationQueryService {
                 metadata: {
                     source: 'ide',
                     repoName: 'kodus-ai',
+                    repositoryId: firstRule.repositoryId,
                     invalidCount: 2,
                     issues: [
                         {
-                            ruleId: randomUUID(),
-                            ruleName: 'Follow the repository logging contract',
+                            ruleId: firstRule.ruleId,
+                            ruleName: firstRule.ruleName,
                             filePath: 'libs/core/log/logger.ts',
                             reason: 'File not found in default branch',
                         },
                         {
-                            ruleId: randomUUID(),
-                            ruleName: 'Keep migrations reversible',
+                            ruleId: secondRule.ruleId,
+                            ruleName: secondRule.ruleName,
                             filePath:
                                 'libs/core/infrastructure/database/migrations/',
                             reason: 'File not found in default branch',
@@ -142,6 +174,7 @@ export class NotificationQueryService {
                 event: NotificationEvent.IDE_RULES_SYNCED,
                 metadata: {
                     repoName: 'kodus-ai',
+                    repositoryId: firstRule.repositoryId,
                     rulesCount: 12,
                     syncMode: 'fast',
                 },
