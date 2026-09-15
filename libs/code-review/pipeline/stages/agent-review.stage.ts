@@ -1387,9 +1387,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // PR-level suggestions go to validSuggestionsByPR → CreatePrLevelCommentsStage.
             // A file-anchored finding takes the same route: it is about the
             // file, so there is no line in the diff to hang it on.
+            // Either field missing (not both) already means it can't be
+            // anchored to a diff position: a lone relevantLinesStart with no
+            // relevantFile used to fall through to file-level grouping keyed
+            // on '', which never matches a real changed file and silently
+            // dropped the finding as DISCARDED_BY_CODE_DIFF.
             const isPrLevelSuggestion = (s: Partial<CodeSuggestion>): boolean =>
                 s.label === 'kody_rules' &&
-                ((!s.relevantFile && !s.relevantLinesStart) ||
+                (!s.relevantFile ||
+                    !s.relevantLinesStart ||
                     s.fileAnchored === true);
             const prLevelSuggestions = deduped.filter(isPrLevelSuggestion);
             const fileLevelSuggestions = deduped.filter(
