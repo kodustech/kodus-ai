@@ -48,6 +48,8 @@ jobs:
 
                   echo WEB_HOSTNAME_BILLING=$(aws ssm get-parameter --name /qa/kodus-web/WEB_HOSTNAME_BILLING --query 'Parameter.Value' --output text) >> .env
 
+                  echo API_BILLING_WEBHOOK_SECRET=$(aws ssm get-parameter --name /qa/kodus-web/API_BILLING_WEBHOOK_SECRET --with-decryption --query 'Parameter.Value' --output text) >> .env
+
                   echo WEB_NEXTAUTH_SECRET=$(aws ssm get-parameter --name /qa/kodus-web/WEB_NEXTAUTH_SECRET --query 'Parameter.Value' --output text) >> .env
                   echo NEXTAUTH_URL=$(aws ssm get-parameter --name /qa/kodus-web/NEXTAUTH_URL --query 'Parameter.Value' --output text) >> .env
 
