@@ -20,7 +20,14 @@ export const useMCPAvailability = (enabled = true) =>
                     return false;
                 }
 
-                console.error("Failed to check MCP availability:", error);
+                // This probe asks "is the MCP manager reachable?", so a
+                // failure is its answer, not an application error. The navbar
+                // runs it on every page: logging at error level turned an
+                // unhealthy manager into a console error on every screen (and
+                // a red badge in the dev overlay) for something the user can
+                // neither see nor act on. Still fails OPEN — a blip should not
+                // make the Plugins entry disappear.
+                console.warn("MCP availability check failed:", error);
                 return true;
             }
         },
