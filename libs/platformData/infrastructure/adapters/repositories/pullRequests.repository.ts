@@ -1643,9 +1643,16 @@ export class PullRequestsRepository implements IPullRequestsRepository {
      * suggestion ids before the bulkWrite — the alternative (letting
      * Mongo generate during $push) doesn't return the new ids in a
      * shape we can use to reference suggestions later.
+     *
+     * The id must be RFC UUID-shaped: the fine-tuning ingest path
+     * (`findByOrganizationAndRepositoryWithStatusAndSyncedFlag` and
+     * `SuggestionEmbeddedService.isValidSuggestion`) filters suggestions by a
+     * UUID regex, and rows carrying a Mongo ObjectId hex string were silently
+     * dropped before embedding, so implemented suggestions and 👍/👎 never
+     * became learning examples (#1846).
      */
     newSubDocumentId(): string {
-        return new mongoose.Types.ObjectId().toString();
+        return crypto.randomUUID();
     }
 
     async addSuggestionToFile(
@@ -1657,7 +1664,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
     ): Promise<PullRequestsEntity | null> {
         const suggestionWithId = {
             ...newSuggestion,
-            id: newSuggestion.id || new mongoose.Types.ObjectId().toString(),
+            id: newSuggestion.id || this.newSubDocumentId(),
         };
 
         const doc = await this.pullRequestsModel
