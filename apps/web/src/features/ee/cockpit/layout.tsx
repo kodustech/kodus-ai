@@ -8,7 +8,7 @@ import { getCockpitMetricsVisibility } from "@services/organizationParameters/fe
 import type { CookieName } from "src/core/utils/cookie";
 import { captureGateHit } from "src/core/utils/gate-hit";
 import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team-id";
-import { greeting } from "src/core/utils/helpers";
+import { Greeting } from "@components/system/greeting";
 
 import { validateOrganizationLicense } from "../subscription/_services/billing/fetch";
 import { IssuesTabLink } from "./_components/cockpit-nav-tabs";
@@ -154,7 +154,7 @@ async function CockpitLayoutBody({
             {!hasAnalyticsData && <CockpitNoDataBanner />}
 
             <Page.Header>
-                <Page.Title>{greeting()}</Page.Title>
+                <Page.Title><Greeting /></Page.Title>
                 <div className="ml-auto flex items-center gap-2">
                     <RepositoryPicker
                         cookieValue={repositoryCookieValue}

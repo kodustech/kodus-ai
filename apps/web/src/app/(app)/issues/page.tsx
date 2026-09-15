@@ -11,7 +11,7 @@ import { parseAsJson, useQueryState } from "nuqs";
 import { useAuth } from "src/core/providers/auth.provider";
 import { usePermissions } from "src/core/providers/permissions.provider";
 import { filterArray, type FilterValueGroup } from "src/core/utils/filtering";
-import { greeting } from "src/core/utils/helpers";
+import { Greeting } from "@components/system/greeting";
 import { hasPermission } from "src/core/utils/permission-map";
 import { safeArray } from "src/core/utils/safe-array";
 import { CockpitNavTabs } from "src/features/ee/cockpit/_components/cockpit-nav-tabs";
@@ -114,7 +114,7 @@ export default function IssuesPage() {
                 The Cockpit's repository/date pickers stay out: they scope the
                 metrics, while this list has its own filters. */}
             <Page.Header>
-                <Page.Title>{greeting()}</Page.Title>
+                <Page.Title><Greeting /></Page.Title>
             </Page.Header>
             <Page.Header>
                 <CockpitNavTabs />

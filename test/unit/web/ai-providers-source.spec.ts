@@ -50,3 +50,30 @@ describe('AI providers page source', () => {
         expect(source).not.toContain('Configure a BYOK model above');
     });
 });
+
+describe('greeting source', () => {
+    it('is computed in the browser, not on the server', () => {
+        const source = read(
+            'apps/web/src/core/components/system/greeting.tsx',
+        );
+
+        expect(source).toContain('"use client"');
+        // Seeding state with the greeting leaves the server's wording on
+        // screen: the effect then sets an identical value and React bails
+        // out of the re-render.
+        expect(source).toContain('useState("")');
+        expect(source).not.toContain('useState(() => greeting');
+    });
+
+    it('has one call site so the surfaces cannot disagree', () => {
+        for (const f of [
+            'apps/web/src/app/(app)/issues/page.tsx',
+            'apps/web/src/features/ee/cockpit/layout.tsx',
+            'apps/web/src/features/ee/cockpit/_components/locked-preview.tsx',
+        ]) {
+            const source = read(f);
+            expect(source).toContain('<Greeting />');
+            expect(source).not.toContain('{greeting()}');
+        }
+    });
+});

@@ -1,6 +1,6 @@
 import { Card } from "@components/ui/card";
 import { Page } from "@components/ui/page";
-import { greeting } from "src/core/utils/helpers";
+import { Greeting } from "@components/system/greeting";
 
 // Static sample values only — this preview renders behind the
 // LockedFeatureOverlay blur for orgs whose tier doesn't include the
@@ -19,7 +19,7 @@ export const CockpitLockedPreview = () => {
     return (
         <Page.Root>
             <Page.Header>
-                <Page.Title>{greeting()}</Page.Title>
+                <Page.Title><Greeting /></Page.Title>
                 <div className="ml-auto flex items-center gap-2">
                     <div className="bg-card-lv2 h-8 w-40 rounded-lg" />
                     <div className="bg-card-lv2 h-8 w-52 rounded-lg" />

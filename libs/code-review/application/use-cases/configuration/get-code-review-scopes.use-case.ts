@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 
 import { ParametersKey } from '@libs/core/domain/enums';
 import { createLogger } from '@libs/core/log/logger';
@@ -49,12 +49,17 @@ export class GetCodeReviewScopesUseCase {
         try {
             const organizationId = user?.organization?.uuid;
 
+            // A missing organization or teamId is a bad request, not a
+            // server fault: thrown as plain Errors these surfaced as 500s and
+            // paged on a caller that simply forgot a query param.
             if (!organizationId) {
-                throw new Error('User organization data is missing');
+                throw new BadRequestException(
+                    'User organization data is missing',
+                );
             }
 
             if (!teamId) {
-                throw new Error('Team ID is required');
+                throw new BadRequestException('Team ID is required');
             }
 
             const parametersEntity = await this.parametersService.findByKey(
@@ -97,6 +102,12 @@ export class GetCodeReviewScopesUseCase {
 
             return scopes;
         } catch (error) {
+            // A bad request is the caller's mistake — rethrow it as-is instead
+            // of logging it as a server error and turning it into noise.
+            if (error instanceof BadRequestException) {
+                throw error;
+            }
+
             this.logger.error({
                 message: 'Error listing code review scopes',
                 context: GetCodeReviewScopesUseCase.name,
