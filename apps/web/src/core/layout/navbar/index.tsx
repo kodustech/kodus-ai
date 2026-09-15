@@ -181,6 +181,16 @@ export const NavMenu = () => {
         isMCPAvailable,
         canReadPullRequests,
         canReadCliReviews,
+        // The credit chip is built inside this memo, so its inputs belong
+        // here. Without them the badge froze at its first render — the
+        // balance had not arrived yet — and stayed blank afterwards, while
+        // the topbar next to it announced that reviews were paused. Listed
+        // field by field: `credits` is a fresh object every render.
+        credits.usesKodusProvider,
+        credits.balanceUsd,
+        credits.exhausted,
+        credits.routedThroughKodus,
+        credits.low,
     ]);
 
     const isActive = (
