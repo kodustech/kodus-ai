@@ -63,12 +63,7 @@ jobs:
 
                   echo WEB_HOSTNAME_BILLING=$(aws ssm get-parameter --name /prod/kodus-web/WEB_HOSTNAME_BILLING --query 'Parameter.Value' --output text) >> .env
 
-                  billing_webhook_secret=$(aws ssm get-parameter --name /prod/kodus-web/API_BILLING_WEBHOOK_SECRET --with-decryption --query 'Parameter.Value' --output text)
-                  if [ -z "$billing_webhook_secret" ]; then
-                    echo "::error::API_BILLING_WEBHOOK_SECRET is empty — /credits/* signing would silently use an empty secret"
-                    exit 1
-                  fi
-                  echo "API_BILLING_WEBHOOK_SECRET=$billing_webhook_secret" >> .env
+                  echo API_BILLING_WEBHOOK_SECRET=$(aws ssm get-parameter --name /prod/kodus-web/API_BILLING_WEBHOOK_SECRET --with-decryption --query 'Parameter.Value' --output text) >> .env
 
                   echo WEB_NEXTAUTH_SECRET=$(aws ssm get-parameter --name /prod/kodus-web/WEB_NEXTAUTH_SECRET --query 'Parameter.Value' --output text) >> .env
                   echo NEXTAUTH_URL=$(aws ssm get-parameter --name /prod/kodus-web/NEXTAUTH_URL --query 'Parameter.Value' --output text) >> .env
