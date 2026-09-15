@@ -368,6 +368,11 @@ export function RichTextEditor(props: RichTextEditorProps) {
     const saveFormatRef = React.useRef(saveFormat);
     const maxLengthRef = React.useRef(maxLength);
     const enableMentionsRef = React.useRef(enableMentions);
+    const lastEmittedValue = React.useRef<string | undefined>(undefined);
+    const lastExternalValue = React.useRef<{
+        editor: Editor;
+        key: string;
+    } | null>(null);
 
     React.useEffect(() => {
         onChangeRef.current = onChange;
@@ -388,6 +393,7 @@ export function RichTextEditor(props: RichTextEditorProps) {
 
             if (currentSaveFormat === "json") {
                 const json = editor.getJSON();
+                lastEmittedValue.current = JSON.stringify(json);
                 onChangeRef.current?.(json);
             } else {
                 const text = serializeTiptapContent(
@@ -398,6 +404,10 @@ export function RichTextEditor(props: RichTextEditorProps) {
                     currentMaxLength && text.length > currentMaxLength
                         ? text.slice(0, currentMaxLength)
                         : text;
+                // A controlled-value echo must not replace the live document
+                // (serialized text can omit a trailing empty paragraph).
+                // Keep length enforcement working when final differs from text.
+                lastEmittedValue.current = text;
                 onChangeRef.current?.(final);
             }
         },
@@ -425,7 +435,7 @@ export function RichTextEditor(props: RichTextEditorProps) {
     // Keep editable state in sync when disabled prop changes after creation
     React.useEffect(() => {
         if (editor && !editor.isDestroyed) {
-            editor.setEditable(!disabled);
+            editor.setEditable(!disabled, false);
         }
     }, [editor, disabled]);
 
@@ -614,9 +624,21 @@ export function RichTextEditor(props: RichTextEditorProps) {
     }, [value]);
 
     React.useEffect(() => {
-        if (!editor) {
+        if (!editor || editor.isDestroyed) {
             return;
         }
+
+        if (
+            lastExternalValue.current?.editor === editor &&
+            lastExternalValue.current.key === valueKey
+        ) {
+            return;
+        }
+        lastExternalValue.current = { editor, key: valueKey };
+        if (lastEmittedValue.current === valueKey) {
+            return;
+        }
+        lastEmittedValue.current = undefined;
 
         const currentContent =
             saveFormat === "json"
@@ -630,6 +652,7 @@ export function RichTextEditor(props: RichTextEditorProps) {
         if (valueKey !== currentKey) {
             editor.commands.setContent(
                 parseValueToTiptapContent(value || "", enableMentions) as any,
+                { emitUpdate: false },
             );
         }
     }, [valueKey, editor, enableMentions, saveFormat, value]);
