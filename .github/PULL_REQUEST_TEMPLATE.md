@@ -1,14 +1,16 @@
-<!--
-  Thanks for sending a PR! The PR title MUST follow Conventional Commits, e.g.
-    feat(code-review): add agent-first reviewer
-    fix(web): block app.kodus.io from search-engine indexing
-    chore(deps): bump posthog-node to 4.x
-  CI will fail otherwise.
--->
+<!-- Title: Conventional Commits, e.g. fix(web): block indexing. CI fails otherwise. -->
 
 ## Summary
 
 <!-- 1–3 sentences. What changes for the user (or for us, if internal)? -->
+
+## Eval evidence
+
+<!-- Required if the PR touches libs/code-review, libs/agent-harness, libs/kodyRules, libs/ee/{codeReview,kodyRules} or evals/. Stays under Summary: the rule reads only the first 1000 chars, comments included. Delete this section otherwise. -->
+
+- Run: <link to the code-review evals workflow run on this branch>, or `Not applicable: <concrete reason>`
+- Proof (feat/perf only): <metric> on <subset>, main <value> → branch <value>
+- Design: <link to the design comment on the issue>
 
 ## Changelog routing (driven by the PR title prefix)
 
