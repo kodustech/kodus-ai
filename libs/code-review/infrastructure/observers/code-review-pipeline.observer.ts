@@ -147,9 +147,26 @@ export class CodeReviewPipelineObserver implements IPipelineObserver {
         // it co-occurs with any other error (unfiltered elsewhere in
         // `errors`), since that other failure is real and does degrade the
         // check.
-        const errors = (context.errors || []).filter(
-            (e) => e?.metadata?.reason !== SUMMARY_GENERATION_FAILED_REASON,
-        );
+        const errors = (context.errors || []).filter((e) => {
+            const isSummaryGenerationFailure =
+                e?.metadata?.reason === SUMMARY_GENERATION_FAILED_REASON;
+
+            if (isSummaryGenerationFailure) {
+                this.logger.debug({
+                    message:
+                        'Ignoring SUMMARY_GENERATION_FAILED_REASON error when deriving the check conclusion',
+                    context: CodeReviewPipelineObserver.name,
+                    error: e?.error,
+                    metadata: {
+                        organizationId:
+                            context.organizationAndTeamData?.organizationId,
+                        reason: e?.metadata?.reason,
+                    },
+                });
+            }
+
+            return !isSummaryGenerationFailure;
+        });
         const hasCriticalError =
             context.statusInfo.status === AutomationStatus.ERROR ||
             errors.some((e) => (e.severity ?? 'critical') === 'critical');
