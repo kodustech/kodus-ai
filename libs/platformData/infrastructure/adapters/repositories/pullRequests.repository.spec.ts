@@ -146,6 +146,28 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                 'files.id': 'file-id-1',
             });
         });
+
+        it('uses the UUID suggestion generator when no id is provided', async () => {
+            const generatedId = '123e4567-e89b-12d3-a456-426614174000';
+            const newSuggestionId = jest
+                .spyOn(repo, 'newSuggestionId')
+                .mockReturnValue(generatedId);
+
+            await repo.addSuggestionToFile(
+                'file-id-1',
+                { suggestionContent: 'x' } as any,
+                42,
+                'cal.com',
+                ORG,
+            );
+
+            const update = findOneAndUpdate.mock.calls[0][1];
+            expect(newSuggestionId).toHaveBeenCalledTimes(1);
+            expect(update.$push['files.$.suggestions']).toMatchObject({
+                id: generatedId,
+                suggestionContent: 'x',
+            });
+        });
     });
 
     describe('updateFile', () => {
