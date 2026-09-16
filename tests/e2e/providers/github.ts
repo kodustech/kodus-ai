@@ -297,7 +297,9 @@ export class GitHubProvider extends BaseProvider {
         // caller scopes the query to a path, only inline comments can match
         // it, so issue-level comments (things like the generic "Code Review
         // Completed!" wrap-up, which classifyKodyComment reads as 'review')
-        // must be excluded entirely rather than always tagging along.
+        // must be excluded entirely rather than always tagging along. Without
+        // this, a scenario asserting "no contradiction on file X" could be
+        // failed by an unrelated PR-level comment wrongly attributed to X.
         const issueLevel =
             opts.path === undefined
                 ? this.listOrThrow(

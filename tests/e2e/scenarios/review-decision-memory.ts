@@ -71,7 +71,11 @@ export function extractSuggestedCode(body: string): string | null {
 // only needs to catch the specific reversal this fixture provokes, not every
 // way a model could phrase disagreement.
 const CONTRADICTION_PATTERNS = [
-    /remov(e|ing|ed)\s+(the\s+)?(null|undefined)?[\s-]*check/i,
+    // Gated on a directive cue ("you should/could/can", "please", "consider")
+    // so a comment that merely DESCRIBES the already-applied fix in passing
+    // (e.g. "removing the null check fixed the crash") isn't misread as a
+    // suggestion to undo it — only an actual ask to remove it counts.
+    /\b(you (should|could|can)|please|consider)\b.{0,40}remov(e|ing|ed)\s+(the\s+)?(null|undefined)?[\s-]*check/i,
     // Both word orders: "unnecessary null check" AND "check ... is unnecessary".
     /unnecessary.{0,30}(null|undefined)?[\s-]*check\b/i,
     /\bcheck\b.{0,30}unnecessary/i,
@@ -85,6 +89,165 @@ const CONTRADICTION_PATTERNS = [
 export function isContradictionComment(body: string): boolean {
     return CONTRADICTION_PATTERNS.some((re) => re.test(body));
 }
+
+// Second real bug shape, modeled on a GENUINE, ground-truth-confirmed #1313
+// contradiction found during this investigation (internal dogfooding data,
+// Sept 2026): round N fixed a resource-teardown-before-acquire ordering bug
+// by moving the teardown to run AFTER the new resource exists; round N+1
+// asked to move it back, reproducing the exact original lockout. Written
+// fresh here as a generic, self-contained analog, not copied from the real
+// incident's actual code or naming any internal system — same tension
+// (teardown-before-vs-after-acquire on failure), different domain (token
+// rotation).
+const ORDERING_FIXTURE_PATH = 'src/e2e-decision-memory-ordering-fixture.ts';
+
+// Bug: revokes the previous token before the new one is confirmed issued. If
+// `issue()` throws, the caller is left with NO valid token at all — the
+// previous one is already gone and the new one never arrived. The fix Kody
+// should suggest is to issue first and only revoke the old one once the new
+// one exists.
+const ORDERING_BUGGY_CONTENT = `export async function rotateApiToken(
+    store: { issue: () => Promise<string>; revoke: (token: string) => Promise<void> },
+    previousToken: string | null,
+): Promise<string> {
+    if (previousToken) {
+        await store.revoke(previousToken);
+    }
+    return store.issue();
+}
+`;
+
+// A round-2 comment on this file matching any of these means Kody suggested
+// moving the revoke back to run BEFORE issue — reversing the exact fix it
+// (or the developer, applying its suggestion) put in place, reproducing the
+// self-inflicted-lockout bug the fix exists to prevent.
+const ORDERING_CONTRADICTION_PATTERNS = [
+    /\b(you (should|could|can)|please|consider)\b.{0,60}revoke.{0,40}\bbefore\b.{0,20}issu/i,
+    /\brevoke\b.{0,40}\bfirst\b/i,
+    /\bmove\b.{0,40}revoke.{0,40}\b(before|above)\b/i,
+    /\bissu\w*\b.{0,40}\bafter\b.{0,40}revok/i,
+];
+
+/** Exported for unit testing — the ordering-fixture counterpart of
+ *  `isContradictionComment`. */
+export function isOrderingContradictionComment(body: string): boolean {
+    return ORDERING_CONTRADICTION_PATTERNS.some((re) => re.test(body));
+}
+
+// Third real bug shape, modeled on a GENUINE, ground-truth-confirmed #1313
+// contradiction found in the same investigation: round N added a cap to stop
+// an unbounded per-item loop from fanning out into hundreds of concurrent
+// calls; round N+1 asked to remove the cap because it silently drops items
+// past the limit — reproducing the exact fan-out the cap exists to prevent.
+// Written fresh here as a generic analog (job-status polling), not naming
+// any internal system.
+const CAP_FIXTURE_PATH = 'src/e2e-decision-memory-cap-fixture.ts';
+
+// Bug: no cap on `jobIds`, so a caller passing a large list makes this fan
+// out into one `getStatus` call per id with no bound. The fix Kody should
+// suggest is capping `jobIds` before the loop.
+const CAP_BUGGY_CONTENT = `export async function fetchJobStatuses(
+    api: { getStatus: (id: string) => Promise<string> },
+    jobIds: string[],
+): Promise<Record<string, string>> {
+    const statuses: Record<string, string> = {};
+    for (const id of jobIds) {
+        statuses[id] = await api.getStatus(id);
+    }
+    return statuses;
+}
+`;
+
+// A round-2 comment matching any of these means Kody suggested removing the
+// cap entirely — reversing the exact fan-out fix it (or the developer,
+// applying its suggestion) just put in place.
+const CAP_CONTRADICTION_PATTERNS = [
+    /\b(you (should|could|can)|please|consider)\b.{0,60}remov(e|ing)\s+(the\s+)?(cap|limit)\b/i,
+    /\bremov(e|ing)\b.{0,30}\b(the\s+)?(cap|limit)\b/i,
+    /\bwithout\s+(a\s+)?(cap|limit)\b/i,
+    /\bno\s+(cap|limit)\b/i,
+    /\bdrop(ping)?\s+the\s+(cap|limit)\b/i,
+];
+
+/** Exported for unit testing — the cap-fixture counterpart of
+ *  `isContradictionComment`. */
+export function isCapContradictionComment(body: string): boolean {
+    return CAP_CONTRADICTION_PATTERNS.some((re) => re.test(body));
+}
+
+// Fourth real bug shape, modeled on a GENUINE, ground-truth-confirmed #1313
+// regression found in the same investigation: a cache-key fallback that must
+// be unique per tenant instead fell back to a value shared by every tenant
+// on the same region+plan, reintroducing the exact collision the key exists
+// to prevent. Written fresh here as a generic analog, not naming any
+// internal system.
+const COLLISION_FIXTURE_PATH = 'src/e2e-decision-memory-collision-fixture.ts';
+
+// Bug: when `tenantId` is absent, the fallback seed is `region:plan` alone —
+// identical for every tenant sharing that combination, so their cache
+// entries collide. The fix Kody should suggest is keeping the fallback
+// unique per tenant (e.g. mixing in something tenant-scoped, or requiring
+// tenantId).
+const COLLISION_BUGGY_CONTENT = `export function cacheKeyFor(cfg: {
+    tenantId?: string;
+    region: string;
+    plan: string;
+}): string {
+    const seed = cfg.tenantId ? cfg.tenantId : \`\${cfg.region}:\${cfg.plan}\`;
+    return seed;
+}
+`;
+
+// A round-2 comment matching any of these means Kody suggested reverting to
+// the shared, non-unique fallback — reintroducing the exact cross-tenant
+// collision the fix exists to prevent.
+const COLLISION_CONTRADICTION_PATTERNS = [
+    /\b(you (should|could|can)|please|consider)\b.{0,60}(revert|remov(e|ing)|simplify|drop)\b.{0,60}(fallback|unique|tenant)/i,
+    /\bjust\s+use\b.{0,40}\bregion\b.{0,20}\bplan\b/i,
+    /\brevert\b.{0,40}\bfallback\b/i,
+    /\bunnecessary\b.{0,40}\b(complexity|uniqueness)\b/i,
+];
+
+/** Exported for unit testing — the collision-fixture counterpart of
+ *  `isContradictionComment`. */
+export function isCollisionContradictionComment(body: string): boolean {
+    return COLLISION_CONTRADICTION_PATTERNS.some((re) => re.test(body));
+}
+
+interface DecisionFixture {
+    /** Human-readable label used only in assertion failure messages. */
+    label: string;
+    path: string;
+    buggyContent: string;
+    isContradiction: (body: string) => boolean;
+}
+
+const DECISION_FIXTURES: DecisionFixture[] = [
+    {
+        label: 'missing-null-check',
+        path: FIXTURE_PATH,
+        buggyContent: BUGGY_CONTENT,
+        isContradiction: isContradictionComment,
+    },
+    {
+        label: 'revoke-before-issue-ordering',
+        path: ORDERING_FIXTURE_PATH,
+        buggyContent: ORDERING_BUGGY_CONTENT,
+        isContradiction: isOrderingContradictionComment,
+    },
+    {
+        label: 'unbounded-fanout-cap',
+        path: CAP_FIXTURE_PATH,
+        buggyContent: CAP_BUGGY_CONTENT,
+        isContradiction: isCapContradictionComment,
+    },
+    {
+        label: 'cross-tenant-cache-key-collision',
+        path: COLLISION_FIXTURE_PATH,
+        buggyContent: COLLISION_BUGGY_CONTENT,
+        isContradiction: isCollisionContradictionComment,
+    },
+];
 
 export const reviewDecisionMemory: Scenario = {
     id: 'review-decision-memory',
@@ -125,8 +288,10 @@ export const reviewDecisionMemory: Scenario = {
             branch,
             baseBranch: 'main',
             title: `[e2e] review-decision-memory ${ctx.runId.slice(0, 8)}`,
-            body: `Automated PR opened by Kodus E2E run ${ctx.runId}. Introduces a deliberate missing-null-check bug in a throwaway fixture file, then applies the fix for real and re-reviews.`,
-            fixtureFiles: { [FIXTURE_PATH]: BUGGY_CONTENT },
+            body: `Automated PR opened by Kodus E2E run ${ctx.runId}. Introduces ${DECISION_FIXTURES.length} deliberate bugs (${DECISION_FIXTURES.map((f) => f.label).join(', ')}) in throwaway fixture files, then applies each fix for real and re-reviews.`,
+            fixtureFiles: Object.fromEntries(
+                DECISION_FIXTURES.map((f) => [f.path, f.buggyContent]),
+            ),
         });
 
         try {
@@ -147,7 +312,7 @@ export const reviewDecisionMemory: Scenario = {
             ctx.assert(
                 round1.reviewComments + round1.issueComments + round1.reviews > 0,
                 pipelineStartedAt
-                    ? `Round 1 pipeline started (heartbeat at ${pipelineStartedAt}) but produced 0 findings on PR #${pr.number}. The fixture (${FIXTURE_PATH}) has a deliberate missing-null-check bug — any decent LLM should flag it.`
+                    ? `Round 1 pipeline started (heartbeat at ${pipelineStartedAt}) but produced 0 findings on PR #${pr.number}. The fixtures (${DECISION_FIXTURES.map((f) => f.path).join(', ')}) each have a deliberate bug — any decent LLM should flag at least one.`
                     : `No round-1 review findings on PR #${pr.number} within timeout.`,
             );
 
@@ -162,32 +327,37 @@ export const reviewDecisionMemory: Scenario = {
                 pr.number,
             );
 
-            // ---- Extract Kody's REAL suggestion and apply it verbatim ----
-            const round1Bodies = await ctx.provider.listReviewCommentBodies!(
-                { number: pr.number },
-                { sinceIso: sinceIsoRound1, path: FIXTURE_PATH },
-            );
-            const suggestedFix = round1Bodies
-                .map(extractSuggestedCode)
-                .find((code): code is string => code !== null);
-            ctx.assert(
-                suggestedFix !== undefined,
-                `Round 1 flagged the bug on ${FIXTURE_PATH} but none of its ${round1Bodies.length} ` +
-                    `comment(s) contained a parseable suggested-code block — can't apply a real fix. ` +
-                    `Comment(s):\n${round1Bodies.map((c) => `---\n${c.slice(0, 500)}`).join('\n')}`,
-            );
+            // ---- Extract Kody's REAL suggestion for EACH fixture and apply
+            // it verbatim ----
+            const suggestedFixes: Record<string, string> = {};
+            for (const fixture of DECISION_FIXTURES) {
+                const round1Bodies = await ctx.provider.listReviewCommentBodies!(
+                    { number: pr.number },
+                    { sinceIso: sinceIsoRound1, path: fixture.path },
+                );
+                const suggestedFix = round1Bodies
+                    .map(extractSuggestedCode)
+                    .find((code): code is string => code !== null);
+                ctx.assert(
+                    suggestedFix !== undefined,
+                    `Round 1 flagged the bug on ${fixture.path} (${fixture.label}) but none of its ` +
+                        `${round1Bodies.length} comment(s) contained a parseable suggested-code block — ` +
+                        `can't apply a real fix. Comment(s):\n${round1Bodies.map((c) => `---\n${c.slice(0, 500)}`).join('\n')}`,
+                );
+                suggestedFixes[fixture.path] = suggestedFix!;
+            }
 
-            // ---- Apply the fix for real, push a genuine 2nd commit.
-            // Bundles a second, unrelated buggy file in with the fix — see
+            // ---- Apply every fix for real, push a genuine 2nd commit.
+            // Bundles a second, unrelated buggy file in with the fixes — see
             // QUALITY_CHECK_PATH's comment above for why. ----
             const sinceIsoRound2 = new Date().toISOString();
             await ctx.provider.pushFollowupCommit!(
                 pr,
                 {
-                    [FIXTURE_PATH]: suggestedFix!,
+                    ...suggestedFixes,
                     [QUALITY_CHECK_PATH]: QUALITY_CHECK_BUGGY_CONTENT,
                 },
-                '[e2e] apply Kody\'s suggested fix verbatim + introduce an unrelated bug',
+                "[e2e] apply Kody's suggested fixes verbatim + introduce an unrelated bug",
             );
 
             // ---- Round 2: wait for a SECOND execution row that has actually
@@ -241,19 +411,33 @@ export const reviewDecisionMemory: Scenario = {
             // execution — mirrors assertHealthyExecution's own settle gap.
             await new Promise((resolve) => setTimeout(resolve, 5_000));
 
-            const round2Bodies = await ctx.provider.listReviewCommentBodies!(
-                { number: pr.number },
-                { sinceIso: sinceIsoRound2, path: FIXTURE_PATH },
-            );
-
-            const contradictions = round2Bodies.filter(isContradictionComment);
-            ctx.assert(
-                contradictions.length === 0,
-                `Round 2 posted ${contradictions.length} comment(s) on ${FIXTURE_PATH} that ` +
-                    `suggest UNDOING the null-check fix already applied in round 1 — this is the ` +
-                    `#1313 symptom (Kody contradicting a decision from an earlier review round). ` +
-                    `Offending comment(s):\n${contradictions.map((c) => `---\n${c.slice(0, 500)}`).join('\n')}`,
-            );
+            // ---- Round 2 checks, per fixture: no comment on ANY fixture
+            // file may suggest reversing that fixture's own already-applied
+            // fix. Each fixture models a real, ground-truth-confirmed #1313
+            // contradiction shape found in production, so a regression here
+            // is a genuine repeat of a real bug, not a hypothetical. ----
+            const round2Results: Record<
+                string,
+                { comments: number; contradictions: number }
+            > = {};
+            for (const fixture of DECISION_FIXTURES) {
+                const round2Bodies = await ctx.provider.listReviewCommentBodies!(
+                    { number: pr.number },
+                    { sinceIso: sinceIsoRound2, path: fixture.path },
+                );
+                const contradictions = round2Bodies.filter(fixture.isContradiction);
+                ctx.assert(
+                    contradictions.length === 0,
+                    `Round 2 posted ${contradictions.length} comment(s) on ${fixture.path} ` +
+                        `(${fixture.label}) that suggest UNDOING the fix already applied in round 1 — ` +
+                        `this is the #1313 symptom (Kody contradicting a decision from an earlier ` +
+                        `review round). Offending comment(s):\n${contradictions.map((c) => `---\n${c.slice(0, 500)}`).join('\n')}`,
+                );
+                round2Results[fixture.path] = {
+                    comments: round2Bodies.length,
+                    contradictions: contradictions.length,
+                };
+            }
 
             // ---- Quality-regression guard: memory must not suppress a
             // genuinely new, unrelated finding bundled into the same commit ----
@@ -264,7 +448,7 @@ export const reviewDecisionMemory: Scenario = {
             ctx.assert(
                 qualityCheckBodies.length > 0,
                 `Round 2 found 0 comment(s) on ${QUALITY_CHECK_PATH}, a brand-new deliberate ` +
-                    `missing-null-check bug bundled into the SAME commit as the fix — this file has ` +
+                    `missing-null-check bug bundled into the SAME commit as the fixes — this file has ` +
                     `no prior decision history, so PreviousReviewDecisions context must not have ` +
                     `suppressed it. Any decent LLM should flag it independent of memory; 0 findings ` +
                     `means the memory feature is over-suppressing unrelated new findings.`,
@@ -280,8 +464,7 @@ export const reviewDecisionMemory: Scenario = {
                 },
                 round2: {
                     executions: executionsAfterRound2,
-                    commentsOnFixtureFile: round2Bodies.length,
-                    contradictions: contradictions.length,
+                    perFixture: round2Results,
                     commentsOnQualityCheckFile: qualityCheckBodies.length,
                 },
             };
