@@ -277,6 +277,42 @@ describe('buildUserPrompt', () => {
         expect(block).not.toContain('Kody Rule —');
     });
 
+    it('labels a general-review (non-rule) decision explicitly when ruleTitleByUuid is given, so it can never be misread as covering one of the rules listed above (malinosqui review, PR #1895)', () => {
+        const block = formatPreviousDecisions(
+            [
+                {
+                    suggestionId: 'sug-1',
+                    relevantFile: 'src/a.ts',
+                    suggestionContent: 'This log call needs to follow team logging standards.',
+                    label: 'security',
+                    // No brokenKodyRulesIds — this came from the general
+                    // finder, not any Kody Rule.
+                    outcome: 'implemented',
+                    decidedAt: '2026-01-01T00:00:00.000Z',
+                },
+            ],
+            new Map([['rule-uuid-1', 'Structured logging']]),
+        );
+
+        expect(block).toContain('Type: General review (not a Kody Rule) — security');
+    });
+
+    it('leaves Type as the raw label for a general-review decision when no ruleTitleByUuid is given (generic finder/verifier call sites unaffected)', () => {
+        const block = formatPreviousDecisions([
+            {
+                suggestionId: 'sug-1',
+                relevantFile: 'src/a.ts',
+                suggestionContent: 'This log call needs to follow team logging standards.',
+                label: 'security',
+                outcome: 'implemented',
+                decidedAt: '2026-01-01T00:00:00.000Z',
+            },
+        ]);
+
+        expect(block).toContain('Type: security');
+        expect(block).not.toContain('Type: General review');
+    });
+
     it.each([
         ['full', {}],
         ['compact', { adaptiveProfile: { compactPrompt: true } }],

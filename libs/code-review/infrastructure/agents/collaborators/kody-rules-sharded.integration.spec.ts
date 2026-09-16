@@ -547,4 +547,36 @@ describe('sharded kody-rules — PreviousDecision rule-title resolution (PR #189
             'Type: Kody Rule — "Prefer Map for lookups"',
         );
     });
+
+    it('labels a general-review (non-rule) decision explicitly, so it is never misread as covering a rule listed above', async () => {
+        const previousDecisions: PrDecisionRecord[] = [
+            {
+                suggestionId: 'sug-1',
+                relevantFile: 'src/a.ts',
+                relevantLinesStart: 5,
+                relevantLinesEnd: 5,
+                suggestionContent: 'This log call needs to follow team logging standards.',
+                label: 'security',
+                // No brokenKodyRulesIds — general finder, not a Kody Rule.
+                outcome: 'implemented',
+                decidedAt: '2026-01-01T00:00:00.000Z',
+            },
+        ];
+        let capturedUser = '';
+        const runJudge: RunJudge = async ({ user }) => {
+            capturedUser = user;
+            return [];
+        };
+
+        await judgeKodyRulesSharded({
+            changedFiles,
+            rules,
+            runJudge,
+            previousDecisions,
+        });
+
+        expect(capturedUser).toContain(
+            'Type: General review (not a Kody Rule) — security',
+        );
+    });
 });

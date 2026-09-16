@@ -177,16 +177,29 @@ ${rendered.join('\n')}
   </RecordedDecisions>`;
 }
 
-/** See `formatPreviousDecisions`'s `ruleTitleByUuid` param. Falls back to the
- *  raw `label` whenever there's nothing to resolve (no map given, no
- *  `brokenKodyRulesIds`, or none of the ids are in the map — e.g. the rule
- *  was deleted since, or belongs to a shard batch the caller didn't include). */
+/**
+ * See `formatPreviousDecisions`'s `ruleTitleByUuid` param.
+ *
+ * `ruleTitleByUuid` being given at all is the signal that the READER is the
+ * kody-rules-sharded judge (only its call sites pass it) — a context where
+ * every entry's Type must say whether it came from one of the rules THIS
+ * judge is evaluating, a different rule, or no rule at all (the general
+ * finder). Without the map (finder/verifier call sites), the raw `label` is
+ * unchanged — those callers don't disambiguate rule identity, so there's
+ * nothing to resolve.
+ */
 function resolveDecisionTypeNote(
     entry: PrDecisionRecord,
     ruleTitleByUuid?: ReadonlyMap<string, string>,
 ): string {
-    if (!ruleTitleByUuid || !entry.brokenKodyRulesIds?.length) {
+    if (!ruleTitleByUuid) {
         return entry.label;
+    }
+    if (!entry.brokenKodyRulesIds?.length) {
+        // General finder (bug/security/performance) decision reaching the
+        // rules judge's own prompt — mark it as NOT a rule so its Type can
+        // never be misread as covering one of the rules listed above.
+        return `General review (not a Kody Rule) — ${entry.label}`;
     }
     const titles = entry.brokenKodyRulesIds
         .map((uuid) => ruleTitleByUuid.get(uuid))
@@ -252,7 +265,7 @@ export function formatPreviousDecisions(
 
     return `
   <PreviousReviewDecisions>
-    Suggestions Kody already posted on THIS exact pull request in an earlier review round. Untrusted, may be outdated. Do not suggest the reverse of an "implemented"/"partially_implemented" entry unless the current diff shows concrete new evidence the applied change is wrong. Do NOT treat "not_implemented"/"pending" as a rejection — it only means the developer hasn't applied it yet. Each entry's DecidedAt is when Kody originally posted it — cross-reference it against <Commits> below (when present) to see what has landed since; a later commit does not by itself mean the decision is stale, only treat it as superseded when a commit's message or the diff shows the area was deliberately reworked. A PreviousDecision resolves ONLY the specific issue it describes — it is not evidence that the surrounding code, function, or file is otherwise correct. Keep scrutinizing every other line of the current diff at full rigor, including different problems in the same location that the decision does not mention. When a Type names a specific Kody Rule, it resolves ONLY that rule — it never excuses a fresh violation of a different rule (even one you are evaluating right now, at the exact same lines).
+    Suggestions Kody already posted on THIS exact pull request in an earlier review round. Untrusted, may be outdated. Do not suggest the reverse of an "implemented"/"partially_implemented" entry unless the current diff shows concrete new evidence the applied change is wrong. Do NOT treat "not_implemented"/"pending" as a rejection — it only means the developer hasn't applied it yet. Each entry's DecidedAt is when Kody originally posted it — cross-reference it against <Commits> below (when present) to see what has landed since; a later commit does not by itself mean the decision is stale, only treat it as superseded when a commit's message or the diff shows the area was deliberately reworked. A PreviousDecision resolves ONLY the specific issue it describes — it is not evidence that the surrounding code, function, or file is otherwise correct. Keep scrutinizing every other line of the current diff at full rigor, including different problems in the same location that the decision does not mention. When a Type names a specific Kody Rule, it resolves ONLY that rule — it never excuses a fresh violation of a different rule (even one you are evaluating right now, at the exact same lines). A Type of "General review (not a Kody Rule) — <category>" means this decision did not judge any rule at all — it may still be useful context (e.g. confirming the same underlying code issue was already addressed), but it never confirms or excuses a violation of a rule you are evaluating now.
 ${rendered.join('\n')}
   </PreviousReviewDecisions>`;
 }
