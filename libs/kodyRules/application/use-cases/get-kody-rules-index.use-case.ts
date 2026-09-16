@@ -54,12 +54,12 @@ export class GetKodyRulesIndexUseCase implements IUseCase {
                     entry.status !== KodyRulesStatus.APPLIED,
             );
 
-            // No request context at all means a non-HTTP caller (the dev
-            // notification seeder) that already supplied the organization it
-            // is entitled to. But a request WITH no user is an authenticated
-            // path that lost its identity, and returning the organization's
-            // whole index there would be failing open on the one thing this
-            // use case exists to scope.
+            // REQUEST is @Optional because this use case is also constructed
+            // outside a request scope (tests, and any future non-HTTP caller),
+            // where the caller supplies the organization itself. Inside a
+            // request, though, a missing user is an authenticated path that
+            // lost its identity, and returning the organization's whole index
+            // there would fail open on the one thing this use case scopes.
             if (!this.request) {
                 return visible;
             }

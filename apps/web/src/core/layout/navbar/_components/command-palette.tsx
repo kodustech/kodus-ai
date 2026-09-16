@@ -91,7 +91,7 @@ const PAGES: Array<{
         href: "/cli-reviews",
         icon: TerminalIcon,
         keywords: "reviews cli terminal",
-        permission: { action: Action.Read, resource: ResourceType.PullRequests },
+        permission: { action: Action.Read, resource: ResourceType.CliReview },
     },
     {
         label: "Cockpit",
