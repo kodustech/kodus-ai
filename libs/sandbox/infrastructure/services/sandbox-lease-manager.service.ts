@@ -835,12 +835,21 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         // between this read and the checkout, instead of leaving it open for
         // the other consumer's entire pipeline run.
         if (cloneParams) {
-            const currentDoc = await this.leaseRepo.findByPrKey(prKey);
+            // Best-effort re-read: a transient failure here must fall back to
+            // running the sync (the pre-fix behavior), not fail the acquire.
+            const currentDoc = await this.leaseRepo
+                .findByPrKey(prKey)
+                .catch(() => null);
             if (currentDoc && currentDoc.leaseCount > 1) {
                 this.logger.log({
                     message: `SandboxLeaseManager: skipping destructive git sync for sandboxId="${sandboxId}" prKey="${prKey}" — leaseCount=${currentDoc.leaseCount} other consumer(s) active`,
                     context: SandboxLeaseManager.name,
-                    metadata: { prKey, sandboxId, leaseCount: currentDoc.leaseCount },
+                    metadata: {
+                        organizationId: prKey.split(':')[0],
+                        prKey,
+                        sandboxId,
+                        leaseCount: currentDoc.leaseCount,
+                    },
                 });
             } else {
                 try {
