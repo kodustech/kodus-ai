@@ -82,6 +82,7 @@ import {
     WorkflowAuditTool,
     WorkflowLintTool,
 } from '@libs/code-review/infrastructure/analyzers/tools/workflow.tools';
+import { SecretScanTool } from '@libs/code-review/infrastructure/analyzers/tools/secret-scan.tool';
 import { AgentReviewStage } from './stages/agent-review.stage';
 import { BugAgentProvider } from '../infrastructure/agents/providers/bug-agent.provider';
 import { SecurityAgentProvider } from '../infrastructure/agents/providers/security-agent.provider';
@@ -181,6 +182,7 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         DeterministicEvidenceGate,
         AnalyzerToolRouter,
         RulePackTool,
+        SecretScanTool,
         WorkflowLintTool,
         WorkflowAuditTool,
         {
@@ -189,10 +191,16 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
             provide: ANALYZER_TOOLS_TOKEN,
             useFactory: (
                 rulePack: RulePackTool,
+                secrets: SecretScanTool,
                 workflowLint: WorkflowLintTool,
                 workflowAudit: WorkflowAuditTool,
-            ) => [rulePack, workflowLint, workflowAudit],
-            inject: [RulePackTool, WorkflowLintTool, WorkflowAuditTool],
+            ) => [rulePack, secrets, workflowLint, workflowAudit],
+            inject: [
+                RulePackTool,
+                SecretScanTool,
+                WorkflowLintTool,
+                WorkflowAuditTool,
+            ],
         },
         AgentReviewStage,
         BugAgentProvider,

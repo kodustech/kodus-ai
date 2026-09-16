@@ -19,6 +19,7 @@ import { writeFileSync } from 'node:fs';
 import { promisify } from 'node:util';
 
 import { NOISE_SAMPLES } from './noise-samples.mjs';
+import { SECRET_SAMPLES } from './secret-samples.mjs';
 
 const execFileP = promisify(execFile);
 
@@ -281,7 +282,7 @@ async function main() {
         console.log(`CWE-${cwe} (${label}): ${kept} samples`);
     }
 
-    const all = [...samples, ...NOISE_SAMPLES];
+    const all = [...samples, ...SECRET_SAMPLES, ...NOISE_SAMPLES];
 
     writeFileSync(
         out,
@@ -290,7 +291,8 @@ async function main() {
                 version: 1,
                 generatedAt: new Date().toISOString(),
                 counts: {
-                    vuln: samples.length,
+                    vuln: samples.length + SECRET_SAMPLES.length,
+                    secrets: SECRET_SAMPLES.length,
                     noise: NOISE_SAMPLES.length,
                 },
                 samples: all,
@@ -300,7 +302,7 @@ async function main() {
         ),
     );
     console.log(
-        `\nwrote ${samples.length} vulnerability + ${NOISE_SAMPLES.length} noise samples → ${out}`,
+        `\nwrote ${samples.length} vulnerability + ${SECRET_SAMPLES.length} secret + ${NOISE_SAMPLES.length} noise samples → ${out}`,
     );
 }
 
