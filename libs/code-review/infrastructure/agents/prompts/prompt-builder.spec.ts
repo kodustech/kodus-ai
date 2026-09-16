@@ -221,6 +221,62 @@ describe('buildUserPrompt', () => {
         expect(block).toContain('DecidedAt: 2026-01-01T00:00:00.000Z');
     });
 
+    it('resolves a kody_rules decision Type to the rule title when ruleTitleByUuid is given (malinosqui review, PR #1895)', () => {
+        const block = formatPreviousDecisions(
+            [
+                {
+                    suggestionId: 'sug-1',
+                    relevantFile: 'src/a.ts',
+                    suggestionContent: 'Log through PinoLoggerService.',
+                    label: 'kody_rules',
+                    brokenKodyRulesIds: ['rule-uuid-1'],
+                    outcome: 'implemented',
+                    decidedAt: '2026-01-01T00:00:00.000Z',
+                },
+            ],
+            new Map([['rule-uuid-1', 'Structured logging']]),
+        );
+
+        expect(block).toContain('Type: Kody Rule — "Structured logging"');
+    });
+
+    it('does not claim a match when brokenKodyRulesIds has no entry in ruleTitleByUuid (rule deleted or outside this shard batch)', () => {
+        const block = formatPreviousDecisions(
+            [
+                {
+                    suggestionId: 'sug-1',
+                    relevantFile: 'src/a.ts',
+                    suggestionContent: 'Log through PinoLoggerService.',
+                    label: 'kody_rules',
+                    brokenKodyRulesIds: ['unknown-rule-uuid'],
+                    outcome: 'implemented',
+                    decidedAt: '2026-01-01T00:00:00.000Z',
+                },
+            ],
+            new Map([['rule-uuid-1', 'Structured logging']]),
+        );
+
+        expect(block).toContain('rule not in the current catalog');
+        expect(block).not.toContain('Kody Rule —');
+    });
+
+    it('leaves Type as the raw label when no ruleTitleByUuid is given, even for a kody_rules decision (generic finder/verifier call sites)', () => {
+        const block = formatPreviousDecisions([
+            {
+                suggestionId: 'sug-1',
+                relevantFile: 'src/a.ts',
+                suggestionContent: 'Log through PinoLoggerService.',
+                label: 'kody_rules',
+                brokenKodyRulesIds: ['rule-uuid-1'],
+                outcome: 'implemented',
+                decidedAt: '2026-01-01T00:00:00.000Z',
+            },
+        ]);
+
+        expect(block).toContain('Type: kody_rules');
+        expect(block).not.toContain('Kody Rule —');
+    });
+
     it.each([
         ['full', {}],
         ['compact', { adaptiveProfile: { compactPrompt: true } }],

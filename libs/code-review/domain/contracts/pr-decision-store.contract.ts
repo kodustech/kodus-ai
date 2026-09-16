@@ -40,9 +40,22 @@ export interface PrDecisionRecord {
     readonly relevantLinesStart?: number;
     readonly relevantLinesEnd?: number;
     readonly suggestionContent: string;
-    /** 'bug' | 'security' | 'performance' | ... — surfaced to the verifier so a
-     *  security-labeled prior decision can be weighed differently than a style one. */
+    /** 'bug' | 'security' | 'performance' | 'kody_rules' | ... — surfaced to the
+     *  verifier so a security-labeled prior decision can be weighed differently
+     *  than a style one. Always 'kody_rules' for a rule-based finding — does
+     *  NOT say which rule; see `brokenKodyRulesIds` below. */
     readonly label: string;
+    /** UUID(s) of the Kody Rule(s) this decision violated, when `label` is
+     *  'kody_rules' (absent for general bug/security/performance findings).
+     *  Without this, the kody-rules-sharded judge cannot tell a decision made
+     *  about THIS rule from one made about a different rule (or the general
+     *  review) at the same file/lines — a resolved decision for rule A could
+     *  then wrongly excuse a fresh violation of rule B. A consumer that can
+     *  resolve these to rule titles (the sharded judge, which already holds
+     *  the rule catalog) should do so before rendering; one that cannot
+     *  (the generic finder/verifier) can ignore this field — `label` alone
+     *  is enough context there. */
+    readonly brokenKodyRulesIds?: readonly string[];
     readonly outcome: PrDecisionOutcome;
     /** `createdAt` of the original suggestion. */
     readonly decidedAt: string;

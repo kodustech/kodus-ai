@@ -14,6 +14,8 @@ import {
     RunJudge,
 } from './kody-rules-sharded.judge';
 import { mapAgentFindings } from './finding-mapper';
+import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
+import { KodyRulesScope } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
 const file = (filename: string, patch: string): any => ({
     filename,
@@ -446,5 +448,103 @@ describe('whole-file block — one copy, one instruction (#1826)', () => {
         ]);
         expect(prompt).toContain('may well sit outside the hunk');
         expect(copies(prompt)).toBe(41);
+    });
+});
+
+// Resolving `PreviousDecision.brokenKodyRulesIds` to a rule TITLE (malinosqui
+// review, PR #1895): the file/PR shards evaluate several NAMED candidate
+// rules at once, so an opaque "kody_rules" Type on every rule-based decision
+// gives the model no way to tell a decision about the SAME rule it's judging
+// apart from one about a DIFFERENT rule at the same location. This exercises
+// the whole wire — the map built once in `judgeKodyRulesSharded` from the
+// full rule catalog, reaching the actual prompt text — not just the pure
+// `formatPreviousDecisions` unit (covered in prompt-builder.spec.ts).
+describe('sharded kody-rules — PreviousDecision rule-title resolution (PR #1895 review)', () => {
+    const rules = [
+        {
+            uuid: 'rule-a',
+            title: 'Structured logging',
+            rule: 'Log through PinoLoggerService',
+        },
+        {
+            uuid: 'rule-b',
+            title: 'Prefer Map for lookups',
+            rule: 'Use a Map instead of .filter() in a loop',
+        },
+    ];
+    const changedFiles = [file('src/a.ts', '5 +console.log(1)')];
+
+    it('resolves a previous decision to the rule that produced it, in the file shard prompt', async () => {
+        const previousDecisions: PrDecisionRecord[] = [
+            {
+                suggestionId: 'sug-1',
+                relevantFile: 'src/a.ts',
+                relevantLinesStart: 5,
+                relevantLinesEnd: 5,
+                suggestionContent: 'Log through PinoLoggerService.',
+                label: 'kody_rules',
+                brokenKodyRulesIds: ['rule-a'],
+                outcome: 'implemented',
+                decidedAt: '2026-01-01T00:00:00.000Z',
+            },
+        ];
+        let capturedUser = '';
+        const runJudge: RunJudge = async ({ user }) => {
+            capturedUser = user;
+            return [];
+        };
+
+        await judgeKodyRulesSharded({
+            changedFiles,
+            rules,
+            runJudge,
+            previousDecisions,
+        });
+
+        expect(capturedUser).toContain(
+            'Type: Kody Rule — "Structured logging"',
+        );
+        // The OTHER candidate rule's title must not be the one attached to
+        // this decision — it would misreport which rule was already decided.
+        expect(capturedUser).not.toContain(
+            'Type: Kody Rule — "Prefer Map for lookups"',
+        );
+    });
+
+    it('resolves a previous decision in the PR-scope shard prompt too', async () => {
+        const previousDecisions: PrDecisionRecord[] = [
+            {
+                suggestionId: 'sug-pr-1',
+                suggestionContent: 'Split this into two migrations.',
+                label: 'kody_rules',
+                brokenKodyRulesIds: ['rule-b'],
+                outcome: 'pending',
+                decidedAt: '2026-01-01T00:00:00.000Z',
+            },
+        ];
+        const prRules = [
+            {
+                uuid: 'rule-b',
+                title: 'Prefer Map for lookups',
+                rule: 'PR-scope variant',
+                scope: KodyRulesScope.PULL_REQUEST,
+            },
+        ];
+        let capturedPrUser = '';
+        const runJudge: RunJudge = async ({ user, filename }) => {
+            if (filename === null) capturedPrUser = user;
+            return [];
+        };
+
+        await judgeKodyRulesSharded({
+            changedFiles,
+            rules: prRules,
+            runJudge,
+            previousDecisions,
+        });
+
+        expect(capturedPrUser).toContain(
+            'Type: Kody Rule — "Prefer Map for lookups"',
+        );
     });
 });

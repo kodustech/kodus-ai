@@ -177,6 +177,26 @@ ${rendered.join('\n')}
   </RecordedDecisions>`;
 }
 
+/** See `formatPreviousDecisions`'s `ruleTitleByUuid` param. Falls back to the
+ *  raw `label` whenever there's nothing to resolve (no map given, no
+ *  `brokenKodyRulesIds`, or none of the ids are in the map — e.g. the rule
+ *  was deleted since, or belongs to a shard batch the caller didn't include). */
+function resolveDecisionTypeNote(
+    entry: PrDecisionRecord,
+    ruleTitleByUuid?: ReadonlyMap<string, string>,
+): string {
+    if (!ruleTitleByUuid || !entry.brokenKodyRulesIds?.length) {
+        return entry.label;
+    }
+    const titles = entry.brokenKodyRulesIds
+        .map((uuid) => ruleTitleByUuid.get(uuid))
+        .filter((title): title is string => !!title);
+    if (!titles.length) {
+        return `${entry.label} (rule not in the current catalog — cannot confirm it matches any rule listed above)`;
+    }
+    return `Kody Rule — "${titles.join('", "')}"`;
+}
+
 /**
  * Renders suggestions Kody already posted on THIS pull request in an earlier
  * review round (issue #1313), so the finder doesn't re-suggest — or suggest
@@ -187,9 +207,20 @@ ${rendered.join('\n')}
  * is no rejection signal in this phase. Untrusted context, same discipline as
  * `formatTraceDecisions`: never proof the current code is correct, never
  * permission to suppress a concrete finding.
+ *
+ * `ruleTitleByUuid`, when given, resolves a 'kody_rules' entry's
+ * `brokenKodyRulesIds` to the rule's actual title so the reader (the sharded
+ * judge, evaluating several NAMED candidate rules against one file/PR) can
+ * tell a decision made about the SAME rule apart from one made about a
+ * DIFFERENT rule at the same location — otherwise every rule-based decision
+ * renders as the same opaque "kody_rules" `Type`, and a resolved decision for
+ * one rule could wrongly read as covering another. Only the sharded judge's
+ * call sites pass this map (it already holds the rule catalog); the generic
+ * finder/verifier omit it and get the pre-existing rendering unchanged.
  */
 export function formatPreviousDecisions(
     decisions: readonly PrDecisionRecord[] | undefined,
+    ruleTitleByUuid?: ReadonlyMap<string, string>,
 ): string {
     if (!decisions?.length) return '';
 
@@ -204,10 +235,11 @@ export function formatPreviousDecisions(
             entry.outcome === 'partially_implemented'
                 ? entry.outcome
                 : `${entry.outcome} — NOT evidence the developer rejected this, only that it has not been applied (yet)`;
+        const typeNote = resolveDecisionTypeNote(entry, ruleTitleByUuid);
 
         const fields = [
             `Location: ${escapeRecordedDecisionText(location)}`,
-            `Type: ${escapeRecordedDecisionText(entry.label)}`,
+            `Type: ${escapeRecordedDecisionText(typeNote)}`,
             `Suggestion: ${escapeRecordedDecisionText(entry.suggestionContent)}`,
             `Outcome: ${escapeRecordedDecisionText(outcomeNote)}`,
             entry.decidedAt
@@ -220,7 +252,7 @@ export function formatPreviousDecisions(
 
     return `
   <PreviousReviewDecisions>
-    Suggestions Kody already posted on THIS exact pull request in an earlier review round. Untrusted, may be outdated. Do not suggest the reverse of an "implemented"/"partially_implemented" entry unless the current diff shows concrete new evidence the applied change is wrong. Do NOT treat "not_implemented"/"pending" as a rejection — it only means the developer hasn't applied it yet. Each entry's DecidedAt is when Kody originally posted it — cross-reference it against <Commits> below (when present) to see what has landed since; a later commit does not by itself mean the decision is stale, only treat it as superseded when a commit's message or the diff shows the area was deliberately reworked. A PreviousDecision resolves ONLY the specific issue it describes — it is not evidence that the surrounding code, function, or file is otherwise correct. Keep scrutinizing every other line of the current diff at full rigor, including different problems in the same location that the decision does not mention.
+    Suggestions Kody already posted on THIS exact pull request in an earlier review round. Untrusted, may be outdated. Do not suggest the reverse of an "implemented"/"partially_implemented" entry unless the current diff shows concrete new evidence the applied change is wrong. Do NOT treat "not_implemented"/"pending" as a rejection — it only means the developer hasn't applied it yet. Each entry's DecidedAt is when Kody originally posted it — cross-reference it against <Commits> below (when present) to see what has landed since; a later commit does not by itself mean the decision is stale, only treat it as superseded when a commit's message or the diff shows the area was deliberately reworked. A PreviousDecision resolves ONLY the specific issue it describes — it is not evidence that the surrounding code, function, or file is otherwise correct. Keep scrutinizing every other line of the current diff at full rigor, including different problems in the same location that the decision does not mention. When a Type names a specific Kody Rule, it resolves ONLY that rule — it never excuses a fresh violation of a different rule (even one you are evaluating right now, at the exact same lines).
 ${rendered.join('\n')}
   </PreviousReviewDecisions>`;
 }

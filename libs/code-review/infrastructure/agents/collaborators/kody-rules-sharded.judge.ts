@@ -677,6 +677,7 @@ function fileShardUser(
     contextSlices?: Map<string, RetrievedSlice[]>,
     fileContents?: Map<string, string>,
     previousDecisionsByFile?: Map<string, PrDecisionRecord[]>,
+    ruleTitleByUuid?: ReadonlyMap<string, string>,
 ): string {
     const diff = (file as any).patchWithLinesStr ?? file.patch ?? '';
     // Scoped to THIS file — matching by line range is deliberately not done
@@ -687,6 +688,7 @@ function fileShardUser(
     // relevantFile is LLM-produced free text, not a validated path).
     const previousDecisionsSection = formatPreviousDecisions(
         previousDecisionsByFile?.get(normalizePath(file.filename)),
+        ruleTitleByUuid,
     );
     return [
         `<Rules>`,
@@ -756,10 +758,14 @@ function prShardUser(
     prBody?: string,
     languageLabel?: string | null,
     previousDecisions?: PrDecisionRecord[],
+    ruleTitleByUuid?: ReadonlyMap<string, string>,
 ): string {
     // Full list — file-level AND PR-level — since this shard reasons across
     // the whole PR anyway, unlike the per-file shard's file-scoped filter.
-    const previousDecisionsSection = formatPreviousDecisions(previousDecisions);
+    const previousDecisionsSection = formatPreviousDecisions(
+        previousDecisions,
+        ruleTitleByUuid,
+    );
     let used = 0;
     const diffs: string[] = [];
     for (const f of files) {
@@ -1169,6 +1175,19 @@ export async function judgeKodyRulesSharded(
     const previousDecisionsByFile =
         groupDecisionsByNormalizedFile(previousDecisions);
 
+    // Resolves a PreviousDecision's `brokenKodyRulesIds` to the rule's actual
+    // title (see `formatPreviousDecisions`'s `ruleTitleByUuid` param) — from
+    // the FULL rule list, not `judgeable`, so a decision made when a rule's
+    // detector had fired (and has since gone quiet) still resolves to a real
+    // name instead of reading as "not in the current catalog".
+    const ruleTitleByUuid = new Map(
+        rules
+            .filter((r): r is Partial<IKodyRule> & { uuid: string } =>
+                !!r.uuid,
+            )
+            .map((r) => [r.uuid, r.title ?? r.uuid] as const),
+    );
+
     let shardsRun = 0;
     let shardsErrored = 0;
     const violations: ShardViolation[] = [];
@@ -1205,6 +1224,7 @@ export async function judgeKodyRulesSharded(
                         contextSlices,
                         fileContents,
                         previousDecisionsByFile,
+                        ruleTitleByUuid,
                     ),
                     filename: file.filename,
                     ruleUuids,
@@ -1245,6 +1265,7 @@ export async function judgeKodyRulesSharded(
                     prBody,
                     languageLabel,
                     previousDecisions,
+                    ruleTitleByUuid,
                 ),
                 filename: null,
                 ruleUuids,
