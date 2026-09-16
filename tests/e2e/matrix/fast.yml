@@ -68,12 +68,24 @@ scenarios:
     # snapshots + a live enqueue→poll→completed against a small public PR.
     # No tenant/provider — it only touches /cli/public/*.
     - public-pr-demo
-    # Prior-round decision memory (#1313): opens a PR with a deliberate
-    # missing-null-check bug, applies the real fix for real (a genuine 2nd
-    # commit, not a command re-trigger), and asserts round 2 doesn't suggest
-    # undoing the fix. github-only for now — needs pushFollowupCommit +
+    # Prior-round decision memory (#1313): opens a PR with several deliberate
+    # bugs (missing-null-check, ordering, unbounded fan-out, cache-key
+    # collision — each modeled on a real, ground-truth-confirmed production
+    # contradiction), applies the real fixes for real (genuine 2nd commit,
+    # not a command re-trigger), and asserts round 2 doesn't suggest undoing
+    # any of them. github-only for now — needs pushFollowupCommit +
     # listReviewCommentBodies, only implemented on the GitHub provider.
     - review-decision-memory
+    # Negative-control counterpart: applies Kody's real fix, then
+    # DELIBERATELY reverts it, and asserts round 3 still flags it despite a
+    # PreviousReviewDecision marking it "implemented" — memory must not
+    # over-suppress when the diff shows concrete evidence of a real reversal.
+    - review-decision-memory-revert
+    # Kody Rules path counterpart: the rules-judge (kody-rules-sharded.judge.ts)
+    # is a SEPARATE code path from the bug/security/performance finder, so
+    # none of the fixtures above exercise it. Creates a real Kody Rule,
+    # applies the real fix, and asserts round 2 doesn't suggest undoing it.
+    - review-decision-memory-kody-rules
 
 cells:
     # ---------- self-hosted ----------

@@ -23,6 +23,8 @@ import perSeatLicenseToggle from './per-seat-license-toggle.js';
 import prExecutionSse from './pr-execution-sse.js';
 import publicPrDemo from './public-pr-demo.js';
 import reviewDecisionMemory from './review-decision-memory.js';
+import reviewDecisionMemoryRevert from './review-decision-memory-revert.js';
+import reviewDecisionMemoryKodyRules from './review-decision-memory-kody-rules.js';
 import rbacAuthorization from './rbac-authorization.js';
 import rbacFrontendRoutes from './rbac-frontend-routes.js';
 import rbacUiRender from './rbac-ui-render.js';
@@ -57,6 +59,8 @@ export const allScenarios: Record<string, Scenario> = {
     [prExecutionSse.id]: prExecutionSse,
     [publicPrDemo.id]: publicPrDemo,
     [reviewDecisionMemory.id]: reviewDecisionMemory,
+    [reviewDecisionMemoryRevert.id]: reviewDecisionMemoryRevert,
+    [reviewDecisionMemoryKodyRules.id]: reviewDecisionMemoryKodyRules,
     [rbacAuthorization.id]: rbacAuthorization,
     [rbacFrontendRoutes.id]: rbacFrontendRoutes,
     [rbacUiRender.id]: rbacUiRender,

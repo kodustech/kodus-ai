@@ -31,6 +31,8 @@ test("allScenarios: includes the registered release-gate scenarios", () => {
         "rbac-frontend-routes",
         "rbac-ui-render",
         "review-decision-memory",
+        "review-decision-memory-kody-rules",
+        "review-decision-memory-revert",
         "rule-file-detection",
         "sso-cookie-domain",
         "sso-multi-user",
@@ -222,6 +224,28 @@ test("review-decision-memory: github-only (needs pushFollowupCommit + listReview
     assert.ok(
         !s.appliesTo.provider.includes("github-app"),
         "review-decision-memory must stay github-only until github-app is validated too",
+    );
+});
+
+test("review-decision-memory-revert: github-only, same appliesTo shape as review-decision-memory", () => {
+    const s = allScenarios["review-decision-memory-revert"];
+    assert.deepEqual(s.appliesTo.target, ["cloud", "self-hosted"]);
+    assert.deepEqual(s.appliesTo.provider, ["github"]);
+    assert.deepEqual(s.appliesTo.license, ["paid", "license-paid"]);
+    assert.ok(
+        !s.appliesTo.provider.includes("github-app"),
+        "review-decision-memory-revert must stay github-only until github-app is validated too",
+    );
+});
+
+test("review-decision-memory-kody-rules: github-only, same appliesTo shape as review-decision-memory", () => {
+    const s = allScenarios["review-decision-memory-kody-rules"];
+    assert.deepEqual(s.appliesTo.target, ["cloud", "self-hosted"]);
+    assert.deepEqual(s.appliesTo.provider, ["github"]);
+    assert.deepEqual(s.appliesTo.license, ["paid", "license-paid"]);
+    assert.ok(
+        !s.appliesTo.provider.includes("github-app"),
+        "review-decision-memory-kody-rules must stay github-only until github-app is validated too",
     );
 });
 
