@@ -4,7 +4,7 @@ import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider
 import { AnalyzerFinding } from './analyzer-finding.type';
 
 /** Every deterministic tool Kody can run itself. */
-export const ANALYZER_TOOL_IDS = ['rule-pack'] as const;
+export const ANALYZER_TOOL_IDS = ['rule-pack', 'actionlint', 'zizmor'] as const;
 
 export type AnalyzerToolId = (typeof ANALYZER_TOOL_IDS)[number];
 

@@ -1152,6 +1152,8 @@ deterministicEvidence:
     ciChecks: false # read the CI results your own pipeline already produced
     tools: # per tool: off | auto | on — auto skips when your CI already runs an equivalent
         rule-pack: 'off'
+        actionlint: 'off' # GitHub Actions correctness; only runs when workflows change
+        zizmor: 'off' # GitHub Actions security; only runs when workflows change
 
 # suggestion control
 suggestionControl:

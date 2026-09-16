@@ -10,6 +10,22 @@ const downloadUrl = `https://github.com/shadowsocks/shadowsocks-rust/releases/do
 const opengrepVersion = '1.30.0';
 const opengrepUrl = `https://github.com/opengrep/opengrep/releases/download/v${opengrepVersion}/opengrep_manylinux_x86`;
 
+// GitHub Actions tools. They only run when a PR touches `.github/workflows`,
+// so they cost nothing on most reviews — but the binaries must already be here.
+const actionlintVersion = '1.7.12';
+const actionlintUrl = `https://github.com/rhysd/actionlint/releases/download/v${actionlintVersion}/actionlint_${actionlintVersion}_linux_amd64.tar.gz`;
+const zizmorVersion = '1.30.1';
+const zizmorUrl = `https://github.com/zizmorcore/zizmor/releases/download/v${zizmorVersion}/zizmor-x86_64-unknown-linux-gnu.tar.gz`;
+
+const installWorkflowTools = [
+    `wget -O actionlint.tar.gz ${actionlintUrl}`,
+    'tar -xzf actionlint.tar.gz actionlint',
+    'sudo mv actionlint /usr/local/bin/',
+    `wget -O zizmor.tar.gz ${zizmorUrl}`,
+    'tar -xzf zizmor.tar.gz',
+    'sudo mv zizmor /usr/local/bin/',
+];
+
 // Transparent proxy: all outbound TCP traffic is routed through the Shadowsocks server
 // so git fetch, curl, etc. automatically use the proxy without any extra configuration.
 export const kodusTemplate = Template()
@@ -22,6 +38,7 @@ export const kodusTemplate = Template()
         `wget -O opengrep ${opengrepUrl}`,
         'chmod +x opengrep',
         'sudo mv opengrep /usr/local/bin/',
+        ...installWorkflowTools,
     ])
     .copy('config.json', 'config.json')
     .copy('iptables-rules.sh', 'iptables-rules.sh', { mode: 0o755 })
@@ -48,4 +65,5 @@ export const kodusBenchmarkTemplate = Template()
         `wget -O opengrep ${opengrepUrl}`,
         'chmod +x opengrep',
         'sudo mv opengrep /usr/local/bin/',
+        ...installWorkflowTools,
     ]);

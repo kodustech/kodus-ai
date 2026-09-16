@@ -17,12 +17,15 @@ export type KnownAnalyzer =
     | 'gitleaks'
     | 'trufflehog'
     | 'ggshield'
-    | 'detect-secrets';
+    | 'detect-secrets'
+    | 'actionlint'
+    | 'zizmor';
 
 /** Deterministic tools Kody can run itself. */
 export enum ManagedTool {
     RULE_PACK = 'rule_pack',
     SECRETS = 'secrets',
+    WORKFLOW = 'workflow',
 }
 
 const ANALYZER_ALIASES: Record<KnownAnalyzer, readonly string[]> = {
@@ -38,6 +41,8 @@ const ANALYZER_ALIASES: Record<KnownAnalyzer, readonly string[]> = {
     trufflehog: ['trufflehog', 'truffle hog'],
     ggshield: ['ggshield', 'gitguardian'],
     'detect-secrets': ['detect-secrets', 'detect secrets'],
+    actionlint: ['actionlint'],
+    zizmor: ['zizmor'],
 };
 
 /**
@@ -61,6 +66,7 @@ const COVERED_BY: Record<ManagedTool, readonly KnownAnalyzer[]> = {
         'ggshield',
         'detect-secrets',
     ],
+    [ManagedTool.WORKFLOW]: ['actionlint', 'zizmor'],
 };
 
 /**

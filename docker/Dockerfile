@@ -127,6 +127,8 @@ FROM docker.io/oven/bun:${BUN_VERSION}-debian AS bun-source
 FROM --platform=$BUILDPLATFORM docker.io/library/debian:bookworm-slim AS opengrep-source
 ARG TARGETARCH
 ARG OPENGREP_VERSION=1.30.0
+ARG ACTIONLINT_VERSION=1.7.12
+ARG ZIZMOR_VERSION=1.30.1
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl \
   && case "$TARGETARCH" in \
@@ -137,7 +139,19 @@ RUN apt-get update \
   && curl -fsSL -o /opengrep \
        "https://github.com/opengrep/opengrep/releases/download/v${OPENGREP_VERSION}/${asset}" \
   && chmod +x /opengrep \
-  && test -s /opengrep
+  && test -s /opengrep \
+  && case "$TARGETARCH" in \
+       amd64) al=linux_amd64; zz=x86_64-unknown-linux-gnu ;; \
+       arm64) al=linux_arm64; zz=aarch64-unknown-linux-gnu ;; \
+     esac \
+  && curl -fsSL -o /tmp/actionlint.tgz \
+       "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_${al}.tar.gz" \
+  && tar -xzf /tmp/actionlint.tgz -C / actionlint \
+  && chmod +x /actionlint && test -s /actionlint \
+  && curl -fsSL -o /tmp/zizmor.tgz \
+       "https://github.com/zizmorcore/zizmor/releases/download/v${ZIZMOR_VERSION}/zizmor-${zz}.tar.gz" \
+  && tar -xzf /tmp/zizmor.tgz -C / zizmor \
+  && chmod +x /zizmor && test -s /zizmor
 
 FROM docker.io/library/node:22.22.2-slim AS runtime-common
 LABEL org.opencontainers.image.source="https://github.com/kodustech/kodus-ai"
@@ -205,6 +219,8 @@ FROM runtime-common AS worker
 # Only the worker runs the code-review pipeline, so only it needs the analyzer.
 # RunAnalyzersStage resolves it from PATH.
 COPY --from=opengrep-source /opengrep /usr/local/bin/opengrep
+COPY --from=opengrep-source /actionlint /usr/local/bin/actionlint
+COPY --from=opengrep-source /zizmor /usr/local/bin/zizmor
 CMD ["node", "dist/apps/worker/main.js"]
 FROM runtime-common AS mcp-manager
 ENTRYPOINT ["/usr/local/bin/prod-entrypoint-mcp-manager"]

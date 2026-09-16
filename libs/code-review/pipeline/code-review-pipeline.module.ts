@@ -78,6 +78,10 @@ import { DeterministicEvidenceGate } from '@libs/code-review/infrastructure/anal
 import { AnalyzerToolRouter } from '@libs/code-review/infrastructure/analyzers/analyzer-tool.router';
 import { ANALYZER_TOOLS_TOKEN } from '@libs/code-review/infrastructure/analyzers/tool.contract';
 import { RulePackTool } from '@libs/code-review/infrastructure/analyzers/tools/rule-pack.tool';
+import {
+    WorkflowAuditTool,
+    WorkflowLintTool,
+} from '@libs/code-review/infrastructure/analyzers/tools/workflow.tools';
 import { AgentReviewStage } from './stages/agent-review.stage';
 import { BugAgentProvider } from '../infrastructure/agents/providers/bug-agent.provider';
 import { SecurityAgentProvider } from '../infrastructure/agents/providers/security-agent.provider';
@@ -177,12 +181,18 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         DeterministicEvidenceGate,
         AnalyzerToolRouter,
         RulePackTool,
+        WorkflowLintTool,
+        WorkflowAuditTool,
         {
             // The registry the router walks. New tools are added here; the
             // stage itself stays unchanged.
             provide: ANALYZER_TOOLS_TOKEN,
-            useFactory: (rulePack: RulePackTool) => [rulePack],
-            inject: [RulePackTool],
+            useFactory: (
+                rulePack: RulePackTool,
+                workflowLint: WorkflowLintTool,
+                workflowAudit: WorkflowAuditTool,
+            ) => [rulePack, workflowLint, workflowAudit],
+            inject: [RulePackTool, WorkflowLintTool, WorkflowAuditTool],
         },
         AgentReviewStage,
         BugAgentProvider,
