@@ -1885,20 +1885,19 @@ export class PullRequestsRepository implements IPullRequestsRepository {
     }
 
     /**
-     * Stable generator for sub-document ids used in `bulkApplyFileChanges`.
-     * Exposed on the repository so the service can pre-compute file/
-     * suggestion ids before the bulkWrite — the alternative (letting
-     * Mongo generate during $push) doesn't return the new ids in a
-     * shape we can use to reference suggestions later.
-     *
-     * The id must be RFC UUID-shaped: the fine-tuning ingest path
-     * (`findByOrganizationAndRepositoryWithStatusAndSyncedFlag` and
-     * `SuggestionEmbeddedService.isValidSuggestion`) filters suggestions by a
-     * UUID regex, and rows carrying a Mongo ObjectId hex string were silently
-     * dropped before embedding, so implemented suggestions and 👍/👎 never
-     * became learning examples (#1846).
+     * Stable ObjectId-shaped generator for file sub-documents. Mongo's native
+     * generated ids are unavailable in a shape bulk writes can reference.
      */
     newSubDocumentId(): string {
+        return new mongoose.Types.ObjectId().toString();
+    }
+
+    /**
+     * Generates ids for suggestion sub-documents. The fine-tuning ingest path
+     * filters suggestion ids by UUID, so ObjectId hex strings were silently
+     * dropped before embedding (#1846).
+     */
+    newSuggestionId(): string {
         return crypto.randomUUID();
     }
 
@@ -1911,7 +1910,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
     ): Promise<PullRequestsEntity | null> {
         const suggestionWithId = {
             ...newSuggestion,
-            id: newSuggestion.id || this.newSubDocumentId(),
+            id: newSuggestion.id || this.newSuggestionId(),
         };
 
         const doc = await this.pullRequestsModel

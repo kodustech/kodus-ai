@@ -1317,7 +1317,7 @@ export class PullRequestsService implements IPullRequestsService {
                     unusedSuggestions,
                 ).map((s) => ({
                     ...s,
-                    id: s.id || this.pullRequestsRepository.newSubDocumentId(),
+                    id: s.id || this.pullRequestsRepository.newSuggestionId(),
                 }));
 
                 const existing = existingByPath.get(filename);
