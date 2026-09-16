@@ -20,6 +20,9 @@ const zizmorUrl = `https://github.com/zizmorcore/zizmor/releases/download/v${ziz
 const betterleaksVersion = '1.8.1';
 const betterleaksUrl = `https://github.com/betterleaks/betterleaks/releases/download/v${betterleaksVersion}/betterleaks_${betterleaksVersion}_linux_x64.tar.gz`;
 
+const osvScannerVersion = '2.6.0';
+const osvScannerUrl = `https://github.com/google/osv-scanner/releases/download/v${osvScannerVersion}/osv-scanner_linux_amd64`;
+
 const installWorkflowTools = [
     `wget -O actionlint.tar.gz ${actionlintUrl}`,
     'tar -xzf actionlint.tar.gz actionlint',
@@ -30,6 +33,9 @@ const installWorkflowTools = [
     `wget -O betterleaks.tar.gz ${betterleaksUrl}`,
     'tar -xzf betterleaks.tar.gz betterleaks',
     'sudo mv betterleaks /usr/local/bin/',
+    `wget -O osv-scanner ${osvScannerUrl}`,
+    'chmod +x osv-scanner',
+    'sudo mv osv-scanner /usr/local/bin/',
 ];
 
 // Transparent proxy: all outbound TCP traffic is routed through the Shadowsocks server

@@ -130,6 +130,7 @@ ARG OPENGREP_VERSION=1.30.0
 ARG ACTIONLINT_VERSION=1.7.12
 ARG ZIZMOR_VERSION=1.30.1
 ARG BETTERLEAKS_VERSION=1.8.1
+ARG OSV_SCANNER_VERSION=2.6.0
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl \
   && case "$TARGETARCH" in \
@@ -160,7 +161,10 @@ RUN apt-get update \
   && curl -fsSL -o /tmp/betterleaks.tgz \
        "https://github.com/betterleaks/betterleaks/releases/download/v${BETTERLEAKS_VERSION}/betterleaks_${BETTERLEAKS_VERSION}_${bl}.tar.gz" \
   && tar -xzf /tmp/betterleaks.tgz -C / betterleaks \
-  && chmod +x /betterleaks && test -s /betterleaks
+  && chmod +x /betterleaks && test -s /betterleaks \
+  && curl -fsSL -o /osv-scanner \
+       "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_${TARGETARCH}" \
+  && chmod +x /osv-scanner && test -s /osv-scanner
 
 FROM docker.io/library/node:22.22.2-slim AS runtime-common
 LABEL org.opencontainers.image.source="https://github.com/kodustech/kodus-ai"
@@ -231,6 +235,7 @@ COPY --from=opengrep-source /opengrep /usr/local/bin/opengrep
 COPY --from=opengrep-source /actionlint /usr/local/bin/actionlint
 COPY --from=opengrep-source /zizmor /usr/local/bin/zizmor
 COPY --from=opengrep-source /betterleaks /usr/local/bin/betterleaks
+COPY --from=opengrep-source /osv-scanner /usr/local/bin/osv-scanner
 CMD ["node", "dist/apps/worker/main.js"]
 FROM runtime-common AS mcp-manager
 ENTRYPOINT ["/usr/local/bin/prod-entrypoint-mcp-manager"]

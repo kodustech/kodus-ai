@@ -19,13 +19,17 @@ export type KnownAnalyzer =
     | 'ggshield'
     | 'detect-secrets'
     | 'actionlint'
-    | 'zizmor';
+    | 'zizmor'
+    | 'osv-scanner'
+    | 'dependabot'
+    | 'trivy';
 
 /** Deterministic tools Kody can run itself. */
 export enum ManagedTool {
     RULE_PACK = 'rule_pack',
     SECRETS = 'secrets',
     WORKFLOW = 'workflow',
+    DEPENDENCIES = 'dependencies',
 }
 
 const ANALYZER_ALIASES: Record<KnownAnalyzer, readonly string[]> = {
@@ -43,6 +47,9 @@ const ANALYZER_ALIASES: Record<KnownAnalyzer, readonly string[]> = {
     'detect-secrets': ['detect-secrets', 'detect secrets'],
     actionlint: ['actionlint'],
     zizmor: ['zizmor'],
+    'osv-scanner': ['osv-scanner', 'osv scanner'],
+    dependabot: ['dependabot'],
+    trivy: ['trivy'],
 };
 
 /**
@@ -67,6 +74,7 @@ const COVERED_BY: Record<ManagedTool, readonly KnownAnalyzer[]> = {
         'detect-secrets',
     ],
     [ManagedTool.WORKFLOW]: ['actionlint', 'zizmor'],
+    [ManagedTool.DEPENDENCIES]: ['osv-scanner', 'dependabot', 'snyk', 'trivy'],
 };
 
 /**

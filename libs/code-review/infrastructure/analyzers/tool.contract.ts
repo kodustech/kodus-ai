@@ -7,6 +7,7 @@ import { AnalyzerFinding } from './analyzer-finding.type';
 export const ANALYZER_TOOL_IDS = [
     'rule-pack',
     'secrets',
+    'dependencies',
     'actionlint',
     'zizmor',
 ] as const;

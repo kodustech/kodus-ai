@@ -83,6 +83,7 @@ import {
     WorkflowLintTool,
 } from '@libs/code-review/infrastructure/analyzers/tools/workflow.tools';
 import { SecretScanTool } from '@libs/code-review/infrastructure/analyzers/tools/secret-scan.tool';
+import { DependencyScanTool } from '@libs/code-review/infrastructure/analyzers/tools/dependency-scan.tool';
 import { AgentReviewStage } from './stages/agent-review.stage';
 import { BugAgentProvider } from '../infrastructure/agents/providers/bug-agent.provider';
 import { SecurityAgentProvider } from '../infrastructure/agents/providers/security-agent.provider';
@@ -183,6 +184,7 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         AnalyzerToolRouter,
         RulePackTool,
         SecretScanTool,
+        DependencyScanTool,
         WorkflowLintTool,
         WorkflowAuditTool,
         {
@@ -192,12 +194,14 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
             useFactory: (
                 rulePack: RulePackTool,
                 secrets: SecretScanTool,
+                dependencies: DependencyScanTool,
                 workflowLint: WorkflowLintTool,
                 workflowAudit: WorkflowAuditTool,
-            ) => [rulePack, secrets, workflowLint, workflowAudit],
+            ) => [rulePack, secrets, dependencies, workflowLint, workflowAudit],
             inject: [
                 RulePackTool,
                 SecretScanTool,
+                DependencyScanTool,
                 WorkflowLintTool,
                 WorkflowAuditTool,
             ],
