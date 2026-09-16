@@ -1537,9 +1537,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             // Any finding that named a file has to say WHERE,
                             // since a PR-level comment carries no anchor of
                             // its own — true whether it's fileAnchored
-                            // (explicitly out-of-hunk) or just missing a line.
+                            // (explicitly out-of-hunk) or just missing a
+                            // line. Cite a line only when one is real
+                            // (`!s.relevantLinesStart`, same falsy check
+                            // `isPrLevelSuggestion` uses above): fabricating
+                            // `:1` for a finding that has no line — the
+                            // empty/unparseable-patch case — would point at
+                            // a line that need not exist in the diff at all.
                             suggestionContent: s.relevantFile
-                                ? `\`${s.relevantFile}:${s.relevantLinesStart ?? 1}\` — ${s.suggestionContent || ''}`
+                                ? s.relevantLinesStart
+                                    ? `\`${s.relevantFile}:${s.relevantLinesStart}\` — ${s.suggestionContent || ''}`
+                                    : `\`${s.relevantFile}\` — ${s.suggestionContent || ''}`
                                 : s.suggestionContent || '',
                             oneSentenceSummary: s.oneSentenceSummary || '',
                             label: (s.label as any) || 'kody_rules',
