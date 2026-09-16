@@ -286,4 +286,40 @@ describe('a kody_rules finding with a line but no file goes PR-level, not discar
             ),
         ).toBe(true);
     });
+
+    // Kody's review on this PR's second commit caught this too: a
+    // relevantFile that IS in the PR but whose patch has no valid diff
+    // ranges (extractValidDiffLines returns []) makes snapLinesToDiff
+    // return the finding unchanged (agent-review.stage.ts:178) — the line
+    // stays missing. Falling into the file-level branch then produced a
+    // broken inline comment (calculateCommentStartLine returns undefined
+    // for a missing relevantLinesStart, and create-file-comments.stage.ts
+    // posts it anyway with start_line/line both undefined).
+    it('routes a finding naming an in-PR file with an unparseable patch to PR-level instead of a line-less inline comment', async () => {
+        const result = await run(
+            [
+                ruleFinding({
+                    relevantFile: 'src/empty-patch.ts',
+                    relevantLinesStart: undefined,
+                    relevantLinesEnd: undefined,
+                    brokenKodyRulesIds: ['rule-unrelated'],
+                }),
+            ],
+            {
+                changedFiles: [
+                    { filename: 'src/user.ts', patch: PATCH },
+                    { filename: 'src/empty-patch.ts', patch: '' },
+                ],
+            },
+        );
+
+        expect(result.validSuggestionsByPR).toHaveLength(1);
+        expect(result.validSuggestionsByPR[0].suggestionContent).toContain(
+            '`src/empty-patch.ts:1`',
+        );
+        const emptyPatchFile = (result.fileAnalysisResults ?? []).find(
+            (f: any) => f.file?.filename === 'src/empty-patch.ts',
+        );
+        expect(emptyPatchFile?.validSuggestionsToAnalyze ?? []).toEqual([]);
+    });
 });
