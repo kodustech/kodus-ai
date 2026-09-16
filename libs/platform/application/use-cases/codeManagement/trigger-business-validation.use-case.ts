@@ -4,6 +4,7 @@ import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 
 import { BusinessRulesValidationAgentProvider } from '@libs/agents/infrastructure/services/agents/business-rules-validation/businessRulesValidationAgent';
+import { NO_TASK_MCP_SENTINEL } from '@libs/agents/infrastructure/services/agents/business-rules-validation/no-task-mcp-sentinel';
 import { BusinessRulesPrepareContext } from '@libs/agents/infrastructure/services/agents/business-rules-validation/types';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
@@ -140,7 +141,7 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
         // "__NO_TASK_MCP__" string to whoever ran the command.
         const result =
             agentResult ===
-            BusinessRulesValidationAgentProvider.NO_TASK_MCP_SENTINEL
+            NO_TASK_MCP_SENTINEL
                 ? 'No task-management MCP (Jira, GitHub Issues, Linear, Notion, ' +
                   'ClickUp, etc.) is connected for this organization, so ' +
                   'business rules validation has nothing to compare the PR ' +

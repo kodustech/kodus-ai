@@ -1,6 +1,7 @@
 import { createThreadId } from '@libs/common/utils/thread-id';
 import { createLogger } from '@libs/core/log/logger';
 import { BusinessRulesValidationAgentProvider } from '@libs/agents/infrastructure/services/agents/business-rules-validation/businessRulesValidationAgent';
+import { NO_TASK_MCP_SENTINEL } from '@libs/agents/infrastructure/services/agents/business-rules-validation/no-task-mcp-sentinel';
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
@@ -223,9 +224,7 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
                 context: this.stageName,
                 metadata: {
                     prNumber: context.pullRequest?.number,
-                    isNoTaskMcpSentinel:
-                        result ===
-                        BusinessRulesValidationAgentProvider.NO_TASK_MCP_SENTINEL,
+                    isNoTaskMcpSentinel: result === NO_TASK_MCP_SENTINEL,
                     resultType: typeof result,
                     resultPreview:
                         typeof result === 'string'
@@ -236,10 +235,7 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
 
             // No task-management MCP connected — treat as if the category
             // were disabled: skip silently, no PR comment.
-            if (
-                result ===
-                BusinessRulesValidationAgentProvider.NO_TASK_MCP_SENTINEL
-            ) {
+            if (result === NO_TASK_MCP_SENTINEL) {
                 this.logger.log({
                     message:
                         '[BUSINESS-LOGIC] Skipped — no task-management MCP connected.',

@@ -3,7 +3,7 @@ import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 
 import { BusinessRulesValidationAgentUseCase } from '@libs/agents/application/use-cases/business-rules-validation-agent.use-case';
-import { BusinessRulesValidationAgentProvider } from '@libs/agents/infrastructure/services/agents/business-rules-validation/businessRulesValidationAgent';
+import { NO_TASK_MCP_SENTINEL } from '@libs/agents/infrastructure/services/agents/business-rules-validation/no-task-mcp-sentinel';
 import { ConversationAgentUseCase } from '@libs/agents/application/use-cases/conversation-agent.use-case';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -2118,7 +2118,7 @@ export class ChatWithKodyFromGitUseCase {
         // path did not (#leak: it was reaching users verbatim as literal
         // "__NO_TASK_MCP__" text). Translate it into a readable message.
         if (
-            result === BusinessRulesValidationAgentProvider.NO_TASK_MCP_SENTINEL
+            result === NO_TASK_MCP_SENTINEL
         ) {
             return ACKNOWLEDGMENT_MESSAGES.BUSINESS_LOGIC_NO_TASK_MCP;
         }
