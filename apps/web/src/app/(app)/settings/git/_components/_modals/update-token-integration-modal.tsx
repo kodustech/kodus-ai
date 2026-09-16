@@ -49,6 +49,8 @@ type UpdateTokenPlatformKey = keyof typeof UPDATE_TOKEN_PLATFORMS;
 const SELF_HOSTED_KEYS = new Set(["gitlab", "bitbucket", "forgejo"]);
 
 type Props = {
+    /** Existing self-hosted instance URL, when this connection has one. */
+    host?: string;
     /** Lowercase integration key, e.g. `gitlab`. */
     platformKey: UpdateTokenPlatformKey;
     platformName: string;
@@ -56,14 +58,16 @@ type Props = {
 };
 
 export const UpdateTokenIntegrationModal = ({
+    host,
     platformKey,
     platformName,
     teamId,
 }: Props) => {
+    const initialHost = host?.trim() ?? "";
     const [token, setToken] = useState("");
     const [error, setError] = useState({ message: "" });
-    const [selfhosted, setSelfhosted] = useState(false);
-    const [selfHostedUrl, setSelfHostedUrl] = useState("");
+    const [selfhosted, setSelfhosted] = useState(!!initialHost);
+    const [selfHostedUrl, setSelfHostedUrl] = useState(initialHost);
 
     const { invalidateQueries, generateQueryKey } =
         useReactQueryInvalidateQueries();

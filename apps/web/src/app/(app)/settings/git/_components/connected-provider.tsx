@@ -60,6 +60,7 @@ export const GitConnectedProvider = ({
                         onClick={() => {
                             magicModal.show(() => (
                                 <UpdateTokenIntegrationModal
+                                    host={connection.config?.host}
                                     platformKey={platformKey}
                                     platformName={platform.platformName}
                                     teamId={teamId}
