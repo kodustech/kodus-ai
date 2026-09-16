@@ -621,7 +621,7 @@ describe('syncE2BSandboxRepo', () => {
         expect(run).toHaveBeenCalledTimes(1);
         const [command, opts] = run.mock.calls[0];
         expect(command).toBe(
-            `cd ${REPO_DIR} && git -c http.extraHeader="$GIT_AUTH_HEADER" fetch --depth=1 'https://github.com/kodustech/kodus-ai' 'refs/pull/44/head' && git checkout -f FETCH_HEAD`,
+            `cd ${REPO_DIR} && git -c http.extraHeader="$GIT_AUTH_HEADER" fetch --depth=1 'https://github.com/kodustech/kodus-ai' 'refs/pull/44/head' && git checkout -f FETCH_HEAD && git clean -fd`,
         );
         expect(opts.envs.GIT_AUTH_HEADER).toBe(
             `Authorization: Basic ${Buffer.from('x-access-token:tok123').toString('base64')}`,
@@ -639,7 +639,7 @@ describe('syncE2BSandboxRepo', () => {
 
         const [command, opts] = run.mock.calls[0];
         expect(command).toBe(
-            `cd ${REPO_DIR} && git fetch --depth=1 'https://github.com/kodustech/kodus-ai' 'refs/pull/44/head' && git checkout -f FETCH_HEAD`,
+            `cd ${REPO_DIR} && git fetch --depth=1 'https://github.com/kodustech/kodus-ai' 'refs/pull/44/head' && git checkout -f FETCH_HEAD && git clean -fd`,
         );
         expect(opts.envs).toBeUndefined();
     });
@@ -658,11 +658,17 @@ describe('syncE2BSandboxRepo', () => {
     });
 
     it('is non-fatal on a failed fetch — logs a warning instead of throwing, leaving the stale checkout in place', async () => {
-        const run = jest.fn().mockResolvedValue({
-            stdout: '',
-            stderr: 'fatal: could not read from remote',
-            exitCode: 128,
-        });
+        // sandbox.commands.run THROWS CommandExitError on a non-zero exit
+        // (it never resolves with one) — mocking a resolve here would
+        // exercise dead code and hide the very bug this normalizes.
+        const run = jest.fn().mockRejectedValue(
+            new CommandExitError({
+                stdout: '',
+                stderr: 'fatal: could not read from remote',
+                exitCode: 128,
+                error: '',
+            } as any),
+        );
         const warn = jest.fn();
 
         await expect(
@@ -673,6 +679,34 @@ describe('syncE2BSandboxRepo', () => {
 
         expect(warn).toHaveBeenCalledTimes(1);
         expect(warn.mock.calls[0][0].message).toContain('git sync failed');
+    });
+
+    it('is non-fatal on a non-CommandExitError rejection too (e.g. a timeout)', async () => {
+        const run = jest.fn().mockRejectedValue(new Error('sandbox timed out'));
+        const warn = jest.fn();
+
+        await expect(
+            syncE2BSandboxRepo(makeSandbox(run), baseParams, {
+                logger: { warn, log: jest.fn() } as any,
+            }),
+        ).resolves.toBeUndefined();
+
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0][0].metadata.stderr).toBe('sandbox timed out');
+    });
+
+    it('prefers checkoutSha over prNumber/branch (CLI merge-base sync)', async () => {
+        const run = jest
+            .fn()
+            .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+        await syncE2BSandboxRepo(makeSandbox(run), {
+            ...baseParams,
+            checkoutSha: 'abc123deadbeef',
+        });
+
+        const [command] = run.mock.calls[0];
+        expect(command).toContain(`'abc123deadbeef'`);
+        expect(command).not.toContain('refs/pull');
     });
 
     it('logs success (not warn) when the sync succeeds', async () => {

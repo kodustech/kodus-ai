@@ -296,14 +296,27 @@ export async function syncE2BSandboxRepo(
     params: CreateSandboxParams,
     opts: SyncE2BSandboxRepoOptions = {},
 ): Promise<void> {
-    const { cloneUrl, authToken, authUsername, branch, prNumber, platform } =
-        params;
+    const {
+        cloneUrl,
+        authToken,
+        authUsername,
+        branch,
+        prNumber,
+        platform,
+        checkoutSha,
+    } = params;
     const { logger, logContext, timeoutMs = TIMEOUTS.CLONE_MS } = opts;
 
+    // Same precedence as the create path (checkoutSha > PR refspec > branch
+    // tip) — CLI-origin reviews set checkoutSha and leave prNumber undefined,
+    // so without this a reused CLI sandbox synced to the branch tip instead
+    // of the merge-base commit the diff was actually computed against.
     const refspec =
-        prNumber != null
-            ? resolvePrRefspec(platform, prNumber, cloneUrl, branch)
-            : `refs/heads/${branch}`;
+        checkoutSha != null
+            ? checkoutSha
+            : prNumber != null
+              ? resolvePrRefspec(platform, prNumber, cloneUrl, branch)
+              : `refs/heads/${branch}`;
 
     const hasAuth = !!authToken;
     const authHeader = hasAuth
@@ -317,15 +330,38 @@ export async function syncE2BSandboxRepo(
         ? `git -c http.extraHeader="$GIT_AUTH_HEADER" fetch --depth=1 ${safeCloneUrl} ${safeRefspec}`
         : `git fetch --depth=1 ${safeCloneUrl} ${safeRefspec}`;
 
-    const result = await sandbox.commands.run(
-        [`cd ${REPO_DIR}`, fetchCmd, `git checkout -f FETCH_HEAD`].join(
-            ' && ',
-        ),
-        {
-            timeoutMs,
-            ...(hasAuth && { envs: { GIT_AUTH_HEADER: authHeader } }),
-        },
-    );
+    // `git checkout -f` only overwrites TRACKED files — a file the previous
+    // round's agent left in the working tree (scratch output, an untracked
+    // file outside the new commit) survives and keeps confusing round N's
+    // readFile/grep the same way the stale-checkout bug did. `git clean -fd`
+    // makes the tree exactly the fetched commit.
+    let result: { exitCode: number; stderr?: string };
+    try {
+        result = await sandbox.commands.run(
+            [
+                `cd ${REPO_DIR}`,
+                fetchCmd,
+                `git checkout -f FETCH_HEAD`,
+                `git clean -fd`,
+            ].join(' && '),
+            {
+                timeoutMs,
+                ...(hasAuth && { envs: { GIT_AUTH_HEADER: authHeader } }),
+            },
+        );
+    } catch (err) {
+        // sandbox.commands.run THROWS a CommandExitError on any non-zero
+        // exit (same as buildE2BRemoteCommands' runCmd above) — without this
+        // normalization the exitCode !== 0 branch below is unreachable and a
+        // real fetch/checkout failure escapes as an unhandled rejection.
+        result =
+            err instanceof CommandExitError
+                ? { exitCode: err.exitCode, stderr: err.stderr }
+                : {
+                      exitCode: -1,
+                      stderr: err instanceof Error ? err.message : String(err),
+                  };
+    }
 
     if (result.exitCode !== 0) {
         // Non-fatal: the reused sandbox falls back to its stale checkout
