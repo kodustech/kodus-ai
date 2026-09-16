@@ -1150,7 +1150,8 @@ reviewOptions:
 # deterministic evidence (opt-in)
 deterministicEvidence:
     ciChecks: false # read the CI results your own pipeline already produced
-    rulePack: 'off' # off | auto | on — auto skips when your CI already runs an equivalent scanner
+    tools: # per tool: off | auto | on — auto skips when your CI already runs an equivalent
+        rule-pack: 'off'
 
 # suggestion control
 suggestionControl:

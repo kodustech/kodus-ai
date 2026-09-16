@@ -14,6 +14,7 @@ import {
 import { CheckEvidence } from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
 import { ManagedTool } from '@libs/code-review/infrastructure/adapters/services/ci-evidence/recognize-ci-analyzers';
 import { AnalyzerFinding } from '@libs/code-review/infrastructure/analyzers/analyzer-finding.type';
+import { RouteDecision } from '@libs/code-review/infrastructure/analyzers/tool.contract';
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { CollectCrossFileContextsResult } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import type { TraceContextDecision } from '@libs/cli-review/domain/types/trace-context.types';
@@ -247,14 +248,18 @@ export interface CodeReviewPipelineContext extends PipelineContext {
      */
     ciCoveredTools?: ManagedTool[];
 
-    /** In-diff findings from Kody's own security rule pack. */
+    /** In-diff findings from the deterministic tools that ran. */
     analyzerFindings?: AnalyzerFinding[];
 
     /**
-     * Why the analyzer pass produced nothing. Set only when it did NOT run —
-     * absent findings with no reason means it ran and found nothing.
+     * What the router decided for every registered tool, including the ones
+     * it skipped and why. Absent findings alone cannot distinguish "found
+     * nothing" from "never ran"; this is what tells them apart.
      */
-    analyzerSkipped?: 'unavailable';
+    analyzerRouting?: RouteDecision[];
+
+    /** Tools that were selected but failed. Never read as "clean". */
+    analyzerFailures?: string[];
 
     /** Sandbox handle kept alive for safeguard agent verification */
     sandboxHandle?: SandboxInstance;

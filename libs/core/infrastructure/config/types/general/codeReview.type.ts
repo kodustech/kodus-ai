@@ -344,10 +344,10 @@ export type CodeReviewConfig = {
         /** Read check runs / statuses the customer's own pipeline produced. */
         ciChecks?: boolean;
         /**
-         * Run Kody's own security rule pack. `auto` skips it when the
-         * customer's CI already runs an equivalent analyzer.
+         * Per-tool switch. `auto` runs a tool only when the customer's CI has
+         * no equivalent analysis; `on` runs it regardless; absent is off.
          */
-        rulePack?: 'off' | 'auto' | 'on';
+        tools?: Record<string, 'off' | 'auto' | 'on'>;
     };
     ignoredTitleKeywords: string[];
     baseBranches: string[];
