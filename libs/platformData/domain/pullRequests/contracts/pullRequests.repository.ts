@@ -236,8 +236,11 @@ export interface IPullRequestsRepository {
         totalChanges: number;
     }>;
 
-    /** Generates a stable id for file/suggestion sub-documents. */
+    /** Generates a stable ObjectId-shaped id for file sub-documents. */
     newSubDocumentId(): string;
+
+    /** Generates a UUID-shaped id accepted by the fine-tuning suggestion ingest. */
+    newSuggestionId(): string;
 
     addSuggestionToFile(
         fileId: string,

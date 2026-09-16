@@ -34,6 +34,7 @@ describe('PullRequestsService — #1107 bulk file changes', () => {
         bulkApplyFileChanges: jest.Mock;
         computeFileTotals: jest.Mock;
         newSubDocumentId: jest.Mock;
+        newSuggestionId: jest.Mock;
         update: jest.Mock;
     };
 
@@ -106,6 +107,7 @@ describe('PullRequestsService — #1107 bulk file changes', () => {
                 totalChanges: 0,
             }),
             newSubDocumentId: jest.fn(() => nextId()),
+            newSuggestionId: jest.fn(() => nextId()),
             update: jest.fn(async (entity: any, patch: any) => ({
                 ...entity,
                 ...patch,
@@ -275,6 +277,32 @@ describe('PullRequestsService — #1107 bulk file changes', () => {
                 (op: any) => op.kind === 'addFile' && op.file.path === 'src/new-d.ts',
             );
             expect(newDOp.file.suggestions).toHaveLength(1);
+        });
+
+        it('uses ObjectId-shaped file ids and UUID suggestion ids independently', async () => {
+            pullRequestsRepository.newSubDocumentId.mockReturnValue('file-subdocument-id');
+            pullRequestsRepository.newSuggestionId.mockReturnValue(
+                'suggestion-uuid',
+            );
+
+            await callHandleExisting({
+                existingPR: { uuid: 'pr-uuid-id-formats', files: [] },
+                changedFiles: [makeChangedFile('src/new.ts')],
+                prioritized: [
+                    {
+                        relevantFile: 'src/new.ts',
+                        suggestionContent: 'fix',
+                    },
+                ],
+            });
+
+            const [, , ops] =
+                pullRequestsRepository.bulkApplyFileChanges.mock.calls[0];
+            const addFile = ops.find((op: any) => op.kind === 'addFile');
+            expect(addFile.file.id).toBe('file-subdocument-id');
+            expect(addFile.file.suggestions[0].id).toBe('suggestion-uuid');
+            expect(pullRequestsRepository.newSubDocumentId).toHaveBeenCalledTimes(1);
+            expect(pullRequestsRepository.newSuggestionId).toHaveBeenCalledTimes(1);
         });
 
         it('writes totals from server-side aggregation, not from in-memory projection', async () => {
