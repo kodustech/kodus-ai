@@ -246,7 +246,7 @@ Para instruções completas de configuração, siga o [Quickstart Local](https:/
 | Usuários | Ilimitados | Ilimitados | Ilimitados |
 | Kody Rules | Até 10 | Ilimitadas | Ilimitadas |
 | Plugins ativos | Até 3 | Ilimitados | Ilimitados |
-| Kody Learnings e Memória | ✅ | ✅ | ✅ |
+| Memória do Kody | ✅ | ✅ | ✅ |
 | Issues do Quality Radar | Ilimitadas | Ilimitadas | Ilimitadas |
 | Fila prioritária para Kody Agents | ❌ | ✅ | ✅ |
 | Métricas de Engenharia / Cockpit | ❌ | ✅ | ✅ |
