@@ -265,4 +265,25 @@ describe('a kody_rules finding with a line but no file goes PR-level, not discar
             ),
         ).toBe(false);
     });
+
+    // Kody's own review on this PR caught this: checking relevantLinesStart
+    // too (not just relevantFile) let a finding naming an out-of-PR file
+    // with no line citation bypass the changedFiles discard guard (KRC-20)
+    // and leak out as an unanchored PR-level comment.
+    it('still discards a finding naming a file outside the PR even with no line citation', async () => {
+        const result = await run([
+            ruleFinding({
+                relevantFile: 'src/not-in-this-pr.ts',
+                relevantLinesStart: undefined,
+                relevantLinesEnd: undefined,
+            }),
+        ]);
+
+        expect(result.validSuggestionsByPR ?? []).toEqual([]);
+        expect(
+            (result.discardedSuggestions ?? []).some(
+                (s: any) => s.relevantFile === 'src/not-in-this-pr.ts',
+            ),
+        ).toBe(true);
+    });
 });
