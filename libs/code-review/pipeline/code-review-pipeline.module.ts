@@ -84,6 +84,7 @@ import {
 } from '@libs/code-review/infrastructure/analyzers/tools/workflow.tools';
 import { SecretScanTool } from '@libs/code-review/infrastructure/analyzers/tools/secret-scan.tool';
 import { DependencyScanTool } from '@libs/code-review/infrastructure/analyzers/tools/dependency-scan.tool';
+import { IacScanTool } from '@libs/code-review/infrastructure/analyzers/tools/iac-scan.tool';
 import { AgentReviewStage } from './stages/agent-review.stage';
 import { BugAgentProvider } from '../infrastructure/agents/providers/bug-agent.provider';
 import { SecurityAgentProvider } from '../infrastructure/agents/providers/security-agent.provider';
@@ -185,6 +186,7 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         RulePackTool,
         SecretScanTool,
         DependencyScanTool,
+        IacScanTool,
         WorkflowLintTool,
         WorkflowAuditTool,
         {
@@ -195,13 +197,22 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
                 rulePack: RulePackTool,
                 secrets: SecretScanTool,
                 dependencies: DependencyScanTool,
+                iac: IacScanTool,
                 workflowLint: WorkflowLintTool,
                 workflowAudit: WorkflowAuditTool,
-            ) => [rulePack, secrets, dependencies, workflowLint, workflowAudit],
+            ) => [
+                rulePack,
+                secrets,
+                dependencies,
+                iac,
+                workflowLint,
+                workflowAudit,
+            ],
             inject: [
                 RulePackTool,
                 SecretScanTool,
                 DependencyScanTool,
+                IacScanTool,
                 WorkflowLintTool,
                 WorkflowAuditTool,
             ],

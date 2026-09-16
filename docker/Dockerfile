@@ -131,6 +131,7 @@ ARG ACTIONLINT_VERSION=1.7.12
 ARG ZIZMOR_VERSION=1.30.1
 ARG BETTERLEAKS_VERSION=1.8.1
 ARG OSV_SCANNER_VERSION=2.6.0
+ARG TRIVY_VERSION=0.74.0
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl \
   && case "$TARGETARCH" in \
@@ -164,7 +165,21 @@ RUN apt-get update \
   && chmod +x /betterleaks && test -s /betterleaks \
   && curl -fsSL -o /osv-scanner \
        "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_${TARGETARCH}" \
-  && chmod +x /osv-scanner && test -s /osv-scanner
+  && chmod +x /osv-scanner && test -s /osv-scanner \
+  && case "$TARGETARCH" in \
+       amd64) tv=Linux-64bit ;; \
+       arm64) tv=Linux-ARM64 ;; \
+     esac \
+  && curl -fsSL -o /tmp/trivy.tgz \
+       "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_${tv}.tar.gz" \
+  && tar -xzf /tmp/trivy.tgz -C / trivy \
+  && chmod +x /trivy && test -s /trivy \
+  && curl -fsSL -o /tmp/trivy-native.tgz \
+       "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+  && mkdir -p /tmp/native && tar -xzf /tmp/trivy-native.tgz -C /tmp/native trivy \
+  && mkdir -p /trivy-cache && printf 'FROM scratch\n' > /tmp/Dockerfile.seed \
+  && TRIVY_CACHE_DIR=/trivy-cache /tmp/native/trivy config --quiet /tmp/Dockerfile.seed >/dev/null 2>&1 || true \
+  && test -d /trivy-cache
 
 FROM docker.io/library/node:22.22.2-slim AS runtime-common
 LABEL org.opencontainers.image.source="https://github.com/kodustech/kodus-ai"
@@ -236,6 +251,10 @@ COPY --from=opengrep-source /actionlint /usr/local/bin/actionlint
 COPY --from=opengrep-source /zizmor /usr/local/bin/zizmor
 COPY --from=opengrep-source /betterleaks /usr/local/bin/betterleaks
 COPY --from=opengrep-source /osv-scanner /usr/local/bin/osv-scanner
+COPY --from=opengrep-source /trivy /usr/local/bin/trivy
+# Trivy's checks bundle, fetched once at build time so no review waits on a
+# registry pull. Paired with --skip-check-update at scan time.
+COPY --from=opengrep-source /trivy-cache /home/node/.cache/trivy
 CMD ["node", "dist/apps/worker/main.js"]
 FROM runtime-common AS mcp-manager
 ENTRYPOINT ["/usr/local/bin/prod-entrypoint-mcp-manager"]

@@ -22,7 +22,9 @@ export type KnownAnalyzer =
     | 'zizmor'
     | 'osv-scanner'
     | 'dependabot'
-    | 'trivy';
+    | 'trivy'
+    | 'checkov'
+    | 'tfsec';
 
 /** Deterministic tools Kody can run itself. */
 export enum ManagedTool {
@@ -30,6 +32,7 @@ export enum ManagedTool {
     SECRETS = 'secrets',
     WORKFLOW = 'workflow',
     DEPENDENCIES = 'dependencies',
+    IAC = 'iac',
 }
 
 const ANALYZER_ALIASES: Record<KnownAnalyzer, readonly string[]> = {
@@ -50,6 +53,8 @@ const ANALYZER_ALIASES: Record<KnownAnalyzer, readonly string[]> = {
     'osv-scanner': ['osv-scanner', 'osv scanner'],
     dependabot: ['dependabot'],
     trivy: ['trivy'],
+    checkov: ['checkov'],
+    tfsec: ['tfsec'],
 };
 
 /**
@@ -75,6 +80,7 @@ const COVERED_BY: Record<ManagedTool, readonly KnownAnalyzer[]> = {
     ],
     [ManagedTool.WORKFLOW]: ['actionlint', 'zizmor'],
     [ManagedTool.DEPENDENCIES]: ['osv-scanner', 'dependabot', 'snyk', 'trivy'],
+    [ManagedTool.IAC]: ['trivy', 'checkov', 'tfsec'],
 };
 
 /**

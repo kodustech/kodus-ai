@@ -8,6 +8,7 @@ export const ANALYZER_TOOL_IDS = [
     'rule-pack',
     'secrets',
     'dependencies',
+    'iac',
     'actionlint',
     'zizmor',
 ] as const;

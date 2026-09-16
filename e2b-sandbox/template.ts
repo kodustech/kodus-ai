@@ -23,6 +23,9 @@ const betterleaksUrl = `https://github.com/betterleaks/betterleaks/releases/down
 const osvScannerVersion = '2.6.0';
 const osvScannerUrl = `https://github.com/google/osv-scanner/releases/download/v${osvScannerVersion}/osv-scanner_linux_amd64`;
 
+const trivyVersion = '0.74.0';
+const trivyUrl = `https://github.com/aquasecurity/trivy/releases/download/v${trivyVersion}/trivy_${trivyVersion}_Linux-64bit.tar.gz`;
+
 const installWorkflowTools = [
     `wget -O actionlint.tar.gz ${actionlintUrl}`,
     'tar -xzf actionlint.tar.gz actionlint',
@@ -36,6 +39,12 @@ const installWorkflowTools = [
     `wget -O osv-scanner ${osvScannerUrl}`,
     'chmod +x osv-scanner',
     'sudo mv osv-scanner /usr/local/bin/',
+    `wget -O trivy.tar.gz ${trivyUrl}`,
+    'tar -xzf trivy.tar.gz trivy',
+    'sudo mv trivy /usr/local/bin/',
+    // Seed the checks bundle now so no review waits on a registry pull.
+    'printf "FROM scratch\\n" > /tmp/seed.Dockerfile',
+    'trivy config --quiet /tmp/seed.Dockerfile || true',
 ];
 
 // Transparent proxy: all outbound TCP traffic is routed through the Shadowsocks server

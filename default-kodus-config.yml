@@ -1154,6 +1154,7 @@ deterministicEvidence:
         rule-pack: 'off'
         secrets: 'off' # credential scanning over the changed files
         dependencies: 'off' # known CVEs in dependencies this PR adds or bumps
+        iac: 'off' # Dockerfile, Terraform, Kubernetes and Helm misconfiguration
         actionlint: 'off' # GitHub Actions correctness; only runs when workflows change
         zizmor: 'off' # GitHub Actions security; only runs when workflows change
 
