@@ -822,19 +822,40 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         // 2026-09-11). Best-effort: a sync failure falls back to whatever
         // was already on disk (the pre-fix behavior), it never fails the
         // acquire.
+        //
+        // Skip the sync entirely when another consumer currently holds this
+        // lease (leaseCount > 1, e.g. round N's AgentReviewStage still
+        // reading files while round N+1 joins after a fast follow-up push):
+        // `checkout -f` + `clean -fd` rewrite the sandbox's ONE shared
+        // working tree, so running it here would yank the tree out from
+        // under that other consumer's in-flight readFile/grep calls — the
+        // exact identical-context/working-tree contradiction this sync was
+        // added to fix, just caused by the fix itself. Re-reading the doc
+        // right before the destructive commands narrows the race to the gap
+        // between this read and the checkout, instead of leaving it open for
+        // the other consumer's entire pipeline run.
         if (cloneParams) {
-            try {
-                await syncE2BSandboxRepo(e2bSandbox, cloneParams, {
-                    logger: this.logger,
-                    logContext: SandboxLeaseManager.name,
-                });
-            } catch (err) {
-                this.logger.warn({
-                    message: `SandboxLeaseManager: syncE2BSandboxRepo threw for sandboxId="${sandboxId}" prKey="${prKey}" — sandbox keeps its previous checkout`,
+            const currentDoc = await this.leaseRepo.findByPrKey(prKey);
+            if (currentDoc && currentDoc.leaseCount > 1) {
+                this.logger.log({
+                    message: `SandboxLeaseManager: skipping destructive git sync for sandboxId="${sandboxId}" prKey="${prKey}" — leaseCount=${currentDoc.leaseCount} other consumer(s) active`,
                     context: SandboxLeaseManager.name,
-                    error: err,
-                    metadata: { prKey, sandboxId },
+                    metadata: { prKey, sandboxId, leaseCount: currentDoc.leaseCount },
                 });
+            } else {
+                try {
+                    await syncE2BSandboxRepo(e2bSandbox, cloneParams, {
+                        logger: this.logger,
+                        logContext: SandboxLeaseManager.name,
+                    });
+                } catch (err) {
+                    this.logger.warn({
+                        message: `SandboxLeaseManager: syncE2BSandboxRepo threw for sandboxId="${sandboxId}" prKey="${prKey}" — sandbox keeps its previous checkout`,
+                        context: SandboxLeaseManager.name,
+                        error: err,
+                        metadata: { prKey, sandboxId },
+                    });
+                }
             }
         }
 

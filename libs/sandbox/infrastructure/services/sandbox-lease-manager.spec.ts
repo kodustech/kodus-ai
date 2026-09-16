@@ -753,6 +753,56 @@ describe('SandboxLeaseManager', () => {
         );
     });
 
+    it('joiner WITH cloneParams skips the destructive sync when another consumer is still active', async () => {
+        // leaseCount > 1 at connect time means some other in-flight run
+        // (e.g. round N's AgentReviewStage still reading files) holds this
+        // same lease — checkout -f + clean -fd would rewrite the ONE shared
+        // working tree out from under it, so the sync must be skipped.
+        const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:303';
+        const cloneParams = {
+            cloneUrl: 'https://github.com/org/repo.git',
+            authToken: 'token',
+            branch: 'feature',
+            prNumber: 303,
+            platform: 'GITHUB' as any,
+        };
+
+        leaseRepo.upsertAcquire.mockResolvedValueOnce({
+            _id: prKey,
+            leaseCount: 2,
+            state: 'READY',
+            sandboxId: 'warm-sandbox-id',
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        } as any);
+        leaseRepo.findByPrKey.mockResolvedValueOnce({
+            _id: prKey,
+            leaseCount: 2,
+            state: 'READY',
+            sandboxId: 'warm-sandbox-id',
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        } as any);
+
+        const run = jest
+            .fn()
+            .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+        (Sandbox.connect as jest.Mock).mockResolvedValueOnce({
+            commands: { run },
+        });
+
+        const result = await manager.acquire(
+            prKey,
+            'review',
+            undefined,
+            cloneParams,
+        );
+
+        expect(result.sandbox).toBeDefined();
+        expect(result.wasCreated).toBe(false);
+        expect(run).not.toHaveBeenCalled();
+    });
+
     it('joiner WITHOUT cloneParams never attempts a sync (nothing to sync to)', async () => {
         const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:302';
 
