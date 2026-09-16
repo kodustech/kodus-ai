@@ -154,6 +154,10 @@ export class FastSyncIdeRulesUseCase {
                 error:
                     error instanceof Error ? error : new Error(String(error)),
                 context: FastSyncIdeRulesUseCase.name,
+                // Swallowed on purpose — a notification must not fail a sync —
+                // so the metadata is the only way to tie the miss back to the
+                // organization and repository that triggered it.
+                metadata: { organizationId, repositoryId },
             });
         }
     }

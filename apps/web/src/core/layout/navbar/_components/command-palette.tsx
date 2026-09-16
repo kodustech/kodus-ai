@@ -58,6 +58,10 @@ import {
     useFeatureGates,
     type GatedFeatureKey,
 } from "src/features/ee/subscription/_hooks/use-feature-gates";
+import { Action, ResourceType } from "@services/permissions/types";
+import { useAuth } from "src/core/providers/auth.provider";
+import { usePermissions } from "src/core/providers/permissions.provider";
+import { hasPermission } from "src/core/utils/permission-map";
 
 // ⌘K palette (prototype): one search box that jumps to any page, switches
 // the settings scope to a repository or directory, opens a Kody Rule by
@@ -70,18 +74,24 @@ const PAGES: Array<{
     icon: ComponentType<{ className?: string }>;
     keywords: string;
     gate?: GatedFeatureKey;
+    /** RBAC for the destination. A plan `gate` decides whether the feature is
+     *  SOLD to this organization; this decides whether this ROLE may open it.
+     *  Without it the palette offered pages the navbar had already hidden. */
+    permission?: { action: Action; resource: ResourceType };
 }> = [
     {
         label: "Pull requests",
         href: "/pull-requests",
         icon: GitPullRequestIcon,
         keywords: "reviews prs",
+        permission: { action: Action.Read, resource: ResourceType.PullRequests },
     },
     {
         label: "CLI reviews",
         href: "/cli-reviews",
         icon: TerminalIcon,
         keywords: "reviews cli terminal",
+        permission: { action: Action.Read, resource: ResourceType.PullRequests },
     },
     {
         label: "Cockpit",
@@ -89,6 +99,7 @@ const PAGES: Array<{
         icon: GaugeIcon,
         keywords: "metrics analytics dashboard productivity",
         gate: "cockpit",
+        permission: { action: Action.Read, resource: ResourceType.Cockpit },
     },
     {
         label: "Issues",
@@ -96,12 +107,14 @@ const PAGES: Array<{
         icon: TriangleAlertIcon,
         keywords: "cockpit open resolved",
         gate: "cockpit",
+        permission: { action: Action.Read, resource: ResourceType.Issues },
     },
     {
         label: "Plugins",
         href: "/settings/plugins",
         icon: PuzzleIcon,
         keywords: "mcp integrations tools",
+        permission: { action: Action.Read, resource: ResourceType.PluginSettings },
     },
     {
         label: "Integrations",
@@ -114,6 +127,7 @@ const PAGES: Array<{
         href: "/settings/git",
         icon: GitBranchIcon,
         keywords: "repositories provider connection",
+        permission: { action: Action.Read, resource: ResourceType.GitSettings },
     },
     {
         label: "Rules library",
@@ -146,12 +160,14 @@ const PAGES: Array<{
         href: "/settings/subscription",
         icon: CreditCardIcon,
         keywords: "billing plan licenses seats",
+        permission: { action: Action.Read, resource: ResourceType.Billing },
     },
     {
         label: "Token usage",
         href: "/token-usage",
         icon: ChartColumnIcon,
         keywords: "cost spend tokens",
+        permission: { action: Action.Read, resource: ResourceType.TokenUsage },
     },
     {
         label: "Activity logs",
@@ -159,6 +175,7 @@ const PAGES: Array<{
         icon: ActivityIcon,
         keywords: "audit history",
         gate: "activityLogs",
+        permission: { action: Action.Read, resource: ResourceType.Logs },
     },
     {
         label: "Organization · General",
@@ -323,6 +340,27 @@ export const CommandPalette = () => {
     );
     const scopes = useCodeReviewScopes(open);
 
+    // RBAC, on top of the plan gates. A gated page stays listed with a
+    // padlock because the organization could buy it; a page this ROLE cannot
+    // open is not listed at all, which is what the navbar already does.
+    // Without this the palette was a way around the navbar's own filtering.
+    const permissions = usePermissions();
+    const { organizationId } = useAuth();
+    const visiblePages = useMemo(
+        () =>
+            PAGES.filter(
+                (page) =>
+                    !page.permission ||
+                    hasPermission({
+                        permissions,
+                        organizationId: organizationId!,
+                        action: page.permission.action,
+                        resource: page.permission.resource,
+                    }),
+            ),
+        [permissions, organizationId],
+    );
+
     // MCP plugins (Jira, Linear, …): each opens its own page. Empty when the
     // MCP manager is not reachable.
     const { data: plugins } = useQuery({
@@ -448,7 +486,7 @@ export const CommandPalette = () => {
                             )}
 
                             <CommandGroup heading="Go to">
-                                {PAGES.map((page) => (
+                                {visiblePages.map((page) => (
                                     <CommandItem
                                         key={page.href}
                                         value={`${page.label} ${page.keywords}`}

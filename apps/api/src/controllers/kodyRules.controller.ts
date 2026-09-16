@@ -65,6 +65,7 @@ import {
     Inject,
     Post,
     Query,
+    UnauthorizedException,
     UseGuards,
 } from '@nestjs/common';
 import { KodyRulesTenantGuard } from '../guards/kody-rules-tenant.guard';
@@ -192,7 +193,12 @@ export class KodyRulesController {
         const organizationId = this.request?.user?.organization?.uuid;
 
         if (!organizationId) {
-            throw new Error('Organization ID is missing from request');
+            // A request that reached a guarded route without an organization
+            // on its token is a bad request, not a server fault: a raw Error
+            // surfaced as an opaque 500 and read as an outage.
+            throw new UnauthorizedException(
+                'Organization ID is missing from request',
+            );
         }
 
         return this.getKodyRulesIndexUseCase.execute(organizationId);

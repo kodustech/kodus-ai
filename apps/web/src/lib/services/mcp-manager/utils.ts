@@ -66,16 +66,21 @@ export const mcpManagerFetch = async <Data>(
         });
     } catch (error) {
         // Service unavailable — MCP Manager might not be running.
-        // 502/504 from our own proxy means IT could not reach the manager —
-        // the browser never sees ECONNREFUSED, because its request to
-        // /api/proxy/mcp succeeds and the failure happens upstream of it. The
-        // string checks below only ever matched server-side direct calls, so
-        // without this a self-hosted install that never deployed the manager
-        // looked like a manager that was merely erroring.
+        // Our own proxy could not reach the manager. The browser never sees
+        // ECONNREFUSED, because its request to /api/proxy/mcp succeeds and the
+        // failure happens upstream of it, so the string checks below only ever
+        // matched server-side direct calls.
+        //
+        // Matched on the proxy's own body marker, not on the status: a 502,
+        // 503 or 504 RELAYED from the manager (an ingress mid-rolling-restart,
+        // the manager reporting its own backend down) means "briefly
+        // unhealthy", and treating that as "not deployed" would hide the
+        // Plugins entry for the whole staleTime window — the opposite of the
+        // fail-open this probe promises.
+        const body = (error as { body?: { code?: unknown } })?.body;
         const proxyCouldNotReachIt =
-            typeof (error as { statusCode?: unknown })?.statusCode ===
-                "number" &&
-            [502, 503, 504].includes((error as { statusCode: number }).statusCode);
+            (error as { statusCode?: unknown })?.statusCode === 502 &&
+            body?.code === "UPSTREAM_UNREACHABLE";
 
         if (
             proxyCouldNotReachIt ||

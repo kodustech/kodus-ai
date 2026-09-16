@@ -54,8 +54,18 @@ export class GetKodyRulesIndexUseCase implements IUseCase {
                     entry.status !== KodyRulesStatus.APPLIED,
             );
 
-            if (!this.request?.user) {
+            // No request context at all means a non-HTTP caller (the dev
+            // notification seeder) that already supplied the organization it
+            // is entitled to. But a request WITH no user is an authenticated
+            // path that lost its identity, and returning the organization's
+            // whole index there would be failing open on the one thing this
+            // use case exists to scope.
+            if (!this.request) {
                 return visible;
+            }
+
+            if (!this.request.user) {
+                return [];
             }
 
             const allowedRepoScope =

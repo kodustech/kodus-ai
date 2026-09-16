@@ -1323,7 +1323,12 @@ const KodyRulesPageContent = () => {
                 isGlobalView={isGlobalView}
             />
 
-            {viewMode === "table" && (
+            {/* Not gated on the table view: the sheet is also how a deep link
+                from the palette or a notification arrives, and in card view
+                that set the rule id, put ?rule= in the address bar, and
+                rendered nothing. The sheet resolves its own rule against the
+                list, so it is safe in either view. */}
+            {detailRule && (
                 <KodyRuleDetailSheet
                     rule={detailRule}
                     variant={activeTab === "memories" ? "memories" : "rules"}
