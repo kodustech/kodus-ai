@@ -40,8 +40,13 @@ function evaluateGate(summary, rows, model, setName) {
     // disagree on borderline matches by several points of recall, enough to hide
     // a regression or invent one. Refuse to gate across judges.
     const { JUDGE_MODEL } = require('./recall-judge');
-    if (set.judge && set.judge !== JUDGE_MODEL) {
-        return { status: 'skipped', reason: `floors for set ${setName} were calibrated with judge ${set.judge}, this run used ${JUDGE_MODEL}` };
+    const effort = process.env.JUDGE_REASONING_EFFORT || null;
+    if (set.judge && (set.judge !== JUDGE_MODEL || (set.judgeReasoningEffort || null) !== effort)) {
+        const judgeOf = (model, e) => `${model}${e ? ` (effort ${e})` : ''}`;
+        return {
+            status: 'skipped',
+            reason: `floors for set ${setName} were calibrated with judge ${judgeOf(set.judge, set.judgeReasoningEffort)}, this run used ${judgeOf(JUDGE_MODEL, effort)}`,
+        };
     }
 
     const meanFindings = avg(

@@ -129,6 +129,7 @@ function preflight({ strictCoverage }) {
         'evals/shared/engine-files.js',
         'evals/investigation/gate.js',
         'evals/investigation/confirm-gate.js',
+        'evals/investigation/rejudge.js',
         'evals/investigation/nightly-compare.js',
         'evals/investigation/investigate-facts.js',
         'evals/investigation/investigate-prompt.md',

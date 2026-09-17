@@ -113,3 +113,34 @@ describe('confirmation of a run below the floor', () => {
         expect(combined.tokens).toEqual({ prompt: 20, completion: 2 });
     });
 });
+
+describe('gate refuses a judge it was not calibrated with', () => {
+    const run = { metrics: { recall_mean: 0.4 }, rows: [{ caseId: 'a', status: 'pass', metadata: { recall: 0.4, tpFindings: 2, fpFindings: 1, totalCalls: 40 } }] };
+    const gateUnder = (env: Record<string, string | undefined>) => {
+        const saved = { JUDGE_MODEL: process.env.JUDGE_MODEL, JUDGE_REASONING_EFFORT: process.env.JUDGE_REASONING_EFFORT };
+        Object.assign(process.env, env);
+        for (const [k, v] of Object.entries(env)) if (v === undefined) delete process.env[k];
+        let result: { status: string; reason?: string } = { status: '' };
+        jest.isolateModules(() => {
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            const { evaluateGate } = require('./gate');
+            result = evaluateGate(run, run.rows, 'deepseek-v4-flash@fireworks', 'light');
+        });
+        for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+        return result;
+    };
+
+    it('gates under the calibrated judge and effort', () => {
+        expect(gateUnder({ JUDGE_MODEL: 'gpt-5.6-luna', JUDGE_REASONING_EFFORT: 'low' }).status).toBe('pass');
+    });
+
+    it.each([
+        [{ JUDGE_MODEL: 'gpt-5.4-mini', JUDGE_REASONING_EFFORT: 'low' }],
+        [{ JUDGE_MODEL: 'gpt-5.6-luna', JUDGE_REASONING_EFFORT: undefined }],
+        [{ JUDGE_MODEL: 'gpt-5.6-luna', JUDGE_REASONING_EFFORT: 'high' }],
+    ])('skips when the judge or its effort differ: %j', (env) => {
+        const result = gateUnder(env);
+        expect(result.status).toBe('skipped');
+        expect(result.reason).toContain('gpt-5.6-luna (effort low)');
+    });
+});

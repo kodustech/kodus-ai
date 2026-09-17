@@ -19,10 +19,10 @@ name: "Evals: nightly quality (DeepSeek, 30 PRs)"
 # Gate: finder-recall run mean vs evals/investigation/targets.json → sets.light.
 # RATCHET: when a PR intentionally moves recall, update that floor in the same PR.
 #
-# Judge: gpt-5.4-mini, the alternative the agreement study validated (κ 0.89 vs
-# Sonnet; evals/investigation/agreement). Not the claude-haiku-4-5 default: on
-# 2026-09-16 both ANTHROPIC_API_KEY and BYOK_ANTHROPIC_API_KEY answered 401
-# "API key is invalid" — the reason the old finder gate sat at 8/8 infra for weeks.
+# Judge: gpt-5.6-luna at reasoning effort low, on BYOK_OPENAI_API_KEY (both
+# Anthropic secrets answered 401 on 2026-09-16, so the claude-haiku-4-5 default
+# can't run in CI). The floor is calibrated under exactly this judge; the gate
+# refuses to compare a run judged otherwise.
 #
 # When the gate goes red, a read-only Claude Code agent reads the facts (tonight
 # vs the last green night, the lost bugs with both nights' findings, the engine
@@ -69,7 +69,8 @@ concurrency:
 env:
     MODEL: deepseek-v4-flash@fireworks
     CASE_SET: light
-    JUDGE_MODEL: gpt-5.4-mini
+    JUDGE_MODEL: gpt-5.6-luna
+    JUDGE_REASONING_EFFORT: low
 
 jobs:
     changed:

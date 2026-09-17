@@ -63,33 +63,35 @@
             "__doc": [
                 "Floors for the NIGHTLY run (code-review-evals-nightly.yml): --set=light, 30 PRs.",
                 "",
-                "Calibrated 2026-09-17 IN CI (run 35171204422, attempts 1 and 2) — same runner,",
-                "secrets, model (deepseek-v4-flash@fireworks) and judge (gpt-5.4-mini) the nightly",
-                "uses: recall_mean 0.384 and 0.352.",
+                "Finder runs: two in CI on the same commit (run 35171204422, attempts 1 and 2),",
+                "deepseek-v4-flash@fireworks. Judge: gpt-5.6-luna, reasoning effort low, applied to",
+                "those runs' saved findings with evals/investigation/rejudge.js (run 35253466493):",
+                "recall_mean 0.368 and 0.346. The same tool with the previous judge (gpt-5.4-mini)",
+                "reproduced run 1 at 0.395 vs 0.384 originally, and luna agrees with mini on 94.7% of",
+                "the per-bug decisions over the same findings.",
                 "",
                 "The floor comes from RUN-TO-RUN noise on these 30 PRs, not cross-PR spread: the",
-                "per-PR recall difference between the two runs has sd 0.318, so a night's mean",
-                "moves 0.318/sqrt(2)/sqrt(30) = 0.041, and against this 2-run baseline",
-                "0.041*sqrt(1.5) = 0.050. recallFloor 0.26 = 0.368 - ~2.2 sigma: a ~11pp drop trips",
-                "it, a normal night does ~1-2% of the time.",
+                "per-PR recall difference between the two runs has sd 0.329, so a night's mean",
+                "moves 0.329/sqrt(2)/sqrt(30) = 0.042, and against this 2-run baseline",
+                "0.042*sqrt(1.5) = 0.052. recallFloor 0.24 = 0.357 - ~2.2 sigma: a ~11pp drop trips",
+                "it, a normal night does ~1-2% of the time; a drop is then confirmed on a second run.",
                 "minMeanFindings / minMeanToolCalls = ~half the observed mean (2.7 / 41.5).",
                 "",
-                "JUDGE: floors hold only under `judge`; run-recall refuses to gate a run judged",
-                "by another model. The claude-haiku-4-5 default is quieter (two local runs, same",
-                "engine: 0.313 / 0.268, sigma 0.030, a ~7pp drop detectable) but both Anthropic",
-                "secrets answered 401 on 2026-09-16. Once one is rotated, switching the nightly",
-                "back means re-running this calibration under haiku.",
+                "JUDGE: floors hold only under `judge` + `judgeReasoningEffort`; the gate refuses a",
+                "run judged otherwise. To change the judge, re-judge two calibration runs with",
+                "rejudge.js (cents, no finder re-run) and update this block in the same PR.",
                 "",
                 "RATCHET RULE: when a PR intentionally moves recall, re-run --set=light twice",
                 "on it and update these floors in the same PR."
             ],
-            "judge": "gpt-5.4-mini",
+            "judge": "gpt-5.6-luna",
+            "judgeReasoningEffort": "low",
             "models": {
                 "deepseek-v4-flash@fireworks": {
-                    "recallFloor": 0.26,
+                    "recallFloor": 0.24,
                     "minMeanFindings": 1.3,
                     "minMeanToolCalls": 20,
-                    "observed": { "recall_mean": 0.368, "runs": [0.384, 0.352], "sdPerPrRunDiff": 0.318, "precision_mean": 0.524, "meanFindings": 2.7, "meanToolCalls": 41.5 }
+                    "observed": { "recall_mean": 0.357, "runs": [0.368, 0.346], "sdPerPrRunDiff": 0.329, "precision_mean": 0.518, "meanFindings": 2.7, "meanToolCalls": 41.5 }
                 }
             }
         }

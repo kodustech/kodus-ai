@@ -71,5 +71,6 @@ Each eval's README has its own commands for narrower runs.
 ## Changing things
 
 - **Recalibrate a floor.** Run the set twice on the same commit, compute the paired per-PR noise, and update the floor in the same PR. The method and the last numbers are in the `__doc` of the set in `evals/investigation/targets.json`.
+- **Change the judge.** Re-score two saved nightly runs with `evals/investigation/rejudge.js` under the new judge (no finder re-run, cents), then recalibrate from those. Check it reproduces the old judge's numbers first.
 - **Add or drop a Friday model.** Set `tier0: true` in `evals/shared/tier0-models.js` and pass its secret in `.github/workflows/code-review-evals-tier0.yml`.
 - **Add an eval.** Give it a README with the standard header (see any eval's README), add a step to `evals/wiring-smoke.js` if it drives the engine, and follow [AGENTS.md](AGENTS.md).

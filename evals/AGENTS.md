@@ -22,7 +22,7 @@ What runs when, and what each eval answers: [README.md](README.md). These rules 
 ## Floors and judges
 
 - Floors live in `evals/investigation/targets.json` (finder-recall) and `evals/kody-rules/kody-targets.json` (kody-rules). Point at them; never copy their numbers into code, docs or PR text.
-- A floor holds only under the judge recorded with its set. `evals/investigation/run-recall.js` refuses to gate across judges, so changing `JUDGE_MODEL` means recalibrating.
+- A floor holds only under the judge (model and reasoning effort) recorded with its set. The gate refuses to compare across judges, so changing `JUDGE_MODEL` or `JUDGE_REASONING_EFFORT` means recalibrating. Do it with `evals/investigation/rejudge.js` on two saved calibration runs: only the judge re-runs, for cents.
 - Calibrate from run-to-run noise: two full runs of the same commit, using the paired per-PR difference. The method is in the set's `__doc`. Cross-PR spread overstates the noise, and 8 PRs can't see a realistic drop.
 - If a PR moves recall on purpose, recalibrate in that PR and link both runs.
 

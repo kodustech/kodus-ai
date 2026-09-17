@@ -177,6 +177,9 @@ async function judgeCall(model, apiKey, prompt) {
                     model,
                     max_completion_tokens: 2048,
                     messages: [{ role: 'user', content: prompt }],
+                    // JUDGE_REASONING_EFFORT (e.g. low): part of the judge's
+                    // identity — floors are calibrated under a model AND effort.
+                    ...(process.env.JUDGE_REASONING_EFFORT ? { reasoning_effort: process.env.JUDGE_REASONING_EFFORT } : {}),
                 };
             } else {
                 url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
