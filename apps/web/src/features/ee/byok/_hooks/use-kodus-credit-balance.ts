@@ -32,6 +32,13 @@ export type KodusCreditBalanceView = {
     routedThroughKodus: boolean;
     /** Live balance from billing, falling back to the license snapshot. */
     balanceUsd: number | undefined;
+    /** Billing actually answered with a number. Every state flag below is
+     *  gated on it, so a screen that renders a balance MUST check this first:
+     *  coercing the unknown to 0 prints a confident "$0.00" that no badge and
+     *  no warning accompanies, because all of them are false while it's
+     *  unknown. "We don't know yet" and "you have nothing" look identical to
+     *  the reader and mean opposite things. */
+    known: boolean;
     /** Balance known and at or below zero. */
     exhausted: boolean;
     /** Balance known, positive, and at or below the low-balance threshold. */
@@ -101,6 +108,7 @@ export const useKodusCreditBalance = (): KodusCreditBalanceView => {
         usesKodusProvider: credits.usesKodusProvider,
         routedThroughKodus: routesThroughKodus(routingQuery.data),
         balanceUsd,
+        known,
         exhausted,
         low: known && balanceUsd > 0 && balanceUsd <= lowThresholdUsd,
         neverFunded:
