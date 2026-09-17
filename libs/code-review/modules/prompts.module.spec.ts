@@ -89,6 +89,23 @@ jest.mock('@libs/cli-review/trace-context.module', () => {
     })(MockTraceContextModule);
     return { TraceContextModule: MockTraceContextModule };
 });
+jest.mock('@libs/code-review/modules/code-review-core.module', () => {
+    const { Module } = require('@nestjs/common');
+    const {
+        BuildPreviousReviewDecisionsUseCase,
+    } = require('@libs/code-review/application/use-cases/previousReviewDecisions/build-previous-review-decisions.use-case');
+    class MockCodeReviewCoreModule {}
+    Module({
+        providers: [
+            {
+                provide: BuildPreviousReviewDecisionsUseCase,
+                useValue: { execute: jest.fn().mockResolvedValue([]) },
+            },
+        ],
+        exports: [BuildPreviousReviewDecisionsUseCase],
+    })(MockCodeReviewCoreModule);
+    return { CodeReviewCoreModule: MockCodeReviewCoreModule };
+});
 
 describe('PromptsModule Trace wiring', () => {
     it('compiles and resolves LOAD_EXTERNAL_CONTEXT_STAGE_TOKEN with Trace available', async () => {

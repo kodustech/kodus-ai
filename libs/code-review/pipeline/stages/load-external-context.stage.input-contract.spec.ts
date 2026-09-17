@@ -8,6 +8,7 @@ import { CodeReviewContextPackService } from '@libs/ai-engine/infrastructure/ada
 import { BuildTraceContextPackUseCase } from '@libs/cli-review/application/use-cases/build-trace-context-pack.use-case';
 import { FeatureGateService } from '@libs/feature-gate';
 import { ORGANIZATION_SERVICE_TOKEN } from '@libs/organization/domain/organization/contracts/organization.service.contract';
+import { BuildPreviousReviewDecisionsUseCase } from '@libs/code-review/application/use-cases/previousReviewDecisions/build-previous-review-decisions.use-case';
 
 /**
  * Input-contract spec for LoadExternalContextStage — the stage that loads the
@@ -59,12 +60,17 @@ describe('LoadExternalContextStage — input contract', () => {
                 { provide: BuildTraceContextPackUseCase, useValue: {} },
                 { provide: FeatureGateService, useValue: {} },
                 { provide: ORGANIZATION_SERVICE_TOKEN, useValue: {} },
+                { provide: BuildPreviousReviewDecisionsUseCase, useValue: {} },
             ],
         }).compile();
 
         stage = module.get(LoadExternalContextStage);
         // Trace decisions are covered by the trace-gate spec — keep them out.
         jest.spyOn(stage as any, 'loadTraceDecisions').mockResolvedValue(undefined);
+        // Previous review decisions are covered by their own gate spec — keep them out.
+        jest
+            .spyOn(stage as any, 'loadPreviousReviewDecisions')
+            .mockResolvedValue(undefined);
     });
 
     it('looks up references by the org/repo/directory hierarchy', async () => {

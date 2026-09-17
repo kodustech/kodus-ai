@@ -1141,4 +1141,209 @@ describe('contract matrix — E. N-model policy (strict json_schema vs fallback)
     // e2e cannot spy LLM.run here without breaking the finder's own model calls
     // (the runner uses the SAME LLM.run door), so the contract is pinned at the
     // recovery unit above rather than duplicated as a flaky e2e assertion.
+
+    // Previous review decisions (issue #1313): proves the REAL wiring end to
+    // end — AgentLoopInput.previousDecisions -> runFinderWithVerify ->
+    // LlmVerifier -> verifierPromptFor — not just the unit-level forwarding
+    // already pinned in verifier.agent.contract.spec.ts. This is the actual
+    // reported symptom: the finder (no memory of its own) proposes the OPPOSITE
+    // of a decision it already applied on a prior review round; the verifier,
+    // given that decision as evidence, refutes it.
+    it('threads previousDecisions to the verifier, which refutes a finding contradicting an already-applied decision', async () => {
+        const doGenerate = (async (opts: any) => {
+            const sys = JSON.stringify(opts?.prompt ?? opts ?? '');
+            const isVerifier =
+                sys.includes('REFUTE') ||
+                sys.includes('verdict') ||
+                sys.includes('verify');
+
+            if (isVerifier) {
+                // The verifier only sees this evidence because the adapter
+                // threaded previousDecisions all the way down — if any hop in
+                // the chain silently dropped the field, this string would be
+                // absent and the test would refute nothing (keep:true, findings
+                // survive), catching a regression at ANY of the hops.
+                const sawPriorDecision =
+                    sys.includes('PreviousReviewDecisions') &&
+                    sys.includes('Use const instead of let');
+                return {
+                    content: [
+                        {
+                            type: 'tool-call',
+                            toolCallId: 'v',
+                            toolName: 'submitVerdict',
+                            input: JSON.stringify(
+                                sawPriorDecision
+                                    ? {
+                                          keep: false,
+                                          rationale:
+                                              'refuted: contradicts an already-applied decision',
+                                      }
+                                    : { keep: true, rationale: 'no evidence' },
+                            ),
+                        },
+                    ],
+                    finishReason: 'tool-calls',
+                    usage: { inputTokens: 5, outputTokens: 5 },
+                    warnings: [],
+                };
+            }
+
+            // Finder: proposes the OPPOSITE of the previously-applied decision.
+            return {
+                content: [
+                    {
+                        type: 'tool-call',
+                        toolCallId: 'f',
+                        toolName: 'submitResult',
+                        input: JSON.stringify({
+                            reasoning: 'one candidate',
+                            suggestions: [
+                                {
+                                    relevantFile: 'a.ts',
+                                    suggestionContent:
+                                        'Use let instead of const.',
+                                    existingCode: 'const x = 1;',
+                                    improvedCode: 'let x = 1;',
+                                    severity: 'low',
+                                },
+                            ],
+                        }),
+                    },
+                ],
+                finishReason: 'tool-calls',
+                usage: { inputTokens: 5, outputTokens: 5 },
+                warnings: [],
+            };
+        }) as any;
+
+        const out = await runAgentLoopViaCore(
+            makeInput(new MockLanguageModelV3({ doGenerate }), {
+                previousDecisions: [
+                    {
+                        suggestionId: 'sug-1',
+                        relevantFile: 'a.ts',
+                        suggestionContent: 'Use const instead of let.',
+                        label: 'bug',
+                        outcome: 'implemented',
+                        decidedAt: '2026-01-01T00:00:00.000Z',
+                    },
+                ],
+            }),
+            secrets,
+        );
+
+        expect(out.findings.suggestions).toHaveLength(0);
+        expect(out.droppedByVerify.map((s: any) => s.relevantFile)).toEqual([
+            'a.ts',
+        ]);
+    });
+
+    // The evidence gate's forceFull re-verify (finder.agent.ts's second,
+    // unevidenced-only LlmVerifier instance) is a one-line duplicate of the
+    // first pass's `previousDecisions` forwarding, but was never itself
+    // exercised end-to-end — only the first-pass LlmVerifier was proven above.
+    // Here the finder never calls readFile/checkTypes, so the kept finding is
+    // always "unevidenced" and always reaches the gate; the first pass keeps
+    // it unconditionally so the SECOND (forceFull) verifier call is the one
+    // actually deciding, proving previousDecisions reached that instance too.
+    it('threads previousDecisions to the evidence-gate forceFull re-verify too, not just the first pass', async () => {
+        let verifierCalls = 0;
+        const doGenerate = (async (opts: any) => {
+            const sys = JSON.stringify(opts?.prompt ?? opts ?? '');
+            const isVerifier =
+                sys.includes('REFUTE') ||
+                sys.includes('verdict') ||
+                sys.includes('verify');
+
+            if (isVerifier) {
+                verifierCalls += 1;
+                const isFirstPass = verifierCalls === 1;
+                const sawPriorDecision =
+                    sys.includes('PreviousReviewDecisions') &&
+                    sys.includes('Use const instead of let');
+                // First pass always keeps (unevidenced) -> forces the gate.
+                // The gate call is the one that actually refutes, and only
+                // does so because it too received previousDecisions.
+                const keep = isFirstPass || !sawPriorDecision;
+                return {
+                    content: [
+                        {
+                            type: 'tool-call',
+                            toolCallId: 'v',
+                            toolName: 'submitVerdict',
+                            input: JSON.stringify({
+                                keep,
+                                rationale: keep
+                                    ? 'kept'
+                                    : 'refuted by the gate: contradicts an already-applied decision',
+                            }),
+                        },
+                    ],
+                    finishReason: 'tool-calls',
+                    usage: { inputTokens: 5, outputTokens: 5 },
+                    warnings: [],
+                };
+            }
+
+            return {
+                content: [
+                    {
+                        type: 'tool-call',
+                        toolCallId: 'f',
+                        toolName: 'submitResult',
+                        input: JSON.stringify({
+                            reasoning: 'one candidate',
+                            suggestions: [
+                                {
+                                    relevantFile: 'a.ts',
+                                    suggestionContent:
+                                        'Use let instead of const.',
+                                    existingCode: 'const x = 1;',
+                                    improvedCode: 'let x = 1;',
+                                    severity: 'low',
+                                },
+                            ],
+                        }),
+                    },
+                ],
+                finishReason: 'tool-calls',
+                usage: { inputTokens: 5, outputTokens: 5 },
+                warnings: [],
+            };
+        }) as any;
+
+        const out = await runAgentLoopViaCore(
+            makeInput(new MockLanguageModelV3({ doGenerate }), {
+                previousDecisions: [
+                    {
+                        suggestionId: 'sug-1',
+                        relevantFile: 'a.ts',
+                        suggestionContent: 'Use const instead of let.',
+                        label: 'bug',
+                        outcome: 'implemented',
+                        decidedAt: '2026-01-01T00:00:00.000Z',
+                    },
+                ],
+            }),
+            secrets,
+        );
+
+        expect(verifierCalls).toBe(2); // first pass + forceFull gate
+        expect(out.findings.suggestions).toHaveLength(0);
+        expect(out.droppedByVerify.map((s: any) => s.relevantFile)).toEqual([
+            'a.ts',
+        ]);
+    });
+
+    it('omitting previousDecisions keeps current behavior unchanged (backward compatible)', async () => {
+        const { model } = makeModel();
+        const out = await runAgentLoopViaCore(makeInput(model), secrets);
+
+        // Same assertion as the baseline e2e test above — proves the new field
+        // is purely additive when absent.
+        expect(
+            out.findings.suggestions.map((s: any) => s.relevantFile),
+        ).toEqual(['a.ts']);
+    });
 });

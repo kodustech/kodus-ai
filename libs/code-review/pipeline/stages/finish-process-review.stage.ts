@@ -11,6 +11,7 @@ import { PrAuthorRecipientResolver } from '@libs/notifications/application/pr-au
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
 // SeverityLevel no longer used — request changes is driven by level classification
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
+import { SUMMARY_GENERATION_FAILED_REASON } from './finish-comments.stage';
 
 @Injectable()
 export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -61,10 +62,23 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
         // "all good" on a degraded run. The user-facing message tells
         // them which auxiliary checks failed and where to look for the
         // details; here we just refuse to approve.
+        //
+        // Exception: SUMMARY_GENERATION_FAILED_REASON (#1844). By the time
+        // this stage runs, the pipeline has already posted the actual review
+        // output — PR-level + line comments — in createPrLevelCommentsStage /
+        // createFileCommentsStage, several stages before this one. A failure
+        // to generate the PR-summary narrative afterward says nothing about
+        // whether that already-posted review is trustworthy; it only means a
+        // decorative recap is missing. Blocking approve on it penalized a
+        // fully-delivered, zero-finding review for an unrelated cosmetic step
+        // — proved with a regression test before this fix (a clean PR with
+        // ONLY that error never called approvePullRequest). Every OTHER
+        // partial/critical error still blocks, unchanged.
         const reviewHasFailures = (context.errors ?? []).some(
             (e) =>
-                (e?.severity ?? 'critical') === 'critical' ||
-                e?.severity === 'partial',
+                e?.metadata?.reason !== SUMMARY_GENERATION_FAILED_REASON &&
+                ((e?.severity ?? 'critical') === 'critical' ||
+                    e?.severity === 'partial'),
         );
 
         const approved = await this.approvePullRequest(
