@@ -46,10 +46,14 @@ import {
     removeCreditPaymentMethodAction,
     updateCreditAutoTopUpAction,
 } from "src/features/ee/subscription/_actions/credits";
-import type { CreditLedgerEntry } from "src/features/ee/subscription/_services/billing/types";
+import type {
+    CreditBalance,
+    CreditLedgerEntry,
+} from "src/features/ee/subscription/_services/billing/types";
 
 import {
     KODUS_CREDITS_PATH,
+    kodusCreditBalanceKey,
     useKodusCreditBalance,
 } from "../_hooks/use-kodus-credit-balance";
 
@@ -482,6 +486,7 @@ const AutoTopUpRow = ({
     onChanged: () => void;
 }) => {
     const { teamId } = useSelectedTeamId();
+    const queryClient = useQueryClient();
     const credits = useKodusCreditBalance();
     const auto = credits.autoTopUp;
     const packs = credits.packsUsd;
@@ -500,17 +505,37 @@ const AutoTopUpRow = ({
             const thresholdUsd = next?.thresholdUsd ?? effectiveThreshold;
             const amountUsd = next?.amountUsd ?? effectiveAmount;
             try {
-                await updateCreditAutoTopUpAction({
+                const saved = await updateCreditAutoTopUpAction({
                     teamId,
                     enabled,
                     thresholdUsd,
                     amountUsd,
                 });
+                // The switch is driven by server state, so writing the
+                // mutation's OWN answer into the cache is what moves it. This
+                // used to discard `saved` and rely on the refetch below, which
+                // meant the toast claimed success while the control the user
+                // just flipped still showed the old position — and stayed
+                // there for good if the refetch came back stale. Announce the
+                // change only once it is on screen.
+                if (saved) {
+                    queryClient.setQueryData<CreditBalance | null>(
+                        kodusCreditBalanceKey(teamId),
+                        (current) =>
+                            current ? { ...current, autoTopUp: saved } : current,
+                    );
+                }
+                // Report what was SAVED, not what was asked for. Announcing
+                // the request and rendering the response is how a success
+                // message ends up next to a switch that disagrees with it.
+                const nowOn = saved ? saved.enabled : enabled;
+                const savedAmount = saved?.amountUsd ?? amountUsd;
+                const savedThreshold = saved?.thresholdUsd ?? thresholdUsd;
                 toast({
                     variant: "success",
-                    title: enabled ? "Auto top-up on" : "Auto top-up off",
-                    description: enabled
-                        ? `We'll add ${usd(amountUsd, 0)} whenever the balance drops below ${usd(thresholdUsd, 0)}.`
+                    title: nowOn ? "Auto top-up on" : "Auto top-up off",
+                    description: nowOn
+                        ? `We'll add ${usd(savedAmount, 0)} whenever the balance drops below ${usd(savedThreshold, 0)}.`
                         : undefined,
                 });
                 onChanged();
