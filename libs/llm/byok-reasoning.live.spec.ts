@@ -712,6 +712,15 @@ const LIVE = [
     // `credentialField` and no new mechanism, just the secret.
     {
         brand: 'google_vertex',
+        // NOT yet verified against a live vendor, and the reason is a GCP
+        // entitlement rather than anything in our code. Measured 2026-09-17 on a
+        // project with billing enabled and roles/aiplatform.user bound:
+        //   global    -> 429 Too Many Requests  (route exists, quota is zero)
+        //   us-east5  -> 404 Not Found          (bare id; regional Claude wants
+        //                                        a dated suffix, e.g. @20260219)
+        // Claude on Vertex has to be accepted in Model Garden per project before
+        // any quota exists, which no CLI can do. The row stays on `global`
+        // because that is the route that answered at all.
         why: 'Claude-on-Vertex resolves reasoning through the ANTHROPIC module, not google thinkingConfig — the whole reason PR #1303 exists. Nothing has ever called it',
         slot: {
             provider: 'google_vertex',
@@ -723,6 +732,9 @@ const LIVE = [
     },
     {
         brand: 'google_vertex_gemini',
+        // VERIFIED LIVE 2026-09-17: 346-366 reasoning tokens across three runs,
+        // so the google thinkingConfig path on Vertex is real and this row
+        // measures it rather than asserting it.
         why: 'the OTHER SDK model behind the same provider id: Gemini-on-Vertex takes google thinkingConfig, and a shared provider that builds two transports can regress on one of them alone',
         slot: {
             provider: 'google_vertex',
