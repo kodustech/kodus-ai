@@ -12,7 +12,11 @@
  * answers. A family added to the union with no row fails the coverage test; a
  * family added with a row that only one resolver can answer fails its own.
  */
-import { detectModelFamily, type ModelFamily } from './model-family';
+import {
+    detectModelFamily,
+    isOpenAiReasonerId,
+    type ModelFamily,
+} from './model-family';
 import { reasoningConfigForModel } from './model-reasoning';
 import { resolveCompatibleReasoningTraits } from './reasoning-traits';
 import { isAnthropicModel } from './anthropic-cache';
@@ -149,5 +153,16 @@ describe('model families are known to the WHOLE system, or to none of it', () =>
         expect(resolveCompatibleReasoningTraits('glm-5.2').canDisableThinking).toBe(true);
         // A GLM whose id merely contains the digits elsewhere is NOT GLM-5.3.
         expect(resolveCompatibleReasoningTraits('glm-4-turbo-r5.3x').canDisableThinking).toBe(true);
+    });
+
+    it('the OpenAI reasoner line is matched on one digit, not on loose digits', () => {
+        // Azure serves GPT-3.5 as `gpt-35-turbo`. A two-digit match reads that as a
+        // reasoner, which drops the user's temperature and renames max_tokens.
+        expect(isOpenAiReasonerId('gpt-5.6-sol')).toBe(true);
+        expect(isOpenAiReasonerId('gpt-6-astra')).toBe(true);
+        expect(isOpenAiReasonerId('gpt-35-turbo')).toBe(false);
+        expect(isOpenAiReasonerId('gpt-35-turbo-16k')).toBe(false);
+        expect(isOpenAiReasonerId('gpt-35-turbo-instruct')).toBe(false);
+        expect(reasoningConfigForModel('gpt-35-turbo')).toBeUndefined();
     });
 });
