@@ -46,7 +46,8 @@ describe('nightly report', () => {
         const report = nightlyReport(night(), env, { lastGreen: night(), targets });
         expect(report.status).toBe('success');
         expect(report.title).toBe('✅ Evals · recall 45% · estável');
-        expect(report.description.split('\n')).toHaveLength(1);
+        expect(report.description).toContain('**Recall** 45% (verde: 45%) · **precisão** 50% (50%) · piso 26%');
+        expect(report.description).not.toContain('Bugs perdidos');
         expect(report.markdown).toContain('Recall **45%** (última noite verde 45% · piso 26%)');
         expect(report.markdown).not.toContain('Onde mais mudou');
     });
@@ -57,8 +58,8 @@ describe('nightly report', () => {
         const report = nightlyReport(tonight, env, { lastGreen, targets, commits: [{ sha: 'abc1234', subject: 'fix(code-review): x', author: 'dev' }] });
         expect(report.status).toBe('failure');
         expect(report.title).toBe('❌ Evals · recall 45% (−25 pts) · piso 50%');
-        expect(report.description).toContain('1 bug perdido · 1 commit');
-        expect(report.description).toContain('• pr-a 100→50%');
+        expect(report.description).toContain('**Bugs perdidos (1)**\n• pr-a 100→50%: "race"');
+        expect(report.description).toContain('**Commits (1)**\n• `abc1234` fix(code-review): x — dev');
         expect(report.markdown).toContain('• pr-a 100% → 50%: deixou de achar "race"');
         expect(report.markdown).toContain('`abc1234` fix(code-review): x (dev)');
         expect(report.markdown).toContain('**Próximo passo:** rodar `pnpm eval:nightly`');
@@ -72,7 +73,7 @@ describe('nightly report', () => {
     it("shows the Claude reading as an unverified hypothesis, only on a red night", () => {
         const tonight = night({ gate: { status: 'fail', checks: [{ name: 'recall_mean', actual: 0.2, floor: 0.26, pass: false }] } });
         const investigation = { verdict: 'noise', confidence: 'alta', summary: 'Dentro do ruído.', suspects: [], confirm: 'rodar de novo' };
-        expect(nightlyReport(tonight, env, { investigation }).description).toContain('🤖 Provavelmente ruído (alta): Dentro do ruído');
+        expect(nightlyReport(tonight, env, { investigation }).description).toContain('**🤖 Claude** · provavelmente ruído · confiança alta\nDentro do ruído.');
         expect(nightlyReport(tonight, env, { investigation }).markdown).toContain('**🤖 Leitura do Claude: provavelmente ruído** (confiança alta, não verificada)');
         expect(nightlyReport(night(), env, { investigation }).description).not.toContain('🤖');
     });
@@ -104,17 +105,21 @@ describe('nightly report', () => {
 });
 
 describe('Discord messages stay scannable', () => {
-    it('keep every nightly description to a handful of short lines', () => {
+    it('label every block and bound each line, while keeping the bugs, commits and lead', () => {
         const lastGreen = night({ rows: [row('pr-a', 1, ['null deref', 'race']), row('pr-b', 0.9, ['sql injection'])] });
-        const tonight = night({ gate: { status: 'fail', checks: [{ name: 'recall_mean', actual: 0.2, floor: 0.5, pass: false }], confirmation: { runs: [0.2, 0.2] } } });
-        const investigation = { verdict: 'regression', confidence: 'média', summary: 'A causa provável é o commit abc. Mais detalhes no run.', suspects: [], confirm: '' };
+        const tonight = night({ rows: [row('pr-a', 0.5, ['null deref'], ['race']), row('pr-b', 0.4, [], ['sql injection'])], gate: { status: 'fail', checks: [{ name: 'recall_mean', actual: 0.2, floor: 0.5, pass: false }], confirmation: { runs: [0.2, 0.2] } } });
+        const investigation = { verdict: 'regression', confidence: 'média', summary: 'x'.repeat(400), suspects: [{ commit: 'c1', file: 'libs/a/b/c/finder.agent.ts:190', why: 'y' }], confirm: 'z'.repeat(300) };
         const commits = Array.from({ length: 12 }, (_, i) => ({ sha: `c${i}`, subject: 'x'.repeat(200), author: 'dev' }));
         const { description, title } = nightlyReport(tonight, env, { lastGreen, targets, investigation, commits });
         const lines = description.split('\n');
-        expect(lines.length).toBeLessThanOrEqual(5);
         expect(title.length).toBeLessThan(60);
-        expect(description).not.toMatch(/Próximo passo|Mudanças medidas|evals\/investigation\/targets\.json/);
-        for (const line of lines.filter((l) => !l.startsWith('['))) expect(line.length).toBeLessThanOrEqual(170);
+        expect(lines.length).toBeLessThanOrEqual(18);
+        for (const line of lines.filter((l) => !l.startsWith('['))) expect(line.length).toBeLessThanOrEqual(200);
+        expect(description).toContain('"race"');
+        expect(description).toContain('• `c0`');
+        expect(description).toContain('• +9 no diff');
+        expect(description).toContain('`finder.agent.ts:190`');
+        expect(description).not.toMatch(/evals\/investigation\/targets\.json/);
     });
 });
 
@@ -126,14 +131,14 @@ describe('tier-0 report', () => {
         const report = tier0Report(['a', 'b'], read({ a: pass('a'), b: pass('b') }));
         expect(report.status).toBe('success');
         expect(report.title).toBe('✅ Tier-0 · 2/2 modelos ok');
-        expect(report.description).toBe('✅ a, b');
+        expect(report.description).toBe('✅ a · b');
     });
 
     it('names the model that no longer reviews, apart from one that left no result', () => {
         const report = tier0Report(['a', 'b', 'c'], read({ a: pass('a'), b: { ...pass('b'), status: 'broken', reason: 'no finding parsed' } }));
         expect(report.status).toBe('failure');
         expect(report.title).toBe('❌ Tier-0 · 1/3 modelos ok');
-        expect(report.description).toBe('✅ a\n❌ b: nenhum finding\n❓ c: job caiu');
+        expect(report.description).toContain('✅ a\n❌ **b** · review: nenhum finding\n   `no finding parsed` → clientes nesse modelo afetados\n❓ **c** · sem resultado, o job caiu');
     });
 
     it('treats a broken PR summary as a broken model', () => {
@@ -144,7 +149,7 @@ describe('tier-0 report', () => {
         const refused = { ...pass('a'), status: 'infra', reason: 'insufficient balance' };
         const report = tier0Report(['a'], read({ a: refused }), env, read({ a: refused }));
         expect(report.title).toBe('⚠️ Tier-0 · 0/1 modelo ok');
-        expect(report.description).toBe('⚠️ a: sem crédito · igual semana passada\n[run](https://github.com/kodustech/kodus-ai/actions/runs/42)');
+        expect(report.description).toContain('⚠️ **a** · review: sem crédito (igual semana passada)');
         expect(report.markdown).toContain('_(igual à semana passada)_');
     });
 });

@@ -271,11 +271,15 @@ function nightlyReport(result, env = {}, extras = {}) {
     return { status, verdict, mention, state, title: compact.title, description: compact.description, markdown };
 }
 
-// The Discord version: a title with the numbers, then at most a few short
-// lines and links. Everything else lives in the run summary.
+// The Discord version: a title with the numbers, then short labelled blocks —
+// what moved, which bugs, which commits, the agent's lead, what to do — each a
+// line or two. The long form stays in the run summary.
+const SECRET_FOR = { juiz: 'BYOK_OPENAI_API_KEY', model: 'BYOK_FIREWORKS_API_KEY' };
+
 function nightlyCompact({ result, verdict, comparison, commits, investigation, previousState, url, compareUrl }) {
     const links = [md('run', url), md('diff', compareUrl)].filter(Boolean).join(' · ');
     const recall = result?.metrics?.recall_mean;
+    const precision = result?.metrics?.precision_mean;
     const gate = result?.gate || {};
     const floor = (gate.checks || []).find((check) => check.name === 'recall_mean')?.floor;
     const failed = (gate.checks || []).filter((check) => !check.pass).map((check) => check.name);
@@ -284,6 +288,10 @@ function nightlyCompact({ result, verdict, comparison, commits, investigation, p
     const signed = (d) => `${d >= 0 ? '+' : '−'}${Math.round(Math.abs(d) * 100)} pts`;
     const day = previousState && RED.has(previousState.verdict) ? (previousState.streak || 1) + 1 : null;
     const infraReason = result?.error || result?.confirmationError || (result?.rows || []).find((row) => row.status === 'infra')?.reason;
+    const minutes = result ? minutesBetween(result.startedAt, result.finishedAt) : null;
+    const cost = result ? costUpperBound(result.tokens, catalogIdFor(result.model)) : null;
+    const money = typeof cost === 'number' ? `US$ ${cost.toFixed(2).replace('.', ',')}` : null;
+    const measured = result ? result.cases - (result.infraFailures || 0) : 0;
 
     let title;
     if (verdict === 'pass') title = `✅ Evals · recall ${pct(recall)} · estável`;
@@ -298,37 +306,68 @@ function nightlyCompact({ result, verdict, comparison, commits, investigation, p
     else title = `❌ Evals · recall ${pct(recall)}${typeof delta === 'number' ? ` (${signed(delta)})` : ''}${typeof floor === 'number' ? ` · piso ${pct(floor)}` : ''}`;
 
     const lines = [];
-    if (verdict === 'pass') {
-        const minutes = minutesBetween(result.startedAt, result.finishedAt);
-        const cost = costUpperBound(result.tokens, catalogIdFor(result.model));
-        lines.push([`${result.cases} PRs`, minutes ? `${minutes} min` : null, typeof cost === 'number' ? `US$ ${cost.toFixed(2).replace('.', ',')}` : null, links].filter(Boolean).join(' · '));
-    } else if (verdict === 'oscillation') {
-        lines.push([runs ? `medições ${runs.map(pct).join(' e ')}` : null, `média ${pct(recall)}`, typeof floor === 'number' ? `piso ${pct(floor)}` : null, links].filter(Boolean).join(' · '));
-    } else if (verdict === 'infra' || verdict === 'ungated') {
-        // The raw error only when the title couldn't name it in a few words.
+    const numbers = (withFloor = true) => {
+        const recallPart = `**Recall** ${pct(recall)}${comparison?.recallBefore != null ? ` (verde: ${pct(comparison.recallBefore)})` : ''}`;
+        const precisionPart = `**precisão** ${pct(precision)}${comparison?.precisionBefore != null ? ` (${pct(comparison.precisionBefore)})` : ''}`;
+        return [recallPart, precisionPart, withFloor && typeof floor === 'number' ? `piso ${pct(floor)}` : null].filter(Boolean).join(' · ');
+    };
+    const runLine = () => [`${measured}/${result.cases} PRs`, minutes ? `${minutes} min` : null, money].filter(Boolean).join(' · ');
+    const commitBlock = (label, max) => {
+        if (!commits.length) return;
+        lines.push('', `**${label} (${commits.length})**`);
+        for (const c of commits.slice(0, max)) lines.push(`• \`${c.sha}\` ${clip(c.subject, 60)} — ${c.author}`);
+        if (commits.length > max) lines.push(`• +${commits.length - max} no diff`);
+    };
+
+    if (verdict === 'infra' || verdict === 'ungated') {
         const raw = verdict === 'infra' ? infraReason : gate.reason;
-        if (verdict === 'ungated' || shortReason(raw) === clip(raw, 60)) lines.push(clip(raw, 110));
-        if (links) lines.push(links);
+        lines.push(`**Erro:** ${clip(raw, 140)}`);
+        if (verdict === 'infra') {
+            const reason = shortReason(raw);
+            const secret = reason.startsWith('juiz') ? SECRET_FOR.juiz : /chave|crédito|limite/.test(reason) ? SECRET_FOR.model : null;
+            lines.push(`**Próximo passo:** ${secret ? `corrigir \`${secret}\`` : 'ver o log do run'}. A próxima noite mede de novo.`);
+        } else {
+            lines.push('**Próximo passo:** o run não bateu com a calibração (modelo ou juiz). Ver `targets.json`.');
+        }
+    } else if (verdict === 'oscillation') {
+        lines.push(`**Medições:** ${runs ? runs.map(pct).join(' e ') : 'n/d'} · média ${pct(recall)} · piso ${pct(floor)}`);
+        lines.push(numbers(false), runLine());
+        lines.push('Uma medição caiu, a repetição não confirmou. Nada a fazer.');
+    } else if (verdict === 'pass' || verdict === 'improved') {
+        lines.push(numbers(), runLine());
+        commitBlock('Commits medidos', 3);
+        if (verdict === 'improved') lines.push('', '**Próximo passo:** se repetir na próxima noite, subir o piso.');
     } else {
-        const facts = [
-            RED.has(verdict) && comparison?.lostTotal != null ? `${comparison.lostTotal} ${comparison.lostTotal === 1 ? 'bug perdido' : 'bugs perdidos'}` : null,
-            commits.length ? `${commits.length} ${commits.length === 1 ? 'commit' : 'commits'}` : null,
-            runs ? `medições ${runs.map(pct).join(' e ')}` : null,
-            verdict === 'still-red' && previousState?.since ? `alertado em ${previousState.since}` : null,
-        ].filter(Boolean);
-        if (facts.length) lines.push(facts.join(' · '));
+        // regression / still-red
+        lines.push(numbers(verdict === 'still-red'), [runLine(), runs ? `medições ${runs.map(pct).join(' e ')}` : null].filter(Boolean).join(' · '));
+        if (verdict === 'still-red' && previousState?.since) {
+            lines.push(`Alertado em ${previousState.since}${typeof previousState.recall === 'number' ? ` com ${pct(previousState.recall)}` : ''}. Sem @here até piorar.`);
+        }
         if (comparison && verdict !== 'still-red') {
-            const moved = verdict === 'improved' ? [...comparison.perCase].reverse() : comparison.perCase;
-            for (const c of moved.filter((x) => (verdict === 'improved' ? x.delta > 0 : x.delta < 0)).slice(0, 2)) {
-                lines.push(`• ${clip(c.caseId, 38)} ${Math.round(c.recallBefore * 100)}→${pct(c.recall)}`);
+            const lostCases = comparison.perCase.filter((c) => c.delta < 0 && (c.lost === null || c.lost.length));
+            const total = comparison.lostTotal;
+            if (lostCases.length) {
+                lines.push('', `**${total != null ? `Bugs perdidos (${total})` : 'PRs que mais caíram'}**`);
+                for (const c of lostCases.slice(0, 3)) {
+                    const bug = c.lost && c.lost.length ? `: "${clip(c.lost[0], 70)}"${c.lost.length > 1 ? ` +${c.lost.length - 1}` : ''}` : '';
+                    lines.push(`• ${clip(c.caseId, 38)} ${Math.round(c.recallBefore * 100)}→${pct(c.recall)}${bug}`);
+                }
             }
         }
-        if (investigation && RED.has(verdict)) {
-            const reading = { regression: 'Provável regressão', noise: 'Provavelmente ruído', eval: 'Problema do eval', unclear: 'Inconclusivo' }[investigation.verdict] || 'Hipótese';
-            lines.push(`🤖 ${reading} (${investigation.confidence}): ${clip(firstSentence(investigation.summary), 140)}`);
+        commitBlock(verdict === 'still-red' ? 'Commits desde o alerta' : 'Commits', 3);
+        if (investigation) {
+            const reading = { regression: 'provável regressão', noise: 'provavelmente ruído', eval: 'problema do eval', unclear: 'inconclusivo' }[investigation.verdict] || 'hipótese';
+            lines.push('', `**🤖 Claude** · ${reading} · confiança ${investigation.confidence}`);
+            lines.push(clip(investigation.summary, 180));
+            const suspect = (investigation.suspects || [])[0];
+            const where = suspect ? [suspect.commit && `\`${suspect.commit}\``, suspect.file && `\`${suspect.file.split('/').pop()}\``].filter(Boolean).join(' ') : '';
+            const confirm = investigation.confirm ? `confirmar: ${clip(investigation.confirm, 90)}` : '';
+            if (where || confirm) lines.push([where && `suspeito: ${where}`, confirm].filter(Boolean).join(' · '));
+        } else if (verdict === 'regression') {
+            lines.push('', '**Próximo passo:** `pnpm eval:nightly` no commit anterior e no suspeito.');
         }
-        if (links) lines.push(links);
     }
+    if (links) lines.push('', links);
     return { title, description: lines.join('\n') };
 }
 
@@ -404,21 +443,27 @@ function tier0Report(models, readResult, env = {}, readPrevious = () => null) {
 
     const markdown = [`## ${title}`, '', ...lines.map((line) => (line ? `${line}  ` : line))].join('\n');
 
-    // Discord: who is fine in one line, one short line per model that isn't.
+    // Discord: the healthy models in one line, then each problem with its short
+    // cause, the raw error and what to do.
     const okModels = results.filter((r) => !missing.includes(r) && !broken.includes(r) && !unreachable.includes(r));
     const icon = verdict === 'pass' ? '✅' : verdict === 'infra' ? '⚠️' : '❌';
+    const secretFor = (model) =>
+        /^claude/.test(model) ? 'BYOK_ANTHROPIC_API_KEY' : /^gpt/.test(model) ? 'BYOK_OPENAI_API_KEY' : /^gemini/.test(model) ? 'BYOK_GOOGLE_API_KEY' : /^kimi/.test(model) ? 'BYOK_MOONSHOT_API_KEY' : /^glm/.test(model) ? 'BYOK_ZHIPU_API_KEY' : null;
     const compactLines = [];
-    if (okModels.length) compactLines.push(`✅ ${names(okModels)}`);
-    const problem = (r) => {
-        const why =
-            r.status === 'missing' ? 'job caiu'
-            : r.status !== 'pass' ? shortReason(r.reason)
-            : `resumo ${r.prSummary?.status === 'infra' ? shortReason(r.prSummary?.reason) : 'quebrado'}`;
-        const repeat = sameFailure(r, readPrevious(r.model)) ? ' · igual semana passada' : '';
-        return `${r.status === 'missing' ? '❓' : broken.includes(r) ? '❌' : '⚠️'} ${r.model}: ${why}${repeat}`;
-    };
-    for (const r of [...broken, ...missing, ...unreachable]) compactLines.push(problem(r));
-    if (url) compactLines.push(md('run', url));
+    if (okModels.length) compactLines.push(`✅ ${okModels.map((r) => r.model).join(' · ')}`);
+    for (const r of [...broken, ...missing, ...unreachable]) {
+        const reviewBroken = r.status !== 'pass';
+        const raw = r.status === 'missing' ? null : reviewBroken ? r.reason : r.prSummary?.reason;
+        const why = r.status === 'missing' ? 'sem resultado, o job caiu' : `${reviewBroken ? 'review' : 'resumo'}: ${shortReason(raw)}`;
+        const repeat = sameFailure(r, readPrevious(r.model)) ? ' (igual semana passada)' : '';
+        compactLines.push(`${r.status === 'missing' ? '❓' : broken.includes(r) ? '❌' : '⚠️'} **${r.model}** · ${why}${repeat}`);
+        const detail = [];
+        if (raw) detail.push(`\`${clip(raw, 90)}\``);
+        if (unreachable.includes(r) && secretFor(r.model)) detail.push(`corrigir \`${secretFor(r.model)}\``);
+        if (broken.includes(r)) detail.push('clientes nesse modelo afetados');
+        if (detail.length) compactLines.push(`   ${detail.join(' → ')}`);
+    }
+    if (url) compactLines.push('', md('run', url));
     return {
         status,
         verdict,
