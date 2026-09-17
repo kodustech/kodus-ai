@@ -48,7 +48,6 @@ export class SuggestionLLMValidator {
             // single span path (Q4). setTemperature(0) is likewise dropped (not threaded).
             const result = await LLM.run({
                 schema: validateCodeSemanticsSchema,
-                system: '',
                 user: prompt_validateCodeSemantics(payload),
                 runName,
                 organizationId: organizationAndTeamData?.organizationId,

@@ -98,9 +98,18 @@ export function isOpenAiReasonerId(model?: string): boolean {
     const m = model.toLowerCase();
     return (
         /^o[134](\b|[-_@])/.test(m) ||
-        // gpt-5 and later. One digit only: `\d{2,}` also swallows Azure's legacy
-        // `gpt-35-turbo`, and a false reasoner drops temperature + renames max_tokens.
-        /^gpt-[5-9](\b|[-_@])/.test(m) ||
+        // gpt-5 and later, one OR two digits — but never a pre-5 dash-encoded
+        // minor version (Azure's `gpt-35-turbo` = GPT-3.5, and the same
+        // convention makes gpt-4x mean GPT-4.x: gpt-40/gpt-41/gpt-45 are
+        // GPT-4.0/4.1/4.5, non-reasoning models). A false reasoner there
+        // drops temperature + renames max_tokens. Excluding the whole 3x/4x
+        // range (not just 35) instead of dropping two-digit support
+        // entirely, since the same convention makes a future `gpt-55`/
+        // `gpt-65` (5.5/6.5) a realistic near-term id, not a hypothetical
+        // one — reasoners start at gpt-5, so nothing in 3x/4x is ever one.
+        /^gpt-(?!3[0-9](\b|[-_@]))(?!4[0-9](\b|[-_@]))([5-9]|\d{2})(\b|[-_@])/.test(
+            m,
+        ) ||
         /deep-research/.test(m)
     );
 }

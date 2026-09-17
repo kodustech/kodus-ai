@@ -217,6 +217,24 @@ export class ParametersRepository implements IParametersRepository {
     ): Promise<ParametersEntity<K> | undefined> {
         return this.parametersRepository.manager.transaction(
             async (manager) => {
+                // Serialize concurrent writers for this exact (teamId,
+                // configKey) pair. Without this, two concurrent callers (the
+                // settings UI + a background sync, or two rapid UI saves)
+                // both deactivate the old active row and then both try to
+                // INSERT their own new active row — the second collides with
+                // the partial unique index
+                // UQ_parameters_one_active_per_team_key and 500s the caller
+                // (prod, BetterStack: 170+ occurrences over ~2 months via
+                // ParametersController.updateOrCreateCodeReviewParameter).
+                // `pg_advisory_xact_lock` is transaction-scoped — it releases
+                // automatically on commit or rollback, no manual unlock — so
+                // the second writer just waits for the first to finish
+                // instead of racing it into the unique index.
+                await manager.query(
+                    'SELECT pg_advisory_xact_lock(hashtext($1))',
+                    [`${teamId}:${configKey}`],
+                );
+
                 // Bulk-deactivate every currently-active row for this
                 // (teamId, configKey) — not just the single row the caller
                 // read. If a previous race left an orphan active row behind,

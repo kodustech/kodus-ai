@@ -4063,7 +4063,12 @@ This is an experimental feature that generates committable changes. Review the d
                 error.message.includes('line must be part of the diff') ||
                 error.message.includes(
                     'start_line must be part of the same hunk as the line',
-                );
+                ) ||
+                // Same failure class, third message shape GitHub uses for it
+                // (prod: 81 occurrences / 25 orgs) — without this, the
+                // retry-with-adjusted-line recovery in
+                // createReviewCommentWithRetry never ran for this shape.
+                error.message.includes('pull_request_review_thread.line');
 
             const errorType = isLineMismatch
                 ? 'failed_lines_mismatch'
@@ -6289,9 +6294,18 @@ This is an experimental feature that generates committable changes. Review the d
         const criticalIssuesSummaryArray: OneSentenceSummaryItem[] =
             criticalComments.map((comment) => {
                 return {
-                    id: comment.codeReviewFeedbackData.commentId,
+                    // Both `codeReviewFeedbackData` and `suggestion` are
+                    // declared optional on their own types (a comment whose
+                    // GitHub post failed has no feedback data yet), and
+                    // OneSentenceSummaryItem.id is itself optional — the
+                    // caller (getListOfCriticalIssues) already renders a
+                    // linkless bullet when id is missing. Accessing these
+                    // without `?.` crashed the whole "request changes"
+                    // stage instead of degrading to that existing fallback
+                    // (prod, 2026-09-17: 10 occurrences).
+                    id: comment.codeReviewFeedbackData?.commentId,
                     oneSentenceSummary:
-                        comment.comment.suggestion.oneSentenceSummary ?? '',
+                        comment.comment.suggestion?.oneSentenceSummary ?? '',
                 };
             });
 
