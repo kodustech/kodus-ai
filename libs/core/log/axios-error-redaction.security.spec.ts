@@ -135,13 +135,17 @@ describe('sanitizeString — secrets embedded in strings', () => {
     });
 
     it('redacts every name in SENSITIVE_KEYS when it carries a value in a string', () => {
-        for (const key of SENSITIVE_KEYS) {
-            const secret = `secret-for-${key}`;
+        // The probe value must not contain a hint stem of its own, otherwise
+        // it opens the gate by itself and this walk can never fail.
+        let probe = 0;
 
-            expect(sanitizeString(`{"${key}":"${secret}"}`)).not.toContain(
-                secret,
+        for (const key of SENSITIVE_KEYS) {
+            const value = `pr0be-${probe++}`;
+
+            expect(sanitizeString(`{"${key}":"${value}"}`)).not.toContain(
+                value,
             );
-            expect(sanitizeString(`${key}: ${secret}`)).not.toContain(secret);
+            expect(sanitizeString(`${key}: ${value}`)).not.toContain(value);
         }
     });
 
