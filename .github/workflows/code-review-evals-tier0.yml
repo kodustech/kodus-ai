@@ -15,9 +15,9 @@ name: "Evals: tier-0 smoke (Friday release)"
 # Models: tier0() in evals/shared/tier0-models.js.
 # Secrets (repo-level): BYOK_OPENAI_API_KEY, BYOK_ANTHROPIC_API_KEY,
 # BYOK_GOOGLE_API_KEY, BYOK_MOONSHOT_API_KEY, BYOK_ZHIPU_API_KEY,
-# DISCORD_WEBHOOK_TESTS (falls back to DISCORD_WEBHOOK_INTERNAL / DISCORD_WEBHOOK). On 2026-09-16 both Anthropic secrets
-# answered 401, so claude-sonnet-4-6 reports infra until BYOK_ANTHROPIC_API_KEY is
-# rotated — that is the smoke doing its job.
+# DISCORD_WEBHOOK_TESTS (falls back to DISCORD_WEBHOOK_INTERNAL / DISCORD_WEBHOOK).
+# BYOK_ANTHROPIC_API_KEY answered 401 until it was rotated on 2026-09-17; the
+# smoke reported claude-sonnet-4-6 as infra the whole time, which is it working.
 
 permissions:
     contents: read
