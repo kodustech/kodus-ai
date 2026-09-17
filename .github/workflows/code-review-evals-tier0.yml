@@ -25,6 +25,10 @@ on:
         # Friday 03:00 UTC = 00:00 BRT — same slot as the release train
         # (selfhosted-build-push.yml).
         - cron: "0 3 * * 5"
+    # TEMP (validation on PR #1951, reverted before merge)
+    pull_request:
+        paths:
+            - ".github/workflows/code-review-evals-tier0.yml"
     workflow_dispatch:
         inputs:
             only_model:
@@ -121,6 +125,7 @@ jobs:
                   EVAL_MODELS: ${{ needs.prepare.outputs.models }}
               run: node evals/ci-report.js tier0 tier0-results
             - name: Notify Discord
+              if: github.event_name != 'pull_request'
               uses: ./.github/actions/discord-notify
               with:
                   webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}

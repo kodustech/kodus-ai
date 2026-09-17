@@ -28,6 +28,10 @@ on:
         # 05:00 UTC = 02:00 BRT. Results land before the workday, and Friday's
         # lands before the release meeting.
         - cron: "0 5 * * *"
+    # TEMP (validation on PR #1951, reverted before merge)
+    pull_request:
+        paths:
+            - ".github/workflows/code-review-evals-nightly.yml"
     workflow_dispatch:
         inputs:
             force:
@@ -58,7 +62,7 @@ jobs:
             - id: diff
               env:
                   GH_TOKEN: ${{ github.token }}
-                  FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
+                  FORCE: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.force) }}
               run: |
                   base=$(gh run list -R "$GITHUB_REPOSITORY" --workflow code-review-evals-nightly.yml \
                       --branch main --status success --limit 1 --json headSha --jq '.[0].headSha // ""')
@@ -111,7 +115,7 @@ jobs:
               # step below says which.
               run: |
                   node evals/investigation/run-recall.js --model="$MODEL" --set="$CASE_SET" \
-                      --concurrency=6 --gate --output=evals/investigation/results/nightly.json
+                      --concurrency=6 --gate --output=evals/investigation/results/nightly.json ${{ github.event_name == 'pull_request' && '--limit=3' || '' }}
             - name: Report
               id: report
               if: always()
@@ -129,7 +133,7 @@ jobs:
                   if-no-files-found: ignore
                   retention-days: 30
             - name: Notify Discord
-              if: always() && steps.report.outputs.title != ''
+              if: always() && steps.report.outputs.title != '' && github.event_name != 'pull_request'
               uses: ./.github/actions/discord-notify
               with:
                   webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
