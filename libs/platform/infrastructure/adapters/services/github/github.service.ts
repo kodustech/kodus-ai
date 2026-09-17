@@ -6294,9 +6294,18 @@ This is an experimental feature that generates committable changes. Review the d
         const criticalIssuesSummaryArray: OneSentenceSummaryItem[] =
             criticalComments.map((comment) => {
                 return {
-                    id: comment.codeReviewFeedbackData.commentId,
+                    // Both `codeReviewFeedbackData` and `suggestion` are
+                    // declared optional on their own types (a comment whose
+                    // GitHub post failed has no feedback data yet), and
+                    // OneSentenceSummaryItem.id is itself optional — the
+                    // caller (getListOfCriticalIssues) already renders a
+                    // linkless bullet when id is missing. Accessing these
+                    // without `?.` crashed the whole "request changes"
+                    // stage instead of degrading to that existing fallback
+                    // (prod, 2026-09-17: 10 occurrences).
+                    id: comment.codeReviewFeedbackData?.commentId,
                     oneSentenceSummary:
-                        comment.comment.suggestion.oneSentenceSummary ?? '',
+                        comment.comment.suggestion?.oneSentenceSummary ?? '',
                 };
             });
 
