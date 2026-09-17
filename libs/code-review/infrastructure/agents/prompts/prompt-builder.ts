@@ -196,6 +196,15 @@ function resolveDecisionTypeNote(
         return entry.label;
     }
     if (!entry.brokenKodyRulesIds?.length) {
+        // A rule decision whose ids were never persisted (LLM omitted
+        // ruleUuid, or a legacy record predating this field) must NOT be
+        // asserted as a general review — that would tell the reader this
+        // decision "did not judge any rule at all" and let it re-open a rule
+        // violation that was already decided, just because the specific
+        // uuid wasn't recorded.
+        if (entry.label === 'kody_rules') {
+            return `${entry.label} (rule identity not recorded — cannot confirm it matches any rule listed above)`;
+        }
         // General finder (bug/security/performance) decision reaching the
         // rules judge's own prompt — mark it as NOT a rule so its Type can
         // never be misread as covering one of the rules listed above.

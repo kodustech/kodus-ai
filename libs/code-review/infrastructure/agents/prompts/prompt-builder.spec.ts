@@ -277,6 +277,27 @@ describe('buildUserPrompt', () => {
         expect(block).not.toContain('Kody Rule —');
     });
 
+    it('does not mislabel a kody_rules decision with no brokenKodyRulesIds as a general review — that would let an already-decided rule violation be re-opened (kody-ai review, PR #1895)', () => {
+        const block = formatPreviousDecisions(
+            [
+                {
+                    suggestionId: 'sug-1',
+                    relevantFile: 'src/a.ts',
+                    suggestionContent: 'Log through PinoLoggerService.',
+                    label: 'kody_rules',
+                    // No brokenKodyRulesIds — LLM omitted ruleUuid, or a
+                    // legacy record predating this field.
+                    outcome: 'implemented',
+                    decidedAt: '2026-01-01T00:00:00.000Z',
+                },
+            ],
+            new Map([['rule-uuid-1', 'Structured logging']]),
+        );
+
+        expect(block).not.toContain('Type: General review');
+        expect(block).toContain('Type: kody_rules (rule identity not recorded');
+    });
+
     it('labels a general-review (non-rule) decision explicitly when ruleTitleByUuid is given, so it can never be misread as covering one of the rules listed above (malinosqui review, PR #1895)', () => {
         const block = formatPreviousDecisions(
             [
