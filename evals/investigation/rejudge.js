@@ -37,27 +37,33 @@ function datasetVars() {
 }
 
 // Submission findings keep summary+content joined in `description`; label and
-// file come back as the extra fields recall-assertion appends.
+// file come back as the extra fields recall-assertion appends. The trace isn't
+// re-derived: scoring doesn't read it, and the fidelity fields are copied from
+// the source row (FIDELITY).
 function agentOutputOf(result) {
     return JSON.stringify({
         findings: (result.findings || []).map((f) => ({ oneSentenceSummary: f.description, label: f.category, relevantFile: f.path })),
-        trace: { replayCalls: result.trace?.replayCalls ?? 0, unexpectedToolCalls: [] },
     });
 }
+
+const FIDELITY = ['totalCalls', 'hitRate', 'unserved'];
 
 async function main() {
     const [summaryFile, submissionFile] = process.argv.slice(2);
     const out = (process.argv.find((a) => a.startsWith('--out=')) || '').slice(6);
-    const concurrency = Number((process.argv.find((a) => a.startsWith('--concurrency=')) || '--concurrency=6').slice(14));
-    if (!summaryFile || !submissionFile || !out) {
-        console.error('usage: node evals/investigation/rejudge.js <nightly.json> <nightly.submission.json> --out=<result.json>');
+    const concurrencyFlag = (process.argv.find((a) => a.startsWith('--concurrency=')) || '--concurrency=6').slice(14);
+    const concurrency = /^\d+$/.test(concurrencyFlag) ? Number(concurrencyFlag) : 0;
+    if (!summaryFile || !submissionFile || !out || concurrency < 1) {
+        console.error('usage: node evals/investigation/rejudge.js <nightly.json> <nightly.submission.json> --out=<result.json> [--concurrency=<positive integer>]');
         return 2;
     }
     const original = readJson(summaryFile);
     const submission = new Map(readJson(submissionFile).results.map((r) => [r.caseId, r]));
     const vars = datasetVars();
-    const rows = [];
-    let infraFailures = 0;
+    // PRs the source run couldn't measure stay unmeasured here, so the output
+    // describes the same 30 PRs as the run it re-scores.
+    const rows = (original.rows || []).filter((row) => row.status === 'infra').map((row) => ({ caseId: row.caseId, status: 'infra', reason: `infra in the source run: ${row.reason || 'unknown'}` }));
+    let infraFailures = rows.length;
     const queue = (original.rows || []).filter((row) => row.status !== 'infra');
     let cursor = 0;
     const worker = async () => {
@@ -73,7 +79,8 @@ async function main() {
             }
             try {
                 const assertion = await recallAssertion(agentOutputOf(result), { vars: caseVars });
-                rows.push({ caseId: row.caseId, status: assertion.pass ? 'pass' : 'fail', score: assertion.score, metadata: { ...assertion.metadata, totalCalls: row.metadata?.totalCalls ?? assertion.metadata.totalCalls, hitRate: row.metadata?.hitRate ?? assertion.metadata.hitRate }, judgedBefore: row.metadata?.recall ?? null });
+                const fidelity = Object.fromEntries(FIDELITY.map((key) => [key, row.metadata?.[key] ?? null]));
+                rows.push({ caseId: row.caseId, status: assertion.pass ? 'pass' : 'fail', score: assertion.score, metadata: { ...assertion.metadata, ...fidelity }, judgedBefore: row.metadata?.recall ?? null });
             } catch (error) {
                 infraFailures += 1;
                 rows.push({ caseId: row.caseId, status: 'infra', reason: error.message });
