@@ -19,11 +19,23 @@ export const PageWithSidebar = (props: React.PropsWithChildren) => {
     );
 };
 
-// Every page is a centered column with the SAME cap: 80rem (1280px). Wide
+// Every page is a centered column with the SAME cap: 96rem (1536px). Wide
 // enough for the data tables (Kody Rules, Reviews, Issues, Cockpit), which
 // used to opt out with `max-w-full` and made forms and tables start at
 // different x positions. Don't override the cap per page.
-const PAGE_CONTAINER = "mx-auto w-full max-w-7xl";
+//
+// Raised from 80rem: on a 1720px window that cap left 220px of dead margin
+// on each side — a quarter of the screen — while table rows truncated. Text
+// columns don't get longer as a result; the prose on the settings pages is
+// sized by its own container, not by this one (measured identical at both
+// caps), so the extra width lands on the tables that wanted it.
+// Exported because a few chrome elements live OUTSIDE Page.Root and still
+// have to line up with it — the settings tab bar, its skeleton, the Cockpit
+// empty-state banner. They each hard-coded the old value, so raising the cap
+// here alone would have left them narrower than the content beneath them.
+// Import this instead of repeating the number.
+export const PAGE_MAX_WIDTH = "max-w-[96rem]";
+const PAGE_CONTAINER = `mx-auto w-full ${PAGE_MAX_WIDTH}`;
 const WITH_SIDEBAR_CONTAINER = PAGE_CONTAINER;
 const WITHOUT_SIDEBAR_CONTAINER = PAGE_CONTAINER;
 

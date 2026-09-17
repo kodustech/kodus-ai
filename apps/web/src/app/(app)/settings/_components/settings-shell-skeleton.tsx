@@ -1,6 +1,8 @@
 "use client";
 
+import { PAGE_MAX_WIDTH } from "@components/ui/page";
 import { Skeleton } from "@components/ui/skeleton";
+import { cn } from "src/core/utils/components";
 import { SettingsPageSkeleton } from "src/core/components/system/page-skeletons";
 
 // General · What to review · Kody Rules · What Kody writes · Linked repos
@@ -11,7 +13,11 @@ export const SettingsShellHeaderSkeleton = () => (
     <div
         className="bg-card-lv1 border-card-lv3/60 shrink-0 border-b px-8"
         aria-hidden>
-        <div className="mx-auto flex h-12 w-full max-w-7xl items-center gap-6">
+        <div
+            className={cn(
+                "mx-auto flex h-12 w-full items-center gap-6",
+                PAGE_MAX_WIDTH,
+            )}>
             <Skeleton className="h-8 w-28 rounded-lg" />
             <div className="flex items-center gap-5">
                 {TAB_WIDTHS_REM.map((width, i) => (

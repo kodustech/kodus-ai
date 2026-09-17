@@ -50,6 +50,7 @@ import {
     ScanSearchIcon,
     Settings2Icon,
 } from "lucide-react";
+import { PAGE_MAX_WIDTH } from "@components/ui/page";
 import { cn } from "src/core/utils/components";
 import {
     hasUnsavedChanges,
@@ -585,7 +586,11 @@ export const CodeReviewShellHeader = ({
         // below), like a GitHub repo header: scope pill on the left, page
         // tabs with icons after it, active underline flush with the edge.
         <div className="bg-card-lv1 border-card-lv3/60 shrink-0 border-b px-8">
-            <div className="mx-auto flex h-12 w-full max-w-7xl items-stretch gap-6">
+            <div
+                className={cn(
+                    "mx-auto flex h-12 w-full items-stretch gap-6",
+                    PAGE_MAX_WIDTH,
+                )}>
                 <div className="flex shrink-0 items-center gap-1.5">
                     <Popover open={open} onOpenChange={setOpen}>
                         <PopoverTrigger asChild>

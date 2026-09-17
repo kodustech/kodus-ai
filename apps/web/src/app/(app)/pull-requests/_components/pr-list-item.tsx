@@ -569,7 +569,13 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                         </Tooltip>
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <span className="flex max-w-[14rem] min-w-0 items-center gap-1">
+                                {/* A ceiling, not a width: `min-w-0` lets this
+                                    shrink and truncate exactly as before when
+                                    the row is tight, so the wider cap only
+                                    cashes out on screens that have the room.
+                                    14rem cut most branch names in half while
+                                    the column beside them sat empty. */}
+                                <span className="flex max-w-[26rem] min-w-0 items-center gap-1">
                                     <GitBranchIcon className="size-3 shrink-0" />
                                     <span className="truncate font-mono">
                                         {latest.headBranchRef}
