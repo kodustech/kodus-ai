@@ -69,6 +69,31 @@ export const PrDataTable = ({
         return () => observer.disconnect();
     }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
+    // A page can arrive SHORTER than the window it has to fill: post-query
+    // filters discard rows, and the backend caps how far one request will scan
+    // rather than draining the whole history for a selective filter. When that
+    // leaves the list not tall enough to scroll, the observer above never gets
+    // another intersection to react to — the sentinel just sits in view — and
+    // the reader is stranded on a handful of rows with blank space under them
+    // and no way to ask for more.
+    //
+    // So also pull on settle: whenever a fetch finishes and the sentinel is
+    // still on screen with more behind it, fetch again. It stops on its own as
+    // soon as the content is tall enough to push the sentinel out of view,
+    // which is the point where scrolling takes over.
+    useEffect(() => {
+        if (!fetchNextPage || !hasNextPage || isFetchingNextPage) return;
+        const node = loadMoreRef.current;
+        const root = scrollRef.current;
+        if (!node || !root) return;
+
+        const nodeTop = node.getBoundingClientRect().top;
+        const rootBottom = root.getBoundingClientRect().bottom;
+        if (nodeTop <= rootBottom) {
+            fetchNextPage();
+        }
+    }, [fetchNextPage, hasNextPage, isFetchingNextPage, data.length]);
+
     if (loading) {
         return (
             <div className="border-card-lv3/40 bg-card-lv1/50 divide-card-lv3/30 flex flex-col divide-y overflow-hidden rounded-xl border">
