@@ -15,6 +15,11 @@ export function openaiReasoningConfig(
 ): ReasoningConfig | undefined {
     if (!model) return undefined;
     const m = model.toLowerCase();
+    // gpt-6 names its own levels when it refuses one: low/medium/high/xhigh.
+    // `xhigh` has no ReasoningEffort member, so the picker stops at high.
+    if (/^gpt-[6-9](\b|[-_@])/.test(m)) {
+        return { type: 'level', options: ['low', 'medium', 'high'] };
+    }
     if (/^gpt-5(\b|[-_@])/.test(m)) {
         return { type: 'level', options: ['medium', 'high'] };
     }
