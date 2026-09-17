@@ -102,6 +102,7 @@ describe('tier-0 report', () => {
 describe('tier-0 failure classification', () => {
     it.each([
         'Incorrect API key provided: sk-...',
+        'agent loop finished with error: API key is invalid. (finishReason=error, steps=0, tokens=0)',
         'Your account org-1 is suspended due to insufficient balance',
         'AI_APICallError: Cannot connect to API: connect ECONNREFUSED',
         '429 Too Many Requests',

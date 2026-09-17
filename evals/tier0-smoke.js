@@ -27,7 +27,8 @@ const DEFAULT_CASE = 'add-guest-management-functionality-to-existing-bookings-ca
 // (targets.json observed.meanToolCalls); fewer than this means tools are dead.
 const MIN_TOOL_CALLS = 3;
 const MIN_FINDINGS = 1;
-const INFRA = /\b(401|403|429|402)\b|unauthori[sz]ed|(invalid|incorrect|missing|expired).{0,20}(api.?key|x-api-key|token|credential)|suspended|permission.?denied|quota|rate.?limit|insufficient|billing|credit balance|exceeded your|cannot connect|ECONNREFUSED|ENOTFOUND|ECONNRESET|ETIMEDOUT|EAI_AGAIN|fetch failed|socket hang up|overloaded|\b50[234]\b/i;
+const RETRY_DELAY_MS = 60 * 1000;
+const INFRA = /\b(401|403|429|402)\b|unauthori[sz]ed|(invalid|incorrect|missing|expired).{0,20}(api.?key|x-api-key|token|credential)|(api.?key|x-api-key|token|credential).{0,20}(invalid|incorrect|expired|revoked)|suspended|permission.?denied|quota|rate.?limit|insufficient|billing|credit balance|exceeded your|cannot connect|ECONNREFUSED|ENOTFOUND|ECONNRESET|ETIMEDOUT|EAI_AGAIN|fetch failed|socket hang up|overloaded|\b50[234]\b/i;
 
 function parseArgs(argv) {
     return Object.fromEntries(
@@ -95,10 +96,20 @@ async function main() {
     });
 
     const started = Date.now();
-    const result = await provider.callApi(JSON.stringify(vars), { vars }, {});
+    let result = await provider.callApi(JSON.stringify(vars), { vars }, {});
+    // One retry when the provider refused: Moonshot and Z.ai answer "engine
+    // overloaded" in bursts, and a Friday alarm for a busy minute helps nobody.
+    // A refusal that survives the retry is reported.
+    let retried = false;
+    if (!result.output && classifyFailure(result.error) === 'infra') {
+        console.log(`⚠️ ${model} review refused (${String(result.error).slice(0, 160)}) — retrying once in ${RETRY_DELAY_MS / 1000}s`);
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+        result = await provider.callApi(JSON.stringify(vars), { vars }, {});
+        retried = true;
+    }
     const seconds = Math.round((Date.now() - started) / 1000);
 
-    const summary = { model, caseId, seconds, status: 'pass', reason: null, findings: null, toolCalls: null, tokens: result.tokenUsage || null };
+    const summary = { model, caseId, seconds, retried, status: 'pass', reason: null, findings: null, toolCalls: null, tokens: result.tokenUsage || null };
     if (!result.output) {
         const reason = String(result.error || 'provider returned no output');
         summary.status = classifyFailure(reason);

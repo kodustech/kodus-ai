@@ -16,8 +16,10 @@ name: "Evals: nightly quality (DeepSeek, 30 PRs)"
 # Gate: finder-recall run mean vs evals/investigation/targets.json → sets.light.
 # RATCHET: when a PR intentionally moves recall, update that floor in the same PR.
 #
-# Secrets (repo-level): BYOK_FIREWORKS_API_KEY (model), ANTHROPIC_API_KEY
+# Secrets (repo-level): BYOK_FIREWORKS_API_KEY (model), BYOK_ANTHROPIC_API_KEY
 # (judge, claude-haiku-4-5), DISCORD_WEBHOOK_INTERNAL / DISCORD_WEBHOOK.
+# Not ANTHROPIC_API_KEY: on 2026-09-16 it answered 401 "API key is invalid",
+# which is what kept the old finder gate at 8/8 infra for weeks.
 
 permissions:
     contents: read
@@ -110,7 +112,7 @@ jobs:
               id: recall
               env:
                   BYOK_FIREWORKS_API_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
-                  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+                  BYOK_ANTHROPIC_API_KEY: ${{ secrets.BYOK_ANTHROPIC_API_KEY }}
               # exit 1 = below the floor, 2 = infra. Both fail the job; the report
               # step below says which.
               run: |

@@ -13,9 +13,10 @@ name: "Evals: tier-0 smoke (Friday release)"
 # it), not a reason to stop the whole release.
 #
 # Models: tier0() in evals/shared/tier0-models.js.
-# Secrets (repo-level): BYOK_OPENAI_API_KEY, ANTHROPIC_API_KEY,
+# Secrets (repo-level): BYOK_OPENAI_API_KEY, BYOK_ANTHROPIC_API_KEY,
 # BYOK_GOOGLE_API_KEY, BYOK_MOONSHOT_API_KEY, BYOK_ZHIPU_API_KEY,
-# DISCORD_WEBHOOK_INTERNAL / DISCORD_WEBHOOK.
+# DISCORD_WEBHOOK_INTERNAL / DISCORD_WEBHOOK. Not ANTHROPIC_API_KEY — it is read
+# first when present and answered 401 on 2026-09-16.
 
 permissions:
     contents: read
@@ -92,7 +93,6 @@ jobs:
             - name: Review + PR summary on ${{ matrix.model }}
               env:
                   BYOK_OPENAI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
-                  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
                   BYOK_ANTHROPIC_API_KEY: ${{ secrets.BYOK_ANTHROPIC_API_KEY }}
                   BYOK_GOOGLE_API_KEY: ${{ secrets.BYOK_GOOGLE_API_KEY }}
                   BYOK_MOONSHOT_API_KEY: ${{ secrets.BYOK_MOONSHOT_API_KEY }}
