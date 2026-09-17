@@ -15,7 +15,7 @@ if (!process.env.API_CRYPTO_KEY) {
 
 const {
     buildVerifierPrompt,
-} = require('../../libs/code-review/infrastructure/agents/llm/agent-loop.ts');
+} = require('../../libs/code-review/infrastructure/agents/prompts/verifier-prompt.ts');
 
 function parseMaybeJson(value) {
     if (typeof value !== 'string') return value;
