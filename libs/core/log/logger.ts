@@ -348,13 +348,15 @@ function sanitizeString(value: string): string {
 }
 
 // Cheap pre-check so ordinary strings (stacks, messages) skip the regexes.
-// Loose on purpose: a false hit only costs the scans below.
+// Loose on purpose: a false hit only costs the scans below. The gate is
+// fail-open, so every name in SENSITIVE_KEYS must match one of these stems —
+// a spec walks the set and fails when a new key has no stem here.
 const EMBEDDED_SECRET_HINT =
-    /auth|cookie|token|secret|passw|key|credential|jwt|ssn|cpf|cvv|card/i;
+    /auth|cookie|token|secret|passw|key|credential|jwt|connection|ssn|cpf|cvv|card/i;
 
 // Linear patterns (no nested or overlapping quantifiers).
 const HEADER_LINE_PATTERN =
-    /(^|[\r\n])([ \t]*)([A-Za-z0-9-]{1,100})([ \t]*:[ \t]*)([^\r\n]*)/g;
+    /(^|[\r\n])([ \t]*)([A-Za-z0-9_.-]{1,100})([ \t]*:[ \t]*)([^\r\n]*)/g;
 const QUERY_PARAM_PATTERN =
     /(^|[?&;\s])([A-Za-z0-9_.-]{1,100})=([^&#\s"'<>]*)/g;
 const JSON_PAIR_PATTERN = /"([^"\\]{1,100})"(\s*:\s*)"((?:[^"\\]|\\.)*)"/g;
@@ -750,7 +752,7 @@ export class SimpleLogger {
 }
 
 /** Exported for testing only. */
-export { deepSanitize, isSensitiveKey, sanitizeString };
+export { deepSanitize, isSensitiveKey, sanitizeString, SENSITIVE_KEYS };
 
 export function createLogger(component: string): SimpleLogger {
     return new SimpleLogger(component);

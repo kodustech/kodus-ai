@@ -16,11 +16,12 @@ import * as http from 'http';
 import axios from 'axios';
 import pino from 'pino';
 
-const { deepSanitize, sanitizeString } = jest.requireActual(
+const { deepSanitize, sanitizeString, SENSITIVE_KEYS } = jest.requireActual(
     '@libs/core/log/logger',
 ) as {
     deepSanitize: (obj: any) => any;
     sanitizeString: (value: string) => string;
+    SENSITIVE_KEYS: Set<string>;
 };
 
 const FAKE_PAT = 'fake-pat-0000000000000000000000000000000000000000000000000000';
@@ -124,6 +125,24 @@ describe('sanitizeString — secrets embedded in strings', () => {
         expect(out).not.toContain('glpat-xyz');
         expect(out).toContain('Accept: */*');
         expect(out).toContain('Host: example.com');
+    });
+
+    it('redacts a sensitive header name written with separators', () => {
+        const out = sanitizeString('api_key: k-secret\nX_API_KEY: k-secret2');
+
+        expect(out).not.toContain('k-secret');
+        expect(out).not.toContain('k-secret2');
+    });
+
+    it('redacts every name in SENSITIVE_KEYS when it carries a value in a string', () => {
+        for (const key of SENSITIVE_KEYS) {
+            const secret = `secret-for-${key}`;
+
+            expect(sanitizeString(`{"${key}":"${secret}"}`)).not.toContain(
+                secret,
+            );
+            expect(sanitizeString(`${key}: ${secret}`)).not.toContain(secret);
+        }
     });
 
     it('redacts sensitive query-string and form parameters', () => {
