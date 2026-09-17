@@ -39,7 +39,7 @@ expose:
   # hostname across suspend/resume, which is what a link in a PR comment needs.
   mode: https
 limits:
-  instance: m7i-flex.xlarge  # non-burstable: the image build never throttles
+  instance: t3.xlarge  # 16 GiB, permitted by the isolated Ohio identity
   disk: 100gb
   # a reviewer comes back to the link minutes or hours later; while the
   # hostname still carries the IP, a resume invalidates the posted link, so

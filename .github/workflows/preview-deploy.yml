@@ -11,8 +11,8 @@ name: "Preview: Deploy"
 # review flow, not just render the frontend against a shared QA backend.
 #
 # Required secrets (environment "Preview"):
-#   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY  account the preview VMs live in
-#   PREVIEW_RUNO_SSH_KEY       private key every run reuses to reach the VMs
+#   PREVIEW_RUNO_TOKEN        control-plane token; AWS and SSH stay on the server
+#   Variable PREVIEW_RUNO_SERVER points to the isolated Ohio control plane
 #   OP_SERVICE_ACCOUNT_TOKEN   renders .env from .env.template, the same way a
 #                              developer does — so a variable added to the
 #                              template does not silently break previews weeks
@@ -25,6 +25,12 @@ name: "Preview: Deploy"
 # =============================================================================
 
 on:
+    workflow_dispatch:
+        inputs:
+            pr_number:
+                description: Pull request to validate on the Ohio preview fleet
+                required: true
+                type: number
     pull_request:
         types: [opened, synchronize, reopened]
 
@@ -35,26 +41,20 @@ concurrency:
     # A newer push supersedes the running deploy: `runo up` is idempotent and
     # the next run adopts the same VM and reconciles it, so cancelling costs
     # nothing but the wasted minutes.
-    group: preview-${{ github.event.pull_request.number }}
+    group: preview-${{ github.event.pull_request.number || inputs.pr_number }}
     cancel-in-progress: true
 
 env:
-    # Fixed path on purpose: runo derives the AWS keypair, security group and
-    # instance tags from a hash of RUNO_HOME, and those must be identical from
-    # one job to the next or a new runner cannot find (or reach) the VM the
-    # previous one created.
-    RUNO_HOME: /home/runner/.runo-preview
-    RUNO_AWS_REGION: sa-east-1
-    # One preview per open PR — the laptop default of 3 is not the CI budget.
-    RUNO_MAX_INSTANCES: "20"
-    RUNO_REF: main
+    RUNO_HOME: /home/runner/.runo-preview-ohio
+    RUNO_AWS_REGION: us-east-2
+    RUNO_REF: feat/isolated-control-plane
 
 jobs:
     preview:
         name: Preview environment
         # Secrets are not available to forks, and a fork branch name could
         # collide with ours in the env registry.
-        if: github.event.pull_request.head.repo.full_name == github.repository
+        if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
         runs-on: ubuntu-latest
         environment: Preview
         timeout-minutes: 60
@@ -64,9 +64,30 @@ jobs:
         outputs:
             url: ${{ steps.up.outputs.url }}
         steps:
+            - name: Resolve preview revision
+              id: target
+              uses: actions/github-script@v9.0.0
+              env:
+                  PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+              with:
+                  script: |
+                      const { data: pr } = await github.rest.pulls.get({
+                        owner: context.repo.owner, repo: context.repo.repo,
+                        pull_number: Number(process.env.PR_NUMBER),
+                      });
+                      if (pr.head.repo.full_name !== `${context.repo.owner}/${context.repo.repo}`) {
+                        throw new Error('Only same-repository previews are allowed');
+                      }
+                      core.setOutput('sha', pr.head.sha);
+                      core.setOutput('branch', pr.head.ref);
             - uses: actions/checkout@v6.0.2
               with:
-                  ref: ${{ github.event.pull_request.head.sha }}
+                  ref: ${{ steps.target.outputs.sha }}
+
+            - name: Use the isolated preview instance family
+              run: |
+                  # Older PRs still carry the previous fleet's instance family.
+                  sed -i 's/instance: m7i-flex.xlarge/instance: t3.xlarge/' .kodus/workspace.preview.yaml
 
             - uses: oven-sh/setup-bun@v2
               with:
@@ -94,7 +115,7 @@ jobs:
                   # and anyone holding it could otherwise recompute a preview's
                   # JWT and crypto keys and mint sessions without logging in.
                   PREVIEW_SECRET_SEED_BASE: ${{ secrets.PREVIEW_SECRET_SEED }}
-                  HEAD_REF: ${{ github.event.pull_request.head.ref }}
+                  HEAD_REF: ${{ steps.target.outputs.branch }}
               run: |
                   # No token means previews are not configured for this
                   # repository (a fork, or before the secrets are added). That
@@ -138,15 +159,16 @@ jobs:
               id: up
               if: steps.env.outputs.configured == 'true'
               env:
-                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-                  RUNO_SSH_KEY: ${{ secrets.PREVIEW_RUNO_SSH_KEY }}
-                  HEAD_REF: ${{ github.event.pull_request.head.ref }}
+                  RUNO_SERVER: ${{ vars.PREVIEW_RUNO_SERVER }}
+                  RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
+                  HEAD_REF: ${{ steps.target.outputs.branch }}
               run: |
                   set -euo pipefail
+                  test -n "$RUNO_SERVER" && test -n "$RUNO_TOKEN"
                   # --branch: the checkout is a detached HEAD, so runo cannot
                   # read the branch from git itself
                   $RUNO up --here --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml
+                  $RUNO share qa --branch "$HEAD_REF"
                   # `up` only uploads code when it CREATES the VM; on every
                   # later push the environment already exists and the new
                   # commit travels with push (compose watch reloads it)
@@ -156,7 +178,7 @@ jobs:
                   echo "Preview: $URL"
 
             - name: Comment the preview link
-              if: always() && steps.env.outputs.configured == 'true'
+              if: always() && github.event_name == 'pull_request' && steps.env.outputs.configured == 'true'
               uses: actions/github-script@v9.0.0
               env:
                   URL: ${{ steps.up.outputs.url }}
