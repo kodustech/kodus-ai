@@ -121,6 +121,7 @@ const BORROWS_FROM: Record<string, string> = {
     openai_gpt56: 'openai',
     openai_compatible_gpt56: 'openai',
     openai_gpt6_astra: 'openai',
+    google_vertex_gemini: 'google_vertex',
 };
 
 /**
@@ -190,10 +191,13 @@ const credentialFor = (row: { brand: string; requires?: () => boolean }) =>
  * the first version of this regex missed it and a local run caught that: OpenAI
  * does not say "invalid", it says "incorrect", and a classifier that reads only
  * the Anthropic wording sends the exact same misleading alert for the exact
- * same cause. Add a phrasing here only after seeing it in a log.
+ * same cause. `dunning decision is deny` joined it the same way: Vertex says
+ * that when the GCP project's billing is delinquent, and nothing about the
+ * request shape is being judged when it does.
+ * Add a phrasing here only after seeing it in a log.
  */
 const CREDENTIAL_FAILURE =
-    /(api key is invalid|invalid api key|incorrect api key|invalid[ _-]?anthropic[ _-]?api[ _-]?key|invalid[ _-]?x-api-key|invalid_api_key|authentication[ _]?error|unauthorized|forbidden|invalid_payment_instrument|access denied|permission denied|expired token|could not be authenticated)/i;
+    /(api key is invalid|invalid api key|incorrect api key|invalid[ _-]?anthropic[ _-]?api[ _-]?key|invalid[ _-]?x-api-key|invalid_api_key|authentication[ _]?error|unauthorized|forbidden|invalid_payment_instrument|access denied|permission denied|expired token|could not be authenticated|dunning decision is deny|billing[ _]?(is )?(disabled|not enabled)|has not enabled billing)/i;
 
 const onlyDrift = async <T>(brand: string, call: Promise<T>): Promise<T> => {
     try {
@@ -236,8 +240,13 @@ function secretsPassedByCi(): string[] {
     );
     // The RUN line, not the first mention — the job's comments name the spec
     // several times above its own env block.
-    const runAt = workflow.indexOf(
-        'run: pnpm exec jest --config jest.config.ts libs/llm/byok-reasoning.live.spec.ts',
+    // Matched on the SPEC PATH, not on the whole command: pinning the exact
+    // command string meant that prefixing it (NODE_OPTIONS, for the Vertex
+    // rows' dynamic import) silently detached this parser from the job, and
+    // all three credential invariants went red for a reason that had nothing
+    // to do with credentials.
+    const runAt = workflow.search(
+        /^\s+run:.*byok-reasoning\.live\.spec\.ts/m,
     );
     if (runAt < 0) {
         throw new Error(
@@ -692,6 +701,38 @@ const LIVE = [
         reasons: false,
     },
 
+    // ── Vertex: a whole PROVIDER with no live row. `libs/llm/providers/vertex`
+    // builds TWO different SDK models from one provider id and resolves their
+    // reasoning through two different modules — Claude-on-Vertex speaks the
+    // Anthropic thinking protocol (PR #1303 exists because it did not), Gemini-
+    // on-Vertex speaks google thinkingConfig. Both claims are offline today.
+    //
+    // The credential is the service account JSON, base64, in `apiKey` — the
+    // provider decodes it itself (`vertexModelFromSaJson`), so this needs no
+    // `credentialField` and no new mechanism, just the secret.
+    {
+        brand: 'google_vertex',
+        why: 'Claude-on-Vertex resolves reasoning through the ANTHROPIC module, not google thinkingConfig — the whole reason PR #1303 exists. Nothing has ever called it',
+        slot: {
+            provider: 'google_vertex',
+            model: 'claude-sonnet-4-6',
+            vertexLocation: 'global',
+            reasoningEffort: 'medium',
+        },
+        reasons: true,
+    },
+    {
+        brand: 'google_vertex_gemini',
+        why: 'the OTHER SDK model behind the same provider id: Gemini-on-Vertex takes google thinkingConfig, and a shared provider that builds two transports can regress on one of them alone',
+        slot: {
+            provider: 'google_vertex',
+            model: 'gemini-3.1-pro-preview',
+            vertexLocation: 'global',
+            reasoningEffort: 'medium',
+        },
+        reasons: true,
+    },
+
     // ── families with real production weight and NO row at all. The code makes
     // no per-model claim about any of them — no trait entry, no reasoning
     // schema — so what these check is the TRANSPORT: that the body we build for
@@ -1031,6 +1072,19 @@ describe('BYOK reasoning — LIVE provider contract', () => {
                 Promise.reject(
                     new Error(
                         'Incorrect API key provided: sk-svcac****. You can find your API key at https://platform.openai.com/account/api-keys.',
+                    ),
+                ),
+            ),
+        ).rejects.toThrow(/CREDENTIAL failure/);
+
+        // Observed live on 2026-09-17 against project kody-408918: GCP denies a
+        // delinquent project before the model ever sees the request.
+        await expect(
+            onlyDrift(
+                'google_vertex_gemini',
+                Promise.reject(
+                    new Error(
+                        'Lightning dunning decision is deny for project: projects/39158519179',
                     ),
                 ),
             ),

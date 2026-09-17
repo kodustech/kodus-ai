@@ -282,10 +282,17 @@ jobs:
                   BYOK_OPEN_ROUTER_API_KEY: ${{ secrets.BYOK_OPEN_ROUTER_API_KEY }}
                   BYOK_DEEPSEEK_API_KEY: ${{ secrets.BYOK_DEEPSEEK_API_KEY }}
                   BYOK_AMAZON_BEDROCK_API_KEY: ${{ secrets.BYOK_AMAZON_BEDROCK_API_KEY }}
+                  # Vertex's credential is the service account JSON, base64 —
+                  # the provider decodes it out of `apiKey` itself.
+                  BYOK_GOOGLE_VERTEX_API_KEY: ${{ secrets.BYOK_GOOGLE_VERTEX_API_KEY }}
                   # Scheduled runs must not pass by checking nothing — see the
                   # coverage case in the spec. A dispatch or a fork PR still can.
                   BYOK_LIVE_EVENT: ${{ github.event_name }}
-              run: pnpm exec jest --config jest.config.ts libs/llm/byok-reasoning.live.spec.ts --no-coverage --forceExit
+              # The Vertex rows load @ai-sdk/google-vertex through a dynamic
+              # import, which Jest refuses without this flag — the row then
+              # fails with a TypeError about vm-modules, saying nothing about
+              # Vertex. Every other row is unaffected by it.
+              run: NODE_OPTIONS=--experimental-vm-modules pnpm exec jest --config jest.config.ts libs/llm/byok-reasoning.live.spec.ts --no-coverage --forceExit
 
             - name: Notify Discord on failure
               if: failure()
