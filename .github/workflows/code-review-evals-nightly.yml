@@ -16,10 +16,13 @@ name: "Evals: nightly quality (DeepSeek, 30 PRs)"
 # Gate: finder-recall run mean vs evals/investigation/targets.json → sets.light.
 # RATCHET: when a PR intentionally moves recall, update that floor in the same PR.
 #
-# Secrets (repo-level): BYOK_FIREWORKS_API_KEY (model), BYOK_ANTHROPIC_API_KEY
-# (judge, claude-haiku-4-5), DISCORD_WEBHOOK_INTERNAL / DISCORD_WEBHOOK.
-# Not ANTHROPIC_API_KEY: on 2026-09-16 it answered 401 "API key is invalid",
-# which is what kept the old finder gate at 8/8 infra for weeks.
+# Judge: gpt-5.4-mini, the alternative the agreement study validated (κ 0.89 vs
+# Sonnet; evals/investigation/agreement). Not the claude-haiku-4-5 default: on
+# 2026-09-16 both ANTHROPIC_API_KEY and BYOK_ANTHROPIC_API_KEY answered 401
+# "API key is invalid" — the reason the old finder gate sat at 8/8 infra for weeks.
+#
+# Secrets (repo-level): BYOK_FIREWORKS_API_KEY (model), BYOK_OPENAI_API_KEY
+# (judge), DISCORD_WEBHOOK_INTERNAL / DISCORD_WEBHOOK.
 
 permissions:
     contents: read
@@ -112,12 +115,13 @@ jobs:
               id: recall
               env:
                   BYOK_FIREWORKS_API_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
-                  BYOK_ANTHROPIC_API_KEY: ${{ secrets.BYOK_ANTHROPIC_API_KEY }}
+                  JUDGE_MODEL: gpt-5.4-mini
+                  JUDGE_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
               # exit 1 = below the floor, 2 = infra. Both fail the job; the report
               # step below says which.
               run: |
                   node evals/investigation/run-recall.js --model="$MODEL" --set="$CASE_SET" \
-                      --concurrency=6 --gate --output=evals/investigation/results/nightly.json ${{ github.event_name == 'pull_request' && '--limit=3' || '' }}
+                      --concurrency=6 --gate --output=evals/investigation/results/nightly.json
             - name: Report
               id: report
               if: always()

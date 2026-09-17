@@ -80,6 +80,11 @@ function findKeyInText(text, envNames) {
 // Resolve the API key for a given model's provider: process.env → .env files →
 // ~/.kodus-dev/config, in env-name priority order.
 function loadKeyForModel(model) {
+    // JUDGE_API_KEY wins: the finder's model setup overwrites API_OPEN_AI_API_KEY
+    // with the key of whatever openai-compatible model it runs (Fireworks for the
+    // nightly), so an OpenAI judge resolving by name would send that key to OpenAI.
+    if (process.env.JUDGE_API_KEY) return process.env.JUDGE_API_KEY;
+
     const envNames = PROVIDER_KEY_ENVS[providerFor(model)];
 
     for (const name of envNames) {

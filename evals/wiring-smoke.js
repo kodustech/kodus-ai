@@ -72,7 +72,7 @@ async function main() {
         // the same local server, so scoring is exercised without a key.
         JUDGE_MODEL: 'gpt-eval-fake',
         JUDGE_BASE_URL: server.url,
-        API_OPEN_AI_API_KEY: 'fake',
+        JUDGE_API_KEY: 'fake',
         RECALL_DUMP: '',
     };
 
