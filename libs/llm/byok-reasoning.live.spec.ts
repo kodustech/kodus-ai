@@ -27,7 +27,8 @@
  * `BYOK_<BRAND>_API_KEY`, and a brand that borrows reads the lender's.
  *
  *     BYOK_ANTHROPIC_API_KEY   -> anthropic, -modern, -opus-5, openai_compatible_claude
- *     BYOK_OPENAI_API_KEY      -> openai, openai_compatible_gpt5
+ *     BYOK_OPENAI_API_KEY      -> openai, openai_compatible_gpt5, openai_gpt56,
+ *                                 openai_compatible_gpt56, openai_gpt6_astra
  *     BYOK_ZHIPU_API_KEY       -> zai, zai_glm53 (Zhipu is Z.ai, the GLM vendor)
  *     BYOK_GOOGLE_API_KEY      -> google_gemini, google_gemini_flash
  *     BYOK_MOONSHOT_API_KEY    -> moonshot_code
@@ -117,6 +118,9 @@ const BORROWS_FROM: Record<string, string> = {
     open_router_qwen: 'open_router',
     openai_compatible_gpt5: 'openai',
     openai_compatible_claude: 'anthropic',
+    openai_gpt56: 'openai',
+    openai_compatible_gpt56: 'openai',
+    openai_gpt6_astra: 'openai',
 };
 
 /**
@@ -163,6 +167,54 @@ const key = (brand: string): string | undefined => {
  */
 const credentialFor = (row: { brand: string; requires?: () => boolean }) =>
     row.requires && !row.requires() ? undefined : key(row.brand);
+
+/**
+ * A dead credential is not drift — and this job spent two Mondays saying it was.
+ *
+ * Seven rows failed on 2026-09-07 and again on 2026-09-14 with `API key is
+ * invalid`, `Forbidden` and `INVALID_PAYMENT_INSTRUMENT`, and the alert they
+ * fired read "a provider changed how a model is configured" — the one thing
+ * that had demonstrably NOT happened. The request shape was never tested at
+ * all: the call died at the door.
+ *
+ * The failure stays a failure. A dead key means zero live coverage for every
+ * row that borrows it, which is precisely what this tier exists to notice, so
+ * downgrading it to a skip would hide the hole instead of the noise. What
+ * changes is that the message names the real cause — because an alert that
+ * misnames its cause is worse than no alert. Someone reads "provider drifted",
+ * goes looking for a changelog, finds nothing, and learns to ignore Monday.
+ */
+/*
+ * Every alternative here is a string a vendor ACTUALLY returned, not a guess at
+ * how one might phrase it. `incorrect api key provided` is in the list because
+ * the first version of this regex missed it and a local run caught that: OpenAI
+ * does not say "invalid", it says "incorrect", and a classifier that reads only
+ * the Anthropic wording sends the exact same misleading alert for the exact
+ * same cause. Add a phrasing here only after seeing it in a log.
+ */
+const CREDENTIAL_FAILURE =
+    /(api key is invalid|invalid api key|incorrect api key|invalid[ _-]?anthropic[ _-]?api[ _-]?key|invalid[ _-]?x-api-key|invalid_api_key|authentication[ _]?error|unauthorized|forbidden|invalid_payment_instrument|access denied|permission denied|expired token|could not be authenticated)/i;
+
+const onlyDrift = async <T>(brand: string, call: Promise<T>): Promise<T> => {
+    try {
+        return await call;
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (!CREDENTIAL_FAILURE.test(message)) {
+            throw err;
+        }
+        throw new Error(
+            `byok-live: ${brand} never reached the model. This is a CREDENTIAL ` +
+                `failure, NOT provider drift — the secret this row runs on is dead ` +
+                `(expired, rotated, or unpaid), so the reasoning shape was not ` +
+                `tested at all, and every row borrowing the same key is equally ` +
+                `uncovered. Rotate the secret and re-run. Do NOT read this as a ` +
+                `model changing its reasoning contract.\n` +
+                `Provider said: ${message}`,
+            { cause: err },
+        );
+    }
+};
 
 /** Does this row have SOMETHING to authenticate with? */
 const canRun = (row: { brand: string; requires?: () => boolean }): boolean => {
@@ -322,6 +374,69 @@ const LIVE = [
             provider: 'openai',
             model: 'gpt-5.4',
             reasoningEffort: 'medium', // prod: 18 de 22 slots usam medium
+        },
+        reasons: true,
+    },
+    // ── The 5.6 line: 18 production slots across three transports and, until
+    // now, not one row. That is the largest uncovered family in the corpus —
+    // bigger than every brand below it that does have a row — and it went
+    // uncovered for the ordinary reason: the rows were written when 5.4 was the
+    // newest id, and nothing re-asks that question when a vendor ships a line.
+    //
+    // Two rows, not five. The three ids (sol/luna/terra) are one family and the
+    // subject is the TRANSPORT, which is where the shapes actually differ: the
+    // Responses API natively, and the OpenAI protocol through a proxy. Both ride
+    // BYOK_OPENAI_API_KEY, so the pair costs no new secret.
+    {
+        brand: 'openai_gpt56',
+        why: 'the 5.6 line is 18 production slots and had NO row — the biggest uncovered family in the corpus. terra is its largest native group (5 slots, 3 at medium), and the id is a generation newer than every OpenAI row here',
+        slot: {
+            provider: 'openai',
+            model: 'gpt-5.6-terra',
+            reasoningEffort: 'medium', // prod: 3 de 5 slots do terra usam medium; 1 high, 1 ausente
+        },
+        reasons: true,
+    },
+    {
+        brand: 'openai_compatible_gpt56',
+        // Production points these at FIVE distinct customer proxies (the corpus
+        // holds them redacted). None of them is ours to call, and a row that
+        // named one would be testing that customer's gateway rather than the
+        // request we build — so this points at the vendor's own endpoint, the
+        // same choice `openai_compatible_gpt5` makes one row down.
+        why: 'sol is 5 production slots and every one of them rides an OpenAI-protocol proxy rather than the native API — a different transport for the newest reasoner id, and the majority store high',
+        slot: {
+            provider: 'openai_compatible',
+            model: 'gpt-5.6-sol',
+            baseURL: 'https://api.openai.com/v1',
+            reasoningEffort: 'high', // prod: 3 de 5 slots do sol usam high; 1 medium, 1 ausente
+        },
+        reasons: true,
+    },
+    // ── gpt-6: ZERO production slots today, and the row is still justified —
+    // for a different reason than every row above it, so it says so rather than
+    // borrowing their argument.
+    //
+    // PR #1952 taught `isOpenAiReasonerId` a whole new family and
+    // `openaiReasoningConfig` a new level set: gpt-6 gets low/medium/high where
+    // gpt-5 exposes only medium/high. Both claims are a regex and a table read
+    // from a doc — offline facts about a model nothing has ever called. The
+    // first customer to store a gpt-6 slot is not the right person to discover
+    // that OpenAI disagrees.
+    //
+    // `medium`, not `low`, even though `low` is the level the family newly
+    // claims: this file already paid to learn that a low-effort row on this
+    // prompt returns zero reasoning tokens while behaving exactly as documented
+    // (see bedrock_opus47). A row that goes red for that is a row people mute.
+    // So the level stays where the prompt is known to make a reasoner think, and
+    // `low` on gpt-6 remains untested — deliberately, and written down.
+    {
+        brand: 'openai_gpt6_astra',
+        why: 'the newest family is detected by REGEX and configured from a table, both offline — nothing has ever called it. Proves OpenAI accepts the reasoning shape #1952 taught us to build, before a customer stores the first gpt-6 slot',
+        slot: {
+            provider: 'openai',
+            model: 'gpt-6-astra',
+            reasoningEffort: 'medium',
         },
         reasons: true,
     },
@@ -880,6 +995,63 @@ describe('BYOK reasoning — LIVE provider contract', () => {
         }
     });
 
+    /**
+     * The classifier itself, offline — because the failure it renames only
+     * happens on a Monday with a dead secret, and a helper that is only
+     * exercised then is a helper nobody knows is broken.
+     */
+    it('names a dead credential as a credential failure, not drift', async () => {
+        await expect(
+            onlyDrift('anthropic', Promise.reject(new Error('API key is invalid.'))),
+        ).rejects.toThrow(/CREDENTIAL failure, NOT provider drift/);
+        await expect(
+            onlyDrift('bedrock_opus47', Promise.reject(new Error('Forbidden'))),
+        ).rejects.toThrow(/CREDENTIAL failure/);
+        await expect(
+            onlyDrift(
+                'openai_compatible_claude',
+                Promise.reject(new Error('Invalid Anthropic API Key')),
+            ),
+        ).rejects.toThrow(/CREDENTIAL failure/);
+        await expect(
+            onlyDrift(
+                'amazon_bedrock',
+                Promise.reject(
+                    new Error('Model access is denied due to INVALID_PAYMENT_INSTRUMENT'),
+                ),
+            ),
+        ).rejects.toThrow(/CREDENTIAL failure/);
+
+        // Observed locally on 2026-09-17 with a revoked service-account key —
+        // OpenAI says "incorrect", not "invalid", and the first cut of the
+        // regex let this one through as drift.
+        await expect(
+            onlyDrift(
+                'openai_gpt56',
+                Promise.reject(
+                    new Error(
+                        'Incorrect API key provided: sk-svcac****. You can find your API key at https://platform.openai.com/account/api-keys.',
+                    ),
+                ),
+            ),
+        ).rejects.toThrow(/CREDENTIAL failure/);
+
+        // The vendor's own words survive — the rename adds a cause, it does not
+        // swallow the evidence.
+        await expect(
+            onlyDrift('anthropic', Promise.reject(new Error('API key is invalid.'))),
+        ).rejects.toThrow(/Provider said: API key is invalid\./);
+
+        // ...and real drift still reads as itself. A classifier that caught
+        // everything would relabel the very failure this tier exists to find.
+        await expect(
+            onlyDrift('zai', Promise.reject(new Error('unknown field `thinking`'))),
+        ).rejects.toThrow(/unknown field `thinking`/);
+        await expect(
+            onlyDrift('zai', Promise.reject(new Error('unknown field `thinking`'))),
+        ).rejects.not.toThrow(/CREDENTIAL failure/);
+    });
+
     for (const c of LIVE) {
         const credential = credentialFor(c);
         const run = canRun(c) ? it : it.skip;
@@ -896,7 +1068,7 @@ describe('BYOK reasoning — LIVE provider contract', () => {
                 // hands back the raw SDK result — and usage is what the
                 // reasoning assertion below reads. It is also a real production
                 // path: the review agent runs through exactly this door.
-                const result = await LLM.run({
+                const result = await onlyDrift(c.brand, LLM.run({
                     byokConfig: {
                         ...c.slot,
                         // Auth may be inherited even when the rest of the slot
@@ -944,7 +1116,7 @@ describe('BYOK reasoning — LIVE provider contract', () => {
                     // A row that emits a thinking BUDGET needs a cap above it
                     // (the request is rejected otherwise), so it states its own.
                     maxOutputTokens: (c as any).maxOutputTokens ?? 4_096,
-                });
+                }));
 
                 expect(typeof result.text).toBe('string');
 
@@ -1074,16 +1246,19 @@ describe('BYOK structured output — LIVE, through LLM.run (the one door)', () =
                 // Calling `runStructuredReviewCall` directly (the first version
                 // of this block) skipped what LLM.run owns: slot resolution and
                 // the primary->fallback cascade in `runWithModelFailover`.
-                const result = await LLM.run({
-                    byokConfig: {
-                        ...c.slot,
-                        apiKey,
-                    } as unknown as NormalizedModel,
-                    user: 'Reply with ok=true and word="ok".',
-                    runName: 'byok-live-structured',
-                    schema,
-                    maxOutputTokens: 4_096,
-                });
+                const result = await onlyDrift(
+                    c.brand,
+                    LLM.run({
+                        byokConfig: {
+                            ...c.slot,
+                            apiKey,
+                        } as unknown as NormalizedModel,
+                        user: 'Reply with ok=true and word="ok".',
+                        runName: 'byok-live-structured',
+                        schema,
+                        maxOutputTokens: 4_096,
+                    }),
+                );
 
                 // Getting a parsed object back means the whole composition held:
                 // the plan picked a channel the model accepts, the schema

@@ -293,7 +293,9 @@ jobs:
               with:
                   webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
                   status: failure
-                  title: "❌ BYOK reasoning drifted — a provider changed how a model is configured"
+                  title: "❌ BYOK reasoning live tier failed — drift, or a dead credential"
                   description: |
-                      A brand no longer accepts (or no longer honours) the reasoning shape we send. The failing test names the brand and shows the request we built. This is NOT a release gate — it means customer reviews on that provider are silently degrading.
+                      Read the failing test before assuming drift. Two different things land here:
+                      • "never reached the model — this is a CREDENTIAL failure": the secret that row runs on is dead (expired, rotated, unpaid). Nothing about the request shape was tested, and every row sharing that key is equally uncovered. Rotate the secret — there is no changelog to hunt.
+                      • anything else: a brand no longer accepts (or no longer honours) the reasoning shape we send. The failing test names the brand and shows the request we built. This is NOT a release gate — it means customer reviews on that provider are silently degrading.
                       Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
