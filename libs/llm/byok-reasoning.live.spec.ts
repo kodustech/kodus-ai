@@ -122,6 +122,8 @@ const BORROWS_FROM: Record<string, string> = {
     openai_compatible_gpt56: 'openai',
     openai_gpt6_astra: 'openai',
     google_vertex_gemini: 'google_vertex',
+    google_vertex_modern: 'google_vertex',
+    google_vertex_legacy: 'google_vertex',
 };
 
 /**
@@ -727,6 +729,64 @@ const LIVE = [
             model: 'claude-sonnet-4-6',
             vertexLocation: 'global',
             reasoningEffort: 'medium',
+        },
+        reasons: true,
+    },
+    // The Vertex rows are one per SHAPE, not one per model — the id only selects
+    // a band in `resolveAnthropicModelTraits`, and two models in the same band
+    // produce the same request. Measured, not assumed:
+    //
+    //   claude-sonnet-4-6   adaptive-4-6   thinkingShape=adaptive  (row above)
+    //   claude-sonnet-5     modern         thinkingShape=adaptive
+    //   claude-haiku-4-5    legacy         thinkingShape=budget
+    //
+    // `claude-opus-5` resolves to `modern` exactly like `claude-sonnet-5`, so a
+    // row for each would run the same code twice. Sonnet is the cheaper of the
+    // two and the native tier already carries an Opus 5 row; the argument that
+    // justifies that one — it is the most expensive model customers run — has no
+    // force here, where the corpus holds no Vertex slot at all.
+    {
+        brand: 'google_vertex_modern',
+        // THE TEMPERATURE IS THE SUBJECT, and without it this row is redundant.
+        // Checked before writing it: `reasoning()` on Vertex returns the SAME
+        // body for both bands —
+        //   claude-sonnet-4-6  {thinking:{type:adaptive}, effort:medium}
+        //   claude-sonnet-5    {thinking:{type:adaptive}, effort:medium}
+        // so a second row asserting the thinking shape would run the row above
+        // again under a different name. Where they actually diverge is sampling:
+        //   temperaturePolicy(claude-sonnet-4-6) -> adjustable
+        //   temperaturePolicy(claude-sonnet-5)   -> unsupported
+        // On the 4.7+/5 line a temperature that reaches the wire is a 400, and
+        // the SDK only strips it by itself while thinking is ON. So the slot
+        // carries one the runtime must DROP — if it ever leaks, this row is
+        // where that shows, exactly as `openai_compatible_gpt5` does one tier up.
+        why: 'the `modern` band over Vertex, where temperature is UNSUPPORTED while the 4.6 row above takes it — the one place the two bands produce different requests. The slot carries a temperature the Vertex path must drop',
+        slot: {
+            provider: 'google_vertex',
+            model: 'claude-sonnet-5',
+            vertexLocation: 'global',
+            reasoningEffort: 'medium',
+            temperature: 0.2,
+        },
+        reasons: true,
+    },
+    {
+        brand: 'google_vertex_legacy',
+        // `low` AND a cap of its own, because the budget shape states its
+        // ceiling out loud and the protocol requires max_tokens above it:
+        //   low 5,000 · medium 15,000 · high 40,000
+        // At the default 4,096 cap this row would have gone out with a budget
+        // larger than its own ceiling and been rejected — a 400 that says
+        // nothing about Vertex. `low` is safe here in a way it is not on an
+        // adaptive row: the budget is explicit, so the model is told to think
+        // rather than left to decide it needn't.
+        maxOutputTokens: 6_144,
+        why: 'the `legacy` budget shape — thinking {type:enabled, budget_tokens} — which has NO live row in any provider today. Haiku 4.5 is the only current model that still resolves to it, so this is the one place that shape reaches a real vendor',
+        slot: {
+            provider: 'google_vertex',
+            model: 'claude-haiku-4-5',
+            vertexLocation: 'global',
+            reasoningEffort: 'low',
         },
         reasons: true,
     },
