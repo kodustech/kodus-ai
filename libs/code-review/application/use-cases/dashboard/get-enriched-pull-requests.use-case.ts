@@ -18,6 +18,7 @@ import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/del
 import {
     authorMatchesExact,
     isOpenPullRequest,
+    matchesPullRequestState,
     deepLinkTargetRank,
     isUnresolvedDeliveredSuggestion,
 } from './utils/pull-request-metrics';
@@ -151,6 +152,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
             category,
             needsAttention,
             author,
+            prState,
         } = query;
 
         if (!this.request.user?.organization?.uuid) {
@@ -650,6 +652,13 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                             author &&
                             !this.matchesAuthorFilter(author, pullRequest)
                         ) {
+                            continue;
+                        }
+
+                        // The PR's own state, independent of how Kody's run
+                        // went. Same predicate `needsAttention` already uses,
+                        // so "open" means one thing across the whole screen.
+                        if (!matchesPullRequestState(pullRequest, prState)) {
                             continue;
                         }
 

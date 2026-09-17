@@ -2,6 +2,7 @@ import {
     authorMatchesExact,
     isOpenPullRequest,
     isUnresolvedDeliveredSuggestion,
+    matchesPullRequestState,
 } from './pull-request-metrics';
 
 describe('isOpenPullRequest', () => {
@@ -126,5 +127,49 @@ describe('authorMatchesExact', () => {
     it('handles a missing user without throwing', () => {
         expect(authorMatchesExact(null, 'anyone')).toBe(false);
         expect(authorMatchesExact({}, 'anyone')).toBe(false);
+    });
+});
+
+
+describe('matchesPullRequestState', () => {
+    const open = { merged: false, status: 'open' };
+    const merged = { merged: true, status: 'open' };
+    const closed = { merged: false, status: 'closed' };
+
+    it('matches everything when no state is asked for', () => {
+        expect(matchesPullRequestState(open, undefined)).toBe(true);
+        expect(matchesPullRequestState(closed, undefined)).toBe(true);
+        expect(matchesPullRequestState(merged, undefined)).toBe(true);
+    });
+
+    it('keeps only open PRs under "open"', () => {
+        expect(matchesPullRequestState(open, 'open')).toBe(true);
+        expect(matchesPullRequestState(closed, 'open')).toBe(false);
+        expect(matchesPullRequestState(merged, 'open')).toBe(false);
+    });
+
+    it('keeps merged and closed PRs under "closed"', () => {
+        expect(matchesPullRequestState(closed, 'closed')).toBe(true);
+        expect(matchesPullRequestState(merged, 'closed')).toBe(true);
+        expect(matchesPullRequestState(open, 'closed')).toBe(false);
+    });
+
+    // The two filters sit side by side on the screen and are constantly
+    // confused; the state filter must key off the PR only, never off how
+    // Kody's run went.
+    it('never partitions on anything but merged/status', () => {
+        expect(
+            matchesPullRequestState(
+                { ...open, ...({ executionStatus: 'error' } as object) },
+                'open',
+            ),
+        ).toBe(true);
+    });
+
+    // A record whose close event we never received still reads open. The
+    // filter must not paper over that — it reports what we stored, and the
+    // list's most-recent-execution ordering is what keeps those at the bottom.
+    it('treats a record with no close data as open, as stored', () => {
+        expect(matchesPullRequestState({ status: 'open' }, 'open')).toBe(true);
     });
 });

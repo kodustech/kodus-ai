@@ -110,6 +110,14 @@ export function PullRequestsPageClient() {
         "view",
         parseAsStringLiteral(["awaiting"] as const).withOptions(urlOpts),
     );
+    // The PR's own state — the "what still needs a human" axis. Deliberately a
+    // plain filter and not another `view`: the whole point is that it composes
+    // with Repo / Author / Status, which the `awaiting` view cannot do because
+    // it swaps the list component out entirely.
+    const [prState, setPrState] = useQueryState(
+        "prState",
+        parseAsStringLiteral(["open", "closed"] as const).withOptions(urlOpts),
+    );
 
     // View scope is temporarily PINNED to the team dashboard — the "My queue /
     // My team" switcher is hidden for now (product decision). The mine-view
@@ -178,6 +186,7 @@ export function PullRequestsPageClient() {
             status: statusFilter ?? undefined,
             needsAttention: needsAttention === "true" ? true : undefined,
             author: effectiveAuthor,
+            prState: prState ?? undefined,
             createdAtFrom: createdAtFrom ?? undefined,
             // Make the "to" bound inclusive of the whole selected day.
             createdAtTo: createdAtTo
@@ -236,6 +245,7 @@ export function PullRequestsPageClient() {
         setNeedsAttention(null);
         setAuthorFilter(null);
         setView(null);
+        setPrState(null);
         setCreatedAtFrom(null);
         setCreatedAtTo(null);
     };
@@ -300,6 +310,15 @@ export function PullRequestsPageClient() {
                 setAuthorPolicy("reviewable");
             },
         },
+        prState && {
+            key: "prState",
+            // "Review status" is the other filter (Kody's run), so this one
+            // says PR out loud to keep the two apart on screen.
+            label: prState === "open" ? "PR: Open" : "PR: Closed",
+            clear: () => {
+                setPrState(null);
+            },
+        },
         statusFilter && {
             key: "status",
             label: `Status: ${STATUS_LABEL[statusFilter]}`,
@@ -348,6 +367,10 @@ export function PullRequestsPageClient() {
         suggestionsFilter !== "all" ||
         needsAttention === "true" ||
         !!effectiveAuthor ||
+        // The PR-state filter runs in the same post-query loop, so it makes
+        // `filteredPrTotal` an upper bound too — without this the header would
+        // print a DB-level count next to a shorter list.
+        !!prState ||
         authorPolicy !== "all";
     const canUseExactFilteredTotal =
         hasActiveFilters &&
@@ -423,9 +446,14 @@ export function PullRequestsPageClient() {
               },
               {
                   key: "awaiting",
-                  label: "Awaiting review",
+                  // Was "Awaiting review", which reads as "waiting for a human
+                  // to review it" — the single most-wanted thing on this
+                  // screen, and not at all what this card selects. It counts
+                  // PRs KODY never reviewed because config blocked her. The
+                  // honest name; the reviewable backlog is the PR state filter.
+                  label: "Kody skipped",
                   sub: "backlog",
-                  hint: "PRs Kody was triggered on but skipped and never reviewed — blocked by config (no license, BYOK, manual/paused cadence, ignored user). Current backlog, not today.",
+                  hint: "PRs Kody was triggered on but skipped and never reviewed — blocked by config (no license, BYOK, manual/paused cadence, ignored user). Current backlog, not today. For PRs still waiting on a human, use the PR state filter.",
                   // Backlog is a current total, not a "today" number — read it
                   // from facets (same source as the toggle's 665), so the card
                   // and the toggle never disagree.
@@ -653,6 +681,35 @@ export function PullRequestsPageClient() {
                             setCreatedAtTo(value || null)
                         }
                     />
+
+                    {/* The PR's own state. Sits immediately before the review
+                        Status select because the two are constantly mistaken
+                        for each other — "Open" here means the PR is still
+                        waiting on a human, while Status describes how Kody's
+                        run went. Pairing them makes the distinction legible. */}
+                    <Select
+                        value={prState ?? "all"}
+                        onValueChange={(value) =>
+                            setPrState(
+                                value === "all"
+                                    ? null
+                                    : (value as "open" | "closed"),
+                            )
+                        }>
+                        <SelectTrigger
+                            size="sm"
+                            className={cn(
+                                "h-9 w-auto gap-1.5 rounded-lg",
+                                prState && "border-primary-light/50",
+                            )}>
+                            <SelectValue placeholder="PR state" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">PR state</SelectItem>
+                            <SelectItem value="open">Open</SelectItem>
+                            <SelectItem value="closed">Closed</SelectItem>
+                        </SelectContent>
+                    </Select>
 
                     <Select
                         value={statusFilter ?? "all"}

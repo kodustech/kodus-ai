@@ -22,6 +22,8 @@ export interface PullRequestFilters {
     category?: string;
     needsAttention?: boolean;
     author?: string;
+    /** The PR's own state — not `status`, which is Kody's review run. */
+    prState?: "open" | "closed";
 }
 
 export type PullRequestSeverityFilter = "critical" | "high" | "medium" | "low";
@@ -80,6 +82,9 @@ export const PULL_REQUEST_API = {
         }
         if (filters?.author) {
             params.append("author", filters.author);
+        }
+        if (filters?.prState) {
+            params.append("prState", filters.prState);
         }
 
         const queryString = params.toString();
