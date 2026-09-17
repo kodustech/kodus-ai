@@ -4,10 +4,12 @@
 //
 //   node evals/ci-report.js nightly <result.json> [--last-green=<result.json>]
 //        [--commits=<tsv: sha, subject, author>] [--investigation=<json>]
+//        [--previous-state=<json>] [--state-out=<json>]
 //   node evals/ci-report.js tier0 <dir> [--previous=<dir>]
 //
-// Writes markdown to $GITHUB_STEP_SUMMARY and `status`, `verdict`, `title`,
-// `description` to $GITHUB_OUTPUT when those are set; prints them otherwise.
+// Writes markdown to $GITHUB_STEP_SUMMARY and `status`, `verdict`, `mention`,
+// `title`, `description` to $GITHUB_OUTPUT when those are set; prints them
+// otherwise. `mention` is true only for a new or worsening confirmed drop.
 //
 // Messages are in Portuguese: they go to the team's channel. Facts come first;
 // the LLM's reading, when there is one, is marked as a hypothesis and never
@@ -51,14 +53,15 @@ function minutesBetween(start, end) {
     return Number.isFinite(ms) && ms > 0 ? Math.max(1, Math.round(ms / 60000)) : null;
 }
 
-function emit({ status, verdict, title, description, markdown }) {
+function emit({ status, verdict, mention = false, state = null, title, description, markdown }, stateOut = null) {
     if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${markdown}\n`);
     else console.log(markdown);
+    if (stateOut && state) fs.writeFileSync(stateOut, JSON.stringify(state, null, 2));
     if (process.env.GITHUB_OUTPUT) {
         const delimiter = `EOF_${Date.now()}`;
         fs.appendFileSync(
             process.env.GITHUB_OUTPUT,
-            `status=${status}\nverdict=${verdict}\ntitle=${title}\ndescription<<${delimiter}\n${description}\n${delimiter}\n`,
+            `status=${status}\nverdict=${verdict}\nmention=${mention}\ntitle=${title}\ndescription<<${delimiter}\n${description}\n${delimiter}\n`,
         );
     }
     console.log(`\n${title}\n${description}`);
@@ -69,15 +72,30 @@ function emit({ status, verdict, title, description, markdown }) {
 // What the gate says, in order of what matters: a run that measured nothing is
 // not a quality result; a collapse (no findings, no tool calls) is the engine
 // breaking, not recall wobbling.
-function nightlyVerdict(result, comparison, noise) {
+//
+// Only a confirmed drop (two runs, their mean below the floor) is a regression,
+// and only a new or worsening one mentions people: a drop that already alerted
+// and hasn't changed stays red without pinging again.
+const RED = new Set(['regression', 'still-red']);
+
+function nightlyVerdict(result, comparison, noise, previousState) {
     if (!result) return { verdict: 'infra', title: 'não produziu resultado' };
     if (result.error) return { verdict: 'infra', title: 'não mediu' };
+    if (result.confirmationError) return { verdict: 'infra', title: 'ficou abaixo do piso, mas a confirmação não mediu' };
     const infra = result.infraFailures || 0;
     if (infra > 0) return { verdict: 'infra', title: `${infra} de ${result.cases} PRs não medidos` };
 
     const gate = result.gate || {};
     const failed = (gate.checks || []).filter((check) => !check.pass).map((check) => check.name);
     if (gate.status === 'fail') {
+        const recall = result.metrics?.recall_mean;
+        if (previousState && RED.has(previousState.verdict)) {
+            const day = (previousState.streak || 1) + 1;
+            const worse = typeof recall === 'number' && typeof previousState.recall === 'number' && recall < previousState.recall - (noise || 0.05);
+            return worse
+                ? { verdict: 'regression', title: `piorou: recall caiu mais ${points(recall - previousState.recall)} (dia ${day})` }
+                : { verdict: 'still-red', title: `continua abaixo do piso (dia ${day})` };
+        }
         if (failed.includes('mean_tool_calls')) return { verdict: 'regression', title: 'o finder parou de usar as ferramentas' };
         if (failed.includes('mean_findings')) return { verdict: 'regression', title: 'o finder parou de produzir findings' };
         const delta = comparison?.recallDelta;
@@ -87,25 +105,41 @@ function nightlyVerdict(result, comparison, noise) {
         };
     }
     if (gate.status !== 'pass') return { verdict: 'ungated', title: 'não comparou com o piso' };
+    if (gate.confirmation) return { verdict: 'oscillation', title: 'oscilou abaixo do piso, a confirmação passou' };
 
     const delta = comparison?.recallDelta;
     if (typeof delta === 'number' && noise && delta >= 2 * noise) return { verdict: 'improved', title: `recall subiu ${points(delta)}` };
     return { verdict: 'pass', title: 'qualidade estável' };
 }
 
-const ICON = { pass: '✅', improved: '📈', regression: '❌', infra: '⚠️', ungated: '⚠️' };
+// What the next night needs to know: whether this night is red, since when,
+// and the recall it alerted at (to tell "still red" from "worse").
+function nextState(verdict, result, previousState, today) {
+    const red = RED.has(verdict);
+    const continuing = red && previousState && RED.has(previousState.verdict);
+    return {
+        verdict,
+        recall: result?.metrics?.recall_mean ?? null,
+        streak: red ? (continuing ? (previousState.streak || 1) + 1 : 1) : 0,
+        since: red ? (continuing ? previousState.since : today) : null,
+    };
+}
+
+const ICON = { pass: '✅', improved: '📈', oscillation: '⚠️', regression: '❌', 'still-red': '❌', infra: '⚠️', ungated: '⚠️' };
 
 function nightlyReport(result, env = {}, extras = {}) {
-    const { lastGreen = null, commits = [], investigation = null, targets = null } = extras;
+    const { lastGreen = null, commits = [], investigation = null, targets = null, previousState = null, today = new Date().toISOString().slice(0, 10) } = extras;
     const url = runUrl(env);
     const { EVAL_BASE_SHA: base, GITHUB_SHA: head, GITHUB_SERVER_URL, GITHUB_REPOSITORY } = env;
     const compareUrl = base && head && base !== head ? `${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/${base.slice(0, 12)}...${head.slice(0, 12)}` : null;
 
     const comparison = result && lastGreen && !result.error ? compareNights(result, lastGreen) : null;
     const noise = targets && result ? nightNoise(targets, 'light', result.model) : null;
-    const { verdict, title: headline } = nightlyVerdict(result, comparison, noise);
+    const { verdict, title: headline } = nightlyVerdict(result, comparison, noise, previousState);
     const title = `${ICON[verdict]} Evals noturnos: ${headline}`;
-    const status = verdict === 'pass' || verdict === 'improved' ? 'success' : 'failure';
+    const status = ['pass', 'improved', 'oscillation'].includes(verdict) ? 'success' : 'failure';
+    const mention = verdict === 'regression';
+    const state = nextState(verdict, result, previousState, today);
     const lines = [];
 
     if (!result || result.error) {
@@ -138,8 +172,18 @@ function nightlyReport(result, env = {}, extras = {}) {
             const reasons = [...new Set((result.rows || []).filter((row) => row.status === 'infra').map((row) => clip(row.reason, 160)))].slice(0, 2);
             lines.push('', `Motivo: ${reasons.join(' | ')}`);
         }
+        if (result.confirmationError) {
+            lines.push('', `A primeira medição ficou abaixo do piso; a confirmação não mediu (${clip(result.confirmationError, 160)}). Nada foi confirmado.`);
+        }
+        const confirmation = result.gate?.confirmation;
+        if (confirmation && Array.isArray(confirmation.runs)) {
+            lines.push(`Duas medições no mesmo commit: ${confirmation.runs.map(pct).join(' e ')} (média ${pct(result.metrics?.recall_mean)}${typeof floor === 'number' ? `, piso ${pct(floor)}` : ''})`);
+        }
+        if (verdict === 'still-red' && previousState?.since) {
+            lines.push(`Abaixo do piso desde ${previousState.since}. Sem menção: o alerta já saiu, e a próxima só sai se piorar.`);
+        }
 
-        if (comparison && (verdict === 'regression' || verdict === 'improved')) {
+        if (comparison && (RED.has(verdict) || verdict === 'improved')) {
             const moved = verdict === 'improved' ? [...comparison.perCase].reverse() : comparison.perCase;
             const notable = moved.filter((c) => (verdict === 'improved' ? c.delta > 0 : c.delta < 0)).slice(0, MAX_DROPS);
             if (notable.length) {
@@ -162,7 +206,7 @@ function nightlyReport(result, env = {}, extras = {}) {
             if (tail) lines.push(tail);
         }
 
-        if (investigation && verdict === 'regression') {
+        if (investigation && RED.has(verdict)) {
             const reading = { regression: 'provável regressão', noise: 'provavelmente ruído', eval: 'provável problema do próprio eval', unclear: 'inconclusivo' }[investigation.verdict] || 'hipótese';
             lines.push('', `**🤖 Leitura do Claude: ${reading}** (confiança ${investigation.confidence || 'n/d'}, não verificada)`);
             lines.push(clip(investigation.summary, 500));
@@ -174,6 +218,8 @@ function nightlyReport(result, env = {}, extras = {}) {
 
         const next = {
             regression: 'rodar `pnpm eval:nightly` no commit anterior e no suspeito. Se a queda for intencional, recalibrar `sets.light` em `evals/investigation/targets.json` no mesmo PR.',
+            'still-red': 'a mesma queda segue sem correção. Quem estiver com ela: corrigir ou recalibrar `sets.light` se for intencional.',
+            oscillation: 'nada. Uma medição isolada abaixo do piso é ruído quando a repetição passa.',
             improved: 'se a melhora se repetir na próxima noite, subir o piso (regra no `__doc` de `sets.light`).',
             infra: 'corrigir a chave ou a cota citada. A próxima noite mede de novo.',
             ungated: 'o run não bateu com a calibração (modelo ou juiz diferente). Ver `evals/investigation/targets.json`.',
@@ -196,7 +242,7 @@ function nightlyReport(result, env = {}, extras = {}) {
           ]
         : [];
     const markdown = [`## ${title}`, '', description.replace(/\n/g, '  \n'), ...perPr].join('\n');
-    return { status, verdict, title, description, markdown };
+    return { status, verdict, mention, state, title, description, markdown };
 }
 
 // ── tier-0 ───────────────────────────────────────────────────────────────────
@@ -306,8 +352,10 @@ if (require.main === module) {
                 lastGreen: flag('last-green') ? readJson(flag('last-green')) : null,
                 commits: readCommits(flag('commits')),
                 investigation: flag('investigation') ? readJson(flag('investigation')) : null,
+                previousState: flag('previous-state') ? readJson(flag('previous-state')) : null,
                 targets: readJson(path.join(__dirname, 'investigation', 'targets.json')),
             }),
+            flag('state-out'),
         );
     } else if (mode === 'tier0' && target) {
         // EVAL_MODELS: the models this run was asked for (a dispatch can pin one).

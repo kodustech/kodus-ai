@@ -93,3 +93,23 @@ describe('investigation contract', () => {
         expect(extractInvestigation(raw).error).toBeTruthy();
     });
 });
+
+describe('confirmation of a run below the floor', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { combineRuns } = require('./confirm-gate');
+    const run = (recall: number, found: boolean) => ({
+        model: 'm',
+        metrics: { recall_mean: recall, precision_mean: 0.5 },
+        tokens: { prompt: 10, completion: 1 },
+        rows: [{ caseId: 'a', status: 'pass', metadata: { recall, precision: 0.5, tpFindings: 1, fpFindings: 0, totalCalls: 20, goldenResults: [{ golden: 'bug', found }] } }],
+    });
+
+    it('decides on the mean of both runs and counts a bug found by either as found', () => {
+        const gateFor = (summary: { metrics: { recall_mean: number } }) => ({ status: summary.metrics.recall_mean >= 0.3 ? 'pass' : 'fail', checks: [] });
+        const combined = combineRuns(run(0.2, false), run(0.5, true), gateFor);
+        expect(combined.metrics.recall_mean).toBeCloseTo(0.35);
+        expect(combined.gate).toMatchObject({ status: 'pass', confirmation: { runs: [0.2, 0.5] } });
+        expect(combined.rows[0].metadata.goldenResults).toEqual([{ golden: 'bug', found: true }]);
+        expect(combined.tokens).toEqual({ prompt: 20, completion: 2 });
+    });
+});

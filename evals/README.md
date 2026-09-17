@@ -16,6 +16,13 @@ Nightly and Friday post to Discord (`DISCORD_WEBHOOK_TESTS`, falling back to the
 
 Neither trigger is a hand-kept folder list. The wiring smoke records every repo file each eval loads (`evals/shared/trace-loaded.js`): it fails if one falls outside the PR workflow's `paths`, and it hands the nightly the exact files finder-recall depends on (`evals/shared/engine-files.js`).
 
+### How the nightly avoids false alarms
+
+- A run below the floor is measured again on the same commit, and the gate decides on the mean of both (`evals/investigation/confirm-gate.js`). A drop the second run doesn't confirm is posted as "oscilou", without pinging anyone.
+- Only a confirmed new drop, or one that got worse beyond noise, mentions the evals role (repo variable `DISCORD_EVALS_ROLE_ID`). The same drop on later nights reads "continua abaixo do piso (dia N)" without a mention, and it isn't re-measured until an engine file changes after it.
+- Infra and missing keys never mention anyone, and never count as a measurement.
+- The agent's reading can't lower an alert.
+
 ## How an eval touches the engine
 
 - **Replay.** The finder-style evals run the real engine code with a real model, but tool calls (`readFile`, `grep`, `listDir`, `findFile`) are answered from a recording of a real review (`evals/investigation/datasets`). No sandbox, no GitHub. A call the recording can't answer returns nothing; `fidelity` in the results is the share that was answered.
@@ -54,6 +61,8 @@ Each eval's README has its own commands for narrower runs.
 
 - **Wiring smoke fails on your PR.** Your change broke an eval's hold on the engine: a renamed method, a moved file, a new dependency the eval fakes. The failing step prints its command and log tail. Reproduce with `pnpm eval:wiring` and fix the eval in the same PR.
 - **Nightly: "PRs não medidos" / "não mediu".** A key, a quota or the network. The reason is in the message (for example `judge HTTP 401`). This is not a quality result. Fix the secret, and the next night measures again because a failed night is never a baseline.
+- **Nightly: "oscilou abaixo do piso, a confirmação passou".** One run fell below, the repeat didn't. Nothing to do.
+- **Nightly: "continua abaixo do piso (dia N)".** The drop that already alerted is still there; whoever owns it keeps going. It pings again only if it gets worse.
 - **Nightly: "recall caiu … abaixo do piso".** The message lists the PRs and known bugs lost, the engine commits measured and Claude's reading. Treat the reading as a lead, not a verdict: re-run `pnpm eval:nightly` before and after the suspect commit. If the drop is an intended trade-off, recalibrate (below) in the PR that made it. The agent's full report is in the run summary and the `nightly-investigation` artifact.
 - **Nightly: "o finder parou de produzir findings / usar as ferramentas".** Not a recall wobble; the engine broke on the path the finder uses. Start from the commits in the message.
 - **Nightly: "não comparou com o piso".** Either there is no floor for that model and set, or the run used a different judge than the floor was calibrated with.

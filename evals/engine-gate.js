@@ -127,6 +127,8 @@ function preflight({ strictCoverage }) {
         'evals/shared/fake-llm-server.js',
         'evals/shared/trace-loaded.js',
         'evals/shared/engine-files.js',
+        'evals/investigation/gate.js',
+        'evals/investigation/confirm-gate.js',
         'evals/investigation/nightly-compare.js',
         'evals/investigation/investigate-facts.js',
         'evals/investigation/investigate-prompt.md',

@@ -31,6 +31,15 @@ name: "Evals: nightly quality (DeepSeek, 30 PRs)"
 # hypothesis. It never changes the verdict, and the message goes out without it
 # if the agent fails.
 #
+# Alerting without false positives:
+# - A run below the floor is measured again on the same commit, and the gate
+#   decides on the mean of both (evals/investigation/confirm-gate.js). One noisy
+#   run is posted as "oscilou", without pinging anyone.
+# - Only a confirmed new drop, or one that got worse, mentions the evals role
+#   (repo variable DISCORD_EVALS_ROLE_ID). A drop that already alerted stays red
+#   without pinging, and isn't re-measured until an engine file changes again.
+# - The agent's reading never lowers an alert.
+#
 # Jobs: changed → measure → investigate (red nights only) → notify.
 #
 # Secrets (repo-level): BYOK_FIREWORKS_API_KEY (model), BYOK_OPENAI_API_KEY
@@ -106,8 +115,32 @@ jobs:
                       git diff --name-only "$base" HEAD > changed-files.txt
                       node evals/shared/engine-files.js changed engine-files.txt changed-files.txt > engine-changes.txt
                   fi
+                  # A confirmed drop that already alerted is not re-measured (or
+                  # re-posted) until an engine file changes after it.
+                  red_sha=""
+                  for id in $(gh run list -R "$GITHUB_REPOSITORY" --workflow code-review-evals-nightly.yml \
+                      --branch main --status completed --limit 30 --json databaseId --jq '.[].databaseId'); do
+                      [ "$id" = "$GITHUB_RUN_ID" ] && continue
+                      has=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/artifacts" \
+                          --jq '[.artifacts[] | select(.name == "nightly-report" and (.expired | not))] | length')
+                      [ "$has" = "0" ] && continue
+                      gh run download "$id" -R "$GITHUB_REPOSITORY" -n nightly-report -D last-measured >/dev/null 2>&1 || break
+                      verdict=$(node -e 'try { console.log(require("./last-measured/state.json").verdict || "") } catch { console.log("") }')
+                      if [ "$verdict" = "regression" ] || [ "$verdict" = "still-red" ]; then
+                          red_sha=$(gh run view "$id" -R "$GITHUB_REPOSITORY" --json headSha --jq .headSha)
+                      fi
+                      break
+                  done
+                  red_changes=""
+                  if [ -n "$red_sha" ] && git cat-file -e "$red_sha^{commit}" 2>/dev/null; then
+                      git diff --name-only "$red_sha" HEAD > changed-since-red.txt
+                      red_changes=$(node evals/shared/engine-files.js changed engine-files.txt changed-since-red.txt)
+                  fi
                   if [ "$FORCE" = "true" ]; then
                       echo "run=true" >> "$GITHUB_OUTPUT"; echo "forced"
+                  elif [ -n "$red_sha" ] && [ -z "$red_changes" ]; then
+                      echo "run=false" >> "$GITHUB_OUTPUT"
+                      echo "still below the floor since ${red_sha:0:9}, and no engine file changed after it — not re-measuring or re-posting"
                   elif [ -z "$base" ]; then
                       echo "run=true" >> "$GITHUB_OUTPUT"; echo "no measured night to compare with"
                   elif [ -s engine-changes.txt ]; then
@@ -160,15 +193,26 @@ jobs:
 
                   export const environment = devEnvironment;
                   EOF
-            - name: Run finder recall
+            - name: Run finder recall (confirmed when below the floor)
               env:
                   BYOK_FIREWORKS_API_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
                   JUDGE_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
-              # exit 1 = below the floor, 2 = infra. Both fail the job; the report
-              # says which.
+              # exit 1 = confirmed below the floor, 2 = infra. Both fail the job;
+              # the report says which. A first run below the floor that the second
+              # run doesn't confirm ends green, as an oscillation.
               run: |
-                  node evals/investigation/run-recall.js --model="$MODEL" --set="$CASE_SET" \
-                      --concurrency=6 --gate --output=nightly-report/nightly.json
+                  recall() { node evals/investigation/run-recall.js --model="$MODEL" --set="$CASE_SET" --concurrency=6 --gate --output="$1"; }
+                  code=0; recall nightly-report/nightly.json || code=$?
+                  if [ "$code" -eq 1 ]; then
+                      echo "::notice::below the floor, measuring the same commit again before alerting"
+                      # nightly.submission.json (first run's findings) stays for the report.
+                      mv nightly-report/nightly.json nightly-report/nightly.first.json
+                      recall nightly-report/nightly.confirm.json || true
+                      code=0
+                      node evals/investigation/confirm-gate.js nightly-report/nightly.first.json nightly-report/nightly.confirm.json \
+                          --out=nightly-report/nightly.json --set="$CASE_SET" || code=$?
+                  fi
+                  exit "$code"
             - uses: actions/download-artifact@v4
               if: always()
               continue-on-error: true
@@ -195,6 +239,18 @@ jobs:
                       fi
                   done
                   rm -rf nightly-report/last-green/last-green
+                  # The last measured night's state (any outcome), to tell a new
+                  # drop from one that already alerted.
+                  for id in $(gh run list -R "$GITHUB_REPOSITORY" --workflow code-review-evals-nightly.yml \
+                      --branch main --status completed --limit 30 --json databaseId --jq '.[].databaseId'); do
+                      has=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/artifacts" \
+                          --jq '[.artifacts[] | select(.name == "nightly-report" and (.expired | not))] | length')
+                      if [ "$has" != "0" ]; then
+                          gh run download "$id" -R "$GITHUB_REPOSITORY" -n nightly-report -D previous-night >/dev/null 2>&1 \
+                              && cp previous-night/state.json nightly-report/previous-state.json 2>/dev/null || true
+                          break
+                      fi
+                  done
                   if [ -n "$BASE" ] && [ -s nightly-report/engine-changes.txt ]; then
                       mapfile -t files < nightly-report/engine-changes.txt
                       git log --format='%h%x09%s%x09%an' "$BASE"..HEAD -- "${files[@]}" > nightly-report/commits.tsv || true
@@ -207,7 +263,8 @@ jobs:
                   EVAL_BASE_SHA: ${{ needs.changed.outputs.base }}
               run: |
                   node evals/ci-report.js nightly nightly-report/nightly.json \
-                      --last-green=nightly-report/last-green/nightly.json --commits=nightly-report/commits.tsv
+                      --last-green=nightly-report/last-green/nightly.json --commits=nightly-report/commits.tsv \
+                      --previous-state=nightly-report/previous-state.json --state-out=nightly-report/state.json
             - uses: actions/upload-artifact@v4
               if: always()
               with:
@@ -221,7 +278,7 @@ jobs:
     investigate:
         name: "investigate the drop (agent, advisory)"
         needs: [changed, measure]
-        if: always() && needs.measure.outputs.verdict == 'regression'
+        if: always() && (needs.measure.outputs.verdict == 'regression' || needs.measure.outputs.verdict == 'still-red')
         runs-on: ubuntu-latest
         continue-on-error: true
         timeout-minutes: 25
@@ -305,7 +362,8 @@ jobs:
               run: |
                   node evals/ci-report.js nightly nightly-report/nightly.json \
                       --last-green=nightly-report/last-green/nightly.json --commits=nightly-report/commits.tsv \
-                      --investigation=nightly-investigation/investigation/investigation.json
+                      --investigation=nightly-investigation/investigation/investigation.json \
+                      --previous-state=nightly-report/previous-state.json
             - name: Notify Discord
               uses: ./.github/actions/discord-notify
               with:
@@ -313,3 +371,5 @@ jobs:
                   status: ${{ steps.report.outputs.status }}
                   title: ${{ steps.report.outputs.title }}
                   description: ${{ steps.report.outputs.description }}
+                  # Mention only a new or worsening confirmed drop.
+                  content: ${{ steps.report.outputs.mention == 'true' && vars.DISCORD_EVALS_ROLE_ID != '' && format('<@&{0}>', vars.DISCORD_EVALS_ROLE_ID) || '' }}

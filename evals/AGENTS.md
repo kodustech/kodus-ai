@@ -16,6 +16,7 @@ What runs when, and what each eval answers: [README.md](README.md). These rules 
 - Exit 2 is "not measured". Never turn it into a pass or a warning, and always log the reason next to it. A count with no reason is how a dead judge key went unseen for weeks.
 - If the eval drives the engine, add a step to `evals/wiring-smoke.js` with `model: true`.
 
+- Alerts must stay rare and true. A drop is only a regression after the confirmation run (`evals/investigation/confirm-gate.js`), and only a new or worsening one mentions people. Don't add a path that pings on a single run, on infra, or on a failure that already alerted.
 - The investigation agent is advisory. Its reading never sets the verdict, the gate or a floor, and the nightly message goes out without it when the agent fails. Keep it read-only (`Read,Grep,Glob`); the evidence holds model-written text.
 
 ## Floors and judges
@@ -31,6 +32,7 @@ What runs when, and what each eval answers: [README.md](README.md). These rules 
 - `evals/investigation/run-recall.js`: finder-recall runner, used by the nightly
 - `evals/tier0-smoke.js`: the Friday per-model check
 - `evals/ci-report.js`: Actions job summary and Discord message (Portuguese; facts first, the agent's reading only on red nights)
+- `evals/investigation/gate.js` + `evals/investigation/confirm-gate.js`: the floor check, and the second run that confirms a drop before anyone is alerted
 - `evals/investigation/nightly-compare.js`: tonight vs the last green night (per-PR recall, known bugs lost and gained, noise, cost)
 - `evals/investigation/investigate-facts.js` + `evals/investigation/investigate-prompt.md` + `evals/investigation/extract-investigation.js`: the red-night investigation. The facts are built deterministically; a read-only Claude Code agent reads them; the extractor accepts only a well-formed verdict
 - `evals/shared/tier0-models.js`: model id → engine route and key env names; `tier0()` is the Friday list

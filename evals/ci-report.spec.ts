@@ -148,3 +148,54 @@ describe('tier-0 failure classification', () => {
         expect(classifyFailure(reason)).toBe('broken');
     });
 });
+
+describe('nightly alerting without false positives', () => {
+    const targets = { sets: { light: { models: { 'deepseek-v4-flash@fireworks': { observed: { sdPerPrRunDiff: 0.318, runs: [0.384, 0.352] } } } } } };
+    const measured = (recall: number, gate: Record<string, unknown>) => ({
+        model: 'deepseek-v4-flash@fireworks',
+        cases: 1,
+        infraFailures: 0,
+        metrics: { recall_mean: recall, precision_mean: 0.5 },
+        rows: [{ caseId: 'a', status: 'pass', metadata: { recall, precision: 0.5, tpFindings: 1, fpFindings: 0, totalCalls: 20 } }],
+        gate,
+    });
+    const confirmedFail = (recall: number) => ({ status: 'fail', checks: [{ name: 'recall_mean', actual: recall, floor: 0.26, pass: false }], confirmation: { runs: [recall, recall] } });
+
+    it('a first run below the floor that the confirmation does not hold is green and pings nobody', () => {
+        const report = nightlyReport(measured(0.3, { status: 'pass', checks: [], confirmation: { runs: [0.24, 0.36] } }), {}, { targets });
+        expect(report.verdict).toBe('oscillation');
+        expect(report.status).toBe('success');
+        expect(report.mention).toBe(false);
+        expect(report.description).toContain('Duas medições no mesmo commit: 24% e 36%');
+    });
+
+    it('a confirmed new drop pings and starts a streak', () => {
+        const report = nightlyReport(measured(0.2, confirmedFail(0.2)), {}, { targets, today: '2026-09-18' });
+        expect(report).toMatchObject({ verdict: 'regression', mention: true, state: { verdict: 'regression', streak: 1, since: '2026-09-18' } });
+    });
+
+    it('the same drop the next night stays red without pinging', () => {
+        const previousState = { verdict: 'regression', recall: 0.2, streak: 1, since: '2026-09-18' };
+        const report = nightlyReport(measured(0.19, confirmedFail(0.19)), {}, { targets, previousState, today: '2026-09-19' });
+        expect(report.title).toBe('❌ Evals noturnos: continua abaixo do piso (dia 2)');
+        expect(report).toMatchObject({ verdict: 'still-red', mention: false, state: { streak: 2, since: '2026-09-18' } });
+    });
+
+    it('a drop that gets worse beyond noise pings again', () => {
+        const previousState = { verdict: 'still-red', recall: 0.2, streak: 2, since: '2026-09-18' };
+        const report = nightlyReport(measured(0.1, confirmedFail(0.1)), {}, { targets, previousState, today: '2026-09-20' });
+        expect(report).toMatchObject({ verdict: 'regression', mention: true, state: { streak: 3, since: '2026-09-18' } });
+        expect(report.title).toContain('piorou');
+    });
+
+    it('a confirmation that could not measure confirms nothing and pings nobody', () => {
+        const report = nightlyReport({ ...measured(0.2, { status: 'fail', checks: [] }), confirmationError: 'judge HTTP 429' }, {}, { targets });
+        expect(report).toMatchObject({ verdict: 'infra', mention: false, state: { streak: 0 } });
+    });
+
+    it("never lowers an alert because of the agent's reading", () => {
+        const investigation = { verdict: 'noise', confidence: 'alta', summary: 'Ruído.', suspects: [], confirm: '' };
+        const report = nightlyReport(measured(0.2, confirmedFail(0.2)), {}, { targets, investigation });
+        expect(report).toMatchObject({ verdict: 'regression', status: 'failure', mention: true });
+    });
+});
