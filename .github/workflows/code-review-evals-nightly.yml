@@ -6,8 +6,9 @@ name: "Evals: nightly quality (DeepSeek, 30 PRs)"
 # shows up on any model, so measuring six models per merge (the old suite) paid
 # six times for the same answer. DeepSeek V4 Flash on Fireworks is the model the
 # trial runs in production, is cheap (~$0.10/PR), and its runs are steady.
-# Thirty PRs because per-PR recall swings ±20pp: with 8 PRs only a ~14pp drop is
-# distinguishable from noise, with 30 a ~7pp one is.
+# Thirty PRs because per-PR recall swings run to run: calibrated in CI, a night's
+# 30-PR mean moves ~5pp, so the floor catches a ~11pp drop (8 PRs could not tell
+# a drop twice that size from noise).
 #
 # Skips when no engine path changed since the last successful night, so a quiet
 # week costs nothing. A night that fails (regression or infra) is not a baseline,
@@ -33,10 +34,6 @@ on:
         # 05:00 UTC = 02:00 BRT. Results land before the workday, and Friday's
         # lands before the release meeting.
         - cron: "0 5 * * *"
-    # TEMP (validation on PR #1951, reverted before merge)
-    pull_request:
-        paths:
-            - ".github/workflows/code-review-evals-nightly.yml"
     workflow_dispatch:
         inputs:
             force:
@@ -67,7 +64,7 @@ jobs:
             - id: diff
               env:
                   GH_TOKEN: ${{ github.token }}
-                  FORCE: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.force) }}
+                  FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
               run: |
                   base=$(gh run list -R "$GITHUB_REPOSITORY" --workflow code-review-evals-nightly.yml \
                       --branch main --status success --limit 1 --json headSha --jq '.[0].headSha // ""')
@@ -139,7 +136,7 @@ jobs:
                   if-no-files-found: ignore
                   retention-days: 30
             - name: Notify Discord
-              if: always() && steps.report.outputs.title != '' && github.event_name != 'pull_request'
+              if: always() && steps.report.outputs.title != ''
               uses: ./.github/actions/discord-notify
               with:
                   webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}

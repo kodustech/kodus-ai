@@ -27,10 +27,6 @@ on:
         # Friday 03:00 UTC = 00:00 BRT — same slot as the release train
         # (selfhosted-build-push.yml).
         - cron: "0 3 * * 5"
-    # TEMP (validation on PR #1951, reverted before merge)
-    pull_request:
-        paths:
-            - ".github/workflows/code-review-evals-tier0.yml"
     workflow_dispatch:
         inputs:
             only_model:
@@ -56,9 +52,7 @@ jobs:
                   ONLY_MODEL: ${{ inputs.only_model }}
               # tier0-models.js is dependency-free CJS, so no install is needed.
               run: |
-                  if [ "${{ github.event_name }}" = "pull_request" ]; then
-                      echo "::notice::TEMP validation already done for tier-0"; exit 1 # TEMP validation
-                  elif [ -n "$ONLY_MODEL" ]; then
+                  if [ -n "$ONLY_MODEL" ]; then
                       models=$(node -e 'console.log(JSON.stringify([process.env.ONLY_MODEL]))')
                   else
                       models=$(node -e 'console.log(JSON.stringify(require("./evals/shared/tier0-models").tier0()))')
@@ -128,7 +122,6 @@ jobs:
                   EVAL_MODELS: ${{ needs.prepare.outputs.models }}
               run: node evals/ci-report.js tier0 tier0-results
             - name: Notify Discord
-              if: github.event_name != 'pull_request'
               uses: ./.github/actions/discord-notify
               with:
                   webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
