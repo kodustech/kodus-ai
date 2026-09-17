@@ -385,4 +385,6 @@ async function main() {
 
 // Exit-code contract for the suite: 1 = gate failed (quality regression),
 // 2 = infra error (no key, bad model id, crash) — always surfaced loudly.
-main().catch((e) => { console.error(e); process.exit(2); });
+// Exit explicitly on success too: an open handle left by the engine would
+// otherwise keep a finished run alive until the CI timeout.
+main().then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(2); });

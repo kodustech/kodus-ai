@@ -97,7 +97,7 @@ function writeJson(file, payload) {
  * minMeanFindings (prompt lost / findings not parsed) and minMeanToolCalls
  * (tools dead / loop not engaging).
  */
-function evaluateGate(summary, rows, model) {
+function evaluateGate(summary, rows, model, setName) {
     let targets;
     try {
         targets = require('./targets.json');
@@ -109,9 +109,13 @@ function evaluateGate(summary, rows, model) {
         }
         throw err;
     }
-    const target = targets.models?.[model];
+    // Floors are per case set: a mean over 8 PRs and a mean over 30 are
+    // different numbers. The top-level table is the `pr` set; others live
+    // under `sets.<name>`.
+    const table = setName === targets.set ? targets.models : targets.sets?.[setName]?.models;
+    const target = table?.[model];
     if (!target) {
-        return { status: 'skipped', reason: `no target for model ${model}` };
+        return { status: 'skipped', reason: `no target for model ${model} on set ${setName}` };
     }
 
     const meanFindings = avg(
@@ -144,6 +148,7 @@ function evaluateGate(summary, rows, model) {
     return {
         status: checks.every((check) => check.pass) ? 'pass' : 'fail',
         checks,
+        observed: target.observed || null,
     };
 }
 
@@ -415,12 +420,17 @@ async function main() {
             try {
                 await runOneCase(selectedTests[idx]);
             } catch (error) {
+                // Reaches here when scoring throws (e.g. the judge's key is
+                // rejected). It used to be counted without a word, so CI showed
+                // "INFRA failure(s): 8" for weeks and nobody could say why.
                 infraFailures += 1;
-                rows.push({
+                const row = {
                     caseId: selectedTests[idx]?.vars?.caseId || `idx-${idx}`,
                     status: 'infra',
                     reason: error instanceof Error ? error.message : String(error),
-                });
+                };
+                rows.push(row);
+                console.log(`INFRA ${row.caseId} ${row.reason.slice(0, 300)}`);
             }
         }
     };
@@ -448,8 +458,9 @@ async function main() {
         rows,
     };
 
+    const setName = args.all ? 'all' : args.cases ? 'custom' : args.set;
     const gate = args.gate
-        ? evaluateGate(summary, rows, args.model)
+        ? evaluateGate(summary, rows, args.model, setName)
         : { status: 'off' };
     summary.gate = gate;
 
@@ -503,7 +514,11 @@ async function main() {
     }
 }
 
-main().catch((error) => {
-    console.error(error);
-    process.exit(2);
-});
+// Exit explicitly: the engine can leave a handle open after the last case, and
+// a finished run that never exits holds its CI job until the timeout.
+main()
+    .then(() => process.exit(0))
+    .catch((error) => {
+        console.error(error);
+        process.exit(2);
+    });
