@@ -49,7 +49,15 @@ describe('engine files — trace hook', () => {
         fs.mkdirSync(path.join(cwd, 'lib'));
         fs.writeFileSync(path.join(cwd, 'lib', 'dep.js'), 'module.exports = 1;');
         fs.writeFileSync(path.join(cwd, 'data.json'), '{}');
-        fs.writeFileSync(path.join(cwd, 'main.js'), "require('./lib/dep'); require('fs').readFileSync('data.json');");
+        // Like the runners: a worker thread is alive when main calls
+        // process.exit, and shares its pid. Main's list must survive.
+        fs.writeFileSync(
+            path.join(cwd, 'main.js'),
+            "require('./lib/dep'); require('fs').readFileSync('data.json');" +
+                "const { Worker } = require('worker_threads');" +
+                "const w = new Worker('setInterval(() => {}, 1000)', { eval: true });" +
+                "w.on('online', () => process.exit(0));",
+        );
 
         const result = spawnSync(process.execPath, ['--require', path.join(__dirname, 'trace-loaded.js'), 'main.js'], {
             cwd,

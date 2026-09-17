@@ -72,8 +72,9 @@ if (require.main === module) {
     }
     const lines = (file) => fs.readFileSync(file, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean);
     const engineFiles = lines(engineList);
-    if (!engineFiles.length) {
-        console.error(`${engineList} is empty — the wiring smoke recorded no finder-recall files`);
+    const runner = 'evals/investigation/run-recall.js';
+    if (!engineFiles.includes(runner) || !engineFiles.some((file) => file.startsWith('libs/'))) {
+        console.error(`${engineList} does not list ${runner} and the engine it loads — the trace is incomplete; refusing to decide`);
         process.exit(2);
     }
     for (const file of changedEngineFiles(lines(changedList), engineFiles)) console.log(file);

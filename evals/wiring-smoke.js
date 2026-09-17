@@ -136,11 +136,14 @@ async function main() {
 
     await server.close();
 
-    // The PR check must fire on every file an eval loads.
+    // The PR check must fire on every file an eval loads. A step whose trace
+    // lacks its own runner was not recorded properly; trusting it would narrow
+    // the filter check and let the nightly skip real changes.
     const loaded = fs.existsSync(traceDir) ? readTrace(traceDir) : [];
+    const untraced = steps.filter((step) => !(fs.existsSync(traceDir) && readTrace(traceDir, step.name).includes(step.args[0])));
     const outside = uncovered(loaded, prWorkflowPaths());
-    const coverageProblem = !loaded.length
-        ? 'recorded no loaded files — the trace hook did not run'
+    const coverageProblem = untraced.length
+        ? `incomplete trace for ${untraced.map((step) => step.name).join(', ')} — its runner is missing from what it loaded`
         : outside.length
           ? `${outside.length} loaded file(s) outside the paths filter of ${PR_WORKFLOW}, e.g. ${outside.slice(0, 5).join(', ')}`
           : null;
@@ -159,7 +162,7 @@ async function main() {
         return 0;
     }
     if (coverageProblem && !broken.length) {
-        console.log(`\nAdd the missing paths to ${PR_WORKFLOW} so the PR check runs when they change.`);
+        console.log(untraced.length ? '\nThe load trace is incomplete; its file lists cannot be trusted.' : `\nAdd the missing paths to ${PR_WORKFLOW} so the PR check runs when they change.`);
         return 1;
     }
     for (const r of broken) {
