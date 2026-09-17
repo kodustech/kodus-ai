@@ -58,15 +58,18 @@ function missingHeaderFields(markdown) {
     return HEADER_FIELDS.filter((field) => !top.includes(`**${field}:**`));
 }
 
+// Folders under evals/ that are helpers, not evals, and have no README.
+const NOT_AN_EVAL = new Set(['shared']);
+
 // The docs the preflight holds to this: the evals entry points and every
-// eval's own README.
+// eval's own README. A new eval folder without one is listed anyway, so the
+// preflight reports it missing instead of never looking.
 function evalDocs(root) {
     const evalsDir = path.join(root, 'evals');
     const readmes = fs
         .readdirSync(evalsDir, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => path.join('evals', entry.name, 'README.md'))
-        .filter((doc) => fs.existsSync(path.join(root, doc)));
+        .filter((entry) => entry.isDirectory() && !NOT_AN_EVAL.has(entry.name))
+        .map((entry) => path.join('evals', entry.name, 'README.md'));
     return { entryPoints: ['evals/README.md', 'evals/AGENTS.md'], readmes };
 }
 

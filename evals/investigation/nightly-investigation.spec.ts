@@ -99,7 +99,7 @@ describe('confirmation of a run below the floor', () => {
     const { combineRuns } = require('./confirm-gate');
     const run = (recall: number, found: boolean) => ({
         model: 'm',
-        metrics: { recall_mean: recall, precision_mean: 0.5 },
+        metrics: { recall_mean: recall, precision_mean: 0.5, f1_mean: recall / 2 },
         tokens: { prompt: 10, completion: 1 },
         rows: [{ caseId: 'a', status: 'pass', metadata: { recall, precision: 0.5, tpFindings: 1, fpFindings: 0, totalCalls: 20, goldenResults: [{ golden: 'bug', found }] } }],
     });
@@ -111,6 +111,12 @@ describe('confirmation of a run below the floor', () => {
         expect(combined.gate).toMatchObject({ status: 'pass', confirmation: { runs: [0.2, 0.5] } });
         expect(combined.rows[0].metadata.goldenResults).toEqual([{ golden: 'bug', found: true }]);
         expect(combined.tokens).toEqual({ prompt: 20, completion: 2 });
+    });
+
+    it('keeps every metric and count run-recall writes', () => {
+        const combined = combineRuns(run(0.2, false), run(0.6, true), () => ({ status: 'pass', checks: [] }));
+        expect(combined.metrics.f1_mean).toBeCloseTo(0.2);
+        expect(combined).toMatchObject({ model: 'm', cases: 1, passed: 1, failed: 0 });
     });
 });
 

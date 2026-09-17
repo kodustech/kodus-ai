@@ -458,7 +458,17 @@ async function main() {
         process.exit(2);
     }
 
-    if (qualityFailures > 0) {
+    // --gate asked for a verdict against the floors; a gate that couldn't run
+    // (no targets, wrong judge) is not a pass. Exit 2 so the night is not
+    // recorded as green and never becomes the next night's baseline.
+    if (args.gate && gate.status === 'skipped') {
+        console.error(`\nGate requested but not evaluated: ${gate.reason}`);
+        process.exit(2);
+    }
+
+    // With --gate the run mean decides (per-PR results are noise); without it,
+    // per-case failures (RECALL_THRESHOLD, unparsed output) fail the run.
+    if (!args.gate && qualityFailures > 0) {
         console.error(`\nFinder recall gate failed in ${qualityFailures} case(s).`);
         process.exit(1);
     }

@@ -34,21 +34,21 @@ function combineRuns(first, second, gateFor) {
     const byCase = new Map((second.rows || []).map((row) => [row.caseId, row]));
     const rows = (first.rows || []).map((row) => combineRow(row, byCase.get(row.caseId)));
     const infraFailures = rows.filter((row) => row.status === 'infra').length;
+    // Every metric run-recall writes, averaged, so no consumer sees a field vanish.
+    const metricKeys = new Set([...Object.keys(first.metrics || {}), ...Object.keys(second.metrics || {})]);
+    const metrics = Object.fromEntries([...metricKeys].map((key) => [key, avg([first.metrics?.[key], second.metrics?.[key]])]));
     const combined = {
-        model: first.model,
-        startedAt: first.startedAt,
+        ...first,
         finishedAt: second.finishedAt,
         tokens: {
             prompt: (first.tokens?.prompt || 0) + (second.tokens?.prompt || 0),
             completion: (first.tokens?.completion || 0) + (second.tokens?.completion || 0),
         },
         cases: rows.length,
+        passed: rows.filter((row) => row.status === 'pass').length,
+        failed: rows.filter((row) => row.status === 'fail').length,
         infraFailures,
-        metrics: {
-            recall_mean: avg([first.metrics?.recall_mean, second.metrics?.recall_mean]),
-            precision_mean: avg([first.metrics?.precision_mean, second.metrics?.precision_mean]),
-            fidelity_mean: avg([first.metrics?.fidelity_mean, second.metrics?.fidelity_mean]),
-        },
+        metrics,
         rows,
     };
     combined.gate = {

@@ -36,6 +36,10 @@ describe('engine files — nightly trigger', () => {
         expect(changedEngineFiles(['apps/web/page.tsx', 'libs/core/unrelated.ts'], engineFiles)).toEqual([]);
     });
 
+    it('wakes on a change to the harness that builds the watch list', () => {
+        expect(changedEngineFiles(['evals/shared/engine-files.js', 'evals/wiring-smoke.js'], engineFiles)).toEqual(['evals/shared/engine-files.js', 'evals/wiring-smoke.js']);
+    });
+
     it('wakes on a loaded file, the lockfile or the floors', () => {
         const changed = ['libs/core/cache/cache.service.ts', 'pnpm-lock.yaml', 'evals/investigation/targets.json', 'README.md'];
         expect(changedEngineFiles(changed, engineFiles)).toEqual(['libs/core/cache/cache.service.ts', 'pnpm-lock.yaml', 'evals/investigation/targets.json']);
@@ -43,17 +47,18 @@ describe('engine files — nightly trigger', () => {
 });
 
 describe('engine files — trace hook', () => {
-    it('records repo files loaded through require and readFileSync, not node_modules', () => {
+    it('records repo files loaded through require and sync or async reads, not node_modules', () => {
         const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-loaded-'));
         const traceDir = path.join(cwd, 'trace');
         fs.mkdirSync(path.join(cwd, 'lib'));
         fs.writeFileSync(path.join(cwd, 'lib', 'dep.js'), 'module.exports = 1;');
-        fs.writeFileSync(path.join(cwd, 'data.json'), '{}');
+        for (const file of ['data.json', 'async.json', 'callback.json', 'stream.json']) fs.writeFileSync(path.join(cwd, file), '{}');
         // Like the runners: a worker thread is alive when main calls
         // process.exit, and shares its pid. Main's list must survive.
         fs.writeFileSync(
             path.join(cwd, 'main.js'),
-            "require('./lib/dep'); require('fs').readFileSync('data.json');" +
+            "require('./lib/dep'); const fs = require('fs'); fs.readFileSync('data.json');" +
+                "fs.promises.readFile('async.json'); fs.readFile('callback.json', () => {}); fs.createReadStream('stream.json').destroy();" +
                 "const { Worker } = require('worker_threads');" +
                 "const w = new Worker('setInterval(() => {}, 1000)', { eval: true });" +
                 "w.on('online', () => process.exit(0));",
@@ -65,7 +70,7 @@ describe('engine files — trace hook', () => {
         });
 
         expect(result.status).toBe(0);
-        expect(readTrace(traceDir, 'finder-recall')).toEqual(['data.json', 'lib/dep.js', 'main.js']);
+        expect(readTrace(traceDir, 'finder-recall')).toEqual(['async.json', 'callback.json', 'data.json', 'lib/dep.js', 'main.js', 'stream.json']);
         fs.rmSync(cwd, { recursive: true, force: true });
     });
 });

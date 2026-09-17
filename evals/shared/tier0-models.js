@@ -108,6 +108,10 @@ const TIER0 = {
 // --model to force one.
 const EXCLUDED_BY_DEFAULT = new Set(['claude-opus-4-7']);
 
+// Routes that only answer inside the wiring smoke (its local server is up only
+// while it runs): never offered as a runnable model.
+const LOCAL_ONLY = new Set(['eval-fake']);
+
 // The push-to-main gate matrix. Small on purpose: TIER0 is 23 routes and the
 // suite cannot run on all of them per merge. Adding a model here costs money on
 // every push to main — that is the decision this flag makes explicit.
@@ -118,7 +122,7 @@ function tier0() {
 // Every routable id minus the ones the benchmark skips by default (cost). NOT
 // the gate set — that is tier0(). Read by `run-recall --list-models`.
 function defaultMatrix() {
-    return Object.keys(TIER0).filter((id) => id !== 'gpt-5.4-mini' && !EXCLUDED_BY_DEFAULT.has(id));
+    return Object.keys(TIER0).filter((id) => id !== 'gpt-5.4-mini' && !EXCLUDED_BY_DEFAULT.has(id) && !LOCAL_ONLY.has(id));
 }
 
 // Point the env at `modelId` so buildModelFromSlot(undefined, ...) builds it.

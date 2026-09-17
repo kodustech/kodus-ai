@@ -11,7 +11,7 @@ const os = require('os');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const path = require('path');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { findBrokenReferences, missingHeaderFields, repoPathOf } = require('./doc-references');
+const { findBrokenReferences, missingHeaderFields, repoPathOf, evalDocs } = require('./doc-references');
 
 describe('eval doc references', () => {
     let root: string;
@@ -61,5 +61,10 @@ describe('eval doc references', () => {
         const full = '# X\n\n> - **Answers:** a\n> - **Runs:** b\n> - **Run it:** c\n> - **Gate:** d\n> - **Cost:** e\n';
         expect(missingHeaderFields(full)).toEqual([]);
         expect(missingHeaderFields(full.replace('> - **Cost:** e\n', ''))).toEqual(['Cost']);
+    });
+
+    it('lists the README of a new eval folder that has none, so the preflight reports it', () => {
+        fs.mkdirSync(path.join(root, 'evals/new-eval'), { recursive: true });
+        expect(evalDocs(root).readmes).toEqual(['evals/new-eval/README.md']);
     });
 });

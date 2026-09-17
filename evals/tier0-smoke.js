@@ -41,7 +41,10 @@ function parseArgs(argv) {
 
 function loadCase(caseId) {
     const dir = path.join(__dirname, 'investigation', 'datasets');
-    for (const file of fs.readdirSync(dir).filter((f) => f.endsWith('.json'))) {
+    // Datasets are named after their case id; scan the rest only if that misses.
+    const named = `${caseId}.json`;
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
+    for (const file of [named, ...files.filter((f) => f !== named)].filter((f) => files.includes(f))) {
         try {
             const raw = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8'));
             const c = Array.isArray(raw) ? raw[0] : raw;
@@ -51,6 +54,16 @@ function loadCase(caseId) {
         }
     }
     return null;
+}
+
+// A dataset with unparseable goldens must not replace the real failure reason.
+function knownBugs(vars) {
+    try {
+        const goldens = typeof vars.goldenComments === 'string' ? JSON.parse(vars.goldenComments) : vars.goldenComments;
+        return Array.isArray(goldens) ? goldens.length : '?';
+    } catch {
+        return '?';
+    }
 }
 
 // The provider refused (key, quota, network) → infra; anything else means the
@@ -123,8 +136,7 @@ async function main() {
             summary.reason = `only ${summary.toolCalls} tool call(s) — the loop is not using its tools`;
         } else if (summary.findings < MIN_FINDINGS) {
             summary.status = 'broken';
-            const goldens = typeof vars.goldenComments === 'string' ? JSON.parse(vars.goldenComments) : vars.goldenComments || [];
-            summary.reason = `no finding parsed on a PR with ${goldens.length} known bugs (finishReason=${output.trace?.finishReason})`;
+            summary.reason = `no finding parsed on a PR with ${knownBugs(vars)} known bugs (finishReason=${output.trace?.finishReason})`;
         }
     }
 

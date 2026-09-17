@@ -13,8 +13,17 @@ const fs = require('fs');
 const path = require('path');
 
 // Files that change what the nightly measures without being loaded by the
-// one-case run the smoke records: dependency versions and the floors.
-const NIGHTLY_EXTRA_FILES = ['pnpm-lock.yaml', 'evals/investigation/targets.json'];
+// one-case run the smoke records: dependency versions, the floors, and the
+// harness that builds the record itself (loaded by the smoke's parent process,
+// which isn't traced). A change to how the watch list is made gets measured
+// once, instead of possibly never.
+const NIGHTLY_EXTRA_FILES = [
+    'pnpm-lock.yaml',
+    'evals/investigation/targets.json',
+    'evals/wiring-smoke.js',
+    'evals/shared/trace-loaded.js',
+    'evals/shared/engine-files.js',
+];
 
 // Local env files are read when present but are never part of the repo.
 const IGNORED = /^\.env(\..*)?$/;

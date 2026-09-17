@@ -200,7 +200,8 @@ jobs:
               env:
                   BYOK_FIREWORKS_API_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
                   JUDGE_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
-              # exit 1 = confirmed below the floor, 2 = infra. Both fail the job;
+              # exit 1 = confirmed below the floor, 2 = infra or gate not evaluated
+              # (wrong judge, no floor). Both fail the job;
               # the report says which. A first run below the floor that the second
               # run doesn't confirm ends green, as an oscillation.
               run: |
@@ -241,8 +242,12 @@ jobs:
                       name=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/artifacts" \
                           --jq '[.artifacts[] | select(.expired | not) | .name | select(. == "nightly-report" or . == "nightly-finder-recall")][0] // ""')
                       if [ -n "$name" ]; then
-                          gh run download "$id" -R "$GITHUB_REPOSITORY" -n "$name" -D nightly-report/last-green && echo "last green night: run $id" || true
-                          green_sha=$(gh run view "$id" -R "$GITHUB_REPOSITORY" --json headSha --jq .headSha)
+                          # Only a night whose report we actually have is the
+                          # comparison; a failed API call leaves the fallback base.
+                          if gh run download "$id" -R "$GITHUB_REPOSITORY" -n "$name" -D nightly-report/last-green; then
+                              echo "last green night: run $id"
+                              green_sha=$(gh run view "$id" -R "$GITHUB_REPOSITORY" --json headSha --jq .headSha 2>/dev/null || true)
+                          fi
                           break
                       fi
                   done
@@ -253,7 +258,11 @@ jobs:
                   # run), for the commit list and the investigation's diff.
                   if [ -n "$green_sha" ] && [ -s nightly-report/engine-files.txt ] && git cat-file -e "$green_sha^{commit}" 2>/dev/null; then
                       git diff --name-only "$green_sha" HEAD > changed-since-green.txt
-                      node evals/shared/engine-files.js changed nightly-report/engine-files.txt changed-since-green.txt > nightly-report/engine-changes.txt || true
+                      # Replace the list only when the script decides: a refusal
+                      # (exit 2) must not leave it truncated by the redirect.
+                      if node evals/shared/engine-files.js changed nightly-report/engine-files.txt changed-since-green.txt > changed-since-green.engine.txt; then
+                          mv changed-since-green.engine.txt nightly-report/engine-changes.txt
+                      fi
                   fi
                   # The last measured night's state (any outcome), to tell a new
                   # drop from one that already alerted.

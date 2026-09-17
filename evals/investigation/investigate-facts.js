@@ -82,7 +82,14 @@ function buildFacts({ tonight, tonightSubmission, lastGreen, lastGreenSubmission
     }
     const nowRows = [...rowsNow.values()].filter((r) => r.metadata);
     const beforeRows = [...rowsBefore.values()].filter((r) => r.metadata);
-    const collapse = (key) => `${avg(nowRows.map((r) => (key === 'findings' ? r.metadata.tpFindings + r.metadata.fpFindings : r.metadata[key])))?.toFixed?.(1)} vs ${avg(beforeRows.map((r) => (key === 'findings' ? r.metadata.tpFindings + r.metadata.fpFindings : r.metadata[key])))?.toFixed?.(1)}`;
+    // An older artifact may lack a field: say n/a rather than NaN or undefined.
+    const pick = (key) => (r) => {
+        if (key !== 'findings') return r.metadata[key];
+        const { tpFindings: tp, fpFindings: fp } = r.metadata;
+        return typeof tp === 'number' && typeof fp === 'number' ? tp + fp : null;
+    };
+    const oneDecimal = (v) => (typeof v === 'number' && Number.isFinite(v) ? v.toFixed(1) : 'n/a');
+    const collapse = (key) => `${oneDecimal(avg(nowRows.map(pick(key))))} vs ${oneDecimal(avg(beforeRows.map(pick(key))))}`;
     out.push(`Mean findings per PR: ${collapse('findings')} · mean tool calls: ${collapse('totalCalls')} · replay fidelity: ${collapse('hitRate')}`);
     out.push('');
 

@@ -87,6 +87,11 @@ describe('nightly report', () => {
         expect(report.markdown).not.toContain('Recall **');
     });
 
+    it('sends credit problems to the provider account, not to the secret', () => {
+        const tonight = night({ infraFailures: 2, rows: [{ caseId: 'pr-a', status: 'infra', reason: 'HTTP 402 insufficient balance' }] });
+        expect(nightlyReport(tonight, env, {}).description).toContain('**Próximo passo:** pôr crédito na conta Fireworks.');
+    });
+
     it('says which key is missing when the run stopped before measuring', () => {
         const report = nightlyReport({ model: 'deepseek-v4-flash@fireworks', error: 'Missing judge key for gpt-5.4-mini (openai): set JUDGE_API_KEY.' }, env, {});
         expect(report.title).toBe('⚠️ Evals · não mediu · juiz: sem chave');
@@ -218,6 +223,16 @@ describe('nightly alerting without false positives', () => {
     it('a confirmation that could not measure confirms nothing and pings nobody', () => {
         const report = nightlyReport({ ...measured(0.2, { status: 'fail', checks: [] }), confirmationError: 'judge HTTP 429' }, {}, { targets });
         expect(report).toMatchObject({ verdict: 'infra', mention: false, state: { streak: 0 } });
+    });
+
+    it('a finder that collapses during a red streak still pings, once', () => {
+        const collapsed = (recall: number) => ({ status: 'fail', checks: [{ name: 'recall_mean', actual: recall, floor: 0.26, pass: false }, { name: 'mean_tool_calls', actual: 2, floor: 20, pass: false }] });
+        const previousState = { verdict: 'regression', recall: 0.2, streak: 1, since: '2026-09-18', failed: ['recall_mean'] };
+        const report = nightlyReport(measured(0.19, collapsed(0.19)), {}, { targets, previousState, today: '2026-09-19' });
+        expect(report).toMatchObject({ verdict: 'regression', mention: true, state: { streak: 2, failed: ['recall_mean', 'mean_tool_calls'] } });
+        expect(report.title).toBe('❌ Evals · finder parou de usar ferramentas · dia 2');
+        const next = nightlyReport(measured(0.19, collapsed(0.19)), {}, { targets, previousState: report.state, today: '2026-09-20' });
+        expect(next).toMatchObject({ verdict: 'still-red', mention: false });
     });
 
     it("never lowers an alert because of the agent's reading", () => {

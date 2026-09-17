@@ -114,15 +114,18 @@ function nightlyVerdict(result, comparison, noise, previousState) {
     const failed = (gate.checks || []).filter((check) => !check.pass).map((check) => check.name);
     if (gate.status === 'fail') {
         const recall = result.metrics?.recall_mean;
-        if (previousState && RED.has(previousState.verdict)) {
-            const day = (previousState.streak || 1) + 1;
+        const wasRed = Boolean(previousState && RED.has(previousState.verdict));
+        const day = wasRed ? (previousState.streak || 1) + 1 : null;
+        // A collapse is the engine breaking: it alerts even during a red streak,
+        // unless it's the collapse that streak already alerted for.
+        const collapse = newCollapse(failed, previousState);
+        if (collapse) return { verdict: 'regression', title: `${COLLAPSE_TITLE[collapse]}${day ? ` (dia ${day})` : ''}` };
+        if (wasRed) {
             const worse = typeof recall === 'number' && typeof previousState.recall === 'number' && recall < previousState.recall - (noise || 0.05);
             return worse
                 ? { verdict: 'regression', title: `piorou: recall caiu mais ${points(recall - previousState.recall)} (dia ${day})` }
                 : { verdict: 'still-red', title: `continua abaixo do piso (dia ${day})` };
         }
-        if (failed.includes('mean_tool_calls')) return { verdict: 'regression', title: 'o finder parou de usar as ferramentas' };
-        if (failed.includes('mean_findings')) return { verdict: 'regression', title: 'o finder parou de produzir findings' };
         const delta = comparison?.recallDelta;
         return {
             verdict: 'regression',
@@ -137,14 +140,25 @@ function nightlyVerdict(result, comparison, noise, previousState) {
     return { verdict: 'pass', title: 'qualidade estável' };
 }
 
+const COLLAPSE_TITLE = { mean_tool_calls: 'o finder parou de usar as ferramentas', mean_findings: 'o finder parou de produzir findings' };
+
+// The collapse check failing tonight that the current red streak hasn't
+// already alerted for, if any.
+function newCollapse(failed, previousState) {
+    const alerted = previousState && RED.has(previousState.verdict) ? previousState.failed || [] : [];
+    return Object.keys(COLLAPSE_TITLE).find((check) => failed.includes(check) && !alerted.includes(check)) || null;
+}
+
 // What the next night needs to know: whether this night is red, since when,
-// and the recall it alerted at (to tell "still red" from "worse").
+// the recall it alerted at (to tell "still red" from "worse") and the checks
+// that failed (so a later collapse still alerts).
 function nextState(verdict, result, previousState, today) {
     const red = RED.has(verdict);
     const continuing = red && previousState && RED.has(previousState.verdict);
     return {
         verdict,
         recall: result?.metrics?.recall_mean ?? null,
+        failed: red ? (result?.gate?.checks || []).filter((check) => !check.pass).map((check) => check.name) : [],
         streak: red ? (continuing ? (previousState.streak || 1) + 1 : 1) : 0,
         since: red ? (continuing ? previousState.since : today) : null,
     };
@@ -274,7 +288,22 @@ function nightlyReport(result, env = {}, extras = {}) {
 // The Discord version: a title with the numbers, then short labelled blocks —
 // what moved, which bugs, which commits, the agent's lead, what to do — each a
 // line or two. The long form stays in the run summary.
+//
+// The nightly workflow passes only these secrets (the model's key as
+// BYOK_FIREWORKS_API_KEY, the judge's as JUDGE_API_KEY), so they are the ones
+// its runs resolve.
 const SECRET_FOR = { juiz: 'BYOK_OPENAI_API_KEY', model: 'BYOK_FIREWORKS_API_KEY' };
+const ACCOUNT_FOR = { juiz: 'OpenAI', model: 'Fireworks' };
+
+// What to do about a provider refusal: a key is fixed in the secret, credit on
+// the provider account, a rate limit only by waiting for the next night.
+function infraNextStep(reason) {
+    const who = reason.startsWith('juiz') ? 'juiz' : 'model';
+    if (/chave/.test(reason)) return `corrigir \`${SECRET_FOR[who]}\``;
+    if (/crédito/.test(reason)) return `pôr crédito na conta ${ACCOUNT_FOR[who]}`;
+    if (/limite/.test(reason)) return `limite de uso da ${ACCOUNT_FOR[who]}; se repetir, pedir aumento`;
+    return 'ver o log do run';
+}
 
 function nightlyCompact({ result, verdict, comparison, commits, investigation, previousState, url, compareUrl }) {
     const links = [md('run', url), md('diff', compareUrl)].filter(Boolean).join(' · ');
@@ -287,6 +316,7 @@ function nightlyCompact({ result, verdict, comparison, commits, investigation, p
     const delta = comparison?.recallDelta;
     const signed = (d) => `${d >= 0 ? '+' : '−'}${Math.round(Math.abs(d) * 100)} pts`;
     const day = previousState && RED.has(previousState.verdict) ? (previousState.streak || 1) + 1 : null;
+    const collapse = verdict === 'regression' ? newCollapse(failed, previousState) : null;
     const infraReason = result?.error || result?.confirmationError || (result?.rows || []).find((row) => row.status === 'infra')?.reason;
     const minutes = result ? minutesBetween(result.startedAt, result.finishedAt) : null;
     const cost = result ? costUpperBound(result.tokens, catalogIdFor(result.model)) : null;
@@ -300,9 +330,9 @@ function nightlyCompact({ result, verdict, comparison, commits, investigation, p
     else if (verdict === 'infra') title = `⚠️ Evals · não mediu${shortReason(infraReason) !== clip(infraReason, 60) ? ` · ${shortReason(infraReason)}` : ''}`;
     else if (verdict === 'ungated') title = '⚠️ Evals · não comparou com o piso';
     else if (verdict === 'still-red') title = `❌ Evals · ainda abaixo do piso · dia ${day}`;
+    else if (collapse === 'mean_tool_calls') title = `❌ Evals · finder parou de usar ferramentas${day ? ` · dia ${day}` : ''}`;
+    else if (collapse === 'mean_findings') title = `❌ Evals · finder parou de gerar findings${day ? ` · dia ${day}` : ''}`;
     else if (day) title = `❌ Evals · piorou · recall ${pct(recall)} · dia ${day}`;
-    else if (failed.includes('mean_tool_calls')) title = '❌ Evals · finder parou de usar ferramentas';
-    else if (failed.includes('mean_findings')) title = '❌ Evals · finder parou de gerar findings';
     else title = `❌ Evals · recall ${pct(recall)}${typeof delta === 'number' ? ` (${signed(delta)})` : ''}${typeof floor === 'number' ? ` · piso ${pct(floor)}` : ''}`;
 
     const lines = [];
@@ -323,9 +353,7 @@ function nightlyCompact({ result, verdict, comparison, commits, investigation, p
         const raw = verdict === 'infra' ? infraReason : gate.reason;
         lines.push(`**Erro:** ${clip(raw, 140)}`);
         if (verdict === 'infra') {
-            const reason = shortReason(raw);
-            const secret = reason.startsWith('juiz') ? SECRET_FOR.juiz : /chave|crédito|limite/.test(reason) ? SECRET_FOR.model : null;
-            lines.push(`**Próximo passo:** ${secret ? `corrigir \`${secret}\`` : 'ver o log do run'}. A próxima noite mede de novo.`);
+            lines.push(`**Próximo passo:** ${infraNextStep(shortReason(raw))}. A próxima noite mede de novo.`);
         } else {
             lines.push('**Próximo passo:** o run não bateu com a calibração (modelo ou juiz). Ver `targets.json`.');
         }

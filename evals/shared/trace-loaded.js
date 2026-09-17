@@ -1,6 +1,6 @@
 // Preloaded into each wiring-smoke step (NODE_OPTIONS=--require): records every
 // repo file the process loads — through require (engine .ts via ts-node or the
-// esbuild hook, JSON) or readFileSync (datasets, prompts, targets) — and writes
+// esbuild hook, JSON) or fs reads, sync or async (datasets, prompts, targets) — and writes
 // the list to $TRACE_LOADED_DIR/<TRACE_LOADED_LABEL>.<pid>.<threadId>.txt on exit.
 // The thread id keeps worker threads (NODE_OPTIONS preloads this into them too)
 // from writing over the main thread's list: they share the pid. A real nightly-
@@ -21,14 +21,23 @@ if (dir) {
         return abs.startsWith(root) && !abs.includes(`${path.sep}node_modules${path.sep}`) ? abs.slice(root.length) : null;
     };
 
-    const readFileSync = fs.readFileSync;
-    fs.readFileSync = function tracedReadFileSync(file, ...rest) {
+    const record = (file) => {
         if (typeof file === 'string' || file instanceof URL) {
             const rel = repoRelative(file instanceof URL ? file.pathname : file);
             if (rel) read.add(rel);
         }
-        return readFileSync.call(this, file, ...rest);
     };
+    const trace = (owner, name) => {
+        const original = owner[name];
+        owner[name] = function traced(file, ...rest) {
+            record(file);
+            return original.call(this, file, ...rest);
+        };
+    };
+    trace(fs, 'readFileSync');
+    trace(fs, 'readFile');
+    trace(fs, 'createReadStream');
+    trace(fs.promises, 'readFile');
 
     process.on('exit', () => {
         try {
