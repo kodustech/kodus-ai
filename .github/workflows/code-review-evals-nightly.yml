@@ -24,8 +24,18 @@ name: "Evals: nightly quality (DeepSeek, 30 PRs)"
 # 2026-09-16 both ANTHROPIC_API_KEY and BYOK_ANTHROPIC_API_KEY answered 401
 # "API key is invalid" — the reason the old finder gate sat at 8/8 infra for weeks.
 #
+# When the gate goes red, a read-only Claude Code agent reads the facts (tonight
+# vs the last green night, the lost bugs with both nights' findings, the engine
+# commits and their diff) and the repo, and gives its reading — regression,
+# noise, eval problem or unclear — which the message shows as an unverified
+# hypothesis. It never changes the verdict, and the message goes out without it
+# if the agent fails.
+#
+# Jobs: changed → measure → investigate (red nights only) → notify.
+#
 # Secrets (repo-level): BYOK_FIREWORKS_API_KEY (model), BYOK_OPENAI_API_KEY
-# (judge), DISCORD_WEBHOOK_INTERNAL / DISCORD_WEBHOOK.
+# (judge), CLAUDE_CODE_OAUTH_TOKEN (investigation, subscription auth),
+# DISCORD_WEBHOOK_TESTS (falls back to DISCORD_WEBHOOK_INTERNAL / DISCORD_WEBHOOK).
 
 permissions:
     contents: read
@@ -50,6 +60,7 @@ concurrency:
 env:
     MODEL: deepseek-v4-flash@fireworks
     CASE_SET: light
+    JUDGE_MODEL: gpt-5.4-mini
 
 jobs:
     changed:
@@ -87,33 +98,40 @@ jobs:
                   GH_TOKEN: ${{ github.token }}
                   FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
               run: |
+                  : > engine-changes.txt
                   base=$(gh run list -R "$GITHUB_REPOSITORY" --workflow code-review-evals-nightly.yml \
                       --branch main --status success --limit 1 --json headSha --jq '.[0].headSha // ""')
                   echo "base=$base" >> "$GITHUB_OUTPUT"
+                  if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then
+                      git diff --name-only "$base" HEAD > changed-files.txt
+                      node evals/shared/engine-files.js changed engine-files.txt changed-files.txt > engine-changes.txt
+                  fi
                   if [ "$FORCE" = "true" ]; then
-                      echo "run=true" >> "$GITHUB_OUTPUT"; echo "forced"; exit 0
-                  fi
-                  if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
-                      echo "run=true" >> "$GITHUB_OUTPUT"; echo "no measured night to compare with"; exit 0
-                  fi
-                  git diff --name-only "$base" HEAD > changed-files.txt
-                  node evals/shared/engine-files.js changed engine-files.txt changed-files.txt > engine-changes.txt
-                  if [ -s engine-changes.txt ]; then
+                      echo "run=true" >> "$GITHUB_OUTPUT"; echo "forced"
+                  elif [ -z "$base" ]; then
+                      echo "run=true" >> "$GITHUB_OUTPUT"; echo "no measured night to compare with"
+                  elif [ -s engine-changes.txt ]; then
                       echo "run=true" >> "$GITHUB_OUTPUT"
                       echo "$(wc -l < engine-changes.txt) measured file(s) changed since $base:"; head -50 engine-changes.txt
                   else
                       echo "run=false" >> "$GITHUB_OUTPUT"
                       echo "none of the $(wc -l < engine-files.txt) files finder-recall loads changed since $base — skipping"
                   fi
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: nightly-engine-changes
+                  path: engine-changes.txt
+                  retention-days: 90
             - name: Notify Discord (harness broken)
               if: failure()
               uses: ./.github/actions/discord-notify
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
                   status: failure
-                  title: "❌ Nightly eval: the eval harness is broken — nothing was measured"
+                  title: "❌ Evals noturnos: o harness dos evals quebrou, nada foi medido"
                   description: |
-                      The wiring smoke failed before spending anything, so tonight was not measured. The failing step and its log are in the run; `pnpm eval:wiring` reproduces it locally.
+                      O wiring smoke falhou antes de gastar qualquer coisa, então esta noite não mediu. O passo que falhou e o log estão no run; `pnpm eval:wiring` reproduz localmente.
+                      **Próximo passo:** corrigir o eval (ou a engine) no commit que quebrou. A próxima noite mede de novo.
                       Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
     measure:
@@ -122,8 +140,12 @@ jobs:
         if: needs.changed.outputs.run == 'true'
         runs-on: ubuntu-latest
         timeout-minutes: 150
+        outputs:
+            verdict: ${{ steps.report.outputs.verdict }}
         steps:
             - uses: actions/checkout@v6.0.2
+              with:
+                  fetch-depth: 0
             - uses: pnpm/action-setup@v4
             - uses: actions/setup-node@v4
               with:
@@ -139,37 +161,155 @@ jobs:
                   export const environment = devEnvironment;
                   EOF
             - name: Run finder recall
-              id: recall
               env:
                   BYOK_FIREWORKS_API_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
-                  JUDGE_MODEL: gpt-5.4-mini
                   JUDGE_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
               # exit 1 = below the floor, 2 = infra. Both fail the job; the report
-              # step below says which.
+              # says which.
               run: |
                   node evals/investigation/run-recall.js --model="$MODEL" --set="$CASE_SET" \
-                      --concurrency=6 --gate --output=evals/investigation/results/nightly.json
+                      --concurrency=6 --gate --output=nightly-report/nightly.json
+            - uses: actions/download-artifact@v4
+              if: always()
+              continue-on-error: true
+              with:
+                  name: nightly-engine-changes
+                  path: nightly-report
+            # Everything the message and the investigation need, in one artifact:
+            # tonight's result, the last green night's, and the commits measured.
+            - name: Gather the comparison
+              if: always()
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  BASE: ${{ needs.changed.outputs.base }}
+              run: |
+                  mkdir -p nightly-report
+                  touch nightly-report/engine-changes.txt
+                  for id in $(gh run list -R "$GITHUB_REPOSITORY" --workflow code-review-evals-nightly.yml \
+                      --branch main --status success --limit 30 --json databaseId --jq '.[].databaseId'); do
+                      name=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/artifacts" \
+                          --jq '[.artifacts[] | select(.expired | not) | .name | select(. == "nightly-report" or . == "nightly-finder-recall")][0] // ""')
+                      if [ -n "$name" ]; then
+                          gh run download "$id" -R "$GITHUB_REPOSITORY" -n "$name" -D nightly-report/last-green && echo "last green night: run $id" || true
+                          break
+                      fi
+                  done
+                  rm -rf nightly-report/last-green/last-green
+                  if [ -n "$BASE" ] && [ -s nightly-report/engine-changes.txt ]; then
+                      mapfile -t files < nightly-report/engine-changes.txt
+                      git log --format='%h%x09%s%x09%an' "$BASE"..HEAD -- "${files[@]}" > nightly-report/commits.tsv || true
+                  fi
+                  touch nightly-report/commits.tsv
             - name: Report
               id: report
               if: always()
               env:
                   EVAL_BASE_SHA: ${{ needs.changed.outputs.base }}
-              run: node evals/ci-report.js nightly evals/investigation/results/nightly.json
-            - name: Upload result
+              run: |
+                  node evals/ci-report.js nightly nightly-report/nightly.json \
+                      --last-green=nightly-report/last-green/nightly.json --commits=nightly-report/commits.tsv
+            - uses: actions/upload-artifact@v4
               if: always()
-              uses: actions/upload-artifact@v4
               with:
-                  name: nightly-finder-recall
-                  path: |
-                      evals/investigation/results/nightly.json
-                      evals/investigation/results/nightly.submission.json
+                  name: nightly-report
+                  path: nightly-report/
                   if-no-files-found: ignore
-                  retention-days: 30
+                  retention-days: 90
+
+    # Read-only Claude Code agent, red nights only. Advisory: continue-on-error,
+    # skips without the token, and the notify job doesn't wait on its outcome.
+    investigate:
+        name: "investigate the drop (agent, advisory)"
+        needs: [changed, measure]
+        if: always() && needs.measure.outputs.verdict == 'regression'
+        runs-on: ubuntu-latest
+        continue-on-error: true
+        timeout-minutes: 25
+        steps:
+            - uses: actions/checkout@v6.0.2
+              with:
+                  fetch-depth: 0
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+            - uses: actions/download-artifact@v4
+              with:
+                  name: nightly-report
+                  path: nightly-report
+            - name: Build the evidence
+              run: |
+                  node evals/investigation/investigate-facts.js --report=nightly-report \
+                      --out=evals/investigation/results/evidence \
+                      --base="${{ needs.changed.outputs.base }}" --head="$GITHUB_SHA"
+            - name: Investigate with Claude Code (subscription auth)
+              env:
+                  CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+              run: |
+                  set -uo pipefail
+                  mkdir -p investigation
+                  if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
+                      echo "::warning title=Nightly investigation skipped::CLAUDE_CODE_OAUTH_TOKEN is not configured"
+                      exit 0
+                  fi
+                  npm install -g @anthropic-ai/claude-code >/dev/null 2>&1
+                  # The evidence holds model-written text (findings), so the agent is
+                  # strictly read-only: no shell, no writes, no web, no MCP servers
+                  # from the checkout. Its answer arrives on stdout.
+                  claude -p "$(cat evals/investigation/investigate-prompt.md)" \
+                      --allowedTools "Read,Grep,Glob" \
+                      --disallowedTools "Bash,Write,Edit,MultiEdit,NotebookEdit,WebFetch,WebSearch,Task" \
+                      --strict-mcp-config \
+                      --max-turns 40 \
+                      --output-format text > investigation/agent.log 2>&1 || {
+                      echo "::warning title=Nightly investigation failed (advisory)::see the nightly-investigation artifact"
+                  }
+                  node evals/investigation/extract-investigation.js investigation/agent.log investigation
+                  if [ -f investigation/investigation.md ]; then
+                      { echo "## 🤖 Leitura do Claude (não verificada)"; echo; cat investigation/investigation.md; } >> "$GITHUB_STEP_SUMMARY"
+                  fi
+            - uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                  name: nightly-investigation
+                  path: |
+                      investigation/
+                      evals/investigation/results/evidence/
+                  if-no-files-found: ignore
+                  retention-days: 90
+
+    notify:
+        name: "notify"
+        needs: [changed, measure, investigate]
+        if: always() && needs.changed.outputs.run == 'true'
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        steps:
+            - uses: actions/checkout@v6.0.2
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+            - uses: actions/download-artifact@v4
+              continue-on-error: true
+              with:
+                  name: nightly-report
+                  path: nightly-report
+            - uses: actions/download-artifact@v4
+              continue-on-error: true
+              with:
+                  name: nightly-investigation
+                  path: nightly-investigation
+            - name: Message
+              id: report
+              env:
+                  EVAL_BASE_SHA: ${{ needs.changed.outputs.base }}
+              run: |
+                  node evals/ci-report.js nightly nightly-report/nightly.json \
+                      --last-green=nightly-report/last-green/nightly.json --commits=nightly-report/commits.tsv \
+                      --investigation=nightly-investigation/investigation/investigation.json
             - name: Notify Discord
-              if: always() && steps.report.outputs.title != ''
               uses: ./.github/actions/discord-notify
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
-                  status: ${{ steps.recall.outcome == 'success' && 'success' || 'failure' }}
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  status: ${{ steps.report.outputs.status }}
                   title: ${{ steps.report.outputs.title }}
                   description: ${{ steps.report.outputs.description }}

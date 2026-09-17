@@ -12,7 +12,7 @@ Numbers and lists (floors, tier-0 models, schedules, secrets) are not copied her
 | Nightly, only if a file finder-recall loads changed since the last green night | Did review quality get worse? | finder-recall on the `light` case set with one cheap model, gated on a calibrated floor | `.github/workflows/code-review-evals-nightly.yml`, `evals/investigation/targets.json` → `sets.light` |
 | Friday, in the release train slot | Does every tier-0 model still run a review? | `evals/tier0-smoke.js`: one replayed PR per model (no judge), plus the PR-summary eval | `.github/workflows/code-review-evals-tier0.yml`, `evals/shared/tier0-models.js` |
 
-Nightly and Friday post to Discord and write an Actions job summary; results are uploaded as artifacts. Cost: $0 per PR; ~$3.5 per measured night (measured 2026-09-16); a few dollars per Friday (one review per model).
+Nightly and Friday post to Discord (`DISCORD_WEBHOOK_TESTS`, falling back to the engineering webhook) and write an Actions job summary; results are uploaded as artifacts. The nightly message compares tonight with the last green night: recall and precision, the PRs that moved most and the known bugs they lost, the engine commits measured, time and cost. On a red night, a read-only Claude Code agent reads those facts, the engine diff and the repo, and the message adds its reading (regression, noise, eval problem or unclear) marked as an unverified hypothesis. The agent never changes the verdict. Cost: $0 per PR; ~$3.5 per measured night (measured 2026-09-16); a few dollars per Friday (one review per model).
 
 Neither trigger is a hand-kept folder list. The wiring smoke records every repo file each eval loads (`evals/shared/trace-loaded.js`): it fails if one falls outside the PR workflow's `paths`, and it hands the nightly the exact files finder-recall depends on (`evals/shared/engine-files.js`).
 
@@ -53,10 +53,11 @@ Each eval's README has its own commands for narrower runs.
 ## When it goes red
 
 - **Wiring smoke fails on your PR.** Your change broke an eval's hold on the engine: a renamed method, a moved file, a new dependency the eval fakes. The failing step prints its command and log tail. Reproduce with `pnpm eval:wiring` and fix the eval in the same PR.
-- **Nightly: "PRs not measured (infra)".** A key, a quota or the network. The reason is in the message (for example `judge HTTP 401`). This is not a quality result. Fix the secret, and the next night measures again because a failed night is never a baseline.
-- **Nightly: "dropped below the floor".** The message links the engine commits measured since the last green night. Re-run `pnpm eval:nightly` before and after the suspect commit. If the drop is an intended trade-off, recalibrate (below) in the PR that made it.
-- **Nightly: "not gated".** Either there is no floor for that model and set, or the run used a different judge than the floor was calibrated with.
-- **Friday: "could not reach X".** That vendor's key or quota is broken. **"X no longer reviews"**: the engine no longer works on that model, so customers using it are affected. Decide per model, not for the whole release.
+- **Nightly: "PRs não medidos" / "não mediu".** A key, a quota or the network. The reason is in the message (for example `judge HTTP 401`). This is not a quality result. Fix the secret, and the next night measures again because a failed night is never a baseline.
+- **Nightly: "recall caiu … abaixo do piso".** The message lists the PRs and known bugs lost, the engine commits measured and Claude's reading. Treat the reading as a lead, not a verdict: re-run `pnpm eval:nightly` before and after the suspect commit. If the drop is an intended trade-off, recalibrate (below) in the PR that made it. The agent's full report is in the run summary and the `nightly-investigation` artifact.
+- **Nightly: "o finder parou de produzir findings / usar as ferramentas".** Not a recall wobble; the engine broke on the path the finder uses. Start from the commits in the message.
+- **Nightly: "não comparou com o piso".** Either there is no floor for that model and set, or the run used a different judge than the floor was calibrated with.
+- **Friday: "sem acesso a X".** That vendor's key or quota is broken. **"X não revisa mais"**: the engine no longer works on that model, so customers using it are affected. Decide per model, not for the whole release. A line marked _igual à semana passada_ is a known, unchanged failure.
 
 ## Changing things
 

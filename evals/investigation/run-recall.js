@@ -323,6 +323,7 @@ async function main() {
     const rows = [];
     let infraFailures = 0;
     let qualityFailures = 0;
+    const startedAt = new Date().toISOString();
 
     console.log(
         `════ finder-recall · model=${args.model} · set=${args.all ? 'all' : args.cases ? 'custom' : args.set} · cases=${selectedTests.length} · threshold=${process.env.RECALL_THRESHOLD || 0} ════`,
@@ -454,8 +455,18 @@ async function main() {
     rows.sort(byOrder);
     submissionResults.sort(byOrder);
 
+    const tokens = rows.reduce(
+        (sum, row) => ({
+            prompt: sum.prompt + (row.tokenUsage?.prompt || 0),
+            completion: sum.completion + (row.tokenUsage?.completion || 0),
+        }),
+        { prompt: 0, completion: 0 },
+    );
     const summary = {
         model: args.model,
+        startedAt,
+        finishedAt: new Date().toISOString(),
+        tokens,
         cases: rows.length,
         passed: rows.filter((row) => row.status === 'pass').length,
         failed: qualityFailures,

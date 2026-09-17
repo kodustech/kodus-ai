@@ -15,12 +15,13 @@ name: "Evals: tier-0 smoke (Friday release)"
 # Models: tier0() in evals/shared/tier0-models.js.
 # Secrets (repo-level): BYOK_OPENAI_API_KEY, BYOK_ANTHROPIC_API_KEY,
 # BYOK_GOOGLE_API_KEY, BYOK_MOONSHOT_API_KEY, BYOK_ZHIPU_API_KEY,
-# DISCORD_WEBHOOK_INTERNAL / DISCORD_WEBHOOK. On 2026-09-16 both Anthropic secrets
+# DISCORD_WEBHOOK_TESTS (falls back to DISCORD_WEBHOOK_INTERNAL / DISCORD_WEBHOOK). On 2026-09-16 both Anthropic secrets
 # answered 401, so claude-sonnet-4-6 reports infra until BYOK_ANTHROPIC_API_KEY is
 # rotated — that is the smoke doing its job.
 
 permissions:
     contents: read
+    actions: read
 
 on:
     schedule:
@@ -116,15 +117,28 @@ jobs:
                   pattern: tier0-smoke-*
                   merge-multiple: true
                   path: tier0-results
+            # Last run's results, so a failure that hasn't changed since last week
+            # reads as "igual à semana passada" instead of looking new.
+            - name: Previous run
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  mkdir -p previous
+                  prev=$(gh run list -R "$GITHUB_REPOSITORY" --workflow code-review-evals-tier0.yml --branch main \
+                      --status completed --limit 10 --json databaseId --jq '.[].databaseId' | grep -v "^${GITHUB_RUN_ID}$" | head -1 || true)
+                  if [ -n "$prev" ]; then
+                      gh run download "$prev" -R "$GITHUB_REPOSITORY" -p 'tier0-smoke-*' -D previous-raw || true
+                      find previous-raw -name 'tier0-smoke-*.json' -exec cp {} previous/ \; 2>/dev/null || true
+                  fi
             - name: Report
               id: report
               env:
                   EVAL_MODELS: ${{ needs.prepare.outputs.models }}
-              run: node evals/ci-report.js tier0 tier0-results
+              run: node evals/ci-report.js tier0 tier0-results --previous=previous
             - name: Notify Discord
               uses: ./.github/actions/discord-notify
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
                   status: ${{ steps.report.outputs.status }}
                   title: ${{ steps.report.outputs.title }}
                   description: ${{ steps.report.outputs.description }}
