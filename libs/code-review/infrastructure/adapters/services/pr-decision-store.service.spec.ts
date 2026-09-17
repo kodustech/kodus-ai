@@ -86,6 +86,20 @@ describe('toRecord', () => {
             decidedAt: '2026-01-01T00:00:00.000Z',
         });
     });
+
+    it('passes brokenKodyRulesIds through so the sharded judge can resolve the rule identity (PR #1895 review)', () => {
+        const record = toRecord(
+            makeSuggestion({ label: 'kody_rules', brokenKodyRulesIds: ['rule-uuid-1'] }),
+        );
+
+        expect(record.brokenKodyRulesIds).toEqual(['rule-uuid-1']);
+    });
+
+    it('leaves brokenKodyRulesIds absent when the source suggestion never got one (LLM omitted ruleUuid, or legacy record)', () => {
+        const record = toRecord(makeSuggestion({ label: 'kody_rules' }));
+
+        expect(record.brokenKodyRulesIds).toBeUndefined();
+    });
 });
 
 describe('toRecordFromPrLevel (issue #1313 Fase 1b)', () => {
@@ -107,6 +121,25 @@ describe('toRecordFromPrLevel (issue #1313 Fase 1b)', () => {
             makePrLevelSuggestion({ createdAt: undefined }),
         );
         expect(record.decidedAt).toBe('');
+    });
+
+    it('passes brokenKodyRulesIds through for a PR-level kody_rules decision (PR #1895 review)', () => {
+        const record = toRecordFromPrLevel(
+            makePrLevelSuggestion({
+                label: 'kody_rules' as any,
+                brokenKodyRulesIds: ['rule-uuid-1'],
+            }),
+        );
+
+        expect(record.brokenKodyRulesIds).toEqual(['rule-uuid-1']);
+    });
+
+    it('leaves brokenKodyRulesIds absent for a PR-level kody_rules decision with none (agent-review.stage.ts:1527 fallback path)', () => {
+        const record = toRecordFromPrLevel(
+            makePrLevelSuggestion({ label: 'kody_rules' as any }),
+        );
+
+        expect(record.brokenKodyRulesIds).toBeUndefined();
     });
 });
 
