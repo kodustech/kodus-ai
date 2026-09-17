@@ -4,44 +4,38 @@
 import type { FeaturesSnapshot } from '../domain/snapshot.types';
 
 export const FEATURES_SNAPSHOT: FeaturesSnapshot = {
-    "schema_version": 1,
-    "generated_at": "2026-09-10T15:47:46.419Z",
-    "source": "manual",
-    "features": {
-        "github-enterprise-server-pat": {
-            "name": "GitHub Enterprise Server (PAT auth)",
-            "stage": "beta",
-            "description": "Connect a GitHub Enterprise Server installation using a personal access token, for environments where the GitHub App flow isn't available.",
-            "audience": [
-                "cloud",
-                "self-hosted"
-            ]
+    schema_version: 1,
+    generated_at: '2026-09-10T15:47:46.419Z',
+    source: 'manual',
+    features: {
+        'github-enterprise-server-pat': {
+            name: 'GitHub Enterprise Server (PAT auth)',
+            stage: 'beta',
+            description:
+                "Connect a GitHub Enterprise Server installation using a personal access token, for environments where the GitHub App flow isn't available.",
+            audience: ['cloud', 'self-hosted'],
         },
-        "heavy-review": {
-            "name": "Heavy review (deeper pass)",
-            "stage": "alpha",
-            "description": "An opt-in deeper review that re-runs the finder multiple times to surface more real bugs, for the changes where catching everything matters more than speed.",
-            "audience": [
-                "cloud",
-                "self-hosted"
-            ]
+        'heavy-review': {
+            name: 'Heavy review (deeper pass)',
+            stage: 'alpha',
+            description:
+                'An opt-in deeper review that re-runs the finder multiple times to surface more real bugs, for the changes where catching everything matters more than speed.',
+            audience: ['cloud', 'self-hosted'],
         },
-        "kodus-provider": {
-            "name": "Kodus as a provider (prepaid credits)",
-            "stage": "alpha",
-            "description": "Pick a curated model and let Kodus run it on its own provider accounts — no API key to manage, usage billed from a prepaid credit balance you top up as you go.",
-            "documentation_url": "how_to_use/en/byok#kodus-credits",
-            "audience": [
-                "cloud"
-            ]
+        'kodus-provider': {
+            name: 'Kodus as a provider (prepaid credits)',
+            stage: 'alpha',
+            description:
+                'Pick a curated model and let Kodus run it on its own provider accounts — no API key to manage, usage billed from a prepaid credit balance you top up as you go.',
+            documentation_url: 'how_to_use/en/byok#kodus-credits',
+            audience: ['cloud'],
         },
-        "kodus-trace-review-context": {
-            "name": "Kodus Trace review context",
-            "stage": "alpha",
-            "description": "Use sanitized decisions distilled from local coding-agent sessions as repository-scoped context for Kody code reviews.",
-            "audience": [
-                "cloud"
-            ]
-        }
-    }
+        'kodus-trace-review-context': {
+            name: 'Kodus Trace review context',
+            stage: 'alpha',
+            description:
+                'Use sanitized decisions distilled from local coding-agent sessions as repository-scoped context for Kody code reviews.',
+            audience: ['cloud'],
+        },
+    },
 };

@@ -287,6 +287,36 @@ export class PullRequestsService implements IPullRequestsService {
         );
     }
 
+    async findSuggestionsByPRAndFilenames(
+        prNumber: number,
+        repoFullName: string,
+        filenames: readonly string[],
+        organizationId: string,
+        deliveryStatus: DeliveryStatus,
+    ): Promise<ISuggestion[]> {
+        return this.pullRequestsRepository.findSuggestionsByPRAndFilenames(
+            prNumber,
+            repoFullName,
+            filenames,
+            organizationId,
+            deliveryStatus,
+        );
+    }
+
+    async findPrLevelSuggestionsByPR(
+        prNumber: number,
+        repoFullName: string,
+        organizationId: string,
+        deliveryStatus: DeliveryStatus,
+    ): Promise<ISuggestionByPR[]> {
+        return this.pullRequestsRepository.findPrLevelSuggestionsByPR(
+            prNumber,
+            repoFullName,
+            organizationId,
+            deliveryStatus,
+        );
+    }
+
     async findSuggestionsByPR(
         organizationId: string,
         prNumber: number,

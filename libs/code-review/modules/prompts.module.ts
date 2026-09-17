@@ -15,6 +15,7 @@ import { AIEngineModule } from '@libs/ai-engine/modules/ai-engine.module';
 import { TraceContextModule } from '@libs/cli-review/trace-context.module';
 import { FeatureGateModule } from '@libs/feature-gate/modules/feature-gate.module';
 import { OrganizationModule } from '@libs/organization/modules/organization.module';
+import { CodeReviewCoreModule } from '@libs/code-review/modules/code-review-core.module';
 
 @Module({
     imports: [
@@ -25,6 +26,7 @@ import { OrganizationModule } from '@libs/organization/modules/organization.modu
         FeatureGateModule,
         forwardRef(() => OrganizationModule),
         TraceContextModule,
+        forwardRef(() => CodeReviewCoreModule),
     ],
     providers: [
         {

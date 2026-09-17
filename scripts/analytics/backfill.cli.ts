@@ -43,7 +43,8 @@ import { SharedMongoModule } from '@libs/shared/database/shared-mongo.module';
         // LLM is only used by the classifier provider registered inside
         // AnalyticsWarehouseModule; the backfill orchestrator itself
         // doesn't call any model. Required here so Nest can resolve the
-        // classifier's `PromptRunnerService` dep at bootstrap.
+        // classifier's own deps (DataSource, PullRequestsModel,
+        // ObservabilityService) at bootstrap.
         AnalyticsWarehouseModule.forRoot(),
     ],
 })
