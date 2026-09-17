@@ -98,7 +98,10 @@ export function isOpenAiReasonerId(model?: string): boolean {
     const m = model.toLowerCase();
     return (
         /^o[134](\b|[-_@])/.test(m) ||
-        /^gpt-5(\b|[-_@])/.test(m) ||
+        // gpt-5 and every line after it. Pinned to `gpt-5` alone, `gpt-6-astra`
+        // read as a non-reasoner: over openai_compatible that sends it the
+        // `temperature` and `max_tokens` OpenAI rejects on a reasoning model.
+        /^gpt-([5-9]|\d{2,})(\b|[-_@])/.test(m) ||
         /deep-research/.test(m)
     );
 }
