@@ -168,17 +168,25 @@ export class CloneParamsResolverService {
         if (gitContext.githubPat) {
             authToken = gitContext.githubPat;
             platform = platform ?? PlatformType.GITHUB;
-        } else if (cliContext?.isTrialMode) {
-            // Trial mode without a PAT: `context.organizationAndTeamData` is
-            // the placeholder `{organizationId: 'trial', teamId: 'trial'}`
+        } else if (!cliContext?.isTrialMode) {
+            // Trial mode without a PAT skips this whole lookup: with no
+            // PAT, `context.organizationAndTeamData` is the placeholder
+            // `{organizationId: 'trial', teamId: 'trial'}`
             // (public-pr-review.use-case.ts), not a real org — there is no
             // integration row to look up. Querying it anyway threw "invalid
             // input syntax for type uuid" against Postgres on every trial
-            // review (prod incident, 2026-09-14). Skip straight to the
-            // anonymous clone this doc comment already promises: no token,
-            // only a public repo will actually clone.
-            platform = platform ?? PlatformType.GITHUB;
-        } else {
+            // review (prod incident, 2026-09-14). It falls straight through
+            // to the `!platform` guard below with `platform` untouched:
+            // do NOT default it to GITHUB here (caught in review, PR
+            // #1954) — unlike the `githubPat` branch above, where the
+            // client explicitly signals "this is GitHub" by sending a
+            // GitHub-flavored token, a plain trial request carries no such
+            // signal, and forcing GITHUB would override that guard for
+            // exactly the self-managed hosts (GitLab CE/EE, GHES, Gitea) it
+            // exists to skip (#1541: "Do NOT guess GitHub" a few lines up).
+            // The intended case — a public github.com trial repo — already
+            // arrives with `inferredPlatform === GITHUB` from the hostname
+            // check above, so `platform` needs no help here.
             try {
                 // Passing an undefined platform is deliberate: getCloneParams
                 // then resolves the team's connected integration itself, which
@@ -213,7 +221,8 @@ export class CloneParamsResolverService {
                     context: CloneParamsResolverService.name,
                     error,
                     metadata: {
-                        organizationAndTeamData: context.organizationAndTeamData,
+                        organizationAndTeamData:
+                            context.organizationAndTeamData,
                         remoteHost: extractRemoteHost(gitContext.remote),
                         inferredPlatform,
                     },
@@ -247,7 +256,8 @@ export class CloneParamsResolverService {
                     message: `Could not parse SSH-like git remote URL: ${cloneUrl}`,
                     context: CloneParamsResolverService.name,
                     metadata: {
-                        organizationAndTeamData: context.organizationAndTeamData,
+                        organizationAndTeamData:
+                            context.organizationAndTeamData,
                         remoteHost: extractRemoteHost(cloneUrl),
                         platform,
                     },

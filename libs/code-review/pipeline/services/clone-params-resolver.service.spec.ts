@@ -327,4 +327,30 @@ describe('CloneParamsResolverService (trial mode, no PAT)', () => {
         expect(getCloneParams).not.toHaveBeenCalled();
         expect(result?.authToken).toBe('ghp-user-supplied');
     });
+
+    // Regression (caught in review, PR #1954): a self-managed host (GitLab
+    // CE/EE, GHES, Gitea) the CLI could not infer a platform for must skip
+    // the sandbox via the existing `!platform` guard, not get force-assumed
+    // as GitHub — that would attempt an anonymous GitHub-shaped clone and
+    // fetch the wrong repository entirely (#1541, "Do NOT guess GitHub").
+    it('skips the sandbox (does not force GitHub) for a self-managed host trial-mode could not infer', async () => {
+        const getCloneParams = jest.fn();
+        const service = new CloneParamsResolverService({
+            getCloneParams,
+        } as any);
+
+        const result = await service.resolve(
+            trialPipelineContext(),
+            trialCliContext({
+                gitContext: {
+                    remote: 'https://git.acme-corp.internal/group/repo.git',
+                    branch: 'main',
+                    inferredPlatform: undefined,
+                },
+            }),
+        );
+
+        expect(getCloneParams).not.toHaveBeenCalled();
+        expect(result).toBeNull();
+    });
 });
