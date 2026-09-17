@@ -153,7 +153,9 @@ jobs:
             - uses: actions/upload-artifact@v4
               with:
                   name: nightly-engine-changes
-                  path: engine-changes.txt
+                  path: |
+                      engine-changes.txt
+                      engine-files.txt
                   retention-days: 90
             - name: Notify Discord (harness broken)
               if: failure()
@@ -229,16 +231,29 @@ jobs:
               run: |
                   mkdir -p nightly-report
                   touch nightly-report/engine-changes.txt
+                  # The last green night that MEASURED. A night skipped for "no
+                  # change" or "still red" also ends green but has no result, so
+                  # it is neither the comparison nor the start of the commit list.
+                  green_sha=""
                   for id in $(gh run list -R "$GITHUB_REPOSITORY" --workflow code-review-evals-nightly.yml \
                       --branch main --status success --limit 30 --json databaseId --jq '.[].databaseId'); do
                       name=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/artifacts" \
                           --jq '[.artifacts[] | select(.expired | not) | .name | select(. == "nightly-report" or . == "nightly-finder-recall")][0] // ""')
                       if [ -n "$name" ]; then
                           gh run download "$id" -R "$GITHUB_REPOSITORY" -n "$name" -D nightly-report/last-green && echo "last green night: run $id" || true
+                          green_sha=$(gh run view "$id" -R "$GITHUB_REPOSITORY" --json headSha --jq .headSha)
                           break
                       fi
                   done
                   rm -rf nightly-report/last-green/last-green
+                  since="${green_sha:-$BASE}"
+                  echo "$since" > nightly-report/since-sha.txt
+                  # Engine files changed since that night (not only since the last
+                  # run), for the commit list and the investigation's diff.
+                  if [ -n "$green_sha" ] && [ -s nightly-report/engine-files.txt ] && git cat-file -e "$green_sha^{commit}" 2>/dev/null; then
+                      git diff --name-only "$green_sha" HEAD > changed-since-green.txt
+                      node evals/shared/engine-files.js changed nightly-report/engine-files.txt changed-since-green.txt > nightly-report/engine-changes.txt || true
+                  fi
                   # The last measured night's state (any outcome), to tell a new
                   # drop from one that already alerted.
                   for id in $(gh run list -R "$GITHUB_REPOSITORY" --workflow code-review-evals-nightly.yml \
@@ -251,17 +266,17 @@ jobs:
                           break
                       fi
                   done
-                  if [ -n "$BASE" ] && [ -s nightly-report/engine-changes.txt ]; then
+                  if [ -n "$since" ] && [ -s nightly-report/engine-changes.txt ]; then
                       mapfile -t files < nightly-report/engine-changes.txt
-                      git log --format='%h%x09%s%x09%an' "$BASE"..HEAD -- "${files[@]}" > nightly-report/commits.tsv || true
+                      git log --format='%h%x09%s%x09%an' "$since"..HEAD -- "${files[@]}" > nightly-report/commits.tsv || true
                   fi
                   touch nightly-report/commits.tsv
             - name: Report
               id: report
               if: always()
-              env:
-                  EVAL_BASE_SHA: ${{ needs.changed.outputs.base }}
               run: |
+                  EVAL_BASE_SHA=$(cat nightly-report/since-sha.txt 2>/dev/null || true)
+                  export EVAL_BASE_SHA
                   node evals/ci-report.js nightly nightly-report/nightly.json \
                       --last-green=nightly-report/last-green/nightly.json --commits=nightly-report/commits.tsv \
                       --previous-state=nightly-report/previous-state.json --state-out=nightly-report/state.json
@@ -297,7 +312,7 @@ jobs:
               run: |
                   node evals/investigation/investigate-facts.js --report=nightly-report \
                       --out=evals/investigation/results/evidence \
-                      --base="${{ needs.changed.outputs.base }}" --head="$GITHUB_SHA"
+                      --base="$(cat nightly-report/since-sha.txt 2>/dev/null)" --head="$GITHUB_SHA"
             - name: Investigate with Claude Code (subscription auth)
               env:
                   CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -357,9 +372,9 @@ jobs:
                   path: nightly-investigation
             - name: Message
               id: report
-              env:
-                  EVAL_BASE_SHA: ${{ needs.changed.outputs.base }}
               run: |
+                  EVAL_BASE_SHA=$(cat nightly-report/since-sha.txt 2>/dev/null || true)
+                  export EVAL_BASE_SHA
                   node evals/ci-report.js nightly nightly-report/nightly.json \
                       --last-green=nightly-report/last-green/nightly.json --commits=nightly-report/commits.tsv \
                       --investigation=nightly-investigation/investigation/investigation.json \
