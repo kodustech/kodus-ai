@@ -1,0 +1,132 @@
+name: "Evals: tier-0 smoke (Friday release)"
+
+# Does every tier-0 model still run a review? Asked Friday with the release
+# train, so the answer is in Discord before the 10h release meeting.
+#
+# One replayed PR per model, no judge: the real finder must finish, use its
+# tools and return findings, and the PR summary must generate, post and route.
+# Quality is the nightly's job (one model, thirty PRs); what differs per model
+# is whether the agent loop still works on it — tool calling, structured output,
+# reasoning params — which the contract tests' single-step calls do not reach.
+#
+# A red model is a per-model decision (hold it, fall back, tell the customers on
+# it), not a reason to stop the whole release.
+#
+# Models: tier0() in evals/shared/tier0-models.js.
+# Secrets (repo-level): BYOK_OPENAI_API_KEY, ANTHROPIC_API_KEY,
+# BYOK_GOOGLE_API_KEY, BYOK_MOONSHOT_API_KEY, BYOK_ZHIPU_API_KEY,
+# DISCORD_WEBHOOK_INTERNAL / DISCORD_WEBHOOK.
+
+permissions:
+    contents: read
+
+on:
+    schedule:
+        # Friday 03:00 UTC = 00:00 BRT — same slot as the release train
+        # (selfhosted-build-push.yml).
+        - cron: "0 3 * * 5"
+    workflow_dispatch:
+        inputs:
+            only_model:
+                description: "One tier-0 model id (e.g. gpt-5.4); empty = all tier-0"
+                required: false
+                default: ""
+                type: string
+
+concurrency:
+    group: code-review-evals-tier0
+    cancel-in-progress: false
+
+jobs:
+    prepare:
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        outputs:
+            models: ${{ steps.pick.outputs.models }}
+        steps:
+            - uses: actions/checkout@v6.0.2
+            - id: pick
+              env:
+                  ONLY_MODEL: ${{ inputs.only_model }}
+              # tier0-models.js is dependency-free CJS, so no install is needed.
+              run: |
+                  if [ -n "$ONLY_MODEL" ]; then
+                      models=$(node -e 'console.log(JSON.stringify([process.env.ONLY_MODEL]))')
+                  else
+                      models=$(node -e 'console.log(JSON.stringify(require("./evals/shared/tier0-models").tier0()))')
+                  fi
+                  test "$models" != "[]" || { echo "::error::no model is marked tier0 in evals/shared/tier0-models.js"; exit 1; }
+                  echo "models=$models" >> "$GITHUB_OUTPUT"
+                  echo "models: $models"
+
+    smoke:
+        needs: prepare
+        name: "smoke · ${{ matrix.model }}"
+        runs-on: ubuntu-latest
+        # Kimi and GLM throttle long tool loops (~15 min for one case).
+        timeout-minutes: 45
+        strategy:
+            fail-fast: false
+            matrix:
+                model: ${{ fromJSON(needs.prepare.outputs.models) }}
+        steps:
+            - uses: actions/checkout@v6.0.2
+            - uses: pnpm/action-setup@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+                  cache: "pnpm"
+            - name: Install deps
+              run: pnpm install --frozen-lockfile
+            - name: Create environment.ts (gitignored EE config)
+              run: |
+                  cat <<'EOF' > libs/ee/configs/environment/environment.ts
+                  import { environment as devEnvironment } from './environment.dev';
+
+                  export const environment = devEnvironment;
+                  EOF
+            - name: Review + PR summary on ${{ matrix.model }}
+              env:
+                  BYOK_OPENAI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+                  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+                  BYOK_ANTHROPIC_API_KEY: ${{ secrets.BYOK_ANTHROPIC_API_KEY }}
+                  BYOK_GOOGLE_API_KEY: ${{ secrets.BYOK_GOOGLE_API_KEY }}
+                  BYOK_MOONSHOT_API_KEY: ${{ secrets.BYOK_MOONSHOT_API_KEY }}
+                  BYOK_ZHIPU_API_KEY: ${{ secrets.BYOK_ZHIPU_API_KEY }}
+              run: node evals/tier0-smoke.js --model="${{ matrix.model }}"
+            - name: Upload result
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: tier0-smoke-${{ strategy.job-index }}
+                  path: evals/investigation/results/tier0-smoke-*.json
+                  if-no-files-found: ignore
+                  retention-days: 30
+
+    report:
+        needs: [prepare, smoke]
+        if: always() && needs.prepare.result == 'success'
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        steps:
+            - uses: actions/checkout@v6.0.2
+            - uses: actions/download-artifact@v4
+              with:
+                  pattern: tier0-smoke-*
+                  merge-multiple: true
+                  path: tier0-results
+            - name: Report
+              id: report
+              env:
+                  EVAL_MODELS: ${{ needs.prepare.outputs.models }}
+              run: node evals/ci-report.js tier0 tier0-results
+            - name: Notify Discord
+              uses: ./.github/actions/discord-notify
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  status: ${{ steps.report.outputs.status }}
+                  title: ${{ steps.report.outputs.title }}
+                  description: ${{ steps.report.outputs.description }}
+            - name: Fail when a model is red
+              if: steps.report.outputs.status != 'success'
+              run: exit 1

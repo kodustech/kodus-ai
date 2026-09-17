@@ -121,6 +121,10 @@ function preflight({ strictCoverage }) {
 
     const requiredFiles = [
         'evals/run-suite.js',
+        'evals/wiring-smoke.js',
+        'evals/tier0-smoke.js',
+        'evals/ci-report.js',
+        'evals/shared/fake-llm-server.js',
         'evals/shared/tier0-models.js',
         'evals/investigation/run-eval.js',
         'evals/investigation/run-recall.js',

@@ -1,0 +1,138 @@
+name: "Evals: nightly quality (DeepSeek, 30 PRs)"
+
+# Did the review engine get worse? Answered once a night, only when it changed.
+#
+# One model, thirty PRs. An engine regression — a prompt, a stage, a parser —
+# shows up on any model, so measuring six models per merge (the old suite) paid
+# six times for the same answer. DeepSeek V4 Flash on Fireworks is the model the
+# trial runs in production, is cheap (~$0.10/PR), and its runs are steady.
+# Thirty PRs because per-PR recall swings ±20pp: with 8 PRs only a ~14pp drop is
+# distinguishable from noise, with 30 a ~7pp one is.
+#
+# Skips when no engine path changed since the last successful night, so a quiet
+# week costs nothing. A night that fails (regression or infra) is not a baseline,
+# so the next night measures again.
+#
+# Gate: finder-recall run mean vs evals/investigation/targets.json → sets.light.
+# RATCHET: when a PR intentionally moves recall, update that floor in the same PR.
+#
+# Secrets (repo-level): BYOK_FIREWORKS_API_KEY (model), ANTHROPIC_API_KEY
+# (judge, claude-haiku-4-5), DISCORD_WEBHOOK_INTERNAL / DISCORD_WEBHOOK.
+
+permissions:
+    contents: read
+    actions: read
+
+on:
+    schedule:
+        # 05:00 UTC = 02:00 BRT. Results land before the workday, and Friday's
+        # lands before the release meeting.
+        - cron: "0 5 * * *"
+    workflow_dispatch:
+        inputs:
+            force:
+                description: "Measure even if no engine path changed"
+                type: boolean
+                default: true
+
+concurrency:
+    group: code-review-evals-nightly
+    cancel-in-progress: false
+
+env:
+    MODEL: deepseek-v4-flash@fireworks
+    CASE_SET: light
+
+jobs:
+    changed:
+        name: "engine changed since last measured night?"
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        outputs:
+            run: ${{ steps.diff.outputs.run }}
+            base: ${{ steps.diff.outputs.base }}
+        steps:
+            - uses: actions/checkout@v6.0.2
+              with:
+                  fetch-depth: 0
+            - id: diff
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
+              run: |
+                  base=$(gh run list -R "$GITHUB_REPOSITORY" --workflow code-review-evals-nightly.yml \
+                      --branch main --status success --limit 1 --json headSha --jq '.[0].headSha // ""')
+                  echo "base=$base" >> "$GITHUB_OUTPUT"
+                  if [ "$FORCE" = "true" ]; then
+                      echo "run=true" >> "$GITHUB_OUTPUT"; echo "forced"; exit 0
+                  fi
+                  if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+                      echo "run=true" >> "$GITHUB_OUTPUT"; echo "no measured night to compare with"; exit 0
+                  fi
+                  if git diff --quiet "$base" HEAD -- \
+                      libs/code-review libs/agent-harness libs/llm libs/ai-engine \
+                      libs/ee/codeBase libs/ee/codeReview libs/ee/kodyRules libs/kodyRules \
+                      evals/investigation evals/shared; then
+                      echo "run=false" >> "$GITHUB_OUTPUT"; echo "engine unchanged since $base — skipping"
+                  else
+                      echo "run=true" >> "$GITHUB_OUTPUT"
+                      git log --oneline "$base"..HEAD -- libs/code-review libs/agent-harness libs/llm libs/ai-engine \
+                          libs/ee/codeBase libs/ee/codeReview libs/ee/kodyRules libs/kodyRules evals/investigation evals/shared | head -30
+                  fi
+
+    measure:
+        name: "finder recall · DeepSeek · 30 PRs"
+        needs: changed
+        if: needs.changed.outputs.run == 'true'
+        runs-on: ubuntu-latest
+        timeout-minutes: 150
+        steps:
+            - uses: actions/checkout@v6.0.2
+            - uses: pnpm/action-setup@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+                  cache: "pnpm"
+            - name: Install deps
+              run: pnpm install --frozen-lockfile
+            - name: Create environment.ts (gitignored EE config)
+              run: |
+                  cat <<'EOF' > libs/ee/configs/environment/environment.ts
+                  import { environment as devEnvironment } from './environment.dev';
+
+                  export const environment = devEnvironment;
+                  EOF
+            - name: Run finder recall
+              id: recall
+              env:
+                  BYOK_FIREWORKS_API_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
+                  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+              # exit 1 = below the floor, 2 = infra. Both fail the job; the report
+              # step below says which.
+              run: |
+                  node evals/investigation/run-recall.js --model="$MODEL" --set="$CASE_SET" \
+                      --concurrency=6 --gate --output=evals/investigation/results/nightly.json
+            - name: Report
+              id: report
+              if: always()
+              env:
+                  EVAL_BASE_SHA: ${{ needs.changed.outputs.base }}
+              run: node evals/ci-report.js nightly evals/investigation/results/nightly.json
+            - name: Upload result
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: nightly-finder-recall
+                  path: |
+                      evals/investigation/results/nightly.json
+                      evals/investigation/results/nightly.submission.json
+                  if-no-files-found: ignore
+                  retention-days: 30
+            - name: Notify Discord
+              if: always() && steps.report.outputs.title != ''
+              uses: ./.github/actions/discord-notify
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  status: ${{ steps.recall.outcome == 'success' && 'success' || 'failure' }}
+                  title: ${{ steps.report.outputs.title }}
+                  description: ${{ steps.report.outputs.description }}

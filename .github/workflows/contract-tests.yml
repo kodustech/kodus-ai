@@ -33,11 +33,13 @@ on:
         # Daily 06:00 UTC (03:00 BRT) — after the nightly crons, before the
         # workday starts in BRT.
         - cron: "0 6 * * *"
-        # Weekly Monday 07:00 UTC — the BYOK reasoning LIVE tier only. Weekly,
+        # Weekly Friday 03:00 UTC — the BYOK reasoning LIVE tier only, in the
+        # release train's slot so every per-model signal (this and the tier-0
+        # eval smoke) is in before the release meeting. Weekly,
         # not daily, because unlike the near-free REST pings above this one
         # spends real tokens on seven providers; the drift it catches (a model
         # changing how it is configured) moves on a scale of weeks, not hours.
-        - cron: "0 7 * * 1"
+        - cron: "0 3 * * 5"
     workflow_dispatch:
     # Deliberately NOT every PR (an external API flaking must not block an
     # unrelated merge) — only PRs that touch the contract tests themselves
@@ -68,7 +70,7 @@ jobs:
         # Skipped on the weekly BYOK cron below — that schedule exists only to
         # drive `byok-live`, and re-running the daily tier there would just be
         # noise in the Actions tab.
-        if: github.event.schedule != '0 7 * * 1'
+        if: github.event.schedule != '0 3 * * 5'
         runs-on: ubuntu-latest
         timeout-minutes: 20
         # `BB_TEST_APP_PASSWORD` exists BOTH repo-level (older) and in the `ci`
@@ -208,9 +210,9 @@ jobs:
         # tokens, and that is exactly what should not happen per-push.
         #
         # `workflow_dispatch` stays, so a live check is one click away when a row
-        # changes and you want the answer before Monday.
+        # changes and you want the answer before Friday.
         if: >-
-            github.event.schedule == '0 7 * * 1' ||
+            github.event.schedule == '0 3 * * 5' ||
             github.event_name == 'workflow_dispatch'
         runs-on: ubuntu-latest
         timeout-minutes: 15
