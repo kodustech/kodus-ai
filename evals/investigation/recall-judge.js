@@ -161,7 +161,9 @@ async function judgeCall(model, apiKey, prompt) {
                     messages: [{ role: 'user', content: prompt }],
                 };
             } else if (provider === 'openai') {
-                url = 'https://api.openai.com/v1/chat/completions';
+                // JUDGE_BASE_URL: any OpenAI-compatible endpoint. The wiring smoke
+                // points it at the local scripted model so scoring runs keyless.
+                url = `${(process.env.JUDGE_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '')}/chat/completions`;
                 headers = { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' };
                 // gpt-5.x uses max_completion_tokens; no temperature override
                 // (some minis only accept the default), and reasoning eats

@@ -1,0 +1,62 @@
+name: "Evals: wiring smoke (PR)"
+
+# The PR half of the code-review evals. No model keys, no cost, a few minutes.
+#
+# It runs every eval end-to-end against a scripted local model through the real
+# self-hosted route (evals/wiring-smoke.js), so a refactor that breaks an eval's
+# hold on the engine — a renamed method, a moved file, a new dependency — fails
+# HERE, in the PR that caused it. Before this, that kind of break only showed up
+# post-merge as "INFRA error" on every model, looked like a bad key, and the
+# suite was eventually switched off.
+#
+# Quality is not measured on PRs. It is measured by:
+#   code-review-evals-nightly.yml  DeepSeek on 30 PRs, nightly, when the engine changed
+#   code-review-evals-tier0.yml    one review per tier-0 model, Friday with the release train
+#
+# Secrets: none. Safe for fork PRs.
+
+permissions:
+    contents: read
+
+on:
+    pull_request:
+        paths:
+            - "libs/code-review/**"
+            - "libs/agent-harness/**"
+            - "libs/llm/**"
+            - "libs/ai-engine/**"
+            - "libs/ee/codeBase/**"
+            - "libs/ee/codeReview/**"
+            - "libs/ee/kodyRules/**"
+            - "libs/kodyRules/**"
+            - "evals/**"
+            - ".github/workflows/code-review-evals-*.yml"
+    workflow_dispatch:
+
+concurrency:
+    group: code-review-evals-pr-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    wiring:
+        name: "eval wiring smoke (no keys)"
+        runs-on: ubuntu-latest
+        timeout-minutes: 25
+        steps:
+            - uses: actions/checkout@v6.0.2
+            - uses: pnpm/action-setup@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+                  cache: "pnpm"
+            - name: Install deps
+              run: pnpm install --frozen-lockfile
+            - name: Create environment.ts (gitignored EE config)
+              run: |
+                  cat <<'EOF' > libs/ee/configs/environment/environment.ts
+                  import { environment as devEnvironment } from './environment.dev';
+
+                  export const environment = devEnvironment;
+                  EOF
+            - name: Run wiring smoke
+              run: node evals/wiring-smoke.js
