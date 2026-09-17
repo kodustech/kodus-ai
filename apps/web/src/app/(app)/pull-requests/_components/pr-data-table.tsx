@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@components/ui/button";
 import { Skeleton } from "@components/ui/skeleton";
 import { Spinner } from "@components/ui/spinner";
@@ -16,12 +16,18 @@ import { cn } from "src/core/utils/components";
 import { PR_ROW_GRID, PrListItem } from "./pr-list-item";
 import type { PullRequestExecutionGroup } from "./types";
 
+// How many pages the list may pull by itself, per scroll, to fill the window.
+// Enough for a very selective filter to find something to show; short of
+// letting one mount walk the whole history unattended.
+const AUTO_PULL_BUDGET = 10;
+
 interface PrDataTableProps {
     data: PullRequestExecutionGroup[];
     loading?: boolean;
     hasNextPage?: boolean;
     isFetchingNextPage?: boolean;
     fetchNextPage?: () => void;
+    fetchNextPageFailed?: boolean;
     hasActiveFilters?: boolean;
     onClearFilters?: () => void;
 }
@@ -32,11 +38,14 @@ export const PrDataTable = ({
     hasNextPage,
     isFetchingNextPage,
     fetchNextPage,
+    fetchNextPageFailed,
     hasActiveFilters,
     onClearFilters,
 }: PrDataTableProps) => {
     const scrollRef = useRef<HTMLDivElement | null>(null);
     const loadMoreRef = useRef<HTMLDivElement | null>(null);
+    const autoPulls = useRef(0);
+    const [autoPullExhausted, setAutoPullExhausted] = useState(false);
 
     const virtualizer = useVirtualizer({
         count: data.length,
@@ -81,18 +90,60 @@ export const PrDataTable = ({
     // still on screen with more behind it, fetch again. It stops on its own as
     // soon as the content is tall enough to push the sentinel out of view,
     // which is the point where scrolling takes over.
+    //
+    // Two things it must NOT do on its own. A page that fails leaves the cursor
+    // (and `hasNextPage`) untouched, so re-firing on settle would retry it
+    // instantly, forever, with no backoff — the query has `retry: false`. And a
+    // filter selective enough that every page comes back empty would keep it
+    // reading history with nothing to show for it. So: never auto-pull after a
+    // failure, and spend at most AUTO_PULL_BUDGET pulls before handing the
+    // decision to the reader, who gets a button and their budget back the
+    // moment they scroll.
     useEffect(() => {
         if (!fetchNextPage || !hasNextPage || isFetchingNextPage) return;
+        if (fetchNextPageFailed) return;
         const node = loadMoreRef.current;
         const root = scrollRef.current;
         if (!node || !root) return;
 
         const nodeTop = node.getBoundingClientRect().top;
         const rootBottom = root.getBoundingClientRect().bottom;
-        if (nodeTop <= rootBottom) {
-            fetchNextPage();
+        if (nodeTop > rootBottom) return;
+
+        if (autoPulls.current >= AUTO_PULL_BUDGET) {
+            setAutoPullExhausted(true);
+            return;
         }
-    }, [fetchNextPage, hasNextPage, isFetchingNextPage, data.length]);
+        autoPulls.current += 1;
+        fetchNextPage();
+    }, [
+        fetchNextPage,
+        hasNextPage,
+        isFetchingNextPage,
+        fetchNextPageFailed,
+        data.length,
+    ]);
+
+    // A scroll is the reader asking to go further, so the budget resets. It
+    // can't reset on intersection instead: the observer above is rebuilt on
+    // every fetch and fires again on observe, which would refill the budget
+    // without anyone asking.
+    useEffect(() => {
+        const root = scrollRef.current;
+        if (!root) return;
+        const onScroll = () => {
+            autoPulls.current = 0;
+            setAutoPullExhausted(false);
+        };
+        root.addEventListener("scroll", onScroll, { passive: true });
+        return () => root.removeEventListener("scroll", onScroll);
+    }, []);
+
+    const loadMore = () => {
+        autoPulls.current = 0;
+        setAutoPullExhausted(false);
+        fetchNextPage?.();
+    };
 
     if (loading) {
         return (
@@ -242,6 +293,28 @@ export const PrDataTable = ({
                         <Spinner className="size-5" />
                     </div>
                 )}
+                {/* The way out whenever auto-pull steps back: a failed page, or
+                    a filter so selective that it spent its budget without
+                    filling the window. */}
+                {hasNextPage &&
+                    !isFetchingNextPage &&
+                    (fetchNextPageFailed || autoPullExhausted) && (
+                        <div className="flex flex-col items-center gap-2 py-4">
+                            {fetchNextPageFailed && (
+                                <p className="text-text-secondary text-xs">
+                                    Loading more pull requests failed.
+                                </p>
+                            )}
+                            <Button
+                                size="sm"
+                                variant="helper"
+                                onClick={loadMore}>
+                                {fetchNextPageFailed
+                                    ? "Try again"
+                                    : "Load more"}
+                            </Button>
+                        </div>
+                    )}
             </div>
         </div>
     );

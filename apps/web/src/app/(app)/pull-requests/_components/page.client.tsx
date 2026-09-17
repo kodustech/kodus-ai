@@ -187,6 +187,7 @@ export function PullRequestsPageClient() {
         hasNextPage,
         fetchNextPage,
         isFetchingNextPage,
+        isFetchNextPageError,
         filteredPrTotal,
     } = useInfinitePullRequestExecutions(
         {
@@ -804,6 +805,7 @@ export function PullRequestsPageClient() {
                         hasNextPage={hasNextPage}
                         isFetchingNextPage={isFetchingNextPage}
                         fetchNextPage={fetchNextPage}
+                        fetchNextPageFailed={isFetchNextPageError}
                         hasActiveFilters={activeChips.length > 0}
                         onClearFilters={clearAllFilters}
                     />
