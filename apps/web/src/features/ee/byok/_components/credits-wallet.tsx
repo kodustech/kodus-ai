@@ -519,16 +519,33 @@ const AutoTopUpRow = ({
                 // there for good if the refetch came back stale. Announce the
                 // change only once it is on screen.
                 if (saved) {
+                    // MERGE, don't replace. A 200 that omits a field would
+                    // otherwise erase it from the cache — dropping
+                    // `hasPaymentMethod` alone flips the row into "save a
+                    // card first" for a team that has one.
                     queryClient.setQueryData<CreditBalance | null>(
                         kodusCreditBalanceKey(teamId),
                         (current) =>
-                            current ? { ...current, autoTopUp: saved } : current,
+                            current
+                                ? {
+                                      ...current,
+                                      autoTopUp: {
+                                          ...current.autoTopUp,
+                                          ...saved,
+                                      },
+                                  }
+                                : current,
                     );
                 }
                 // Report what was SAVED, not what was asked for. Announcing
                 // the request and rendering the response is how a success
                 // message ends up next to a switch that disagrees with it.
-                const nowOn = saved ? saved.enabled : enabled;
+                // `?? enabled`, like the two lines below it: a response
+                // that omits the field tells us nothing, and reading that
+                // silence as `false` would announce the opposite of what was
+                // just done — the exact contradiction this block exists to
+                // remove.
+                const nowOn = saved?.enabled ?? enabled;
                 const savedAmount = saved?.amountUsd ?? amountUsd;
                 const savedThreshold = saved?.thresholdUsd ?? thresholdUsd;
                 toast({

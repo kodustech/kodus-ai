@@ -90,15 +90,23 @@ describe('Kodus provider card button hierarchy', () => {
         expect(source).not.toContain('variant={credits.exhausted ? "primary"');
     });
 
-    it('keeps one primary in the wallet: the recommended pack', () => {
+    it('keeps exactly one primary in the wallet', () => {
         const source = read(
             'apps/web/src/features/ee/byok/_components/credits-wallet.tsx',
         );
 
-        expect(source).toContain('pack === primaryPack ? "primary" : "helper"');
-        // The custom-amount action recedes instead of competing, and unlike
-        // the filled variants it also recedes while disabled.
-        expect(source).not.toContain('variant="helper"\n                            disabled={!canEdit || checkingOut || !customValid}');
+        // The rule is "one primary per surface", not "the primary is spelled
+        // this way" — the previous version of this test pinned the exact
+        // ternary that marked one credit pack as primary, so redesigning the
+        // packs into a radio group (where the ONLY primary is the confirm
+        // button, and the amounts carry no variant at all) failed a test whose
+        // invariant the redesign actually strengthened. Count instead.
+        const primaries = source.match(/variant=(?:"primary"|\{[^}]*primary[^}]*\})/g) ?? [];
+        expect(primaries).toHaveLength(1);
+
+        // And the amounts are a choice, not competing actions: one radio group
+        // owns them, so no amount can quietly become a second call to action.
+        expect(source).toContain('role="radiogroup"');
     });
 
     it('uses the app-wide icon-only form for the destructive row action', () => {
