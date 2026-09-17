@@ -1,5 +1,11 @@
 # Investigation Evals
 
+> - **Answers:** Does the finder find a PR's known bugs? (finder-recall)
+> - **Runs:** nightly, gated (`.github/workflows/code-review-evals-nightly.yml`) · every engine PR, against the scripted model (`evals/wiring-smoke.js`) · Friday, one PR per tier-0 model (`evals/tier0-smoke.js`).
+> - **Run it:** `pnpm eval:nightly` · `pnpm eval:finder:recall:smoke`
+> - **Gate:** run mean against the floors in `evals/investigation/targets.json`, only under the judge recorded there.
+> - **Cost:** a real finder model plus the judge on every PR in the set.
+
 Promptfoo harness for prompt and tool-use evals against the current review engine.
 
 Goals:
@@ -44,19 +50,8 @@ effort). What it does NOT: exploration/navigation tool changes (replay can't ser
 exploration — loop-fidelity flags it), the downstream pipeline (cap/dedup/anchoring/
 delivery), or executable proof (needs a real sandbox).
 
-Where it runs in CI:
-
-- **Nightly** (`code-review-evals-nightly.yml`) — `run-recall.js --set=light` (30 PRs)
-  on `deepseek-v4-flash@fireworks`, the model the trial runs, gated on
-  `targets.json` → `sets.light`. Skips nights when no engine path changed.
-- **Friday** (`code-review-evals-tier0.yml`) — `evals/tier0-smoke.js`: one PR per
-  tier-0 model, no judge, only "does the review still run on this model".
-- **PR** (`code-review-evals-pr.yml`) — `evals/wiring-smoke.js`: the same runner
-  against a scripted local model (`--model=eval-fake`), so a harness break fails
-  the PR that caused it. No keys.
-
 Files: `recall-assertion.js` (judge + recall/precision/fairness/fidelity),
-`recall-judge.js` (Sonnet matcher, same algo as `scripts/benchmark/scorecard.ts`),
+`recall-judge.js` (Sonnet matcher, same algo as `tests/e2e/benchmark/scorecard.ts`),
 `recall-tests.js` (builds cases from the per-PR datasets), `promptfoo-recall.yaml`.
 
 Run (ALWAYS set `PROMPTFOO_DISABLE_TEMPLATING=1` — case diffs contain `#{}`/`{{}}` that

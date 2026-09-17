@@ -1,5 +1,11 @@
 # PR-summary eval
 
+> - **Answers:** Is the PR summary generated, posted, and sent to the configured model?
+> - **Runs:** every engine PR, against the scripted model (`evals/wiring-smoke.js`) · Friday, on every tier-0 model (`evals/tier0-smoke.js`).
+> - **Run it:** `pnpm eval:pr-summary:mock` · `pnpm eval:pr-summary`
+> - **Gate:** binary assertions, with no numeric floor (see below).
+> - **Cost:** one model call per case; none mocked.
+
 Guards the **"generate PR summary on open"** feature — the AI description Kody
 writes to a PR when a client opens it.
 

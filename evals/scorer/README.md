@@ -1,5 +1,11 @@
 # Scorer do benchmark
 
+> - **Answers:** Re-score a saved submission (new judge, new metric) without re-running the model.
+> - **Runs:** on demand; a tool, not a gate.
+> - **Run it:** `node evals/scorer/cli.js --submission=<file>`
+> - **Gate:** none.
+> - **Cost:** judge calls only.
+
 Pontua uma **submission** contra os golden comments do dataset e emite um **scorecard**.
 
 Separa **pontuar** de **rodar**. Antes, `run-recall.js` fazia tudo numa passada e

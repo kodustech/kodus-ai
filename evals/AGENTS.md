@@ -1,0 +1,41 @@
+# Evals — rules for agents
+
+What runs when, and what each eval answers: [README.md](README.md). These rules keep the evals measuring the engine instead of their own scaffolding. Each one exists because breaking it has already cost weeks of evals that looked green or red for the wrong reason.
+
+## Before you finish a change
+
+- If you changed the review engine (`libs/code-review`, `libs/agent-harness`, `libs/llm`, `libs/ai-engine`, `libs/kodyRules`, `libs/ee/codeReview`, `libs/ee/kodyRules`, `libs/ee/codeBase`) or anything under `evals/`, run `pnpm eval:wiring`. It must end with "Every eval still drives the engine." A red step is a break you introduced, even when the unit tests pass.
+- If the change is meant to alter review behaviour, attach eval evidence to the PR (root `AGENTS.md`): a nightly run, or a local `pnpm eval:nightly` result compared with `observed` in `evals/investigation/targets.json`.
+
+## Writing or editing an eval
+
+- Drive the engine through its real entry points. To run without a vendor, use `--model=eval-fake` (`evals/shared/fake-llm-server.js`). Don't hand-write a stub of an engine service: stubs are what drifted (`permissionService.resolveTaskSlot`).
+- Route every model through `evals/shared/tier0-models.js` (`applyModelEnv`). An eval never reads vendor keys itself.
+- End every runner with an explicit `process.exit`: 0 pass, 1 quality or gate failure, 2 infra. The engine leaves handles open, so a runner that just returns from `main()` can hang CI after it has finished.
+- Exit 2 is "not measured". Never turn it into a pass or a warning, and always log the reason next to it. A count with no reason is how a dead judge key went unseen for weeks.
+- If the eval drives the engine, add a step to `evals/wiring-smoke.js` with `model: true`.
+
+## Floors and judges
+
+- Floors live in `evals/investigation/targets.json` (finder-recall) and `evals/kody-rules/kody-targets.json` (kody-rules). Point at them; never copy their numbers into code, docs or PR text.
+- A floor holds only under the judge recorded with its set. `evals/investigation/run-recall.js` refuses to gate across judges, so changing `JUDGE_MODEL` means recalibrating.
+- Calibrate from run-to-run noise: two full runs of the same commit, using the paired per-PR difference. The method is in the set's `__doc`. Cross-PR spread overstates the noise, and 8 PRs can't see a realistic drop.
+- If a PR moves recall on purpose, recalibrate in that PR and link both runs.
+
+## Map
+
+- `evals/wiring-smoke.js`: the PR check
+- `evals/investigation/run-recall.js`: finder-recall runner, used by the nightly
+- `evals/tier0-smoke.js`: the Friday per-model check
+- `evals/ci-report.js`: Actions job summary and Discord message
+- `evals/shared/tier0-models.js`: model id → engine route and key env names; `tier0()` is the Friday list
+- `evals/shared/fake-llm-server.js`: the scripted model
+- `evals/investigation/recall-judge.js`: the judge (`JUDGE_MODEL`, `JUDGE_API_KEY`, `JUDGE_BASE_URL`)
+- `evals/engine-gate.js`: preflight, run first by the wiring smoke
+- `evals/shared/doc-references.js`: checks the pointers in these docs
+
+## Docs
+
+- Don't copy numbers or lists into docs; point at the file that owns them.
+- The preflight checks every path, link, `pnpm eval:*` script and `node <file>` command in `evals/README.md`, `evals/AGENTS.md` and each eval's README. A stale pointer fails the PR.
+- Every eval README starts with the standard header: **Answers**, **Runs**, **Run it**, **Gate**, **Cost**. The preflight checks that too.

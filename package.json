@@ -125,7 +125,7 @@
         "eval:pr-summary:mock": "node evals/pr-summary/run.js --mock --gate",
         "eval:suite": "node evals/run-suite.js",
         "eval:wiring": "node evals/wiring-smoke.js",
-        "eval:nightly": "node evals/investigation/run-recall.js --model=deepseek-v4-flash@fireworks --set=light --concurrency=6 --gate",
+        "eval:nightly": "JUDGE_MODEL=gpt-5.4-mini node evals/investigation/run-recall.js --model=deepseek-v4-flash@fireworks --set=light --concurrency=6 --gate",
         "eval:tier0-smoke": "node evals/tier0-smoke.js",
         "eval:engine:preflight": "node evals/engine-gate.js --profile=harness",
         "eval:engine:local": "node evals/engine-gate.js --profile=local",
