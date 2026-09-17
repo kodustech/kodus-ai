@@ -55,7 +55,9 @@ jobs:
                   ONLY_MODEL: ${{ inputs.only_model }}
               # tier0-models.js is dependency-free CJS, so no install is needed.
               run: |
-                  if [ -n "$ONLY_MODEL" ]; then
+                  if [ "${{ github.event_name }}" = "pull_request" ]; then
+                      models='["claude-sonnet-4-6","kimi-k2.7-code"]' # TEMP validation
+                  elif [ -n "$ONLY_MODEL" ]; then
                       models=$(node -e 'console.log(JSON.stringify([process.env.ONLY_MODEL]))')
                   else
                       models=$(node -e 'console.log(JSON.stringify(require("./evals/shared/tier0-models").tier0()))')
