@@ -18,8 +18,13 @@ export function openaiReasoningConfig(
     // gpt-6 names its own levels when it refuses one: low/medium/high/xhigh.
     // `xhigh` has no ReasoningEffort member, so the picker stops at high.
     // Same shape as isOpenAiReasonerId's regex — one or two digits, excluding
-    // only Azure's `gpt-35-turbo` alias.
-    if (/^gpt-(?!35(\b|[-_@]))([6-9]|\d{2})(\b|[-_@])/.test(m)) {
+    // the whole pre-5 3x/4x range (gpt-40/gpt-41/gpt-45 are GPT-4.0/4.1/4.5,
+    // non-reasoning), not just Azure's `gpt-35-turbo` alias.
+    if (
+        /^gpt-(?!3[0-9](\b|[-_@]))(?!4[0-9](\b|[-_@]))([6-9]|\d{2})(\b|[-_@])/.test(
+            m,
+        )
+    ) {
         return { type: 'level', options: ['low', 'medium', 'high'] };
     }
     if (/^gpt-5(\b|[-_@])/.test(m)) {

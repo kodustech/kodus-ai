@@ -179,4 +179,23 @@ describe('model families are known to the WHOLE system, or to none of it', () =>
             options: ['low', 'medium', 'high'],
         });
     });
+
+    // Regression (kody-ai review, PR #1954): the fix above excluded ONLY
+    // `gpt-35-turbo` (the one Azure alias a prior test happened to name),
+    // but the comment's own rule — Azure dash-encodes the minor version, so
+    // `35` = 3.5 — implies the WHOLE pre-5 two-digit range is non-reasoning,
+    // not just 35. `gpt-40`/`gpt-41`/`gpt-45` (GPT-4.0/4.1/4.5) matched the
+    // old regex as reasoners, silently dropping temperature and renaming
+    // max_tokens for them — the exact failure this rule exists to prevent,
+    // just for a sibling id nobody happened to assert on.
+    it('excludes the whole pre-5 two-digit range (3x/4x), not just Azure\'s gpt-35 alias', () => {
+        for (const id of ['gpt-36', 'gpt-40', 'gpt-41', 'gpt-45', 'gpt-49-turbo']) {
+            expect(isOpenAiReasonerId(id)).toBe(false);
+        }
+        expect(reasoningConfigForModel('gpt-45-turbo')).toBeUndefined();
+        // Still recognizes real gpt-5-and-later two-digit ids — the fix must
+        // narrow the exclusion, not widen it into swallowing gpt-5x too.
+        expect(isOpenAiReasonerId('gpt-50')).toBe(true);
+        expect(isOpenAiReasonerId('gpt-55-turbo')).toBe(true);
+    });
 });
