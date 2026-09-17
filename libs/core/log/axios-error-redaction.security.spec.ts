@@ -1,0 +1,159 @@
+/**
+ * AxiosError credential redaction through the real pino `err` serializer.
+ *
+ * An AxiosError carries the live Node ClientRequest, whose `_header` is the
+ * raw request head as ONE string ("POST /x HTTP/1.1\r\nAuthorization: Basic
+ * ...\r\n"). deepSanitize redacted by key name only, so a credential inside
+ * that string reached production logs in clear text (an Azure DevOps PAT).
+ * Secrets carried in a URL query string (`?token=`) or inside a JSON-string
+ * request body leaked the same way.
+ *
+ * A failing assertion here is a REAL leak, NOT a test to relax.
+ */
+import { AddressInfo } from 'net';
+import * as http from 'http';
+
+import axios from 'axios';
+import pino from 'pino';
+
+const { deepSanitize, sanitizeString } = jest.requireActual(
+    '@libs/core/log/logger',
+) as {
+    deepSanitize: (obj: any) => any;
+    sanitizeString: (value: string) => string;
+};
+
+const FAKE_PAT = 'fake-pat-0000000000000000000000000000000000000000000000000000';
+const FAKE_WEBHOOK_TOKEN = '00112233445566778899aabbccddeeff:deadbeefdeadbeef';
+const FAKE_CLIENT_SECRET = 'fake-client-secret-1234567890';
+
+function serializeLikeLogger(err: unknown) {
+    return deepSanitize(pino.stdSerializers.err(err as Error));
+}
+
+describe('logger err serializer — AxiosError credential leaks', () => {
+    let server: http.Server;
+    let baseURL: string;
+
+    beforeAll(async () => {
+        server = http.createServer((_req, res) => {
+            res.writeHead(403, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ message: 'Access Denied' }));
+        });
+        await new Promise<void>((resolve) =>
+            server.listen(0, '127.0.0.1', resolve),
+        );
+        baseURL = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    });
+
+    afterAll(async () => {
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+    });
+
+    async function captureAxiosError(): Promise<unknown> {
+        const basic = Buffer.from(`:${FAKE_PAT}`).toString('base64');
+        try {
+            await axios.post(
+                `${baseURL}/_apis/hooks/subscriptions?api-version=7.1`,
+                {
+                    clientSecret: FAKE_CLIENT_SECRET,
+                    consumerInputs: {
+                        url: `https://webhooks.example.com/azure-repos/webhook?token=${encodeURIComponent(FAKE_WEBHOOK_TOKEN)}`,
+                    },
+                },
+                { headers: { Authorization: `Basic ${basic}` } },
+            );
+        } catch (error) {
+            return error;
+        }
+        throw new Error('expected the request to fail');
+    }
+
+    it('does not leak the Authorization header from the raw request head', async () => {
+        const error = await captureAxiosError();
+        const basic = Buffer.from(`:${FAKE_PAT}`).toString('base64');
+
+        const serialized = JSON.stringify(serializeLikeLogger(error));
+
+        expect(serialized).not.toContain(basic);
+        expect(serialized).not.toContain(FAKE_PAT);
+    });
+
+    it('does not leak secrets from the JSON-string request body', async () => {
+        const error = await captureAxiosError();
+
+        const serialized = JSON.stringify(serializeLikeLogger(error));
+
+        expect(serialized).not.toContain(FAKE_WEBHOOK_TOKEN);
+        expect(serialized).not.toContain(
+            encodeURIComponent(FAKE_WEBHOOK_TOKEN),
+        );
+        expect(serialized).not.toContain(FAKE_CLIENT_SECRET);
+    });
+
+    it('keeps the fields needed to debug the failure', async () => {
+        const error = await captureAxiosError();
+
+        const out = serializeLikeLogger(error);
+
+        expect(out.message).toBe('Request failed with status code 403');
+        expect(out.response?.status).toBe(403);
+        expect(out.response?.data).toEqual({ message: 'Access Denied' });
+        expect(out.config?.method).toBe('post');
+        expect(out.config?.url).toContain('/_apis/hooks/subscriptions');
+    });
+
+    it('replaces the live Node request/socket graph with a marker', async () => {
+        const error = await captureAxiosError();
+
+        const out = serializeLikeLogger(error);
+
+        expect(out.request).toBe('[ClientRequest]');
+        expect(out.response?.request).toBe('[ClientRequest]');
+    });
+});
+
+describe('sanitizeString — secrets embedded in strings', () => {
+    it('redacts sensitive raw header lines', () => {
+        const head =
+            'POST /x HTTP/1.1\r\nAccept: */*\r\nAuthorization: Bearer abc.def\r\nPRIVATE-TOKEN: glpat-xyz\r\nHost: example.com\r\n\r\n';
+
+        const out = sanitizeString(head);
+
+        expect(out).not.toContain('abc.def');
+        expect(out).not.toContain('glpat-xyz');
+        expect(out).toContain('Accept: */*');
+        expect(out).toContain('Host: example.com');
+    });
+
+    it('redacts sensitive query-string and form parameters', () => {
+        const out = sanitizeString(
+            'https://api.example.com/cb?state=ok&access_token=tok123&client_secret=sec456 grant_type=refresh&refresh_token=rt789',
+        );
+
+        expect(out).not.toContain('tok123');
+        expect(out).not.toContain('sec456');
+        expect(out).not.toContain('rt789');
+        expect(out).toContain('state=ok');
+        expect(out).toContain('grant_type=refresh');
+    });
+
+    it('redacts sensitive keys inside a JSON string', () => {
+        const out = sanitizeString(
+            JSON.stringify({ name: 'repo', token: 'jsonTok', nested: { apiKey: 'k1' } }),
+        );
+
+        expect(out).not.toContain('jsonTok');
+        expect(out).not.toContain('k1');
+        expect(out).toContain('"name":"repo"');
+    });
+
+    it('returns the same reference for ordinary strings', () => {
+        const stack =
+            'AxiosError: Request failed with status code 403\n    at settle (/app/node_modules/axios/dist/node/axios.cjs:2090:12)';
+        const message = 'Error creating/replacing hook: tokens used 42';
+
+        expect(sanitizeString(stack)).toBe(stack);
+        expect(sanitizeString(message)).toBe(message);
+    });
+});

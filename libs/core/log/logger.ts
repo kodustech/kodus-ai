@@ -1,3 +1,6 @@
+import { Agent, ClientRequest, IncomingMessage } from 'http';
+import { Socket } from 'net';
+
 import { trace } from '@opentelemetry/api';
 import pino from 'pino';
 
@@ -279,6 +282,9 @@ const SENSITIVE_KEYS = new Set([
     'clientsecret',
     'privatekey',
     'bearertoken',
+    // GitLab PAT header (`PRIVATE-TOKEN`) and webhook secret header.
+    'privatetoken',
+    'xgitlabtoken',
     // Amazon Bedrock BYOK credentials (normalized: lowercased, separators
     // stripped). These travel under aws* field names inside a credential's
     // `settings` and must be redacted at any log depth.
@@ -331,10 +337,60 @@ function isAuthorityTerminator(char: string | undefined): boolean {
 }
 
 /**
+ * Strips credentials embedded in a string: URL userinfo, sensitive query or
+ * form parameters, raw HTTP header lines and JSON key/value pairs. Key-based
+ * redaction in `deepSanitize` can't see these because the secret lives inside
+ * one string value — e.g. an AxiosError's `request._header` or `config.data`.
+ * Returns the original reference when nothing was redacted.
+ */
+function sanitizeString(value: string): string {
+    return redactEmbeddedSecrets(redactUrlUserinfo(value));
+}
+
+// Cheap pre-check so ordinary strings (stacks, messages) skip the regexes.
+// Loose on purpose: a false hit only costs the scans below.
+const EMBEDDED_SECRET_HINT =
+    /auth|cookie|token|secret|passw|key|credential|jwt|ssn|cpf|cvv|card/i;
+
+// Linear patterns (no nested or overlapping quantifiers).
+const HEADER_LINE_PATTERN =
+    /(^|[\r\n])([ \t]*)([A-Za-z0-9-]{1,100})([ \t]*:[ \t]*)([^\r\n]*)/g;
+const QUERY_PARAM_PATTERN =
+    /(^|[?&;\s])([A-Za-z0-9_.-]{1,100})=([^&#\s"'<>]*)/g;
+const JSON_PAIR_PATTERN = /"([^"\\]{1,100})"(\s*:\s*)"((?:[^"\\]|\\.)*)"/g;
+
+function redactEmbeddedSecrets(value: string): string {
+    if (!EMBEDDED_SECRET_HINT.test(value)) {
+        return value;
+    }
+
+    const result = value
+        .replace(
+            HEADER_LINE_PATTERN,
+            (match, lineStart, indent, name, separator, headerValue) =>
+                isSensitiveKey(name) && headerValue
+                    ? `${lineStart}${indent}${name}${separator}[REDACTED]`
+                    : match,
+        )
+        .replace(
+            QUERY_PARAM_PATTERN,
+            (match, prefix, name, paramValue) =>
+                isSensitiveKey(name) && paramValue
+                    ? `${prefix}${name}=[REDACTED]`
+                    : match,
+        )
+        .replace(JSON_PAIR_PATTERN, (match, name, separator) =>
+            isSensitiveKey(name) ? `"${name}"${separator}"[REDACTED]"` : match,
+        );
+
+    return result === value ? value : result;
+}
+
+/**
  * Strips credentials embedded in URL strings using a linear scan.
  * e.g. "mongodb://user:secret@host/db" → "mongodb://user:[REDACTED]@host/db"
  */
-function sanitizeString(value: string): string {
+function redactUrlUserinfo(value: string): string {
     let searchFrom = 0;
     let lastCommittedIndex = 0;
     let result = '';
@@ -428,6 +484,22 @@ function deepSanitize(obj: any, seen?: WeakSet<object>, depth = 0): any {
             return sanitized !== obj ? sanitized : obj;
         }
         return obj;
+    }
+
+    // Live Node HTTP objects (an AxiosError's `request`, sockets, agents) carry
+    // the raw request head with credentials and TLS session buffers. Nothing
+    // in them is worth logging, so don't walk them.
+    if (obj instanceof ClientRequest) {
+        return '[ClientRequest]';
+    }
+    if (obj instanceof IncomingMessage) {
+        return '[IncomingMessage]';
+    }
+    if (obj instanceof Socket) {
+        return '[Socket]';
+    }
+    if (obj instanceof Agent) {
+        return '[Agent]';
     }
 
     if (
