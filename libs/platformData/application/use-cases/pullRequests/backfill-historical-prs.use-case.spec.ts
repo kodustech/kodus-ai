@@ -158,7 +158,11 @@ describe('BackfillHistoricalPRsUseCase.transformPullRequestToDocument', () => {
         });
 
         expect(result).toEqual({
-            title: '',
+            // Not '' — PullRequestsModel requires a non-empty `title`
+            // (Mongoose's String required-check tests `.length`), so an
+            // empty title 500'd the save (prod, 157 occurrences). See
+            // backfill-historical-prs.title.spec.ts.
+            title: 'Untitled',
             status: 'unknown',
             merged: false,
             number: undefined,

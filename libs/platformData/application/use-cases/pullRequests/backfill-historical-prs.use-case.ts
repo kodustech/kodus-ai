@@ -391,7 +391,15 @@ export class BackfillHistoricalPRsUseCase {
         const repoData = pr.head?.repo || pr.base?.repo;
 
         return {
-            title: pr.title || '',
+            // `pr.title || ''` looked defensive but wasn't: PullRequestsModel
+            // declares `title` as a required Mongoose String, and Mongoose's
+            // default required-check for String rejects an empty string too
+            // (`SchemaString._checkRequired` tests `.length`, not just
+            // null/undefined) — an empty title 500'd with the exact same
+            // "title: Path `title` is required." (prod, 157 occurrences).
+            // 'Untitled' matches the fallback already used elsewhere in this
+            // codebase (commentManager.service.ts) for the same case.
+            title: pr.title || 'Untitled',
             status: pr.state || 'unknown',
             merged: isMerged,
             // Same provider split as the loop above: GitHub sends `number`,
