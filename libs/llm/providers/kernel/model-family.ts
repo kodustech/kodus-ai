@@ -98,7 +98,9 @@ export function isOpenAiReasonerId(model?: string): boolean {
     const m = model.toLowerCase();
     return (
         /^o[134](\b|[-_@])/.test(m) ||
-        /^gpt-5(\b|[-_@])/.test(m) ||
+        // gpt-5 and later. One digit only: `\d{2,}` also swallows Azure's legacy
+        // `gpt-35-turbo`, and a false reasoner drops temperature + renames max_tokens.
+        /^gpt-[5-9](\b|[-_@])/.test(m) ||
         /deep-research/.test(m)
     );
 }
