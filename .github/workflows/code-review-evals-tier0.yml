@@ -118,7 +118,7 @@ jobs:
                   merge-multiple: true
                   path: tier0-results
             # Last run's results, so a failure that hasn't changed since last week
-            # reads as "igual à semana passada" instead of looking new.
+            # reads as "same as last week" instead of looking new.
             - name: Previous run
               env:
                   GH_TOKEN: ${{ github.token }}

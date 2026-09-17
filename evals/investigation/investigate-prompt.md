@@ -58,17 +58,17 @@ Your FINAL message must be, in this order:
 ```json
 {
   "verdict": "regression | noise | eval | unclear",
-  "confidence": "alta | média | baixa",
-  "summary": "<2-3 sentences in Brazilian Portuguese for the team's Discord: what happened and the most likely cause>",
+  "confidence": "high | medium | low",
+  "summary": "<2-3 sentences for the team's Discord: what happened and the most likely cause>",
   "suspects": [
-    { "commit": "<short sha or empty>", "file": "<path:line or empty>", "why": "<one sentence in Portuguese>" }
+    { "commit": "<short sha or empty>", "file": "<path:line or empty>", "why": "<one sentence>" }
   ],
-  "confirm": "<one command or step, in Portuguese>"
+  "confirm": "<one command or step>"
 }
 ```
 
 Rules: this investigation is strictly read-only. File writes and shell commands
 are denied by policy, so don't attempt them. Don't invent code, commits or
 numbers that aren't in the evidence or the repo. If you can't tie the drop to a
-change, say `noise` or `unclear` with `baixa` confidence, and keep `suspects`
+change, say `noise` or `unclear` with `low` confidence, and keep `suspects`
 empty. That's a useful answer too.

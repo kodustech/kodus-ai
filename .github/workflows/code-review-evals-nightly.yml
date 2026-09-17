@@ -165,9 +165,9 @@ jobs:
                   webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
                   status: failure
                   nodetail: "true"
-                  title: "❌ Evals · harness quebrado, não mediu"
+                  title: "❌ Evals · harness broken, did not measure"
                   description: |
-                      Wiring smoke falhou antes de gastar · `pnpm eval:wiring` reproduz
+                      Wiring smoke failed before spending anything · `pnpm eval:wiring` reproduces it
                       [run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
     measure:
@@ -347,7 +347,7 @@ jobs:
                   }
                   node evals/investigation/extract-investigation.js investigation/agent.log investigation
                   if [ -f investigation/investigation.md ]; then
-                      { echo "## 🤖 Leitura do Claude (não verificada)"; echo; cat investigation/investigation.md; } >> "$GITHUB_STEP_SUMMARY"
+                      { echo "## 🤖 Claude's reading (unverified)"; echo; cat investigation/investigation.md; } >> "$GITHUB_STEP_SUMMARY"
                   fi
             - uses: actions/upload-artifact@v4
               if: always()

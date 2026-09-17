@@ -10,7 +10,7 @@ const fs = require('fs');
 const path = require('path');
 
 const VERDICTS = new Set(['regression', 'noise', 'eval', 'unclear']);
-const CONFIDENCE = new Set(['alta', 'média', 'baixa']);
+const CONFIDENCE = new Set(['high', 'medium', 'low']);
 
 function extractInvestigation(raw) {
     const fences = [...String(raw || '').matchAll(/```json\s*\n([\s\S]*?)\n```/g)];

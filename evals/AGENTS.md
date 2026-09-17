@@ -31,7 +31,7 @@ What runs when, and what each eval answers: [README.md](README.md). These rules 
 - `evals/wiring-smoke.js`: the PR check
 - `evals/investigation/run-recall.js`: finder-recall runner, used by the nightly
 - `evals/tier0-smoke.js`: the Friday per-model check
-- `evals/ci-report.js`: Actions job summary and Discord message (Portuguese; facts first, the agent's reading only on red nights)
+- `evals/ci-report.js`: Actions job summary and Discord message (English, like every other notification here; facts first, the agent's reading only on red nights)
 - `evals/investigation/gate.js` + `evals/investigation/confirm-gate.js`: the floor check, and the second run that confirms a drop before anyone is alerted
 - `evals/investigation/nightly-compare.js`: tonight vs the last green night (per-PR recall, known bugs lost and gained, noise, cost)
 - `evals/investigation/investigate-facts.js` + `evals/investigation/investigate-prompt.md` + `evals/investigation/extract-investigation.js`: the red-night investigation. The facts are built deterministically; a read-only Claude Code agent reads them; the extractor accepts only a well-formed verdict

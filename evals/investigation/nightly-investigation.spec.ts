@@ -77,18 +77,18 @@ describe('investigation contract', () => {
     const answer = (json: string) => `## Report\nThe drop is noise.\n\n\`\`\`json\n${json}\n\`\`\``;
 
     it('takes the last json block and the report before it', () => {
-        const raw = `${answer('{"verdict":"unclear","confidence":"baixa","summary":"x"}')}\n\n${answer('{"verdict":"regression","confidence":"média","summary":"Queda veio de abc.","suspects":[{"commit":"abc","file":"libs/a.ts:3","why":"mudou"},{"why":"sem alvo"}],"confirm":"rodar"}')}`;
+        const raw = `${answer('{"verdict":"unclear","confidence":"low","summary":"x"}')}\n\n${answer('{"verdict":"regression","confidence":"medium","summary":"The drop came from abc.","suspects":[{"commit":"abc","file":"libs/a.ts:3","why":"it changed"},{"why":"no target"}],"confirm":"run it"}')}`;
         const { investigation, report } = extractInvestigation(raw);
-        expect(investigation).toEqual({ verdict: 'regression', confidence: 'média', summary: 'Queda veio de abc.', suspects: [{ commit: 'abc', file: 'libs/a.ts:3', why: 'mudou' }], confirm: 'rodar' });
+        expect(investigation).toEqual({ verdict: 'regression', confidence: 'medium', summary: 'The drop came from abc.', suspects: [{ commit: 'abc', file: 'libs/a.ts:3', why: 'it changed' }], confirm: 'run it' });
         expect(report).toContain('The drop is noise.');
     });
 
     it.each([
         ['no block', 'just prose'],
         ['bad json', answer('{"verdict":')],
-        ['unknown verdict', answer('{"verdict":"guilty","confidence":"alta","summary":"x"}')],
-        ['unknown confidence', answer('{"verdict":"noise","confidence":"high","summary":"x"}')],
-        ['empty summary', answer('{"verdict":"noise","confidence":"alta","summary":" "}')],
+        ['unknown verdict', answer('{"verdict":"guilty","confidence":"high","summary":"x"}')],
+        ['unknown confidence', answer('{"verdict":"noise","confidence":"certain","summary":"x"}')],
+        ['empty summary', answer('{"verdict":"noise","confidence":"high","summary":" "}')],
     ])('refuses %s', (_label, raw) => {
         expect(extractInvestigation(raw).error).toBeTruthy();
     });
