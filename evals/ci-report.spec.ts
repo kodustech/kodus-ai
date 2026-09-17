@@ -56,6 +56,20 @@ describe('nightly report', () => {
         expect(report.title).toContain('not gated');
     });
 
+    it('says which key is missing when the run stopped before measuring', () => {
+        const report = nightlyReport({ model: 'deepseek-v4-flash@fireworks', error: 'Missing judge key for gpt-5.4-mini (openai): set JUDGE_API_KEY.' });
+        expect(report.status).toBe('failure');
+        expect(report.title).toContain('not measured');
+        expect(report.description).toContain('set JUDGE_API_KEY');
+    });
+
+    it('does not blame the floor when nothing was measured', () => {
+        const report = nightlyReport(
+            nightlyResult({ infraFailures: 30, gate: { status: 'fail', checks: [{ name: 'recall_mean', actual: null, floor: 0.26, pass: false }] }, rows: [{ caseId: 'a', status: 'infra', reason: 'no API key' }] }),
+        );
+        expect(report.description).not.toContain('Below floor');
+    });
+
     it('is red when the run never wrote a result', () => {
         expect(nightlyReport(null).status).toBe('failure');
     });
@@ -102,6 +116,7 @@ describe('tier-0 report', () => {
 describe('tier-0 failure classification', () => {
     it.each([
         'Incorrect API key provided: sk-...',
+        'no API key for claude-sonnet-4-6 — set one of API_ANTHROPIC_API_KEY/ANTHROPIC_API_KEY/BYOK_ANTHROPIC_API_KEY',
         'agent loop finished with error: API key is invalid. (finishReason=error, steps=0, tokens=0)',
         'Your account org-1 is suspended due to insufficient balance',
         'AI_APICallError: Cannot connect to API: connect ECONNREFUSED',

@@ -28,7 +28,7 @@ const DEFAULT_CASE = 'add-guest-management-functionality-to-existing-bookings-ca
 const MIN_TOOL_CALLS = 3;
 const MIN_FINDINGS = 1;
 const RETRY_DELAY_MS = 60 * 1000;
-const INFRA = /\b(401|403|429|402)\b|unauthori[sz]ed|(invalid|incorrect|missing|expired).{0,20}(api.?key|x-api-key|token|credential)|(api.?key|x-api-key|token|credential).{0,20}(invalid|incorrect|expired|revoked)|suspended|permission.?denied|quota|rate.?limit|insufficient|billing|credit balance|exceeded your|cannot connect|ECONNREFUSED|ENOTFOUND|ECONNRESET|ETIMEDOUT|EAI_AGAIN|fetch failed|socket hang up|overloaded|\b50[234]\b/i;
+const INFRA = /\b(401|403|429|402)\b|unauthori[sz]ed|no api key|(invalid|incorrect|missing|expired).{0,20}(api.?key|x-api-key|token|credential)|(api.?key|x-api-key|token|credential).{0,20}(invalid|incorrect|expired|revoked)|suspended|permission.?denied|quota|rate.?limit|insufficient|billing|credit balance|exceeded your|cannot connect|ECONNREFUSED|ENOTFOUND|ECONNRESET|ETIMEDOUT|EAI_AGAIN|fetch failed|socket hang up|overloaded|\b50[234]\b/i;
 
 function parseArgs(argv) {
     return Object.fromEntries(

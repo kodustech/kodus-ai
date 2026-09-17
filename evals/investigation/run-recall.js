@@ -276,10 +276,15 @@ async function main() {
         return;
     }
 
-    const { loadJudgeKey } = require('./recall-judge');
+    const { loadJudgeKey, JUDGE_MODEL, providerFor } = require('./recall-judge');
     if (!loadJudgeKey()) {
-        console.error(
-            'Missing judge key: set API_ANTHROPIC_API_KEY, ANTHROPIC_API_KEY, or BYOK_ANTHROPIC_API_KEY.',
+        const error = `Missing judge key for ${JUDGE_MODEL} (${providerFor(JUDGE_MODEL)}): set JUDGE_API_KEY.`;
+        console.error(error);
+        // Still write a result, so the report says what was missing instead of
+        // "crashed before writing its result".
+        writeJson(
+            args.output || path.join(RESULTS_DIR, `finder-recall-${args.model.replace(/[^\w.-]+/g, '-')}.json`),
+            { model: args.model, cases: 0, infraFailures: 0, error, metrics: {}, rows: [], gate: { status: 'off' } },
         );
         process.exit(2);
     }

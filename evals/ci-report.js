@@ -55,6 +55,15 @@ function nightlyReport(result, env = {}) {
         };
     }
 
+    if (result.error) {
+        return {
+            status: 'failure',
+            title: '⚠️ Nightly eval: not measured (infra)',
+            description: [`${result.model}: ${result.error}`, url && `Run: ${url}`].filter(Boolean).join('\n'),
+            markdown: `## ⚠️ Nightly eval: not measured (infra)\n\n${result.model}: ${result.error}`,
+        };
+    }
+
     const m = result.metrics || {};
     const gate = result.gate || {};
     const check = (name) => (gate.checks || []).find((c) => c.name === name);
@@ -80,7 +89,7 @@ function nightlyReport(result, env = {}) {
 
     const description = [
         `${result.model} · ${result.cases} PRs · recall ${pct(m.recall_mean)}${recallCheck ? ` (floor ${pct(recallCheck.floor)}${observed.recall_mean ? `, calibrated ${pct(observed.recall_mean)}` : ''})` : ''} · precision ${pct(m.precision_mean)}`,
-        failed.length ? `Below floor: ${failed.join('; ')}` : null,
+        failed.length && !infra ? `Below floor: ${failed.join('; ')}` : null,
         infraReasons.length ? `Infra: ${infraReasons.join(' | ')}` : null,
         compare ? `Engine changes measured: ${compare}` : null,
         url ? `Run: ${url}` : null,
