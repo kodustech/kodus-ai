@@ -4,7 +4,8 @@ What runs when, and what each eval answers: [README.md](README.md). These rules 
 
 ## Before you finish a change
 
-- If you changed the review engine (`libs/code-review`, `libs/agent-harness`, `libs/llm`, `libs/ai-engine`, `libs/kodyRules`, `libs/ee/codeReview`, `libs/ee/kodyRules`, `libs/ee/codeBase`) or anything under `evals/`, run `pnpm eval:wiring`. It must end with "Every eval still drives the engine." A red step is a break you introduced, even when the unit tests pass.
+- If you changed anything under `libs/`, `evals/` or `test/fixtures/`, or a dependency, run `pnpm eval:wiring`. The evals load far more than the review folders (`libs/core`, `libs/common`, `libs/identity`, …). It must end with "Every eval still drives the engine." A red step is a break you introduced, even when the unit tests pass.
+- If the smoke reports loaded files outside the paths filter, widen `.github/workflows/code-review-evals-pr.yml`. Never narrow it back to a hand-picked folder list.
 - If the change is meant to alter review behaviour, attach eval evidence to the PR (root `AGENTS.md`): a nightly run, or a local `pnpm eval:nightly` result compared with `observed` in `evals/investigation/targets.json`.
 
 ## Writing or editing an eval
@@ -32,6 +33,7 @@ What runs when, and what each eval answers: [README.md](README.md). These rules 
 - `evals/shared/fake-llm-server.js`: the scripted model
 - `evals/investigation/recall-judge.js`: the judge (`JUDGE_MODEL`, `JUDGE_API_KEY`, `JUDGE_BASE_URL`)
 - `evals/engine-gate.js`: preflight, run first by the wiring smoke
+- `evals/shared/trace-loaded.js` + `evals/shared/engine-files.js`: record what each eval loads; PR filter coverage and the nightly's "did it change" check
 - `evals/shared/doc-references.js`: checks the pointers in these docs
 
 ## Docs

@@ -125,6 +125,8 @@ function preflight({ strictCoverage }) {
         'evals/tier0-smoke.js',
         'evals/ci-report.js',
         'evals/shared/fake-llm-server.js',
+        'evals/shared/trace-loaded.js',
+        'evals/shared/engine-files.js',
         'evals/shared/tier0-models.js',
         'evals/investigation/run-eval.js',
         'evals/investigation/run-recall.js',

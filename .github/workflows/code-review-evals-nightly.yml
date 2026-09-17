@@ -10,9 +10,11 @@ name: "Evals: nightly quality (DeepSeek, 30 PRs)"
 # 30-PR mean moves ~5pp, so the floor catches a ~11pp drop (8 PRs could not tell
 # a drop twice that size from noise).
 #
-# Skips when no engine path changed since the last successful night, so a quiet
-# week costs nothing. A night that fails (regression or infra) is not a baseline,
-# so the next night measures again.
+# Measures only when a file finder-recall actually loads changed since the last
+# successful night (or the lockfile, or the floors). The list is not written by
+# hand: the wiring smoke records every repo file the eval loads, because a
+# hand-picked folder list missed libs/core, libs/common and more. A night that
+# fails (regression or infra) is not a baseline, so the next night measures again.
 #
 # Gate: finder-recall run mean vs evals/investigation/targets.json → sets.light.
 # RATCHET: when a PR intentionally moves recall, update that floor in the same PR.
@@ -53,7 +55,7 @@ jobs:
     changed:
         name: "engine changed since last measured night?"
         runs-on: ubuntu-latest
-        timeout-minutes: 5
+        timeout-minutes: 20
         outputs:
             run: ${{ steps.diff.outputs.run }}
             base: ${{ steps.diff.outputs.base }}
@@ -61,6 +63,25 @@ jobs:
             - uses: actions/checkout@v6.0.2
               with:
                   fetch-depth: 0
+            - uses: pnpm/action-setup@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+                  cache: "pnpm"
+            - name: Install deps
+              run: pnpm install --frozen-lockfile
+            - name: Create environment.ts (gitignored EE config)
+              run: |
+                  cat <<'EOF' > libs/ee/configs/environment/environment.ts
+                  import { environment as devEnvironment } from './environment.dev';
+
+                  export const environment = devEnvironment;
+                  EOF
+            # Against the scripted model, no keys: a broken harness would spend the
+            # night's budget measuring nothing. Also records the files finder-recall
+            # loads — the only changes this night can measure.
+            - name: Wiring smoke + files finder-recall loads
+              run: node evals/wiring-smoke.js --engine-files=engine-files.txt
             - id: diff
               env:
                   GH_TOKEN: ${{ github.token }}
@@ -75,16 +96,25 @@ jobs:
                   if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
                       echo "run=true" >> "$GITHUB_OUTPUT"; echo "no measured night to compare with"; exit 0
                   fi
-                  if git diff --quiet "$base" HEAD -- \
-                      libs/code-review libs/agent-harness libs/llm libs/ai-engine \
-                      libs/ee/codeBase libs/ee/codeReview libs/ee/kodyRules libs/kodyRules \
-                      evals/investigation evals/shared; then
-                      echo "run=false" >> "$GITHUB_OUTPUT"; echo "engine unchanged since $base — skipping"
-                  else
+                  git diff --name-only "$base" HEAD > changed-files.txt
+                  node evals/shared/engine-files.js changed engine-files.txt changed-files.txt > engine-changes.txt
+                  if [ -s engine-changes.txt ]; then
                       echo "run=true" >> "$GITHUB_OUTPUT"
-                      git log --oneline "$base"..HEAD -- libs/code-review libs/agent-harness libs/llm libs/ai-engine \
-                          libs/ee/codeBase libs/ee/codeReview libs/ee/kodyRules libs/kodyRules evals/investigation evals/shared | head -30
+                      echo "$(wc -l < engine-changes.txt) measured file(s) changed since $base:"; head -50 engine-changes.txt
+                  else
+                      echo "run=false" >> "$GITHUB_OUTPUT"
+                      echo "none of the $(wc -l < engine-files.txt) files finder-recall loads changed since $base — skipping"
                   fi
+            - name: Notify Discord (harness broken)
+              if: failure()
+              uses: ./.github/actions/discord-notify
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  status: failure
+                  title: "❌ Nightly eval: the eval harness is broken — nothing was measured"
+                  description: |
+                      The wiring smoke failed before spending anything, so tonight was not measured. The failing step and its log are in the run; `pnpm eval:wiring` reproduces it locally.
+                      Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
     measure:
         name: "finder recall · DeepSeek · 30 PRs"

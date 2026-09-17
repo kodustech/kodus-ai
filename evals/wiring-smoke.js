@@ -13,7 +13,13 @@
 // deterministic evals. It measures nothing. It fails when the harness can no
 // longer drive the engine, in the PR that broke it.
 //
-//   node evals/wiring-smoke.js
+// It also records every repo file each step loads (shared/trace-loaded.js) and
+// fails if one falls outside the PR workflow's `paths` filter, so the check
+// can't stop firing for code the evals depend on. With --engine-files=<file> it
+// writes what finder-recall loaded: the nightly measures only when one of those
+// files changed.
+//
+//   node evals/wiring-smoke.js [--engine-files=<file>]
 //
 // Exit: 0 every step drove the engine / 1 at least one step broke.
 const fs = require('fs');
@@ -21,8 +27,10 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 const { startFakeLlmServer } = require('./shared/fake-llm-server');
+const { readTrace, uncovered } = require('./shared/engine-files');
 
 const ROOT = path.join(__dirname, '..');
+const PR_WORKFLOW = '.github/workflows/code-review-evals-pr.yml';
 const FINDER_CASE = 'add-guest-management-functionality-to-existing-bookings-cal-com';
 // Each step takes seconds against the scripted model. Minutes means it hangs
 // (a finished eval that never exits), which is a break in its own right.
@@ -51,6 +59,12 @@ function run(cmd, args, env) {
     });
 }
 
+function prWorkflowPaths() {
+    const yaml = require('js-yaml');
+    const workflow = yaml.load(fs.readFileSync(path.join(ROOT, PR_WORKFLOW), 'utf8'));
+    return workflow?.on?.pull_request?.paths || [];
+}
+
 function readJson(file) {
     try {
         return JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -60,9 +74,11 @@ function readJson(file) {
 }
 
 async function main() {
+    const engineFilesOut = (process.argv.find((a) => a.startsWith('--engine-files=')) || '').split('=')[1];
     const server = await startFakeLlmServer();
     const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'eval-wiring-'));
     const finderOut = path.join(scratch, 'finder-recall-eval-fake.json');
+    const traceDir = path.join(scratch, 'trace');
 
     const env = {
         ...process.env,
@@ -74,6 +90,8 @@ async function main() {
         JUDGE_BASE_URL: server.url,
         JUDGE_API_KEY: 'fake',
         RECALL_DUMP: '',
+        TRACE_LOADED_DIR: traceDir,
+        NODE_OPTIONS: `${process.env.NODE_OPTIONS || ''} --require ${path.join(__dirname, 'shared', 'trace-loaded.js')}`.trim(),
     };
 
     // `model: true` steps must reach the scripted model at least once — a step
@@ -105,7 +123,7 @@ async function main() {
     for (const step of steps) {
         const before = server.stats.requests;
         // eslint-disable-next-line no-await-in-loop
-        const { code, timedOut, output, ms } = await run(process.execPath, step.args, env);
+        const { code, timedOut, output, ms } = await run(process.execPath, step.args, { ...env, TRACE_LOADED_LABEL: step.name });
         const calls = server.stats.requests - before;
         let problem = null;
         if (timedOut) problem = `did not exit within ${STEP_TIMEOUT_MS / 60000} min`;
@@ -117,12 +135,32 @@ async function main() {
     }
 
     await server.close();
+
+    // The PR check must fire on every file an eval loads.
+    const loaded = fs.existsSync(traceDir) ? readTrace(traceDir) : [];
+    const outside = uncovered(loaded, prWorkflowPaths());
+    const coverageProblem = !loaded.length
+        ? 'recorded no loaded files — the trace hook did not run'
+        : outside.length
+          ? `${outside.length} loaded file(s) outside the paths filter of ${PR_WORKFLOW}, e.g. ${outside.slice(0, 5).join(', ')}`
+          : null;
+    console.log(`${coverageProblem ? '❌' : '✅'} ${'pr paths filter'.padEnd(17)} ${loaded.length} repo files loaded${coverageProblem ? `  — ${coverageProblem}` : ', all covered'}`);
+
+    if (engineFilesOut) {
+        const finderFiles = fs.existsSync(traceDir) ? readTrace(traceDir, 'finder-recall') : [];
+        fs.writeFileSync(engineFilesOut, `${finderFiles.join('\n')}\n`);
+        console.log(`   engine files for the nightly: ${finderFiles.length} → ${engineFilesOut}`);
+    }
     fs.rmSync(scratch, { recursive: true, force: true });
 
     const broken = results.filter((r) => r.problem);
-    if (!broken.length) {
+    if (!broken.length && !coverageProblem) {
         console.log('\nEvery eval still drives the engine.');
         return 0;
+    }
+    if (coverageProblem && !broken.length) {
+        console.log(`\nAdd the missing paths to ${PR_WORKFLOW} so the PR check runs when they change.`);
+        return 1;
     }
     for (const r of broken) {
         const tail = r.output.split('\n').filter((line) => line.trim()).slice(-40).join('\n');

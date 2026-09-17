@@ -19,17 +19,18 @@ permissions:
     contents: read
 
 on:
+    # Every root the evals load from. Not a list of "engine" folders: the evals
+    # also load libs/core, libs/common, libs/identity and more, and a hand-picked
+    # list missed them. evals/wiring-smoke.js records what each eval loads and
+    # fails if a file falls outside these paths.
     pull_request:
         paths:
-            - "libs/code-review/**"
-            - "libs/agent-harness/**"
-            - "libs/llm/**"
-            - "libs/ai-engine/**"
-            - "libs/ee/codeBase/**"
-            - "libs/ee/codeReview/**"
-            - "libs/ee/kodyRules/**"
-            - "libs/kodyRules/**"
+            - "libs/**"
             - "evals/**"
+            - "test/fixtures/**"
+            - "package.json"
+            - "pnpm-lock.yaml"
+            - "tsconfig*.json"
             - ".github/workflows/code-review-evals-*.yml"
     workflow_dispatch:
 

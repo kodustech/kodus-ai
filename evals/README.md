@@ -8,11 +8,13 @@ Numbers and lists (floors, tier-0 models, schedules, secrets) are not copied her
 
 | When | Question | What runs | Owner of the details |
 |---|---|---|---|
-| Every PR that touches the engine | Can the evals still drive the engine? | `evals/wiring-smoke.js`: every model-backed eval end to end against a scripted local model, plus the deterministic evals. Measures nothing. No keys, ~10s. | `.github/workflows/code-review-evals-pr.yml` |
-| Nightly, only if the engine changed since the last green night | Did review quality get worse? | finder-recall on the `light` case set with one cheap model, gated on a calibrated floor | `.github/workflows/code-review-evals-nightly.yml`, `evals/investigation/targets.json` → `sets.light` |
+| Every PR touching `libs/`, `evals/`, test fixtures or dependencies | Can the evals still drive the engine? | `evals/wiring-smoke.js`: every model-backed eval end to end against a scripted local model, plus the deterministic evals. Measures nothing. No keys, ~10s. | `.github/workflows/code-review-evals-pr.yml` |
+| Nightly, only if a file finder-recall loads changed since the last green night | Did review quality get worse? | finder-recall on the `light` case set with one cheap model, gated on a calibrated floor | `.github/workflows/code-review-evals-nightly.yml`, `evals/investigation/targets.json` → `sets.light` |
 | Friday, in the release train slot | Does every tier-0 model still run a review? | `evals/tier0-smoke.js`: one replayed PR per model (no judge), plus the PR-summary eval | `.github/workflows/code-review-evals-tier0.yml`, `evals/shared/tier0-models.js` |
 
 Nightly and Friday post to Discord and write an Actions job summary; results are uploaded as artifacts. Cost: $0 per PR; ~$3.5 per measured night (measured 2026-09-16); a few dollars per Friday (one review per model).
+
+Neither trigger is a hand-kept folder list. The wiring smoke records every repo file each eval loads (`evals/shared/trace-loaded.js`): it fails if one falls outside the PR workflow's `paths`, and it hands the nightly the exact files finder-recall depends on (`evals/shared/engine-files.js`).
 
 ## How an eval touches the engine
 
