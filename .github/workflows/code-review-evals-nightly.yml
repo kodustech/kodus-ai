@@ -163,11 +163,11 @@ jobs:
               with:
                   webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
                   status: failure
-                  title: "❌ Evals noturnos: o harness dos evals quebrou, nada foi medido"
+                  nodetail: "true"
+                  title: "❌ Evals · harness quebrado, não mediu"
                   description: |
-                      O wiring smoke falhou antes de gastar qualquer coisa, então esta noite não mediu. O passo que falhou e o log estão no run; `pnpm eval:wiring` reproduz localmente.
-                      **Próximo passo:** corrigir o eval (ou a engine) no commit que quebrou. A próxima noite mede de novo.
-                      Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+                      Wiring smoke falhou antes de gastar · `pnpm eval:wiring` reproduz
+                      [run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
     measure:
         name: "finder recall · DeepSeek · 30 PRs"
@@ -386,6 +386,7 @@ jobs:
                   status: ${{ steps.report.outputs.status }}
                   title: ${{ steps.report.outputs.title }}
                   description: ${{ steps.report.outputs.description }}
+                  nodetail: "true"
                   # @here only for a new or worsening confirmed drop. Mentions
                   # notify from the message content, not from the embed.
                   content: ${{ steps.report.outputs.mention == 'true' && '@here' || '' }}

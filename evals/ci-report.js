@@ -35,6 +35,31 @@ function clip(text, max) {
     return s.length > max ? `${s.slice(0, max - 1)}…` : s;
 }
 
+// A provider/judge error in two or three words, for titles and one-liners.
+function shortReason(text) {
+    const t = String(text || '');
+    const who = /judge/i.test(t) ? 'juiz: ' : '';
+    const kind =
+        /no api key|missing .*key|set JUDGE_API_KEY/i.test(t) ? 'sem chave'
+        : /(invalid|incorrect|expired).{0,20}(api.?key|key|token)|(api.?key|x-api-key|token).{0,20}(invalid|incorrect|expired)|unauthori[sz]ed|\b40[13]\b/i.test(t) ? 'chave inválida'
+        : /insufficient|balance|credit|billing|\b402\b|suspended/i.test(t) ? 'sem crédito'
+        : /quota|rate.?limit|\b429\b|exhausted/i.test(t) ? 'limite de uso'
+        : /overloaded|\b50[23]\b/i.test(t) ? 'provedor sobrecarregado'
+        : /cannot connect|ECONN|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|fetch failed|socket hang up/i.test(t) ? 'sem conexão'
+        : /no finding/i.test(t) ? 'nenhum finding'
+        : /tool call/i.test(t) ? 'não usa ferramentas'
+        : null;
+    return kind ? `${who}${kind}` : clip(t, 60);
+}
+
+function firstSentence(text) {
+    const s = String(text || '').replace(/\s+/g, ' ').trim();
+    const end = s.search(/[.!?](\s|$)/);
+    return end > 0 ? s.slice(0, end) : s;
+}
+
+const md = (label, href) => (href ? `[${label}](${href})` : null);
+
 function readJson(file) {
     try {
         return JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -228,7 +253,7 @@ function nightlyReport(result, env = {}, extras = {}) {
     }
     if (url) lines.push(`Run: ${url}`);
 
-    const description = lines.join('\n');
+    const detailed = lines.join('\n');
     const perPr = comparison
         ? [
               '',
@@ -241,8 +266,70 @@ function nightlyReport(result, env = {}, extras = {}) {
               '</details>',
           ]
         : [];
-    const markdown = [`## ${title}`, '', description.replace(/\n/g, '  \n'), ...perPr].join('\n');
-    return { status, verdict, mention, state, title, description, markdown };
+    const markdown = [`## ${title}`, '', detailed.replace(/\n/g, '  \n'), ...perPr].join('\n');
+    const compact = nightlyCompact({ result, verdict, comparison, commits, investigation, previousState, url, compareUrl });
+    return { status, verdict, mention, state, title: compact.title, description: compact.description, markdown };
+}
+
+// The Discord version: a title with the numbers, then at most a few short
+// lines and links. Everything else lives in the run summary.
+function nightlyCompact({ result, verdict, comparison, commits, investigation, previousState, url, compareUrl }) {
+    const links = [md('run', url), md('diff', compareUrl)].filter(Boolean).join(' · ');
+    const recall = result?.metrics?.recall_mean;
+    const gate = result?.gate || {};
+    const floor = (gate.checks || []).find((check) => check.name === 'recall_mean')?.floor;
+    const failed = (gate.checks || []).filter((check) => !check.pass).map((check) => check.name);
+    const runs = Array.isArray(gate.confirmation?.runs) ? gate.confirmation.runs : null;
+    const delta = comparison?.recallDelta;
+    const signed = (d) => `${d >= 0 ? '+' : '−'}${Math.round(Math.abs(d) * 100)} pts`;
+    const day = previousState && RED.has(previousState.verdict) ? (previousState.streak || 1) + 1 : null;
+    const infraReason = result?.error || result?.confirmationError || (result?.rows || []).find((row) => row.status === 'infra')?.reason;
+
+    let title;
+    if (verdict === 'pass') title = `✅ Evals · recall ${pct(recall)} · estável`;
+    else if (verdict === 'improved') title = `📈 Evals · recall ${pct(recall)} (${signed(delta)})`;
+    else if (verdict === 'oscillation') title = '⚠️ Evals · oscilou, repetição passou';
+    else if (verdict === 'infra') title = `⚠️ Evals · não mediu${shortReason(infraReason) !== clip(infraReason, 60) ? ` · ${shortReason(infraReason)}` : ''}`;
+    else if (verdict === 'ungated') title = '⚠️ Evals · não comparou com o piso';
+    else if (verdict === 'still-red') title = `❌ Evals · ainda abaixo do piso · dia ${day}`;
+    else if (day) title = `❌ Evals · piorou · recall ${pct(recall)} · dia ${day}`;
+    else if (failed.includes('mean_tool_calls')) title = '❌ Evals · finder parou de usar ferramentas';
+    else if (failed.includes('mean_findings')) title = '❌ Evals · finder parou de gerar findings';
+    else title = `❌ Evals · recall ${pct(recall)}${typeof delta === 'number' ? ` (${signed(delta)})` : ''}${typeof floor === 'number' ? ` · piso ${pct(floor)}` : ''}`;
+
+    const lines = [];
+    if (verdict === 'pass') {
+        const minutes = minutesBetween(result.startedAt, result.finishedAt);
+        const cost = costUpperBound(result.tokens, catalogIdFor(result.model));
+        lines.push([`${result.cases} PRs`, minutes ? `${minutes} min` : null, typeof cost === 'number' ? `US$ ${cost.toFixed(2).replace('.', ',')}` : null, links].filter(Boolean).join(' · '));
+    } else if (verdict === 'oscillation') {
+        lines.push([runs ? `medições ${runs.map(pct).join(' e ')}` : null, `média ${pct(recall)}`, typeof floor === 'number' ? `piso ${pct(floor)}` : null, links].filter(Boolean).join(' · '));
+    } else if (verdict === 'infra' || verdict === 'ungated') {
+        // The raw error only when the title couldn't name it in a few words.
+        const raw = verdict === 'infra' ? infraReason : gate.reason;
+        if (verdict === 'ungated' || shortReason(raw) === clip(raw, 60)) lines.push(clip(raw, 110));
+        if (links) lines.push(links);
+    } else {
+        const facts = [
+            RED.has(verdict) && comparison?.lostTotal != null ? `${comparison.lostTotal} ${comparison.lostTotal === 1 ? 'bug perdido' : 'bugs perdidos'}` : null,
+            commits.length ? `${commits.length} ${commits.length === 1 ? 'commit' : 'commits'}` : null,
+            runs ? `medições ${runs.map(pct).join(' e ')}` : null,
+            verdict === 'still-red' && previousState?.since ? `alertado em ${previousState.since}` : null,
+        ].filter(Boolean);
+        if (facts.length) lines.push(facts.join(' · '));
+        if (comparison && verdict !== 'still-red') {
+            const moved = verdict === 'improved' ? [...comparison.perCase].reverse() : comparison.perCase;
+            for (const c of moved.filter((x) => (verdict === 'improved' ? x.delta > 0 : x.delta < 0)).slice(0, 2)) {
+                lines.push(`• ${clip(c.caseId, 38)} ${Math.round(c.recallBefore * 100)}→${pct(c.recall)}`);
+            }
+        }
+        if (investigation && RED.has(verdict)) {
+            const reading = { regression: 'Provável regressão', noise: 'Provavelmente ruído', eval: 'Problema do eval', unclear: 'Inconclusivo' }[investigation.verdict] || 'Hipótese';
+            lines.push(`🤖 ${reading} (${investigation.confidence}): ${clip(firstSentence(investigation.summary), 140)}`);
+        }
+        if (links) lines.push(links);
+    }
+    return { title, description: lines.join('\n') };
 }
 
 // ── tier-0 ───────────────────────────────────────────────────────────────────
@@ -306,7 +393,8 @@ function tier0Report(models, readResult, env = {}, readPrevious = () => null) {
           : `os ${results.length} modelos revisam`;
     const title = `${verdict === 'pass' ? '✅' : verdict === 'infra' ? '⚠️' : '❌'} Tier-0: ${headline}`;
 
-    const lines = results.map((r) => tier0Line(r, readPrevious(r.model)));
+    const detailedLines = results.map((r) => tier0Line(r, readPrevious(r.model)));
+    const lines = detailedLines;
     const next = [];
     if (broken.length) next.push('• Modelo quebrado afeta quem usa esse modelo hoje: decidir por modelo (segurar, trocar o padrão ou avisar os clientes).');
     if (missing.length) next.push('• Sem resultado: o job caiu ou estourou o tempo; o log está no run.');
@@ -314,9 +402,30 @@ function tier0Report(models, readResult, env = {}, readPrevious = () => null) {
     if (next.length) lines.push('', '**Próximo passo:**', ...next);
     if (url) lines.push(`Run: ${url}`);
 
-    const description = lines.join('\n');
-    const markdown = [`## ${title}`, '', ...description.split('\n').map((line) => (line ? `${line}  ` : line))].join('\n');
-    return { status, verdict, title, description, markdown };
+    const markdown = [`## ${title}`, '', ...lines.map((line) => (line ? `${line}  ` : line))].join('\n');
+
+    // Discord: who is fine in one line, one short line per model that isn't.
+    const okModels = results.filter((r) => !missing.includes(r) && !broken.includes(r) && !unreachable.includes(r));
+    const icon = verdict === 'pass' ? '✅' : verdict === 'infra' ? '⚠️' : '❌';
+    const compactLines = [];
+    if (okModels.length) compactLines.push(`✅ ${names(okModels)}`);
+    const problem = (r) => {
+        const why =
+            r.status === 'missing' ? 'job caiu'
+            : r.status !== 'pass' ? shortReason(r.reason)
+            : `resumo ${r.prSummary?.status === 'infra' ? shortReason(r.prSummary?.reason) : 'quebrado'}`;
+        const repeat = sameFailure(r, readPrevious(r.model)) ? ' · igual semana passada' : '';
+        return `${r.status === 'missing' ? '❓' : broken.includes(r) ? '❌' : '⚠️'} ${r.model}: ${why}${repeat}`;
+    };
+    for (const r of [...broken, ...missing, ...unreachable]) compactLines.push(problem(r));
+    if (url) compactLines.push(md('run', url));
+    return {
+        status,
+        verdict,
+        title: `${icon} Tier-0 · ${ok}/${results.length} ${results.length === 1 ? 'modelo ok' : 'modelos ok'}`,
+        description: compactLines.join('\n'),
+        markdown,
+    };
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────

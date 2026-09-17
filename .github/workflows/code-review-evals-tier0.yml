@@ -142,6 +142,7 @@ jobs:
                   status: ${{ steps.report.outputs.status }}
                   title: ${{ steps.report.outputs.title }}
                   description: ${{ steps.report.outputs.description }}
+                  nodetail: "true"
             - name: Fail when a model is red
               if: steps.report.outputs.status != 'success'
               run: exit 1
