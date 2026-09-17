@@ -24,7 +24,7 @@ inputs:
         required: false
         default: ''
     content:
-        description: 'Optional text outside the embed. Mentions only notify from here (e.g. "<@&role-id>"), never from the description.'
+        description: 'Optional text outside the embed. Mentions only notify from here (e.g. "@here"), never from the description.'
         required: false
         default: ''
 

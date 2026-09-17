@@ -19,7 +19,7 @@ Neither trigger is a hand-kept folder list. The wiring smoke records every repo 
 ### How the nightly avoids false alarms
 
 - A run below the floor is measured again on the same commit, and the gate decides on the mean of both (`evals/investigation/confirm-gate.js`). A drop the second run doesn't confirm is posted as "oscilou", without pinging anyone.
-- Only a confirmed new drop, or one that got worse beyond noise, mentions the evals role (repo variable `DISCORD_EVALS_ROLE_ID`). The same drop on later nights reads "continua abaixo do piso (dia N)" without a mention, and it isn't re-measured until an engine file changes after it.
+- Only a confirmed new drop, or one that got worse beyond noise, pings the channel with `@here`. The same drop on later nights reads "continua abaixo do piso (dia N)" without a mention, and it isn't re-measured until an engine file changes after it.
 - Infra and missing keys never mention anyone, and never count as a measurement.
 - The agent's reading can't lower an alert.
 

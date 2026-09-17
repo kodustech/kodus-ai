@@ -35,9 +35,9 @@ name: "Evals: nightly quality (DeepSeek, 30 PRs)"
 # - A run below the floor is measured again on the same commit, and the gate
 #   decides on the mean of both (evals/investigation/confirm-gate.js). One noisy
 #   run is posted as "oscilou", without pinging anyone.
-# - Only a confirmed new drop, or one that got worse, mentions the evals role
-#   (repo variable DISCORD_EVALS_ROLE_ID). A drop that already alerted stays red
-#   without pinging, and isn't re-measured until an engine file changes again.
+# - Only a confirmed new drop, or one that got worse, pings the channel (@here).
+#   A drop that already alerted stays red without pinging, and isn't re-measured
+#   until an engine file changes again.
 # - The agent's reading never lowers an alert.
 #
 # Jobs: changed → measure → investigate (red nights only) → notify.
@@ -386,5 +386,6 @@ jobs:
                   status: ${{ steps.report.outputs.status }}
                   title: ${{ steps.report.outputs.title }}
                   description: ${{ steps.report.outputs.description }}
-                  # Mention only a new or worsening confirmed drop.
-                  content: ${{ steps.report.outputs.mention == 'true' && vars.DISCORD_EVALS_ROLE_ID != '' && format('<@&{0}>', vars.DISCORD_EVALS_ROLE_ID) || '' }}
+                  # @here only for a new or worsening confirmed drop. Mentions
+                  # notify from the message content, not from the embed.
+                  content: ${{ steps.report.outputs.mention == 'true' && '@here' || '' }}
