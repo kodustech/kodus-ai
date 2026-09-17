@@ -249,3 +249,82 @@ describe('CloneParamsResolverService (platform coverage)', () => {
         },
     );
 });
+
+/**
+ * Regression coverage for the trial-mode "invalid input syntax for type
+ * uuid" prod incident (2026-09-14). Trial/anonymous CLI reviews
+ * (public-pr-review.use-case.ts) run with the placeholder
+ * `organizationAndTeamData: {organizationId: 'trial', teamId: 'trial'}` —
+ * there is no real integration row behind it. Without this fix, a trial
+ * review with no PAT still called `getCloneParams` with that placeholder,
+ * which Postgres rejected outright on the UUID-typed organization_id column.
+ */
+describe('CloneParamsResolverService (trial mode, no PAT)', () => {
+    const REMOTE = 'https://github.com/octocat/hello-world.git';
+
+    const trialPipelineContext = () =>
+        ({
+            origin: 'cli',
+            organizationAndTeamData: { organizationId: 'trial', teamId: 'trial' },
+        }) as any;
+
+    const trialCliContext = (over: Record<string, unknown> = {}) =>
+        ({
+            isTrialMode: true,
+            gitContext: {
+                remote: REMOTE,
+                branch: 'main',
+                inferredPlatform: PlatformType.GITHUB,
+            },
+            ...over,
+        }) as any;
+
+    it('never calls getCloneParams with the trial placeholder org', async () => {
+        const getCloneParams = jest.fn();
+        const service = new CloneParamsResolverService({
+            getCloneParams,
+        } as any);
+
+        await service.resolve(trialPipelineContext(), trialCliContext());
+
+        expect(getCloneParams).not.toHaveBeenCalled();
+    });
+
+    it('clones anonymously (no token) using the inferred platform', async () => {
+        const getCloneParams = jest.fn();
+        const service = new CloneParamsResolverService({
+            getCloneParams,
+        } as any);
+
+        const result = await service.resolve(
+            trialPipelineContext(),
+            trialCliContext(),
+        );
+
+        expect(result?.authToken).toBe('');
+        expect(result?.platform).toBe(PlatformType.GITHUB);
+        expect(result?.url).toBe(REMOTE);
+    });
+
+    it('still uses the PAT path when the trial user supplies one, without calling getCloneParams either', async () => {
+        const getCloneParams = jest.fn();
+        const service = new CloneParamsResolverService({
+            getCloneParams,
+        } as any);
+
+        const result = await service.resolve(
+            trialPipelineContext(),
+            trialCliContext({
+                gitContext: {
+                    remote: REMOTE,
+                    branch: 'main',
+                    inferredPlatform: PlatformType.GITHUB,
+                    githubPat: 'ghp-user-supplied',
+                },
+            }),
+        );
+
+        expect(getCloneParams).not.toHaveBeenCalled();
+        expect(result?.authToken).toBe('ghp-user-supplied');
+    });
+});

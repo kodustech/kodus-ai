@@ -168,6 +168,16 @@ export class CloneParamsResolverService {
         if (gitContext.githubPat) {
             authToken = gitContext.githubPat;
             platform = platform ?? PlatformType.GITHUB;
+        } else if (cliContext?.isTrialMode) {
+            // Trial mode without a PAT: `context.organizationAndTeamData` is
+            // the placeholder `{organizationId: 'trial', teamId: 'trial'}`
+            // (public-pr-review.use-case.ts), not a real org — there is no
+            // integration row to look up. Querying it anyway threw "invalid
+            // input syntax for type uuid" against Postgres on every trial
+            // review (prod incident, 2026-09-14). Skip straight to the
+            // anonymous clone this doc comment already promises: no token,
+            // only a public repo will actually clone.
+            platform = platform ?? PlatformType.GITHUB;
         } else {
             try {
                 // Passing an undefined platform is deliberate: getCloneParams
