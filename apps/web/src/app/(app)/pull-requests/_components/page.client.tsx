@@ -166,6 +166,19 @@ export function PullRequestsPageClient() {
             : suggestionsFilter === "false"
               ? false
               : undefined;
+    // Typing a PR number into the default (title) scope searches TITLES for
+    // that digit string, which almost never matches — so looking up a PR that
+    // plainly exists answers "nothing here" and gives no hint why. The scope
+    // toggle is right there but reads as decoration until you already know.
+    // Don't silently re-route the search (a title genuinely can contain a
+    // number); offer the jump and let the reader take it.
+    const queryLooksLikePrNumber =
+        searchMode === "title" && /^#?\d+$/.test(trimmedQuery);
+    const searchAsPrNumber = () => {
+        const asNumber = trimmedQuery.replace(/^#/, "");
+        setSearchMode("number");
+        setSearchQuery(asNumber);
+    };
 
     const {
         items: pullRequests,
@@ -738,6 +751,20 @@ export function PullRequestsPageClient() {
                         </SelectContent>
                     </Select>
                 </div>
+
+                {queryLooksLikePrNumber && (
+                    <div className="text-text-tertiary flex flex-wrap items-center gap-2 text-xs">
+                        <span>
+                            Searching titles for &ldquo;{trimmedQuery}&rdquo;.
+                        </span>
+                        <Button
+                            size="xs"
+                            variant="helper"
+                            onClick={searchAsPrNumber}>
+                            Look up PR #{trimmedQuery.replace(/^#/, "")} instead
+                        </Button>
+                    </div>
+                )}
 
                 {activeChips.length > 0 && (
                     <div className="flex flex-wrap items-center gap-2">
