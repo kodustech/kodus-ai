@@ -4063,7 +4063,12 @@ This is an experimental feature that generates committable changes. Review the d
                 error.message.includes('line must be part of the diff') ||
                 error.message.includes(
                     'start_line must be part of the same hunk as the line',
-                );
+                ) ||
+                // Same failure class, third message shape GitHub uses for it
+                // (prod: 81 occurrences / 25 orgs) — without this, the
+                // retry-with-adjusted-line recovery in
+                // createReviewCommentWithRetry never ran for this shape.
+                error.message.includes('pull_request_review_thread.line');
 
             const errorType = isLineMismatch
                 ? 'failed_lines_mismatch'
