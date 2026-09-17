@@ -155,14 +155,28 @@ describe('model families are known to the WHOLE system, or to none of it', () =>
         expect(resolveCompatibleReasoningTraits('glm-4-turbo-r5.3x').canDisableThinking).toBe(true);
     });
 
-    it('the OpenAI reasoner line is matched on one digit, not on loose digits', () => {
-        // Azure serves GPT-3.5 as `gpt-35-turbo`. A two-digit match reads that as a
-        // reasoner, which drops the user's temperature and renames max_tokens.
+    it('the OpenAI reasoner line excludes Azure\'s gpt-35-turbo alias but keeps two-digit ids', () => {
+        // Azure serves GPT-3.5 as `gpt-35-turbo`. A loose two-digit match reads
+        // that as a reasoner, which drops the user's temperature and renames
+        // max_tokens — but dropping two-digit support entirely would ALSO miss
+        // a real future id: Azure's own convention (dash-encoded minor version,
+        // `35` = "3.5") makes `gpt-55`/`gpt-65` (5.5/6.5) a realistic near-term
+        // shape, not a hypothetical one (kody-ai review, PR #1952).
         expect(isOpenAiReasonerId('gpt-5.6-sol')).toBe(true);
         expect(isOpenAiReasonerId('gpt-6-astra')).toBe(true);
         expect(isOpenAiReasonerId('gpt-35-turbo')).toBe(false);
         expect(isOpenAiReasonerId('gpt-35-turbo-16k')).toBe(false);
         expect(isOpenAiReasonerId('gpt-35-turbo-instruct')).toBe(false);
         expect(reasoningConfigForModel('gpt-35-turbo')).toBeUndefined();
+        // Positive two-digit assertions — a bare `gpt-[5-9]` single-digit
+        // pattern would silently regress these without failing any existing
+        // test, since every prior assertion here is single-digit or negative.
+        expect(isOpenAiReasonerId('gpt-55-turbo')).toBe(true);
+        expect(isOpenAiReasonerId('gpt-65-preview')).toBe(true);
+        expect(isOpenAiReasonerId('gpt-10')).toBe(true);
+        expect(reasoningConfigForModel('gpt-65-preview')).toEqual({
+            type: 'level',
+            options: ['low', 'medium', 'high'],
+        });
     });
 });

@@ -98,9 +98,14 @@ export function isOpenAiReasonerId(model?: string): boolean {
     const m = model.toLowerCase();
     return (
         /^o[134](\b|[-_@])/.test(m) ||
-        // gpt-5 and later. One digit only: `\d{2,}` also swallows Azure's legacy
-        // `gpt-35-turbo`, and a false reasoner drops temperature + renames max_tokens.
-        /^gpt-[5-9](\b|[-_@])/.test(m) ||
+        // gpt-5 and later, one OR two digits — but never Azure's legacy
+        // `gpt-35-turbo` alias for GPT-3.5 (a false reasoner there drops
+        // temperature + renames max_tokens). The negative lookahead excludes
+        // only that specific alias instead of dropping two-digit support
+        // entirely, since Azure's own convention (dash-encoded minor
+        // version, `35` = "3.5") makes a future `gpt-55`/`gpt-65` (5.5/6.5)
+        // a realistic near-term id, not a hypothetical one.
+        /^gpt-(?!35(\b|[-_@]))([5-9]|\d{2})(\b|[-_@])/.test(m) ||
         /deep-research/.test(m)
     );
 }
