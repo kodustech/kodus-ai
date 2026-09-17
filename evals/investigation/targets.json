@@ -63,26 +63,33 @@
             "__doc": [
                 "Floors for the NIGHTLY run (code-review-evals-nightly.yml): --set=light, 30 PRs.",
                 "",
-                "Calibrated 2026-09-16 from two full runs of the same engine (main @ b73dada76) on",
-                "deepseek-v4-flash@fireworks, judge claude-haiku-4-5: recall_mean 0.313 and 0.268.",
+                "Calibrated 2026-09-17 IN CI (run 35171204422, attempts 1 and 2) — same runner,",
+                "secrets, model (deepseek-v4-flash@fireworks) and judge (gpt-5.4-mini) the nightly",
+                "uses: recall_mean 0.384 and 0.352.",
                 "",
                 "The floor comes from RUN-TO-RUN noise on these 30 PRs, not cross-PR spread: the",
-                "per-PR recall difference between the two runs has sd 0.188, so one run's mean",
-                "moves sd 0.188/sqrt(2)/sqrt(30) = 0.024, and against this 2-run baseline",
-                "0.024*sqrt(1.5) = 0.030. recallFloor = 0.291 - 2.5*0.030 = 0.22: a ~7pp drop",
-                "trips it, a normal night does ~0.6% of the time. (Cross-PR SEM, the rule used",
-                "for the 8-PR set above, would have put it at 0.18 and missed a 10pp drop.)",
-                "minMeanFindings / minMeanToolCalls = ~half the observed mean (2.5 / 37.5).",
+                "per-PR recall difference between the two runs has sd 0.318, so a night's mean",
+                "moves 0.318/sqrt(2)/sqrt(30) = 0.041, and against this 2-run baseline",
+                "0.041*sqrt(1.5) = 0.050. recallFloor 0.26 = 0.368 - ~2.2 sigma: a ~11pp drop trips",
+                "it, a normal night does ~1-2% of the time.",
+                "minMeanFindings / minMeanToolCalls = ~half the observed mean (2.7 / 41.5).",
+                "",
+                "JUDGE: floors hold only under `judge`; run-recall refuses to gate a run judged",
+                "by another model. The claude-haiku-4-5 default is quieter (two local runs, same",
+                "engine: 0.313 / 0.268, sigma 0.030, a ~7pp drop detectable) but both Anthropic",
+                "secrets answered 401 on 2026-09-16. Once one is rotated, switching the nightly",
+                "back means re-running this calibration under haiku.",
                 "",
                 "RATCHET RULE: when a PR intentionally moves recall, re-run --set=light twice",
                 "on it and update these floors in the same PR."
             ],
+            "judge": "gpt-5.4-mini",
             "models": {
                 "deepseek-v4-flash@fireworks": {
-                    "recallFloor": 0.22,
-                    "minMeanFindings": 1.2,
-                    "minMeanToolCalls": 18,
-                    "observed": { "recall_mean": 0.291, "runs": [0.313, 0.268], "sdPerPrRunDiff": 0.188, "precision_mean": 0.458, "meanFindings": 2.5, "meanToolCalls": 37.5 }
+                    "recallFloor": 0.26,
+                    "minMeanFindings": 1.3,
+                    "minMeanToolCalls": 20,
+                    "observed": { "recall_mean": 0.368, "runs": [0.384, 0.352], "sdPerPrRunDiff": 0.318, "precision_mean": 0.524, "meanFindings": 2.7, "meanToolCalls": 41.5 }
                 }
             }
         }

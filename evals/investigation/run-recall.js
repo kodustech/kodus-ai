@@ -112,10 +112,17 @@ function evaluateGate(summary, rows, model, setName) {
     // Floors are per case set: a mean over 8 PRs and a mean over 30 are
     // different numbers. The top-level table is the `pr` set; others live
     // under `sets.<name>`.
-    const table = setName === targets.set ? targets.models : targets.sets?.[setName]?.models;
-    const target = table?.[model];
+    const set = setName === targets.set ? targets : targets.sets?.[setName];
+    const target = set?.models?.[model];
     if (!target) {
         return { status: 'skipped', reason: `no target for model ${model} on set ${setName}` };
+    }
+    // A floor is only meaningful under the judge it was calibrated with: judges
+    // disagree on borderline matches by several points of recall, enough to hide
+    // a regression or invent one. Refuse to gate across judges.
+    const { JUDGE_MODEL } = require('./recall-judge');
+    if (set.judge && set.judge !== JUDGE_MODEL) {
+        return { status: 'skipped', reason: `floors for set ${setName} were calibrated with judge ${set.judge}, this run used ${JUDGE_MODEL}` };
     }
 
     const meanFindings = avg(
