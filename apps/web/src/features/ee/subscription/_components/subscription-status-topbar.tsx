@@ -1,5 +1,8 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@components/ui/button";
 import { Link } from "@components/ui/link";
 import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
 import { useKodusCreditBalance } from "src/features/ee/byok/_hooks/use-kodus-credit-balance";
@@ -76,11 +79,34 @@ const SubscriptionInvalid = () => {
  * this only stops the app from going quiet about it.
  */
 const SubscriptionUnverified = () => {
+    const router = useRouter();
+    const [retrying, setRetrying] = useState(false);
+
+    // The licence is fetched by a server component, so re-running the route is
+    // the retry. Nothing here is optimistic: if billing is still down the
+    // banner simply comes back.
+    const retry = () => {
+        setRetrying(true);
+        router.refresh();
+        window.setTimeout(() => setRetrying(false), 2000);
+    };
+
     return (
-        <div className="bg-warning/25 py-2 text-center text-sm">
-            We couldn&apos;t check your plan just now, so paid features are
-            temporarily locked. Nothing changed on your subscription — this
-            usually clears on its own.
+        <div className="bg-warning/25 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 py-2 text-center text-sm">
+            <span>
+                We can&apos;t reach billing, so your plan can&apos;t be
+                confirmed — paid features stay locked until it answers.{" "}
+                <strong className="font-semibold">
+                    Your subscription hasn&apos;t changed.
+                </strong>
+            </span>
+            <Button
+                size="xs"
+                variant="helper"
+                loading={retrying}
+                onClick={retry}>
+                Try again
+            </Button>
         </div>
     );
 };
