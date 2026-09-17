@@ -28,6 +28,22 @@ services:
                     # OOM-killed at the dev limit of 4G on a cold preview.
                     memory: 8G
 
+    kodus-api:
+        environment:
+            # .env ships these pointing at localhost:3001, which the API then
+            # hands to the git provider when a repository is registered.
+            # GitHub rejects a localhost hook outright ("isn't reachable over
+            # the public Internet"), and that rejection fails the whole save
+            # AFTER the repositories were already persisted — onboarding is
+            # left half-done. runo exposes `webhooks` publicly (see
+            # workspace.preview.yaml) and hands its URL over as
+            # RUNO_URL_WEBHOOKS.
+            - API_GITHUB_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS}/github/webhook
+            - API_GITLAB_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS}/gitlab/webhook
+            - GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS}/bitbucket/webhook
+            - GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS}/azure-repos/webhook
+            - API_FORGEJO_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS}/forgejo/webhook
+
     webhooks:
         deploy:
             resources:
