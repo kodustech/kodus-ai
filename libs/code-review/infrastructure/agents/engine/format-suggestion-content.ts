@@ -2,7 +2,10 @@ import { createLogger } from '@libs/core/log/logger';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { LLM } from '@libs/llm/llm';
 import { buildProviderOptions } from '@libs/llm/reasoning-options';
-import { envManagedReasoningDescriptor } from '@libs/llm/managed-slot';
+import {
+    envManagedReasoningDescriptor,
+    managedDefaultReasoningDescriptor,
+} from '@libs/llm/managed-slot';
 import type { LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
 import {
     buildFormatPrompt,
@@ -73,7 +76,10 @@ export async function formatSuggestionContent(
     // pins. On the env/managed path (no BYOK slot) resolve the provider/model the
     // same way resolveModelConfig does, so the managed DeepSeek/Fireworks default
     // also gets thinking:disabled instead of {}.
-    const reasoningSlot = options?.byokConfig ?? envManagedReasoningDescriptor();
+    const reasoningSlot =
+        options?.byokConfig ??
+        envManagedReasoningDescriptor() ??
+        managedDefaultReasoningDescriptor();
     const formatterProviderOptions = buildProviderOptions(
         'suggestion-formatter',
         options?.telemetryMetadata,

@@ -257,6 +257,34 @@ export function envManagedReasoningDescriptor():
 }
 
 /**
+ * The provider+model descriptor for the CLOUD managed default (no BYOK slot, no
+ * self-hosted env config) — the reasoning-only projection of `resolveManagedSlot`'s
+ * Fireworks fallback. A code path that must derive a reasoning payload BEFORE the
+ * executor resolves the model still names the SAME provider+model the call will
+ * actually run under: the managed default is Kodus-funded Fireworks
+ * (`DEFAULT_MODEL.model` = KODUS_TRIAL_MODEL) speaking the OpenAI-compatible
+ * protocol, so the reasoning payload rides under `openaiCompatible` — not `{}`,
+ * which is truthy and replaces the funnel's providerOptions without disabling
+ * anything. That namespace only REACHES the wire because the Fireworks inline
+ * client is named 'openai-compatible' (see `resolveManagedSlot`); the SDK drops
+ * providerOptions addressed to any other name. `undefined` only if the managed
+ * default were ever a non-Fireworks id (defensive — every current flow resolves
+ * to KODUS_TRIAL_MODEL).
+ */
+export function managedDefaultReasoningDescriptor():
+    | { provider: BYOKProvider; model: string }
+    | undefined {
+    const model = DEFAULT_MODEL.model;
+    if (!/^accounts\/fireworks\/models\//i.test(model)) {
+        return undefined;
+    }
+    // `DEFAULT_MODEL.provider` is `openai_compatible`, the registry id whose
+    // reasoning module owns the `openaiCompatible` namespace the Fireworks
+    // managed endpoint speaks.
+    return { provider: DEFAULT_MODEL.provider, model };
+}
+
+/**
  * Managed/env-default resolution result (Wave 3).
  *
  * The env-default path used to hand-roll every SDK factory inline. It now
@@ -345,14 +373,18 @@ export function resolveManagedSlot(
                     },
                 );
             case 'openai_compat':
-                // INLINE EXCEPTION (self-hosted OpenAI-compatible): name
-                // 'self-hosted', default baseURL api.openai.com, raw
-                // structuredOutputs opt-in — the openai_compatible provider
-                // module can't reproduce this without changing its BYOK behavior.
+                // INLINE EXCEPTION (self-hosted OpenAI-compatible): default
+                // baseURL api.openai.com, raw structuredOutputs opt-in — the
+                // openai_compatible provider module can't reproduce this without
+                // changing its BYOK behavior. The SDK instance name is
+                // 'openai-compatible' (the registry module's name) ON PURPOSE:
+                // @ai-sdk/openai-compatible only forwards `providerOptions` under
+                // the instance name (camelCased), so a 'self-hosted' name made the
+                // funnel's `openaiCompatible` thinking/reasoning payload vanish.
                 return {
                     kind: 'inline',
                     model: createOpenAICompatible({
-                        name: 'self-hosted',
+                        name: 'openai-compatible',
                         apiKey: env.apiKey,
                         baseURL: env.baseURL,
                         supportsStructuredOutputs:
@@ -383,7 +415,12 @@ export function resolveManagedSlot(
     // Detected by the `accounts/fireworks/models/` prefix so we don't need a
     // new BYOK provider entry just for the default-only path; wires through the
     // OpenAI-compatible adapter pointed at Fireworks (inline exception, like
-    // self-hosted above).
+    // self-hosted above). The SDK instance name is 'openai-compatible' (the
+    // registry module's name) ON PURPOSE: @ai-sdk/openai-compatible only
+    // forwards `providerOptions` under the instance name (camelCased), so a
+    // 'fireworks' name made the funnel's `openaiCompatible` reasoning payload
+    // (e.g. thinking:disabled for the managed DeepSeek default) never reach the
+    // Fireworks endpoint.
     if (/^accounts\/fireworks\/models\//i.test(defaultModel)) {
         const fireworksKey =
             process.env.API_FIREWORKS_API_KEY ||
@@ -392,7 +429,7 @@ export function resolveManagedSlot(
         return {
             kind: 'inline',
             model: createOpenAICompatible({
-                name: 'fireworks',
+                name: 'openai-compatible',
                 apiKey: fireworksKey,
                 baseURL:
                     process.env.API_FIREWORKS_BASE_URL ||

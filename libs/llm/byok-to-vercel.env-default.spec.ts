@@ -263,7 +263,7 @@ describe('buildModelFromSlot — env/managed default characterization (undefined
     });
 
     // ── 6a. non-gemini/non-claude + openai key → OpenAI-compatible (default off)
-    it('openai-style model + API_OPEN_AI_API_KEY → createOpenAICompatible({name:self-hosted, default openai.com base, structured OFF})', () => {
+    it('openai-style model + API_OPEN_AI_API_KEY → createOpenAICompatible({name:openai-compatible, default openai.com base, structured OFF})', () => {
         process.env.API_LLM_PROVIDER_MODEL = 'gpt-4o';
         process.env.API_OPEN_AI_API_KEY = 'sk-openai';
 
@@ -273,7 +273,7 @@ describe('buildModelFromSlot — env/managed default characterization (undefined
         expect(result.sdk).toBe('openai-compatible');
         expect(result.modelId).toBe('gpt-4o');
         expect(createOpenAICompatibleMock).toHaveBeenCalledWith({
-            name: 'self-hosted',
+            name: 'openai-compatible',
             apiKey: 'sk-openai',
             baseURL: 'https://api.openai.com/v1',
             supportsStructuredOutputs: false,
@@ -292,7 +292,7 @@ describe('buildModelFromSlot — env/managed default characterization (undefined
 
         expect(result.sdk).toBe('openai-compatible');
         expect(createOpenAICompatibleMock).toHaveBeenCalledWith({
-            name: 'self-hosted',
+            name: 'openai-compatible',
             apiKey: 'sk-openai',
             baseURL: 'https://litellm.internal/v1',
             supportsStructuredOutputs: true,
@@ -300,7 +300,7 @@ describe('buildModelFromSlot — env/managed default characterization (undefined
     });
 
     // ── 7. auto env + Fireworks default → Fireworks OpenAI-compatible ─────────
-    it('auto env (unset) + Fireworks default → createOpenAICompatible({name:fireworks, fireworks key, fireworks base})(defaultModel)', () => {
+    it('auto env (unset) + Fireworks default → createOpenAICompatible({name:openai-compatible, fireworks key, fireworks base})(defaultModel)', () => {
         // API_LLM_PROVIDER_MODEL unset → 'auto'; managed default is the
         // Fireworks-hosted deepseek-v4-flash (KODUS_TRIAL_MODEL).
         process.env.API_FIREWORKS_API_KEY = 'fw-key';
@@ -311,7 +311,7 @@ describe('buildModelFromSlot — env/managed default characterization (undefined
         expect(result.sdk).toBe('openai-compatible');
         expect(result.modelId).toBe('accounts/fireworks/models/deepseek-v4-flash-0731');
         expect(createOpenAICompatibleMock).toHaveBeenCalledWith({
-            name: 'fireworks',
+            name: 'openai-compatible',
             apiKey: 'fw-key',
             baseURL: 'https://api.fireworks.ai/inference/v1',
             supportsStructuredOutputs: true,
@@ -353,7 +353,7 @@ describe('buildModelFromSlot — env/managed default characterization (undefined
         expect(result.sdk).toBe('openai-compatible');
         expect(result.modelId).toBe('accounts/fireworks/models/deepseek-v4-flash-0731');
         expect(createOpenAICompatibleMock).toHaveBeenCalledWith(
-            expect.objectContaining({ name: 'fireworks' }),
+            expect.objectContaining({ name: 'openai-compatible' }),
         );
         expect(createAnthropicMock).not.toHaveBeenCalled();
     });
@@ -373,7 +373,7 @@ describe('buildModelFromSlot — env/managed default characterization (undefined
         expect(result.sdk).toBe('openai-compatible');
         expect(result.modelId).toBe('claude-sonnet-4-5');
         expect(createOpenAICompatibleMock).toHaveBeenCalledWith({
-            name: 'self-hosted',
+            name: 'openai-compatible',
             apiKey: 'sk-proxy-key',
             baseURL: 'https://openrouter.ai/api/v1',
             supportsStructuredOutputs: false,
