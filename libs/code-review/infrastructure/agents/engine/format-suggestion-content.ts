@@ -2,7 +2,10 @@ import { createLogger } from '@libs/core/log/logger';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { LLM } from '@libs/llm/llm';
 import { buildProviderOptions } from '@libs/llm/reasoning-options';
-import { envManagedReasoningDescriptor } from '@libs/llm/managed-slot';
+import {
+    envManagedReasoningDescriptor,
+    managedDefaultReasoningDescriptor,
+} from '@libs/llm/managed-slot';
 import type { LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
 import {
     buildFormatPrompt,
@@ -70,10 +73,17 @@ export async function formatSuggestionContent(
     // (openrouterProviderOrder / openrouterAllowFallbacks) survive — passing a
     // raw buildReasoningProviderOptions here would REPLACE the slot-derived
     // providerOptions in structured-review-call and silently drop the routing
-    // pins. On the env/managed path (no BYOK slot) resolve the provider/model the
-    // same way resolveModelConfig does, so the managed DeepSeek/Fireworks default
-    // also gets thinking:disabled instead of {}.
-    const reasoningSlot = options?.byokConfig ?? envManagedReasoningDescriptor();
+    // pins. The reasoning slot is resolved the same way the call will resolve the
+    // model: the BYOK slot when configured, else the env/managed resolution —
+    // and on the pure CLOUD path (`API_LLM_PROVIDER_MODEL` unset) that lands on
+    // the Kodus-funded Fireworks DeepSeek managed default, which also thinks by
+    // default and gets thinking:disabled too (a `{}` override here was truthy
+    // and replaced the funnel's providerOptions, leaving the managed DeepSeek
+    // billing reasoning tokens).
+    const reasoningSlot =
+        options?.byokConfig ??
+        envManagedReasoningDescriptor() ??
+        managedDefaultReasoningDescriptor();
     const formatterProviderOptions = buildProviderOptions(
         'suggestion-formatter',
         options?.telemetryMetadata,

@@ -20,7 +20,10 @@ jest.mock('./byok-to-vercel', () => ({
 }));
 
 import { resolveModelConfig } from './model-invocation';
-import { envManagedReasoningDescriptor } from './managed-slot';
+import {
+    envManagedReasoningDescriptor,
+    managedDefaultReasoningDescriptor,
+} from './managed-slot';
 
 const ENV_KEYS = [
     'API_LLM_PROVIDER_MODEL',
@@ -87,6 +90,15 @@ describe('envManagedReasoningDescriptor — env config → {provider, model}', (
         expect(envManagedReasoningDescriptor()).toBeUndefined();
         process.env.API_LLM_PROVIDER_MODEL = 'auto';
         expect(envManagedReasoningDescriptor()).toBeUndefined();
+    });
+});
+
+describe('managedDefaultReasoningDescriptor — cloud managed default → {provider, model}', () => {
+    it('the cloud default is the Kodus-funded Fireworks DeepSeek over openai_compatible', () => {
+        expect(managedDefaultReasoningDescriptor()).toEqual({
+            provider: 'openai_compatible',
+            model: 'accounts/fireworks/models/deepseek-v4-flash-0731',
+        });
     });
 });
 

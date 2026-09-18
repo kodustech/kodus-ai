@@ -384,6 +384,41 @@ describe('buildReasoningProviderOptions', () => {
                 openrouter: { reasoning: { effort: 'medium' } },
             });
         });
+
+        it("says 'none' out loud for a disable-able thinking-by-default model", () => {
+            // Omitting the effort does NOT disable anything on OpenRouter — it
+            // leaves the upstream's own default in force, so a DeepSeek that
+            // thinks by default must be told `effort: 'none'` explicitly.
+            expect(
+                buildReasoningProviderOptions(
+                    BYOKProvider.OPEN_ROUTER,
+                    'none',
+                    'deepseek/deepseek-v4-flash',
+                ),
+            ).toEqual({
+                openrouter: { reasoning: { effort: 'none' } },
+            });
+        });
+
+        it('omits the effort for an always-thinking model (the API rejects none)', () => {
+            expect(
+                buildReasoningProviderOptions(
+                    BYOKProvider.OPEN_ROUTER,
+                    'none',
+                    'z-ai/glm-5.3',
+                ),
+            ).toEqual({});
+        });
+
+        it('omits the effort for a non-reasoning/unknown upstream', () => {
+            expect(
+                buildReasoningProviderOptions(
+                    BYOKProvider.OPEN_ROUTER,
+                    'none',
+                    'openai/gpt-4o',
+                ),
+            ).toEqual({});
+        });
     });
 
     describe('OpenAI-Compatible', () => {

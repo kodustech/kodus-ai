@@ -257,6 +257,31 @@ export function envManagedReasoningDescriptor():
 }
 
 /**
+ * The provider+model descriptor for the CLOUD managed default (no BYOK slot, no
+ * self-hosted env config) — the reasoning-only projection of `resolveManagedSlot`'s
+ * Fireworks fallback. A code path that must derive a reasoning-off payload BEFORE
+ * the executor resolves the model still names the SAME provider+model the call will
+ * actually run under: the managed default is Kodus-funded Fireworks
+ * (`DEFAULT_MODEL.model` = KODUS_TRIAL_MODEL) speaking the OpenAI-compatible
+ * protocol, so the reasoning payload rides under `openaiCompatible` — not `{}`,
+ * which fired as a truthy override and left the managed DeepSeek reasoning by
+ * default. `undefined` only if the managed default were ever a non-Fireworks id
+ * (defensive — every current flow resolves to KODUS_TRIAL_MODEL).
+ */
+export function managedDefaultReasoningDescriptor():
+    | { provider: BYOKProvider; model: string }
+    | undefined {
+    const model = DEFAULT_MODEL.model;
+    if (!/^accounts\/fireworks\/models\//i.test(model)) {
+        return undefined;
+    }
+    // `DEFAULT_MODEL.provider` is `openai_compatible`, which is the registry id
+    // whose reasoning module owns the `openaiCompatible` namespace the Fireworks
+    // managed endpoint speaks.
+    return { provider: DEFAULT_MODEL.provider, model };
+}
+
+/**
  * Managed/env-default resolution result (Wave 3).
  *
  * The env-default path used to hand-roll every SDK factory inline. It now
