@@ -112,8 +112,24 @@ export const KodyRuleDetailSheet = ({
             <SheetContent
                 className="w-full gap-0 py-0 sm:max-w-2xl"
                 onEscapeKeyDown={onClose}
-                // Non-modal: clicks on the table must reach the rows.
-                onInteractOutside={(event) => event.preventDefault()}>
+                // Non-modal so clicks on the table still reach the rows —
+                // that is what makes row-to-row browsing work without the
+                // panel slamming shut between rules.
+                //
+                // But the prevention is scoped to the table, not to the whole
+                // document: blanket-preventing meant clicking the page
+                // background or the nav did nothing either, leaving Esc and
+                // the close button as the only ways out. Anything outside the
+                // rules table now dismisses, which is what an outside click is
+                // for.
+                onInteractOutside={(event) => {
+                    const target = event.target as Element | null;
+                    if (target?.closest?.("[data-kody-rules-table]")) {
+                        event.preventDefault();
+                        return;
+                    }
+                    onClose();
+                }}>
                 <SheetHeader className="border-card-lv3/60 gap-3 border-b px-6 pt-4 pb-5">
                     <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-1">

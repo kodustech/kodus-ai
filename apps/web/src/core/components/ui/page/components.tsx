@@ -89,7 +89,19 @@ export const PageContent = forwardRef<
     );
 });
 
-export const PageHeader = (props: React.ComponentProps<"div">) => {
+export const PageHeader = ({
+    sticky,
+    ...props
+}: React.ComponentProps<"div"> & {
+    /**
+     * Pin the header while the page scrolls. Opt-in, because most pages are
+     * short enough that a header scrolling away costs nothing — but a long
+     * column of form controls whose ONLY save action lives up here strands the
+     * reader: flip a toggle near the bottom and the way to keep it is off
+     * screen, with nothing down there saying anything is unsaved.
+     */
+    sticky?: boolean;
+}) => {
     const { hasSidebar } = useContext(PageContext);
 
     return (
@@ -97,6 +109,7 @@ export const PageHeader = (props: React.ComponentProps<"div">) => {
             {...props}
             className={cn(
                 "flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-x-6 gap-y-3 px-8",
+                sticky && "bg-background sticky top-0 z-20 py-2",
                 // A header whose only child rendered null (e.g. the code-review
                 // breadcrumb under the tabs shell) must not keep its 48px.
                 "empty:hidden",

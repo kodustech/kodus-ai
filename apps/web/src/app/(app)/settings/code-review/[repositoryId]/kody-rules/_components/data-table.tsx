@@ -139,7 +139,12 @@ export const KodyRulesDataTable = ({
         // viewport): with the settings sidebar open on a laptop the wide tier
         // would crush the title column, so Origin/Updated fold into the row
         // below 56rem (see getKodyRulesRowGrid).
-        <div className="border-card-lv3/60 bg-card-lv1 @container overflow-clip rounded-xl border">
+        <div
+            // Marks the region whose clicks must NOT dismiss the detail panel,
+            // so row-to-row browsing keeps working while a click anywhere else
+            // closes it. See rule-detail-sheet's onInteractOutside.
+            data-kody-rules-table
+            className="border-card-lv3/60 bg-card-lv1 @container overflow-clip rounded-xl border">
             {/* Narrow containers scroll the grid sideways; wide ones keep the
                 page-level sticky header (no scroll container in between). */}
             <div className="@max-2xl:overflow-x-auto">

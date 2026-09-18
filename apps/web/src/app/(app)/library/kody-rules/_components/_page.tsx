@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
     Breadcrumb,
     BreadcrumbItem,
+    BreadcrumbLink,
     BreadcrumbList,
     BreadcrumbPage,
+    BreadcrumbSeparator,
 } from "@components/ui/breadcrumb";
 import { Button } from "@components/ui/button";
 import {
@@ -220,6 +222,10 @@ export const KodyRulesLibrary = ({
     showSuggestionsButton?: boolean;
 }) => {
     const router = useRouter();
+    // Where the reader came from, so the crumb returns them to their own
+    // scope's rules rather than always to global.
+    const originRepositoryId =
+        useSearchParams().get("from")?.trim() || "global";
 
     const [viewMode, setViewMode] = useState<ViewMode>(() => {
         if (initialView) return initialView;
@@ -501,8 +507,21 @@ export const KodyRulesLibrary = ({
         <Page.Root className="w-full pb-0">
             <Page.Header className="w-full max-w-[90vw]">
                 <div className="flex w-full flex-col gap-1">
+                    {/* A lone BreadcrumbPage is not a breadcrumb — it named
+                        where you are and offered no way back, so arriving from
+                        a repository's rules page left the browser button as
+                        the only exit. Honour `?from=<repositoryId>` when the
+                        caller passes it, and fall back to the global rules
+                        page, which is a valid destination from anywhere. */}
                     <Breadcrumb className="mb-1">
                         <BreadcrumbList>
+                            <BreadcrumbItem>
+                                <BreadcrumbLink
+                                    href={`/settings/code-review/${originRepositoryId}/kody-rules`}>
+                                    Kody Rules
+                                </BreadcrumbLink>
+                            </BreadcrumbItem>
+                            <BreadcrumbSeparator />
                             <BreadcrumbItem>
                                 <BreadcrumbPage>Rules Library</BreadcrumbPage>
                             </BreadcrumbItem>

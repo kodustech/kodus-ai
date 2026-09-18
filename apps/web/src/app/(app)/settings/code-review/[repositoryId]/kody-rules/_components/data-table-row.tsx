@@ -689,15 +689,12 @@ export const KodyRuleRow = ({
                                     Pause
                                 </DropdownMenuItem>
                             )}
-                            <DropdownMenuItem
-                                onSelect={() => context.onOpenRule(rule)}>
-                                {canMutate ? (
-                                    <EditIcon className="size-4" aria-hidden />
-                                ) : (
-                                    <EyeIcon className="size-4" aria-hidden />
-                                )}
-                                {canMutate ? "Edit" : "View details"}
-                            </DropdownMenuItem>
+                            {/* No Edit entry here: the row already carries an
+                                always-visible Edit button running this exact
+                                handler, so repeating it in the menu offered the
+                                same action twice under the same label. The menu
+                                keeps what the button cannot say — status
+                                changes and delete. */}
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                                 disabled={!context.canDelete || isInherited}
