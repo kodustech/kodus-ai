@@ -73,6 +73,11 @@ NEXTAUTH=$(derive nextauth)
 
 OVERRIDES=$(mktemp)
 KEYS=$(grep -oE '^[A-Z0-9_]+=op://' "$TEMPLATE" | cut -d= -f1 | sort -u)
+# Self-hosted-only MCP configuration is not in the cloud template, but the
+# preview compose consumes it and it must receive the same derived secret path.
+if ! echo "$KEYS" | grep -qx "API_MCP_MANAGER_JWT_SECRET"; then
+    KEYS=$(printf '%s\n%s\n' "$KEYS" API_MCP_MANAGER_JWT_SECRET)
+fi
 count=0
 for key in $KEYS; do
     case "$key" in
@@ -90,16 +95,6 @@ for key in $KEYS; do
     esac
     printf '%s=%s\n' "$key" "$value" >> "$OVERRIDES"
     count=$((count + 1))
-done
-
-# Some self-hosted-only values (notably the MCP manager JWT secret) are not
-# represented in .env.template, but the preview compose explicitly consumes
-# them. Emit them here so the generated per-preview secret is actually used.
-for key in API_MCP_MANAGER_JWT_SECRET; do
-    if ! echo "$KEYS" | grep -qx "$key"; then
-        printf '%s=%s\n' "$key" "$(derive "$key")" >> "$OVERRIDES"
-        count=$((count + 1))
-    fi
 done
 
 # Drop the originals, then append the replacements — no in-place editing, so a
