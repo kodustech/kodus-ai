@@ -69,6 +69,7 @@ import { z } from 'zod';
 
 import { LLM } from './llm';
 import type { NormalizedModel } from './byok-config';
+import { KODUS_CATALOG } from './providers/kodus/catalog';
 
 /**
  * Brand → the repo secrets that ALREADY hold its credential under a name that
@@ -96,7 +97,52 @@ const REPO_SECRET: Record<string, string[]> = {
     zai: ['BYOK_ZHIPU_API_KEY'],
     google_gemini: ['BYOK_GOOGLE_API_KEY', 'GEMINI_API_KEY'],
     openai: ['BYOK_OPENAI_API_KEY'],
+    // Not a customer key: the `kodus` provider routes over OUR upstream accounts
+    // and reads the platform key from this env at build time — the slot carries
+    // none. Naming it here is what lets the row gate and the module agree on the
+    // one variable, and what the credential invariants check against the job.
+    kodus: ['API_KODUS_PROVIDER_FIREWORKS_API_KEY'],
 };
+
+/**
+ * The Kodus catalog as live rows — GENERATED, never hand-written.
+ *
+ * `kodus` is the provider that bills a customer's credits: the org picks from a
+ * closed catalog and we route the call over our own upstream accounts. A model
+ * the upstream retires or renames does not degrade there — `build()` refuses an
+ * id the catalog cannot price, so the paying customer's review simply fails. That
+ * is the stale-KODUS_TRIAL_MODEL incident this workflow's header cites, one
+ * provider over, and until now nothing called these models at all.
+ *
+ * Generated from `KODUS_CATALOG` so the two cannot drift: adding a model to the
+ * price list adds its row, removing one removes it. A hand-written row per model
+ * is exactly the list that goes stale the week after someone edits the catalog.
+ *
+ * Measured before writing them (2026-09-18, direct against Fireworks): all five
+ * current entries answered and billed reasoning tokens, so `reasons: true` is a
+ * fact about them, not a hope. Going through `LLM.run` rather than a raw call is
+ * the point — it exercises the routing brand, the closed-catalog gate and the
+ * delegation to the upstream module, which a curl never touches.
+ */
+const kodusBrand = (id: string): string =>
+    `kodus_${id.split('/').pop()!.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}`;
+
+function kodusBorrows(): Record<string, string> {
+    return Object.fromEntries(KODUS_CATALOG.map((m) => [kodusBrand(m.id), 'kodus']));
+}
+
+function kodusCatalogRows() {
+    return KODUS_CATALOG.map((m) => ({
+        brand: kodusBrand(m.id),
+        why: `Kodus-as-provider: ${m.id} is a model we BILL credits for. A retired or renamed upstream id does not degrade — the closed catalog refuses it and the customer's review fails`,
+        slot: {
+            provider: 'kodus',
+            model: m.id,
+            reasoningEffort: 'medium',
+        },
+        reasons: true,
+    }));
+}
 
 /**
  * Brand → the brand whose credential it falls back to.
@@ -124,6 +170,7 @@ const BORROWS_FROM: Record<string, string> = {
     google_vertex_gemini: 'google_vertex',
     google_vertex_modern: 'google_vertex',
     google_vertex_legacy: 'google_vertex',
+    ...kodusBorrows(),
 };
 
 /**
@@ -909,6 +956,7 @@ const LIVE = [
     // or where no readable doc exists at all. Offline tests cannot settle any of
     // these — they prove what we SEND, and the question is what the vendor
     // ACCEPTS. Each one is a claim currently resting on inference. ──────────
+    ...kodusCatalogRows(),
     {
         brand: 'moonshot_code',
         why: 'k2.7-code is the pair to the k2.6 row and differs on BOTH facts we changed: thinking cannot be disabled, and platform.kimi.ai documents its temperature as not modifiable. The slot deliberately carries a temperature the runtime must DROP — if it ever reaches the wire this row is where that shows',
@@ -961,6 +1009,14 @@ describe('BYOK reasoning — LIVE provider contract', () => {
 
         let total = 0;
         const perRow: Array<[string, number]> = [];
+        // The probe fakes every row's credential so it can read the request.
+        // Most rows take theirs in the slot; the Kodus rows take the PLATFORM
+        // key from env at build time, so faking `apiKey` alone left the module
+        // refusing to build and the probe measuring nothing — which it reports,
+        // correctly, as a row with no ceiling.
+        const PLATFORM_KEY = 'API_KODUS_PROVIDER_FIREWORKS_API_KEY';
+        const platformKeyBefore = process.env[PLATFORM_KEY];
+        process.env[PLATFORM_KEY] ||= 'budget-probe';
         try {
             for (const c of LIVE) {
                 let sent: any;
@@ -1021,6 +1077,8 @@ describe('BYOK reasoning — LIVE provider contract', () => {
             }
         } finally {
             globalThis.fetch = real;
+            if (platformKeyBefore === undefined) delete process.env[PLATFORM_KEY];
+            else process.env[PLATFORM_KEY] = platformKeyBefore;
         }
 
         // eslint-disable-next-line no-console

@@ -303,6 +303,10 @@ jobs:
                   # Vertex's credential is the service account JSON, base64 —
                   # the provider decodes it out of `apiKey` itself.
                   BYOK_GOOGLE_VERTEX_API_KEY: ${{ secrets.BYOK_GOOGLE_VERTEX_API_KEY }}
+                  # The Kodus provider reads the PLATFORM key from this env name
+                  # at build time (libs/llm/providers/kodus), not from the slot.
+                  # It is our Fireworks account, the same one BYOK_FIREWORKS holds.
+                  API_KODUS_PROVIDER_FIREWORKS_API_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
                   # Scheduled runs must not pass by checking nothing — see the
                   # coverage case in the spec. A dispatch or a fork PR still can.
                   BYOK_LIVE_EVENT: ${{ github.event_name }}
