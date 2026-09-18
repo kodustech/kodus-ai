@@ -310,14 +310,16 @@ export const IssuesPageSkeleton = ({ tabs }: { tabs?: React.ReactNode }) => (
 /** Kody Rules library: title + search, bucket rail + card grid. */
 export const LibraryPageSkeleton = () => (
     <Page.Root className="w-full pb-0">
-        <Page.Header className="w-full max-w-[90vw]">
+        {/* Same cap as the loaded page: a skeleton with a width of its own
+            makes the content jump sideways the moment it arrives. */}
+        <Page.Header>
             <Page.TitleContainer>
                 <Skeleton className="h-8 w-56" />
                 <Skeleton className="mt-2 h-4 w-[30rem] max-w-full" />
             </Page.TitleContainer>
             <Skeleton className="h-10 w-72 rounded-xl" />
         </Page.Header>
-        <Page.Content className="w-full max-w-[90vw] pt-8">
+        <Page.Content className="pt-8">
             <div className="grid grid-cols-1 gap-8 lg:grid-cols-[280px_1fr]">
                 <div className="flex flex-col gap-2" aria-hidden>
                     {Array.from({ length: 8 }).map((_, i) => (

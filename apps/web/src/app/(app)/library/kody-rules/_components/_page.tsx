@@ -505,7 +505,11 @@ export const KodyRulesLibrary = ({
 
     return (
         <Page.Root className="w-full pb-0">
-            <Page.Header className="w-full max-w-[90vw]">
+            {/* No width override: Page.Header/Content already carry the one
+                shared cap, and `max-w-[90vw]` made this page start and end at
+                a different x than every other screen — the exact drift the cap
+                exists to prevent. */}
+            <Page.Header>
                 <div className="flex w-full flex-col gap-1">
                     {/* A lone BreadcrumbPage is not a breadcrumb — it named
                         where you are and offered no way back, so arriving from
@@ -573,7 +577,7 @@ export const KodyRulesLibrary = ({
                 </div>
             </Page.Header>
 
-            <Page.Content className="w-full max-w-[90vw] pt-8">
+            <Page.Content className="pt-8">
                 <div className="grid grid-cols-1 gap-8 lg:grid-cols-[280px_1fr]">
                     <aside className="space-y-4">
                         <div className="border-card-lv3 bg-card-lv2 rounded-xl border p-4">
