@@ -164,11 +164,11 @@ jobs:
                   HEAD_REF: ${{ steps.target.outputs.branch }}
               run: |
                   set -euo pipefail
-                  test -n "$RUNO_SERVER" && test -n "$RUNO_TOKEN"
+                  : "${RUNO_SERVER:?PREVIEW_RUNO_SERVER is not configured}"
+                  : "${RUNO_TOKEN:?PREVIEW_RUNO_TOKEN is not configured}"
                   # --branch: the checkout is a detached HEAD, so runo cannot
                   # read the branch from git itself
                   $RUNO up --here --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml
-                  $RUNO share qa --branch "$HEAD_REF"
                   # `up` only uploads code when it CREATES the VM; on every
                   # later push the environment already exists and the new
                   # commit travels with push (compose watch reloads it)
@@ -176,6 +176,10 @@ jobs:
                   URL=$($RUNO url --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml | head -1)
                   echo "url=$URL" >> "$GITHUB_OUTPUT"
                   echo "Preview: $URL"
+                  # Sharing is useful to QA but must not prevent a valid
+                  # application deploy from publishing its URL.
+                  $RUNO share qa --branch "$HEAD_REF" || \
+                      echo "::warning::preview deployed, but QA sharing failed"
 
             - name: Comment the preview link
               if: always() && github.event_name == 'pull_request' && steps.env.outputs.configured == 'true'

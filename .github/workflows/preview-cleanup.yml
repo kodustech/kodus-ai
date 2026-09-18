@@ -58,7 +58,8 @@ jobs:
                   HEAD_REF: ${{ github.event.pull_request.head.ref }}
               run: |
                   set -euo pipefail
-                  test -n "$RUNO_SERVER" && test -n "$RUNO_TOKEN"
+                  : "${RUNO_SERVER:?PREVIEW_RUNO_SERVER is not configured}"
+                  : "${RUNO_TOKEN:?PREVIEW_RUNO_TOKEN is not configured}"
                   # `runo destroy` exits 0 when there is nothing to destroy (the
                   # normal case for a PR that never got a preview) and non-zero
                   # on a real failure — which must stay loud, or a leaked VM
