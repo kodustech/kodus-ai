@@ -394,6 +394,7 @@ async function main() {
         }),
         { prompt: 0, completion: 0 },
     );
+    const infraBudget = Math.ceil(rows.length * 0.05);
     const summary = {
         model: args.model,
         startedAt,
@@ -403,6 +404,7 @@ async function main() {
         passed: rows.filter((row) => row.status === 'pass').length,
         failed: qualityFailures,
         infraFailures,
+        infraBudget,
         metrics: {
             recall_mean: avg(rows.map((row) => row.metadata?.recall)),
             precision_mean: avg(rows.map((row) => row.metadata?.precision)),
@@ -453,10 +455,15 @@ async function main() {
         console.log(`\ngate skipped: ${gate.reason}`);
     }
 
-    if (infraFailures > 0) {
-        console.error(`\nINFRA failure(s): ${infraFailures}`);
+    // A flaky provider call on one PR out of thirty should not cost the whole
+    // night: at 1% per-case flake, refusing any infra failure throws away a
+    // quarter of the nights. Up to 5% of the set may go unmeasured; the run
+    // then gates on the PRs that did measure and says how many it had.
+    if (infraFailures > infraBudget) {
+        console.error(`\nINFRA failure(s): ${infraFailures} (budget ${infraBudget})`);
         process.exit(2);
     }
+    if (infraFailures > 0) console.log(`\n${infraFailures} PR(s) not measured, within the budget of ${infraBudget}: gating on the ${rows.length - infraFailures} that were.`);
 
     // --gate asked for a verdict against the floors; a gate that couldn't run
     // (no targets, wrong judge) is not a pass. Exit 2 so the night is not

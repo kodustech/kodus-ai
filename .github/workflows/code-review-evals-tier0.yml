@@ -112,7 +112,12 @@ jobs:
         timeout-minutes: 5
         steps:
             - uses: actions/checkout@v6.0.2
+            # Every leg dying before its upload (a broken lockfile takes all
+            # five at once) is the week that most needs the message, and
+            # download-artifact fails the step when nothing matches. ci-report
+            # reads a missing directory as "no result" per model.
             - uses: actions/download-artifact@v4
+              continue-on-error: true
               with:
                   pattern: tier0-smoke-*
                   merge-multiple: true

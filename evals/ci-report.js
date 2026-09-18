@@ -108,7 +108,9 @@ function nightlyVerdict(result, comparison, noise, previousState) {
     if (result.error) return { verdict: 'infra', title: 'did not measure' };
     if (result.confirmationError) return { verdict: 'infra', title: 'went below the floor, but the confirmation did not measure' };
     const infra = result.infraFailures || 0;
-    if (infra > 0) return { verdict: 'infra', title: `${infra} of ${result.cases} PRs not measured` };
+    // A few unmeasured PRs are a worse sample, not a lost night: the run keeps
+    // its verdict while it stays inside the budget it wrote (run-recall).
+    if (infra > (result.infraBudget || 0)) return { verdict: 'infra', title: `${infra} of ${result.cases} PRs not measured` };
 
     const gate = result.gate || {};
     const failed = (gate.checks || []).filter((check) => !check.pass).map((check) => check.name);
@@ -121,9 +123,13 @@ function nightlyVerdict(result, comparison, noise, previousState) {
         const collapse = newCollapse(failed, previousState);
         if (collapse) return { verdict: 'regression', title: `${COLLAPSE_TITLE[collapse]}${day ? ` (dia ${day})` : ''}` };
         if (wasRed) {
-            const worse = typeof recall === 'number' && typeof previousState.recall === 'number' && recall < previousState.recall - (noise || 0.05);
+            // Against the recall the streak ALERTED at, never against last
+            // night's: a slide in noise-sized steps would otherwise read as
+            // "still red" every night and never ping again.
+            const alerted = typeof previousState.alertedRecall === 'number' ? previousState.alertedRecall : previousState.recall;
+            const worse = typeof recall === 'number' && typeof alerted === 'number' && recall < alerted - (noise || 0.05);
             return worse
-                ? { verdict: 'regression', title: `worse: recall fell another ${points(recall - previousState.recall)} (day ${day})` }
+                ? { verdict: 'regression', title: `worse: recall fell another ${points(recall - alerted)} (day ${day})` }
                 : { verdict: 'still-red', title: `still below the floor (day ${day})` };
         }
         const delta = comparison?.recallDelta;
@@ -155,9 +161,13 @@ function newCollapse(failed, previousState) {
 function nextState(verdict, result, previousState, today) {
     const red = RED.has(verdict);
     const continuing = red && previousState && RED.has(previousState.verdict);
+    const recall = result?.metrics?.recall_mean ?? null;
     return {
         verdict,
-        recall: result?.metrics?.recall_mean ?? null,
+        recall,
+        // What the streak alerted at: kept across the streak so a slow bleed is
+        // measured from where it started, and re-pings when it passes noise.
+        alertedRecall: red ? (continuing ? (previousState.alertedRecall ?? previousState.recall ?? recall) : recall) : null,
         failed: red ? (result?.gate?.checks || []).filter((check) => !check.pass).map((check) => check.name) : [],
         streak: red ? (continuing ? (previousState.streak || 1) + 1 : 1) : 0,
         since: red ? (continuing ? previousState.since : today) : null,
@@ -341,7 +351,9 @@ function nightlyCompact({ result, verdict, comparison, commits, investigation, p
         const precisionPart = `**precision** ${pct(precision)}${comparison?.precisionBefore != null ? ` (${pct(comparison.precisionBefore)})` : ''}`;
         return [recallPart, precisionPart, withFloor && typeof floor === 'number' ? `floor ${pct(floor)}` : null].filter(Boolean).join(' · ');
     };
-    const runLine = () => [`${measured}/${result.cases} PRs`, minutes ? `${minutes} min` : null, money].filter(Boolean).join(' · ');
+    const unmeasured = result ? result.infraFailures || 0 : 0;
+    const runLine = () =>
+        [`${measured}/${result.cases} PRs${unmeasured ? ` (${unmeasured} not measured)` : ''}`, minutes ? `${minutes} min` : null, money].filter(Boolean).join(' · ');
     const commitBlock = (label, max) => {
         if (!commits.length) return;
         lines.push('', `**${label} (${commits.length})**`);

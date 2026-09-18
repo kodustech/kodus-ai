@@ -65,6 +65,22 @@ describe('eval doc references', () => {
 
     it('lists the README of a new eval folder that has none, so the preflight reports it', () => {
         fs.mkdirSync(path.join(root, 'evals/new-eval'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'evals/new-eval/run.js'), '');
         expect(evalDocs(root).readmes).toEqual(['evals/new-eval/README.md']);
+    });
+
+    // A folder git doesn't know about (a stray .DS_Store, a scratch dir) must
+    // not fail the preflight on one machine and pass in CI.
+    it('ignores a folder that is not tracked', () => {
+        const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'doc-refs-git-'));
+        fs.mkdirSync(path.join(repo, 'evals/tracked'), { recursive: true });
+        fs.writeFileSync(path.join(repo, 'evals/tracked/run.js'), '');
+        for (const args of [['init', '-q'], ['add', '-A']]) {
+            require('child_process').execFileSync('git', ['-C', repo, ...args], { stdio: 'ignore' });
+        }
+        fs.mkdirSync(path.join(repo, 'evals/leftover'), { recursive: true });
+        fs.writeFileSync(path.join(repo, 'evals/leftover/.DS_Store'), '');
+        expect(evalDocs(repo).readmes).toEqual(['evals/tracked/README.md']);
+        fs.rmSync(repo, { recursive: true, force: true });
     });
 });

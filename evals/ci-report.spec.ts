@@ -225,6 +225,30 @@ describe('nightly alerting without false positives', () => {
         expect(report).toMatchObject({ verdict: 'infra', mention: false, state: { streak: 0 } });
     });
 
+    it('a slide in noise-sized steps still pings, measured from where the streak started', () => {
+        const first = nightlyReport(measured(0.2, confirmedFail(0.2)), {}, { targets, today: '2026-09-18' });
+        expect(first).toMatchObject({ mention: true, state: { alertedRecall: 0.2 } });
+        // One step below the noise: the same drop, no second ping.
+        const second = nightlyReport(measured(0.16, confirmedFail(0.16)), {}, { targets, previousState: first.state, today: '2026-09-19' });
+        expect(second).toMatchObject({ verdict: 'still-red', mention: false, state: { alertedRecall: 0.2, recall: 0.16 } });
+        // Two steps: noise-sized against last night, a real slide against the alert.
+        const third = nightlyReport(measured(0.12, confirmedFail(0.12)), {}, { targets, previousState: second.state, today: '2026-09-20' });
+        expect(third).toMatchObject({ verdict: 'regression', mention: true });
+    });
+
+    it('keeps the night when a couple of PRs go unmeasured, and says so', () => {
+        const withInfra = (infraFailures: number, infraBudget: number) => ({
+            ...measured(0.4, { status: 'pass', checks: [{ name: 'recall_mean', actual: 0.4, floor: 0.26, pass: true }] }),
+            cases: 30,
+            infraFailures,
+            infraBudget,
+        });
+        const inside = nightlyReport(withInfra(2, 2), {}, { targets });
+        expect(inside.verdict).toBe('pass');
+        expect(inside.description).toContain('28/30 PRs (2 not measured)');
+        expect(nightlyReport(withInfra(3, 2), {}, { targets }).verdict).toBe('infra');
+    });
+
     it('a finder that collapses during a red streak still pings, once', () => {
         const collapsed = (recall: number) => ({ status: 'fail', checks: [{ name: 'recall_mean', actual: recall, floor: 0.26, pass: false }, { name: 'mean_tool_calls', actual: 2, floor: 20, pass: false }] });
         const previousState = { verdict: 'regression', recall: 0.2, streak: 1, since: '2026-09-18', failed: ['recall_mean'] };

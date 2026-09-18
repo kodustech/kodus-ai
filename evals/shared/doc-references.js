@@ -6,6 +6,7 @@
 // pointers stay true, and a stale pointer is exactly how the eval harness drifted
 // last time. engine-gate's preflight runs this, so it fails on the PR.
 const fs = require('fs');
+const { execFileSync } = require('child_process');
 const path = require('path');
 
 const REPO_PATH = /^(evals|libs|apps|scripts|tests|test|docs|\.github)\//;
@@ -61,15 +62,38 @@ function missingHeaderFields(markdown) {
 // Folders under evals/ that are helpers, not evals, and have no README.
 const NOT_AN_EVAL = new Set(['shared']);
 
+// Which eval folders exist, according to git rather than to the working tree:
+// an untracked leftover (one stray .DS_Store is enough) would otherwise fail
+// the preflight on a developer's machine and never in CI — a failure
+// `pnpm eval:wiring` invents instead of reproducing. Falls back to the
+// filesystem where git can't answer (tarball checkout, no git installed).
+function evalDirs(root) {
+    try {
+        const tracked = execFileSync('git', ['-C', root, 'ls-files', '-z', '--', 'evals'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+        const dirs = new Set();
+        for (const file of tracked.split('\0')) {
+            const parts = file.split('/');
+            // evals/<dir>/<file…>: a file directly in evals/ names no folder.
+            if (parts.length > 2 && parts[0] === 'evals') dirs.add(parts[1]);
+        }
+        if (dirs.size) return [...dirs];
+    } catch {
+        // No git here — the working tree is all we have.
+    }
+    return fs
+        .readdirSync(path.join(root, 'evals'), { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name);
+}
+
 // The docs the preflight holds to this: the evals entry points and every
 // eval's own README. A new eval folder without one is listed anyway, so the
 // preflight reports it missing instead of never looking.
 function evalDocs(root) {
-    const evalsDir = path.join(root, 'evals');
-    const readmes = fs
-        .readdirSync(evalsDir, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory() && !NOT_AN_EVAL.has(entry.name))
-        .map((entry) => path.join('evals', entry.name, 'README.md'));
+    const readmes = evalDirs(root)
+        .filter((name) => !NOT_AN_EVAL.has(name))
+        .sort()
+        .map((name) => path.join('evals', name, 'README.md'));
     return { entryPoints: ['evals/README.md', 'evals/AGENTS.md'], readmes };
 }
 
