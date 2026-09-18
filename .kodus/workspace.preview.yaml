@@ -20,12 +20,20 @@ services:
     # own public URL in its env, and memory limits sized for a 16GB VM
     files: [docker-compose.dev.yml, docker-compose.preview.yml]
     # the web app is what a reviewer opens; it proxies to the API over the
-    # compose network, so the API needs no public address of its own
-    public: web
+    # compose network, so the API needs no public address of its own.
+    # `webhooks` is public for a different reason: the git provider calls it
+    # from outside, so registering a repository needs a URL that resolves on
+    # the public internet — localhost, which .env ships, is rejected by
+    # GitHub at webhook-creation time and fails the whole save.
+    # web stays first, so it remains the primary (RUNO_PUBLIC_URL).
+    public: [web, webhooks]
     health_timeout: 1800
     env:
       RUNO_PUBLIC_URL: "${RUNO_PUBLIC_URL}"
       RUNO_PUBLIC_HOST: "${RUNO_PUBLIC_HOST}"
+      # the webhooks service's own public URL, so the API can hand a
+      # reachable hook address to the git provider
+      RUNO_URL_WEBHOOKS: "${RUNO_URL_WEBHOOKS}"
 data:
   migrate: pnpm run migration:run
   # seed:preview adds an onboarded organization + a login, so the link opens on

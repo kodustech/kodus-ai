@@ -523,10 +523,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         }
 
         try {
-            // Build progress callback for real-time agent traces in PR timeline
+            // Build progress callback for real-time agent traces in PR timeline.
+            // `context.correlationId` is a `corr_<random>_<timestamp>` tracing
+            // id (id-generator.ts), never a real UUID — it must NOT be used
+            // here as a fallback. `writeAgentTrace` already falls back to a
+            // {pullRequestNumber, repositoryId} filter when this is undefined
+            // (prod incident, 2026-09-14: "invalid input syntax for type
+            // uuid" writing automation_execution whenever lastExecution.uuid
+            // was absent and the old `||` fallback poisoned the query).
             const executionUuid =
-                context.pipelineMetadata?.lastExecution?.uuid ||
-                context.correlationId;
+                context.pipelineMetadata?.lastExecution?.uuid;
             const repositoryId = context.repository?.id;
 
             // Shared telemetry metadata for all Langfuse-traced calls in this pipeline run

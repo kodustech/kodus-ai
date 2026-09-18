@@ -219,7 +219,13 @@ export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
  *  submitResult call into RunState.artifacts in step order). The LAST artifact
  *  is the finder's final output. Falls back to [] if the agent never finalized
  *  (budget-exhausted). No hand re-scan of steps — that is the runner's job. */
-export function extractFindings(state: RunState): {
+export function extractFindings(
+    state: RunState,
+    // Purely for the [LLM_ENVELOPE] logs sanitizeFindingsResult emits — see
+    // that function's own doc comment for why this is an untyped inline
+    // shape rather than LangfuseTelemetryMetadata.
+    telemetryMetadata?: { organizationId?: string },
+): {
     reasoning: string;
     suggestions: FinderSuggestion[];
 } {
@@ -233,11 +239,14 @@ export function extractFindings(state: RunState): {
     // publicado nao distingue "revisou e nao achou" de "quebrou o formato".
     (state as any).__findingsOutcome = !artifact
         ? 'no-artifact'
-        : sanitizeFindingsResult(artifact.payload as any)
+        : sanitizeFindingsResult(artifact.payload as any, telemetryMetadata)
           ? 'structured'
           : 'artifact-unusable';
     if (artifact) {
-        const clean = sanitizeFindingsResult(artifact.payload as any);
+        const clean = sanitizeFindingsResult(
+            artifact.payload as any,
+            telemetryMetadata,
+        );
         if (clean) {
             return {
                 reasoning: clean.reasoning ?? '',
@@ -255,7 +264,7 @@ export function extractFindings(state: RunState): {
                 ? ((artifact.payload as { reasoning: string }).reasoning ?? '')
                 : '';
         return (
-            findingsFromText(state) ?? {
+            findingsFromText(state, telemetryMetadata) ?? {
                 reasoning: proseReasoning,
                 suggestions: [],
             }
@@ -263,12 +272,20 @@ export function extractFindings(state: RunState): {
     }
     // 2. Fallback: the model answered in TEXT instead of calling submitResult
     //    (or called it empty). Recover the findings JSON from its final text.
-    return findingsFromText(state) ?? { reasoning: '', suggestions: [] };
+    return (
+        findingsFromText(state, telemetryMetadata) ?? {
+            reasoning: '',
+            suggestions: [],
+        }
+    );
 }
 
 /** Recover findings from the model's final text — covers "answered in prose/JSON
  *  instead of calling submitResult" and empty-arg submitResult. */
-function findingsFromText(state: RunState): {
+function findingsFromText(
+    state: RunState,
+    telemetryMetadata?: { organizationId?: string },
+): {
     reasoning: string;
     suggestions: FinderSuggestion[];
 } | null {
@@ -280,7 +297,10 @@ function findingsFromText(state: RunState): {
         const json = extractJsonFromText(text);
         if (!json) continue;
         try {
-            const clean = sanitizeFindingsResult(JSON.parse(json));
+            const clean = sanitizeFindingsResult(
+                JSON.parse(json),
+                telemetryMetadata,
+            );
             if (clean) {
                 return {
                     reasoning: clean.reasoning ?? '',
@@ -351,8 +371,9 @@ export type ProseRecoverer = (reasoning: string) => Promise<FinderSuggestion[]>;
 export async function extractFindingsWithRecovery(
     state: RunState,
     recover?: ProseRecoverer,
+    telemetryMetadata?: { organizationId?: string },
 ): Promise<FinderFindings> {
-    const found = extractFindings(state);
+    const found = extractFindings(state, telemetryMetadata);
     if (found.suggestions.length > 0 || !recover) return found;
     const recovered = await recover(found.reasoning);
     return recovered.length > 0
@@ -376,13 +397,25 @@ export async function recoverFindingsFromProse(
         const result = await LLM.run({
             byokConfig,
             schema: RECOVERY_SCHEMA,
+            // Original instruction text is untouched — only the trailing
+            // sentence is new. It must literally contain the word "json"
+            // somewhere: OpenAI (and OpenAI-compatible providers) reject a
+            // `json_object` response-format request outright otherwise —
+            // their own error is "'messages' must contain the word 'json'
+            // in some form" — which is exactly the json_schema→json_object
+            // fallback LLM.run owns for this call (prod incident,
+            // 2026-09-17: this silently 400'd recovery for every provider
+            // needing that fallback, e.g. gpt-5.6-sol/gpt-5.6-terra).
+            // Verified live against the real OpenAI API (2026-09-17): the
+            // exact same request 400s with that message without this
+            // sentence, and 200s with it.
             user:
                 "The following is a code reviewer's analysis written as " +
                 'prose. Extract EVERY concrete finding it describes into ' +
                 'the structured schema — one entry per distinct issue, ' +
                 'using the file paths and line numbers mentioned. Do NOT ' +
                 'invent findings; only extract what is explicitly ' +
-                `described.\n\nANALYSIS:\n${prose}`,
+                `described.\n\nRespond with a JSON object.\n\nANALYSIS:\n${prose}`,
             runName: usageRunName
                 ? `${usageRunName}-recovery`
                 : 'code-review-recovery',
@@ -507,6 +540,7 @@ export async function runFinderWithVerify(
     const base = await extractFindingsWithRecovery(
         finderState,
         params.recoverProse,
+        params.telemetryMetadata,
     );
 
     // RECALL PASS: synthesis rescue — one extra finder run that re-thinks from
@@ -799,6 +833,7 @@ export async function runRecallPasses(
         const extracted = await extractFindingsWithRecovery(
             state,
             params.recoverProse,
+            params.telemetryMetadata,
         );
         usage = sumVerifyUsage(usage, usageOf(state.usage));
         toolCalls.push(...collectToolCalls(state));

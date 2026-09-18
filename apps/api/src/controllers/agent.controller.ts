@@ -56,10 +56,22 @@ export class AgentController {
         // user and conversation of a team would collapse onto one thread/record,
         // so we add the user (and an optional conversation id) to keep distinct
         // chats from bleeding into the same session document.
+        //
+        // `teamId` is genuinely optional (`OrganizationAndTeamDataDto.teamId`
+        // is `@IsOptional()` — an org-only conversation is a valid case), but
+        // it was spliced in unconditionally here while `userId` and
+        // `conversationId` right below it already use the conditional-spread
+        // pattern. `createThreadId` rejects any identifier that is present
+        // but empty/undefined, so an org-only request (or one that omits
+        // `organizationAndTeamData` altogether) crashed with a raw "Cannot
+        // read properties of undefined (reading 'teamId')" / "Identificador
+        // teamId não pode ser... undefined" 500 (prod, BetterStack,
+        // 2026-09-16) instead of just falling back to org+user granularity.
+        const teamId = body?.organizationAndTeamData?.teamId;
         const thread = createThreadId(
             {
                 organizationId,
-                teamId: body.organizationAndTeamData.teamId,
+                ...(teamId ? { teamId } : {}),
                 ...(userId ? { userId } : {}),
                 ...(body.conversationId
                     ? { conversationId: body.conversationId }
