@@ -60,11 +60,32 @@ const REPO_B: Repo = {
     project: { id: 'project-1' },
 };
 
+/**
+ * The team whose subscriptions the fixtures mint, kept module-level because
+ * the fixture helpers are and the team id is generated per test.
+ */
+let currentTeamId = '';
+
+/**
+ * Sentinel for a subscription minted before the team marker existed. It cannot
+ * be `undefined`: that is what a defaulted parameter falls back on, so it would
+ * silently produce a marked subscription instead of an unmarked one.
+ */
+const NO_TEAM = '';
+
+/** The callback URL a subscription minted by `teamId` carries. */
+function callbackUrl(teamId: string | undefined, token = generateWebhookToken()) {
+    const base = `${WEBHOOK_URL}?token=${encodeURIComponent(token)}`;
+
+    return teamId ? `${base}&team=${encodeURIComponent(teamId)}` : base;
+}
+
 /** A subscription shaped like the ones Kodus creates, with a valid token. */
 function subscriptionFor(
     repo: Repo,
     eventType: string,
     overrides: Partial<AzureRepoSubscription> = {},
+    teamId: string | undefined = currentTeamId,
 ): AzureRepoSubscription {
     return {
         id: `sub-${repo.id}-${eventType}`,
@@ -77,7 +98,7 @@ function subscriptionFor(
             repository: repo.id,
         },
         consumerInputs: {
-            url: `${WEBHOOK_URL}?token=${encodeURIComponent(generateWebhookToken())}`,
+            url: callbackUrl(teamId),
         },
         ...overrides,
     } as AzureRepoSubscription;
@@ -125,6 +146,7 @@ describe('AzureReposService webhook subscriptions (issue #1956)', () => {
             organizationId: `org-${orgTeamSeq}`,
             teamId: `team-${orgTeamSeq}`,
         };
+        currentTeamId = orgTeam.teamId;
 
         helper = {
             listSubscriptions: jest.fn().mockResolvedValue([]),
@@ -662,6 +684,135 @@ describe('AzureReposService webhook subscriptions (issue #1956)', () => {
     });
 
     // ── the reported scenario, end to end ────────────────────────────────
+    describe('ownership: one team never deletes another team\'s hooks', () => {
+        /**
+         * The callback URL is a single deployment-wide env var and nothing
+         * stops two Kodus teams from connecting the same Azure organization,
+         * so "points at our webhook URL" is not proof of ownership. Only the
+         * team marker is.
+         */
+        it('marks the subscriptions it creates with the saving team', async () => {
+            withSelection([REPO_A]);
+
+            await service.createWebhook(orgTeam);
+
+            const urls = helper.createSubscriptionForProject.mock.calls.map(
+                (call) => call[0].subscriptionPayload.consumerInputs.url,
+            );
+
+            expect(urls).toHaveLength(3);
+            urls.forEach((url: string) => {
+                expect(new URL(url).searchParams.get('team')).toBe(
+                    orgTeam.teamId,
+                );
+            });
+        });
+
+        it('leaves another team\'s subscription alone even when the repository is not in this selection', async () => {
+            withSelection([REPO_A]);
+            helper.listSubscriptions.mockResolvedValue([
+                ...allSubscriptionsFor([REPO_A]),
+                ...EVENT_TYPES.map((eventType) =>
+                    subscriptionFor(REPO_B, eventType, {}, 'team-somebody-else'),
+                ),
+            ]);
+
+            await service.createWebhook(orgTeam);
+
+            expect(helper.deleteWebhookById).not.toHaveBeenCalled();
+        });
+
+        it('leaves an unmarked subscription alone when its repository is not in the selection', async () => {
+            withSelection([REPO_A]);
+            helper.listSubscriptions.mockResolvedValue([
+                ...allSubscriptionsFor([REPO_A]),
+                // No team marker: minted before ownership was recorded, so it
+                // belongs to nobody and is not ours to remove.
+                ...EVENT_TYPES.map((eventType) =>
+                    subscriptionFor(REPO_B, eventType, {}, NO_TEAM),
+                ),
+            ]);
+
+            await service.createWebhook(orgTeam);
+
+            expect(helper.deleteWebhookById).not.toHaveBeenCalled();
+        });
+
+        it('replaces an unmarked subscription of a selected repository instead of creating a second one', async () => {
+            withSelection([REPO_A]);
+            helper.listSubscriptions.mockResolvedValue(
+                EVENT_TYPES.map((eventType) =>
+                    subscriptionFor(REPO_A, eventType, {}, NO_TEAM),
+                ),
+            );
+
+            await service.createWebhook(orgTeam);
+
+            // Replaced, not duplicated: Azure would otherwise deliver every
+            // event twice for this repository.
+            expect(helper.deleteWebhookById).toHaveBeenCalledTimes(3);
+            expect(helper.createSubscriptionForProject).toHaveBeenCalledTimes(3);
+
+            const urls = helper.createSubscriptionForProject.mock.calls.map(
+                (call) => call[0].subscriptionPayload.consumerInputs.url,
+            );
+            urls.forEach((url: string) => {
+                expect(new URL(url).searchParams.get('team')).toBe(
+                    orgTeam.teamId,
+                );
+            });
+        });
+
+        it('does not rewrite a subscription this team already marked', async () => {
+            withSelection([REPO_A]);
+            helper.listSubscriptions.mockResolvedValue(
+                allSubscriptionsFor([REPO_A]),
+            );
+
+            await service.createWebhook(orgTeam);
+
+            expect(helper.createSubscriptionForProject).not.toHaveBeenCalled();
+            expect(helper.deleteWebhookById).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('the one listing the whole pass depends on', () => {
+        it('writes nothing anywhere when the listing fails', async () => {
+            withSelection([REPO_A, REPO_B]);
+            helper.listSubscriptions.mockRejectedValue(
+                new Error('429 Too Many Requests'),
+            );
+
+            await service.createWebhook(orgTeam);
+
+            expect(helper.createSubscriptionForProject).not.toHaveBeenCalled();
+            expect(helper.deleteWebhookById).not.toHaveBeenCalled();
+        });
+
+        it('does not reject, so the fire-and-forget caller cannot crash the process', async () => {
+            withSelection([REPO_A]);
+            helper.listSubscriptions.mockRejectedValue(
+                new Error('403 Forbidden'),
+            );
+
+            await expect(service.createWebhook(orgTeam)).resolves.toBeUndefined();
+        });
+
+        it('releases the single-flight guard, so the next save still runs', async () => {
+            withSelection([REPO_A]);
+            helper.listSubscriptions.mockRejectedValueOnce(
+                new Error('500 Internal Server Error'),
+            );
+
+            await service.createWebhook(orgTeam);
+
+            helper.listSubscriptions.mockResolvedValue([]);
+            await service.createWebhook(orgTeam);
+
+            expect(helper.createSubscriptionForProject).toHaveBeenCalledTimes(3);
+        });
+    });
+
     describe('the scenario this was reported from', () => {
         /**
          * "I connected Azure, saved the repos, it created the webhooks. Then I

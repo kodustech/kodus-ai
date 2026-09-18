@@ -2414,11 +2414,33 @@ export class AzureReposService implements Omit<
             // safe because each repository/event pair is visited exactly once
             // per pass, so nothing this pass creates can be missed by its own
             // later lookups.
-            const existingSubscriptions =
-                await this.azureReposRequestHelper.listSubscriptions({
-                    orgName: azureAuthDetail.orgName,
-                    token: azureAuthDetail.token,
+            let existingSubscriptions: AzureRepoSubscription[];
+
+            try {
+                existingSubscriptions =
+                    await this.azureReposRequestHelper.listSubscriptions({
+                        orgName: azureAuthDetail.orgName,
+                        token: azureAuthDetail.token,
+                    });
+            } catch (error) {
+                // The whole pass reads from this one snapshot, so losing it
+                // means nothing is created and nothing is pruned for any
+                // repository. Reported here rather than through the pass-level
+                // catch, which cannot say which step failed, and returning
+                // instead of throwing keeps the fire-and-forget caller intact.
+                this.logger.error({
+                    message: `[AZURE-HOOKS] pass ${passId} | subscription listing failed — no webhook created or pruned for any of the ${selection.length} selected repositories`,
+                    context: this.createWebhook.name,
+                    error: error,
+                    metadata: {
+                        passId,
+                        organizationAndTeamData,
+                        repositoryCount: selection.length,
+                    },
                 });
+
+                return null;
+            }
 
             // Converge down before converging up. Pruning first leaves at
             // most one subscription per repository and event, so the create
@@ -2434,7 +2456,28 @@ export class AzureReposService implements Omit<
                     token: azureAuthDetail.token,
                     selection,
                     existingSubscriptions,
+                    teamId: organizationAndTeamData?.teamId,
                 });
+
+            // One index for the whole pass. The create side used to rescan the
+            // organization-wide snapshot once per repository per event type,
+            // which grows with the organization rather than with the
+            // selection. Keyed exactly like the prune step so the two cannot
+            // disagree about what counts as the same subscription.
+            const subscriptionIndex = new Map<string, AzureRepoSubscription[]>();
+
+            for (const subscription of surviving) {
+                const key = AzureReposService.subscriptionKey(
+                    subscription.publisherInputs?.projectId,
+                    subscription.publisherInputs?.repository,
+                    subscription.eventType,
+                );
+
+                subscriptionIndex.set(key, [
+                    ...(subscriptionIndex.get(key) ?? []),
+                    subscription,
+                ]);
+            }
 
             for (const repo of selection) {
                 await this.createNotificationChannel(
@@ -2443,7 +2486,8 @@ export class AzureReposService implements Omit<
                     azureAuthDetail.orgName,
                     repo.id,
                     passId,
-                    surviving,
+                    subscriptionIndex,
+                    organizationAndTeamData?.teamId,
                 );
             }
 
@@ -4166,9 +4210,16 @@ export class AzureReposService implements Omit<
         token: string;
         selection: Repositories[];
         existingSubscriptions: AzureRepoSubscription[];
+        teamId?: string;
     }): Promise<{ removed: number; surviving: AzureRepoSubscription[] }> {
-        const { passId, orgName, token, selection, existingSubscriptions } =
-            params;
+        const {
+            passId,
+            orgName,
+            token,
+            selection,
+            existingSubscriptions,
+            teamId,
+        } = params;
 
         const webhookUrl =
             process.env.GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK;
@@ -4185,30 +4236,42 @@ export class AzureReposService implements Omit<
             return { removed: 0, surviving: existingSubscriptions };
         }
 
-        const subscriptionKey = (
-            projectId?: string,
-            repoId?: string,
-            eventType?: string,
-        ) => `${projectId}|${repoId}|${eventType}`;
-
         const desired = new Set<string>();
 
         for (const repo of selection) {
             for (const event of AzureReposService.WEBHOOK_EVENTS) {
                 desired.add(
-                    subscriptionKey(repo?.project?.id, repo?.id, event.type),
+                    AzureReposService.subscriptionKey(
+                        repo?.project?.id,
+                        repo?.id,
+                        event.type,
+                    ),
                 );
             }
         }
 
+        // Deletion is scoped to subscriptions this team minted, not merely to
+        // ones pointing at this deployment's webhook URL. The URL is a single
+        // env var for the whole deployment and an Azure organization can be
+        // connected by more than one team -- nothing enforces otherwise -- so
+        // matching on it alone would let one team's save delete another team's
+        // hooks and silently stop their reviews. Subscriptions created before
+        // the team marker existed carry no owner and are left alone: they are
+        // still replaced when their repository is selected (see
+        // `createOrReplaceHook`), which is what tags them, but they are never
+        // removed on someone else's behalf.
         const ours = existingSubscriptions.filter((subscription) =>
-            subscription.consumerInputs?.url?.includes(webhookUrl),
+            this.subscriptionBelongsToTeam(
+                subscription.consumerInputs?.url,
+                webhookUrl,
+                teamId,
+            ),
         );
 
         const byKey = new Map<string, AzureRepoSubscription[]>();
 
         for (const subscription of ours) {
-            const key = subscriptionKey(
+            const key = AzureReposService.subscriptionKey(
                 subscription.publisherInputs?.projectId,
                 subscription.publisherInputs?.repository,
                 subscription.eventType,
@@ -4316,7 +4379,8 @@ export class AzureReposService implements Omit<
         organizationName: string,
         repoId: string,
         passId?: string,
-        existingSubscriptions: AzureRepoSubscription[] = [],
+        subscriptionIndex: Map<string, AzureRepoSubscription[]> = new Map(),
+        teamId?: string,
     ): Promise<void> {
         const webhookUrl =
             process.env.GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK!;
@@ -4347,7 +4411,8 @@ export class AzureReposService implements Omit<
                 webhookUrl,
                 encryptedToken,
                 passId,
-                existingSubscriptions,
+                subscriptionIndex,
+                teamId,
             }).catch((error) => {
                 this.logger.error({
                     message: `Erro no hook ${type}: ${error.message ?? error}`,
@@ -4365,6 +4430,64 @@ export class AzureReposService implements Omit<
 
         // Aguardar todas, mas já lidamos com erros acima
         await Promise.all(tasks);
+    }
+
+    /**
+     * Query parameter that records which Kodus team minted a subscription.
+     *
+     * The callback URL is otherwise identical for every team on a deployment,
+     * and an Azure organization can be connected by more than one of them, so
+     * without this there is no way to tell whose hook a subscription is.
+     */
+    private static readonly TEAM_PARAM = 'team';
+
+    /** Identity of a subscription: one per repository, per event type. */
+    private static subscriptionKey(
+        projectId?: string,
+        repoId?: string,
+        eventType?: string,
+    ): string {
+        return `${projectId}|${repoId}|${eventType}`;
+    }
+
+    /** The callback URL this instance mints for a team's subscriptions. */
+    private buildWebhookCallbackUrl(
+        webhookUrl: string,
+        encryptedToken: string,
+        teamId?: string,
+    ): string {
+        const base = `${webhookUrl}?token=${encodeURIComponent(encryptedToken)}`;
+
+        return teamId
+            ? `${base}&${AzureReposService.TEAM_PARAM}=${encodeURIComponent(teamId)}`
+            : base;
+    }
+
+    /**
+     * Whether a subscription was minted by this team, which is what makes it
+     * safe to delete. Deliberately stricter than "points at our webhook URL":
+     * that is true of every team on the deployment. A subscription with no
+     * owner marker predates the marker and belongs to nobody, so it is never
+     * deleted on a guess.
+     */
+    private subscriptionBelongsToTeam(
+        subscriptionUrl: string | undefined,
+        webhookUrl: string,
+        teamId?: string,
+    ): boolean {
+        if (!subscriptionUrl?.includes(webhookUrl) || !teamId) {
+            return false;
+        }
+
+        try {
+            return (
+                new URL(subscriptionUrl).searchParams.get(
+                    AzureReposService.TEAM_PARAM,
+                ) === String(teamId)
+            );
+        } catch {
+            return false;
+        }
     }
 
     /**
@@ -4404,7 +4527,8 @@ export class AzureReposService implements Omit<
         webhookUrl: string;
         encryptedToken: string;
         passId?: string;
-        existingSubscriptions: AzureRepoSubscription[];
+        subscriptionIndex: Map<string, AzureRepoSubscription[]>;
+        teamId?: string;
     }): Promise<void> {
         const {
             orgName,
@@ -4416,7 +4540,7 @@ export class AzureReposService implements Omit<
             webhookUrl,
             encryptedToken,
             passId,
-            existingSubscriptions,
+            subscriptionIndex,
         } = opts;
 
         try {
@@ -4428,28 +4552,45 @@ export class AzureReposService implements Omit<
                 consumerActionId: 'httpRequest',
                 publisherInputs: { projectId, repository: repoId },
                 consumerInputs: {
-                    url: `${webhookUrl}?token=${encodeURIComponent(encryptedToken)}`,
+                    url: this.buildWebhookCallbackUrl(
+                        webhookUrl,
+                        encryptedToken,
+                        opts.teamId,
+                    ),
                     resourceDetailsToSend: 'all',
                     messagesToSend: 'all',
                     detailedMessagesToSend: 'all',
                 },
             };
 
-            // The pass listed the organization's subscriptions once and
-            // handed the result down; the project filter that
-            // `listSubscriptionsByProject` used to apply is done here instead,
-            // so the match is the same one as before.
-            const existing = existingSubscriptions.find(
-                (s) =>
-                    s.eventType === eventType &&
-                    s.publisherInputs?.projectId === projectId &&
-                    s.publisherInputs?.repository === repoId &&
-                    s.consumerInputs?.url?.includes(webhookUrl),
-            );
+            // The pass indexed the organization's subscriptions once and
+            // handed the map down, so this is a lookup rather than a rescan of
+            // the whole organization per repository per event type.
+            //
+            // Matching here is by callback URL, which is wider than the
+            // ownership rule the prune step applies: a subscription minted
+            // before the team marker existed has no owner, and finding it here
+            // is what lets it be replaced by a marked one instead of having a
+            // second subscription created beside it -- which would make Azure
+            // deliver every event twice.
+            const existing = (
+                subscriptionIndex.get(
+                    AzureReposService.subscriptionKey(
+                        projectId,
+                        repoId,
+                        eventType,
+                    ),
+                ) ?? []
+            ).find((s) => s.consumerInputs?.url?.includes(webhookUrl));
 
             const usable =
                 !!existing &&
-                this.hasUsableWebhookToken(existing.consumerInputs?.url);
+                this.hasUsableWebhookToken(existing.consumerInputs?.url) &&
+                this.subscriptionBelongsToTeam(
+                    existing.consumerInputs?.url,
+                    webhookUrl,
+                    opts.teamId,
+                );
 
             this.logger.log({
                 message: `[AZURE-HOOKS] pass ${passId} repo ${repoId} | ${eventType} | decision=${usable ? 'skip-already-subscribed' : existing ? 'delete-then-create' : 'create-only'}`,
@@ -4459,7 +4600,7 @@ export class AzureReposService implements Omit<
                     projectId,
                     repoId,
                     eventType,
-                    subscriptionsInSnapshot: existingSubscriptions.length,
+                    subscriptionsInSnapshot: subscriptionIndex.size,
                     decision: usable
                         ? 'skip-already-subscribed'
                         : existing
