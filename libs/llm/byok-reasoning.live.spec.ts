@@ -1124,6 +1124,40 @@ describe('BYOK reasoning — LIVE provider contract', () => {
         }
     });
 
+    /**
+     * The weekly cron string is written THREE times — once in `on.schedule`,
+     * once in the daily job's `if` (to stand down on that day) and once in this
+     * job's `if` (to stand up). Nothing connected them, and they are exactly the
+     * kind of constant that gets edited in one place: move the day in the
+     * schedule alone and the weekly run fires with BOTH jobs disabled, which
+     * reports green having run nothing at all.
+     */
+    it('the weekly cron agrees across the schedule and both job gates', () => {
+        const workflow = readFileSync(
+            join(__dirname, '..', '..', '.github', 'workflows', 'contract-tests.yml'),
+            'utf8',
+        );
+        const crons = [...workflow.matchAll(/^\s+- cron:\s*"([^"]+)"/gm)].map(
+            (m) => m[1],
+        );
+        // The daily tier is the `* * *` one; the other is the weekly BYOK cron.
+        const weekly = crons.filter((c) => !/\*\s+\*\s+\*$/.test(c));
+        expect(weekly).toHaveLength(1);
+
+        const standsDown = workflow.match(
+            /if:\s*github\.event\.schedule\s*!=\s*'([^']+)'/,
+        )?.[1];
+        const standsUp = workflow.match(
+            /github\.event\.schedule\s*==\s*'([^']+)'/,
+        )?.[1];
+
+        expect([weekly[0], standsDown, standsUp]).toEqual([
+            weekly[0],
+            weekly[0],
+            weekly[0],
+        ]);
+    });
+
     it('reports which brands this run actually covered', () => {
         const covered = configured.map((c) => c.brand);
         // Two reasons a row sits out, and they mean opposite things. "No

@@ -33,11 +33,23 @@ on:
         # Daily 06:00 UTC (03:00 BRT) — after the nightly crons, before the
         # workday starts in BRT.
         - cron: "0 6 * * *"
-        # Weekly Monday 07:00 UTC — the BYOK reasoning LIVE tier only. Weekly,
+        # Weekly FRIDAY 07:00 UTC — the BYOK reasoning LIVE tier only. Weekly,
         # not daily, because unlike the near-free REST pings above this one
         # spends real tokens on seven providers; the drift it catches (a model
         # changing how it is configured) moves on a scale of weeks, not hours.
-        - cron: "0 7 * * 1"
+        #
+        # Friday, not Monday, because Friday is the release train — the day the
+        # deploy happens. Provider drift found on Monday sits for four days
+        # behind whatever shipped; found on Friday morning it is in front of the
+        # people already looking at a release. (GitHub's cron is best-effort and
+        # has been running 4-7h late in practice, which lands this mid-morning
+        # BRT — during the release window rather than before it, and that is
+        # fine: the point is the same day, not the same hour.)
+        #
+        # THIS STRING APPEARS IN BOTH JOBS' `if:` BELOW. A spec invariant checks
+        # the three copies agree, because when they drift either both tiers run
+        # on Friday or neither does.
+        - cron: "0 7 * * 5"
     workflow_dispatch:
     # Deliberately NOT every PR (an external API flaking must not block an
     # unrelated merge) — only PRs that touch the contract tests themselves
@@ -68,7 +80,7 @@ jobs:
         # Skipped on the weekly BYOK cron below — that schedule exists only to
         # drive `byok-live`, and re-running the daily tier there would just be
         # noise in the Actions tab.
-        if: github.event.schedule != '0 7 * * 1'
+        if: github.event.schedule != '0 7 * * 5'
         runs-on: ubuntu-latest
         timeout-minutes: 20
         # `BB_TEST_APP_PASSWORD` exists BOTH repo-level (older) and in the `ci`
@@ -201,7 +213,7 @@ jobs:
     # coverage instead of a false red, and fork PRs stay green.
     byok-live:
         name: BYOK reasoning live contract (weekly)
-        # Weekly cron and manual dispatch ONLY — deliberately not on pull_request.
+        # Weekly cron (Friday) and manual dispatch ONLY — deliberately not on pull_request.
         # It used to run on PRs harmlessly, because the fallbacks named secrets
         # that do not exist and every row skipped. Now that they name the secrets
         # that DO, a PR touching this file would make real calls to ten vendors
@@ -216,7 +228,7 @@ jobs:
         # `workflow_dispatch` stays, so a live check is one click away when a row
         # changes and you want the answer before Monday.
         if: >-
-            github.event.schedule == '0 7 * * 1' ||
+            github.event.schedule == '0 7 * * 5' ||
             github.event_name == 'workflow_dispatch'
         runs-on: ubuntu-latest
         timeout-minutes: 15
@@ -298,7 +310,22 @@ jobs:
               # import, which Jest refuses without this flag — the row then
               # fails with a TypeError about vm-modules, saying nothing about
               # Vertex. Every other row is unaffected by it.
-              run: NODE_OPTIONS=--experimental-vm-modules pnpm exec jest --config jest.config.ts libs/llm/byok-reasoning.live.spec.ts --no-coverage --forceExit
+              run: NODE_OPTIONS=--experimental-vm-modules pnpm exec jest --config jest.config.ts libs/llm/byok-reasoning.live.spec.ts --no-coverage --forceExit --json --outputFile=byok-live-report.json
+
+            # Turn the run into something readable BEFORE it reaches Discord.
+            # The old notification was a fixed paragraph asserting drift, which
+            # was wrong for every failure of the last two months (dead keys, a
+            # GCP quota) and named no row either way. `if: always()` because the
+            # summary is only useful on the path where the job failed.
+            - name: Summarize the failing rows
+              id: byok_summary
+              if: always()
+              run: |
+                  {
+                      echo 'text<<SUMMARY_EOF'
+                      node scripts/ci/summarize-byok-live.mjs byok-live-report.json
+                      echo 'SUMMARY_EOF'
+                  } >> "$GITHUB_OUTPUT"
 
             - name: Notify Discord on failure
               if: failure()
@@ -314,7 +341,7 @@ jobs:
                   status: failure
                   title: "❌ BYOK reasoning live tier failed — drift, or a dead credential"
                   description: |
-                      Read the failing test before assuming drift. Two different things land here:
-                      • "never reached the model — this is a CREDENTIAL failure": the secret that row runs on is dead (expired, rotated, unpaid). Nothing about the request shape was tested, and every row sharing that key is equally uncovered. Rotate the secret — there is no changelog to hunt.
-                      • anything else: a brand no longer accepts (or no longer honours) the reasoning shape we send. The failing test names the brand and shows the request we built. This is NOT a release gate — it means customer reviews on that provider are silently degrading.
+                      ${{ steps.byok_summary.outputs.text }}
+
+                      A `dead credential` line means the secret is expired, rotated or unpaid — the request shape was never tested, so rotate it rather than hunting a changelog. Anything else is the vendor refusing or ignoring what we send, and customer reviews on that provider are degrading now. Not a release gate either way.
                       Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
