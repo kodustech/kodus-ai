@@ -18,7 +18,7 @@ permissions:
 env:
     RUNO_HOME: /home/runner/.runo-preview-ohio
     RUNO_AWS_REGION: us-east-2
-    RUNO_REF: feat/isolated-control-plane
+    RUNO_REF: main
 
 jobs:
     destroy:
