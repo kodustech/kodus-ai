@@ -13,7 +13,6 @@ import {
 import { useMCPAvailability } from "@services/mcp-manager/hooks";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
-import { formatUsd } from "@services/usage/format";
 import { useQueryClient } from "@tanstack/react-query";
 import {
     BlocksIcon,
@@ -116,29 +115,27 @@ export const NavMenu = () => {
                 href: credits.usesKodusProvider ? "/byok#kodus" : "/byok",
                 visible: canEditOrg,
                 matcher: (path) => path.startsWith("/byok"),
-                // Orgs on the Kodus provider carry their prepaid balance
-                // here, where the entry they'd click already is.
-                badge: credits.usesKodusProvider ? (
-                    <span
-                        data-testid="nav-credits"
-                        className={cn(
-                            "text-xs tabular-nums",
-                            // Urgent only when routing actually reaches Kodus;
-                            // otherwise an empty balance costs the org nothing
-                            // and the chip just states it.
-                            credits.exhausted && credits.routedThroughKodus
-                                ? "text-danger"
-                                : credits.low
-                                  ? "text-warning"
-                                  : "text-text-tertiary",
-                        )}>
-                        {credits.exhausted && credits.routedThroughKodus
-                            ? "Top up"
-                            : typeof credits.balanceUsd === "number"
-                              ? formatUsd(credits.balanceUsd)
-                              : ""}
-                    </span>
-                ) : undefined,
+                // No balance here. A badge beside a nav item means "this many
+                // things need you" everywhere else in the app, so putting
+                // currency in that slot made the healthy state read as a
+                // counter — and the number answered a question nobody asks
+                // while navigating. The balance lives on the page below, where
+                // it sits next to what it pays for, the fee and the top-up.
+                //
+                // What's left is only the state that needs acting on, and the
+                // exhausted case is already a band at the top of the app, so
+                // announcing it twice at once helped no one: this reduces to
+                // the nudge that had no home at all — running low.
+                badge:
+                    credits.usesKodusProvider &&
+                    credits.low &&
+                    credits.routedThroughKodus ? (
+                        <span
+                            data-testid="nav-credits"
+                            className="text-warning text-xs">
+                            Low
+                        </span>
+                    ) : undefined,
             },
             {
                 label: "Settings",
@@ -186,9 +183,9 @@ export const NavMenu = () => {
         // balance had not arrived yet — and stayed blank afterwards, while
         // the topbar next to it announced that reviews were paused. Listed
         // field by field: `credits` is a fresh object every render.
+        // Only what the nav actually reads now that the balance moved to the
+        // page: the badge is a low-credit nudge, not a number.
         credits.usesKodusProvider,
-        credits.balanceUsd,
-        credits.exhausted,
         credits.routedThroughKodus,
         credits.low,
     ]);

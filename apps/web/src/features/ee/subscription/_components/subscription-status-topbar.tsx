@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@components/ui/button";
 import { Link } from "@components/ui/link";
+import { formatUsd } from "@services/usage/format";
 import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
 import { useKodusCreditBalance } from "src/features/ee/byok/_hooks/use-kodus-credit-balance";
 import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
@@ -155,6 +156,24 @@ const CreditsExhausted = ({ neverFunded }: { neverFunded: boolean }) => {
     );
 };
 
+/**
+ * The warning BEFORE the block. Exhausted already had a band; low had only
+ * an amber tint on a number in the nav, which is not something anyone
+ * notices in time to act on it. Same routing gate as exhausted: a balance
+ * running low on an org that routes nothing through Kodus threatens nothing.
+ */
+const CreditsLow = ({ balanceUsd }: { balanceUsd: number | undefined }) => (
+    <div className="bg-warning/25 py-2 text-center text-sm">
+        Your Kodus credits are running low
+        {typeof balanceUsd === "number" ? ` (${formatUsd(balanceUsd)})` : ""} —
+        reviews on Kodus-routed models stop when they run out.{" "}
+        <Link href="/byok#kodus" className="font-bold">
+            Top up credits
+        </Link>
+        .
+    </div>
+);
+
 export const SubscriptionStatusTopbar = () => {
     const { status } = useSubscriptionStatus();
     const credits = useKodusCreditBalance();
@@ -174,6 +193,16 @@ export const SubscriptionStatusTopbar = () => {
         return (
             <div>
                 <CreditsExhausted neverFunded={credits.neverFunded} />
+                {Component && <Component />}
+            </div>
+        );
+    }
+
+    // Same shape one step earlier: warn while there is still time to act.
+    if (credits.low && credits.routedThroughKodus) {
+        return (
+            <div>
+                <CreditsLow balanceUsd={credits.balanceUsd} />
                 {Component && <Component />}
             </div>
         );

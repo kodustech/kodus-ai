@@ -93,14 +93,18 @@ export const useKodusCreditBalance = (): KodusCreditBalanceView => {
     const known = typeof balanceUsd === "number";
 
     const exhausted = known && balanceUsd <= 0;
+    const low = known && balanceUsd > 0 && balanceUsd <= lowThresholdUsd;
 
-    // Connecting Kodus is not the same as routing to it. Asked only when the
-    // balance is gone on an org that has Kodus configured — the one case where
-    // the answer decides between "reviews are paused" and "nothing happened".
+    // Connecting Kodus is not the same as routing to it. Asked when the
+    // balance is gone OR running out on an org that has Kodus configured —
+    // the cases where the answer decides between "this threatens your
+    // reviews" and "nothing happens here". It used to be asked for
+    // `exhausted` alone, which quietly made `routedThroughKodus` always false
+    // while merely low: anything gated on both could never fire.
     const routingQuery = useQuery({
         queryKey: ["kodus-credits", "routing", teamId],
         queryFn: () => getBYOK(),
-        enabled: credits.usesKodusProvider && exhausted,
+        enabled: credits.usesKodusProvider && (exhausted || low),
         staleTime: 60_000,
     });
 
@@ -110,7 +114,7 @@ export const useKodusCreditBalance = (): KodusCreditBalanceView => {
         balanceUsd,
         known,
         exhausted,
-        low: known && balanceUsd > 0 && balanceUsd <= lowThresholdUsd,
+        low,
         neverFunded:
             exhausted && !!balance && balance.lifetimePurchasedUsd === 0,
         autoTopUp: balance?.autoTopUp ?? null,
