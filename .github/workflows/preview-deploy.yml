@@ -191,6 +191,18 @@ jobs:
                   $RUNO share qa --branch "$HEAD_REF" || \
                       echo "::warning::preview deployed, but QA sharing failed"
 
+            - name: Dump MCP and billing diagnostics
+              if: always() && steps.env.outputs.configured == 'true'
+              env:
+                  RUNO_SERVER: ${{ vars.PREVIEW_RUNO_SERVER }}
+                  RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
+                  HEAD_REF: ${{ steps.target.outputs.branch }}
+              run: |
+                  # A failed optional-service health check must leave evidence
+                  # in the Actions run, not require an SSH key on a laptop.
+                  $RUNO exec --branch "$HEAD_REF" -- \
+                    'docker compose -f docker-compose.dev.yml -f docker-compose.preview.yml --profile mcp ps; docker compose -f docker-compose.dev.yml -f docker-compose.preview.yml --profile mcp logs --tail=200 mcp-manager kodus-service-billing' || true
+
             - name: Comment the preview link
               if: always() && github.event_name == 'pull_request' && steps.env.outputs.configured == 'true'
               uses: actions/github-script@v9.0.0
