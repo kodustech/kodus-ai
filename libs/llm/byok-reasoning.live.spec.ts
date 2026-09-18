@@ -714,6 +714,14 @@ const LIVE = [
     // `credentialField` and no new mechanism, just the secret.
     {
         brand: 'google_vertex',
+        // GATED OFF, and the gate is the point. The Vertex credential IS in CI,
+        // so without this the three Claude rows would run every Monday and fail
+        // every Monday on a quota grant nobody is pursuing — the red-every-week
+        // alarm this whole file is built to avoid. They are not deleted because
+        // the shapes they cover are real and the measurement behind them cost an
+        // evening; set BYOK_VERTEX_CLAUDE=1 on a project that has the quota and
+        // all three wake up. The Gemini row below stays live: it passes.
+        requires: () => !!process.env.BYOK_VERTEX_CLAUDE,
         // NOT yet verified against a live vendor, and the reason is a GCP quota
         // grant rather than anything in our code. Walked the whole path on
         // 2026-09-17, on a project with billing enabled, roles/aiplatform.user
@@ -757,6 +765,14 @@ const LIVE = [
     // force here, where the corpus holds no Vertex slot at all.
     {
         brand: 'google_vertex_modern',
+        // GATED OFF, and the gate is the point. The Vertex credential IS in CI,
+        // so without this the three Claude rows would run every Monday and fail
+        // every Monday on a quota grant nobody is pursuing — the red-every-week
+        // alarm this whole file is built to avoid. They are not deleted because
+        // the shapes they cover are real and the measurement behind them cost an
+        // evening; set BYOK_VERTEX_CLAUDE=1 on a project that has the quota and
+        // all three wake up. The Gemini row below stays live: it passes.
+        requires: () => !!process.env.BYOK_VERTEX_CLAUDE,
         // THE TEMPERATURE IS THE SUBJECT, and without it this row is redundant.
         // Checked before writing it: `reasoning()` on Vertex returns the SAME
         // body for both bands —
@@ -782,6 +798,14 @@ const LIVE = [
     },
     {
         brand: 'google_vertex_legacy',
+        // GATED OFF, and the gate is the point. The Vertex credential IS in CI,
+        // so without this the three Claude rows would run every Monday and fail
+        // every Monday on a quota grant nobody is pursuing — the red-every-week
+        // alarm this whole file is built to avoid. They are not deleted because
+        // the shapes they cover are real and the measurement behind them cost an
+        // evening; set BYOK_VERTEX_CLAUDE=1 on a project that has the quota and
+        // all three wake up. The Gemini row below stays live: it passes.
+        requires: () => !!process.env.BYOK_VERTEX_CLAUDE,
         // `low` AND a cap of its own, because the budget shape states its
         // ceiling out loud and the protocol requires max_tokens above it:
         //   low 5,000 · medium 15,000 · high 40,000
@@ -1087,14 +1111,27 @@ describe('BYOK reasoning — LIVE provider contract', () => {
 
     it('reports which brands this run actually covered', () => {
         const covered = configured.map((c) => c.brand);
-        const skipped = LIVE.filter((c) => !canRun(c)).map((c) => c.brand);
+        // Two reasons a row sits out, and they mean opposite things. "No
+        // credential" is a secret someone can go set; "gated off" is a row
+        // deliberately parked behind a flag because the blocker is outside this
+        // repo. Reporting both as the first sends people hunting for a key that
+        // is already there — the Vertex rows hold a working service account and
+        // wait on a GCP quota grant.
+        const gated = LIVE.filter(
+            (c) => (c as { requires?: () => boolean }).requires?.() === false,
+        ).map((c) => c.brand);
+        const gatedSet = new Set(gated);
+        const skipped = LIVE.filter(
+            (c) => !canRun(c) && !gatedSet.has(c.brand),
+        ).map((c) => c.brand);
         // Coverage is DATA, not a failure: a PARTIAL secret is a legitimate
         // green, and so is a fork PR with none. Printing it stops "green" from
         // being mistaken for "everything was checked".
         // eslint-disable-next-line no-console
         console.log(
             `[byok-live] covered: ${covered.join(', ') || '(none)'}\n` +
-                `[byok-live] skipped (no credential): ${skipped.join(', ') || '(none)'}`,
+                `[byok-live] skipped (no credential): ${skipped.join(', ') || '(none)'}\n` +
+                `[byok-live] gated off (blocker outside this repo): ${gated.join(', ') || '(none)'}`,
         );
         expect(LIVE.length).toBeGreaterThan(0);
 
