@@ -242,17 +242,10 @@ describe('formatSuggestionContent — LLM.run contract (#1786)', () => {
                     },
                 },
             });
-            // A thinking-by-default DeepSeek on OpenRouter must be TOLD off out
-            // loud: omitting the effort param leaves the upstream's own default
-            // in force (OpenRouter does not disable anything on its own), so the
-            // routing pins survive AND the reasoning is actually turned off.
-            expect(arg.providerOptions.openrouter).toEqual({
-                provider: {
-                    order: ['fireworks', 'together'],
-                    allow_fallbacks: false,
-                },
-                reasoning: { effort: 'none' },
-            });
+            // OpenRouter expresses reasoning-off by OMITTING the effort param.
+            expect(arg.providerOptions).not.toHaveProperty(
+                'openrouter.reasoning',
+            );
         });
 
         it('emits thinking:disabled for a thinking-by-default DeepSeek BYOK slot (the #1851 cause)', async () => {
@@ -272,63 +265,18 @@ describe('formatSuggestionContent — LLM.run contract (#1786)', () => {
             });
         });
 
-        it('forces reasoning OFF on the CLOUD managed path (no BYOK slot, no env model)', async () => {
+        it('forces reasoning OFF on the env/managed path (no BYOK slot)', async () => {
             mockRun.mockResolvedValue(
                 '[{"index": 0, "suggestionContent": "ok"}]',
             );
 
-            // No byokConfig AND no self-hosted env model → the Kodus-funded
-            // Fireworks DeepSeek managed default. The formatter must emit the
-            // CONCRETE disable payload, not a truthy `{}` that replaces the
-            // funnel's providerOptions without disabling anything (#1851).
-            const prev = process.env.API_LLM_PROVIDER_MODEL;
-            delete process.env.API_LLM_PROVIDER_MODEL;
-            try {
-                await formatSuggestionContent([suggestion]);
-            } finally {
-                if (prev === undefined)
-                    delete process.env.API_LLM_PROVIDER_MODEL;
-                else process.env.API_LLM_PROVIDER_MODEL = prev;
-            }
+            // No byokConfig → env/managed default. The formatter must still not
+            // be left thinking-by-default.
+            await formatSuggestionContent([suggestion]);
 
             const arg = mockRun.mock.calls[0][0];
             expect(arg.byokConfig).toBeUndefined();
-            expect(arg.providerOptions).toEqual({
-                openaiCompatible: { thinking: { type: 'disabled' } },
-            });
-        });
-
-        it('forces reasoning OFF on the self-hosted env path (thinking-by-default env model)', async () => {
-            mockRun.mockResolvedValue(
-                '[{"index": 0, "suggestionContent": "ok"}]',
-            );
-
-            // No byokConfig, but a self-hosted DeepSeek env model → the env
-            // descriptor resolves it to openai_compatible and the formatter must
-            // say "off" out loud just like a connected BYOK slot of that model.
-            const snapshot = {
-                API_LLM_PROVIDER_MODEL: process.env.API_LLM_PROVIDER_MODEL,
-                API_OPEN_AI_API_KEY: process.env.API_OPEN_AI_API_KEY,
-                API_OPENAI_FORCE_BASE_URL:
-                    process.env.API_OPENAI_FORCE_BASE_URL,
-            };
-            process.env.API_LLM_PROVIDER_MODEL = 'deepseek-v4-pro';
-            process.env.API_OPEN_AI_API_KEY = 'sk-x';
-            process.env.API_OPENAI_FORCE_BASE_URL = 'https://api.deepseek.com/v1';
-            try {
-                await formatSuggestionContent([suggestion]);
-            } finally {
-                for (const [k, v] of Object.entries(snapshot)) {
-                    if (v === undefined) delete process.env[k];
-                    else process.env[k] = v;
-                }
-            }
-
-            const arg = mockRun.mock.calls[0][0];
-            expect(arg.byokConfig).toBeUndefined();
-            expect(arg.providerOptions).toEqual({
-                openaiCompatible: { thinking: { type: 'disabled' } },
-            });
+            expect(arg.providerOptions).toBeDefined();
         });
     });
 

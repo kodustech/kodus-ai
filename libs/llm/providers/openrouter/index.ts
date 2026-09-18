@@ -83,26 +83,10 @@ export const openRouterModule: ProviderModule = {
     },
 
     reasoning(
-        cfg: ProviderBuildConfig,
+        _cfg: ProviderBuildConfig,
         effort: ReasoningEffort,
     ): ProviderReasoningOptions {
-        if (effort === 'none') {
-            // `reasoning.effort: 'none'` on OpenRouter DISABLES reasoning — its
-            // own docs say exactly that — but sending it to an upstream that
-            // REJECTS an explicit off (always-thinking GLM-5.3 / Kimi k2.7-code
-            // / k3, MiniMax M2) is a 400 the docs tell you to avoid. Same gate
-            // as the openai_compatible module: say "off" out loud for a
-            // RECOGNIZED disable-able thinking-by-default model, omit for
-            // everything else (unknown upstreams and always-thinking variants
-            // that reject the field). Omitting here leaves the upstream's own
-            // default in force (see reasoningTraits below), which is exactly
-            // why a thinking-by-default DeepSeek must be told "off" explicitly.
-            const traits = resolveCompatibleReasoningTraits(cfg.model);
-            if (traits.thinksByDefault && traits.canDisableThinking) {
-                return { openrouter: { reasoning: { effort: 'none' } } };
-            }
-            return {};
-        }
+        if (effort === 'none') return {};
         // OpenRouter normalizes reasoning across upstreams via reasoning.effort.
         return { openrouter: { reasoning: { effort } } };
     },
@@ -142,9 +126,7 @@ export const openRouterModule: ProviderModule = {
             // OpenRouter leaves the upstream's own default in force, it does not
             // disable anything. So we must not impose a family default here —
             // doing so would change what 23 production slots spend, to say what
-            // the upstream was already going to do. ("none" still reaches the
-            // wire as `reasoning.effort: 'none'` for a recognized disable-able
-            // thinking-by-default model — see `reasoning()` above.)
+            // the upstream was already going to do.
             omittingDisablesReasoning: false,
         };
     },
