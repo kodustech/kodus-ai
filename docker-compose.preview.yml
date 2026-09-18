@@ -70,6 +70,12 @@ services:
                 condition: service_healthy
         env_file:
             - .env.billing
+        environment:
+            # The billing repo reads these directly at module import time.
+            # Supplying them in the overlay keeps the generated secret file
+            # independent of the URL, which Runo only knows after exposing VM.
+            - CORS_URLS=${RUNO_PUBLIC_URL}
+            - FRONTEND_URL=${RUNO_PUBLIC_URL}
         ports:
             - '3992:3992'
         restart: unless-stopped
