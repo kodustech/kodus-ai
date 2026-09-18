@@ -776,6 +776,86 @@ describe('AzureReposService webhook subscriptions (issue #1956)', () => {
         });
     });
 
+    describe('health: a subscription Azure stopped delivering is not coverage', () => {
+        /**
+         * Azure moves a subscription out of `enabled` by itself after repeated
+         * delivery failures or when the creating identity goes inactive. The
+         * old code deleted and recreated on every save and healed these as a
+         * side effect; skipping redundant work means the check is explicit.
+         */
+        it.each([
+            'onProbation',
+            'disabledBySystem',
+            'disabledByUser',
+            'disabledByInactiveIdentity',
+        ])('replaces a subscription in %s', async (status) => {
+            withSelection([REPO_A]);
+            helper.listSubscriptions.mockResolvedValue(
+                EVENT_TYPES.map((eventType) =>
+                    subscriptionFor(REPO_A, eventType, { status } as any),
+                ),
+            );
+
+            await service.createWebhook(orgTeam);
+
+            expect(helper.deleteWebhookById).toHaveBeenCalledTimes(3);
+            expect(helper.createSubscriptionForProject).toHaveBeenCalledTimes(3);
+        });
+
+        it('leaves an enabled subscription alone', async () => {
+            withSelection([REPO_A]);
+            helper.listSubscriptions.mockResolvedValue(
+                EVENT_TYPES.map((eventType) =>
+                    subscriptionFor(REPO_A, eventType, {
+                        status: 'enabled',
+                    } as any),
+                ),
+            );
+
+            await service.createWebhook(orgTeam);
+
+            expect(helper.createSubscriptionForProject).not.toHaveBeenCalled();
+            expect(helper.deleteWebhookById).not.toHaveBeenCalled();
+        });
+
+        it('treats a missing status as enabled rather than churning', async () => {
+            withSelection([REPO_A]);
+            helper.listSubscriptions.mockResolvedValue(
+                allSubscriptionsFor([REPO_A]),
+            );
+
+            await service.createWebhook(orgTeam);
+
+            expect(helper.createSubscriptionForProject).not.toHaveBeenCalled();
+        });
+
+        it('keeps the delivering copy when collapsing duplicates, not just the one with a valid token', async () => {
+            const eventType = EVENT_TYPES[0];
+
+            withSelection([REPO_A]);
+            helper.listSubscriptions.mockResolvedValue([
+                // Valid token, but Azure stopped delivering it.
+                subscriptionFor(REPO_A, eventType, {
+                    id: 'sub-dead',
+                    status: 'disabledBySystem',
+                } as any),
+                // Delivering, and its token still validates.
+                subscriptionFor(REPO_A, eventType, {
+                    id: 'sub-alive',
+                    status: 'enabled',
+                } as any),
+            ]);
+
+            await service.createWebhook(orgTeam);
+
+            const deletedIds = helper.deleteWebhookById.mock.calls.map(
+                (call) => call[0].subscriptionId,
+            );
+            expect(deletedIds).toContain('sub-dead');
+            expect(deletedIds).not.toContain('sub-alive');
+        });
+    });
+
     describe('the one listing the whole pass depends on', () => {
         it('writes nothing anywhere when the listing fails', async () => {
             withSelection([REPO_A, REPO_B]);

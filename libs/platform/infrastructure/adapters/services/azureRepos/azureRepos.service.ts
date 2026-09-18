@@ -4298,11 +4298,19 @@ export class AzureReposService implements Omit<
                 // than once, and Azure then delivers every event that many
                 // times. Keep one — preferring a token this instance can still
                 // validate — and drop the rest.
+                // Prefer a copy that both delivers and carries a token we
+                // accept. Looking at the token alone can keep a subscription
+                // Azure has disabled and delete the enabled one beside it,
+                // which reads as "converged" while no event arrives.
                 const keepIndex = Math.max(
-                    subscriptions.findIndex((subscription) =>
-                        this.hasUsableWebhookToken(
-                            subscription.consumerInputs?.url,
-                        ),
+                    subscriptions.findIndex(
+                        (subscription) =>
+                            AzureReposService.subscriptionIsHealthy(
+                                subscription,
+                            ) &&
+                            this.hasUsableWebhookToken(
+                                subscription.consumerInputs?.url,
+                            ),
                     ),
                     0,
                 );
@@ -4440,6 +4448,24 @@ export class AzureReposService implements Omit<
      * without this there is no way to tell whose hook a subscription is.
      */
     private static readonly TEAM_PARAM = 'team';
+
+    /**
+     * Whether Azure is still delivering this subscription.
+     *
+     * Azure moves a subscription out of `enabled` on its own -- `onProbation`
+     * after repeated delivery failures, `disabledBySystem`,
+     * `disabledByUser`, `disabledByInactiveIdentity` -- and a subscription in
+     * any of those states exists without delivering anything. The old code
+     * deleted and recreated on every save, so it healed these by accident;
+     * skipping work when the hook is already correct means the check has to be
+     * made on purpose. A missing status is read as enabled so an unexpected
+     * response shape does not cause needless churn.
+     */
+    private static subscriptionIsHealthy(
+        subscription?: AzureRepoSubscription,
+    ): boolean {
+        return !subscription?.status || subscription.status === 'enabled';
+    }
 
     /** Identity of a subscription: one per repository, per event type. */
     private static subscriptionKey(
@@ -4585,6 +4611,7 @@ export class AzureReposService implements Omit<
 
             const usable =
                 !!existing &&
+                AzureReposService.subscriptionIsHealthy(existing) &&
                 this.hasUsableWebhookToken(existing.consumerInputs?.url) &&
                 this.subscriptionBelongsToTeam(
                     existing.consumerInputs?.url,
