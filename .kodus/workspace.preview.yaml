@@ -33,7 +33,7 @@ data:
   migrate: pnpm run migration:run
   # seed:preview adds an onboarded organization + a login, so the link opens on
   # something usable instead of an empty signup screen
-  seed: pnpm run seed && pnpm run seed:preview && timeout 300 bash -c 'until curl -fsS http://127.0.0.1:3101/health >/dev/null && curl -fsS http://127.0.0.1:3992/health/ready >/dev/null; do sleep 3; done'
+  seed: pnpm run seed && pnpm run seed:preview
 expose:
   # Zero-setup HTTPS on the VM's sslip.io name. TODO: switch to
   #   mode: tunnel

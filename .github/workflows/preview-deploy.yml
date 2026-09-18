@@ -183,6 +183,11 @@ jobs:
                   # later push the environment already exists and the new
                   # commit travels with push (compose watch reloads it)
                   $RUNO push --restart --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml
+                  # Runo's data step retries automatically. Keep optional
+                  # service readiness outside it so one failed MCP/billing
+                  # probe does not hide the real container logs for 15min.
+                  $RUNO exec --branch "$HEAD_REF" -- \
+                    "timeout 300 bash -c 'until curl -fsS http://127.0.0.1:3101/health >/dev/null && curl -fsS http://127.0.0.1:3992/health/ready >/dev/null; do sleep 3; done'"
                   URL=$($RUNO url --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml | head -1)
                   echo "url=$URL" >> "$GITHUB_OUTPUT"
                   echo "Preview: $URL"
