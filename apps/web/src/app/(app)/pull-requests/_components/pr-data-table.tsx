@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@components/ui/button";
 import { Skeleton } from "@components/ui/skeleton";
 import { Spinner } from "@components/ui/spinner";
@@ -57,6 +57,29 @@ export const PrDataTable = ({
         getItemKey: (index) => data[index]?.prId ?? index,
     });
 
+    // BOTH triggers go through here. They used to be independent: the budget
+    // and the after-failure guard lived only in the settle effect below, while
+    // the observer called fetchNextPage directly — and because that observer
+    // is rebuilt on every `isFetchingNextPage` change and fires again on
+    // observe(), an already-visible sentinel re-fired it on each settle. So a
+    // failed page retried instantly and forever (the query sets `retry:
+    // false`), and the budget bounded nothing. One door, one set of locks.
+    const requestMore = useCallback(() => {
+        if (!fetchNextPage || !hasNextPage || isFetchingNextPage) return;
+        if (fetchNextPageFailed) return;
+        if (autoPulls.current >= AUTO_PULL_BUDGET) {
+            setAutoPullExhausted(true);
+            return;
+        }
+        autoPulls.current += 1;
+        fetchNextPage();
+    }, [fetchNextPage, hasNextPage, isFetchingNextPage, fetchNextPageFailed]);
+
+    // Held in a ref so the observer below can be rebuilt without the callback
+    // it captured going stale.
+    const requestMoreRef = useRef(requestMore);
+    requestMoreRef.current = requestMore;
+
     useEffect(() => {
         const node = loadMoreRef.current;
         const root = scrollRef.current;
@@ -64,12 +87,8 @@ export const PrDataTable = ({
 
         const observer = new IntersectionObserver(
             (entries) => {
-                if (
-                    entries[0]?.isIntersecting &&
-                    hasNextPage &&
-                    !isFetchingNextPage
-                ) {
-                    fetchNextPage();
+                if (entries[0]?.isIntersecting) {
+                    requestMoreRef.current();
                 }
             },
             { root, rootMargin: "0px 0px 400px 0px" },
@@ -100,8 +119,6 @@ export const PrDataTable = ({
     // decision to the reader, who gets a button and their budget back the
     // moment they scroll.
     useEffect(() => {
-        if (!fetchNextPage || !hasNextPage || isFetchingNextPage) return;
-        if (fetchNextPageFailed) return;
         const node = loadMoreRef.current;
         const root = scrollRef.current;
         if (!node || !root) return;
@@ -110,13 +127,9 @@ export const PrDataTable = ({
         const rootBottom = root.getBoundingClientRect().bottom;
         if (nodeTop > rootBottom) return;
 
-        if (autoPulls.current >= AUTO_PULL_BUDGET) {
-            setAutoPullExhausted(true);
-            return;
-        }
-        autoPulls.current += 1;
-        fetchNextPage();
+        requestMore();
     }, [
+        requestMore,
         fetchNextPage,
         hasNextPage,
         isFetchingNextPage,
@@ -137,7 +150,11 @@ export const PrDataTable = ({
         };
         root.addEventListener("scroll", onScroll, { passive: true });
         return () => root.removeEventListener("scroll", onScroll);
-    }, []);
+        // `loading` and `data.length`, not []: the first commit of a cold load
+        // returns the skeleton before this scroller exists, so an effect that
+        // only ran once attached to nothing and the budget never got its
+        // reset — exactly the reader-controlled escape hatch it exists for.
+    }, [loading, data.length]);
 
     const loadMore = () => {
         autoPulls.current = 0;

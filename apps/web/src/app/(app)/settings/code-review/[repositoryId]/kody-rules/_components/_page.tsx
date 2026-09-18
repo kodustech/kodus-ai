@@ -958,7 +958,8 @@ const KodyRulesPageContent = () => {
                     </Button>
 
                     {canShowDiscovery && (
-                        <Link href="/library/kody-rules/featured">
+                        <Link
+                            href={`/library/kody-rules/featured?from=${encodeURIComponent(repositoryId)}`}>
                             <Button
                                 size="sm"
                                 decorative

@@ -189,6 +189,7 @@ export function PullRequestsPageClient() {
         isFetchingNextPage,
         isFetchNextPageError,
         filteredPrTotal,
+        refetch,
     } = useInfinitePullRequestExecutions(
         {
             teamId,
@@ -792,11 +793,25 @@ export function PullRequestsPageClient() {
                     <div className="min-h-0 flex-1 overflow-y-auto">
                         <AwaitingList teamId={teamId} />
                     </div>
-                ) : error ? (
+                ) : error && !groupedPullRequests.length ? (
+                    // Only when there is nothing to show. React Query marks the
+                    // whole query `error` when ANY page fails, so testing
+                    // `error` alone threw away every row already on screen the
+                    // first time a later page failed — and replaced them with a
+                    // dead end, since this branch also has no way to retry. With
+                    // rows loaded the table stays mounted and its own inline
+                    // recovery handles the failed page.
                     <div className="min-h-0 flex-1 overflow-y-auto py-12 text-center">
-                        <p className="text-sm text-red-600">
-                            Error loading pull requests. Please try again.
+                        <p className="text-text-secondary text-sm">
+                            Couldn&apos;t load pull requests.
                         </p>
+                        <Button
+                            size="sm"
+                            variant="helper"
+                            className="mt-3"
+                            onClick={() => void refetch()}>
+                            Try again
+                        </Button>
                     </div>
                 ) : (
                     <PrDataTable

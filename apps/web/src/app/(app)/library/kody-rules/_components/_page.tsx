@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { parseAsString, useQueryState } from "nuqs";
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -223,9 +224,11 @@ export const KodyRulesLibrary = ({
 }) => {
     const router = useRouter();
     // Where the reader came from, so the crumb returns them to their own
-    // scope's rules rather than always to global.
-    const originRepositoryId =
-        useSearchParams().get("from")?.trim() || "global";
+    // scope's rules rather than always to global. Read through nuqs like every
+    // other URL param in this app, and carried by `browseHref` below so it
+    // survives the in-page navigation that rebuilds the query string.
+    const [fromRepositoryId] = useQueryState("from", parseAsString);
+    const originRepositoryId = fromRepositoryId?.trim() || "global";
 
     const [viewMode, setViewMode] = useState<ViewMode>(() => {
         if (initialView) return initialView;
@@ -239,9 +242,14 @@ export const KodyRulesLibrary = ({
             query.set("view", "browse");
             if (next.bucket) query.set("bucket", next.bucket);
             if (next.type) query.set("type", next.type);
+            // Carried through every in-page hop: this builder rebuilds the
+            // whole query string, so anything not re-added here is dropped the
+            // moment the reader picks a bucket or a type — which would have
+            // left the breadcrumb pointing back at global after one click.
+            if (fromRepositoryId) query.set("from", fromRepositoryId);
             return `/library/kody-rules?${query.toString()}`;
         },
-        [],
+        [fromRepositoryId],
     );
 
     const [filters, setFilters] = useState<FindLibraryKodyRulesFilters>(() => {
@@ -419,7 +427,7 @@ export const KodyRulesLibrary = ({
             setViewMode(nextMode);
             router.push(
                 nextMode === "featured"
-                    ? "/library/kody-rules/featured"
+                    ? `/library/kody-rules/featured${fromRepositoryId ? `?from=${encodeURIComponent(fromRepositoryId)}` : ""}`
                     : browseHref({}),
             );
         },

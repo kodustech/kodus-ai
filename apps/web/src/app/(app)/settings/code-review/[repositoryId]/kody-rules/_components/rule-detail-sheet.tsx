@@ -124,7 +124,19 @@ export const KodyRuleDetailSheet = ({
                 // for.
                 onInteractOutside={(event) => {
                     const target = event.target as Element | null;
-                    if (target?.closest?.("[data-kody-rules-table]")) {
+                    // The table itself, plus anything Radix renders in a
+                    // portal on document.body on the table's behalf: a row's
+                    // "More actions" menu and the bulk toolbar's menus live
+                    // OUTSIDE the marked subtree, so matching the table alone
+                    // meant choosing Pause or Delete dismissed the panel the
+                    // reader was working from — and `onClose` rewrites the URL
+                    // on the way out, so it was not even a silent loss.
+                    const keepOpen =
+                        target?.closest?.("[data-kody-rules-table]") ||
+                        target?.closest?.(
+                            "[data-radix-popper-content-wrapper],[role='menu'],[role='dialog'],[role='alertdialog']",
+                        );
+                    if (keepOpen) {
                         event.preventDefault();
                         return;
                     }
