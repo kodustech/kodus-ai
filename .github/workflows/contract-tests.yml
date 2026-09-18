@@ -170,7 +170,13 @@ jobs:
               if: failure()
               uses: ./.github/actions/discord-notify
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  # The tests channel, not the general engineering one. A red
+                  # contract test is a note for whoever watches test health,
+                  # and posting it where every deploy and alert also lands is
+                  # how it gets scrolled past. Falls back to the old pair so a
+                  # missing DISCORD_WEBHOOK_TESTS degrades instead of going
+                  # silent — the action already no-ops on an empty webhook.
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
                   status: failure
                   title: "❌ Contract tests failed — an external API drifted"
                   description: |
@@ -298,7 +304,13 @@ jobs:
               if: failure()
               uses: ./.github/actions/discord-notify
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  # The tests channel, not the general engineering one. A red
+                  # contract test is a note for whoever watches test health,
+                  # and posting it where every deploy and alert also lands is
+                  # how it gets scrolled past. Falls back to the old pair so a
+                  # missing DISCORD_WEBHOOK_TESTS degrades instead of going
+                  # silent — the action already no-ops on an empty webhook.
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
                   status: failure
                   title: "❌ BYOK reasoning live tier failed — drift, or a dead credential"
                   description: |
