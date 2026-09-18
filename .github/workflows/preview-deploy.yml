@@ -182,6 +182,11 @@ jobs:
                   # `up` only uploads code when it CREATES the VM; on every
                   # later push the environment already exists and the new
                   # commit travels with push (compose watch reloads it)
+                  # The billing context tracks its own repository. Rebuild its
+                  # pinned local image before restarting, otherwise compose can
+                  # keep serving the image baked by the previous PR push.
+                  $RUNO exec --branch "$HEAD_REF" -- \
+                    'docker compose -f docker-compose.dev.yml -f docker-compose.preview.yml --profile mcp build kodus-service-billing'
                   $RUNO push --restart --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml
                   # Runo's data step retries automatically. Keep optional
                   # service readiness outside it so one failed MCP/billing
@@ -196,17 +201,18 @@ jobs:
                   $RUNO share qa --branch "$HEAD_REF" || \
                       echo "::warning::preview deployed, but QA sharing failed"
 
-            - name: Dump MCP and billing diagnostics
+            - name: Report MCP and billing status
               if: always() && steps.env.outputs.configured == 'true'
               env:
                   RUNO_SERVER: ${{ vars.PREVIEW_RUNO_SERVER }}
                   RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
                   HEAD_REF: ${{ steps.target.outputs.branch }}
               run: |
-                  # A failed optional-service health check must leave evidence
-                  # in the Actions run, not require an SSH key on a laptop.
+                  # Keep public Actions logs free of request bodies, headers,
+                  # token-bearing URLs, and Stripe payloads. Detailed logs are
+                  # available through the authenticated Runo exec/logs path.
                   $RUNO exec --branch "$HEAD_REF" -- \
-                    'docker compose -f docker-compose.dev.yml -f docker-compose.preview.yml --profile mcp ps; docker compose -f docker-compose.dev.yml -f docker-compose.preview.yml --profile mcp logs --tail=200 mcp-manager kodus-service-billing' || true
+                    'docker compose -f docker-compose.dev.yml -f docker-compose.preview.yml --profile mcp ps' || true
 
             - name: Comment the preview link
               if: always() && github.event_name == 'pull_request' && steps.env.outputs.configured == 'true'

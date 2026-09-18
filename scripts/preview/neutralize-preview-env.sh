@@ -92,6 +92,16 @@ for key in $KEYS; do
     count=$((count + 1))
 done
 
+# Some self-hosted-only values (notably the MCP manager JWT secret) are not
+# represented in .env.template, but the preview compose explicitly consumes
+# them. Emit them here so the generated per-preview secret is actually used.
+for key in API_MCP_MANAGER_JWT_SECRET; do
+    if ! echo "$KEYS" | grep -qx "$key"; then
+        printf '%s=%s\n' "$key" "$(derive "$key")" >> "$OVERRIDES"
+        count=$((count + 1))
+    fi
+done
+
 # Drop the originals, then append the replacements — no in-place editing, so a
 # value containing slashes or ampersands cannot corrupt the file.
 PATTERN=$(echo "$KEYS" | paste -sd'|' -)

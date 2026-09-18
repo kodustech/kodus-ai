@@ -15,7 +15,15 @@ done
 # most importantly, refuse a live Stripe key before anything reaches the VM.
 invalid=$(grep -vE '^[[:space:]]*(#|$|STRIPE_(SECRET_KEY|WEBHOOK_SECRET|PRICE_ID(_[A-Z0-9_]+)?)=)' "$SOURCE" || true)
 [ -z "$invalid" ] || { echo "PREVIEW_BILLING_ENV contains unsupported keys" >&2; exit 1; }
-grep -qE '^STRIPE_SECRET_KEY=sk_test_' "$SOURCE" || {
+[ "$(grep -cE '^STRIPE_SECRET_KEY=' "$SOURCE")" = 1 ] || {
+    echo "PREVIEW_BILLING_ENV must contain exactly one STRIPE_SECRET_KEY" >&2
+    exit 1
+}
+! grep -qE 'sk_live_' "$SOURCE" || {
+    echo "PREVIEW_BILLING_ENV contains a live Stripe key" >&2
+    exit 1
+}
+grep -qE '^STRIPE_SECRET_KEY=sk_test_[^[:space:]]+$' "$SOURCE" || {
     echo "PREVIEW_BILLING_ENV must contain a Stripe test key (sk_test_)" >&2
     exit 1
 }
@@ -27,6 +35,8 @@ read_env() {
 
 webhook_secret=$(read_env API_BILLING_WEBHOOK_SECRET)
 [ -n "$webhook_secret" ] || { echo "API_BILLING_WEBHOOK_SECRET is missing" >&2; exit 1; }
+credits_token=$(read_env API_CREDITS_SERVICE_TOKEN)
+[ -n "$credits_token" ] || { echo "API_CREDITS_SERVICE_TOKEN is missing" >&2; exit 1; }
 
 umask 077
 {
@@ -47,6 +57,7 @@ umask 077
     printf 'CLOUD_TOKEN_SECRET=%s\n' "$webhook_secret"
     printf 'ADMIN_TOKEN=%s\n' "$webhook_secret"
     printf 'KODUS_NOTIFICATION_WEBHOOK_SECRET=%s\n' "$webhook_secret"
+    printf 'CREDITS_SERVICE_TOKEN=%s\n' "$credits_token"
 } > "$OUTPUT"
 
 chmod 600 "$OUTPUT"
