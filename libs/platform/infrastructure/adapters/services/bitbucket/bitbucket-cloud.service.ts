@@ -3247,6 +3247,12 @@ export class BitbucketCloudService implements Omit<
         configKey: IntegrationConfigKey;
         configValue: any;
         type?: 'replace' | 'append';
+        /**
+         * Set by the chunked repository save on every request but the last, so
+         * webhooks are reconciled once against the complete selection instead
+         * of against each partially-persisted chunk.
+         */
+        deferWebhooks?: boolean;
     }): Promise<void> {
         try {
             const integration = await this.integrationService.findOne({
@@ -3276,9 +3282,16 @@ export class BitbucketCloudService implements Omit<
             // here escalated to an unhandledRejection that crashed the whole
             // API process. The failure still gets a loud error log from
             // createWebhook's own catch; this catch only stops the crash.
-            void this.createWebhook(params.organizationAndTeamData).catch(
-                () => undefined,
-            );
+            // Skipped for an intermediate chunk of a chunked save: the
+            // selection persisted so far is partial, and reconciling webhooks
+            // against a partial selection removes the hooks of everything not
+            // in it. The last chunk arrives with the complete selection and
+            // runs this once.
+            if (!params.deferWebhooks) {
+                void this.createWebhook(
+                    params.organizationAndTeamData,
+                ).catch(() => undefined);
+            }
         } catch (error) {
             this.logger.error({
                 message: 'Error to create or update integration config',
