@@ -186,7 +186,8 @@ jobs:
                   # pinned local image before restarting, otherwise compose can
                   # keep serving the image baked by the previous PR push.
                   $RUNO exec --branch "$HEAD_REF" -- \
-                    'docker compose -f docker-compose.dev.yml -f docker-compose.preview.yml --profile mcp build kodus-service-billing'
+                    'docker compose -f docker-compose.dev.yml -f docker-compose.preview.yml --profile mcp build kodus-service-billing' || \
+                    echo "::warning::kodus-service-billing image rebuild failed — keeping the previous image"
                   $RUNO push --restart --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml
                   # Runo's data step retries automatically. Keep optional
                   # service readiness outside it so one failed MCP/billing
