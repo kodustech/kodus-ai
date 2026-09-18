@@ -305,12 +305,17 @@ const SENSITIVE_KEYS = new Set([
 const KEY_SENSITIVITY_CACHE = new Map<string, boolean>();
 const KEY_SENSITIVITY_CACHE_MAX = 512;
 
+function isSensitiveName(name: string): boolean {
+    return SENSITIVE_KEYS.has(name.toLowerCase().replace(/[^a-z0-9]/g, ''));
+}
+
+// Object keys only. The cache never evicts, so names harvested from string
+// content (payload JSON keys, query params) would fill it for good; the
+// string scanners call isSensitiveName directly instead.
 function isSensitiveKey(key: string): boolean {
     let result = KEY_SENSITIVITY_CACHE.get(key);
     if (result === undefined) {
-        result = SENSITIVE_KEYS.has(
-            key.toLowerCase().replace(/[^a-z0-9]/g, ''),
-        );
+        result = isSensitiveName(key);
         if (KEY_SENSITIVITY_CACHE.size < KEY_SENSITIVITY_CACHE_MAX) {
             KEY_SENSITIVITY_CACHE.set(key, result);
         }
@@ -355,8 +360,9 @@ const EMBEDDED_SECRET_HINT =
     /auth|cookie|token|secret|passw|key|credential|jwt|connection|ssn|cpf|cvv|card/i;
 
 // Linear patterns (no nested or overlapping quantifiers).
+// The optional leading `+`/`-` covers unified-diff lines, which get logged.
 const HEADER_LINE_PATTERN =
-    /(^|[\r\n])([ \t]*)([A-Za-z0-9_.-]{1,100})([ \t]*:[ \t]*)([^\r\n]*)/g;
+    /(^|[\r\n])([+-]?[ \t]*)([A-Za-z0-9_.-]{1,100})([ \t]*:[ \t]*)([^\r\n]*)/g;
 const QUERY_PARAM_PATTERN =
     /(^|[?&;\s])([A-Za-z0-9_.-]{1,100})=([^&#\s"'<>]*)/g;
 const JSON_PAIR_PATTERN = /"([^"\\]{1,100})"(\s*:\s*)"((?:[^"\\]|\\.)*)"/g;
@@ -370,19 +376,19 @@ function redactEmbeddedSecrets(value: string): string {
         .replace(
             HEADER_LINE_PATTERN,
             (match, lineStart, indent, name, separator, headerValue) =>
-                isSensitiveKey(name) && headerValue
+                isSensitiveName(name) && headerValue
                     ? `${lineStart}${indent}${name}${separator}[REDACTED]`
                     : match,
         )
         .replace(
             QUERY_PARAM_PATTERN,
             (match, prefix, name, paramValue) =>
-                isSensitiveKey(name) && paramValue
+                isSensitiveName(name) && paramValue
                     ? `${prefix}${name}=[REDACTED]`
                     : match,
         )
         .replace(JSON_PAIR_PATTERN, (match, name, separator) =>
-            isSensitiveKey(name) ? `"${name}"${separator}"[REDACTED]"` : match,
+            isSensitiveName(name) ? `"${name}"${separator}"[REDACTED]"` : match,
         );
 
     return result === value ? value : result;
@@ -486,6 +492,15 @@ function deepSanitize(obj: any, seen?: WeakSet<object>, depth = 0): any {
             return sanitized !== obj ? sanitized : obj;
         }
         return obj;
+    }
+
+    // A Buffer (or any typed-array view) is walked index by index, comes out
+    // unchanged, and pino then serializes it via toJSON(): a 1 MB buffer costs
+    // ~131 ms here, expands to ~3 MB of JSON, and the bytes stay recoverable.
+    // This is also where an axios request body lands on a timeout
+    // (`_requestBodyBuffers`).
+    if (ArrayBuffer.isView(obj)) {
+        return `[Binary ${obj.byteLength} bytes]`;
     }
 
     // Live Node HTTP objects (an AxiosError's `request`, sockets, agents) carry
@@ -752,7 +767,13 @@ export class SimpleLogger {
 }
 
 /** Exported for testing only. */
-export { deepSanitize, isSensitiveKey, sanitizeString, SENSITIVE_KEYS };
+export {
+    deepSanitize,
+    isSensitiveKey,
+    KEY_SENSITIVITY_CACHE,
+    sanitizeString,
+    SENSITIVE_KEYS,
+};
 
 export function createLogger(component: string): SimpleLogger {
     return new SimpleLogger(component);

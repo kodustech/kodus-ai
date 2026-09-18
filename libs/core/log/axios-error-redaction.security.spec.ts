@@ -16,13 +16,13 @@ import * as http from 'http';
 import axios from 'axios';
 import pino from 'pino';
 
-const { deepSanitize, sanitizeString, SENSITIVE_KEYS } = jest.requireActual(
-    '@libs/core/log/logger',
-) as {
-    deepSanitize: (obj: any) => any;
-    sanitizeString: (value: string) => string;
-    SENSITIVE_KEYS: Set<string>;
-};
+const { deepSanitize, sanitizeString, SENSITIVE_KEYS, KEY_SENSITIVITY_CACHE } =
+    jest.requireActual('@libs/core/log/logger') as {
+        deepSanitize: (obj: any) => any;
+        sanitizeString: (value: string) => string;
+        SENSITIVE_KEYS: Set<string>;
+        KEY_SENSITIVITY_CACHE: Map<string, boolean>;
+    };
 
 const FAKE_PAT = 'fake-pat-0000000000000000000000000000000000000000000000000000';
 const FAKE_WEBHOOK_TOKEN = '00112233445566778899aabbccddeeff:deadbeefdeadbeef';
@@ -37,7 +37,10 @@ describe('logger err serializer — AxiosError credential leaks', () => {
     let baseURL: string;
 
     beforeAll(async () => {
-        server = http.createServer((_req, res) => {
+        server = http.createServer((req, res) => {
+            if (req.url?.startsWith('/hang')) {
+                return; // never answers, so the client times out
+            }
             res.writeHead(403, { 'content-type': 'application/json' });
             res.end(JSON.stringify({ message: 'Access Denied' }));
         });
@@ -48,6 +51,7 @@ describe('logger err serializer — AxiosError credential leaks', () => {
     });
 
     afterAll(async () => {
+        server.closeAllConnections();
         await new Promise<void>((resolve) => server.close(() => resolve()));
     });
 
@@ -104,6 +108,35 @@ describe('logger err serializer — AxiosError credential leaks', () => {
         expect(out.config?.url).toContain('/_apis/hooks/subscriptions');
     });
 
+    it('does not leak the header or the body when the request times out', async () => {
+        const basic = Buffer.from(`:${FAKE_PAT}`).toString('base64');
+        let error: unknown;
+        try {
+            await axios.post(
+                `${baseURL}/hang`,
+                {
+                    consumerInputs: {
+                        url: `https://webhooks.example.com/hook?token=${encodeURIComponent(FAKE_WEBHOOK_TOKEN)}`,
+                    },
+                },
+                { headers: { Authorization: `Basic ${basic}` }, timeout: 200 },
+            );
+        } catch (caught) {
+            error = caught;
+        }
+
+        const serialized = JSON.stringify(serializeLikeLogger(error));
+
+        expect((error as any)?.code).toBe('ECONNABORTED');
+        expect(serialized).not.toContain(basic);
+        expect(serialized).not.toContain(
+            encodeURIComponent(FAKE_WEBHOOK_TOKEN),
+        );
+        // The body sits in `_requestBodyBuffers` as a Buffer; its bytes would
+        // survive as a numeric array without the binary marker.
+        expect(serialized).not.toContain('"type":"Buffer"');
+    });
+
     it('replaces the live Node request/socket graph with a marker', async () => {
         const error = await captureAxiosError();
 
@@ -111,6 +144,14 @@ describe('logger err serializer — AxiosError credential leaks', () => {
 
         expect(out.request).toBe('[ClientRequest]');
         expect(out.response?.request).toBe('[ClientRequest]');
+    });
+});
+
+describe('deepSanitize — binary values', () => {
+    it('replaces a Buffer with a size marker instead of its bytes', () => {
+        const out = deepSanitize({ body: Buffer.from('bytes-with-a-secret') });
+
+        expect(out.body).toBe('[Binary 19 bytes]');
     });
 });
 
@@ -147,6 +188,29 @@ describe('sanitizeString — secrets embedded in strings', () => {
             );
             expect(sanitizeString(`${key}: ${value}`)).not.toContain(value);
         }
+    });
+
+    it('redacts header-like lines inside a unified diff', () => {
+        const out = sanitizeString(
+            '@@ -1,2 +1,2 @@\n-  token: old-value\n+  authorization: Bearer new-value\n   unchanged: kept',
+        );
+
+        expect(out).not.toContain('old-value');
+        expect(out).not.toContain('new-value');
+        expect(out).toContain('unchanged: kept');
+    });
+
+    it('does not grow the key cache with names found inside strings', () => {
+        const before = KEY_SENSITIVITY_CACHE.size;
+        const payload = JSON.stringify(
+            Object.fromEntries(
+                Array.from({ length: 600 }, (_, i) => [`field_key_${i}`, 'x']),
+            ),
+        );
+
+        sanitizeString(payload);
+
+        expect(KEY_SENSITIVITY_CACHE.size).toBe(before);
     });
 
     it('redacts sensitive query-string and form parameters', () => {
