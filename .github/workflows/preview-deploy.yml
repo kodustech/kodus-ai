@@ -11,8 +11,8 @@ name: "Preview: Deploy"
 # review flow, not just render the frontend against a shared QA backend.
 #
 # Required secrets (environment "Preview"):
-#   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY  account the preview VMs live in
-#   PREVIEW_RUNO_SSH_KEY       private key every run reuses to reach the VMs
+#   PREVIEW_RUNO_TOKEN        control-plane token; AWS and SSH stay on the server
+#   Variable PREVIEW_RUNO_SERVER points to the isolated Ohio control plane
 #   OP_SERVICE_ACCOUNT_TOKEN   renders .env from .env.template, the same way a
 #                              developer does — so a variable added to the
 #                              template does not silently break previews weeks
@@ -22,9 +22,18 @@ name: "Preview: Deploy"
 #   PREVIEW_SEED_PASSWORD      password of the seeded login (preview@kodus.io);
 #                              signup enforces 8+ chars with an uppercase, a
 #                              lowercase, a number and a symbol
+#   PREVIEW_BILLING_ENV        allowlisted Stripe test configuration used by
+#                              the isolated billing container; live keys fail
+#                              closed before the workspace is uploaded
 # =============================================================================
 
 on:
+    workflow_dispatch:
+        inputs:
+            pr_number:
+                description: Pull request to validate on the Ohio preview fleet
+                required: true
+                type: number
     pull_request:
         types: [opened, synchronize, reopened]
 
@@ -35,18 +44,12 @@ concurrency:
     # A newer push supersedes the running deploy: `runo up` is idempotent and
     # the next run adopts the same VM and reconciles it, so cancelling costs
     # nothing but the wasted minutes.
-    group: preview-${{ github.event.pull_request.number }}
+    group: preview-${{ github.event.pull_request.number || inputs.pr_number }}
     cancel-in-progress: true
 
 env:
-    # Fixed path on purpose: runo derives the AWS keypair, security group and
-    # instance tags from a hash of RUNO_HOME, and those must be identical from
-    # one job to the next or a new runner cannot find (or reach) the VM the
-    # previous one created.
-    RUNO_HOME: /home/runner/.runo-preview
-    RUNO_AWS_REGION: sa-east-1
-    # One preview per open PR — the laptop default of 3 is not the CI budget.
-    RUNO_MAX_INSTANCES: "20"
+    RUNO_HOME: /home/runner/.runo-preview-ohio
+    RUNO_AWS_REGION: us-east-2
     RUNO_REF: main
 
 jobs:
@@ -54,7 +57,7 @@ jobs:
         name: Preview environment
         # Secrets are not available to forks, and a fork branch name could
         # collide with ours in the env registry.
-        if: github.event.pull_request.head.repo.full_name == github.repository
+        if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
         runs-on: ubuntu-latest
         environment: Preview
         timeout-minutes: 60
@@ -64,9 +67,30 @@ jobs:
         outputs:
             url: ${{ steps.up.outputs.url }}
         steps:
+            - name: Resolve preview revision
+              id: target
+              uses: actions/github-script@v9.0.0
+              env:
+                  PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+              with:
+                  script: |
+                      const { data: pr } = await github.rest.pulls.get({
+                        owner: context.repo.owner, repo: context.repo.repo,
+                        pull_number: Number(process.env.PR_NUMBER),
+                      });
+                      if (pr.head.repo.full_name !== `${context.repo.owner}/${context.repo.repo}`) {
+                        throw new Error('Only same-repository previews are allowed');
+                      }
+                      core.setOutput('sha', pr.head.sha);
+                      core.setOutput('branch', pr.head.ref);
             - uses: actions/checkout@v6.0.2
               with:
-                  ref: ${{ github.event.pull_request.head.sha }}
+                  ref: ${{ steps.target.outputs.sha }}
+
+            - name: Use the isolated preview instance family
+              run: |
+                  # Older PRs still carry the previous fleet's instance family.
+                  sed -i 's/instance: m7i-flex.xlarge/instance: t3.xlarge/' .kodus/workspace.preview.yaml
 
             - uses: oven-sh/setup-bun@v2
               with:
@@ -94,7 +118,8 @@ jobs:
                   # and anyone holding it could otherwise recompute a preview's
                   # JWT and crypto keys and mint sessions without logging in.
                   PREVIEW_SECRET_SEED_BASE: ${{ secrets.PREVIEW_SECRET_SEED }}
-                  HEAD_REF: ${{ github.event.pull_request.head.ref }}
+                  PREVIEW_BILLING_ENV: ${{ secrets.PREVIEW_BILLING_ENV }}
+                  HEAD_REF: ${{ steps.target.outputs.branch }}
               run: |
                   # No token means previews are not configured for this
                   # repository (a fork, or before the secrets are added). That
@@ -127,6 +152,9 @@ jobs:
                   fi
                   # ...and then nothing real survives into a public environment
                   ./scripts/preview/neutralize-preview-env.sh .env .env.template
+                  printf '%s\n' "$PREVIEW_BILLING_ENV" > "$RUNNER_TEMP/preview-billing.env"
+                  ./scripts/preview/materialize-billing-env.sh \
+                    "$RUNNER_TEMP/preview-billing.env" .env .env.billing
                   # the seed runs on the VM and reads these from the same file
                   {
                     echo "PREVIEW_SEED_EMAIL=preview@kodus.io"
@@ -138,33 +166,67 @@ jobs:
               id: up
               if: steps.env.outputs.configured == 'true'
               env:
-                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-                  RUNO_SSH_KEY: ${{ secrets.PREVIEW_RUNO_SSH_KEY }}
-                  HEAD_REF: ${{ github.event.pull_request.head.ref }}
+                  RUNO_SERVER: ${{ vars.PREVIEW_RUNO_SERVER }}
+                  RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
+                  HEAD_REF: ${{ steps.target.outputs.branch }}
               run: |
                   set -euo pipefail
+                  : "${RUNO_SERVER:?PREVIEW_RUNO_SERVER is not configured}"
+                  : "${RUNO_TOKEN:?PREVIEW_RUNO_TOKEN is not configured}"
                   # --branch: the checkout is a detached HEAD, so runo cannot
                   # read the branch from git itself
                   $RUNO up --here --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml
+                  # `up` runs setup for new VMs. Existing previews retain their
+                  # workspace; the billing compose context is remote and needs
+                  # no one-time checkout on the VM.
                   # `up` only uploads code when it CREATES the VM; on every
                   # later push the environment already exists and the new
                   # commit travels with push (compose watch reloads it)
+                  # The billing context tracks its own repository. Rebuild its
+                  # pinned local image before restarting, otherwise compose can
+                  # keep serving the image baked by the previous PR push.
+                  $RUNO exec --branch "$HEAD_REF" -- \
+                    'docker compose -f docker-compose.dev.yml -f docker-compose.preview.yml --profile mcp build kodus-service-billing' || \
+                    echo "::warning::kodus-service-billing image rebuild failed — keeping the previous image"
                   $RUNO push --restart --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml
-                  # ...which means `up` ran the seed against the PREVIOUS
-                  # commit's code. Re-run it here, after the sync, so a change
-                  # to the seed takes effect on the deploy that carries it
-                  # instead of the one after. Idempotent by design, and
-                  # best-effort: a preview that is already usable must not fail
-                  # the deploy over a second seed pass.
-                  $RUNO exec --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml \
-                      -- pnpm run seed:preview || echo "::warning::post-sync seed:preview failed — the environment may be running the previous commit's seed"
+                  # Runo's data step retries automatically. Keep optional
+                  # service readiness outside it so one failed MCP/billing
+                  # probe does not hide the real container logs for 15min.
+                  $RUNO exec --branch "$HEAD_REF" -- \
+                    "timeout 300 bash -c 'until curl -fsS http://127.0.0.1:3101/health >/dev/null && curl -fsS http://127.0.0.1:3992/health/ready >/dev/null; do sleep 3; done'"
+                  # The recipe seeds as part of `up`'s data step, which runs
+                  # BEFORE `push` syncs this commit — and on an environment
+                  # that already exists `up` skips setup entirely, so the seed
+                  # never sees the code being previewed. Re-run it once here,
+                  # after the sync and after the health wait above, so a change
+                  # to the seed takes effect on the deploy that introduces it
+                  # instead of the next one. Non-fatal: a preview that fails to
+                  # re-seed still deploys, it just carries the previous data.
+                  $RUNO exec --branch "$HEAD_REF" -- pnpm run seed:preview || \
+                      echo "::warning::post-sync seed:preview failed — the preview may be carrying the previous commit's seed"
                   URL=$($RUNO url --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml | head -1)
                   echo "url=$URL" >> "$GITHUB_OUTPUT"
                   echo "Preview: $URL"
+                  # Sharing is useful to QA but must not prevent a valid
+                  # application deploy from publishing its URL.
+                  $RUNO share qa --branch "$HEAD_REF" || \
+                      echo "::warning::preview deployed, but QA sharing failed"
+
+            - name: Report MCP and billing status
+              if: always() && steps.env.outputs.configured == 'true'
+              env:
+                  RUNO_SERVER: ${{ vars.PREVIEW_RUNO_SERVER }}
+                  RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
+                  HEAD_REF: ${{ steps.target.outputs.branch }}
+              run: |
+                  # Keep public Actions logs free of request bodies, headers,
+                  # token-bearing URLs, and Stripe payloads. Detailed logs are
+                  # available through the authenticated Runo exec/logs path.
+                  $RUNO exec --branch "$HEAD_REF" -- \
+                    'docker compose -f docker-compose.dev.yml -f docker-compose.preview.yml --profile mcp ps' || true
 
             - name: Comment the preview link
-              if: always() && steps.env.outputs.configured == 'true'
+              if: always() && github.event_name == 'pull_request' && steps.env.outputs.configured == 'true'
               uses: actions/github-script@v9.0.0
               env:
                   URL: ${{ steps.up.outputs.url }}
@@ -179,7 +241,7 @@ jobs:
                             '',
                             `**${process.env.URL}**`,
                             '',
-                            'Full stack (api, worker, webhooks, mongo, postgres, rabbit) on one VM.',
+                            'Full stack (web, api, worker, webhooks, MCP, billing, mongo, postgres, rabbit) on one VM.',
                             'Login: `preview@kodus.io` — password is the `PREVIEW_SEED_PASSWORD` secret.',
                             '',
                             'The VM suspends itself after 60min idle; a new push wakes it and updates this link.',
