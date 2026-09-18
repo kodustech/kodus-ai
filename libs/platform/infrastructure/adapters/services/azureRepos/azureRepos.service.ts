@@ -4260,12 +4260,48 @@ export class AzureReposService implements Omit<
         // still replaced when their repository is selected (see
         // `createOrReplaceHook`), which is what tags them, but they are never
         // removed on someone else's behalf.
-        const ours = existingSubscriptions.filter((subscription) =>
+        const marked = existingSubscriptions.filter((subscription) =>
             this.subscriptionBelongsToTeam(
                 subscription.consumerInputs?.url,
                 webhookUrl,
                 teamId,
             ),
+        );
+
+        // Keys this team demonstrably owns, because a marked copy exists.
+        const ownedKeys = new Set(
+            marked.map((subscription) =>
+                AzureReposService.subscriptionKey(
+                    subscription.publisherInputs?.projectId,
+                    subscription.publisherInputs?.repository,
+                    subscription.eventType,
+                ),
+            ),
+        );
+
+        // Ours, plus unmarked copies of a key we already own. Every team on a
+        // deployment shares one webhook URL and the handler resolves the team
+        // from the repository in the database, so one subscription per
+        // repository and event serves all of them: a second copy is not extra
+        // coverage, it makes Azure deliver every event twice. Collapsing one
+        // of these cannot uncover anybody, because the marked copy that proves
+        // the key is ours stays behind.
+        const ours = existingSubscriptions.filter(
+            (subscription) =>
+                this.subscriptionBelongsToTeam(
+                    subscription.consumerInputs?.url,
+                    webhookUrl,
+                    teamId,
+                ) ||
+                (!this.hasTeamMarker(subscription.consumerInputs?.url) &&
+                    !!subscription.consumerInputs?.url?.includes(webhookUrl) &&
+                    ownedKeys.has(
+                        AzureReposService.subscriptionKey(
+                            subscription.publisherInputs?.projectId,
+                            subscription.publisherInputs?.repository,
+                            subscription.eventType,
+                        ),
+                    )),
         );
 
         const byKey = new Map<string, AzureRepoSubscription[]>();
@@ -4302,16 +4338,29 @@ export class AzureReposService implements Omit<
                 // accept. Looking at the token alone can keep a subscription
                 // Azure has disabled and delete the enabled one beside it,
                 // which reads as "converged" while no event arrives.
+                const isUsable = (subscription: AzureRepoSubscription) =>
+                    AzureReposService.subscriptionIsHealthy(subscription) &&
+                    this.hasUsableWebhookToken(
+                        subscription.consumerInputs?.url,
+                    );
+
+                // Prefer a copy that is ours, delivering, and carries a token
+                // we accept. Ours matters: keeping an unmarked copy over a
+                // marked one would undo the ownership this pass just
+                // recorded, and the next pass would have to mark it again.
                 const keepIndex = Math.max(
-                    subscriptions.findIndex(
-                        (subscription) =>
-                            AzureReposService.subscriptionIsHealthy(
-                                subscription,
-                            ) &&
-                            this.hasUsableWebhookToken(
+                    [
+                        (subscription: AzureRepoSubscription) =>
+                            isUsable(subscription) &&
+                            this.subscriptionBelongsToTeam(
                                 subscription.consumerInputs?.url,
+                                webhookUrl,
+                                teamId,
                             ),
-                    ),
+                        isUsable,
+                    ]
+                        .map((predicate) => subscriptions.findIndex(predicate))
+                        .find((index) => index >= 0) ?? -1,
                     0,
                 );
 
@@ -4490,6 +4539,26 @@ export class AzureReposService implements Omit<
     }
 
     /**
+     * Whether a subscription records an owner at all. One that does not
+     * predates the marker, so it cannot be attributed to any team.
+     */
+    private hasTeamMarker(subscriptionUrl?: string): boolean {
+        if (!subscriptionUrl) {
+            return false;
+        }
+
+        try {
+            return (
+                new URL(subscriptionUrl).searchParams.get(
+                    AzureReposService.TEAM_PARAM,
+                ) !== null
+            );
+        } catch {
+            return false;
+        }
+    }
+
+    /**
      * Whether a subscription was minted by this team, which is what makes it
      * safe to delete. Deliberately stricter than "points at our webhook URL":
      * that is true of every team on the deployment. A subscription with no
@@ -4599,7 +4668,7 @@ export class AzureReposService implements Omit<
             // is what lets it be replaced by a marked one instead of having a
             // second subscription created beside it -- which would make Azure
             // deliver every event twice.
-            const existing = (
+            const candidates = (
                 subscriptionIndex.get(
                     AzureReposService.subscriptionKey(
                         projectId,
@@ -4607,16 +4676,34 @@ export class AzureReposService implements Omit<
                         eventType,
                     ),
                 ) ?? []
-            ).find((s) => s.consumerInputs?.url?.includes(webhookUrl));
+            ).filter((s) => s.consumerInputs?.url?.includes(webhookUrl));
 
-            const usable =
-                !!existing &&
-                AzureReposService.subscriptionIsHealthy(existing) &&
-                this.hasUsableWebhookToken(existing.consumerInputs?.url) &&
+            // Coverage is decided by a subscription this team owns, not by
+            // whichever entry Azure happened to list first. Taking the first
+            // URL match instead let another team's entry, sorted ahead of
+            // ours, be read as "not ours, replace it": the pass deleted their
+            // hook and created a second one of ours beside the healthy one it
+            // never looked at, so Azure delivered every event twice.
+            const owned = candidates.find((s) =>
                 this.subscriptionBelongsToTeam(
-                    existing.consumerInputs?.url,
+                    s.consumerInputs?.url,
                     webhookUrl,
                     opts.teamId,
+                ),
+            );
+
+            const usable =
+                !!owned &&
+                AzureReposService.subscriptionIsHealthy(owned) &&
+                this.hasUsableWebhookToken(owned.consumerInputs?.url);
+
+            // Only a subscription this pass may remove can be replaced: one of
+            // ours, or an unmarked entry that predates the marker. Another
+            // team's is left untouched.
+            const existing =
+                owned ??
+                candidates.find(
+                    (s) => !this.hasTeamMarker(s.consumerInputs?.url),
                 );
 
             this.logger.log({

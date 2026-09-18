@@ -776,6 +776,129 @@ describe('AzureReposService webhook subscriptions (issue #1956)', () => {
         });
     });
 
+    describe('ownership is resolved, not taken from listing order', () => {
+        /**
+         * Every team on a deployment shares one webhook URL, so a repository
+         * can carry subscriptions from more than one of them and Azure returns
+         * them in no particular order. Reading coverage off the first URL
+         * match made the answer depend on that order.
+         */
+        it('treats our healthy subscription as coverage even when another team sorts first', async () => {
+            withSelection([REPO_A]);
+            helper.listSubscriptions.mockResolvedValue(
+                EVENT_TYPES.flatMap((eventType) => [
+                    subscriptionFor(
+                        REPO_A,
+                        eventType,
+                        { id: `foreign-${eventType}` },
+                        'team-somebody-else',
+                    ),
+                    subscriptionFor(REPO_A, eventType, {
+                        id: `ours-${eventType}`,
+                    }),
+                ]),
+            );
+
+            await service.createWebhook(orgTeam);
+
+            expect(helper.createSubscriptionForProject).not.toHaveBeenCalled();
+            expect(helper.deleteWebhookById).not.toHaveBeenCalled();
+        });
+
+        it('never deletes another team\'s subscription to make room for ours', async () => {
+            withSelection([REPO_A]);
+            helper.listSubscriptions.mockResolvedValue(
+                EVENT_TYPES.map((eventType) =>
+                    subscriptionFor(
+                        REPO_A,
+                        eventType,
+                        { id: `foreign-${eventType}` },
+                        'team-somebody-else',
+                    ),
+                ),
+            );
+
+            await service.createWebhook(orgTeam);
+
+            // Ours is missing, so it is created — but theirs is not removed to
+            // make room, and nothing is deleted at all.
+            expect(helper.createSubscriptionForProject).toHaveBeenCalledTimes(3);
+            expect(helper.deleteWebhookById).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('duplicates that predate the owner marker', () => {
+        /**
+         * One subscription per repository and event serves every team, because
+         * the handler resolves the team from the repository in the database.
+         * A second copy is not extra coverage: Azure delivers the event twice
+         * and the review runs twice.
+         */
+        it('collapses an unmarked copy of a subscription we own', async () => {
+            const eventType = EVENT_TYPES[0];
+
+            withSelection([REPO_A]);
+            helper.listSubscriptions.mockResolvedValue([
+                subscriptionFor(REPO_A, eventType, { id: 'unmarked' }, NO_TEAM),
+                subscriptionFor(REPO_A, eventType, { id: 'marked' }),
+            ]);
+
+            await service.createWebhook(orgTeam);
+
+            const deletedIds = helper.deleteWebhookById.mock.calls.map(
+                (call) => call[0].subscriptionId,
+            );
+            expect(deletedIds).toContain('unmarked');
+            expect(deletedIds).not.toContain('marked');
+        });
+
+        it('keeps the marked copy, so the collapse does not undo the marking', async () => {
+            const eventType = EVENT_TYPES[0];
+
+            withSelection([REPO_A]);
+            // Unmarked first: the keeper must be chosen by ownership, not by
+            // whichever copy Azure listed first.
+            helper.listSubscriptions.mockResolvedValue([
+                subscriptionFor(REPO_A, eventType, { id: 'unmarked-1' }, NO_TEAM),
+                subscriptionFor(REPO_A, eventType, { id: 'unmarked-2' }, NO_TEAM),
+                subscriptionFor(REPO_A, eventType, { id: 'marked' }),
+            ]);
+
+            await service.createWebhook(orgTeam);
+
+            const deletedIds = helper.deleteWebhookById.mock.calls.map(
+                (call) => call[0].subscriptionId,
+            );
+            expect(deletedIds).toEqual(
+                expect.arrayContaining(['unmarked-1', 'unmarked-2']),
+            );
+            expect(deletedIds).not.toContain('marked');
+
+            // The other two event types have no subscription at all here, so
+            // they are created. What must not happen is a re-create of the
+            // event whose marked copy survived the collapse.
+            const createdEventTypes =
+                helper.createSubscriptionForProject.mock.calls.map(
+                    (call) => call[0].subscriptionPayload.eventType,
+                );
+            expect(createdEventTypes).not.toContain(eventType);
+        });
+
+        it('still leaves an unmarked subscription alone when we own no copy of its key', async () => {
+            withSelection([REPO_A]);
+            helper.listSubscriptions.mockResolvedValue([
+                ...allSubscriptionsFor([REPO_A]),
+                ...EVENT_TYPES.map((eventType) =>
+                    subscriptionFor(REPO_B, eventType, {}, NO_TEAM),
+                ),
+            ]);
+
+            await service.createWebhook(orgTeam);
+
+            expect(helper.deleteWebhookById).not.toHaveBeenCalled();
+        });
+    });
+
     describe('health: a subscription Azure stopped delivering is not coverage', () => {
         /**
          * Azure moves a subscription out of `enabled` by itself after repeated
