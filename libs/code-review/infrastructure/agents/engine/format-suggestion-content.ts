@@ -46,6 +46,13 @@ export async function formatSuggestionContent(
         organizationId?: string;
         /** Full telemetry metadata (org/team/PR/repo) for Langfuse tracing. */
         telemetryMetadata?: LangfuseTelemetryMetadata;
+        /**
+         * Called when the formatter degrades to the mechanical fallback (parse
+         * failure or provider error) instead of throwing — so the caller can
+         * record `{ severity: 'partial', stage: 'suggestion-formatter' }` on the
+         * execution and keep a degraded run from finishing as success (rule 15).
+         */
+        onDegraded?: (info: { reason: string; error?: unknown }) => void;
     },
 ): Promise<Map<number, FormattedSuggestion>> {
     if (suggestions.length === 0) {
@@ -76,6 +83,15 @@ export async function formatSuggestionContent(
     // pins. On the env/managed path (no BYOK slot) resolve the provider/model the
     // same way resolveModelConfig does, so the managed DeepSeek/Fireworks default
     // also gets thinking:disabled instead of {}.
+    //
+    // The managed default forwards `{ thinking: { type: 'disabled' } }` to
+    // api.fireworks.ai for the first time (the old 'fireworks' instance name
+    // dropped it). The field is a DOCUMENTED part of Fireworks' OpenAI-compatible
+    // surface — https://docs.fireworks.ai/api-reference/post-completions: "type=
+    // disabled always disables thinking", and DeepSeek V4 defaults reasoning ON
+    // ('high'), so the disable is both accepted and required. If an upstream ever
+    // rejects it, the catch path below degrades and reports through onDegraded —
+    // a rejected payload is observable, never silently passed.
     const reasoningSlot =
         options?.byokConfig ??
         envManagedReasoningDescriptor() ??
@@ -91,6 +107,13 @@ export async function formatSuggestionContent(
             openrouterAllowFallbacks: options?.byokConfig?.openrouterAllowFallbacks,
         },
     );
+    // An EMPTY payload (no provider resolved, or a model family with no
+    // reasoning-off shape) must never become a truthy `{}` override that
+    // replaces the funnel's own derivation in structured-review-call
+    // (`providerOptionsOverride ?? providerOptions`). Only pass a concrete
+    // disable; otherwise leave the funnel in charge.
+    const hasFormattedProviderOptions =
+        Object.keys(formatterProviderOptions).length > 0;
 
     try {
         const text = await LLM.run({
@@ -103,7 +126,9 @@ export async function formatSuggestionContent(
             timeoutMs: FORMAT_TIMEOUT_MS,
             organizationId: options?.organizationId,
             telemetryMetadata: options?.telemetryMetadata,
-            providerOptions: formatterProviderOptions,
+            providerOptions: hasFormattedProviderOptions
+                ? formatterProviderOptions
+                : undefined,
         });
 
         const { formatted, parseOk } = parseFormatResponse(text || '');
@@ -116,6 +141,9 @@ export async function formatSuggestionContent(
                     pullRequestId: options?.telemetryMetadata?.pullRequestId,
                     suggestionCount: suggestions.length,
                 },
+            });
+            options?.onDegraded?.({
+                reason: 'model response had no parseable JSON array',
             });
             return stripLabelsMechanically(suggestions);
         }
@@ -135,6 +163,10 @@ export async function formatSuggestionContent(
                 pullRequestId: options?.telemetryMetadata?.pullRequestId,
                 suggestionCount: suggestions.length,
             },
+        });
+        options?.onDegraded?.({
+            reason: `provider call failed: ${err instanceof Error ? err.message : String(err)}`,
+            error: err,
         });
         return stripLabelsMechanically(suggestions);
     }

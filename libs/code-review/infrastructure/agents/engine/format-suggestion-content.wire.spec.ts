@@ -47,35 +47,60 @@ interface CapturedWire {
     body: any;
 }
 
-/** Run the real formatter with `globalThis.fetch` stubbed and return the first
- *  captured HTTP request. Never touches the network. */
-async function captureFormatterWire(): Promise<CapturedWire> {
+interface CaptureResult {
+    captured: CapturedWire[];
+    formatted: Map<number, { suggestionContent: string; improvedCode: string }>;
+    degraded: string[];
+}
+
+/** Run the real formatter with `globalThis.fetch` stubbed and return every
+ *  captured HTTP request plus the degradation reports. Never touches the
+ *  network. `status` lets a test simulate an upstream REJECTING the payload
+ *  (e.g. a strict server 400ing on an unknown body field). */
+async function captureFormatterWire(
+    init: { status?: number; body?: unknown } = {},
+): Promise<CaptureResult> {
     const captured: CapturedWire[] = [];
+    const degraded: string[] = [];
     const realFetch = globalThis.fetch;
 
-    globalThis.fetch = (async (input: any, init: any) => {
+    globalThis.fetch = (async (input: any, init_: any) => {
         const url =
             typeof input === 'string' ? input : String(input?.url ?? input);
         captured.push({
             url,
-            body: init?.body ? JSON.parse(String(init.body)) : undefined,
+            body: init_?.body ? JSON.parse(String(init_.body)) : undefined,
         });
-        return new Response(JSON.stringify(OPENAI_OK), {
-            status: 200,
-            headers: { 'content-type': 'application/json' },
-        });
+        return new Response(
+            init.body !== undefined && init.status
+                ? JSON.stringify(init.body)
+                : JSON.stringify(OPENAI_OK),
+            {
+                status: init.status ?? 200,
+                headers: { 'content-type': 'application/json' },
+            },
+        );
     }) as typeof fetch;
 
+    let formatted: Map<
+        number,
+        { suggestionContent: string; improvedCode: string }
+    >;
     try {
-        await formatSuggestionContent([
+        formatted = await formatSuggestionContent(
+            [
+                {
+                    suggestionContent: 'WHAT: x. WHY: y. HOW: z.',
+                    existingCode: 'a',
+                    improvedCode: 'b',
+                    relevantFile: 'src/foo.ts',
+                    language: 'TypeScript',
+                },
+            ],
             {
-                suggestionContent: 'WHAT: x. WHY: y. HOW: z.',
-                existingCode: 'a',
-                improvedCode: 'b',
-                relevantFile: 'src/foo.ts',
-                language: 'TypeScript',
+                onDegraded: (info) => degraded.push(info.reason),
             },
-        ]);
+        );
     } finally {
         globalThis.fetch = realFetch;
     }
@@ -83,7 +108,7 @@ async function captureFormatterWire(): Promise<CapturedWire> {
     if (!captured.length) {
         throw new Error('no HTTP request captured');
     }
-    return captured[0];
+    return { captured, formatted, degraded };
 }
 
 describe('formatSuggestionContent — reasoning-off reaches the WIRE', () => {
@@ -108,7 +133,8 @@ describe('formatSuggestionContent — reasoning-off reaches the WIRE', () => {
         // DeepSeek managed default. `API_LLM_PROVIDER_MODEL` must be absent.
         process.env.API_FIREWORKS_API_KEY = 'fw-test';
 
-        const { url, body } = await captureFormatterWire();
+        const { captured } = await captureFormatterWire();
+        const { url, body } = captured[0];
 
         expect(url).toContain('api.fireworks.ai');
         expect(body.model).toBe(
@@ -125,10 +151,35 @@ describe('formatSuggestionContent — reasoning-off reaches the WIRE', () => {
         process.env.API_OPEN_AI_API_KEY = 'sk-test';
         process.env.API_OPENAI_FORCE_BASE_URL = 'https://api.deepseek.com/v1';
 
-        const { url, body } = await captureFormatterWire();
+        const { captured } = await captureFormatterWire();
+        const { url, body } = captured[0];
 
         expect(url).toContain('api.deepseek.com');
         expect(body.model).toBe('deepseek-v4-pro');
         expect(body.thinking).toEqual({ type: 'disabled' });
+    });
+
+    it('A REJECTED Fireworks payload degrades (rule 15) — reports, ships the mechanical strip, never silently passes', async () => {
+        // Fireworks is strict with unknown body fields. if a future request
+        // shape (or a stricter upstream) were ever refused on this field, the
+        // formatter must NOT swallow it into a silent pass — it records a
+        // partial degradation and the mechanical fallback still ships comments.
+        process.env.API_FIREWORKS_API_KEY = 'fw-test';
+
+        const { captured, formatted, degraded } = await captureFormatterWire({
+            status: 400,
+            body: { error: { message: 'unknown field: thinking' } },
+        });
+
+        // The payload WAS placed on the wire (that's what the upstream rejected).
+        expect(captured[0].url).toContain('api.fireworks.ai');
+        expect(captured[0].body.thinking).toEqual({ type: 'disabled' });
+
+        // Rejection → pollution to the pipeline (partial), never a throw, and
+        // never a silent 200-corrupted run.
+        expect(degraded).toHaveLength(1);
+        expect(degraded[0]).toContain('provider call failed');
+        expect(formatted.size).toBe(1);
+        expect(formatted.get(0)?.suggestionContent).toBe('x. y. z.');
     });
 });

@@ -323,6 +323,26 @@ describe('formatSuggestionContent — LLM.run contract (#1786)', () => {
                 openaiCompatible: { thinking: { type: 'disabled' } },
             });
         });
+
+        it('passes providerOptions=undefined (NOT a truthy {}) when the resolved payload is empty — an undefined descriptor can never replace the funnel', async () => {
+            mockRun.mockResolvedValue(
+                '[{"index": 0, "suggestionContent": "ok"}]',
+            );
+            // provider 'openai' on a non-reasoning model: "off" is expressed by
+            // OMITTING the param, so buildProviderOptions → {}. This is exactly
+            // what an undefined descriptor (e.g. managedDefaultReasoningDescriptor
+            // returning undefined for a future non-Fireworks managed default)
+            // resolves to, and passing {} would silently Replace the funnel's
+            // derivation in structured-review-call (#1851 class). The guard must
+            // downgrade {}/empty to undefined and leave the funnel in charge.
+            const byokConfig = { provider: 'openai', model: 'gpt-4o' } as any;
+
+            await formatSuggestionContent([suggestion], { byokConfig });
+
+            const arg = mockRun.mock.calls[0][0];
+            expect(arg.byokConfig).toBe(byokConfig);
+            expect(arg.providerOptions).toBeUndefined();
+        });
     });
 
     // -- LAYER 2: OFF-SCHEMA / N-MODEL ROBUSTNESS (the #1786 class) ----------
@@ -491,6 +511,64 @@ describe('formatSuggestionContent — LLM.run contract (#1786)', () => {
                 expect(typeof v.improvedCode).toBe('string');
             }
         });
+    });
+});
+
+describe('formatSuggestionContent — degradation reporting (rule 15)', () => {
+    const suggestion = {
+        suggestionContent: 'WHAT: x. WHY: y. HOW: z.',
+        existingCode: 'a',
+        improvedCode: 'b',
+        relevantFile: 'src/foo.ts',
+        language: 'TypeScript',
+    };
+
+    beforeEach(() => {
+        mockRun.mockReset();
+    });
+
+    it('calls onDegraded { partial } when the provider call rejects, and still returns the mechanical strip', async () => {
+        mockRun.mockRejectedValue(new Error('provider 500 / suspended key'));
+        const degraded: Array<{ reason: string; error?: unknown }> = [];
+
+        const result = await formatSuggestionContent([suggestion], {
+            onDegraded: (info) => degraded.push(info),
+        });
+
+        expect(degraded).toHaveLength(1);
+        expect(degraded[0].reason).toContain('provider call failed');
+        expect(degraded[0].reason).toContain('provider 500 / suspended key');
+        expect(degraded[0].error).toBeInstanceOf(Error);
+        // the fail-safe still ships the mechanical strip (never throws)
+        expect(result).toBeInstanceOf(Map);
+        expect(result.get(0)?.suggestionContent).toBe('x. y. z.');
+    });
+
+    it('calls onDegraded when the response has no parseable JSON array', async () => {
+        mockRun.mockResolvedValue('just prose, no array');
+        const degraded: string[] = [];
+
+        const result = await formatSuggestionContent([suggestion], {
+            onDegraded: (info) => degraded.push(info.reason),
+        });
+
+        expect(degraded).toEqual([
+            'model response had no parseable JSON array',
+        ]);
+        expect(result.size).toBe(1);
+    });
+
+    it('does NOT call onDegraded on the happy path', async () => {
+        mockRun.mockResolvedValue(
+            '[{"index": 0, "suggestionContent": "ok"}]',
+        );
+        const degraded: unknown[] = [];
+
+        await formatSuggestionContent([suggestion], {
+            onDegraded: () => degraded.push(true),
+        });
+
+        expect(degraded).toHaveLength(0);
     });
 });
 

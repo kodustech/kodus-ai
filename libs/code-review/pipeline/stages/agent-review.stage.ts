@@ -1204,6 +1204,31 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         organizationId:
                             context.organizationAndTeamData?.organizationId,
                         telemetryMetadata: telemetryMeta,
+                        // The formatter records every degradation (parse failure
+                        // or provider error) here as 'partial' — a run whose
+                        // comments shipped only via the mechanical strip must
+                        // not finish as success (rule 15).
+                        onDegraded: (info) => {
+                            context = this.updateContext(context, (draft) => {
+                                if (!draft.errors) {
+                                    draft.errors = [];
+                                }
+                                draft.errors.push({
+                                    pipelineId:
+                                        context.pipelineMetadata?.pipelineId,
+                                    stage: this.stageName,
+                                    substage: 'suggestion-formatter',
+                                    error: new Error(
+                                        `Suggestion formatter degraded to the mechanical fallback: ${info.reason}`,
+                                    ),
+                                    severity: 'partial',
+                                    metadata: {
+                                        suggestionCount: deduped.length,
+                                        prNumber,
+                                    },
+                                });
+                            });
+                        },
                     },
                 );
                 for (const [i, fmt] of formatted) {
