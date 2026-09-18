@@ -898,9 +898,16 @@ export class GitlabService implements Omit<
             // API process (observed on the Bitbucket twin of this call). The
             // failure still gets a loud error log from the method's own
             // catch; this catch only stops the crash.
-            void this.createMergeRequestWebhook({
-                organizationAndTeamData: params.organizationAndTeamData,
-            }).catch(() => undefined);
+            // Skipped for an intermediate chunk of a chunked save: the
+            // selection persisted so far is partial, and reconciling webhooks
+            // against a partial selection removes the hooks of everything not
+            // in it. The last chunk arrives with the complete selection and
+            // runs this once.
+            if (!params.deferWebhooks) {
+                void this.createMergeRequestWebhook({
+                    organizationAndTeamData: params.organizationAndTeamData,
+                }).catch(() => undefined);
+            }
         } catch (err) {
             throw new BadRequestException(err);
         }

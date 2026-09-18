@@ -421,9 +421,19 @@ export class GithubService
                 params.organizationAndTeamData,
             );
 
+            // `deferWebhooks` marks an intermediate chunk of a chunked save,
+            // whose persisted selection is still partial. Reconciling here
+            // would read that partial selection as the desired state and
+            // delete the webhooks of every repository outside it — with 200
+            // repositories saved in chunks of 50, the first chunk removes the
+            // other 150, and the later chunks recreate them. In between, those
+            // repositories silently stop delivering PR events, and the hooks
+            // never come back if the process dies mid-save. The last chunk
+            // arrives with the complete selection and reconciles once.
             const shouldRefreshTokenWebhooks =
                 githubAuthDetail?.authMode === AuthMode.TOKEN &&
-                params.configKey === IntegrationConfigKey.REPOSITORIES;
+                params.configKey === IntegrationConfigKey.REPOSITORIES &&
+                !params.deferWebhooks;
 
             const previousRepositories = shouldRefreshTokenWebhooks
                 ? ((await this.findOneByOrganizationAndTeamDataAndConfigKey(
