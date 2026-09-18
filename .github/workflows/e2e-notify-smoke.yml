@@ -16,7 +16,9 @@ on:
 jobs:
     notify-smoke:
         runs-on: ubuntu-latest
-        environment: QA
+        # No environment: the webhooks are repo-level secrets, and the QA
+        # environment's branch rules would block running this from a PR
+        # branch — the one place it is useful.
         timeout-minutes: 5
         steps:
             - name: Build fixture digest
