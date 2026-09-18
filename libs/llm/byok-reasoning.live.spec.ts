@@ -716,11 +716,14 @@ const LIVE = [
         brand: 'google_vertex',
         // GATED OFF, and the gate is the point. The Vertex credential IS in CI,
         // so without this the three Claude rows would run every Monday and fail
-        // every Monday on a quota grant nobody is pursuing — the red-every-week
-        // alarm this whole file is built to avoid. They are not deleted because
-        // the shapes they cover are real and the measurement behind them cost an
-        // evening; set BYOK_VERTEX_CLAUDE=1 on a project that has the quota and
-        // all three wake up. The Gemini row below stays live: it passes.
+        // every Monday on a GCP quota grant we do not currently hold — the
+        // red-every-week alarm this whole file is built to avoid.
+        //
+        // This gate is a DEBT, not a finding that the coverage is unnecessary.
+        // Self-hosted customers run Claude on Vertex today and no live call has
+        // ever checked what we send them. Set BYOK_VERTEX_CLAUDE=1 on a project
+        // that holds the quota and all three wake up — that is the whole fix.
+        // The Gemini row below stays live: it passes.
         requires: () => !!process.env.BYOK_VERTEX_CLAUDE,
         // NOT yet verified against a live vendor, and the reason is a GCP quota
         // grant rather than anything in our code. Walked the whole path on
@@ -760,18 +763,27 @@ const LIVE = [
     //
     // `claude-opus-5` resolves to `modern` exactly like `claude-sonnet-5`, so a
     // row for each would run the same code twice. Sonnet is the cheaper of the
-    // two and the native tier already carries an Opus 5 row; the argument that
-    // justifies that one — it is the most expensive model customers run — has no
-    // force here, where the corpus holds no Vertex slot at all.
+    // two and the native tier already carries an Opus 5 row.
+    //
+    // AND THE CORPUS CANNOT SETTLE WHO RUNS VERTEX. `byok-prod-shapes.json` is
+    // built from the CLOUD replica (`$PROD_REPLICA_URL`); a self-hosted install
+    // keeps its own database and never appears there. Zero Vertex slots in it
+    // means zero CLOUD slots and nothing more — self-hosted customers DO run
+    // Claude on Vertex, and every claim this provider makes about them (the
+    // band, the thinking shape, the temperature policy) rests on offline tables
+    // no live call has ever checked.
     {
         brand: 'google_vertex_modern',
         // GATED OFF, and the gate is the point. The Vertex credential IS in CI,
         // so without this the three Claude rows would run every Monday and fail
-        // every Monday on a quota grant nobody is pursuing — the red-every-week
-        // alarm this whole file is built to avoid. They are not deleted because
-        // the shapes they cover are real and the measurement behind them cost an
-        // evening; set BYOK_VERTEX_CLAUDE=1 on a project that has the quota and
-        // all three wake up. The Gemini row below stays live: it passes.
+        // every Monday on a GCP quota grant we do not currently hold — the
+        // red-every-week alarm this whole file is built to avoid.
+        //
+        // This gate is a DEBT, not a finding that the coverage is unnecessary.
+        // Self-hosted customers run Claude on Vertex today and no live call has
+        // ever checked what we send them. Set BYOK_VERTEX_CLAUDE=1 on a project
+        // that holds the quota and all three wake up — that is the whole fix.
+        // The Gemini row below stays live: it passes.
         requires: () => !!process.env.BYOK_VERTEX_CLAUDE,
         // THE TEMPERATURE IS THE SUBJECT, and without it this row is redundant.
         // Checked before writing it: `reasoning()` on Vertex returns the SAME
@@ -800,11 +812,14 @@ const LIVE = [
         brand: 'google_vertex_legacy',
         // GATED OFF, and the gate is the point. The Vertex credential IS in CI,
         // so without this the three Claude rows would run every Monday and fail
-        // every Monday on a quota grant nobody is pursuing — the red-every-week
-        // alarm this whole file is built to avoid. They are not deleted because
-        // the shapes they cover are real and the measurement behind them cost an
-        // evening; set BYOK_VERTEX_CLAUDE=1 on a project that has the quota and
-        // all three wake up. The Gemini row below stays live: it passes.
+        // every Monday on a GCP quota grant we do not currently hold — the
+        // red-every-week alarm this whole file is built to avoid.
+        //
+        // This gate is a DEBT, not a finding that the coverage is unnecessary.
+        // Self-hosted customers run Claude on Vertex today and no live call has
+        // ever checked what we send them. Set BYOK_VERTEX_CLAUDE=1 on a project
+        // that holds the quota and all three wake up — that is the whole fix.
+        // The Gemini row below stays live: it passes.
         requires: () => !!process.env.BYOK_VERTEX_CLAUDE,
         // `low` AND a cap of its own, because the budget shape states its
         // ceiling out loud and the protocol requires max_tokens above it:
