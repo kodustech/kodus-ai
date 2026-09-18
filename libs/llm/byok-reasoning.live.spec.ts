@@ -714,15 +714,25 @@ const LIVE = [
     // `credentialField` and no new mechanism, just the secret.
     {
         brand: 'google_vertex',
-        // NOT yet verified against a live vendor, and the reason is a GCP
-        // entitlement rather than anything in our code. Measured 2026-09-17 on a
-        // project with billing enabled and roles/aiplatform.user bound:
-        //   global    -> 429 Too Many Requests  (route exists, quota is zero)
-        //   us-east5  -> 404 Not Found          (bare id; regional Claude wants
-        //                                        a dated suffix, e.g. @20260219)
-        // Claude on Vertex has to be accepted in Model Garden per project before
-        // any quota exists, which no CLI can do. The row stays on `global`
-        // because that is the route that answered at all.
+        // NOT yet verified against a live vendor, and the reason is a GCP quota
+        // grant rather than anything in our code. Walked the whole path on
+        // 2026-09-17, on a project with billing enabled, roles/aiplatform.user
+        // bound, and all three Claude models accepted in Model Garden:
+        //
+        //   global    -> 429 RESOURCE_EXHAUSTED
+        //                "Quota exceeded for aiplatform.googleapis.com/
+        //                 global_online_prediction_requests_per_base_model
+        //                 with base model: anthropic-claude-sonnet"
+        //   us-east5  -> 404 Not Found (that host serves an older catalogue —
+        //                claude-3-opus and claude-sonnet-4-5 and nothing newer)
+        //
+        // Model Garden acceptance is NOT the blocker — with it missing the
+        // answer is 403 PERMISSION_DENIED, and this is 429. Acceptance and quota
+        // are two separate grants, and the self-service quota page offers a
+        // range of "0 to 0" on a project with no usage history: "não é possível
+        // aumentar a cota no momento ... entre em contato com nossa equipe de
+        // vendas". So these rows need a GCP project that ALREADY runs Vertex,
+        // not another form. The row stays on `global`, the route that answers.
         why: 'Claude-on-Vertex resolves reasoning through the ANTHROPIC module, not google thinkingConfig — the whole reason PR #1303 exists. Nothing has ever called it',
         slot: {
             provider: 'google_vertex',
