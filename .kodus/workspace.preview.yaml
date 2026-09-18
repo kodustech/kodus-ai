@@ -8,9 +8,6 @@ version: 1
 setup:
   - docker network create kodus-backend-services 2>/dev/null || true
   - docker network create shared-network 2>/dev/null || true
-  # Billing still lives in its own public repository. Keep the checkout inside
-  # the Runo workspace so compose can build it without any GitHub credential.
-  - test -d .runo/billing/.git || git clone --depth 1 --branch main https://github.com/kodustech/kodus-service-billing.git .runo/billing
   # sequential build of the shared image (api/worker/webhooks share the SAME
   # tag; a parallel compose build races on export — same as the repo scripts)
   - docker compose -f docker-compose.dev.yml build kodus-api

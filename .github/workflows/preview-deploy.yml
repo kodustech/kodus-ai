@@ -177,10 +177,8 @@ jobs:
                   # read the branch from git itself
                   $RUNO up --here --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml
                   # `up` runs setup for new VMs. Existing previews retain their
-                  # workspace, so reconcile the separately versioned billing
-                  # checkout before compose is restarted as well.
-                  $RUNO exec --branch "$HEAD_REF" -- \
-                    'git -C .runo/billing fetch --depth 1 origin main && git -C .runo/billing reset --hard FETCH_HEAD'
+                  # workspace; the billing compose context is remote and needs
+                  # no one-time checkout on the VM.
                   # `up` only uploads code when it CREATES the VM; on every
                   # later push the environment already exists and the new
                   # commit travels with push (compose watch reloads it)

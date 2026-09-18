@@ -58,7 +58,10 @@ services:
     # Only Stripe TEST credentials are accepted by the materialization script.
     kodus-service-billing:
         build:
-            context: ./.runo/billing
+            # Compose/BuildKit fetches this public repo directly. This keeps a
+            # pre-existing Runo VM reconcilable too: it does not depend on a
+            # one-time setup clone having run before `runo up`.
+            context: https://github.com/kodustech/kodus-service-billing.git#main
             dockerfile: DockerFiles/Dockerfile.dev
         image: kodus-service-billing-preview:latest
         container_name: kodus-service-billing
