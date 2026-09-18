@@ -363,8 +363,9 @@ const EMBEDDED_SECRET_HINT =
 // The optional leading `+`/`-` covers unified-diff lines, which get logged.
 const HEADER_LINE_PATTERN =
     /(^|[\r\n])([+-]?[ \t]*)([A-Za-z0-9_.-]{1,100})([ \t]*:[ \t]*)([^\r\n]*)/g;
+// The optional `+`/`-` marker mirrors HEADER_LINE_PATTERN for diff lines.
 const QUERY_PARAM_PATTERN =
-    /(^|[?&;\s])([A-Za-z0-9_.-]{1,100})=([^&#\s"'<>]*)/g;
+    /(^|[?&;\s])([+-]?)([A-Za-z0-9_.-]{1,100})=([^&#\s"'<>]*)/g;
 const JSON_PAIR_PATTERN = /"([^"\\]{1,100})"(\s*:\s*)"((?:[^"\\]|\\.)*)"/g;
 
 function redactEmbeddedSecrets(value: string): string {
@@ -382,9 +383,9 @@ function redactEmbeddedSecrets(value: string): string {
         )
         .replace(
             QUERY_PARAM_PATTERN,
-            (match, prefix, name, paramValue) =>
+            (match, prefix, marker, name, paramValue) =>
                 isSensitiveName(name) && paramValue
-                    ? `${prefix}${name}=[REDACTED]`
+                    ? `${prefix}${marker}${name}=[REDACTED]`
                     : match,
         )
         .replace(JSON_PAIR_PATTERN, (match, name, separator) =>
@@ -485,6 +486,14 @@ const DEEP_SANITIZE_MAX_DEPTH = 24;
  * Depth-bounded: stops recursing past `DEEP_SANITIZE_MAX_DEPTH` and
  * returns a `[Max-Depth]` marker.
  */
+function isRedirectableRequest(obj: any): boolean {
+    return (
+        '_currentRequest' in obj &&
+        '_options' in obj &&
+        Array.isArray(obj._requestBodyBuffers)
+    );
+}
+
 function deepSanitize(obj: any, seen?: WeakSet<object>, depth = 0): any {
     if (obj === null || typeof obj !== 'object') {
         if (typeof obj === 'string') {
@@ -508,6 +517,13 @@ function deepSanitize(obj: any, seen?: WeakSet<object>, depth = 0): any {
     // in them is worth logging, so don't walk them.
     if (obj instanceof ClientRequest) {
         return '[ClientRequest]';
+    }
+    // follow-redirects' RedirectableRequest wraps the native request and is
+    // what axios attaches as `err.request` on timeouts and connection errors.
+    // It is a Writable, not a ClientRequest, and its `_options` carries the
+    // headers and the `auth` option ("user:password") under non-sensitive keys.
+    if (isRedirectableRequest(obj)) {
+        return '[RedirectableRequest]';
     }
     if (obj instanceof IncomingMessage) {
         return '[IncomingMessage]';

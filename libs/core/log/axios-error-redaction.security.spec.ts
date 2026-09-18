@@ -128,6 +128,9 @@ describe('logger err serializer — AxiosError credential leaks', () => {
         const serialized = JSON.stringify(serializeLikeLogger(error));
 
         expect((error as any)?.code).toBe('ECONNABORTED');
+        // On a timeout axios attaches follow-redirects' wrapper, not the
+        // native ClientRequest.
+        expect(serializeLikeLogger(error).request).toBe('[RedirectableRequest]');
         expect(serialized).not.toContain(basic);
         expect(serialized).not.toContain(
             encodeURIComponent(FAKE_WEBHOOK_TOKEN),
@@ -135,6 +138,23 @@ describe('logger err serializer — AxiosError credential leaks', () => {
         // The body sits in `_requestBodyBuffers` as a Buffer; its bytes would
         // survive as a numeric array without the binary marker.
         expect(serialized).not.toContain('"type":"Buffer"');
+    });
+
+    it('does not leak the axios auth option when the request times out', async () => {
+        let error: unknown;
+        try {
+            await axios.get(`${baseURL}/hang`, {
+                auth: { username: 'svc-user', password: FAKE_CLIENT_SECRET },
+                timeout: 200,
+            });
+        } catch (caught) {
+            error = caught;
+        }
+
+        const serialized = JSON.stringify(serializeLikeLogger(error));
+
+        expect((error as any)?.code).toBe('ECONNABORTED');
+        expect(serialized).not.toContain(FAKE_CLIENT_SECRET);
     });
 
     it('replaces the live Node request/socket graph with a marker', async () => {
@@ -198,6 +218,17 @@ describe('sanitizeString — secrets embedded in strings', () => {
         expect(out).not.toContain('old-value');
         expect(out).not.toContain('new-value');
         expect(out).toContain('unchanged: kept');
+    });
+
+    it('redacts query-style secrets on added and removed diff lines', () => {
+        const out = sanitizeString(
+            '@@ -1 +1 @@\n-access_token=old-tok\n+access_token=new-tok\n+PRIVATE_TOKEN=gl-tok',
+        );
+
+        expect(out).not.toContain('old-tok');
+        expect(out).not.toContain('new-tok');
+        expect(out).not.toContain('gl-tok');
+        expect(out).toContain('+access_token=[REDACTED]');
     });
 
     it('does not grow the key cache with names found inside strings', () => {
