@@ -65,7 +65,10 @@ import {
     getTranslationsForLanguageByCategory,
     TranslationsCategory,
 } from '@libs/common/utils/translations/translations';
-import { generateWebhookToken } from '@libs/common/utils/webhooks/webhookTokenCrypto';
+import {
+    generateWebhookToken,
+    validateWebhookToken,
+} from '@libs/common/utils/webhooks/webhookTokenCrypto';
 import { AzureReposAuthDetail } from '@libs/integrations/domain/authIntegrations/types/azure-repos-auth-detail';
 import { IntegrationConfigEntity } from '@libs/integrations/domain/integrationConfigs/entities/integration-config.entity';
 import { IntegrationEntity } from '@libs/integrations/domain/integrations/entities/integration.entity';
@@ -75,6 +78,7 @@ import {
     AzureRepoCommit,
     AzureRepoFileItem,
     AzureRepoPRThread,
+    AzureRepoSubscription,
     EventConfig,
 } from '@libs/platform/domain/azure/entities/azureRepoExtras.type';
 import {
@@ -100,6 +104,18 @@ import {
 } from '../code-management-defaults.constants';
 import { AzureReposRequestHelper } from './azure-repos-request-helper';
 
+// Sequence for the webhook-pass id in the instrumentation logs, so
+// successive passes over the same selection can be told apart.
+let azureWebhookPassSeq = 0;
+
+// Org/team keys with a webhook pass currently running, and those whose pass
+// must go around again because a save arrived while it was running. In-memory
+// and per-process is enough: the pass always runs in the API process that
+// handled the save, which is the same reasoning the historical-PR backfill
+// guard in create-repositories.ts uses.
+const azureWebhookPassInFlight = new Set<string>();
+const azureWebhookPassRerunRequested = new Set<string>();
+
 @IntegrationServiceDecorator(PlatformType.AZURE_REPOS, 'codeManagement')
 export class AzureReposService implements Omit<
     ICodeManagementService,
@@ -123,6 +139,24 @@ export class AzureReposService implements Omit<
      * regardless of which entry point fired the fetch.
      */
     private static readonly FILE_CONTENT_CONCURRENCY = 30;
+
+    /**
+     * The PR events Kodus subscribes to, and the resourceVersion Azure
+     * requires for each. Shared by the code that creates subscriptions and the
+     * code that prunes the ones the selection no longer asks for, so the two
+     * can never disagree about what "the desired state" is.
+     *
+     * The versions are not interchangeable: the comment event only exists at
+     * 2.0, the two pull-request events at 1.0.
+     */
+    private static readonly WEBHOOK_EVENTS: EventConfig[] = [
+        { type: 'git.pullrequest.created', resourceVersion: '1.0' },
+        { type: 'git.pullrequest.updated', resourceVersion: '1.0' },
+        {
+            type: 'ms.vss-code.git-pullrequest-comment-event',
+            resourceVersion: '2.0',
+        },
+    ];
 
     constructor(
         @Inject(INTEGRATION_SERVICE_TOKEN)
@@ -2297,29 +2331,132 @@ export class AzureReposService implements Omit<
     async createWebhook(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<void> {
+        const passKey = `${organizationAndTeamData?.organizationId}:${organizationAndTeamData?.teamId}`;
+
+        if (azureWebhookPassInFlight.has(passKey)) {
+            // A pass is already walking this org/team's selection. The web UI
+            // saves in chunks of 50 and the backend fires this without
+            // awaiting it, so a second pass starting now would read its
+            // subscription snapshot before the first finished creating hooks
+            // and both would create the same ones, leaving the repository with
+            // duplicate subscriptions that deliver every PR event twice. Ask
+            // the running pass to go around once more instead, so whatever
+            // this save added still gets its hooks.
+            azureWebhookPassRerunRequested.add(passKey);
+
+            this.logger.log({
+                message: `[AZURE-HOOKS] pass coalesced into the one already running | key=${passKey}`,
+                context: this.createWebhook.name,
+                metadata: { organizationAndTeamData },
+            });
+
+            return;
+        }
+
+        azureWebhookPassInFlight.add(passKey);
+
+        try {
+            do {
+                azureWebhookPassRerunRequested.delete(passKey);
+
+                const passId = `${Date.now().toString(36)}-${(azureWebhookPassSeq += 1)}`;
+
+                await this.createWebhookPass(organizationAndTeamData, passId);
+            } while (azureWebhookPassRerunRequested.has(passKey));
+        } finally {
+            azureWebhookPassInFlight.delete(passKey);
+            azureWebhookPassRerunRequested.delete(passKey);
+        }
+    }
+
+    private async createWebhookPass(
+        organizationAndTeamData: OrganizationAndTeamData,
+        passId: string,
+    ): Promise<void> {
         try {
             const azureAuthDetail = await this.getAuthDetails(
                 organizationAndTeamData,
             );
 
-            const repositories: Repositories[] =
+            const repositories =
                 await this.findOneByOrganizationAndTeamDataAndConfigKey(
                     organizationAndTeamData,
                     IntegrationConfigKey.REPOSITORIES,
                 );
 
-            if (!repositories || repositories.length === 0) {
+            // Only an array is a statement about what the team wants. A
+            // missing integration and a missing config row both come back
+            // nullish, and a failed read throws — none of them mean "nothing
+            // is selected", and pruning against an unknown desired state would
+            // delete every subscription the team has. An explicit empty array
+            // does mean it, and must still reach the prune below.
+            if (!Array.isArray(repositories)) {
                 return null;
             }
 
-            for (const repo of repositories) {
+            const selection = repositories as Repositories[];
+
+            this.logger.log({
+                message: `[AZURE-HOOKS] pass ${passId} START | converging ${selection.length} repositories | org=${organizationAndTeamData?.organizationId} team=${organizationAndTeamData?.teamId}`,
+                context: this.createWebhook.name,
+                metadata: {
+                    passId,
+                    organizationAndTeamData,
+                    repositoryCount: selection.length,
+                },
+            });
+
+            // One listing for the whole pass. The endpoint is
+            // organization-wide with no server-side filter, so it costs the
+            // same whether we are about to check one repository or two
+            // hundred; running it per repository per event is what exhausted
+            // the account's rate limit (issue #1956). A snapshot taken here is
+            // safe because each repository/event pair is visited exactly once
+            // per pass, so nothing this pass creates can be missed by its own
+            // later lookups.
+            const existingSubscriptions =
+                await this.azureReposRequestHelper.listSubscriptions({
+                    orgName: azureAuthDetail.orgName,
+                    token: azureAuthDetail.token,
+                });
+
+            // Converge down before converging up. Pruning first leaves at
+            // most one subscription per repository and event, so the create
+            // side below sees an unambiguous model and no subscription is
+            // touched twice in one pass — otherwise a duplicate whose token
+            // had expired got deleted by the create side and again by the
+            // prune, while its freshly created replacement turned into a new
+            // duplicate.
+            const { removed: pruned, surviving } =
+                await this.pruneSubscriptionsOutsideSelection({
+                    passId,
+                    orgName: azureAuthDetail.orgName,
+                    token: azureAuthDetail.token,
+                    selection,
+                    existingSubscriptions,
+                });
+
+            for (const repo of selection) {
                 await this.createNotificationChannel(
                     repo?.project?.id,
                     azureAuthDetail.token,
                     azureAuthDetail.orgName,
                     repo.id,
+                    passId,
+                    surviving,
                 );
             }
+
+            this.logger.log({
+                message: `[AZURE-HOOKS] pass ${passId} END | ${selection.length} repositories converged, ${pruned} stale subscriptions removed`,
+                context: this.createWebhook.name,
+                metadata: {
+                    passId,
+                    organizationAndTeamData,
+                    repositoryCount: selection.length,
+                    prunedSubscriptions: pruned,
+                },
+            });
         } catch (error) {
             this.logger.error({
                 message: 'Error to create webhook',
@@ -2659,7 +2796,24 @@ export class AzureReposService implements Omit<
                 params.type,
             );
 
-            this.createWebhook(params.organizationAndTeamData);
+            // Deliberately not awaited (webhook creation must not block the
+            // integration-config save) — but the promise MUST be caught.
+            // createWebhook's own body is wrapped, yet the single-flight
+            // bookkeeping and the pass logging around it are not, and an
+            // orphaned rejection here escalates to an unhandledRejection: the
+            // same failure mode that crashed the whole API process on the
+            // Bitbucket adapter. Failures still get a loud error log from
+            // createWebhook itself; this catch only stops the crash.
+            // Skipped for an intermediate chunk of a chunked save: the
+            // selection persisted so far is partial, and reconciling webhooks
+            // against a partial selection removes the hooks of everything not
+            // in it. The last chunk arrives with the complete selection and
+            // runs this once.
+            if (!params.deferWebhooks) {
+                void this.createWebhook(
+                    params.organizationAndTeamData,
+                ).catch(() => undefined);
+            }
         } catch (err) {
             this.logger.error({
                 message: 'Error to create or update integration config',
@@ -3982,26 +4136,207 @@ export class AzureReposService implements Omit<
         }
     }
 
+    /**
+     * Brings Azure in line with the selection: removes this instance's
+     * subscriptions that the selection no longer asks for, and collapses
+     * duplicates down to one per repository and event.
+     *
+     * Reuses the snapshot the pass already took, so convergence costs no
+     * extra listing.
+     *
+     * Why it compares against Azure rather than against the previously saved
+     * selection (which is what the GitHub adapter does): resetting the
+     * integration to rotate a PAT deletes every integration config row, so
+     * after a reconnect there is no previous selection to diff against, and
+     * subscriptions from before the reset would stay live forever. Comparing
+     * against Azure needs no memory and therefore survives a reset, a failed
+     * reset, and a rotated token.
+     *
+     * Ownership is decided by the callback URL pointing at THIS instance.
+     * That is deliberate: two Kodus instances sharing one Azure account mint
+     * their tokens from the same secret, so token-based ownership would let
+     * one delete the other's subscriptions. The cost is that subscriptions
+     * left behind by an earlier webhook URL are not reclaimed here — they are
+     * invisible to this match by construction, and any broader rule risks
+     * deleting hooks that are not ours to delete.
+     */
+    private async pruneSubscriptionsOutsideSelection(params: {
+        passId: string;
+        orgName: string;
+        token: string;
+        selection: Repositories[];
+        existingSubscriptions: AzureRepoSubscription[];
+    }): Promise<{ removed: number; surviving: AzureRepoSubscription[] }> {
+        const { passId, orgName, token, selection, existingSubscriptions } =
+            params;
+
+        const webhookUrl =
+            process.env.GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK;
+
+        if (!webhookUrl) {
+            // Without it there is no way to tell our subscriptions from
+            // anyone else's, and guessing wrong deletes someone's webhooks.
+            this.logger.warn({
+                message: `[AZURE-HOOKS] pass ${passId} | no webhook URL configured, skipping convergence`,
+                context: this.createWebhook.name,
+                metadata: { passId },
+            });
+
+            return { removed: 0, surviving: existingSubscriptions };
+        }
+
+        const subscriptionKey = (
+            projectId?: string,
+            repoId?: string,
+            eventType?: string,
+        ) => `${projectId}|${repoId}|${eventType}`;
+
+        const desired = new Set<string>();
+
+        for (const repo of selection) {
+            for (const event of AzureReposService.WEBHOOK_EVENTS) {
+                desired.add(
+                    subscriptionKey(repo?.project?.id, repo?.id, event.type),
+                );
+            }
+        }
+
+        const ours = existingSubscriptions.filter((subscription) =>
+            subscription.consumerInputs?.url?.includes(webhookUrl),
+        );
+
+        const byKey = new Map<string, AzureRepoSubscription[]>();
+
+        for (const subscription of ours) {
+            const key = subscriptionKey(
+                subscription.publisherInputs?.projectId,
+                subscription.publisherInputs?.repository,
+                subscription.eventType,
+            );
+
+            byKey.set(key, [...(byKey.get(key) ?? []), subscription]);
+        }
+
+        const stale: Array<{
+            subscription: AzureRepoSubscription;
+            reason: 'not-in-selection' | 'duplicate';
+        }> = [];
+
+        for (const [key, subscriptions] of byKey) {
+            if (!desired.has(key)) {
+                subscriptions.forEach((subscription) =>
+                    stale.push({ subscription, reason: 'not-in-selection' }),
+                );
+                continue;
+            }
+
+            if (subscriptions.length > 1) {
+                // Overlapping passes could create the same subscription more
+                // than once, and Azure then delivers every event that many
+                // times. Keep one — preferring a token this instance can still
+                // validate — and drop the rest.
+                const keepIndex = Math.max(
+                    subscriptions.findIndex((subscription) =>
+                        this.hasUsableWebhookToken(
+                            subscription.consumerInputs?.url,
+                        ),
+                    ),
+                    0,
+                );
+
+                subscriptions.forEach((subscription, index) => {
+                    if (index !== keepIndex) {
+                        stale.push({ subscription, reason: 'duplicate' });
+                    }
+                });
+            }
+        }
+
+        if (stale.length === 0) {
+            return { removed: 0, surviving: existingSubscriptions };
+        }
+
+        const staleIds = new Set(stale.map(({ subscription }) => subscription.id));
+        let removed = 0;
+
+        for (const { subscription, reason } of stale) {
+            try {
+                await this.azureReposRequestHelper.deleteWebhookById({
+                    orgName,
+                    token,
+                    subscriptionId: subscription.id,
+                });
+
+                removed += 1;
+
+                this.logger.log({
+                    message: `[AZURE-HOOKS] pass ${passId} | pruned ${reason} subscription | repo=${subscription.publisherInputs?.repository} event=${subscription.eventType} id=${subscription.id}`,
+                    context: this.createWebhook.name,
+                    metadata: {
+                        passId,
+                        reason,
+                        repoId: subscription.publisherInputs?.repository,
+                        eventType: subscription.eventType,
+                        subscriptionId: subscription.id,
+                    },
+                });
+            } catch (error) {
+                // A subscription we failed to remove is stale, which is noise.
+                // Aborting the pass would instead leave selected repositories
+                // without the hooks they need, so keep going.
+                this.logger.error({
+                    message: `[AZURE-HOOKS] pass ${passId} | failed to prune subscription ${subscription.id} (${reason})`,
+                    context: this.createWebhook.name,
+                    error: error,
+                    metadata: {
+                        passId,
+                        reason,
+                        repoId: subscription.publisherInputs?.repository,
+                        eventType: subscription.eventType,
+                        subscriptionId: subscription.id,
+                    },
+                });
+            }
+        }
+
+        // Whatever the create side looks at must not include what this pass
+        // just deleted, or it would try to reuse — or delete again — a
+        // subscription that no longer exists.
+        return {
+            removed,
+            surviving: existingSubscriptions.filter(
+                (subscription) => !staleIds.has(subscription.id),
+            ),
+        };
+    }
+
     private async createNotificationChannel(
         projectId: string,
         userToken: string,
         organizationName: string,
         repoId: string,
+        passId?: string,
+        existingSubscriptions: AzureRepoSubscription[] = [],
     ): Promise<void> {
-        const EVENT_CONFIGS: EventConfig[] = [
-            { type: 'git.pullrequest.created', resourceVersion: '1.0' },
-            { type: 'git.pullrequest.updated', resourceVersion: '1.0' },
-            {
-                type: 'ms.vss-code.git-pullrequest-comment-event',
-                resourceVersion: '2.0',
-            },
-        ];
-
         const webhookUrl =
             process.env.GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK!;
         const encryptedToken = generateWebhookToken();
 
-        const tasks = EVENT_CONFIGS.map(({ type, resourceVersion }) =>
+        this.logger.log({
+            message: `[AZURE-HOOKS] pass ${passId} repo ${repoId} | fan-out ${AzureReposService.WEBHOOK_EVENTS.length} event types (parallel)`,
+            context: this.createNotificationChannel.name,
+            metadata: {
+                passId,
+                projectId,
+                repoId,
+                eventTypes: AzureReposService.WEBHOOK_EVENTS.map(
+                    (event) => event.type,
+                ),
+            },
+        });
+
+        const tasks = AzureReposService.WEBHOOK_EVENTS.map(
+            ({ type, resourceVersion }) =>
             this.createOrReplaceHook({
                 orgName: organizationName,
                 token: userToken,
@@ -4011,6 +4346,8 @@ export class AzureReposService implements Omit<
                 resourceVersion,
                 webhookUrl,
                 encryptedToken,
+                passId,
+                existingSubscriptions,
             }).catch((error) => {
                 this.logger.error({
                     message: `Erro no hook ${type}: ${error.message ?? error}`,
@@ -4030,6 +4367,33 @@ export class AzureReposService implements Omit<
         await Promise.all(tasks);
     }
 
+    /**
+     * Whether an existing subscription's callback URL still carries a webhook
+     * token this instance accepts.
+     *
+     * The token is the shared secret encrypted under a random IV, and
+     * validation just decrypts and compares, so a subscription created by any
+     * earlier pass stays valid indefinitely and recreating it buys nothing. It
+     * does stop being valid if `CODE_MANAGEMENT_SECRET` or
+     * `CODE_MANAGEMENT_WEBHOOK_TOKEN` is rotated, and the delete-and-recreate
+     * path is what heals that -- so check the token rather than treating any
+     * URL that merely points at us as usable.
+     */
+    private hasUsableWebhookToken(subscriptionUrl?: string): boolean {
+        if (!subscriptionUrl) {
+            return false;
+        }
+
+        try {
+            const token = new URL(subscriptionUrl).searchParams.get('token');
+
+            return !!token && validateWebhookToken(token);
+        } catch {
+            // Unparseable URL: treat as unusable so it gets replaced.
+            return false;
+        }
+    }
+
     private async createOrReplaceHook(opts: {
         orgName: string;
         token: string;
@@ -4039,6 +4403,8 @@ export class AzureReposService implements Omit<
         resourceVersion: string;
         webhookUrl: string;
         encryptedToken: string;
+        passId?: string;
+        existingSubscriptions: AzureRepoSubscription[];
     }): Promise<void> {
         const {
             orgName,
@@ -4049,6 +4415,8 @@ export class AzureReposService implements Omit<
             resourceVersion,
             webhookUrl,
             encryptedToken,
+            passId,
+            existingSubscriptions,
         } = opts;
 
         try {
@@ -4067,20 +4435,49 @@ export class AzureReposService implements Omit<
                 },
             };
 
-            // Lista assinaturas existentes
-            const subs =
-                await this.azureReposRequestHelper.listSubscriptionsByProject({
-                    orgName,
-                    token,
-                    projectId,
-                });
-
-            const existing = subs.find(
+            // The pass listed the organization's subscriptions once and
+            // handed the result down; the project filter that
+            // `listSubscriptionsByProject` used to apply is done here instead,
+            // so the match is the same one as before.
+            const existing = existingSubscriptions.find(
                 (s) =>
                     s.eventType === eventType &&
+                    s.publisherInputs?.projectId === projectId &&
                     s.publisherInputs?.repository === repoId &&
                     s.consumerInputs?.url?.includes(webhookUrl),
             );
+
+            const usable =
+                !!existing &&
+                this.hasUsableWebhookToken(existing.consumerInputs?.url);
+
+            this.logger.log({
+                message: `[AZURE-HOOKS] pass ${passId} repo ${repoId} | ${eventType} | decision=${usable ? 'skip-already-subscribed' : existing ? 'delete-then-create' : 'create-only'}`,
+                context: this.createOrReplaceHook.name,
+                metadata: {
+                    passId,
+                    projectId,
+                    repoId,
+                    eventType,
+                    subscriptionsInSnapshot: existingSubscriptions.length,
+                    decision: usable
+                        ? 'skip-already-subscribed'
+                        : existing
+                          ? 'delete-then-create'
+                          : 'create-only',
+                    existingSubscriptionId: existing?.id,
+                },
+            });
+
+            if (usable) {
+                // Already subscribed to this event for this repository, with a
+                // token this instance can still validate. Deleting and
+                // recreating it would leave Azure in exactly the state it is
+                // already in, at the cost of two writes per event per
+                // repository on every save -- the churn measured in #1956.
+                // This matches what the Bitbucket adapter already does.
+                return;
+            }
 
             if (existing) {
                 await this.azureReposRequestHelper.deleteWebhookById({
@@ -4332,6 +4729,12 @@ ${copyPrompt}
     async deleteWebhook(params: {
         organizationAndTeamData: OrganizationAndTeamData;
     }): Promise<void> {
+        return this.deleteWebhookPass(params);
+    }
+
+    private async deleteWebhookPass(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+    }): Promise<void> {
         try {
             const authDetails = await this.getAuthDetails(
                 params.organizationAndTeamData,
@@ -4346,6 +4749,46 @@ ${copyPrompt}
                     );
 
                 if (repositories) {
+                    // One listing for the whole delete pass, for the same
+                    // reason as the create pass: the endpoint is
+                    // organization-wide, so listing it once per repository
+                    // multiplied the cost by the size of the selection with no
+                    // extra information to show for it (issue #1956). Deleting
+                    // cannot invalidate another repository's entry in the
+                    // snapshot, since each subscription is matched and removed
+                    // exactly once.
+                    let allSubscriptions: AzureRepoSubscription[];
+
+                    try {
+                        allSubscriptions =
+                            await this.azureReposRequestHelper.listSubscriptions(
+                                {
+                                    orgName: authDetails.orgName,
+                                    token: authDetails.token,
+                                },
+                            );
+                    } catch (error) {
+                        // Reported here rather than letting it reach the outer
+                        // catch, which would blame authentication for what is a
+                        // listing failure. Nothing can be deleted without the
+                        // listing, and the caller
+                        // (delete-integration.use-case) already proceeds with
+                        // local cleanup when this path fails.
+                        this.logger.error({
+                            message:
+                                'Error listing Azure Repos subscriptions for webhook deletion — no webhooks removed',
+                            context: this.deleteWebhook.name,
+                            error: error,
+                            metadata: {
+                                organizationAndTeamData:
+                                    params.organizationAndTeamData,
+                                repositoryCount: repositories.length,
+                            },
+                        });
+
+                        return;
+                    }
+
                     for (const repo of repositories) {
                         try {
                             const projectId =
@@ -4358,14 +4801,14 @@ ${copyPrompt}
                                 continue;
                             }
 
-                            const subs =
-                                await this.azureReposRequestHelper.listSubscriptionsByProject(
-                                    {
-                                        orgName: authDetails.orgName,
-                                        token: authDetails.token,
-                                        projectId,
-                                    },
-                                );
+                            // The project filter that
+                            // `listSubscriptionsByProject` used to apply is
+                            // applied here, so the set matched per repository
+                            // is the same one as before.
+                            const subs = allSubscriptions.filter(
+                                (s) =>
+                                    s.publisherInputs?.projectId === projectId,
+                            );
 
                             const webhookUrl = this.configService.get<string>(
                                 'GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK'!,

@@ -276,10 +276,21 @@ export class AzureReposRequestHelper {
         return data;
     }
 
-    async listSubscriptionsByProject(params: {
+    /**
+     * Azure exposes no server-side filter on this endpoint: it always returns
+     * every service hook subscription in the organization, and narrowing by
+     * project happens in our code. The response therefore grows with the
+     * organization and one call costs roughly 1.75 of the 200 TSTUs an account
+     * gets per sliding 5-minute window.
+     *
+     * Callers that need this for many repositories must take a single snapshot
+     * and reuse it. Calling it once per repository per event is what exhausted
+     * a customer's rate limit and had Azure delay every request the Kodus
+     * service account made, code reviews included (issue #1956).
+     */
+    async listSubscriptions(params: {
         orgName: string;
         token: string;
-        projectId: string;
     }): Promise<AzureRepoSubscription[]> {
         const instance = await this.azureRequest(params);
 
@@ -287,31 +298,18 @@ export class AzureReposRequestHelper {
             '/_apis/hooks/subscriptions?api-version=7.1',
         );
 
-        return res.data.value.filter(
-            (sub) => sub.publisherInputs?.projectId === params.projectId,
-        );
+        return res.data?.value ?? [];
     }
 
-    async findExistingWebhook(params: {
+    async listSubscriptionsByProject(params: {
         orgName: string;
         token: string;
         projectId: string;
-        eventType: string;
-        repoId: string;
-        url: string;
-    }): Promise<AzureRepoSubscription | undefined> {
-        const instance = await this.azureRequest(params);
+    }): Promise<AzureRepoSubscription[]> {
+        const subscriptions = await this.listSubscriptions(params);
 
-        const { data } = await instance.get(
-            '/_apis/hooks/subscriptions?api-version=7.1',
-        );
-
-        return data.value.find(
-            (sub) =>
-                sub.eventType === params.eventType &&
-                sub.publisherInputs?.projectId === params.projectId &&
-                sub.publisherInputs?.repository === params.repoId &&
-                sub.consumerInputs?.url?.includes(params.url),
+        return subscriptions.filter(
+            (sub) => sub.publisherInputs?.projectId === params.projectId,
         );
     }
 
