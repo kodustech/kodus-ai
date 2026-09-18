@@ -12,6 +12,19 @@
 # runo substitutes ${RUNO_PUBLIC_URL} / ${RUNO_PUBLIC_HOST} at up time, after
 # the tunnel exists and before the stack boots.
 services:
+    kodus-api:
+        environment:
+            - API_MCP_SERVER_ENABLED=true
+
+    worker:
+        environment:
+            - API_MCP_SERVER_ENABLED=true
+
+    mcp-manager:
+        environment:
+            - API_MCP_MANAGER_REDIRECT_URI=${RUNO_PUBLIC_URL}/setup/mcp/oauth
+            - API_MCP_MANAGER_BACKEND_URL=http://kodus-api:3001
+
     web:
         environment:
             # .env ships NEXTAUTH_URL=http://localhost:3000, so without this
@@ -21,6 +34,10 @@ services:
             # Next 16 answers 403 on /_next/* for dev requests coming from an
             # origin it was not told about — the tunnel hostname is one.
             - ALLOWED_DEV_ORIGINS=${RUNO_PUBLIC_HOST}
+            # The billing proxy runs server-side inside this container, so it
+            # must use Docker DNS rather than the browser's localhost.
+            - WEB_HOSTNAME_BILLING=kodus-service-billing
+            - WEB_PORT_BILLING=3992
         deploy:
             resources:
                 limits:
@@ -35,3 +52,42 @@ services:
                     # ts-node boot + migrations + seeds exceeds the 1G dev
                     # limit on a cold VM and the container crash-loops.
                     memory: 2G
+
+    # Billing is a separate repository today. Runo checks it out during setup
+    # and this overlay joins it to the same databases and networks as kodus-ai.
+    # Only Stripe TEST credentials are accepted by the materialization script.
+    kodus-service-billing:
+        build:
+            context: ./.runo/billing
+            dockerfile: DockerFiles/Dockerfile.dev
+        image: kodus-service-billing-preview:latest
+        container_name: kodus-service-billing
+        depends_on:
+            db_postgres:
+                condition: service_healthy
+        env_file:
+            - .env.billing
+        ports:
+            - '3992:3992'
+        restart: unless-stopped
+        networks:
+            - kodus-backend-services
+            - shared-network
+        healthcheck:
+            test:
+                [
+                    'CMD',
+                    'node',
+                    '-e',
+                    "fetch('http://127.0.0.1:3992/health/ready').then((res)=>process.exit(res.ok?0:1)).catch(()=>process.exit(1))",
+                ]
+            interval: 15s
+            timeout: 5s
+            retries: 12
+            start_period: 60s
+        deploy:
+            resources:
+                limits:
+                    memory: 1G
+                reservations:
+                    memory: 256M

@@ -22,6 +22,9 @@ name: "Preview: Deploy"
 #   PREVIEW_SEED_PASSWORD      password of the seeded login (preview@kodus.io);
 #                              signup enforces 8+ chars with an uppercase, a
 #                              lowercase, a number and a symbol
+#   PREVIEW_BILLING_ENV        allowlisted Stripe test configuration used by
+#                              the isolated billing container; live keys fail
+#                              closed before the workspace is uploaded
 # =============================================================================
 
 on:
@@ -115,6 +118,7 @@ jobs:
                   # and anyone holding it could otherwise recompute a preview's
                   # JWT and crypto keys and mint sessions without logging in.
                   PREVIEW_SECRET_SEED_BASE: ${{ secrets.PREVIEW_SECRET_SEED }}
+                  PREVIEW_BILLING_ENV: ${{ secrets.PREVIEW_BILLING_ENV }}
                   HEAD_REF: ${{ steps.target.outputs.branch }}
               run: |
                   # No token means previews are not configured for this
@@ -148,6 +152,9 @@ jobs:
                   fi
                   # ...and then nothing real survives into a public environment
                   ./scripts/preview/neutralize-preview-env.sh .env .env.template
+                  printf '%s\n' "$PREVIEW_BILLING_ENV" > "$RUNNER_TEMP/preview-billing.env"
+                  ./scripts/preview/materialize-billing-env.sh \
+                    "$RUNNER_TEMP/preview-billing.env" .env .env.billing
                   # the seed runs on the VM and reads these from the same file
                   {
                     echo "PREVIEW_SEED_EMAIL=preview@kodus.io"
@@ -169,6 +176,11 @@ jobs:
                   # --branch: the checkout is a detached HEAD, so runo cannot
                   # read the branch from git itself
                   $RUNO up --here --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml
+                  # `up` runs setup for new VMs. Existing previews retain their
+                  # workspace, so reconcile the separately versioned billing
+                  # checkout before compose is restarted as well.
+                  $RUNO exec --branch "$HEAD_REF" -- \
+                    'git -C .runo/billing fetch --depth 1 origin main && git -C .runo/billing reset --hard FETCH_HEAD'
                   # `up` only uploads code when it CREATES the VM; on every
                   # later push the environment already exists and the new
                   # commit travels with push (compose watch reloads it)
@@ -197,7 +209,7 @@ jobs:
                             '',
                             `**${process.env.URL}**`,
                             '',
-                            'Full stack (api, worker, webhooks, mongo, postgres, rabbit) on one VM.',
+                            'Full stack (web, api, worker, webhooks, MCP, billing, mongo, postgres, rabbit) on one VM.',
                             'Login: `preview@kodus.io` — password is the `PREVIEW_SEED_PASSWORD` secret.',
                             '',
                             'The VM suspends itself after 60min idle; a new push wakes it and updates this link.',

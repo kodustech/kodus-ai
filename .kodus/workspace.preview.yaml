@@ -8,17 +8,23 @@ version: 1
 setup:
   - docker network create kodus-backend-services 2>/dev/null || true
   - docker network create shared-network 2>/dev/null || true
+  # Billing still lives in its own public repository. Keep the checkout inside
+  # the Runo workspace so compose can build it without any GitHub credential.
+  - test -d .runo/billing/.git || git clone --depth 1 --branch main https://github.com/kodustech/kodus-service-billing.git .runo/billing
   # sequential build of the shared image (api/worker/webhooks share the SAME
   # tag; a parallel compose build races on export — same as the repo scripts)
   - docker compose -f docker-compose.dev.yml build kodus-api
   - pnpm install
 files:
-  copy: [.env]
+  copy: [.env, .env.billing]
 services:
   compose:
     # the overlay adds what a public, non-laptop environment needs: the app's
     # own public URL in its env, and memory limits sized for a 16GB VM
     files: [docker-compose.dev.yml, docker-compose.preview.yml]
+    # MCP is intentionally opt-in for laptops, but a preview must represent the
+    # complete product rather than the lightweight default developer stack.
+    profiles: [mcp]
     # the web app is what a reviewer opens; it proxies to the API over the
     # compose network, so the API needs no public address of its own
     public: web
@@ -30,7 +36,7 @@ data:
   migrate: pnpm run migration:run
   # seed:preview adds an onboarded organization + a login, so the link opens on
   # something usable instead of an empty signup screen
-  seed: pnpm run seed && pnpm run seed:preview
+  seed: pnpm run seed && pnpm run seed:preview && timeout 300 bash -c 'until curl -fsS http://127.0.0.1:3101/health >/dev/null && curl -fsS http://127.0.0.1:3992/health/ready >/dev/null; do sleep 3; done'
 expose:
   # Zero-setup HTTPS on the VM's sslip.io name. TODO: switch to
   #   mode: tunnel
