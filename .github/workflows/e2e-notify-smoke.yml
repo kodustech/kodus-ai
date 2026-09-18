@@ -2,7 +2,7 @@ name: "E2E: notify smoke test"
 
 # Manual-only utility: renders the three e2e-cloud Discord notification
 # shapes (infra-unreachable / gating failures / green-with-advisories)
-# from a FIXTURE digest and posts them to the internal channel, clearly
+# from a FIXTURE digest and posts them to the tests channel, clearly
 # labeled [SMOKE TEST]. Use it to validate message rendering when
 # touching the notification pipeline — the real path only fires on real
 # failures, which you can't (and shouldn't) produce on demand.
@@ -51,7 +51,7 @@ jobs:
             - name: "[SMOKE] Case 1 — infra unreachable"
               uses: ./.github/actions/discord-notify
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
                   status: failure
                   title: "[SMOKE TEST] 🔌 E2E: QA unreachable — matrix did NOT run"
                   description: |
@@ -61,7 +61,7 @@ jobs:
             - name: "[SMOKE] Case 2 — gating failures"
               uses: ./.github/actions/discord-notify
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
                   status: failure
                   title: "[SMOKE TEST] ❌ E2E cloud matrix: ${{ steps.digest.outputs.headline }}"
                   description: |
@@ -71,7 +71,7 @@ jobs:
             - name: "[SMOKE] Case 3 — green with advisories"
               uses: ./.github/actions/discord-notify
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
                   status: cancelled
                   title: "[SMOKE TEST] ⚠️ E2E cloud matrix GREEN with advisories: ${{ steps.digest.outputs.headline }}"
                   description: |
