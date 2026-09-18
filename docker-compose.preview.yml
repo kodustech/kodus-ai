@@ -38,11 +38,18 @@ services:
             # left half-done. runo exposes `webhooks` publicly (see
             # workspace.preview.yaml) and hands its URL over as
             # RUNO_URL_WEBHOOKS.
-            - API_GITHUB_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS}/github/webhook
-            - API_GITLAB_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS}/gitlab/webhook
-            - GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS}/bitbucket/webhook
-            - GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS}/azure-repos/webhook
-            - API_FORGEJO_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS}/forgejo/webhook
+            #
+            # `:?` guards the one case Compose would otherwise paper over: the
+            # recipe no longer declaring the variable at all, which would
+            # interpolate to an empty string and boot the API with a relative
+            # hook path. It does NOT catch `webhooks` being dropped from
+            # `public:` — runo still exports the name, unsubstituted — but that
+            # case fails loudly at the provider, the same way it does today.
+            - API_GITHUB_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS:?webhooks must be listed under services.compose.public in .kodus/workspace.preview.yaml}/github/webhook
+            - API_GITLAB_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS:?webhooks must be listed under services.compose.public in .kodus/workspace.preview.yaml}/gitlab/webhook
+            - GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS:?webhooks must be listed under services.compose.public in .kodus/workspace.preview.yaml}/bitbucket/webhook
+            - GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS:?webhooks must be listed under services.compose.public in .kodus/workspace.preview.yaml}/azure-repos/webhook
+            - API_FORGEJO_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS:?webhooks must be listed under services.compose.public in .kodus/workspace.preview.yaml}/forgejo/webhook
 
     webhooks:
         deploy:
