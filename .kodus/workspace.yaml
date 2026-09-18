@@ -23,6 +23,6 @@ validate:
   - name: test-rbac
     run: pnpm run test:rbac
 limits:
-  instance: m7i-flex.xlarge  # nao-burstavel: build sem throttling de creditos
+  instance: t3.xlarge  # 16 GiB, permitted by the isolated Ohio identity
   disk: 100gb
   idle_suspend: 10m

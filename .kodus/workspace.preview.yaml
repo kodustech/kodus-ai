@@ -13,12 +13,15 @@ setup:
   - docker compose -f docker-compose.dev.yml build kodus-api
   - pnpm install
 files:
-  copy: [.env]
+  copy: [.env, .env.billing]
 services:
   compose:
     # the overlay adds what a public, non-laptop environment needs: the app's
     # own public URL in its env, and memory limits sized for a 16GB VM
     files: [docker-compose.dev.yml, docker-compose.preview.yml]
+    # MCP is intentionally opt-in for laptops, but a preview must represent the
+    # complete product rather than the lightweight default developer stack.
+    profiles: [mcp]
     # the web app is what a reviewer opens; it proxies to the API over the
     # compose network, so the API needs no public address of its own.
     # `webhooks` is public for a different reason: the git provider calls it
@@ -47,7 +50,7 @@ expose:
   # hostname across suspend/resume, which is what a link in a PR comment needs.
   mode: https
 limits:
-  instance: m7i-flex.xlarge  # non-burstable: the image build never throttles
+  instance: t3.xlarge  # 16 GiB, permitted by the isolated Ohio identity
   disk: 100gb
   # a reviewer comes back to the link minutes or hours later; while the
   # hostname still carries the IP, a resume invalidates the posted link, so
