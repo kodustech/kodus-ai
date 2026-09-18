@@ -398,6 +398,28 @@ const LIVE = [
     // subject is the TRANSPORT, which is where the shapes actually differ: the
     // Responses API natively, and the OpenAI protocol through a proxy. Both ride
     // BYOK_OPENAI_API_KEY, so the pair costs no new secret.
+    // ── MEASURED 2026-09-18, and the result is the finding ────────────────────
+    // Both 5.6 rows came back 200 with ZERO reasoning tokens, on two different
+    // transports, while the control group in the SAME run reasoned normally:
+    //
+    //   gpt-5.4        native   medium -> 11 reasoning tokens
+    //   gpt-5.4        compat   medium -> 18
+    //   gpt-6-astra    native   medium -> 20
+    //   gpt-5.6-terra  native   medium ->  0
+    //   gpt-5.6-sol    compat   HIGH   ->  0
+    //
+    // Our side is not the problem: the request bodies were captured offline and
+    // the field goes out, identical in shape to the ones that DO reason —
+    // `reasoning:{effort,summary}` on the Responses API, `reasoning_effort` on
+    // the compatible transport. A higher effort on the compat row changed
+    // nothing, which is what rules out "the prompt was too easy".
+    //
+    // So these rows carry `reasons: false`, the same way `openai_compatible_claude`
+    // does below: it pins the gap rather than asserting a behaviour we wish for.
+    // 18 production slots run a gpt-5.6 with an effort configured, and that
+    // effort currently buys nothing. The day it starts buying something — or the
+    // day a 5.6 model begins reasoning on its own — these rows go red and
+    // somebody gets to find out on purpose.
     {
         brand: 'openai_gpt56',
         why: 'the 5.6 line is 18 production slots and had NO row — the biggest uncovered family in the corpus. terra is its largest native group (5 slots, 3 at medium), and the id is a generation newer than every OpenAI row here',
@@ -406,7 +428,8 @@ const LIVE = [
             model: 'gpt-5.6-terra',
             reasoningEffort: 'medium', // prod: 3 de 5 slots do terra usam medium; 1 high, 1 ausente
         },
-        reasons: true,
+        // Measured 0 — see the block above. Asserting the gap, not the wish.
+        reasons: false,
     },
     {
         brand: 'openai_compatible_gpt56',
@@ -422,7 +445,8 @@ const LIVE = [
             baseURL: 'https://api.openai.com/v1',
             reasoningEffort: 'high', // prod: 3 de 5 slots do sol usam high; 1 medium, 1 ausente
         },
-        reasons: true,
+        // Measured 0 even at `high` — the effort level is not the variable.
+        reasons: false,
     },
     // ── gpt-6: ZERO production slots today, and the row is still justified —
     // for a different reason than every row above it, so it says so rather than
