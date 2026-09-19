@@ -149,6 +149,17 @@ describe('confirmation of a run below the floor', () => {
         expect(combined.gate.confirmation.secondInfra).toBe(1);
     });
 
+    it('does not count a PR the confirmation failed to parse as measured', () => {
+        const scored = (caseId: string, recall: number) => ({ caseId, status: 'pass', metadata: { recall, precision: 0.5, goldenResults: [{ golden: caseId, found: recall > 0 }] } });
+        const first = { model: 'm', metrics: { recall_mean: 0.6 }, rows: [scored('a', 0.2), scored('b', 1)] };
+        // 'b' parsed in the first run and not in the confirmation: an empty
+        // metadata is a row without the number, not a second measurement.
+        const second = { model: 'm', metrics: { recall_mean: 0.2 }, rows: [scored('a', 0.2), { caseId: 'b', status: 'fail', metadata: {} }] };
+        const combined = combineRuns(first, second, () => ({ status: 'fail', checks: [] }));
+        expect(combined.metrics.recall_mean).toBeCloseTo(0.2);
+        expect(combined.gate.confirmation.pairedCases).toBe(1);
+    });
+
     it('decides on the PRs both runs measured, not on one run of 2 and one of 1', () => {
         const two = (recalls: number[]) => ({
             model: 'm',
