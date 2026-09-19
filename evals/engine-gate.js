@@ -137,7 +137,6 @@ function preflight({ strictCoverage }) {
         'evals/shared/tier0-models.js',
         'evals/investigation/run-eval.js',
         'evals/investigation/run-recall.js',
-        'evals/investigation/compare-recall.js',
         'evals/investigation/agent-provider.js',
         'evals/promotion/run-eval.js',
         'evals/kody-rules/real-agent.js',
