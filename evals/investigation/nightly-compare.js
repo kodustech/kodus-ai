@@ -45,16 +45,18 @@ function compareNights(tonight, lastGreen) {
         .sort((a, b) => a.delta - b.delta);
 
     const goldenLevel = perCase.length > 0 && perCase.every((c) => c.lost !== null);
-    // Both means come from the PRs BOTH nights measured. Per-PR recall varies
-    // far more than the change we are looking for, so a night that skipped two
-    // PRs (or a baseline that did) would otherwise move the delta by which PRs
-    // were in the average rather than by anything the engine did.
-    const compared = new Set(perCase.map((c) => c.caseId));
-    const inBoth = (rows) => rows.filter((row) => compared.has(row.caseId));
-    const recallNow = mean(inBoth(now).map((row) => row.metadata.recall));
-    const recallBefore = mean(inBoth(measuredRows(lastGreen)).map((row) => row.metadata.recall));
-    const precisionNow = mean(inBoth(now).map((row) => row.metadata.precision));
-    const precisionBefore = mean(inBoth(measuredRows(lastGreen)).map((row) => row.metadata.precision));
+    // Both means come from the PRs BOTH nights measured, paired per metric:
+    // a row can carry recall and not precision (a parse failure leaves the
+    // metadata empty), and averaging it on one side only puts the two means
+    // back on different PR sets. Per-PR recall varies far more than the change
+    // we are looking for, so that difference alone can invent a drop.
+    const pairs = now.filter((row) => before.has(row.caseId)).map((row) => [row, before.get(row.caseId)]);
+    const pairedMean = (key) => {
+        const usable = pairs.filter(([a, b]) => Number.isFinite(a.metadata?.[key]) && Number.isFinite(b.metadata?.[key]));
+        return [mean(usable.map(([a]) => a.metadata[key])), mean(usable.map(([, b]) => b.metadata[key]))];
+    };
+    const [recallNow, recallBefore] = pairedMean('recall');
+    const [precisionNow, precisionBefore] = pairedMean('precision');
 
     return {
         recall: recallNow,

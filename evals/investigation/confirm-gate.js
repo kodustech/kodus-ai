@@ -16,6 +16,14 @@ const { evaluateGate, avg } = require('./gate');
 
 const MEANS = ['recall', 'precision', 'f1', 'fairRecall', 'hitRate', 'totalCalls', 'tpFindings', 'fpFindings'];
 
+// The summary field each per-case metric feeds (run-recall.js builds the same
+// means from the same rows).
+const SUMMARY_OF = { recall: 'recall_mean', precision: 'precision_mean', f1: 'f1_mean', fairRecall: 'fair_recall_mean', hitRate: 'fidelity_mean' };
+
+function paired(row) {
+    return Boolean(row && row.pairedInBothRuns);
+}
+
 function combineRow(a, b) {
     if (!b || b.status === 'infra' || !b.metadata) return a;
     if (!a || a.status === 'infra' || !a.metadata) return b;
@@ -27,16 +35,32 @@ function combineRow(a, b) {
     if (Array.isArray(a.metadata.goldenResults)) {
         metadata.goldenResults = a.metadata.goldenResults.map((g) => ({ ...g, found: g.found || foundInB.has(g.golden) }));
     }
-    return { ...a, metadata, tokenUsage: undefined };
+    // Measured by both runs: only these carry the combined mean, so a PR one
+    // run skipped can't tilt the decision by being in one side's average only.
+    return { ...a, metadata, tokenUsage: undefined, pairedInBothRuns: true };
 }
 
 function combineRuns(first, second, gateFor) {
     const byCase = new Map((second.rows || []).map((row) => [row.caseId, row]));
     const rows = (first.rows || []).map((row) => combineRow(row, byCase.get(row.caseId)));
     const infraFailures = rows.filter((row) => row.status === 'infra').length;
-    // Every metric run-recall writes, averaged, so no consumer sees a field vanish.
+    // Means over the PRs BOTH runs measured, from their per-case values —
+    // never the average of a 30-PR mean and a 28-PR one, which would move the
+    // gate by which PRs the second run happened to skip. Metrics run-recall
+    // writes but no row carries are averaged from the summaries, so no
+    // consumer sees a field vanish.
+    const pairedRows = rows.filter(paired);
     const metricKeys = new Set([...Object.keys(first.metrics || {}), ...Object.keys(second.metrics || {})]);
-    const metrics = Object.fromEntries([...metricKeys].map((key) => [key, avg([first.metrics?.[key], second.metrics?.[key]])]));
+    const fromRows = Object.fromEntries(
+        Object.entries(SUMMARY_OF)
+            .filter(([, summaryKey]) => metricKeys.has(summaryKey))
+            .map(([rowKey, summaryKey]) => [summaryKey, avg(pairedRows.map((row) => row.metadata?.[rowKey]))]),
+    );
+    const metrics = Object.fromEntries(
+        // Falling back to the run means keeps a metric the rows don't carry
+        // (an older artifact, a field added later) instead of dropping it.
+        [...metricKeys].map((key) => [key, fromRows[key] ?? avg([first.metrics?.[key], second.metrics?.[key]])]),
+    );
     const combined = {
         ...first,
         finishedAt: second.finishedAt,
@@ -57,6 +81,7 @@ function combineRuns(first, second, gateFor) {
             runs: [first.metrics?.recall_mean ?? null, second.metrics?.recall_mean ?? null],
             firstGate: first.gate?.status || null,
             secondInfra: second.infraFailures || 0,
+            pairedCases: pairedRows.length,
         },
     };
     return combined;

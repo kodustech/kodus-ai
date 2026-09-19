@@ -99,6 +99,17 @@ describe('comparing two nights that measured different PRs', () => {
     const { compareNights } = require('./nightly-compare');
     const row = (caseId: string, recall: number) => ({ caseId, status: 'pass', metadata: { recall, precision: 0.5, goldenResults: [{ golden: 'bug', found: recall > 0 }] } });
 
+    it('skips a PR whose metric is missing on one side, on both sides', () => {
+        const green = { rows: [row('a', 0.4), row('b', 1)] };
+        // 'b' parsed on the green night and not tonight: keeping the green 100%
+        // while tonight's average has only 'a' reads as a 60pp collapse.
+        const tonight = { rows: [row('a', 0.4), { caseId: 'b', status: 'fail', metadata: {} }] };
+        const comparison = compareNights(tonight, green);
+        expect(comparison.recall).toBeCloseTo(0.4);
+        expect(comparison.recallBefore).toBeCloseTo(0.4);
+        expect(comparison.recallDelta).toBeCloseTo(0);
+    });
+
     it('averages the PRs both nights measured, not two different subsets', () => {
         const green = { rows: [row('a', 0.4), row('b', 0.4), row('c', 1)] };
         // Tonight lost 'c' to infra: counting the green night's 'c' would read
@@ -136,6 +147,21 @@ describe('confirmation of a run below the floor', () => {
         const combined = combineRuns(run(0.2, false), second, () => ({ status: 'fail', checks: [] }));
         expect(combined.confirmationError).toBeUndefined();
         expect(combined.gate.confirmation.secondInfra).toBe(1);
+    });
+
+    it('decides on the PRs both runs measured, not on one run of 2 and one of 1', () => {
+        const two = (recalls: number[]) => ({
+            model: 'm',
+            metrics: { recall_mean: recalls.reduce((a, b) => a + b, 0) / recalls.length },
+            rows: recalls.map((recall, i) => ({ caseId: `c${i}`, status: 'pass', metadata: { recall, precision: 0.5, goldenResults: [{ golden: `g${i}`, found: recall > 0 }] } })),
+        });
+        const first = two([0.2, 1]);
+        // The second run skipped the PR that scores 1: averaging the two run
+        // means would read 0.4 and pass a floor the paired PRs do not clear.
+        const second = { ...two([0.2]), rows: [two([0.2]).rows[0], { caseId: 'c1', status: 'infra', reason: '429' }], infraFailures: 1, infraBudget: 1 };
+        const combined = combineRuns(first, second, () => ({ status: 'fail', checks: [] }));
+        expect(combined.metrics.recall_mean).toBeCloseTo(0.2);
+        expect(combined.gate.confirmation.pairedCases).toBe(1);
     });
 
     it('keeps every metric and count run-recall writes', () => {
