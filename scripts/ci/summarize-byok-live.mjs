@@ -28,12 +28,44 @@ const LIMIT = 1_500; // Discord embeds hard-cap; keep well inside it.
  * that way). Left alone, one masked key eats the entire line budget and pushes
  * the actual reason out of the message.
  */
+/**
+ * Credential-shaped substrings never reach Discord. Collapsing asterisks alone
+ * assumed every vendor masks the key the way OpenAI does; they do not, and this
+ * channel has a different audience and retention from the Actions log. Scrub
+ * first, then collapse — a full key is long enough to match before masking
+ * shortens it.
+ */
+
+// Two rules, because one is not enough and the obvious one over-reaches.
+//
+// PREFIXED catches the vendor formats by their prefix. A `{12,}` run of plain
+// alphanumerics does NOT catch a real OpenAI key — `sk-svcacct-AbCd…` has a
+// hyphen at character 11 — so the character class has to include `-` and `_`.
+//
+// LONG_TOKEN is the catch-all for opaque blobs (a base64 service account, an
+// unprefixed key). Length alone flags legitimate identifiers: Vertex's own
+// quota error contains `global_online_prediction_requests_per_base_model`, 47
+// characters that must survive. So a long run is only redacted when it also
+// looks random — mixed case AND a digit, which every key format has and a
+// snake_case identifier does not.
+const PREFIXED =
+    /(Bearer\s+\S+)|\b(?:sk|rk|pk|fw|gsk|xai|ghp|glpat|AIza|github_pat)[-_][A-Za-z0-9_-]{10,}/gi;
+const LONG_TOKEN = /\b[A-Za-z0-9+_-]{32,}={0,2}\b/g;
+const looksRandom = (t) =>
+    /[a-z]/.test(t) && /[A-Z]/.test(t) && /[0-9]/.test(t);
+
 const collapse = (text) =>
-    text.replace(/\*{6,}/g, '***').replace(/\s+/g, ' ').trim();
+    text
+        .replace(PREFIXED, '[redacted]')
+        .replace(LONG_TOKEN, (m) => (looksRandom(m) ? '[redacted]' : m))
+        .replace(/\*{6,}/g, '***')
+        .replace(/\s+/g, ' ')
+        .trim();
 
 /** The vendor's message, stripped of the jest frame around it. */
 function causeOf(failure) {
-    const lines = String(failure).split('\n');
+    // eslint-disable-next-line no-control-regex
+    const lines = String(failure).replace(/\u001b\[[0-9;]*m/g, '').split('\n');
     // Our own classifier speaks first when it fires — it already names the cause.
     const credential = lines.find((l) => /CREDENTIAL failure/.test(l));
     if (credential) {
@@ -42,8 +74,20 @@ function causeOf(failure) {
     }
     const apiError = lines.find((l) => /(AI_APICallError|AI_RetryError):/.test(l));
     if (apiError) return collapse(apiError.replace(/^.*?Error:\s*/, ''));
-    const expected = lines.find((l) => /reasoned:\s*false/.test(l));
-    if (expected) return 'returned 200 but billed NO reasoning tokens — the silent drift this tier exists to catch';
+    // Jest prints BOTH sides of a toMatchObject diff: Expected lines start with
+    // `-`, Received with `+`. Matching "reasoned: false" anywhere reported the
+    // INVERSE cause for a row pinned `reasons: false` — its Expected side is
+    // literally `- "reasoned": false`, so a row going red because the model
+    // STARTED reasoning (the event those rows exist to catch) was announced as
+    // "billed no reasoning tokens", sending whoever triages to rotate a key.
+    const received = lines.find((l) =>
+        /^\s*\+\s.*"reasoned":\s*(true|false)/.test(l),
+    );
+    if (received) {
+        return /"reasoned":\s*false/.test(received)
+            ? 'returned 200 but billed NO reasoning tokens — the silent drift this tier exists to catch'
+            : 'returned 200 and STARTED billing reasoning — a row pinned `reasons: false` no longer holds, the upstream config changed';
+    }
     return collapse(lines.find((l) => l.trim()) ?? 'see log');
 }
 

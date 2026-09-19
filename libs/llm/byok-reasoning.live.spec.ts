@@ -475,6 +475,13 @@ const LIVE = [
             model: 'gpt-5.6-terra',
             reasoningEffort: 'medium', // prod: 3 de 5 slots do terra usam medium; 1 high, 1 ausente
         },
+        // A KNOWN GAP, not a satisfied expectation. `reasons: false` is the
+        // right assertion — it is what was measured — but it makes the row
+        // green in exactly the degraded state it exists to document, and the
+        // coverage log cannot tell "verified reasoning" from "verified absence
+        // of it". `knownGap` is printed on its own line so a green weekly run
+        // never reads as "this brand is fine".
+        knownGap: true,
         // Measured 0 — see the block above. Asserting the gap, not the wish.
         reasons: false,
     },
@@ -492,6 +499,13 @@ const LIVE = [
             baseURL: 'https://api.openai.com/v1',
             reasoningEffort: 'high', // prod: 3 de 5 slots do sol usam high; 1 medium, 1 ausente
         },
+        // A KNOWN GAP, not a satisfied expectation. `reasons: false` is the
+        // right assertion — it is what was measured — but it makes the row
+        // green in exactly the degraded state it exists to document, and the
+        // coverage log cannot tell "verified reasoning" from "verified absence
+        // of it". `knownGap` is printed on its own line so a green weekly run
+        // never reads as "this brand is fine".
+        knownGap: true,
         // Measured 0 even at `high` — the effort level is not the variable.
         reasons: false,
     },
@@ -771,6 +785,9 @@ const LIVE = [
             baseURL: 'https://api.anthropic.com/v1',
             reasoningEffort: 'medium',
         },
+        // Same class as the gpt-5.6 rows: an effort a customer configured that
+        // reaches no parameter. Marked so the log stops reading it as covered.
+        knownGap: true,
         reasons: false,
     },
 
@@ -1252,6 +1269,11 @@ describe('BYOK reasoning — LIVE provider contract', () => {
             (c) => (c as { requires?: () => boolean }).requires?.() === false,
         ).map((c) => c.brand);
         const gatedSet = new Set(gated);
+        // Rows that RAN and passed while pinning a degraded upstream. Green for
+        // them means "the gap is still exactly as documented", never "this works".
+        const knownGaps = LIVE.filter(
+            (c) => (c as { knownGap?: boolean }).knownGap === true,
+        ).map((c) => c.brand);
         const skipped = LIVE.filter(
             (c) => !canRun(c) && !gatedSet.has(c.brand),
         ).map((c) => c.brand);
@@ -1262,7 +1284,8 @@ describe('BYOK reasoning — LIVE provider contract', () => {
         console.log(
             `[byok-live] covered: ${covered.join(', ') || '(none)'}\n` +
                 `[byok-live] skipped (no credential): ${skipped.join(', ') || '(none)'}\n` +
-                `[byok-live] gated off (blocker outside this repo): ${gated.join(', ') || '(none)'}`,
+                `[byok-live] gated off (blocker outside this repo): ${gated.join(', ') || '(none)'}\n` +
+                `[byok-live] known gap (effort configured upstream, no reasoning billed): ${knownGaps.join(', ') || '(none)'}`,
         );
         expect(LIVE.length).toBeGreaterThan(0);
 
