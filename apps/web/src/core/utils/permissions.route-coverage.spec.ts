@@ -6,7 +6,7 @@ import { resourceRoutes } from "./permissions.routes";
 
 /**
  * Guard-rail in BOTH directions, so the middleware role guard can never let a
- * page silently 403 every non-owner role (the TokenUsage / Helpdesk class of
+ * page silently 403 every non-owner role (the TokenUsage class of
  * bug):
  *
  *   A. resource -> route: every ResourceType either maps to a route in
@@ -96,8 +96,7 @@ function collectPageRoutes(dir: string): string[] {
 describe("permissions route coverage", () => {
     it("A. every ResourceType is routed or explicitly routeless", () => {
         const uncovered = resourceMembers().filter(
-            (member) =>
-                !isRouted(member) && !ROUTELESS_RESOURCES.has(member),
+            (member) => !isRouted(member) && !ROUTELESS_RESOURCES.has(member),
         );
         expect(uncovered).toEqual([]);
     });
@@ -109,8 +108,7 @@ describe("permissions route coverage", () => {
 
         const unreachable = routes.filter(
             (route) =>
-                !pathMatchesAnyPattern(route) &&
-                !OWNER_ONLY_ROUTES.has(route),
+                !pathMatchesAnyPattern(route) && !OWNER_ONLY_ROUTES.has(route),
         );
         expect(unreachable).toEqual([]);
     });

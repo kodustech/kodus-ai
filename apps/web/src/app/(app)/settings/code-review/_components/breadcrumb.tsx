@@ -15,6 +15,11 @@ import { useCodeReviewRouteParams } from "../../_hooks";
 export const CodeReviewPagesBreadcrumb = (props: { pageName: string }) => {
     const { repositoryId, directoryId } = useCodeReviewRouteParams();
     const config = useCodeReviewConfig();
+    // The settings header band already names the scope and the page, and
+    // carries the kodus-config.yml badge, so a breadcrumb would state the
+    // same location a second time. Kept as a no-op so the pages that render
+    // it don't each need editing.
+    return null;
 
     const url = addSearchParamsToUrl(
         `/settings/code-review/${repositoryId}/general`,

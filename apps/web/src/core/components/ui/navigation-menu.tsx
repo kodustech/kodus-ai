@@ -29,7 +29,11 @@ const NavigationMenuList = React.forwardRef<
     <NavigationMenuPrimitive.List
         ref={ref}
         className={cn(
-            "group flex flex-1 list-none items-center justify-center gap-6",
+            // `safe center` centers while the items fit and falls back to
+            // start-alignment once they do not. Plain `center` overflows
+            // equally on both sides, so on a narrow window the first item
+            // rendered half off the left edge before anyone scrolled.
+            "group flex flex-1 list-none items-center [justify-content:safe_center] gap-6",
             className,
         )}
         {...props}

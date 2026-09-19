@@ -135,12 +135,16 @@ export interface NotificationPayloadMap {
 
     [NotificationEvent.IDE_RULES_SYNCED]: {
         repoName: string;
+        /** Scope the rules landed in — links the notification to its page. */
+        repositoryId?: string;
         rulesCount: number;
         syncMode: 'fast' | 'full' | 'changed-files';
     };
 
     [NotificationEvent.IDE_RULES_SYNC_FAILED]: {
         repoName: string;
+        /** Scope the sync targeted — links the notification to its page. */
+        repositoryId?: string;
         reason: string;
         correlationId: string;
     };
@@ -233,6 +237,8 @@ export interface NotificationPayloadMap {
     [NotificationEvent.RULE_FILE_REFERENCES_INVALID]: {
         source: 'ide' | 'manual' | 'auto_recheck';
         repoName: string;
+        /** Scope the affected rules live in — links each one to its page. */
+        repositoryId?: string;
         invalidCount: number;
         issues: Array<{
             ruleId: string;

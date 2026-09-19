@@ -173,6 +173,26 @@ jobs:
                   set -euo pipefail
                   : "${RUNO_SERVER:?PREVIEW_RUNO_SERVER is not configured}"
                   : "${RUNO_TOKEN:?PREVIEW_RUNO_TOKEN is not configured}"
+                  # `up` validates the compose files that are ON the VM, and
+                  # only a later `push` syncs this commit onto it. A VM left
+                  # holding an unparseable compose file therefore wedges: every
+                  # deploy dies in that validation, so the commit that repairs
+                  # the file never reaches the machine.
+                  #
+                  # `push` alone cannot break the cycle: it resolves the
+                  # environment through runo's registry, which lives in
+                  # RUNO_HOME and is empty on a fresh runner. Only `up` adopts
+                  # a running instance by its AWS tags — and it registers the
+                  # adoption BEFORE reconciling, so even a failed `up` leaves
+                  # an entry `push` can resolve.
+                  #
+                  # So: let `up` adopt and fail, rsync this commit over the bad
+                  # file, then run `up` for real. Both repair commands are
+                  # best-effort — a first deploy has no instance to adopt and
+                  # goes straight to the real `up` below.
+                  $RUNO up --here --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml || true
+                  $RUNO push --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml || true
+
                   # --branch: the checkout is a detached HEAD, so runo cannot
                   # read the branch from git itself
                   $RUNO up --here --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml
@@ -194,6 +214,16 @@ jobs:
                   # probe does not hide the real container logs for 15min.
                   $RUNO exec --branch "$HEAD_REF" -- \
                     "timeout 300 bash -c 'until curl -fsS http://127.0.0.1:3101/health >/dev/null && curl -fsS http://127.0.0.1:3992/health/ready >/dev/null; do sleep 3; done'"
+                  # The recipe seeds as part of `up`'s data step, which runs
+                  # BEFORE `push` syncs this commit — and on an environment
+                  # that already exists `up` skips setup entirely, so the seed
+                  # never sees the code being previewed. Re-run it once here,
+                  # after the sync and after the health wait above, so a change
+                  # to the seed takes effect on the deploy that introduces it
+                  # instead of the next one. Non-fatal: a preview that fails to
+                  # re-seed still deploys, it just carries the previous data.
+                  $RUNO exec --branch "$HEAD_REF" -- pnpm run seed:preview || \
+                      echo "::warning::post-sync seed:preview failed — the preview may be carrying the previous commit's seed"
                   URL=$($RUNO url --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml | head -1)
                   echo "url=$URL" >> "$GITHUB_OUTPUT"
                   echo "Preview: $URL"

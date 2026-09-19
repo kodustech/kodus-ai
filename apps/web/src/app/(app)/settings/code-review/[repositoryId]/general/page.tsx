@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { cn } from "src/core/utils/components";
 import { Button } from "@components/ui/button";
 import { ConfirmModal } from "@components/ui/confirm-modal";
 import { magicModal } from "@components/ui/magic-modal";
@@ -207,30 +208,39 @@ export default function General() {
                 <CodeReviewPagesBreadcrumb pageName="General" />
             </Page.Header>
 
-            <Page.Header>
+            {/* Sticky: this is a long column of toggles and the only way to
+                keep a change lives up here. Scrolled away, flipping something
+                near the bottom left the reader with no save in reach and
+                nothing on screen saying anything was pending. */}
+            <Page.Header sticky>
                 <Page.Title>General settings</Page.Title>
                 <Page.HeaderActions>
                     {isGlobalGeneralView && (
                         <Button
-                            size="md"
+                            size="sm"
                             leftIcon={<Settings2Icon />}
                             onClick={() => setIsCentralizedModalOpen(true)}
-                            variant="secondary"
+                            variant="helper"
                             disabled={!canEdit}>
                             Configure centralized config
                         </Button>
                     )}
 
-                    {formIsDirty && (
-                        <Button
-                            size="md"
-                            variant="cancel"
-                            leftIcon={<RotateCcwIcon />}
-                            onClick={() => form.reset()}
-                            disabled={formIsSubmitting}>
-                            Reset
-                        </Button>
-                    )}
+                    {/* Kept mounted and merely hidden while the form is
+                        clean: mounting it on the first edit made the whole
+                        action bar jump sideways at the exact moment the reader
+                        touched a control. */}
+                    <Button
+                        size="md"
+                        variant="cancel"
+                        leftIcon={<RotateCcwIcon />}
+                        onClick={() => form.reset()}
+                        disabled={formIsSubmitting}
+                        className={cn(!formIsDirty && "invisible")}
+                        aria-hidden={!formIsDirty}
+                        tabIndex={formIsDirty ? undefined : -1}>
+                        Reset
+                    </Button>
 
                     <CodeReviewSaveButton
                         size="md"

@@ -79,6 +79,7 @@ export class ResyncRulesFromIdeUseCase {
                     await this.notifySynced(
                         organizationAndTeamData.organizationId,
                         repo.name,
+                        String(repo.id),
                     );
                     // Validate external file references for this repo's
                     // rules; targeting rule owners so they can fix the
@@ -107,6 +108,7 @@ export class ResyncRulesFromIdeUseCase {
                         perRepoError instanceof Error
                             ? perRepoError.message
                             : String(perRepoError),
+                        String(repo.id),
                     );
                 }
             }
@@ -131,6 +133,7 @@ export class ResyncRulesFromIdeUseCase {
     private async notifySynced(
         organizationId: string,
         repoName: string,
+        repositoryId?: string,
     ): Promise<void> {
         try {
             const userId = this.request.user?.uuid;
@@ -139,6 +142,7 @@ export class ResyncRulesFromIdeUseCase {
                 event: NotificationEvent.IDE_RULES_SYNCED,
                 payload: {
                     repoName: repoName ?? '',
+                    repositoryId,
                     // We don't have a final rules-count for this code
                     // path (syncRepositoryMain returns void). Use 0 to
                     // mean "synced" rather than make up a number — the
@@ -153,7 +157,8 @@ export class ResyncRulesFromIdeUseCase {
         } catch (error) {
             this.logger.error({
                 message: 'Failed to emit ide.rules_synced notification',
-                error: error instanceof Error ? error : new Error(String(error)),
+                error:
+                    error instanceof Error ? error : new Error(String(error)),
                 context: ResyncRulesFromIdeUseCase.name,
             });
         }
@@ -163,6 +168,7 @@ export class ResyncRulesFromIdeUseCase {
         organizationId: string,
         repoName: string,
         reason: string,
+        repositoryId?: string,
     ): Promise<void> {
         try {
             // Owners are the config-driven audience (defaultRoles); only the
@@ -175,6 +181,7 @@ export class ResyncRulesFromIdeUseCase {
                 event: NotificationEvent.IDE_RULES_SYNC_FAILED,
                 payload: {
                     repoName: repoName ?? '',
+                    repositoryId,
                     reason,
                     correlationId: uuid(),
                 },
@@ -184,7 +191,8 @@ export class ResyncRulesFromIdeUseCase {
         } catch (error) {
             this.logger.error({
                 message: 'Failed to emit ide.rules_sync_failed notification',
-                error: error instanceof Error ? error : new Error(String(error)),
+                error:
+                    error instanceof Error ? error : new Error(String(error)),
                 context: ResyncRulesFromIdeUseCase.name,
             });
         }

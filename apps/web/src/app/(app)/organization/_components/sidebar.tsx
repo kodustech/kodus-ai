@@ -19,6 +19,7 @@ import {
     CogIcon,
     GaugeIcon,
     KeyRoundIcon,
+    LockIcon,
     ShieldIcon,
 } from "lucide-react";
 import {
@@ -47,7 +48,9 @@ export const ConfigsSidebar = () => {
             icon: ShieldIcon,
             label: "SSO",
             href: `/organization/sso`,
-            visible: isEnterprise || isTrial,
+            visible: true,
+            // Listed for every plan; the page shows the locked preview.
+            locked: !(isEnterprise || isTrial),
         },
         {
             icon: GaugeIcon,
@@ -72,6 +75,7 @@ export const ConfigsSidebar = () => {
         label: string;
         href: Route;
         visible: boolean;
+        locked?: boolean;
     }>;
 
     return (
@@ -104,6 +108,14 @@ export const ConfigsSidebar = () => {
                                                     size="md"
                                                     decorative
                                                     leftIcon={<Icon />}
+                                                    rightIcon={
+                                                        project.locked ? (
+                                                            <LockIcon
+                                                                aria-label="Enterprise plan"
+                                                                className="text-text-tertiary ml-auto"
+                                                            />
+                                                        ) : undefined
+                                                    }
                                                     active={selected}
                                                     className="w-full justify-start border-none"
                                                     variant={

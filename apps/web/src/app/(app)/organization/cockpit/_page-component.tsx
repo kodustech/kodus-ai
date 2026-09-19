@@ -20,8 +20,8 @@ import {
     useForm,
     useWatch,
 } from "react-hook-form";
-import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 import { cn } from "src/core/utils/components";
+import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 import { z } from "zod";
 
 const createSettingsSchema = () =>
@@ -122,9 +122,7 @@ const MetricToggle = ({
         render={({ field }) => (
             <div className="flex items-center justify-between gap-4">
                 <div className="flex flex-col gap-0.5">
-                    <Label
-                        htmlFor={field.name}
-                        className="text-sm font-medium">
+                    <Label htmlFor={field.name} className="text-sm font-medium">
                         {row.label}
                     </Label>
                     <p className="text-text-tertiary text-xs">
@@ -158,14 +156,10 @@ const TabToggle = ({
         render={({ field }) => (
             <div className="flex items-center justify-between gap-4">
                 <div className="flex flex-col gap-1">
-                    <Label
-                        htmlFor={field.name}
-                        className="text-base font-bold">
+                    <Label htmlFor={field.name} className="text-base font-bold">
                         {title}
                     </Label>
-                    <p className="text-text-secondary text-sm">
-                        {description}
-                    </p>
+                    <p className="text-text-secondary text-sm">{description}</p>
                 </div>
                 <Switch
                     id={field.name}
@@ -233,7 +227,7 @@ export const CockpitOrganizationSettingsPage = (props: {
                     <Page.HeaderActions>
                         <Button
                             type="submit"
-                            size="md"
+                            size="sm"
                             variant="primary"
                             leftIcon={<Save />}
                             disabled={
@@ -290,8 +284,8 @@ export const CockpitOrganizationSettingsPage = (props: {
                                             Summary cards
                                         </span>
                                         <span className="text-text-tertiary text-xs">
-                                            Shown at the top of the
-                                            Productivity tab
+                                            Shown at the top of the Productivity
+                                            tab
                                         </span>
                                     </div>
                                     <div className="flex flex-col gap-3">

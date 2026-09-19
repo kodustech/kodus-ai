@@ -15,6 +15,26 @@ services:
     kodus-api:
         environment:
             - API_MCP_SERVER_ENABLED=true
+            # .env ships these pointing at localhost:3001, which the API then
+            # hands to the git provider when a repository is registered.
+            # GitHub rejects a localhost hook outright ("isn't reachable over
+            # the public Internet"), and that rejection fails the whole save
+            # AFTER the repositories were already persisted — onboarding is
+            # left half-done. runo exposes `webhooks` publicly (see
+            # workspace.preview.yaml) and hands its URL over as
+            # RUNO_URL_WEBHOOKS.
+            #
+            # `:?` guards the one case Compose would otherwise paper over: the
+            # recipe no longer declaring the variable at all, which would
+            # interpolate to an empty string and boot the API with a relative
+            # hook path. It does NOT catch `webhooks` being dropped from
+            # `public:` — runo still exports the name, unsubstituted — but that
+            # case fails loudly at the provider, the same way it does today.
+            - API_GITHUB_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS:?webhooks must be listed under services.compose.public in .kodus/workspace.preview.yaml}/github/webhook
+            - API_GITLAB_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS:?webhooks must be listed under services.compose.public in .kodus/workspace.preview.yaml}/gitlab/webhook
+            - GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS:?webhooks must be listed under services.compose.public in .kodus/workspace.preview.yaml}/bitbucket/webhook
+            - GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS:?webhooks must be listed under services.compose.public in .kodus/workspace.preview.yaml}/azure-repos/webhook
+            - API_FORGEJO_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS:?webhooks must be listed under services.compose.public in .kodus/workspace.preview.yaml}/forgejo/webhook
 
     worker:
         environment:
@@ -45,28 +65,6 @@ services:
                     # OOM-killed at the dev limit of 4G on a cold preview.
                     memory: 8G
 
-    kodus-api:
-        environment:
-            # .env ships these pointing at localhost:3001, which the API then
-            # hands to the git provider when a repository is registered.
-            # GitHub rejects a localhost hook outright ("isn't reachable over
-            # the public Internet"), and that rejection fails the whole save
-            # AFTER the repositories were already persisted — onboarding is
-            # left half-done. runo exposes `webhooks` publicly (see
-            # workspace.preview.yaml) and hands its URL over as
-            # RUNO_URL_WEBHOOKS.
-            #
-            # `:?` guards the one case Compose would otherwise paper over: the
-            # recipe no longer declaring the variable at all, which would
-            # interpolate to an empty string and boot the API with a relative
-            # hook path. It does NOT catch `webhooks` being dropped from
-            # `public:` — runo still exports the name, unsubstituted — but that
-            # case fails loudly at the provider, the same way it does today.
-            - API_GITHUB_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS:?webhooks must be listed under services.compose.public in .kodus/workspace.preview.yaml}/github/webhook
-            - API_GITLAB_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS:?webhooks must be listed under services.compose.public in .kodus/workspace.preview.yaml}/gitlab/webhook
-            - GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS:?webhooks must be listed under services.compose.public in .kodus/workspace.preview.yaml}/bitbucket/webhook
-            - GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS:?webhooks must be listed under services.compose.public in .kodus/workspace.preview.yaml}/azure-repos/webhook
-            - API_FORGEJO_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS:?webhooks must be listed under services.compose.public in .kodus/workspace.preview.yaml}/forgejo/webhook
 
     webhooks:
         deploy:

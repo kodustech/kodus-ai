@@ -28,8 +28,15 @@ const NoItems = () => {
         ));
 };
 
-const NoItemsViewMore = () => (
-    <Link href="/library/kody-rules/featured" className="w-full">
+// Carries the scope in the link so the library's breadcrumb can send the
+// reader back to THEIR rules page rather than always to global.
+const NoItemsViewMore = () => {
+    const { repositoryId } = useCodeReviewRouteParams();
+
+    return (
+        <Link
+            href={`/library/kody-rules/featured?from=${encodeURIComponent(repositoryId)}`}
+            className="w-full">
         <Button
             decorative
             size="lg"
@@ -37,9 +44,10 @@ const NoItemsViewMore = () => (
             className="h-full w-full"
             leftIcon={<Plus />}>
             View more
-        </Button>
-    </Link>
-);
+            </Button>
+        </Link>
+    );
+};
 
 type KodyRulesEmptyStateProps = {
     canEdit: boolean;

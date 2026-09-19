@@ -66,6 +66,8 @@ import {
 import { credentialSettingsOverride } from "../_components/credential-settings-override";
 import { SuccessClaim } from "../_components/success-claim";
 import { formatModelLabel } from "../_data/model-label";
+import { AiProvidersPageSkeleton } from "@components/system/page-skeletons";
+
 import { isPlatformFundedProvider } from "../_data/platform-funded";
 import { PROVIDER_LABELS } from "../_data/provider-labels";
 import {
@@ -722,11 +724,14 @@ export function ByokManualPageClient({
 
     const testing = testState.status === "testing";
 
-    if (!kodusFormAllowed) return null;
+    // A direct ?provider=kodus URL on a non-entitled org bounces back to the
+    // list. Show the page's own skeleton for that frame rather than a blank
+    // white screen while the redirect lands.
+    if (!kodusFormAllowed) return <AiProvidersPageSkeleton />;
 
     return (
         <Page.Root>
-            <Page.Header className="max-w-full px-6">
+            <Page.Header>
                 <Page.TitleContainer>
                     <div className="flex items-center gap-3">
                         <Link href="/byok">
@@ -757,7 +762,7 @@ export function ByokManualPageClient({
                 </Page.TitleContainer>
             </Page.Header>
 
-            <Page.Content className="max-w-full px-6">
+            <Page.Content>
                 {envIsActiveSource && !isEditing && (
                     <Alert variant="info">
                         <InfoIcon />

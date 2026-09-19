@@ -3,8 +3,7 @@
 import { Button } from "@components/ui/button";
 import { Link } from "@components/ui/link";
 import { ArrowRightIcon } from "lucide-react";
-import type { GateFeature } from "src/core/utils/gate-hit";
-import { captureGateCtaClick } from "src/core/utils/gate-hit";
+import { captureGateCtaClick, type GateFeature } from "src/core/utils/gate-hit";
 
 /**
  * The "Upgrade plan" CTA every gate surface (Cockpit overlay, Plugins/Kody
@@ -19,7 +18,9 @@ export const GateCtaLink = ({
     href = "/settings/subscription",
     label = "Upgrade plan",
     size = "md",
+    variant = "primary",
     className,
+    buttonClassName,
 }: {
     feature: GateFeature;
     plan?: string;
@@ -27,14 +28,19 @@ export const GateCtaLink = ({
     href?: string;
     label?: string;
     size?: React.ComponentProps<typeof Button>["size"];
+    /** `primary` for banners and overlays; `cancel` reads as an inline link. */
+    variant?: React.ComponentProps<typeof Button>["variant"];
+    /** Wraps the link; use `buttonClassName` to style the button itself. */
     className?: string;
+    buttonClassName?: string;
 }) => {
     return (
         <Link href={href} className={className}>
             <Button
                 decorative
                 size={size}
-                variant="primary"
+                variant={variant}
+                className={buttonClassName}
                 rightIcon={<ArrowRightIcon />}
                 onClick={() =>
                     captureGateCtaClick({ feature, plan, metadata })

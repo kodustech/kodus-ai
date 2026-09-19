@@ -19,8 +19,25 @@ export const PageWithSidebar = (props: React.PropsWithChildren) => {
     );
 };
 
-const WITH_SIDEBAR_CONTAINER = "max-w-(--breakpoint-lg)";
-const WITHOUT_SIDEBAR_CONTAINER = "max-w-(--breakpoint-lg)";
+// Every page is a centered column with the SAME cap: 96rem (1536px). Wide
+// enough for the data tables (Kody Rules, Reviews, Issues, Cockpit), which
+// used to opt out with `max-w-full` and made forms and tables start at
+// different x positions. Don't override the cap per page.
+//
+// Raised from 80rem: on a 1720px window that cap left 220px of dead margin
+// on each side — a quarter of the screen — while table rows truncated. Text
+// columns don't get longer as a result; the prose on the settings pages is
+// sized by its own container, not by this one (measured identical at both
+// caps), so the extra width lands on the tables that wanted it.
+// Exported because a few chrome elements live OUTSIDE Page.Root and still
+// have to line up with it — the settings tab bar, its skeleton, the Cockpit
+// empty-state banner. They each hard-coded the old value, so raising the cap
+// here alone would have left them narrower than the content beneath them.
+// Import this instead of repeating the number.
+export const PAGE_MAX_WIDTH = "max-w-[96rem]";
+const PAGE_CONTAINER = `mx-auto w-full ${PAGE_MAX_WIDTH}`;
+const WITH_SIDEBAR_CONTAINER = PAGE_CONTAINER;
+const WITHOUT_SIDEBAR_CONTAINER = PAGE_CONTAINER;
 
 export const PageRoot = ({
     scrollable,
@@ -61,7 +78,7 @@ export const PageContent = forwardRef<
             {...props}
             ref={ref}
             className={cn(
-                "container flex flex-1 flex-col gap-6",
+                "flex flex-1 flex-col gap-6 px-8",
                 hasSidebar && "flex-1",
                 !hasParentScrollable && hasSidebar && "overflow-auto",
                 hasSidebar ? WITH_SIDEBAR_CONTAINER : WITHOUT_SIDEBAR_CONTAINER,
@@ -72,14 +89,30 @@ export const PageContent = forwardRef<
     );
 });
 
-export const PageHeader = (props: React.ComponentProps<"div">) => {
+export const PageHeader = ({
+    sticky,
+    ...props
+}: React.ComponentProps<"div"> & {
+    /**
+     * Pin the header while the page scrolls. Opt-in, because most pages are
+     * short enough that a header scrolling away costs nothing — but a long
+     * column of form controls whose ONLY save action lives up here strands the
+     * reader: flip a toggle near the bottom and the way to keep it is off
+     * screen, with nothing down there saying anything is unsaved.
+     */
+    sticky?: boolean;
+}) => {
     const { hasSidebar } = useContext(PageContext);
 
     return (
         <div
             {...props}
             className={cn(
-                "container flex min-h-12 shrink-0 items-center justify-between gap-6",
+                "flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-x-6 gap-y-3 px-8",
+                sticky && "bg-background sticky top-0 z-20 py-2",
+                // A header whose only child rendered null (e.g. the code-review
+                // breadcrumb under the tabs shell) must not keep its 48px.
+                "empty:hidden",
                 hasSidebar ? WITH_SIDEBAR_CONTAINER : WITHOUT_SIDEBAR_CONTAINER,
                 props.className,
             )}>
@@ -91,10 +124,7 @@ export const PageHeader = (props: React.ComponentProps<"div">) => {
 export const PageHeaderActions = (props: React.ComponentProps<"div">) => (
     <div
         data-header-actions
-        className={cn(
-            "flex items-center justify-between gap-2",
-            props.className,
-        )}>
+        className={cn("flex flex-wrap items-center gap-2", props.className)}>
         {props.children}
     </div>
 );
@@ -108,7 +138,12 @@ export const PageDescription = (props: React.ComponentProps<"div">) => (
 );
 
 export const PageTitleContainer = (props: React.ComponentProps<"div">) => (
-    <div {...props} className={cn("flex flex-1 flex-col", props.className)}>
+    <div
+        {...props}
+        className={cn(
+            "flex min-w-[min(100%,22rem)] flex-1 flex-col",
+            props.className,
+        )}>
         {props.children}
     </div>
 );
@@ -126,7 +161,7 @@ export const PageFooter = (props: React.ComponentProps<"div">) => {
         <div
             {...props}
             className={cn(
-                "container flex shrink-0 items-center justify-between gap-6",
+                "flex shrink-0 items-center justify-between gap-6 px-8",
                 hasSidebar ? WITH_SIDEBAR_CONTAINER : WITHOUT_SIDEBAR_CONTAINER,
                 props.className,
             )}>

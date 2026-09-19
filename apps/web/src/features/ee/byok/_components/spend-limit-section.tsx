@@ -4,6 +4,7 @@ import { ComponentProps, useEffect, useMemo, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@components/ui/alert";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
+import { SkeletonCard } from "@components/system/page-skeletons";
 import { Card, CardContent, CardHeader } from "@components/ui/card";
 import { Input } from "@components/ui/input";
 import { Label } from "@components/ui/label";
@@ -116,7 +117,15 @@ const isModelPriceable = (prices: ModelPrices): boolean => {
     return (input ?? 0) > 0 || (output ?? 0) > 0;
 };
 
-export const SpendLimitSection = ({ teamId }: { teamId?: string }) => {
+export const SpendLimitSection = ({
+    teamId,
+    onGoToProviders,
+}: {
+    teamId?: string;
+    /** Switch the parent Tabs to the Providers panel — this tab's models live
+     *  on a sibling tab, not "above". */
+    onGoToProviders?: () => void;
+}) => {
     const { data, isLoading, refetch } = useQuery({
         queryKey: ["spend-limit", teamId],
         queryFn: () => getSpendLimitConfig(teamId),
@@ -312,10 +321,12 @@ export const SpendLimitSection = ({ teamId }: { teamId?: string }) => {
                     <h3 className="text-text-primary text-sm font-semibold text-balance">
                         Budget & alerts
                     </h3>
-                    <p className="text-text-tertiary text-xs text-pretty">
-                        Get alerted as your BYOK spend approaches a cap. Alerts
-                        only — reviews keep running. Set a hard cap with your
-                        provider to actually stop spend.
+                    <p className="text-text-tertiary max-w-prose text-xs text-pretty">
+                        Get alerted as spend on your own provider keys
+                        approaches a cap. Alerts only — reviews keep running.
+                        Set a hard cap with your provider to actually stop
+                        spend. Models routed by Kodus are paid from your
+                        credits instead, and pause on their own at zero.
                     </p>
                 </div>
             </div>
@@ -324,11 +335,23 @@ export const SpendLimitSection = ({ teamId }: { teamId?: string }) => {
                 <SpendLimitSkeleton />
             ) : models.length === 0 ? (
                 <Card color="lv1" className="border-card-lv2 border-dashed">
-                    <CardContent className="py-4">
-                        <p className="text-text-secondary text-sm text-pretty">
-                            Configure a BYOK model above to set a monthly spend
-                            limit.
+                    <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
+                        <span className="text-text-tertiary">
+                            <WalletIcon size={24} />
+                        </span>
+                        <p className="text-text-secondary max-w-md text-sm text-pretty">
+                            Spend alerts watch models you connect with your own
+                            key. Connect one on the Providers tab to set a
+                            monthly limit.
                         </p>
+                        {onGoToProviders && (
+                            <Button
+                                variant="primary"
+                                size="md"
+                                onClick={onGoToProviders}>
+                                Go to Providers
+                            </Button>
+                        )}
                     </CardContent>
                 </Card>
             ) : (
@@ -492,7 +515,7 @@ export const SpendLimitSection = ({ teamId }: { teamId?: string }) => {
                             href="/token-usage"
                             title="See the full cost breakdown on the Costs page"
                             className="text-primary-light inline-flex items-center gap-1 rounded-sm text-sm hover:underline focus-visible:ring-2">
-                            View full breakdown
+                            Open Costs
                             <ArrowUpRightIcon size={13} />
                         </Link>
                         <Button
@@ -718,11 +741,12 @@ function ModelPricingCard({
     );
 }
 
+/** Shaped like what loads: the enable/limit card, then the breakdown card. */
 function SpendLimitSkeleton() {
     return (
-        <div className="flex flex-col gap-2" aria-hidden>
-            <div className="bg-card-lv2 h-20 animate-pulse rounded-xl" />
-            <div className="bg-card-lv2 h-28 animate-pulse rounded-xl" />
+        <div className="flex flex-col gap-2">
+            <SkeletonCard lines={1} />
+            <SkeletonCard lines={3} />
         </div>
     );
 }

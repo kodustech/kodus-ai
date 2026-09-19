@@ -97,6 +97,7 @@ export const useInfinitePullRequestExecutions = (
         if (filters?.category) next.category = filters.category;
         if (filters?.needsAttention) next.needsAttention = true;
         if (filters?.author) next.author = filters.author;
+        if (filters?.prState) next.prState = filters.prState;
 
         return next;
     }, [
@@ -114,6 +115,7 @@ export const useInfinitePullRequestExecutions = (
         filters?.category,
         filters?.needsAttention,
         filters?.author,
+        filters?.prState,
         pageSize,
     ]);
 

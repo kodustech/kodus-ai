@@ -2,6 +2,7 @@
 
 import { Button } from "@components/ui/button";
 import { PauseIcon, PlayIcon, Trash2 } from "lucide-react";
+import { cn } from "src/core/utils/components";
 
 type BulkActionToolbarProps = {
     selectedCount: number;
@@ -18,6 +19,8 @@ type BulkActionToolbarProps = {
     onDelete: () => void;
     onPause: () => void;
     onResume: () => void;
+    /** Layout override — the table view embeds it in its sticky header. */
+    className?: string;
 };
 
 // Sticky toolbar that appears below the filters when at least one rule is
@@ -38,6 +41,7 @@ export const BulkActionToolbar = ({
     onDelete,
     onPause,
     onResume,
+    className,
 }: BulkActionToolbarProps) => {
     if (selectedCount === 0) return null;
 
@@ -46,7 +50,10 @@ export const BulkActionToolbar = ({
 
     return (
         <div
-            className="bg-card-lv1 ring-card-lv2 sticky top-0 z-10 flex flex-wrap items-center gap-3 rounded-lg px-3 py-1.5 ring-1"
+            className={cn(
+                "bg-card-lv1 ring-card-lv2 sticky top-0 z-10 flex flex-wrap items-center gap-3 rounded-lg px-3 py-1.5 ring-1",
+                className,
+            )}
             role="toolbar"
             aria-label="Bulk actions">
             <span className="text-text-secondary text-xs tabular-nums">

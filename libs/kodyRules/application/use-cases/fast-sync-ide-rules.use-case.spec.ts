@@ -82,6 +82,9 @@ describe('FastSyncIdeRulesUseCase — emits', () => {
                 recipients: { kind: 'user', userId: 'user-1' },
                 payload: {
                     repoName: 'acme/api',
+                    // Carried so the in-app notification can link to the
+                    // repository's rules page instead of a generic list.
+                    repositoryId: 'repo-1',
                     rulesCount: 3,
                     syncMode: 'fast',
                 },

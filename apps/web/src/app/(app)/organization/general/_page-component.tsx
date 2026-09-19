@@ -160,7 +160,7 @@ export const GeneralOrganizationSettingsPage = (props: {
                     <Page.HeaderActions>
                         <Button
                             type="submit"
-                            size="md"
+                            size="sm"
                             variant="primary"
                             leftIcon={<Save />}
                             disabled={
