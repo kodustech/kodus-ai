@@ -177,15 +177,20 @@ jobs:
                   # only a later `push` syncs this commit onto it. A VM left
                   # holding an unparseable compose file therefore wedges: every
                   # deploy dies in that validation, so the commit that repairs
-                  # the file can never reach the machine, and the only way out
-                  # is destroying the environment.
+                  # the file never reaches the machine.
                   #
-                  # Sync first when a VM already exists. `resume` boots the
-                  # instance before it reaches any validation, which is all
-                  # `push` needs, and `push` without --restart is an rsync that
-                  # validates nothing. Both are best-effort: a first deploy has
-                  # no VM to resume or push to, and `up` below creates it.
-                  $RUNO resume --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml || true
+                  # `push` alone cannot break the cycle: it resolves the
+                  # environment through runo's registry, which lives in
+                  # RUNO_HOME and is empty on a fresh runner. Only `up` adopts
+                  # a running instance by its AWS tags — and it registers the
+                  # adoption BEFORE reconciling, so even a failed `up` leaves
+                  # an entry `push` can resolve.
+                  #
+                  # So: let `up` adopt and fail, rsync this commit over the bad
+                  # file, then run `up` for real. Both repair commands are
+                  # best-effort — a first deploy has no instance to adopt and
+                  # goes straight to the real `up` below.
+                  $RUNO up --here --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml || true
                   $RUNO push --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml || true
 
                   # --branch: the checkout is a detached HEAD, so runo cannot
