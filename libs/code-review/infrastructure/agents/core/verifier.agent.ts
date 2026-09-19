@@ -21,6 +21,7 @@ import type {
     Verifier,
 } from '@libs/agent-harness/domain/contracts/verifier.contract';
 import { BudgetPolicy } from '@libs/agent-harness/infrastructure/policies/budget.policy';
+import { ForceTextFinalizePolicy } from '@libs/agent-harness/infrastructure/policies/force-text-finalize.policy';
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
 
 import { buildVerifierPrompt } from '@libs/code-review/infrastructure/agents/prompts/verifier-prompt';
@@ -110,7 +111,18 @@ export function buildVerifierAgentSpec(
         phase: 'verify',
         systemPrompt: system,
         tools,
-        policies: [new BudgetPolicy()],
+        policies: [
+            new BudgetPolicy(),
+            // Without this the verify run can spend every step investigating and
+            // be cut off with NO verdict — 20% of production runs (154 sampled,
+            // 2026-09-19), which fails open and keeps the candidate unverified.
+            // Force TEXT, not the tool: this prompt asks for a JSON verdict in
+            // the reply and never mentions submitVerdict, and constraining the
+            // output is measured harm (see model-strictness.ts).
+            new ForceTextFinalizePolicy({
+                answerDescription: 'your final JSON verdict',
+            }),
+        ],
         maxSteps: params.maxSteps ?? 6,
         // CAPTURE: the runner materializes submitVerdict's payload into
         // RunState.artifacts — extractVerdict reads that, never re-scans steps.
