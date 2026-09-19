@@ -24,7 +24,7 @@
  * agent runner, not by BYOK. It consumes the same assembled model.
  */
 import { z } from 'zod';
-import type { generateText, ModelMessage, Schema } from 'ai';
+import type { generateText, LanguageModel, ModelMessage, Schema } from 'ai';
 import type {
     NormalizedModel,
     BYOKConfig,
@@ -80,6 +80,10 @@ export interface LlmRequest extends Omit<BaseReviewCallParams, 'byokConfig' | 'u
     queueTimeoutMs?: number;
     /** Provider override for the limiter (loop path; defaults to the slot's). */
     provider?: string;
+    /** Run this already-built model instead of resolving one from the slot.
+     *  Eval-only seam: without it a caller-built model was silently dropped and
+     *  the run fell back to the env default under the caller's label. */
+    prebuiltModel?: LanguageModel;
     /** Pre-built providerOptions override (loop path) — the finder's config-derived
      *  reasoning; unset → LLM.run derives it from the slot. */
     providerOptions?: Record<string, unknown>;
@@ -205,6 +209,7 @@ export class LLM {
                         reporter: req.reporter,
                         queueTimeoutMs: req.queueTimeoutMs,
                         provider: req.provider,
+                        prebuiltModel: req.prebuiltModel,
                         providerOptions: req.providerOptions,
                         telemetryMetadata: req.telemetryMetadata,
                         signal: req.signal,

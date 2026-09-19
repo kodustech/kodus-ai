@@ -1,0 +1,55 @@
+{
+  "version": "v001",
+  "status": "frozen",
+  "frozenAt": "2026-09-02",
+  "summary": "Frozen baseline: the golden set exactly as it stood when the finder-recall experiments were run. Do not edit.",
+  "origin": {
+    "upstream": "https://github.com/withmartian/code-review-benchmark",
+    "snapshot": "older copy of the Martian golden set, predating the introduction of the category field",
+    "copiedFrom": [
+      "scripts/benchmark/golden-comments/*.json",
+      "evals/investigation/datasets/*.json (vars.goldenComments)"
+    ],
+    "note": "Both copies were verified to be identical before freezing."
+  },
+  "counts": {
+    "full": {
+      "prs": 50,
+      "goldens": 136
+    },
+    "light": {
+      "prs": 30,
+      "goldens": 95
+    },
+    "prsByRepo": {
+      "cal-dot-com": 10,
+      "discourse": 10,
+      "grafana": 10,
+      "keycloak": 10,
+      "sentry": 10
+    },
+    "goldensBySeverity": {
+      "Critical": 9,
+      "High": 41,
+      "Low": 39,
+      "Medium": 47
+    }
+  },
+  "sets": {
+    "full": "All 50 stored PRs.",
+    "light": "The 30 PRs actually measured and published (6 per repository). Defined in evals/investigation/recall-tests.js (LIGHT_CASES)."
+  },
+  "schema": {
+    "prs[].caseId": "key used by the eval runner",
+    "prs[].url": "PR on the evaluation fork",
+    "prs[].originalUrl": "original upstream PR/commit, when one exists",
+    "prs[].sets": "which sets this PR belongs to",
+    "prs[].comments[].comment": "text of the expected bug",
+    "prs[].comments[].severity": "Low | Medium | High | Critical"
+  },
+  "knownGaps": [
+    "No category field. Martian now classifies every golden (bug, security, concurrency, data, api, perf, test_gap, doc_defect, style, speculative) and scores by profile (strict/core/all). Their headline metric cannot be reproduced from this version.",
+    "Out of date: across the same 30 light PRs, Martian now has 120 goldens against our 95 (76 identical, 19 ours only, 44 new on their side).",
+    "Several goldens are very short one-liners (e.g. \"SSRF vulnerability using open(url) without validation\"), which gives the judge little to anchor on when matching a model's finding."
+  ]
+}

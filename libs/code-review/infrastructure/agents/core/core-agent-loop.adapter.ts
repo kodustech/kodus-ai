@@ -48,11 +48,264 @@ import {
 } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import { createAgentRunContext } from '@libs/llm/agent-run-context';
 import { buildProviderOptions } from '@libs/llm/reasoning-options';
+import { splitDiffIntoHunks } from '@libs/code-review/infrastructure/agents/collaborators/context-fit-planner';
+import {
+    buildExpertRoles,
+    RECOGNITION_PANEL_ROLES,
+} from '@libs/code-review/infrastructure/agents/core/expert-panel';
+import { runPlan } from '@libs/code-review/infrastructure/agents/core/selector-shard';
+import {
+    runScout,
+    buildScoutPrompt,
+    buildScoutVerdictBlock,
+    buildAdversarialPrompt,
+    MAX_SCOUT_FLAGS,
+    type ScoutCategory,
+} from '@libs/code-review/infrastructure/agents/core/scout-investigator';
 // buildAgentAnomalies is review-specific (anomaly summary shapes) — lives in its
 // own module (relocated out of the legacy llm/agent-loop.ts).
 import { buildAgentAnomalies } from '@libs/code-review/infrastructure/agents/core/agent-anomalies';
+import { V2_DEFAULT_CATEGORY_DESCRIPTIONS_TEXT } from '@libs/common/utils/codeReview/v2Defaults';
+import {
+    MICRO_AGENTS,
+    MICRO_AGENT_SYSTEM_PROMPT,
+    buildMicroAgentPrompt,
+    runMicroPlanner,
+} from '@libs/code-review/infrastructure/agents/core/micro-agents';
 
 const funnelLogger = createLogger('review-funnel');
+
+/**
+ * The `critical`-tier filenames, resolved back to the paths the agent can
+ * actually pass to readFile. The tier map is keyed by the scorer's normalized
+ * path; handing that key straight to the prompt would give the model a path the
+ * sandbox may not resolve, so match it back to the real changedFiles entry.
+ */
+function criticalFilesFrom(
+    fileTiers: AgentLoopInput['fileTiers'],
+    changedFiles: AgentLoopInput['changedFiles'],
+): Array<{ path: string; diff: string }> | undefined {
+    if (!fileTiers?.size) return undefined;
+    const norm = (p: string) => p.replace(/^\/+/, '').toLowerCase();
+    const critical = new Set(
+        [...fileTiers.entries()]
+            .filter(([, tier]) => tier === 'critical')
+            .map(([file]) => norm(file)),
+    );
+    if (!critical.size) return undefined;
+
+    // A file whose diff we don't have is dropped: a pass over an empty diff is a
+    // wasted run that still looks like a real one in the pass stats.
+    const picked = (changedFiles ?? [])
+        .filter((f) => f?.filename && critical.has(norm(f.filename)))
+        .map((f) => ({
+            path: f.filename as string,
+            diff: (f.patchWithLinesStr ?? f.patch ?? '').trim(),
+        }))
+        .filter((f) => f.diff.length > 0);
+
+    return picked.length ? picked : undefined;
+}
+
+/**
+ * Diff-only content, no rules/categories/output-format boilerplate. Shared by
+ * two A/B knobs: `scoutDedicatedPrompt` (MEASURED on 30 PRs and discarded —
+ * F1 0.375 vs the 0.424 baseline) and `freeformDedicatedPrompt` (not yet
+ * measured).
+ *
+ * CORRECTION to earlier session notes: the full userPrompt was described as
+ * "150k-380k tokens, only 62-76% cache-covered" — that figure is the
+ * CUMULATIVE inputTokens of a multi-step investigator/synthesis pass (every
+ * step resends the growing tool-call history, so it scales with step count,
+ * not prompt size). Measured directly on the light 30-PR set: diffs alone run
+ * 500-9,500 tokens, and the rules/category boilerplate adds only a few
+ * thousand more — the scout's actual one-shot prompt (no tool loop, so its
+ * inputTokens ARE its prompt size) was realistically in the 10k-25k token
+ * range, not 150k+. The size savings from going diff-only is real but smaller
+ * than that number implied — and scoutDedicatedPrompt still cost real
+ * recall/precision despite it, meaning the boilerplate being cut was doing
+ * real calibration work for the scout, not free-riding noise. */
+function rawDiffPrompt(changedFiles: AgentLoopInput['changedFiles']): string {
+    return (changedFiles ?? [])
+        .map((f) => {
+            const diff = (f?.patchWithLinesStr ?? f?.patch ?? '').trim();
+            return diff ? `--- ${f?.filename} (${f?.status}) ---\n${diff}` : '';
+        })
+        .filter(Boolean)
+        .join('\n\n');
+}
+
+/**
+ * Diff + the same BUG/PERFORMANCE/SECURITY definitions the main pass reviews
+ * against (V2_DEFAULT_CATEGORY_DESCRIPTIONS_TEXT) — everything else
+ * (investigation Rules, OutputFormat schema, CoverageContract, PR
+ * context) stays out. A/B knob `scoutCalibratedPrompt`, sibling to
+ * `scoutDedicatedPrompt` (bare diff, MEASURED worse on 30 PRs — F1 0.375 vs
+ * 0.424). MEASURED (30 PRs) and validated: F1 0.432 — the loss from going
+ * diff-only was specifically the missing definitions of what counts as
+ * suspicious, not context in general. A scout with no notion of "what is a
+ * bug" was skimming blind. */
+/** Shared by calibratedDiffPrompt (diff prepended) and criticalFileDedicatedBase
+ *  (no diff — the caller injects a file/hunk-specific diff of its own downstream,
+ *  e.g. buildCriticalFilePrompt's <SingleFileFocus>). */
+const DETECTION_CATEGORIES_BLOCK = `
+<DetectionCategories>
+  A defect worth flagging falls into one of these:
+
+  BUG:
+${V2_DEFAULT_CATEGORY_DESCRIPTIONS_TEXT.bug}
+
+  PERFORMANCE:
+${V2_DEFAULT_CATEGORY_DESCRIPTIONS_TEXT.performance}
+
+  SECURITY:
+${V2_DEFAULT_CATEGORY_DESCRIPTIONS_TEXT.security}
+</DetectionCategories>`;
+
+function calibratedDiffPrompt(
+    changedFiles: AgentLoopInput['changedFiles'],
+): string {
+    return `${rawDiffPrompt(changedFiles)}
+${DETECTION_CATEGORIES_BLOCK}`;
+}
+
+/** Reminder block for dedicated/calibrated bases used by FULL AGENT-LOOP
+ * passes (expert-panel roles + arbitration) — distinct from the scout's
+ * calibratedDiffPrompt, which is a one-shot LLM.run call with the response
+ * SHAPE forced by a schema param, not a submitResult tool call. Agent-loop
+ * passes report via calling the submitResult TOOL; the full userPrompt's
+ * <OutputFormat> section is what teaches the model that a concluded verdict
+ * must become a structured suggestion entry, not just prose in "reasoning".
+ * MEASURED (10 PRs): stripping this block entirely (bare calibratedDiffPrompt,
+ * no output-format reminder) broke that transcription for the expert-panel
+ * skeptic — 3 of 10 cases had the skeptic's own reasoning conclude
+ * "verdict—reported" for a concrete, real defect while `findings` stayed
+ * empty. Recall came back near-zero (3.3%), but the panel's OWN investigation
+ * was often working — this reminder exists to fix that gap, not because the
+ * roles/skeptic mechanism itself was re-measured as bad. */
+const AGENT_LOOP_OUTPUT_FORMAT_REMINDER = `
+
+<OutputFormat>
+  Report findings by calling the submitResult tool — do not just narrate a verdict in your
+  reasoning text. If your own analysis concludes a concrete defect is real (including after
+  challenging a dismissal or a silent lens), it MUST become an entry in the "suggestions"
+  array — writing "reported" or "confirmed" in your reasoning without a matching suggestions
+  entry means the finding is LOST, not submitted.
+
+  Each suggestion needs: relevantFile, language, suggestionContent (WHAT the problem is, WHY
+  it matters, HOW to fix if clear), existingCode, improvedCode (if a fix is clear),
+  relevantLinesStart/relevantLinesEnd, severity (critical|high|medium|low), and confidence
+  (1-10, honest — 9-10 only when you verified both caller and callee).
+</OutputFormat>`;
+
+/**
+ * Diff + BUG/PERFORMANCE/SECURITY definitions + the output-format reminder
+ * above — the expert-panel sibling of calibratedDiffPrompt, for
+ * `expertPanelDedicatedPrompt` (see finder.agent.ts's expertPanelBasePrompt).
+ * First cut of this knob was bare calibratedDiffPrompt with NO output-format
+ * reminder — see AGENT_LOOP_OUTPUT_FORMAT_REMINDER's doc for what that broke.
+ * With the reminder fixed, re-measured (20 PRs, via `recognitionPanel`
+ * standalone) — the output-loss bug was fixed, but the underlying
+ * roles+skeptic mechanism itself was discarded anyway (F1 0.361, see
+ * review-agent.contract.ts's recognitionPanel doc). This base-prompt
+ * builder is not itself the reason it was discarded — the mechanism was
+ * re-measured as genuinely mediocre once its output pipe was intact. */
+function expertPanelDedicatedBase(
+    changedFiles: AgentLoopInput['changedFiles'],
+): string {
+    return calibratedDiffPrompt(changedFiles) + AGENT_LOOP_OUTPUT_FORMAT_REMINDER;
+}
+
+/**
+ * Category definitions + output-format reminder, NO diff — for
+ * `criticalFileDedicatedPrompt` (atomicHunks/atomicFiles/criticalFilePasses,
+ * see finder.agent.ts's criticalFileBasePrompt). Unlike
+ * expertPanelDedicatedBase, this carries no diff of its own: the caller
+ * (buildCriticalFilePrompt's <SingleFileFocus>) already injects that one
+ * file/hunk's diff downstream — prepending the WHOLE PR's diff here too
+ * would defeat the isolation these passes exist for.
+ *
+ * MEASURED (30 PRs, atomicFiles, from an earlier session predating this
+ * investigation's MEASURED-annotation habit): F1 0.327, below baseline — see
+ * finder.agent.ts:buildCriticalFilePrompt's doc. That version used the FULL
+ * generalist userPrompt (the whole diff still sitting in context) plus an
+ * "ignore the diffs above" instruction — the same confound this session
+ * found and fixed for the scout and expert-panel. Untested whether a
+ * genuinely isolated base (this one) changes that result. */
+const CRITICAL_FILE_DEDICATED_BASE =
+    DETECTION_CATEGORIES_BLOCK + AGENT_LOOP_OUTPUT_FORMAT_REMINDER;
+
+/**
+ * Diff + ONLY one category's definitions — the per-category sibling of
+ * calibratedDiffPrompt, for `scoutByCategory` (three parallel scouts, one per
+ * category, see scout-investigator.ts:runScoutByCategory). A prior
+ * "3-category-scouts" experiment gave every scout the FULL userPrompt with
+ * just a one-line focus sentence on top — never actually isolated to its own
+ * category. This is the genuinely isolated version — MEASURED (20 PRs) and
+ * discarded anyway: F1 0.418 vs 0.456 for one scout with all three
+ * categories' definitions (scoutCalibratedPrompt), at higher cost. See
+ * scout-investigator.ts:runScoutByCategory's doc. */
+function categoryDiffPrompt(
+    changedFiles: AgentLoopInput['changedFiles'],
+    category: 'bug' | 'performance' | 'security',
+): string {
+    const diff = rawDiffPrompt(changedFiles);
+    return `${diff}
+
+<DetectionCategory category="${category}">
+  A defect worth flagging in this category:
+${V2_DEFAULT_CATEGORY_DESCRIPTIONS_TEXT[category]}
+</DetectionCategory>`;
+}
+
+/**
+ * Every hunk of every changed file, split purely from the diff's own `@@`
+ * markers — no tier scoring, no model call. This is the whole-PR variant of
+ * `criticalFilesFrom`: instead of one pass per critical FILE, one pass per
+ * hunk of EVERY file. Multiple entries share the same `path` when a file has
+ * several hunks; each still gets its own isolated pass (buildCriticalFilePrompt
+ * scopes reporting to `path`, not to a specific hunk, so a later hunk's pass
+ * sees earlier hunks' findings for the same file via the "already reported"
+ * list — intentional, it prevents the same file's hunks from duplicating a
+ * finding that spans more than one hunk).
+ */
+function atomicHunksFrom(
+    changedFiles: AgentLoopInput['changedFiles'],
+): Array<{ path: string; diff: string }> | undefined {
+    const picked = (changedFiles ?? [])
+        .filter((f) => f?.filename)
+        .flatMap((f) => {
+            const patch = (f.patchWithLinesStr ?? f.patch ?? '').trim();
+            if (!patch) return [];
+            return splitDiffIntoHunks(patch).map((diff) => ({
+                path: f.filename as string,
+                diff,
+            }));
+        });
+    return picked.length ? picked : undefined;
+}
+
+/**
+ * Every CHANGED FILE gets its own pass with its own full diff (all its hunks
+ * together) — the coarser sibling of atomicHunksFrom. A file's hunks are
+ * already grouped in `changedFiles` (one entry per file, one patch string with
+ * every `@@` block), so this needs no splitting at all: unlike hunk-level,
+ * where cost scales with hunk count (up to 26 in this set), this scales with
+ * file count (capped at 6 by the dataset's own extraction), a much smaller
+ * multiplier for PRs with few large hunks concentrated in few files.
+ */
+function atomicFilesFrom(
+    changedFiles: AgentLoopInput['changedFiles'],
+): Array<{ path: string; diff: string }> | undefined {
+    const picked = (changedFiles ?? [])
+        .filter((f) => f?.filename)
+        .map((f) => ({
+            path: f.filename as string,
+            diff: (f.patchWithLinesStr ?? f.patch ?? '').trim(),
+        }))
+        .filter((f) => f.diff.length > 0);
+    return picked.length ? picked : undefined;
+}
 
 export async function runAgentLoopViaCore(
     input: AgentLoopInput,
@@ -70,6 +323,7 @@ export async function runAgentLoopViaCore(
                 : undefined,
         queueTimeoutMs: secrets.byokQueueTimeoutMs,
         reporter: secrets.byokErrorReporter,
+        prebuiltModel: secrets.prebuiltModel,
     });
 
     const { registry: tools, cache: toolCache } = buildFinderToolRegistry({
@@ -144,9 +398,13 @@ export async function runAgentLoopViaCore(
     // tool built for the primary would be rejected by a non-strict fallback
     // (e.g. Gemini primary → OpenAI fallback). See supportsStrictToolsForRun.
     const fallbackModelId = secrets.byokConfig?.fallback?.model;
-    const buildSpecWithLedger = (ledger: DiffCoverageLedger) =>
+    const buildSpecWithLedger = (
+        ledger: DiffCoverageLedger,
+        maxStepsOverride?: number,
+        systemPromptOverride?: string,
+    ) =>
         buildFinderAgentSpec({
-            systemPrompt: input.systemPrompt,
+            systemPrompt: systemPromptOverride ?? input.systemPrompt,
             modelId: specModelId,
             fallbackModelId,
             usageRunName: input.usageRunName,
@@ -158,7 +416,7 @@ export async function runAgentLoopViaCore(
                       overheadTokens,
                   })
                 : undefined,
-            maxSteps: input.maxSteps ?? 20,
+            maxSteps: maxStepsOverride ?? input.maxSteps ?? 20,
             providerOptions,
         });
 
@@ -166,13 +424,74 @@ export async function runAgentLoopViaCore(
     // coverage summary). Heavy resample passes run CONCURRENTLY, so each gets a
     // FRESH ledger via makeResampleSpec — the CompletionGatePolicy mutates the
     // ledger per tool call, and a shared one would race across parallel passes.
+    // Routing step: which of the twelve classes this diff could even contain.
+    // Falls back to all twelve on any failure — a planner that errors must not
+    // quietly turn a full review into a partial one.
+    const microPlan =
+        input.microAgents && input.microPlanner
+            ? await runMicroPlanner(
+                  rawDiffPrompt(input.changedFiles),
+                  secrets.byokConfig,
+                  input.telemetryMetadata?.organizationId,
+                  input.usageRunName,
+              )
+            : null;
+    const microGroups = microPlan?.groups ?? MICRO_AGENTS;
+
     const finderSpec = buildSpecWithLedger(coverageLedger);
+
+    // scoutVerdict (A/B knob): run the scout FIRST and hand its flags to the
+    // generalist as a mandatory checklist, instead of fanning out one
+    // investigator per flag. See scout-investigator.ts:buildScoutVerdictBlock.
+    // A scout failure must never block the review — the generalist runs on the
+    // plain prompt, exactly as it would with the knob off.
+    // adversarial (A/B knob): swap the review task for a break-it task. Uses a
+    // diff-only base — the generalist's rules block would re-impose the
+    // reviewer framing this knob exists to replace.
+    let finderPrompt = input.adversarial
+        ? buildAdversarialPrompt(rawDiffPrompt(input.changedFiles), true)
+        : input.userPrompt;
+    if (input.scoutVerdict) {
+        try {
+            const flags = await runScout(
+                buildScoutPrompt(
+                    input.userPrompt,
+                    undefined,
+                    input.scoutCap ?? MAX_SCOUT_FLAGS,
+                ),
+                secrets.byokConfig,
+                input.telemetryMetadata?.organizationId,
+                input.usageRunName,
+            );
+            finderPrompt = `${finderPrompt}${buildScoutVerdictBlock(flags)}`;
+        } catch {
+            /* scout is best-effort: keep the plain prompt */
+        }
+    }
     const makeResampleSpec = () =>
         buildSpecWithLedger(
             new DiffCoverageLedger({
                 changedFiles: input.changedFiles,
                 fileTiers: input.fileTiers,
             }),
+        );
+    // Critical-file / atomic-hunk passes get their OWN step budget: a pass
+    // scoped to one hunk investigates far less than the full-PR pass, so a
+    // lower cap forces it to conclude instead of exploring at the same depth
+    // regardless of scope (measured: without this, a single-file pass used as
+    // many tool calls as the whole-PR pass). Atomic (whole-diff) mode defaults
+    // tighter than tier-based critical-file mode since it runs far more of
+    // these passes per PR and the per-pass cost compounds.
+    const criticalFileMaxSteps =
+        input.criticalFileMaxSteps ??
+        (input.atomicHunks || input.atomicFiles ? 10 : 20);
+    const makeCriticalFileSpec = () =>
+        buildSpecWithLedger(
+            new DiffCoverageLedger({
+                changedFiles: input.changedFiles,
+                fileTiers: input.fileTiers,
+            }),
+            criticalFileMaxSteps,
         );
 
     // Overflow net (issue #1574): if a mis-sized window lets any finder sub-run
@@ -219,9 +538,180 @@ export async function runAgentLoopViaCore(
             providerOptions,
             skipHeavyPasses,
             skipSynthesisRescue,
+            skipBasePass: input.skipBasePass,
             // HEAVY mode — extra critic pass. Only meaningful when heavy passes
             // run at all (not fast/self-contained); harmless otherwise.
             heavy: !!input.heavy && !skipHeavyPasses,
+            // One pass per critical-tier file, OR one pass per changed FILE
+            // (atomicFiles), OR one pass per diff HUNK of every file
+            // (atomicHunks — the finest, wins if multiple are set). Gated the
+            // same way as heavy: pointless in fast mode, impossible without
+            // tools.
+            criticalFiles:
+                !skipHeavyPasses
+                    ? (input.atomicHunks
+                          ? atomicHunksFrom(input.changedFiles)
+                          : input.atomicFiles
+                            ? atomicFilesFrom(input.changedFiles)
+                            : input.criticalFilePasses
+                              ? criticalFilesFrom(
+                                    input.fileTiers,
+                                    input.changedFiles,
+                                )
+                              : undefined)
+                    : undefined,
+            criticalFileBasePrompt: input.criticalFileDedicatedPrompt
+                ? CRITICAL_FILE_DEDICATED_BASE
+                : undefined,
+            makeCriticalFileSpec,
+            // Expert panel — narrows FOCUS (one lens per role), not scope; runs
+            // over the same whole-PR diff as the main pass. Gated like the
+            // others: pointless in fast mode, impossible without tools.
+            // roleEnsemble is the leaner, no-debate sibling: language +
+            // security + performance only (no QA, no DBA), merged directly
+            // instead of arbitrated — cheaper, no cross-examination step.
+            // recognitionPanel: fixed roster targeting recognition-failure
+            // patterns confirmed by this session's ceiling audit, not topic
+            // categories — see expert-panel.ts:RECOGNITION_PANEL_ROLES.
+            // Checked first: a genuinely different experiment, not a variant
+            // of expertPanel/roleEnsemble.
+            expertRoles:
+                skipHeavyPasses
+                    ? undefined
+                    : input.recognitionPanel
+                      ? RECOGNITION_PANEL_ROLES
+                      : input.expertPanel
+                        ? buildExpertRoles(input.changedFiles)
+                        : input.roleEnsemble
+                          ? buildExpertRoles(input.changedFiles, {
+                                includeQa: false,
+                                includeDba: false,
+                            })
+                          : undefined,
+            expertArbitrate: input.roleEnsemble ? false : undefined,
+            recognitionPanel: input.recognitionPanel,
+            expertPanelBasePrompt: input.expertPanelDedicatedPrompt
+                ? expertPanelDedicatedBase(input.changedFiles)
+                : undefined,
+            scoutInvestigator: input.scoutInvestigator && !skipHeavyPasses,
+            scoutResample: input.scoutResample,
+            scoutSecondRound: input.scoutSecondRound,
+            scoutLineHint: input.scoutLineHint,
+            hypothesisDriven: input.hypothesisDriven,
+            investigatorGroupByFile: input.investigatorGroupByFile,
+            scoutCap: input.scoutCap,
+            challengeDismissals: input.challengeDismissals,
+            secondLookSameFile: input.secondLookSameFile,
+            secondLookAlways: input.secondLookAlways,
+            secondLookForceReport: input.secondLookForceReport,
+            feasibilityVerify: input.feasibilityVerify,
+            skipVerify: input.skipVerify,
+            parallelScout: input.parallelScout,
+            selectorShard: input.selectorShard,
+            // These four are load-bearing and were missing: this object is
+            // built field-by-field, so anything added to the finder's params
+            // but not listed HERE is dropped in silence. Four 30-PR runs went
+            // by measuring the plan+grep default while reporting themselves as
+            // graph-shard and raised-ceiling experiments.
+            graphSites: input.graphSites,
+            graphSitesOnly: input.graphSitesOnly,
+            shardAltPrompt: input.shardAltPrompt,
+            // Same base the expert panel uses: bare diff + what counts as a
+            // defect + the reminder that a verdict must become a suggestions
+            // entry. Everything the generalist carries that competes with the
+            // shard's question — Workflow, CoverageContract, Rules, the
+            // <Diffs> rendering — stays out.
+            shardBasePrompt: input.shardDedicatedPrompt
+                ? expertPanelDedicatedBase(input.changedFiles)
+                : undefined,
+            // One narrow pass per class of defect. Each gets its OWN system
+            // prompt: inheriting the generalist's 21k ("review this PR, cover
+            // every file, follow this workflow") is what made the shard workers
+            // re-review the diff instead of doing their assignment, and the
+            // whole point here is that the agent carries one class and nothing
+            // else.
+            microAgentPasses: input.microAgents
+                ? microGroups.map((group) => ({
+                      label: `micro-${group.id}`,
+                      prompt: buildMicroAgentPrompt(
+                          group,
+                          rawDiffPrompt(input.changedFiles),
+                      ),
+                      spec: buildSpecWithLedger(
+                          new DiffCoverageLedger({
+                              changedFiles: input.changedFiles,
+                              fileTiers: input.fileTiers,
+                          }),
+                          input.maxSteps ?? 12,
+                          MICRO_AGENT_SYSTEM_PROMPT,
+                      ),
+                  }))
+                : undefined,
+            shardCap: input.shardCap,
+            shardPerWorker: input.shardPerWorker,
+            changedFilePaths: (input.changedFiles ?? [])
+                .map((f) => f?.filename)
+                .filter(Boolean) as string[],
+            // Repo-wide search for the selectors. Goes through the same
+            // remoteCommands the tools use, so it hits the sandbox in
+            // production and the real worktree in the eval.
+            runGrep: input.selectorShard
+                ? async (pattern: string) => {
+                      try {
+                          return await (secrets.remoteCommands?.grep?.(pattern, '.') ??
+                              Promise.resolve(''));
+                      } catch {
+                          return '';
+                      }
+                  }
+                : undefined,
+            runPlan: input.selectorShard
+                ? (prompt: string, cap: number) =>
+                      runPlan(
+                          prompt,
+                          secrets.byokConfig,
+                          input.telemetryMetadata?.organizationId,
+                          input.usageRunName,
+                          cap,
+                      )
+                : undefined,
+            freeformPass: input.freeformPass,
+            freeformBasePrompt: input.freeformDedicatedPrompt
+                ? rawDiffPrompt(input.changedFiles)
+                : undefined,
+            scoutBasePrompt: input.scoutDedicatedPrompt
+                ? rawDiffPrompt(input.changedFiles)
+                : input.scoutCalibratedPrompt
+                  ? calibratedDiffPrompt(input.changedFiles)
+                  : undefined,
+            scoutByCategory: input.scoutByCategory,
+            scoutCategoryBasePrompts: input.scoutByCategory
+                ? {
+                      bug: categoryDiffPrompt(input.changedFiles, 'bug'),
+                      performance: categoryDiffPrompt(
+                          input.changedFiles,
+                          'performance',
+                      ),
+                      security: categoryDiffPrompt(
+                          input.changedFiles,
+                          'security',
+                      ),
+                  }
+                : undefined,
+            // Same decoupling as recoverProse below: finder.agent.ts calls this
+            // function without knowing byokConfig exists.
+            runScout: input.scoutInvestigator
+                ? (prompt: string, category?: ScoutCategory, cap?: number) =>
+                      runScout(
+                          prompt,
+                          secrets.byokConfig,
+                          input.telemetryMetadata?.organizationId,
+                          input.usageRunName,
+                          category,
+                          cap,
+                          input.scoutThinking ? 'medium' : undefined,
+                      )
+                : undefined,
             telemetryMetadata: input.telemetryMetadata,
             agentName: input.agentName,
             usageRunName: input.usageRunName,
@@ -236,7 +726,7 @@ export async function runAgentLoopViaCore(
                     input.usageRunName,
                 ),
         },
-        { prompt: input.userPrompt },
+        { prompt: finderPrompt },
         ctx,
     ).finally(cleanup);
 
@@ -363,6 +853,9 @@ export async function runAgentLoopViaCore(
         droppedByVerify: r.droppedByVerify.map((d) => d.finding) as any,
         coverage,
         verification,
+        recallPasses: r.passStats,
+        shardPlan: r.shardPlan,
+        scoutFlags: r.scoutFlags,
         verificationUsage: {
             inputTokens: vu.inputTokens,
             cacheReadTokens: vu.cacheReadTokens,

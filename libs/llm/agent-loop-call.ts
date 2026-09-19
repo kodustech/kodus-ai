@@ -94,6 +94,9 @@ export interface AgentLoopParams {
     queueTimeoutMs?: number;
     /** Provider override for the limiter (defaults to the slot's provider). */
     provider?: string;
+    /** Run this already-built model instead of resolving one from the slot. Only
+     *  the eval harness uses it (bespoke transports no slot can express). */
+    prebuiltModel?: LanguageModel;
     /** Pre-built providerOptions (reasoning/thinking) that OVERRIDE the slot-
      *  derived ones. The review finder computes these from the review config
      *  (`buildProviderOptions(input.*)`), which can differ from the slot's own
@@ -141,6 +144,7 @@ export async function runAgentLoopCall(
         reporter,
         provider: params.provider,
         queueTimeoutMs: params.queueTimeoutMs,
+        prebuiltModel: params.prebuiltModel,
         // Default reasoning effort matches what conversation / business / fetcher
         // used before this primitive (resolveModelConfig's own 'low' default).
         // The review finder never relies on it — it passes a providerOptions

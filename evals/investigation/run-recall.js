@@ -79,9 +79,42 @@ function avg(values) {
     return nums.reduce((sum, value) => sum + value, 0) / nums.length;
 }
 
+function sum(values) {
+    return values
+        .filter((value) => typeof value === 'number' && Number.isFinite(value))
+        .reduce((acc, value) => acc + value, 0);
+}
+
+// withmartian/code-review-benchmark's OWN reported aggregate (step3_judge_
+// comments.py's final summary table) pools tp/fp/fn across every PR FIRST,
+// then divides ONCE — not the mean of each PR's own precision/recall. The
+// two are mathematically different (a PR-count-weighted mean vs an
+// implicit candidate/golden-count-weighted one) and can diverge. This is
+// the number to compare against their published results; recall_mean/
+// precision_mean/f1_mean above answer a different question (treat every PR
+// equally) and are kept for their own established use (regression gate,
+// etc).
+function poolMetrics(rows) {
+    const tp = sum(rows.map((row) => row.metadata?.tp));
+    const fp = sum(rows.map((row) => row.metadata?.fp));
+    const fn = sum(rows.map((row) => row.metadata?.fn));
+    const recall = tp + fn > 0 ? tp / (tp + fn) : null;
+    const precision = tp + fp > 0 ? tp / (tp + fp) : null;
+    const f1 =
+        recall !== null && precision !== null && recall + precision > 0
+            ? (2 * recall * precision) / (recall + precision)
+            : null;
+    return { tp, fp, fn, recall_pooled: recall, precision_pooled: precision, f1_pooled: f1 };
+}
+
 function fmtPct(value) {
     if (value === null || value === undefined) return 'n/a';
     return `${Math.round(value * 100)}%`;
+}
+
+function fmtDuration(ms) {
+    if (ms === null || ms === undefined || !Number.isFinite(ms)) return 'n/a';
+    return `${(ms / 1000).toFixed(1)}s`;
 }
 
 function writeJson(file, payload) {
@@ -114,15 +147,7 @@ function evaluateGate(summary, rows, model) {
         return { status: 'skipped', reason: `no target for model ${model}` };
     }
 
-    const meanFindings = avg(
-        rows.map((row) => {
-            const md = row.metadata || {};
-            const tp = md.tpFindings;
-            const fp = md.fpFindings;
-            if (typeof tp !== 'number' || typeof fp !== 'number') return null;
-            return tp + fp;
-        }),
-    );
+    const meanFindings = avg(rows.map((row) => row.metadata?.findings));
     const meanToolCalls = avg(rows.map((row) => row.metadata?.totalCalls));
 
     const checks = [
@@ -324,6 +349,10 @@ async function main() {
     const runOneCase = async (test) => {
         const caseId = test.vars?.caseId || test.description || 'unknown-case';
         const prompt = JSON.stringify(test.vars || {});
+        // Wall-clock time for the whole case (agent loop + all recall passes),
+        // not just token cost — the two don't always track together (a pass
+        // that waits on rate limits burns time without burning tokens).
+        const startedAt = Date.now();
         let apiResult;
 
         try {
@@ -335,6 +364,7 @@ async function main() {
                 caseId,
                 status: 'infra',
                 reason: error instanceof Error ? error.message : String(error),
+                durationMs: Date.now() - startedAt,
             };
             rows.push(row);
             console.log(`INFRA ${caseId} ${row.reason.slice(0, 180)}`);
@@ -348,33 +378,20 @@ async function main() {
                 status: 'infra',
                 reason: apiResult?.error || 'provider returned no output',
                 metadata: apiResult?.metadata,
+                durationMs: Date.now() - startedAt,
             };
             rows.push(row);
             console.log(`INFRA ${caseId} ${row.reason.slice(0, 180)}`);
             return;
         }
 
-        // eslint-disable-next-line no-await-in-loop
-        const assertion = await recallAssertion(apiResult.output, {
-            vars: test.vars,
-        });
-        const metadata = assertion.metadata || {};
-        const status = assertion.pass ? 'pass' : 'fail';
-        if (!assertion.pass) qualityFailures += 1;
-
-        rows.push({
-            caseId,
-            status,
-            score: assertion.score,
-            reason: assertion.reason,
-            metadata,
-            tokenUsage: apiResult.tokenUsage,
-            traceSummary: traceSummaryFromOutput(apiResult.output),
-        });
-
-        // RECALL_DUMP=<dir>: grava a saida crua do agente por caso. Sem isso a
-        // submission so guarda findings + trace, entao um modelo que devolve
-        // ZERO findings e indistinguivel de um parsing que falhou.
+        // RECALL_DUMP=<dir>: grava a saida crua do agente por caso, ANTES do
+        // judge rodar. A revisao em si (a parte cara: minutos de agent loop
+        // real) ja terminou aqui — se o judge quebrar (rate limit, credito,
+        // parse), essa saida nao pode se perder junto, senao a unica forma de
+        // reavaliar e pagar a revisao inteira de novo. Sem isso a submission
+        // so guarda findings + trace, entao um modelo que devolve ZERO
+        // findings e indistinguivel de um parsing que falhou.
         if (process.env.RECALL_DUMP) {
             try {
                 fs.mkdirSync(process.env.RECALL_DUMP, { recursive: true });
@@ -388,6 +405,41 @@ async function main() {
                 console.warn(`[dump] ${caseId}: ${e.message}`);
             }
         }
+
+        let assertion;
+        try {
+            // eslint-disable-next-line no-await-in-loop
+            assertion = await recallAssertion(apiResult.output, {
+                vars: test.vars,
+            });
+        } catch (error) {
+            infraFailures += 1;
+            const row = {
+                caseId,
+                status: 'infra',
+                reason: `judge failed (review output was saved${process.env.RECALL_DUMP ? ' to RECALL_DUMP' : ''}, only scoring is lost): ${error instanceof Error ? error.message : String(error)}`,
+                durationMs: Date.now() - startedAt,
+            };
+            rows.push(row);
+            console.log(`INFRA ${caseId} ${row.reason.slice(0, 180)}`);
+            return;
+        }
+        const metadata = assertion.metadata || {};
+        const status = assertion.pass ? 'pass' : 'fail';
+        if (!assertion.pass) qualityFailures += 1;
+
+        const durationMs = Date.now() - startedAt;
+        rows.push({
+            caseId,
+            status,
+            score: assertion.score,
+            reason: assertion.reason,
+            metadata,
+            tokenUsage: apiResult.tokenUsage,
+            traceSummary: traceSummaryFromOutput(apiResult.output),
+            durationMs,
+        });
+
         submissionResults.push(
             submissionResultFromOutput(caseId, apiResult.output, apiResult.tokenUsage),
         );
@@ -399,7 +451,7 @@ async function main() {
         });
 
         console.log(
-            `${status.toUpperCase().padEnd(6)} ${caseId} recall=${fmtPct(metadata.recall ?? assertion.score)} precision=${fmtPct(metadata.precision)} fidelity=${fmtPct(metadata.hitRate)} findings=${metadata.findings ?? 'n/a'}`,
+            `${status.toUpperCase().padEnd(6)} ${caseId} recall=${fmtPct(metadata.recall ?? assertion.score)} precision=${fmtPct(metadata.precision)} fidelity=${fmtPct(metadata.hitRate)} findings=${metadata.findings ?? 'n/a'} duration=${fmtDuration(durationMs)}`,
         );
     };
 
@@ -444,6 +496,11 @@ async function main() {
             f1_mean: avg(rows.map((row) => row.metadata?.f1)),
             fair_recall_mean: avg(rows.map((row) => row.metadata?.fairRecall)),
             fidelity_mean: avg(rows.map((row) => row.metadata?.hitRate)),
+            // Wall-clock, not token cost — includes every case (pass AND infra
+            // failure both spent real time before erroring out).
+            duration_mean_ms: avg(rows.map((row) => row.durationMs)),
+            // Martian-parity pooled aggregate — see poolMetrics's doc.
+            ...poolMetrics(rows),
         },
         rows,
     };
@@ -471,8 +528,58 @@ async function main() {
     console.log(`cases: ${summary.cases}`);
     console.log(`recall_mean: ${fmtPct(summary.metrics.recall_mean)}`);
     console.log(`precision_mean: ${fmtPct(summary.metrics.precision_mean)}`);
+    console.log(`f1_mean: ${fmtPct(summary.metrics.f1_mean)}`);
     console.log(`fidelity_mean: ${fmtPct(summary.metrics.fidelity_mean)}`);
+    // Martian-parity — pools tp/fp/fn across every PR before dividing once;
+    // this is the number comparable to their published benchmark results.
+    console.log(`recall_pooled (martian-parity): ${fmtPct(summary.metrics.recall_pooled)}`);
+    console.log(`precision_pooled (martian-parity): ${fmtPct(summary.metrics.precision_pooled)}`);
+    console.log(`f1_pooled (martian-parity): ${fmtPct(summary.metrics.f1_pooled)}`);
+    console.log(`duration_mean: ${fmtDuration(summary.metrics.duration_mean_ms)}`);
     console.log(`artifact: ${path.relative(process.cwd(), outputPath)}`);
+
+    // Langfuse ships spans in batches; the SDK's own flush rides on Node's
+    // `beforeExit`, which never fires on the process.exit paths below (infra
+    // failure, gate failure) and is not worth trusting on the normal one
+    // either. Flushing here, explicitly, is what makes a finished run's trace
+    // actually reach the project.
+    try {
+        const lf = require(
+            path.join(__dirname, '../../libs/core/log/langfuse.ts'),
+        );
+        await lf.flushLangfuse();
+    } catch (err) {
+        console.warn(`langfuse flush: ${String(err).slice(0, 120)}`);
+    }
+
+    // The PR debugger, built from the dump this run just wrote. Generated here
+    // rather than by hand because a diagnostic nobody remembers to run is a
+    // diagnostic nobody reads — and the three measurement bugs this harness hid
+    // were each found by reading a dump after the fact.
+    if (process.env.RECALL_DUMP) {
+        const debuggerPath = outputPath.replace(/\.json$/, '') + '.debug.html';
+        try {
+            const { execFileSync } = require('child_process');
+            execFileSync(
+                process.execPath,
+                [
+                    path.join(__dirname, 'build-pr-debugger.js'),
+                    `--dump=${process.env.RECALL_DUMP}`,
+                    `--results=${path.basename(outputPath)}`,
+                    `--out=${debuggerPath}`,
+                ],
+                { stdio: 'pipe', timeout: 300_000 },
+            );
+            console.log(
+                `debugger: ${path.relative(process.cwd(), debuggerPath)}`,
+            );
+        } catch (err) {
+            // Never fail a finished run over its own report.
+            console.warn(
+                `debugger: falhou (${String(err.message || err).slice(0, 140)})`,
+            );
+        }
+    }
 
     if (gate.status === 'pass' || gate.status === 'fail') {
         console.log('\n════ model floor gate (targets.json) ════');

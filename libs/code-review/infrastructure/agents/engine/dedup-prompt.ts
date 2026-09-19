@@ -171,26 +171,49 @@ export function buildDedupSummaries(
         .join('\n');
 }
 
-/** Full dedup prompt (instructions + the suggestion summaries). */
+/** Full dedup prompt (instructions + the suggestion summaries).
+ *
+ *  `mergeRootCause` (A/B knob, default off = production behavior unchanged):
+ *  adds a third merge class — the SAME systemic mistake repeated across N
+ *  call sites/methods (e.g. the same wrong metric call copy-pasted in
+ *  Create/Update/Delete). Measured motivation (30-PR scout run, 2026-09-16):
+ *  ~40 of 107 false positives were paraphrase/per-call-site variants of a
+ *  root cause the golden comment states ONCE, generically — the conservative
+ *  default keeps them apart, so every extra variant scores as a false
+ *  positive and reads as N redundant comments to the user. */
 export function buildDedupPrompt(
     suggestions: DedupSuggestionLike[],
     normalizeSeverity: (severity?: string) => string,
+    opts?: { mergeRootCause?: boolean },
 ): string {
     const summaries = buildDedupSummaries(suggestions, normalizeSeverity);
+    const rootCauseClass = opts?.mergeRootCause
+        ? `
+
+3. **SYSTEMIC ROOT-CAUSE DUPLICATES** (same underlying mistake, repeated): The
+same wrong pattern applied at several call sites, methods or files — e.g. the
+same incorrect metric call copy-pasted into Create, Update and Delete, or the
+same inverted condition in three branches. One fix (or one find-and-replace)
+would resolve all of them. GROUP them — keep the clearest instance as
+representative; the other locations will be listed on the kept comment.`
+        : '';
+    const differentCodeRule = opts?.mergeRootCause
+        ? `- Suggestions about different code, UNLESS they are the same systemic root cause (type 3 above)`
+        : `- Suggestions about different code even if the description sounds similar`;
     return `You have ${suggestions.length} code review suggestions across multiple files in a PR. Identify duplicates and group them.
 
-BE CONSERVATIVE — when in doubt, do NOT group. Only group when you are highly confident they describe the exact same bug.
+BE CONSERVATIVE — when in doubt, do NOT group. Only group when you are highly confident they describe the exact same bug${opts?.mergeRootCause ? ' or the exact same systemic mistake' : ''}.
 
-There are TWO types of duplicates:
+There are ${opts?.mergeRootCause ? 'THREE' : 'TWO'} types of duplicates:
 
 1. **EXACT DUPLICATES** (same bug, same location): Multiple suggestions pointing to the same file and overlapping lines describing the same issue. Keep the one with the most detail, discard the rest.
 
-2. **CROSS-LOCATION DUPLICATES** (same bug pattern, different locations): Suggestions describing the EXACT SAME code pattern/bug but applied in different files (e.g., "forEach with async callback" found in 3 different files, or "missing null check on the same API call" in 2 files). These should be GROUPED — keep the best one as representative, list the others as duplicates.
+2. **CROSS-LOCATION DUPLICATES** (same bug pattern, different locations): Suggestions describing the EXACT SAME code pattern/bug but applied in different files (e.g., "forEach with async callback" found in 3 different files, or "missing null check on the same API call" in 2 files). These should be GROUPED — keep the best one as representative, list the others as duplicates.${rootCauseClass}
 
 NOT duplicates (keep both):
 - Different bugs in the same file or nearby lines (e.g., "nil pointer" and "missing validation" in the same controller — these are DIFFERENT bugs)
 - Different root causes even if they sound similar (e.g., "add nil check" vs "fix typo" — different problems)
-- Suggestions about different code even if the description sounds similar
+${differentCodeRule}
 
 IGNORE the category label (bug/security/performance) when deciding — two agents can independently find the same issue.
 Prefer keeping the suggestion with the most detail or clearest fix as the representative.

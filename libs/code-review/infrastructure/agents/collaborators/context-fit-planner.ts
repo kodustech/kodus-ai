@@ -205,6 +205,35 @@ export function extractHunkHeaders(diff: string): string[] {
     return headers;
 }
 
+/**
+ * Split a file's diff into its individual hunks, purely from the diff's own
+ * `@@` markers — no LLM, no parser, deterministic. Each returned string is one
+ * hunk's header plus its body, in source order. A diff with no `@@` markers
+ * (pure rename, binary, mode change) returns it whole as a single "hunk" so
+ * callers never silently drop a file with real content.
+ */
+export function splitDiffIntoHunks(diff: string): string[] {
+    if (!diff) {
+        return [];
+    }
+    const lines = diff.split('\n');
+    const hunks: string[] = [];
+    let current: string[] = [];
+    for (const line of lines) {
+        if (line.startsWith('@@ ')) {
+            if (current.length) hunks.push(current.join('\n'));
+            current = [line];
+        } else if (current.length) {
+            current.push(line);
+        }
+        // Lines before the first `@@` (the `## file:` header this engine's
+        // patch format carries) belong to no hunk and are dropped — the
+        // caller already knows the filename separately.
+    }
+    if (current.length) hunks.push(current.join('\n'));
+    return hunks.length ? hunks : [diff.trim()];
+}
+
 export function applyLargePrAggressiveFilter(
     files: FileChange[],
 ): FileChange[] {

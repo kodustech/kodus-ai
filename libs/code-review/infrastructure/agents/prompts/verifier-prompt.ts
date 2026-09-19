@@ -6,6 +6,85 @@
  * its own because it has zero dependencies — extracting it out of the 4627-line
  * legacy file is safe and lets the new path stop importing that file for it.
  */
+/**
+ * Path-feasibility verifier (A/B knob `feasibilityVerify`) — the burden of
+ * proof INVERTED relative to buildVerifierPrompt below. HV2 keeps by default
+ * and drops only on refutation; measured on the 30-PR light set it keeps ~99%
+ * of candidates (84/85), so it does nothing for precision. This variant
+ * follows the LLM4PFA result (arXiv 2601.18844: precision 0.26→0.93 with
+ * recall preserved, by verifying the bug path is actually REACHABLE instead
+ * of merely plausible): the finding is DROPPED unless the verifier can
+ * establish, with concrete facts read from the code, that the failure path is
+ * feasible. Requires a model strong enough to trace callers/guards — this is
+ * a large-model technique by design.
+ */
+export function buildFeasibilityVerifierPrompt(
+    evidenceBundle: string,
+    index: number,
+): {
+    system: string;
+    prompt: string;
+} {
+    return {
+        system: `You are a path-feasibility verifier for code review findings.
+
+Your task: decide whether ONE candidate finding describes a defect whose failure
+path is ACTUALLY REACHABLE in this codebase — not merely plausible-sounding.
+
+The burden of proof is on the FINDING. Default is DROP. You KEEP a finding only
+when your own investigation establishes ALL of the following with concrete facts
+you read from the code (file + line, not assumptions):
+
+1. FACTUAL: the claim matches the real code — the cited symbols, types and
+   behavior are what the finding says they are.
+2. REACHABLE: there is a concrete trigger path — name the entry point or caller
+   chain that reaches the flagged code with the bad state/input the finding
+   needs. For defects that need no runtime path (compile/type errors, a wrong
+   API signature, a missing import), verifying the code fact itself satisfies
+   this requirement.
+3. UNGUARDED: no validation, guard, type constraint or earlier return on that
+   path already prevents the failure. If a guard exists, the finding is
+   infeasible — drop it.
+
+DROP when any of these holds:
+- You cannot articulate the concrete trigger path after investigating.
+- A guard/validation upstream makes the described state impossible.
+- The claim is contradicted by the actual code.
+- It is style, naming, docs, or a generic "missing X" with no concrete path
+  where the omission produces a wrong outcome.
+
+Rules:
+- Use your tool calls to READ the evidence: the flagged code, its callers, the
+  guards on the path. Facts you did not read do not count as evidence.
+- Do NOT create new findings; do NOT rewrite the finding's text or severity.
+- In the rationale, state the trigger path (or the code fact) that justified
+  KEEP, or the missing/blocked link that justified DROP.
+
+Return JSON only at the end.`,
+        prompt: `${evidenceBundle}
+
+You may use up to 4 tool-call steps.
+
+Recommended approach:
+1. Read the cited file/range and confirm the claim's code facts.
+2. Trace who calls the flagged code (grep the symbol) — find one concrete path
+   that delivers the bad state/input.
+3. Check that path for guards/validation that would block the failure.
+4. Return the final JSON verdict.
+
+Output JSON:
+\`\`\`json
+{
+  "index": ${index},
+  "keep": false,
+  "rationale": "the concrete trigger path (keep) or the missing/blocked link (drop)",
+  "confidence": "high|medium|low"
+}
+\`\`\`
+`,
+    };
+}
+
 export function buildVerifierPrompt(
     evidenceBundle: string,
     index: number,

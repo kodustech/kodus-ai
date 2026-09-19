@@ -23,7 +23,10 @@ import type {
 import { BudgetPolicy } from '@libs/agent-harness/infrastructure/policies/budget.policy';
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
 
-import { buildVerifierPrompt } from '@libs/code-review/infrastructure/agents/prompts/verifier-prompt';
+import {
+    buildVerifierPrompt,
+    buildFeasibilityVerifierPrompt,
+} from '@libs/code-review/infrastructure/agents/prompts/verifier-prompt';
 import type { FinderSuggestion } from '@libs/code-review/infrastructure/agents/core/finder.agent';
 import { supportsStrictToolsForRun } from '@libs/code-review/infrastructure/agents/core/model-strictness';
 import {
@@ -68,16 +71,19 @@ export interface BuildVerifierSpecParams {
     maxSteps?: number;
     /** Provider options (reasoning/thinking config) forwarded to the model. */
     providerOptions?: Readonly<Record<string, unknown>>;
-    /** Provider options attached to the system message (e.g. Anthropic prompt
-     *  caching) so the verifier's system prompt is cached across steps. */
+    /** Path-feasibility mode (A/B knob): inverted burden of proof — see
+     *  buildFeasibilityVerifierPrompt. Default off = HV2 refute-to-drop. */
+    feasibilityMode?: boolean;
 }
 
 export function buildVerifierAgentSpec(
     params: BuildVerifierSpecParams,
 ): AgentSpec {
-    // The HV2 system prompt is static (the per-finding evidence goes in the
+    // The system prompt is static (the per-finding evidence goes in the
     // run prompt), so we build it once with a placeholder bundle.
-    const { system } = buildVerifierPrompt('', 0);
+    const { system } = params.feasibilityMode
+        ? buildFeasibilityVerifierPrompt('', 0)
+        : buildVerifierPrompt('', 0);
     const tools = new InMemoryToolRegistry([
         ...params.tools.list(),
         // Strict/structured done-tool for strict-capable models (Gemini
@@ -108,8 +114,11 @@ export function buildVerifierAgentSpec(
     };
 }
 
-/** Format a finding into the verifier's per-run task prompt (HV2 evidence). */
-export function verifierPromptFor(finding: FinderSuggestion): string {
+/** Format a finding into the verifier's per-run task prompt. */
+export function verifierPromptFor(
+    finding: FinderSuggestion,
+    feasibilityMode = false,
+): string {
     const bundle = [
         `File: ${finding.relevantFile}`,
         finding.relevantLinesStart != null
@@ -121,7 +130,9 @@ export function verifierPromptFor(finding: FinderSuggestion): string {
     ]
         .filter(Boolean)
         .join('\n');
-    return buildVerifierPrompt(bundle, 0).prompt;
+    return feasibilityMode
+        ? buildFeasibilityVerifierPrompt(bundle, 0).prompt
+        : buildVerifierPrompt(bundle, 0).prompt;
 }
 
 /** Extract the verdict from a verifier run by reading the run's materialized
@@ -207,6 +218,8 @@ export interface LlmVerifierParams {
      *  their leaf usage span under `${usageRunName}-verify` so `deriveArea`
      *  buckets them to `review` (verify is part of the review cost). */
     usageRunName?: string;
+    /** Path-feasibility mode (A/B knob) — see buildFeasibilityVerifierPrompt. */
+    feasibilityMode?: boolean;
 }
 
 /** The LLM-judge Verifier (HV2): runs a verifier AgentSpec once per finding on
@@ -245,6 +258,7 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
             tools: params.tools,
             maxSteps: params.lightMaxSteps ?? 5,
             providerOptions: params.providerOptions,
+            feasibilityMode: params.feasibilityMode,
         });
         this.fullSpec = buildVerifierAgentSpec({
             modelId: params.modelId,
@@ -254,6 +268,7 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
             tools: params.tools,
             maxSteps: params.fullMaxSteps ?? 10,
             providerOptions: params.providerOptions,
+            feasibilityMode: params.feasibilityMode,
         });
     }
 
@@ -280,7 +295,10 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
         const state = await this.runner.run(
             spec,
             {
-                prompt: verifierPromptFor(candidate),
+                prompt: verifierPromptFor(
+                    candidate,
+                    this.params.feasibilityMode,
+                ),
                 ...toAiSdkTelemetryArgs(
                     buildLangfuseTelemetry(
                         fnId,

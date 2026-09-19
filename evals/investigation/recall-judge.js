@@ -155,9 +155,13 @@ async function judgeCall(model, apiKey, prompt) {
                     'anthropic-version': '2023-06-01',
                     'content-type': 'application/json',
                 };
+                // temperature 0: without it the same (golden, candidate) pair
+                // can flip verdict between runs, which showed up as ~3.2pp of
+                // recall noise between identical re-scores.
                 body = {
                     model,
                     max_tokens: 256,
+                    temperature: 0,
                     messages: [{ role: 'user', content: prompt }],
                 };
             } else if (provider === 'openai') {
@@ -233,10 +237,9 @@ function extractText(provider, data) {
     return parts.map((p) => p.text || '').join('') || '{}';
 }
 
-function parseMatch(text) {
-    // Now shared across Anthropic/OpenAI/Google, whose responses may wrap the
-    // JSON in ```json fences or leading/trailing prose. Try the fence-stripped
-    // whole response first, then fall back to the outermost {..} span.
+// Shared JSON extraction: fence-stripped whole response first, then the
+// outermost {..} span. Returns the parsed object or null.
+function parseJudgeJson(text) {
     const raw = String(text || '')
         .replace(/^\s*```(?:json)?\s*/i, '')
         .replace(/\s*```\s*$/i, '')
@@ -247,13 +250,28 @@ function parseMatch(text) {
     if (first !== -1 && last > first) candidates.push(raw.slice(first, last + 1));
     for (const json of candidates) {
         try {
-            const p = JSON.parse(json);
-            return !!p.match && (p.confidence ?? 0) >= MATCH_CONFIDENCE;
+            return JSON.parse(json);
         } catch {
             /* try the next candidate */
         }
     }
-    return false;
+    return null;
+}
+
+function parseMatch(text) {
+    const p = parseJudgeJson(text);
+    return !!p?.match && (p?.confidence ?? 0) >= MATCH_CONFIDENCE;
+}
+
+// withmartian/code-review-benchmark's own judge (step3_judge_comments.py) has
+// NO confidence floor — it only requires match:true; confidence is used
+// purely to pick the best candidate when several match the SAME golden
+// (`confidence > golden's current best`, starting at 0.0, so any positive
+// confidence clears it). MATCH_CONFIDENCE (0.5) is OUR OWN floor, not
+// theirs — replicating their exact scoring requires this unfloored variant.
+function parseMatchDetailed(text) {
+    const p = parseJudgeJson(text);
+    return { match: !!p?.match, confidence: p?.confidence ?? 0 };
 }
 
 // Judge a (golden, candidate) pair with an explicit model — used by the
@@ -266,10 +284,25 @@ async function matchCommentWith(model, apiKey, golden, candidate) {
     return parseMatch(await judgeCall(model, apiKey, prompt));
 }
 
+async function matchCommentDetailedWith(model, apiKey, golden, candidate) {
+    const prompt = JUDGE_PROMPT.replace('{golden_comment}', golden).replace(
+        '{candidate}',
+        String(candidate || '').slice(0, 4000),
+    );
+    return parseMatchDetailed(await judgeCall(model, apiKey, prompt));
+}
+
 // Judge with the configured JUDGE_MODEL. Same signature as before so
 // recall-assertion.js / dedup-eval.js don't change.
 async function matchComment(apiKey, golden, candidate) {
     return matchCommentWith(JUDGE_MODEL, apiKey, golden, candidate);
+}
+
+// Martian-parity variant — see parseMatchDetailed's doc. Used by
+// recall-assertion.js so our recall/precision/F1 match
+// withmartian/code-review-benchmark's formula exactly.
+async function matchCommentDetailed(apiKey, golden, candidate) {
+    return matchCommentDetailedWith(JUDGE_MODEL, apiKey, golden, candidate);
 }
 
 module.exports = {
@@ -279,4 +312,6 @@ module.exports = {
     providerFor,
     matchComment,
     matchCommentWith,
+    matchCommentDetailed,
+    matchCommentDetailedWith,
 };

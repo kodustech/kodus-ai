@@ -22,6 +22,9 @@ import {
     readOutput,
     salvageStructuredError,
 } from '@libs/llm/structured-output-repair';
+import { createLogger } from '@libs/core/log/logger';
+
+const logger = createLogger('ToolCallRepair');
 
 export async function repairInvalidToolInput(opts: {
     model: LanguageModel;
@@ -34,6 +37,16 @@ export async function repairInvalidToolInput(opts: {
     if (NoSuchToolError.isInstance(error)) {
         return null;
     }
+
+    logger.warn({
+        message: `[tool-repair] invoked for "${toolCall.toolName}" — model sent invalid tool input`,
+        context: 'repairInvalidToolInput',
+        metadata: {
+            toolName: toolCall.toolName,
+            validationError:
+                (error as Error)?.message?.slice(0, 300) ?? String(error),
+        },
+    });
 
     // Guarantee the correction is VALIDATED against the tool schema. A raw
     // jsonSchema() would let Output.object parse-but-not-check, so a still-wrong
@@ -62,6 +75,11 @@ export async function repairInvalidToolInput(opts: {
                 `Return corrected arguments that satisfy the schema. Keep the original intent; only fix what is malformed.`,
             ].join('\n'),
         } as any);
+        logger.warn({
+            message: `[tool-repair] repaired "${toolCall.toolName}" via model re-ask`,
+            context: 'repairInvalidToolInput',
+            metadata: { toolName: toolCall.toolName },
+        });
         return { ...toolCall, input: JSON.stringify(readOutput(result)) };
     } catch (err) {
         // The correction failed to parse/validate. The SHARED salvage does the
@@ -71,8 +89,22 @@ export async function repairInvalidToolInput(opts: {
         // default "don't repair, fail the step" (kept fully fail-soft).
         const recovered = await salvageStructuredError(err, validatingSchema);
         if (recovered !== undefined) {
+            logger.warn({
+                message: `[tool-repair] repaired "${toolCall.toolName}" via deterministic salvage`,
+                context: 'repairInvalidToolInput',
+                metadata: { toolName: toolCall.toolName },
+            });
             return { ...toolCall, input: JSON.stringify(recovered) };
         }
+        logger.warn({
+            message: `[tool-repair] DISCARDED tool call "${toolCall.toolName}" — repair and salvage both failed, step is dropped`,
+            context: 'repairInvalidToolInput',
+            metadata: {
+                toolName: toolCall.toolName,
+                repairError:
+                    (err as Error)?.message?.slice(0, 300) ?? String(err),
+            },
+        });
         return null;
     }
 }

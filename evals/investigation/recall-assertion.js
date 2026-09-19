@@ -11,7 +11,7 @@
  * regression case "must find the SSRF" runs with RECALL_THRESHOLD=1.
  */
 const { parseOutput } = require('./parse-output');
-const { loadJudgeKey, matchComment } = require('./recall-judge');
+const { loadJudgeKey, matchCommentDetailed } = require('./recall-judge');
 
 function asArray(v) {
     if (Array.isArray(v)) return v;
@@ -104,31 +104,42 @@ module.exports = async (output, context) => {
     // agent's toolCalls array (which undercounts → could go negative).
     const totalCalls = typeof trace.replayCalls === 'number' ? trace.replayCalls : unserved;
     const hitRate = totalCalls ? Math.max(0, (totalCalls - unserved) / totalCalls) : 1;
-    // Judge every (golden, finding) pair so we get BOTH:
-    //   recall    — goldens covered by >=1 finding  (did we catch the real bugs?)
-    //   precision — findings that hit >=1 golden     (is what we post real, not noise?)
-    // Skip a pair only when both sides are already decided.
-    const goldenHit = new Array(goldens.length).fill(false);
-    const findingHit = new Array(candidates.length).fill(false);
+    // Judge EVERY (golden, finding) pair — Martian's own scorer
+    // (withmartian/code-review-benchmark, step3_judge_comments.py) never skips
+    // a pair either, because it has to find each golden's HIGHEST-confidence
+    // match across every candidate, not just the first one. For each golden,
+    // keep the best-confidence match (ties/lower confidence don't overwrite —
+    // `confidence > current best`, best starts at 0.0). A candidate is
+    // credited (candidateMatched=true) each time it's the new best for SOME
+    // golden — a candidate that never wins any golden is a false positive.
+    // This exactly mirrors their golden_matched/candidate_matched bookkeeping,
+    // including its one quirk: if two candidates both genuinely describe the
+    // SAME golden, only the higher-confidence one avoids being counted as FP
+    // (their algorithm, not ours — replicated faithfully on purpose).
+    const goldenBestConfidence = new Array(goldens.length).fill(0);
+    const goldenMatched = new Array(goldens.length).fill(false);
+    const candidateMatched = new Array(candidates.length).fill(false);
     for (let gi = 0; gi < goldens.length; gi++) {
         const goldenText = typeof goldens[gi] === 'string' ? goldens[gi] : goldens[gi].comment;
         for (let fi = 0; fi < candidates.length; fi++) {
-            if (goldenHit[gi] && findingHit[fi]) continue;
             // eslint-disable-next-line no-await-in-loop
-            if (await matchComment(apiKey, goldenText, candidates[fi])) {
-                goldenHit[gi] = true;
-                findingHit[fi] = true;
+            const { match, confidence } = await matchCommentDetailed(apiKey, goldenText, candidates[fi]);
+            if (match && confidence > goldenBestConfidence[gi]) {
+                goldenBestConfidence[gi] = confidence;
+                goldenMatched[gi] = true;
+                candidateMatched[fi] = true;
             }
         }
     }
+    const findingHit = candidateMatched; // kept for callers reading this field
 
-    const matched = goldenHit.filter(Boolean).length; // goldens covered (recall TP)
-    const tpFindings = findingHit.filter(Boolean).length; // findings that hit a golden
-    const fpFindings = candidates.length - tpFindings; // findings that hit nothing
+    const matched = goldenMatched.filter(Boolean).length; // tp: goldens covered (Martian's tp_count)
+    const fp = candidateMatched.filter((m) => !m).length; // candidates that never won any golden
+    const fn = goldens.length - matched;
 
     const missed = [];
     for (let gi = 0; gi < goldens.length; gi++) {
-        if (goldenHit[gi]) continue;
+        if (goldenMatched[gi]) continue;
         const t = typeof goldens[gi] === 'string' ? goldens[gi] : goldens[gi].comment;
         missed.push({ text: String(t), fair: codeInCorpus(t, corpus) });
     }
@@ -141,7 +152,10 @@ module.exports = async (output, context) => {
     const untestable = missed.filter((m) => m.fair.present === null).length;
 
     const recall = matched / goldens.length;
-    const precision = candidates.length ? tpFindings / candidates.length : 0;
+    // Per-review precision (Martian's evaluate_review formula): TP capped at
+    // goldens matched, denominator is every candidate submitted — see the
+    // matching loop above for how `matched`/`fp` are derived.
+    const precision = candidates.length ? matched / candidates.length : 0;
     const f1 = recall + precision ? (2 * recall * precision) / (recall + precision) : 0;
     // Fair recall = TP / (TP + recognition-misses) — excludes replay artifacts.
     const fairDenom = matched + realMiss + untestable;
@@ -149,7 +163,7 @@ module.exports = async (output, context) => {
 
     const reason =
         `recall ${matched}/${goldens.length} (${Math.round(recall * 100)}%) · ` +
-        `precision ${tpFindings}/${candidates.length} (${Math.round(precision * 100)}%) · ` +
+        `precision ${matched}/${candidates.length} (${Math.round(precision * 100)}%) · ` +
         `F1 ${f1.toFixed(2)} · ` +
         `fair-recall ${Math.round(fairRecall * 100)}% · ` +
         `loop-fidelity ${Math.round(hitRate * 100)}% (${totalCalls - unserved}/${totalCalls} served)` +
@@ -161,6 +175,14 @@ module.exports = async (output, context) => {
         pass: recall >= RECALL_THRESHOLD,
         score: recall,
         reason,
-        metadata: { recall, precision, f1, fairRecall, hitRate, totalCalls, unserved, matched, goldens: goldens.length, tpFindings, fpFindings, findings: candidates.length, realMiss, artifact, untestable },
+        // recallPasses rides along so the run artifact keeps per-pass attribution.
+        // Without it only the LAST case survives (last-output.json), and a
+        // multi-case run can't tell which pass paid for itself.
+        metadata: { recall, precision, f1, fairRecall, hitRate, totalCalls, unserved, matched, goldens: goldens.length, tp: matched, fp, fn, findings: candidates.length, realMiss, artifact, untestable, recallPasses: parsed.trace && parsed.trace.recallPasses,
+            // Per-finding verdict, in findings order. Findings are appended
+            // main-pass-first then one slice per extra pass (see recallPasses),
+            // so this is what lets TP/FP be attributed to the pass that produced
+            // them — the counts alone can't say whether an extra pass paid off.
+            findingHit },
     };
 };

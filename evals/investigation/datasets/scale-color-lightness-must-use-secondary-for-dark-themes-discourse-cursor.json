@@ -21,7 +21,8 @@
       "expectedRequiredTools": "[\"readFile\"]",
       "expectedForbiddenTools": "[\"searchDocs\",\"checkTypes\"]",
       "expectedMaxSteps": 12,
-      "expectedMaxRepeatedReadPerFile": 3
+      "expectedMaxRepeatedReadPerFile": 3,
+      "callGraphJson": "{\"nodes\":[],\"edges\":[]}"
     },
     "assert": [
       {

@@ -253,6 +253,11 @@ ${renderLens('Performance', PROMPT_BLOCKS.performance)}
             ? `
     - You must readFile EVERY hunk of every changed file listed above before finalizing. A file with multiple hunks is only fully covered when each listed line range has been read; reading the first hunk of a multi-hunk file does NOT cover the rest. grep, findFile, and listDir help navigation, but they do not count as coverage.`
             : ''
+    }${
+        process.env.RECALL_LOG_DISMISSED === '1'
+            ? `
+    - Diagnostic instrumentation, not a reporting rule: in your final reasoning, after the investigation summary, add a section literally titled "Considered but not reported:" listing every additional suspicion you noticed during investigation and decided NOT to turn into a finding — one line each as "file — one-sentence description — why you did not report it". This does not change your reporting bar; report exactly what you would report otherwise, then additionally log what you set aside. If there is nothing to add, write "Considered but not reported: none."`
+            : ''
     }
   </CoordinationPolicy>`;
 }

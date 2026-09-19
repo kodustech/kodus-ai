@@ -322,6 +322,16 @@ export abstract class BaseCodeReviewAgentProvider {
                 (estimatedPromptTokens > promptBudget &&
                     input.reviewMode !== 'deep'));
 
+        // Tiering is scored SEPARATELY from the low-signal filter. Bundling the
+        // two meant a normal-sized PR never got tiers — so CompletionGatePolicy
+        // saw criticalTotal=0 and the agent could finalize without opening the
+        // highest blast-radius file. Dropping tests/docs stays gated (it removes
+        // real review surface); marking blast radius does not.
+        // TIER_EVERY_PR=0 restores the old bundled behavior for an A/B.
+        const shouldTierFiles =
+            input.changedFiles.length > 1 &&
+            process.env.TIER_EVERY_PR !== '0';
+
         if (shouldFireFilter) {
             const filesBefore = input.changedFiles.length;
             const filteredFiles = applyLargePrAggressiveFilter(
@@ -351,7 +361,9 @@ export abstract class BaseCodeReviewAgentProvider {
                     );
                 }
             }
+        }
 
+        if (shouldTierFiles) {
             const scores = computeFileScores(
                 input.changedFiles,
                 input.callGraphJson,
