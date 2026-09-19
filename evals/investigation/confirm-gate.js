@@ -77,7 +77,10 @@ function main() {
     } catch {
         second = null;
     }
-    if (!second || second.error || (second.infraFailures || 0) > 0) {
+    // The confirmation measures under the same rule as the first run: a couple
+    // of unmeasured PRs (within the budget run-recall recorded) still confirm.
+    const secondUnmeasured = second?.infraFailures || 0;
+    if (!second || second.error || secondUnmeasured > (second.infraBudget || 0)) {
         // Nothing confirmed: report the first run, flagged as unconfirmed infra.
         const reason = second?.error || (second ? `${second.infraFailures} PRs not measured in the confirmation run` : 'the confirmation run wrote no result');
         fs.writeFileSync(out, JSON.stringify({ ...first, confirmationError: reason }, null, 2));

@@ -14,7 +14,9 @@ name: "Evals: nightly quality (DeepSeek, 30 PRs)"
 # successful night (or the lockfile, or the floors). The list is not written by
 # hand: the wiring smoke records every repo file the eval loads, because a
 # hand-picked folder list missed libs/core, libs/common and more. A night that
-# fails (regression or infra) is not a baseline, so the next night measures again.
+# fails (regression or infra) is not a baseline, so the next night measures
+# again. A night that measured all but a few PRs (within run-recall's 5%
+# budget) is a baseline: the comparison uses the PRs both nights measured.
 #
 # Gate: finder-recall run mean vs evals/investigation/targets.json → sets.light.
 # RATCHET: when a PR intentionally moves recall, update that floor in the same PR.
