@@ -395,6 +395,11 @@ async function main() {
         { prompt: 0, completion: 0 },
     );
     const infraBudget = Math.ceil(rows.length * 0.05);
+    // Not measured = no recall on the row, whatever the status says. A case
+    // whose output failed to parse is written as a 'fail' with empty metadata
+    // and never counted as infra, so counting only infra rows would let a run
+    // that scored a handful of PRs report itself as a full one.
+    const unmeasured = rows.filter((row) => !Number.isFinite(row.metadata?.recall)).length;
     const summary = {
         model: args.model,
         startedAt,
@@ -404,6 +409,7 @@ async function main() {
         passed: rows.filter((row) => row.status === 'pass').length,
         failed: qualityFailures,
         infraFailures,
+        unmeasured,
         infraBudget,
         metrics: {
             recall_mean: avg(rows.map((row) => row.metadata?.recall)),
@@ -459,11 +465,11 @@ async function main() {
     // night: at 1% per-case flake, refusing any infra failure throws away a
     // quarter of the nights. Up to 5% of the set may go unmeasured; the run
     // then gates on the PRs that did measure and says how many it had.
-    if (infraFailures > infraBudget) {
-        console.error(`\nINFRA failure(s): ${infraFailures} (budget ${infraBudget})`);
+    if (unmeasured > infraBudget) {
+        console.error(`\n${unmeasured} PR(s) not measured (${infraFailures} infra), budget ${infraBudget}`);
         process.exit(2);
     }
-    if (infraFailures > 0) console.log(`\n${infraFailures} PR(s) not measured, within the budget of ${infraBudget}: gating on the ${rows.length - infraFailures} that were.`);
+    if (unmeasured > 0) console.log(`\n${unmeasured} PR(s) not measured, within the budget of ${infraBudget}: gating on the ${rows.length - unmeasured} that were.`);
 
     // --gate asked for a verdict against the floors; a gate that couldn't run
     // (no targets, wrong judge) is not a pass. Exit 2 so the night is not

@@ -103,11 +103,24 @@ function emit({ status, verdict, mention = false, state = null, title, descripti
 // and hasn't changed stays red without pinging again.
 const RED = new Set(['regression', 'still-red']);
 
+// PRs the run has no recall for, however they failed.
+function unmeasuredOf(result) {
+    if (!result) return 0;
+    if (typeof result.unmeasured === 'number') return result.unmeasured;
+    // Older artifacts carry no count: read it off the rows, and never report
+    // fewer than the infra failures the run did count.
+    const fromRows = (result.rows || []).filter((row) => !Number.isFinite(row.metadata?.recall)).length;
+    return Math.max(result.infraFailures || 0, fromRows);
+}
+
 function nightlyVerdict(result, comparison, noise, previousState) {
     if (!result) return { verdict: 'infra', title: 'wrote no result' };
     if (result.error) return { verdict: 'infra', title: 'did not measure' };
     if (result.confirmationError) return { verdict: 'infra', title: 'went below the floor, but the confirmation did not measure' };
-    const infra = result.infraFailures || 0;
+    // Not measured covers infra AND a case whose output failed to parse, which
+    // is written as a 'fail' with no recall: counting only infra rows would
+    // read a run that scored a handful of PRs as a full one.
+    const infra = unmeasuredOf(result);
     // A few unmeasured PRs are a worse sample, not a lost night: the run keeps
     // its verdict while it stays inside the budget it wrote (run-recall).
     if (infra > (result.infraBudget || 0)) return { verdict: 'infra', title: `${infra} of ${result.cases} PRs not measured` };
@@ -201,7 +214,7 @@ function nightlyReport(result, env = {}, extras = {}) {
     } else {
         const gate = result.gate || {};
         const floor = (gate.checks || []).find((check) => check.name === 'recall_mean')?.floor;
-        const infra = result.infraFailures || 0;
+        const infra = unmeasuredOf(result);
 
         const measured = result.cases - infra;
         const context = [
@@ -335,7 +348,7 @@ function nightlyCompact({ result, verdict, comparison, commits, investigation, p
     const minutes = result ? minutesBetween(result.startedAt, result.finishedAt) : null;
     const cost = result ? costUpperBound(result.tokens, catalogIdFor(result.model)) : null;
     const money = typeof cost === 'number' ? `$${cost.toFixed(2)}` : null;
-    const measured = result ? result.cases - (result.infraFailures || 0) : 0;
+    const measured = result ? result.cases - unmeasuredOf(result) : 0;
 
     let title;
     if (verdict === 'pass') title = `✅ Evals · recall ${pct(recall)} · holding`;
@@ -355,7 +368,7 @@ function nightlyCompact({ result, verdict, comparison, commits, investigation, p
         const precisionPart = `**precision** ${pct(precision)}${comparison?.precisionBefore != null ? ` (${pct(comparison.precisionBefore)})` : ''}`;
         return [recallPart, precisionPart, withFloor && typeof floor === 'number' ? `floor ${pct(floor)}` : null].filter(Boolean).join(' · ');
     };
-    const unmeasured = result ? result.infraFailures || 0 : 0;
+    const unmeasured = unmeasuredOf(result);
     const runLine = () =>
         [`${measured}/${result.cases} PRs${unmeasured ? ` (${unmeasured} not measured)` : ''}`, minutes ? `${minutes} min` : null, money].filter(Boolean).join(' · ');
     const commitBlock = (label, max) => {

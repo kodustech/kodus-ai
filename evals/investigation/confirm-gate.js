@@ -103,7 +103,9 @@ function main() {
     }
     // The confirmation measures under the same rule as the first run: a couple
     // of unmeasured PRs (within the budget run-recall recorded) still confirm.
-    const secondUnmeasured = second?.infraFailures || 0;
+    // "Unmeasured" is a row without a recall, not just an infra row: a case
+    // whose output failed to parse never increments infraFailures.
+    const secondUnmeasured = second ? second.unmeasured ?? (second.rows || []).filter((row) => !Number.isFinite(row.metadata?.recall)).length : 0;
     if (!second || second.error || secondUnmeasured > (second.infraBudget || 0)) {
         // Nothing confirmed: report the first run, flagged as unconfirmed infra.
         const reason = second?.error || (second ? `${second.infraFailures} PRs not measured in the confirmation run` : 'the confirmation run wrote no result');

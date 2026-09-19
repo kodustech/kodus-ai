@@ -239,6 +239,25 @@ describe('nightly alerting without false positives', () => {
         expect(fourth).toMatchObject({ verdict: 'still-red', mention: false, state: { alertedRecall: 0.12 } });
     });
 
+    it('counts a PR whose output did not parse as unmeasured, not as a score', () => {
+        const scored = (caseId: string, recall: number) => ({ caseId, status: 'pass', metadata: { recall, precision: 0.5, tpFindings: 1, fpFindings: 0, totalCalls: 20 } });
+        const night = {
+            model: 'deepseek-v4-flash@fireworks',
+            cases: 3,
+            infraFailures: 0,
+            infraBudget: 1,
+            metrics: { recall_mean: 0.4, precision_mean: 0.5 },
+            // 'c' failed to parse: status 'fail', empty metadata, never infra.
+            rows: [scored('a', 0.4), scored('b', 0.4), { caseId: 'c', status: 'fail', metadata: {} }],
+            gate: { status: 'pass', checks: [{ name: 'recall_mean', actual: 0.4, floor: 0.26, pass: true }] },
+        };
+        const report = nightlyReport(night, {}, { targets });
+        expect(report.description).toContain('2/3 PRs (1 not measured)');
+        // One more than the budget and the night is not a quality result.
+        const worse = { ...night, cases: 3, infraBudget: 0 };
+        expect(nightlyReport(worse, {}, { targets }).verdict).toBe('infra');
+    });
+
     it('keeps the night when a couple of PRs go unmeasured, and says so', () => {
         const withInfra = (infraFailures: number, infraBudget: number) => ({
             ...measured(0.4, { status: 'pass', checks: [{ name: 'recall_mean', actual: 0.4, floor: 0.26, pass: true }] }),
