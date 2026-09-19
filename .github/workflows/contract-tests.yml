@@ -39,6 +39,10 @@ on:
         # not daily, because unlike the near-free REST pings above this one
         # spends real tokens on seven providers; the drift it catches (a model
         # changing how it is configured) moves on a scale of weeks, not hours.
+        #
+        # THIS STRING APPEARS IN BOTH JOBS' `if:` BELOW. A spec invariant checks
+        # the three copies agree, because when they drift either both tiers run
+        # on Friday or neither does.
         - cron: "0 3 * * 5"
     workflow_dispatch:
     # Deliberately NOT every PR (an external API flaking must not block an
@@ -172,7 +176,13 @@ jobs:
               if: failure()
               uses: ./.github/actions/discord-notify
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  # The tests channel, not the general engineering one. A red
+                  # contract test is a note for whoever watches test health,
+                  # and posting it where every deploy and alert also lands is
+                  # how it gets scrolled past. Falls back to the old pair so a
+                  # missing DISCORD_WEBHOOK_TESTS degrades instead of going
+                  # silent — the action already no-ops on an empty webhook.
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
                   status: failure
                   title: "❌ Contract tests failed — an external API drifted"
                   description: |
@@ -197,7 +207,7 @@ jobs:
     # coverage instead of a false red, and fork PRs stay green.
     byok-live:
         name: BYOK reasoning live contract (weekly)
-        # Weekly cron and manual dispatch ONLY — deliberately not on pull_request.
+        # Weekly cron (Friday) and manual dispatch ONLY — deliberately not on pull_request.
         # It used to run on PRs harmlessly, because the fallbacks named secrets
         # that do not exist and every row skipped. Now that they name the secrets
         # that DO, a PR touching this file would make real calls to ten vendors
@@ -284,18 +294,52 @@ jobs:
                   BYOK_OPEN_ROUTER_API_KEY: ${{ secrets.BYOK_OPEN_ROUTER_API_KEY }}
                   BYOK_DEEPSEEK_API_KEY: ${{ secrets.BYOK_DEEPSEEK_API_KEY }}
                   BYOK_AMAZON_BEDROCK_API_KEY: ${{ secrets.BYOK_AMAZON_BEDROCK_API_KEY }}
+                  # Vertex's credential is the service account JSON, base64 —
+                  # the provider decodes it out of `apiKey` itself.
+                  BYOK_GOOGLE_VERTEX_API_KEY: ${{ secrets.BYOK_GOOGLE_VERTEX_API_KEY }}
+                  # The Kodus provider reads the PLATFORM key from this env name
+                  # at build time (libs/llm/providers/kodus), not from the slot.
+                  # It is our Fireworks account, the same one BYOK_FIREWORKS holds.
+                  API_KODUS_PROVIDER_FIREWORKS_API_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
                   # Scheduled runs must not pass by checking nothing — see the
                   # coverage case in the spec. A dispatch or a fork PR still can.
                   BYOK_LIVE_EVENT: ${{ github.event_name }}
-              run: pnpm exec jest --config jest.config.ts libs/llm/byok-reasoning.live.spec.ts --no-coverage --forceExit
+              # The Vertex rows load @ai-sdk/google-vertex through a dynamic
+              # import, which Jest refuses without this flag — the row then
+              # fails with a TypeError about vm-modules, saying nothing about
+              # Vertex. Every other row is unaffected by it.
+              run: NODE_OPTIONS=--experimental-vm-modules pnpm exec jest --config jest.config.ts libs/llm/byok-reasoning.live.spec.ts --no-coverage --forceExit --json --outputFile=byok-live-report.json
+
+            # Turn the run into something readable BEFORE it reaches Discord.
+            # The old notification was a fixed paragraph asserting drift, which
+            # was wrong for every failure of the last two months (dead keys, a
+            # GCP quota) and named no row either way. `if: always()` because the
+            # summary is only useful on the path where the job failed.
+            - name: Summarize the failing rows
+              id: byok_summary
+              if: always()
+              run: |
+                  {
+                      echo 'text<<SUMMARY_EOF'
+                      node scripts/ci/summarize-byok-live.mjs byok-live-report.json
+                      echo 'SUMMARY_EOF'
+                  } >> "$GITHUB_OUTPUT"
 
             - name: Notify Discord on failure
               if: failure()
               uses: ./.github/actions/discord-notify
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  # The tests channel, not the general engineering one. A red
+                  # contract test is a note for whoever watches test health,
+                  # and posting it where every deploy and alert also lands is
+                  # how it gets scrolled past. Falls back to the old pair so a
+                  # missing DISCORD_WEBHOOK_TESTS degrades instead of going
+                  # silent — the action already no-ops on an empty webhook.
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
                   status: failure
-                  title: "❌ BYOK reasoning drifted — a provider changed how a model is configured"
+                  title: "❌ BYOK reasoning live tier failed — drift, or a dead credential"
                   description: |
-                      A brand no longer accepts (or no longer honours) the reasoning shape we send. The failing test names the brand and shows the request we built. This is NOT a release gate — it means customer reviews on that provider are silently degrading.
+                      ${{ steps.byok_summary.outputs.text }}
+
+                      A `dead credential` line means the secret is expired, rotated or unpaid — the request shape was never tested, so rotate it rather than hunting a changelog. Anything else is the vendor refusing or ignoring what we send, and customer reviews on that provider are degrading now. Not a release gate either way.
                       Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
