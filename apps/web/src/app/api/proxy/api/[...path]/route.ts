@@ -39,5 +39,12 @@ export const { GET, POST, PUT, PATCH, DELETE } = createProxyHandler({
         "/metrics",
         "/debug",
         "/health/raw",
+        // The MCP controllers (/mcp, /mcp/issues) are @Public() and only
+        // flag-gated, and their tools trust the organizationId in the
+        // JSON-RPC args. Legit callers reach the API origin directly
+        // (API_KODUS_MCP_SERVER_URL / API_MCP_MANAGER_BACKEND_URL), so
+        // forwarding here would only let anyone call them anonymously
+        // through the public web origin.
+        "/mcp",
     ],
 });
