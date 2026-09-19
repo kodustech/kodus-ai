@@ -23,6 +23,14 @@ inputs:
         description: 'Optional body — usually "<step> failed" or a link hint'
         required: false
         default: ''
+    nodetail:
+        description: 'true hides the "Success:/Failure:" title prefix and the GitHub context fields, for messages that carry their own status and links'
+        required: false
+        default: 'false'
+    content:
+        description: 'Optional text outside the embed. Mentions only notify from here (e.g. "@here"), never from the description.'
+        required: false
+        default: ''
 
 runs:
     using: composite
@@ -48,6 +56,8 @@ runs:
               status: ${{ inputs.status }}
               title: ${{ inputs.title }}
               description: ${{ inputs.description }}
+              content: ${{ inputs.content }}
+              nodetail: ${{ inputs.nodetail }}
               username: 'GitHub Actions'
               # Embed color: red on failure, green on success, grey on cancel.
               # sarisia picks defaults if we leave color blank, but ours match

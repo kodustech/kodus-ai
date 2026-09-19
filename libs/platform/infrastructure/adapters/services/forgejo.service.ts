@@ -1128,6 +1128,12 @@ export class ForgejoService implements Omit<
         configKey: IntegrationConfigKey;
         configValue: any;
         type?: 'replace' | 'append';
+        /**
+         * Set by the chunked repository save on every request but the last, so
+         * webhooks are reconciled once against the complete selection instead
+         * of against each partially-persisted chunk.
+         */
+        deferWebhooks?: boolean;
     }): Promise<any> {
         try {
             const integration = await this.integrationService.findOne({
@@ -1150,9 +1156,16 @@ export class ForgejoService implements Omit<
                 params.type,
             );
 
-            this.createPullRequestWebhook({
-                organizationAndTeamData: params.organizationAndTeamData,
-            });
+            // Skipped for an intermediate chunk of a chunked save: the
+            // selection persisted so far is partial, and reconciling webhooks
+            // against a partial selection removes the hooks of everything not
+            // in it. The last chunk arrives with the complete selection and
+            // runs this once.
+            if (!params.deferWebhooks) {
+                this.createPullRequestWebhook({
+                    organizationAndTeamData: params.organizationAndTeamData,
+                });
+            }
         } catch (err) {
             throw new BadRequestException(err);
         }

@@ -12,6 +12,19 @@
 # runo substitutes ${RUNO_PUBLIC_URL} / ${RUNO_PUBLIC_HOST} at up time, after
 # the tunnel exists and before the stack boots.
 services:
+    kodus-api:
+        environment:
+            - API_MCP_SERVER_ENABLED=true
+
+    worker:
+        environment:
+            - API_MCP_SERVER_ENABLED=true
+
+    mcp-manager:
+        environment:
+            - API_MCP_MANAGER_REDIRECT_URI=${RUNO_PUBLIC_URL}/setup/mcp/oauth
+            - API_MCP_MANAGER_BACKEND_URL=http://kodus-api:3001
+
     web:
         environment:
             # .env ships NEXTAUTH_URL=http://localhost:3000, so without this
@@ -21,12 +34,39 @@ services:
             # Next 16 answers 403 on /_next/* for dev requests coming from an
             # origin it was not told about — the tunnel hostname is one.
             - ALLOWED_DEV_ORIGINS=${RUNO_PUBLIC_HOST}
+            # The billing proxy runs server-side inside this container, so it
+            # must use Docker DNS rather than the browser's localhost.
+            - WEB_HOSTNAME_BILLING=kodus-service-billing
+            - WEB_PORT_BILLING=3992
         deploy:
             resources:
                 limits:
                     # Turbopack dev compiling ~10 route slots at once gets
                     # OOM-killed at the dev limit of 4G on a cold preview.
                     memory: 8G
+
+    kodus-api:
+        environment:
+            # .env ships these pointing at localhost:3001, which the API then
+            # hands to the git provider when a repository is registered.
+            # GitHub rejects a localhost hook outright ("isn't reachable over
+            # the public Internet"), and that rejection fails the whole save
+            # AFTER the repositories were already persisted — onboarding is
+            # left half-done. runo exposes `webhooks` publicly (see
+            # workspace.preview.yaml) and hands its URL over as
+            # RUNO_URL_WEBHOOKS.
+            #
+            # `:?` guards the one case Compose would otherwise paper over: the
+            # recipe no longer declaring the variable at all, which would
+            # interpolate to an empty string and boot the API with a relative
+            # hook path. It does NOT catch `webhooks` being dropped from
+            # `public:` — runo still exports the name, unsubstituted — but that
+            # case fails loudly at the provider, the same way it does today.
+            - API_GITHUB_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS:?webhooks must be listed under services.compose.public in .kodus/workspace.preview.yaml}/github/webhook
+            - API_GITLAB_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS:?webhooks must be listed under services.compose.public in .kodus/workspace.preview.yaml}/gitlab/webhook
+            - GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS:?webhooks must be listed under services.compose.public in .kodus/workspace.preview.yaml}/bitbucket/webhook
+            - GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS:?webhooks must be listed under services.compose.public in .kodus/workspace.preview.yaml}/azure-repos/webhook
+            - API_FORGEJO_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS:?webhooks must be listed under services.compose.public in .kodus/workspace.preview.yaml}/forgejo/webhook
 
     webhooks:
         deploy:
@@ -35,3 +75,51 @@ services:
                     # ts-node boot + migrations + seeds exceeds the 1G dev
                     # limit on a cold VM and the container crash-loops.
                     memory: 2G
+
+    # Billing is a separate repository today. Runo checks it out during setup
+    # and this overlay joins it to the same databases and networks as kodus-ai.
+    # Only Stripe TEST credentials are accepted by the materialization script.
+    kodus-service-billing:
+        build:
+            # Compose/BuildKit fetches this public repo directly. This keeps a
+            # pre-existing Runo VM reconcilable too: it does not depend on a
+            # one-time setup clone having run before `runo up`.
+            context: https://github.com/kodustech/kodus-service-billing.git#main
+            dockerfile: DockerFiles/Dockerfile.dev
+        image: kodus-service-billing-preview:latest
+        container_name: kodus-service-billing
+        depends_on:
+            db_postgres:
+                condition: service_healthy
+        env_file:
+            - .env.billing
+        environment:
+            # The billing repo reads these directly at module import time.
+            # Supplying them in the overlay keeps the generated secret file
+            # independent of the URL, which Runo only knows after exposing VM.
+            - CORS_URLS=${RUNO_PUBLIC_URL}
+            - FRONTEND_URL=${RUNO_PUBLIC_URL}
+        ports:
+            - '3992:3992'
+        restart: unless-stopped
+        networks:
+            - kodus-backend-services
+            - shared-network
+        healthcheck:
+            test:
+                [
+                    'CMD',
+                    'node',
+                    '-e',
+                    "fetch('http://127.0.0.1:3992/health/ready').then((res)=>process.exit(res.ok?0:1)).catch(()=>process.exit(1))",
+                ]
+            interval: 15s
+            timeout: 5s
+            retries: 12
+            start_period: 60s
+        deploy:
+            resources:
+                limits:
+                    memory: 1G
+                reservations:
+                    memory: 256M

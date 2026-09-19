@@ -1,5 +1,11 @@
 # Investigation Evals
 
+> - **Answers:** Does the finder find a PR's known bugs? (finder-recall)
+> - **Runs:** nightly, gated (`.github/workflows/code-review-evals-nightly.yml`) · every engine PR, against the scripted model (`evals/wiring-smoke.js`) · Friday, one PR per tier-0 model (`evals/tier0-smoke.js`).
+> - **Run it:** `pnpm eval:nightly` · `pnpm eval:finder:recall:smoke`
+> - **Gate:** run mean against the floors in `evals/investigation/targets.json`, only under the judge recorded there.
+> - **Cost:** a real finder model plus the judge on every PR in the set.
+
 Promptfoo harness for prompt and tool-use evals against the current review engine.
 
 Goals:
@@ -45,7 +51,7 @@ exploration — loop-fidelity flags it), the downstream pipeline (cap/dedup/anch
 delivery), or executable proof (needs a real sandbox).
 
 Files: `recall-assertion.js` (judge + recall/precision/fairness/fidelity),
-`recall-judge.js` (Sonnet matcher, same algo as `scripts/benchmark/scorecard.ts`),
+`recall-judge.js` (Sonnet matcher, same algo as `tests/e2e/benchmark/scorecard.ts`),
 `recall-tests.js` (builds cases from the per-PR datasets), `promptfoo-recall.yaml`.
 
 Run (ALWAYS set `PROMPTFOO_DISABLE_TEMPLATING=1` — case diffs contain `#{}`/`{{}}` that

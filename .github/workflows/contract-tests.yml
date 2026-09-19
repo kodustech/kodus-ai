@@ -33,23 +33,17 @@ on:
         # Daily 06:00 UTC (03:00 BRT) — after the nightly crons, before the
         # workday starts in BRT.
         - cron: "0 6 * * *"
-        # Weekly FRIDAY 07:00 UTC — the BYOK reasoning LIVE tier only. Weekly,
+        # Weekly Friday 03:00 UTC — the BYOK reasoning LIVE tier only, in the
+        # release train's slot so every per-model signal (this and the tier-0
+        # eval smoke) is in before the release meeting. Weekly,
         # not daily, because unlike the near-free REST pings above this one
         # spends real tokens on seven providers; the drift it catches (a model
         # changing how it is configured) moves on a scale of weeks, not hours.
         #
-        # Friday, not Monday, because Friday is the release train — the day the
-        # deploy happens. Provider drift found on Monday sits for four days
-        # behind whatever shipped; found on Friday morning it is in front of the
-        # people already looking at a release. (GitHub's cron is best-effort and
-        # has been running 4-7h late in practice, which lands this mid-morning
-        # BRT — during the release window rather than before it, and that is
-        # fine: the point is the same day, not the same hour.)
-        #
         # THIS STRING APPEARS IN BOTH JOBS' `if:` BELOW. A spec invariant checks
         # the three copies agree, because when they drift either both tiers run
         # on Friday or neither does.
-        - cron: "0 7 * * 5"
+        - cron: "0 3 * * 5"
     workflow_dispatch:
     # Deliberately NOT every PR (an external API flaking must not block an
     # unrelated merge) — only PRs that touch the contract tests themselves
@@ -80,7 +74,7 @@ jobs:
         # Skipped on the weekly BYOK cron below — that schedule exists only to
         # drive `byok-live`, and re-running the daily tier there would just be
         # noise in the Actions tab.
-        if: github.event.schedule != '0 7 * * 5'
+        if: github.event.schedule != '0 3 * * 5'
         runs-on: ubuntu-latest
         timeout-minutes: 20
         # `BB_TEST_APP_PASSWORD` exists BOTH repo-level (older) and in the `ci`
@@ -226,9 +220,9 @@ jobs:
         # tokens, and that is exactly what should not happen per-push.
         #
         # `workflow_dispatch` stays, so a live check is one click away when a row
-        # changes and you want the answer before Monday.
+        # changes and you want the answer before Friday.
         if: >-
-            github.event.schedule == '0 7 * * 5' ||
+            github.event.schedule == '0 3 * * 5' ||
             github.event_name == 'workflow_dispatch'
         runs-on: ubuntu-latest
         timeout-minutes: 15

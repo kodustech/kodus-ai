@@ -1,5 +1,11 @@
 # Promotion Evals
 
+> - **Answers:** Given frozen evidence, does the verifier keep or drop a candidate finding correctly?
+> - **Runs:** on demand only.
+> - **Run it:** `pnpm eval:promotion`
+> - **Gate:** none (report-only).
+> - **Cost:** one model call per candidate. Runs promptfoo through npx.
+
 Promptfoo harness for evaluating the post-investigation decision boundary.
 
 This suite is intentionally narrower than `evals/investigation`:
