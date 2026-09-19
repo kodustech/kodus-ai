@@ -13,7 +13,7 @@ What runs when, and what each eval answers: [README.md](README.md). These rules 
 - Drive the engine through its real entry points. To run without a vendor, use `--model=eval-fake` (`evals/shared/fake-llm-server.js`). Don't hand-write a stub of an engine service: stubs are what drifted (`permissionService.resolveTaskSlot`).
 - Route every model through `evals/shared/tier0-models.js` (`applyModelEnv`). An eval never reads vendor keys itself.
 - End every runner with an explicit `process.exit`: 0 pass, 1 quality or gate failure, 2 infra. The engine leaves handles open, so a runner that just returns from `main()` can hang CI after it has finished.
-- Exit 2 is "not measured". Never turn it into a pass or a warning, and always log the reason next to it. A count with no reason is how a dead judge key went unseen for weeks.
+- Exit 2 is "not measured". Never turn it into a pass or a warning, and always log the reason next to it. A count with no reason is how a dead judge key went unseen for weeks. One exception, written down: a run may leave up to 5% of its cases unmeasured (`infraBudget` in the result) and gate on the rest — beyond that it is exit 2. Comparisons then use the cases BOTH runs measured, never two different subsets.
 - If the eval drives the engine, add a step to `evals/wiring-smoke.js` with `model: true`.
 
 - Alerts must stay rare and true. A drop is only a regression after the confirmation run (`evals/investigation/confirm-gate.js`), and only a new or worsening one mentions people. Don't add a path that pings on a single run, on infra, or on a failure that already alerted.

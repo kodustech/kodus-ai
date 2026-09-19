@@ -94,6 +94,35 @@ describe('investigation contract', () => {
     });
 });
 
+describe('comparing two nights that measured different PRs', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { compareNights } = require('./nightly-compare');
+    const row = (caseId: string, recall: number) => ({ caseId, status: 'pass', metadata: { recall, precision: 0.5, goldenResults: [{ golden: 'bug', found: recall > 0 }] } });
+
+    it('skips a PR whose metric is missing on one side, on both sides', () => {
+        const green = { rows: [row('a', 0.4), row('b', 1)] };
+        // 'b' parsed on the green night and not tonight: keeping the green 100%
+        // while tonight's average has only 'a' reads as a 60pp collapse.
+        const tonight = { rows: [row('a', 0.4), { caseId: 'b', status: 'fail', metadata: {} }] };
+        const comparison = compareNights(tonight, green);
+        expect(comparison.recall).toBeCloseTo(0.4);
+        expect(comparison.recallBefore).toBeCloseTo(0.4);
+        expect(comparison.recallDelta).toBeCloseTo(0);
+    });
+
+    it('averages the PRs both nights measured, not two different subsets', () => {
+        const green = { rows: [row('a', 0.4), row('b', 0.4), row('c', 1)] };
+        // Tonight lost 'c' to infra: counting the green night's 'c' would read
+        // as a 20pp drop that never happened.
+        const tonight = { rows: [row('a', 0.4), row('b', 0.4), { caseId: 'c', status: 'infra', reason: 'provider 429' }] };
+        const comparison = compareNights(tonight, green);
+        expect(comparison.casesCompared).toBe(2);
+        expect(comparison.recall).toBeCloseTo(0.4);
+        expect(comparison.recallBefore).toBeCloseTo(0.4);
+        expect(comparison.recallDelta).toBeCloseTo(0);
+    });
+});
+
 describe('confirmation of a run below the floor', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { combineRuns } = require('./confirm-gate');
@@ -111,6 +140,50 @@ describe('confirmation of a run below the floor', () => {
         expect(combined.gate).toMatchObject({ status: 'pass', confirmation: { runs: [0.2, 0.5] } });
         expect(combined.rows[0].metadata.goldenResults).toEqual([{ golden: 'bug', found: true }]);
         expect(combined.tokens).toEqual({ prompt: 20, completion: 2 });
+    });
+
+    it('confirms when the second run missed only the PRs its budget allows', () => {
+        const second = { ...run(0.5, true), infraFailures: 1, infraBudget: 2 };
+        const combined = combineRuns(run(0.2, false), second, () => ({ status: 'fail', checks: [] }));
+        expect(combined.confirmationError).toBeUndefined();
+        expect(combined.gate.confirmation.secondInfra).toBe(1);
+    });
+
+    it('reports no combined recall when nothing paired, so nobody is pinged for one run', () => {
+        const scored = (caseId: string, recall: number) => ({ caseId, status: 'pass', metadata: { recall, precision: 0.5 } });
+        const first = { model: 'm', metrics: { recall_mean: 0.2 }, rows: [scored('a', 0.2)] };
+        // The confirmation parsed nothing: status 'fail' with empty metadata
+        // never counts as infra, so this is the shape that reaches combineRuns.
+        const second = { model: 'm', metrics: { recall_mean: null }, rows: [{ caseId: 'a', status: 'fail', metadata: {} }] };
+        const combined = combineRuns(first, second, () => ({ status: 'fail', checks: [] }));
+        expect(combined.metrics.recall_mean).toBeNull();
+        expect(combined.gate.confirmation.pairedCases).toBe(0);
+    });
+
+    it('does not count a PR the confirmation failed to parse as measured', () => {
+        const scored = (caseId: string, recall: number) => ({ caseId, status: 'pass', metadata: { recall, precision: 0.5, goldenResults: [{ golden: caseId, found: recall > 0 }] } });
+        const first = { model: 'm', metrics: { recall_mean: 0.6 }, rows: [scored('a', 0.2), scored('b', 1)] };
+        // 'b' parsed in the first run and not in the confirmation: an empty
+        // metadata is a row without the number, not a second measurement.
+        const second = { model: 'm', metrics: { recall_mean: 0.2 }, rows: [scored('a', 0.2), { caseId: 'b', status: 'fail', metadata: {} }] };
+        const combined = combineRuns(first, second, () => ({ status: 'fail', checks: [] }));
+        expect(combined.metrics.recall_mean).toBeCloseTo(0.2);
+        expect(combined.gate.confirmation.pairedCases).toBe(1);
+    });
+
+    it('decides on the PRs both runs measured, not on one run of 2 and one of 1', () => {
+        const two = (recalls: number[]) => ({
+            model: 'm',
+            metrics: { recall_mean: recalls.reduce((a, b) => a + b, 0) / recalls.length },
+            rows: recalls.map((recall, i) => ({ caseId: `c${i}`, status: 'pass', metadata: { recall, precision: 0.5, goldenResults: [{ golden: `g${i}`, found: recall > 0 }] } })),
+        });
+        const first = two([0.2, 1]);
+        // The second run skipped the PR that scores 1: averaging the two run
+        // means would read 0.4 and pass a floor the paired PRs do not clear.
+        const second = { ...two([0.2]), rows: [two([0.2]).rows[0], { caseId: 'c1', status: 'infra', reason: '429' }], infraFailures: 1, infraBudget: 1 };
+        const combined = combineRuns(first, second, () => ({ status: 'fail', checks: [] }));
+        expect(combined.metrics.recall_mean).toBeCloseTo(0.2);
+        expect(combined.gate.confirmation.pairedCases).toBe(1);
     });
 
     it('keeps every metric and count run-recall writes', () => {
