@@ -114,6 +114,12 @@ export const KodyRuleLibraryItemModal = ({
                 origin: KodyRulesOrigin.LIBRARY,
                 status: KodyRulesStatus.ACTIVE,
                 scope: "file",
+                // Extras: the library rule's language is forwarded so the
+                // backend can derive a path glob when `path` is empty —
+                // otherwise an empty path persists and the rule applies to
+                // every file in every PR (#1832). Not part of the KodyRule
+                // shape; the import endpoint reads it off the request body.
+                ...(rule.language ? { language: rule.language } : {}),
             };
 
             if (directoryId) {
@@ -136,12 +142,44 @@ export const KodyRuleLibraryItemModal = ({
                 : selectedRepositoriesIds;
             const directoriesIds = importsGlobally ? [] : selectedDirectoriesIds;
 
-            const addedKodyRules = await addKodyRuleToRepositories({
-                rule: newRule,
-                repositoriesIds,
-                directoriesIds,
-                teamId,
-            });
+            let addedKodyRules: Awaited<
+                ReturnType<typeof addKodyRuleToRepositories>
+            >;
+            try {
+                addedKodyRules = await addKodyRuleToRepositories({
+                    rule: newRule,
+                    repositoriesIds,
+                    directoriesIds,
+                    teamId,
+                });
+            } catch (error) {
+                // e.g. a WAF 403 that answers before the API (WAF body
+                // inspection rejects XSS/SQLi-looking rule examples on some
+                // installs) — the modal previously swallowed it silently via
+                // useAsyncAction's `.finally`-only handling, leaving nothing
+                // on screen (#1886). Surface it so the user isn't baffled by a
+                // rule that just doesn't get added.
+                const detail =
+                    (error as { response?: { data?: unknown } })?.response
+                        ?.data;
+                const message =
+                    typeof detail === "object" &&
+                    detail !== null &&
+                    "message" in detail &&
+                    typeof (detail as { message?: unknown }).message ===
+                        "string"
+                        ? (detail as { message: string }).message
+                        : undefined;
+
+                toast({
+                    variant: "destructive",
+                    title: `Could not add rule "${rule.title}"`,
+                    description:
+                        message ??
+                        "The request was blocked before reaching us (e.g. a security-layer rejection). Try again, or import the rule without the flagged example.",
+                });
+                return;
+            }
 
             if (isCentralizedPrResponse(addedKodyRules)) {
                 toast(
