@@ -50,6 +50,13 @@ describe('credential scrub — what must never reach Discord', () => {
         ['OpenAI project key', 'sk-proj-AbCdEf0123456789XyZwAbCdEf01234567'],
         ['OpenAI service account key', 'sk-svcacct-AbCdEf0123456789XyZw'],
         ['Google API key (no separator after the prefix)', 'AIzaSyD9aBcDeFgHiJkLmNoPqRsTuVwXyZ01234'],
+        // Only the `AIza` branch can catch this one, which is the point: the
+        // fixture above is 39 characters with mixed case and digits, so
+        // LONG_TOKEN redacts it even with the AIza alternative deleted, and the
+        // row would stay green through the exact regression it is meant to pin.
+        // 28 characters, no digit, no uppercase after the prefix: too short for
+        // LONG_TOKEN (32+) and failing looksRandom's mixed-case disjunct.
+        ['Google API key only the AIza branch matches', `AIza${'abcdefghijklmnopqrstuvwx'}`],
         // The class the 40-character floor used to miss: 16 random bytes as
         // hex is 32 characters, lowercase only, and carries digits.
         ['canonical 32-char hex secret', '0123456789abcdef0123456789abcdef'],
@@ -64,6 +71,24 @@ describe('credential scrub — what must never reach Discord', () => {
         // survive. An exact-count quantifier would leak the tail.
         const tail = secret.replace(/^\S+\s+/, '').slice(-12);
         expect(out).not.toContain(tail);
+    });
+
+    /**
+     * The OTHER branch of `causeOf`. Every case above arrives as an
+     * `AI_APICallError:` line, but the shape the live tier emits most often is
+     * the classifier's own two-line message — and that branch does its own
+     * `Provider said:` surgery before scrubbing. Without this case, dropping
+     * `collapse()` from it would send a vendor-echoed key to Discord with the
+     * suite green.
+     */
+    it('redacts a credential the classifier echoed into `Provider said:`', () => {
+        const out = summarize(
+            'CREDENTIAL failure, NOT provider drift — rotate the secret\n' +
+                '    Provider said: 0123456789abcdef0123456789abcdef',
+        );
+        expect(out).toContain('dead credential');
+        expect(out).toContain('[redacted]');
+        expect(out).not.toContain('0123456789abcdef0123456789abcdef');
     });
 
     it.each([
