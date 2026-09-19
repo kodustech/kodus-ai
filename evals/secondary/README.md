@@ -1,5 +1,11 @@
 # Secondary-pass eval harness
 
+> - **Answers:** Shared datasets and model registry for the dedup, severity and format evals.
+> - **Runs:** through those evals.
+> - **Run it:** `node evals/secondary/build-findings-dataset.js <recall-result.json>`
+> - **Gate:** none.
+> - **Cost:** none.
+
 Shared datasets + model registry for the three review **secondary** passes that
 today run on platform `gpt-5.4-mini` and we want to certify for **client BYOK**.
 
