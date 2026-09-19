@@ -1704,6 +1704,7 @@ export class GitlabService implements Omit<
                 config: {
                     hasRepositories: hasRepositories,
                     status: gitlabRepositories?.installationStatus,
+                    host: gitlabOrg?.authIntegration?.authDetails?.host ?? '',
                 },
                 category: IntegrationCategory.CODE_MANAGEMENT,
             };
