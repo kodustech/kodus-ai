@@ -5473,6 +5473,10 @@ This is an experimental feature that generates committable changes. Review the d
         // Usar método centralizado para determinar o owner correto
         const owner = await this.getCorrectOwner(githubAuthDetail, octokit);
 
+        const webhookSignatureSecret = this.configService.get<string>(
+            'CODE_MANAGEMENT_WEBHOOK_SIGNATURE_SECRET',
+        );
+
         try {
             for (const repo of repositories) {
                 // The hook lives under the REPO's namespace, not the
@@ -5512,6 +5516,9 @@ This is an experimental feature that generates committable changes. Review the d
                         url: webhookUrl,
                         content_type: 'json',
                         insecure_ssl: '0',
+                        ...(webhookSignatureSecret
+                            ? { secret: webhookSignatureSecret }
+                            : {}),
                     },
                     events: [
                         'push',

@@ -14,7 +14,9 @@ describe('GitlabController', () => {
             execute: jest.fn().mockResolvedValue(undefined),
         } as any;
 
-        controller = new GitlabController(enqueueWebhookUseCase);
+        controller = new GitlabController(enqueueWebhookUseCase, {
+            validate: jest.fn().mockReturnValue({ valid: true }),
+        } as any);
 
         mockResponse = {
             status: jest.fn().mockReturnThis(),
@@ -25,14 +27,18 @@ describe('GitlabController', () => {
     describe('supported events', () => {
         it('should enqueue "Merge Request Hook" event', async () => {
             mockRequest = {
-                headers: { 'x-gitlab-event': 'Merge Request Hook' },
+                headers: {
+                    'x-gitlab-event': 'Merge Request Hook',
+                    'x-gitlab-event-uuid': 'event-uuid-1',
+                    'x-gitlab-webhook-uuid': 'hook-uuid-must-not-be-used',
+                },
                 body: {
                     object_kind: 'merge_request',
                     object_attributes: { iid: 1 },
                 },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -45,6 +51,7 @@ describe('GitlabController', () => {
             expect(enqueueWebhookUseCase.execute).toHaveBeenCalledWith({
                 platformType: 'GITLAB',
                 event: 'Merge Request Hook',
+                deliveryId: 'event-uuid-1',
                 payload: {
                     object_kind: 'merge_request',
                     object_attributes: { iid: 1 },
@@ -61,7 +68,7 @@ describe('GitlabController', () => {
                 },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -89,7 +96,7 @@ describe('GitlabController', () => {
                 body: { object_kind: 'push', ref: 'refs/heads/main' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -110,7 +117,7 @@ describe('GitlabController', () => {
                 body: { object_kind: 'tag_push' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -130,7 +137,7 @@ describe('GitlabController', () => {
                 body: { object_kind: 'issue' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -150,7 +157,7 @@ describe('GitlabController', () => {
                 body: { object_kind: 'pipeline' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -170,7 +177,7 @@ describe('GitlabController', () => {
                 body: { object_kind: 'build' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -190,7 +197,7 @@ describe('GitlabController', () => {
                 body: { object_kind: 'wiki_page' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -210,7 +217,7 @@ describe('GitlabController', () => {
                 body: { object_kind: 'release' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
