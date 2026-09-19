@@ -25,10 +25,11 @@ import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/i
 
 import { buildVerifierPrompt } from '@libs/code-review/infrastructure/agents/prompts/verifier-prompt';
 import { formatPreviousDecisions } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
+import { LLM_ENVELOPE_TAG } from '@libs/llm/structured-output-repair';
 import {
-    normalizeEnvelope,
-    LLM_ENVELOPE_TAG,
-} from '@libs/llm/structured-output-repair';
+    recoverVerdictObject,
+    verdictFromText,
+} from '@libs/agent-harness/infrastructure/verify/llm-verdict';
 import { createLogger } from '@libs/core/log/logger';
 import type { FinderSuggestion } from '@libs/code-review/infrastructure/agents/core/finder.agent';
 import { normalizePath } from '@libs/code-review/infrastructure/agents/core/finder.agent';
@@ -140,53 +141,52 @@ export function verifierPromptFor(
     return buildVerifierPrompt(bundle, 0).prompt;
 }
 
-/** Extract the verdict from a verifier run by reading the run's materialized
- *  artifacts (the "result tool" convention — same as the finder). Default KEEP
- *  (refute-to-drop): only an explicit keep:false drops the finding. */
+/** Extract the verdict from a verifier run: the run's materialized artifacts
+ *  (the "result tool" convention — same as the finder) first, then the final
+ *  step's TEXT. Default KEEP (refute-to-drop): only an explicit keep:false drops
+ *  the finding.
+ *
+ *  The text path exists because the verifier prompt asks for JSON ("Return JSON
+ *  only at the end") while the tool list offers submitVerdict, and models that
+ *  are not under strict tool use pick the text form — Anthropic and the
+ *  OpenAI-compatible providers, per model-strictness.ts. Reading only the tool
+ *  form published every refutation those models wrote (issue #1937). */
 export function extractVerdict(state: RunState): Verdict {
     // The verifier's investigation tools for THIS finding — carried on the
     // verdict so the domain can attribute per-finding verifier evidence (which
     // files it read/grepped) to the observability trace. submitVerdict itself
     // is excluded (it's the result tool, not investigation).
     const toolCalls = collectVerifierToolCalls(state);
+    // SHAPE recovery (#1786): a non-strict model may wrap ({result:{keep}}),
+    // rename (decision/verdict/shouldKeep), stringify, or bare-array the
+    // verdict — readVerdictObject recovers the scalar `keep` before the boolean
+    // check so a real keep:false is not lost to the fail-open default below.
+    const onRecover = (reason: string) =>
+        logger.warn({
+            message: `${LLM_ENVELOPE_TAG} recovered off-schema verifier verdict (${reason})`,
+            context: 'VerifierAgent',
+        });
     for (let i = state.artifacts.length - 1; i >= 0; i--) {
         const artifact = state.artifacts[i];
         if (artifact.type !== VERIFY_DONE_TOOL) continue;
-        // SHAPE recovery (#1786): a non-strict model may wrap ({result:{keep}}),
-        // rename (decision/verdict/shouldKeep), stringify, or bare-array the
-        // verdict — recover the scalar `keep` before the boolean check so a real
-        // keep:false is not lost to the fail-open default below.
-        const parsed = normalizeEnvelope(
-            artifact.payload,
-            'keep',
-            ['decision', 'verdict', 'shouldKeep'],
-            {
-                scalar: true,
-                onRecover: (reason) =>
-                    logger.warn({
-                        message: `${LLM_ENVELOPE_TAG} recovered off-schema verifier verdict (${reason})`,
-                        context: 'VerifierAgent',
-                    }),
-            },
-        );
-        if (
-            parsed &&
-            typeof parsed === 'object' &&
-            typeof (parsed as Record<string, any>).keep === 'boolean'
-        ) {
-            const obj = parsed as Record<string, any>;
-            return {
-                keep: obj.keep,
-                rationale: obj.rationale,
-                confidence: obj.confidence,
-                toolCalls,
-            };
+        const fromTool = recoverVerdictObject(artifact.payload, onRecover);
+        if (fromTool) {
+            return { ...fromTool, toolCalls, parseMode: 'tool' };
         }
+    }
+    const fromText = verdictFromText(state, onRecover);
+    if (fromText) {
+        logger.log({
+            message: `verifier verdict recovered from text (keep=${fromText.keep})`,
+            context: 'VerifierAgent',
+        });
+        return { ...fromText, toolCalls, parseMode: 'text' };
     }
     return {
         keep: true,
         rationale: 'no parseable verdict — kept by default',
         toolCalls,
+        parseMode: 'default-keep',
     };
 }
 

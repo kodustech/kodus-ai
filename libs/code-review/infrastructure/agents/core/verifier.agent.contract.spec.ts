@@ -110,6 +110,7 @@ describe('verifier contract — LAYER 1 happy path', () => {
             rationale: 'refuted: guarded upstream',
             confidence: 'high',
             toolCalls: [],
+            parseMode: 'tool',
         });
     });
 
@@ -1011,5 +1012,176 @@ describe('verifier contract — previous review decisions (issue #1313)', () => 
 
         const [, input] = run.mock.calls[0];
         expect(input.prompt).not.toContain('<PreviousReviewDecisions>');
+    });
+});
+
+// ---- Text verdicts (issue #1937) -----------------------------------------
+// Production traces (`4639aa9af1083572bf45ee107a105468`,
+// `ebfe70f9537dfe7f2fc7972ea4acc7b0`, `b69fbef3acec1402ead741e19e8c15b1`) show
+// the verifier ending on `finish_reason: stop` with a `{"keep": false}` JSON in
+// its final TEXT and no submitVerdict call: the prompt asks for JSON, the tool
+// list offers submitVerdict, and strict tool use is off for Anthropic and the
+// OpenAI-compatible providers. 169 text verdicts vs 8 tool calls in one org,
+// `droppedByVerifier: 0` on every text run — every refutation written as text
+// was discarded and the finding published.
+describe('verifier contract — verdict written as TEXT (#1937)', () => {
+    /** A finished run with NO verdict artifact whose last step carries `text`. */
+    function textOnlyState(text: string, earlier: string[] = []): RunState {
+        return makeState(NO_ARTIFACT, {
+            steps: [...earlier, text].map((content, index) => ({
+                index,
+                message: { role: 'assistant', content, toolCalls: [] },
+            })),
+        } as Partial<RunState>);
+    }
+
+    // The real trace: reasoning prose, then the verdict object.
+    const TRACE_4639 = `The code's own inline comment explicitly states the CPU bump was scoped to the API task definition. The finding is purely speculative.
+
+{
+  "index": 0,
+  "keep": false,
+  "rationale": "The code's own inline comment explicitly states the intent; the finding is purely speculative ('if the CPU increase was intended for BFF as well') and the code actively refutes the premise",
+  "confidence": "high"
+}`;
+
+    it('drops the finding on a text keep:false (trace 4639aa9a…)', () => {
+        const v = extractVerdict(textOnlyState(TRACE_4639));
+        expect(v.keep).toBe(false);
+        expect(v.rationale).toMatch(/purely speculative/);
+        expect(v.confidence).toBe('high');
+        expect(v.parseMode).toBe('text');
+    });
+
+    it('keeps the finding on a text keep:true', () => {
+        const v = extractVerdict(
+            textOnlyState('Verified.\n{"keep": true, "rationale": "real gap"}'),
+        );
+        expect(v.keep).toBe(true);
+        expect(v.rationale).toBe('real gap');
+        expect(v.parseMode).toBe('text');
+    });
+
+    // The verifier quotes the code it judged before writing its verdict. A
+    // first-match extractor grabs the quote, fails to parse it, and falls back
+    // to keep:true — the verdict must be read from the END of the text.
+    it('reads the verdict AFTER a quoted code block, not the block', () => {
+        const v = extractVerdict(
+            textOnlyState(
+                [
+                    'The cited code reads:',
+                    '```ts',
+                    'const opts = { keep: true, retries: 3 };',
+                    'if (opts.keep) { flush({ keep: true }); }',
+                    '```',
+                    'That attribute does exist, so the claim is refuted.',
+                    '```json',
+                    '{"keep": false, "rationale": "both attributes exist in the cited file"}',
+                    '```',
+                ].join('\n'),
+            ),
+        );
+        expect(v.keep).toBe(false);
+        expect(v.rationale).toMatch(/both attributes exist/);
+        expect(v.parseMode).toBe('text');
+    });
+
+    // A JSON quoted inside the reasoning (an example, a config, the candidate's
+    // own payload) must not outrank the verdict that follows it.
+    it('takes the LAST keep-bearing object in the final text', () => {
+        const v = extractVerdict(
+            textOnlyState(
+                'Example of the format: {"keep": true, "rationale": "example"}\n' +
+                    'My verdict: {"keep": false, "rationale": "refuted"}',
+            ),
+        );
+        expect(v.keep).toBe(false);
+        expect(v.rationale).toBe('refuted');
+    });
+
+    // Only the FINAL step is the answer: a verdict drafted mid-investigation is
+    // the model thinking out loud, before it read the evidence.
+    it('ignores a verdict from an earlier step', () => {
+        const v = extractVerdict(
+            textOnlyState('Investigating further…', [
+                'Preliminary: {"keep": false, "rationale": "too early"}',
+            ]),
+        );
+        expect(v.keep).toBe(true);
+        expect(v.rationale).toMatch(/no parseable verdict/i);
+        expect(v.parseMode).toBe('default-keep');
+    });
+
+    it('prefers the submitVerdict artifact over the final text', () => {
+        const state = makeState(
+            { keep: true, rationale: 'from the tool' },
+            {
+                steps: [
+                    {
+                        index: 0,
+                        message: {
+                            role: 'assistant',
+                            content: '{"keep": false, "rationale": "stale"}',
+                            toolCalls: [],
+                        },
+                    },
+                ],
+            } as Partial<RunState>,
+        );
+        const v = extractVerdict(state);
+        expect(v.keep).toBe(true);
+        expect(v.rationale).toBe('from the tool');
+        expect(v.parseMode).toBe('tool');
+    });
+
+    it('recovers a renamed/wrapped verdict written as text (#1786 shapes)', () => {
+        expect(
+            extractVerdict(
+                textOnlyState('{"result": {"shouldKeep": false, "rationale": "r"}}'),
+            ).keep,
+        ).toBe(false);
+    });
+
+    it('stays fail-open when the final text carries no verdict', () => {
+        const v = extractVerdict(
+            textOnlyState('I could not reach a conclusion on this candidate.'),
+        );
+        expect(v.keep).toBe(true);
+        expect(v.parseMode).toBe('default-keep');
+    });
+
+    it('keeps the investigation tool calls on a text verdict', () => {
+        const state = makeState(NO_ARTIFACT, {
+            steps: [
+                {
+                    index: 0,
+                    message: {
+                        role: 'assistant',
+                        content: '',
+                        toolCalls: [
+                            {
+                                id: 't1',
+                                name: 'readFile',
+                                input: { path: 'a.ts' },
+                                output: 'hit',
+                            },
+                        ],
+                    },
+                },
+                {
+                    index: 1,
+                    message: {
+                        role: 'assistant',
+                        content: '{"keep": false, "rationale": "r"}',
+                        toolCalls: [],
+                    },
+                },
+            ],
+        } as Partial<RunState>);
+        const v = extractVerdict(state);
+        expect(v.keep).toBe(false);
+        expect(v.toolCalls).toEqual([
+            { name: 'readFile', args: { path: 'a.ts' }, result: 'hit' },
+        ]);
     });
 });
