@@ -45,10 +45,16 @@ function compareNights(tonight, lastGreen) {
         .sort((a, b) => a.delta - b.delta);
 
     const goldenLevel = perCase.length > 0 && perCase.every((c) => c.lost !== null);
-    const recallNow = mean(now.map((row) => row.metadata.recall));
-    const recallBefore = mean(measuredRows(lastGreen).map((row) => row.metadata.recall));
-    const precisionNow = mean(now.map((row) => row.metadata.precision));
-    const precisionBefore = mean(measuredRows(lastGreen).map((row) => row.metadata.precision));
+    // Both means come from the PRs BOTH nights measured. Per-PR recall varies
+    // far more than the change we are looking for, so a night that skipped two
+    // PRs (or a baseline that did) would otherwise move the delta by which PRs
+    // were in the average rather than by anything the engine did.
+    const compared = new Set(perCase.map((c) => c.caseId));
+    const inBoth = (rows) => rows.filter((row) => compared.has(row.caseId));
+    const recallNow = mean(inBoth(now).map((row) => row.metadata.recall));
+    const recallBefore = mean(inBoth(measuredRows(lastGreen)).map((row) => row.metadata.recall));
+    const precisionNow = mean(inBoth(now).map((row) => row.metadata.precision));
+    const precisionBefore = mean(inBoth(measuredRows(lastGreen)).map((row) => row.metadata.precision));
 
     return {
         recall: recallNow,

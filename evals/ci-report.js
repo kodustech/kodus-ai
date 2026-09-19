@@ -165,9 +165,11 @@ function nextState(verdict, result, previousState, today) {
     return {
         verdict,
         recall,
-        // What the streak alerted at: kept across the streak so a slow bleed is
-        // measured from where it started, and re-pings when it passes noise.
-        alertedRecall: red ? (continuing ? (previousState.alertedRecall ?? previousState.recall ?? recall) : recall) : null,
+        // The recall of the night that last pinged. It moves on every new ping
+        // and stays put on a quiet "still red" night, so a slow bleed is always
+        // measured from the last alert: one ping per step down, never a ping
+        // repeated because the anchor stayed high.
+        alertedRecall: red ? (continuing && verdict !== 'regression' ? (previousState.alertedRecall ?? previousState.recall ?? recall) : recall) : null,
         failed: red ? (result?.gate?.checks || []).filter((check) => !check.pass).map((check) => check.name) : [],
         streak: red ? (continuing ? (previousState.streak || 1) + 1 : 1) : 0,
         since: red ? (continuing ? previousState.since : today) : null,
@@ -194,6 +196,8 @@ function nightlyReport(result, env = {}, extras = {}) {
     if (!result || result.error) {
         lines.push(result?.error ? `Reason: ${clip(result.error, 300)}` : 'finder-recall stopped before writing a result.');
         lines.push('', '**Next step:** fix the key or quota named above. The next night measures again (a night that did not measure never becomes the baseline).');
+        // Measuring all but a few PRs is a worse sample, not a failure: those
+        // nights do report and do compare, on the PRs both nights measured.
     } else {
         const gate = result.gate || {};
         const floor = (gate.checks || []).find((check) => check.name === 'recall_mean')?.floor;

@@ -233,7 +233,10 @@ describe('nightly alerting without false positives', () => {
         expect(second).toMatchObject({ verdict: 'still-red', mention: false, state: { alertedRecall: 0.2, recall: 0.16 } });
         // Two steps: noise-sized against last night, a real slide against the alert.
         const third = nightlyReport(measured(0.12, confirmedFail(0.12)), {}, { targets, previousState: second.state, today: '2026-09-20' });
-        expect(third).toMatchObject({ verdict: 'regression', mention: true });
+        expect(third).toMatchObject({ verdict: 'regression', mention: true, state: { alertedRecall: 0.12 } });
+        // The ping moved the anchor: the same recall is the same drop, not a new one.
+        const fourth = nightlyReport(measured(0.12, confirmedFail(0.12)), {}, { targets, previousState: third.state, today: '2026-09-21' });
+        expect(fourth).toMatchObject({ verdict: 'still-red', mention: false, state: { alertedRecall: 0.12 } });
     });
 
     it('keeps the night when a couple of PRs go unmeasured, and says so', () => {

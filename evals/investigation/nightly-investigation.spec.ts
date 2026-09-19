@@ -94,6 +94,24 @@ describe('investigation contract', () => {
     });
 });
 
+describe('comparing two nights that measured different PRs', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { compareNights } = require('./nightly-compare');
+    const row = (caseId: string, recall: number) => ({ caseId, status: 'pass', metadata: { recall, precision: 0.5, goldenResults: [{ golden: 'bug', found: recall > 0 }] } });
+
+    it('averages the PRs both nights measured, not two different subsets', () => {
+        const green = { rows: [row('a', 0.4), row('b', 0.4), row('c', 1)] };
+        // Tonight lost 'c' to infra: counting the green night's 'c' would read
+        // as a 20pp drop that never happened.
+        const tonight = { rows: [row('a', 0.4), row('b', 0.4), { caseId: 'c', status: 'infra', reason: 'provider 429' }] };
+        const comparison = compareNights(tonight, green);
+        expect(comparison.casesCompared).toBe(2);
+        expect(comparison.recall).toBeCloseTo(0.4);
+        expect(comparison.recallBefore).toBeCloseTo(0.4);
+        expect(comparison.recallDelta).toBeCloseTo(0);
+    });
+});
+
 describe('confirmation of a run below the floor', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { combineRuns } = require('./confirm-gate');
@@ -111,6 +129,13 @@ describe('confirmation of a run below the floor', () => {
         expect(combined.gate).toMatchObject({ status: 'pass', confirmation: { runs: [0.2, 0.5] } });
         expect(combined.rows[0].metadata.goldenResults).toEqual([{ golden: 'bug', found: true }]);
         expect(combined.tokens).toEqual({ prompt: 20, completion: 2 });
+    });
+
+    it('confirms when the second run missed only the PRs its budget allows', () => {
+        const second = { ...run(0.5, true), infraFailures: 1, infraBudget: 2 };
+        const combined = combineRuns(run(0.2, false), second, () => ({ status: 'fail', checks: [] }));
+        expect(combined.confirmationError).toBeUndefined();
+        expect(combined.gate.confirmation.secondInfra).toBe(1);
     });
 
     it('keeps every metric and count run-recall writes', () => {
