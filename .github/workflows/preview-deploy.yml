@@ -173,6 +173,21 @@ jobs:
                   set -euo pipefail
                   : "${RUNO_SERVER:?PREVIEW_RUNO_SERVER is not configured}"
                   : "${RUNO_TOKEN:?PREVIEW_RUNO_TOKEN is not configured}"
+                  # `up` validates the compose files that are ON the VM, and
+                  # only a later `push` syncs this commit onto it. A VM left
+                  # holding an unparseable compose file therefore wedges: every
+                  # deploy dies in that validation, so the commit that repairs
+                  # the file can never reach the machine, and the only way out
+                  # is destroying the environment.
+                  #
+                  # Sync first when a VM already exists. `resume` boots the
+                  # instance before it reaches any validation, which is all
+                  # `push` needs, and `push` without --restart is an rsync that
+                  # validates nothing. Both are best-effort: a first deploy has
+                  # no VM to resume or push to, and `up` below creates it.
+                  $RUNO resume --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml || true
+                  $RUNO push --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml || true
+
                   # --branch: the checkout is a detached HEAD, so runo cannot
                   # read the branch from git itself
                   $RUNO up --here --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml
