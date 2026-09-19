@@ -114,7 +114,17 @@ export class PipelineExecutor<TContext extends PipelineContext> {
             });
         }
 
-        for (const stage of stages) {
+        // Guard the stage loop so an unexpected throw (outside a stage's own
+        // try/catch — e.g. skip/jump logic, an observer that leaks during
+        // onStageStart) can't bypass onPipelineFinish. The check that a broken
+        // run left IN_PROGRESS on the platform would otherwise never be
+        // concluded: automationCodeReview marks the execution ERROR, but there
+        // is no observer call to finalize the GitHub check (#1849). Forcing
+        // the status to ERROR here lets the existing onPipelineFinish path
+        // post the `failure` conclusion and keeps the check from outliving
+        // the job.
+        try {
+            for (const stage of stages) {
             // Per-stage opt-out: skipStages bypasses specific named stages
             // without changing pipeline status. Checked before the SKIPPED
             // fast-forward so a stage listed here is excluded from both
@@ -283,6 +293,39 @@ export class PipelineExecutor<TContext extends PipelineContext> {
                     },
                 });
             }
+        }
+        } catch (error) {
+            // An unexpected throw escaped the per-stage try/catch. Mark the
+            // run as ERROR so onPipelineFinish still concludes the check in
+            // failure instead of leaving it IN_PROGRESS forever (#1849). We
+            // do not rethrow: subsequent stages are dropped and the pipeline
+            // is already broken beyond this point.
+            const parsedError = this.toError(error);
+            context = produce(context, (draft) => {
+                draft.statusInfo.status = AutomationStatus.ERROR;
+                draft.statusInfo.message =
+                    draft.statusInfo.message ||
+                    `Pipeline aborted: ${parsedError.message}`;
+                draft.errors.push({
+                    stage: pipelineName,
+                    substage: '',
+                    error: parsedError,
+                    severity: 'critical',
+                } as any);
+            });
+            this.logger.error({
+                message: `Pipeline '${pipelineName}' aborted by unexpected error: ${parsedError.message}`,
+                context: PipelineExecutor.name,
+                serviceName: PipelineExecutor.name,
+                error: error,
+                metadata: {
+                    ...context?.pipelineMetadata,
+                    correlationId: (context as any)?.correlationId ?? null,
+                    organizationAndTeamData:
+                        (context as any)?.organizationAndTeamData ?? null,
+                    status: context.statusInfo,
+                },
+            });
         }
 
         // Restore skipped status if needed (for historical accuracy)
