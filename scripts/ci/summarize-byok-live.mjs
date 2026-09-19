@@ -49,10 +49,30 @@ const LIMIT = 1_500; // Discord embeds hard-cap; keep well inside it.
 // looks random — mixed case AND a digit, which every key format has and a
 // snake_case identifier does not.
 const PREFIXED =
-    /(Bearer\s+\S+)|\b(?:sk|rk|pk|fw|gsk|xai|ghp|glpat|AIza|github_pat)[-_][A-Za-z0-9_-]{10,}/gi;
+    // `AIza` carries NO separator — a Google key is `AIzaSy…` straight into
+    // base64url — so listing it with the `[-_]` group made that branch dead
+    // code. It gets its own alternative.
+    /(Bearer\s+\S+)|\bAIza[A-Za-z0-9_-]{20,}|\b(?:sk|rk|pk|fw|gsk|xai|ghp|glpat|github_pat)[-_][A-Za-z0-9_-]{10,}/gi;
 const LONG_TOKEN = /\b[A-Za-z0-9+_-]{32,}={0,2}\b/g;
+
+/**
+ * Two ways a long run earns redaction, because one missed a whole class.
+ *
+ * Mixed case plus a digit covers base64 and most vendor keys. It does NOT cover
+ * a lowercase hex or binary-style token — 40 characters of `0-9a-f` has a digit
+ * and no uppercase — which is a common bearer format, so length alone carries
+ * the second rule.
+ *
+ * Every quantifier here is open-ended (`{n,}`). An exact count is worse than no
+ * rule: it redacts the first n characters and forwards the rest of the key.
+ *
+ * The trade is deliberate. A 40+ character snake_case identifier carrying a
+ * digit gets redacted too, which costs a few words of an error message. Sending
+ * a live credential to a chat channel costs more.
+ */
 const looksRandom = (t) =>
-    /[a-z]/.test(t) && /[A-Z]/.test(t) && /[0-9]/.test(t);
+    (/[a-z]/.test(t) && /[A-Z]/.test(t) && /[0-9]/.test(t)) ||
+    (t.length >= 40 && /[0-9]/.test(t));
 
 const collapse = (text) =>
     text
