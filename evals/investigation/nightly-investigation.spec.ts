@@ -149,6 +149,17 @@ describe('confirmation of a run below the floor', () => {
         expect(combined.gate.confirmation.secondInfra).toBe(1);
     });
 
+    it('reports no combined recall when nothing paired, so nobody is pinged for one run', () => {
+        const scored = (caseId: string, recall: number) => ({ caseId, status: 'pass', metadata: { recall, precision: 0.5 } });
+        const first = { model: 'm', metrics: { recall_mean: 0.2 }, rows: [scored('a', 0.2)] };
+        // The confirmation parsed nothing: status 'fail' with empty metadata
+        // never counts as infra, so this is the shape that reaches combineRuns.
+        const second = { model: 'm', metrics: { recall_mean: null }, rows: [{ caseId: 'a', status: 'fail', metadata: {} }] };
+        const combined = combineRuns(first, second, () => ({ status: 'fail', checks: [] }));
+        expect(combined.metrics.recall_mean).toBeNull();
+        expect(combined.gate.confirmation.pairedCases).toBe(0);
+    });
+
     it('does not count a PR the confirmation failed to parse as measured', () => {
         const scored = (caseId: string, recall: number) => ({ caseId, status: 'pass', metadata: { recall, precision: 0.5, goldenResults: [{ golden: caseId, found: recall > 0 }] } });
         const first = { model: 'm', metrics: { recall_mean: 0.6 }, rows: [scored('a', 0.2), scored('b', 1)] };

@@ -45,16 +45,20 @@ function combineRuns(first, second, gateFor) {
     // the NUMBER, not on the row: a case that failed to parse carries an empty
     // metadata, which is a row without that metric, not a measurement.
     const usablePairs = (key) => pairs.filter(([a, b]) => Number.isFinite(a?.metadata?.[key]) && Number.isFinite(b?.metadata?.[key]));
+    // Whether the rows carry this metric AT ALL. They do → the paired mean is
+    // the answer, even when it is null because nothing paired: a null says the
+    // confirmation measured nothing comparable, and main() refuses to decide on
+    // it. Only a metric no row carries (an older artifact, a field added later)
+    // falls back to the run means, where no subset question exists.
+    const carried = (key) => pairs.some(([a, b]) => Number.isFinite(a?.metadata?.[key]) || Number.isFinite(b?.metadata?.[key]));
     const metricKeys = new Set([...Object.keys(first.metrics || {}), ...Object.keys(second.metrics || {})]);
     const fromRows = Object.fromEntries(
         Object.entries(SUMMARY_OF)
-            .filter(([, summaryKey]) => metricKeys.has(summaryKey))
+            .filter(([rowKey, summaryKey]) => metricKeys.has(summaryKey) && carried(rowKey))
             .map(([rowKey, summaryKey]) => [summaryKey, avg(usablePairs(rowKey).flatMap(([a, b]) => [a.metadata[rowKey], b.metadata[rowKey]]))]),
     );
     const metrics = Object.fromEntries(
-        // Falling back to the run means keeps a metric the rows don't carry
-        // (an older artifact, a field added later) instead of dropping it.
-        [...metricKeys].map((key) => [key, fromRows[key] ?? avg([first.metrics?.[key], second.metrics?.[key]])]),
+        [...metricKeys].map((key) => [key, key in fromRows ? fromRows[key] : avg([first.metrics?.[key], second.metrics?.[key]])]),
     );
     const combined = {
         ...first,
@@ -109,6 +113,15 @@ function main() {
     }
     const setName = (process.argv.find((a) => a.startsWith('--set=')) || '--set=light').slice(6);
     const combined = combineRuns(first, second, (summary, rows) => evaluateGate(summary, rows, first.model, setName));
+    // The confirmation scored none of the PRs the first run scored (every case
+    // failed to parse, say). There is nothing to confirm WITH, and deciding on
+    // the first run alone would ping people for a drop one run measured.
+    if (!Number.isFinite(combined.metrics.recall_mean)) {
+        const reason = 'the confirmation run scored none of the PRs the first run scored';
+        fs.writeFileSync(out, JSON.stringify({ ...first, confirmationError: reason }, null, 2));
+        console.error(`confirmation did not measure: ${reason}`);
+        return 2;
+    }
     fs.writeFileSync(out, JSON.stringify(combined, null, 2));
     const [r1, r2] = combined.gate.confirmation.runs;
     console.log(`confirmation: runs ${Math.round(r1 * 100)}% and ${Math.round(r2 * 100)}% → mean ${Math.round(combined.metrics.recall_mean * 100)}% · gate ${combined.gate.status}`);
