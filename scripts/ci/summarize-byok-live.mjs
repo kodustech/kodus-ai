@@ -72,7 +72,13 @@ const LONG_TOKEN = /\b[A-Za-z0-9+_-]{32,}={0,2}\b/g;
  */
 const looksRandom = (t) =>
     (/[a-z]/.test(t) && /[A-Z]/.test(t) && /[0-9]/.test(t)) ||
-    (t.length >= 40 && /[0-9]/.test(t));
+    // Anchored to LONG_TOKEN's own floor of 32, not higher. A 32-39 character
+    // run is exactly the canonical 16-byte hex secret, and a higher floor here
+    // left that class — the one this rule was added for — unredacted. The floor
+    // is not what protects the identifier this file must not eat:
+    // `global_online_prediction_requests_per_base_model` survives at any length
+    // because it carries no digit.
+    (t.length >= 32 && /[0-9]/.test(t));
 
 const collapse = (text) =>
     text
