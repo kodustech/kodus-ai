@@ -98,7 +98,7 @@ jobs:
               if: steps.fetch.outputs.found == 'true'
               uses: ./.github/actions/discord-notify
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
                   status: cancelled
                   title: "📊 E2E matrix health — last ${{ inputs.days || '30' }} days"
                   description: |

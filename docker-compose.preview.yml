@@ -12,10 +12,6 @@
 # runo substitutes ${RUNO_PUBLIC_URL} / ${RUNO_PUBLIC_HOST} at up time, after
 # the tunnel exists and before the stack boots.
 services:
-    kodus-api:
-        environment:
-            - API_MCP_SERVER_ENABLED=true
-
     worker:
         environment:
             - API_MCP_SERVER_ENABLED=true
@@ -47,6 +43,7 @@ services:
 
     kodus-api:
         environment:
+            - API_MCP_SERVER_ENABLED=true
             # .env ships these pointing at localhost:3001, which the API then
             # hands to the git provider when a repository is registered.
             # GitHub rejects a localhost hook outright ("isn't reachable over
