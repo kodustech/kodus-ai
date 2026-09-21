@@ -1057,28 +1057,32 @@ const KodyRulesPageContent = () => {
 
                     <TabsContent value="review-rules" className="mt-4">
                         <div className="flex flex-col gap-4">
-                            <KodyRulesToolbar
-                                filterQuery={filterQuery}
-                                onFilterQueryChange={setFilterQuery}
-                                entityLabel="rules"
-                                trailing={
-                                    <KodyRulesViewSwitcher
-                                        value={viewMode}
-                                        onChange={handleViewModeChange}
-                                    />
-                                }
-                                visibleScopes={visibleScopes}
-                                onVisibleScopesChange={setVisibleScopes}
-                                listFilters={listFilters}
-                                onListFiltersChange={setListFilters}
-                                sortOption={sortOption}
-                                onSortOptionChange={setSortOption}
-                                isDisabled={
-                                    !reviewRulesState.hasAnyRulesInSystem
-                                }
-                                isRepoView={isRepoView}
-                                isGlobalView={isGlobalView}
-                            />
+                            {/* Nothing to search or filter until a rule exists;
+                                the empty state below carries the actions. */}
+                            {reviewRulesState.hasAnyRulesInSystem && (
+                                <KodyRulesToolbar
+                                    filterQuery={filterQuery}
+                                    onFilterQueryChange={setFilterQuery}
+                                    entityLabel="rules"
+                                    trailing={
+                                        <KodyRulesViewSwitcher
+                                            value={viewMode}
+                                            onChange={handleViewModeChange}
+                                        />
+                                    }
+                                    visibleScopes={visibleScopes}
+                                    onVisibleScopesChange={setVisibleScopes}
+                                    listFilters={listFilters}
+                                    onListFiltersChange={setListFilters}
+                                    sortOption={sortOption}
+                                    onSortOptionChange={setSortOption}
+                                    isDisabled={
+                                        !reviewRulesState.hasAnyRulesInSystem
+                                    }
+                                    isRepoView={isRepoView}
+                                    isGlobalView={isGlobalView}
+                                />
+                            )}
                             <OrphanRulesChip
                                 count={orphanRulesCount}
                                 isFiltering={onlyIdeSynced}
@@ -1256,26 +1260,32 @@ const KodyRulesPageContent = () => {
 
                     <TabsContent value="memories" className="mt-4">
                         <div className="flex flex-col gap-4">
-                            <KodyRulesToolbar
-                                filterQuery={filterQuery}
-                                onFilterQueryChange={setFilterQuery}
-                                entityLabel="memories"
-                                trailing={
-                                    <KodyRulesViewSwitcher
-                                        value={viewMode}
-                                        onChange={handleViewModeChange}
-                                    />
-                                }
-                                visibleScopes={visibleScopes}
-                                onVisibleScopesChange={setVisibleScopes}
-                                listFilters={listFilters}
-                                onListFiltersChange={setListFilters}
-                                sortOption={sortOption}
-                                onSortOptionChange={setSortOption}
-                                isDisabled={!memoriesState.hasAnyRulesInSystem}
-                                isRepoView={isRepoView}
-                                isGlobalView={isGlobalView}
-                            />
+                            {/* Nothing to search or filter until a memory exists;
+                                the empty state below carries the actions. */}
+                            {memoriesState.hasAnyRulesInSystem && (
+                                <KodyRulesToolbar
+                                    filterQuery={filterQuery}
+                                    onFilterQueryChange={setFilterQuery}
+                                    entityLabel="memories"
+                                    trailing={
+                                        <KodyRulesViewSwitcher
+                                            value={viewMode}
+                                            onChange={handleViewModeChange}
+                                        />
+                                    }
+                                    visibleScopes={visibleScopes}
+                                    onVisibleScopesChange={setVisibleScopes}
+                                    listFilters={listFilters}
+                                    onListFiltersChange={setListFilters}
+                                    sortOption={sortOption}
+                                    onSortOptionChange={setSortOption}
+                                    isDisabled={
+                                        !memoriesState.hasAnyRulesInSystem
+                                    }
+                                    isRepoView={isRepoView}
+                                    isGlobalView={isGlobalView}
+                                />
+                            )}
                             <ActiveFiltersChips
                                 filters={listFilters}
                                 onChange={setListFilters}
