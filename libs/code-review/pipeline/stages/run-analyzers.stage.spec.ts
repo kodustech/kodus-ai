@@ -22,7 +22,7 @@ const finding = (overrides: Record<string, unknown> = {}) => ({
 });
 
 const makeTool = (overrides: Partial<AnalyzerTool> = {}): AnalyzerTool => ({
-    id: 'rule-pack',
+    id: 'dependencies',
     selectFiles: (files) => files,
     run: jest.fn().mockResolvedValue([finding()]),
     ...overrides,
@@ -36,7 +36,7 @@ const makeContext = (
         repository: { id: 'repo-1', name: 'widget-api' },
         pullRequest: { number: 42 },
         codeReviewConfig: {
-            deterministicEvidence: { tools: { 'rule-pack': 'on' } },
+            deterministicEvidence: { tools: { 'dependencies': 'on' } },
         },
         changedFiles: [
             { filename: 'src/db/orders.go', patch: patchAdding(10, 3) },
@@ -113,14 +113,14 @@ describe('RunAnalyzersStage', () => {
             const result = await run(makeStage([makeTool()]), makeContext());
 
             expect(result.analyzerRouting).toEqual([
-                { toolId: 'rule-pack', run: true, fileCount: 1 },
+                { toolId: 'dependencies', run: true, fileCount: 1 },
             ]);
         });
 
         it('records the reason a tool was skipped', async () => {
             const context = makeContext({
                 codeReviewConfig: {
-                    deterministicEvidence: { tools: { 'rule-pack': 'off' } },
+                    deterministicEvidence: { tools: { 'dependencies': 'off' } },
                 },
             } as unknown as Partial<CodeReviewPipelineContext>);
 
@@ -149,7 +149,7 @@ describe('RunAnalyzersStage', () => {
             const failing = makeTool({
                 run: jest.fn().mockRejectedValue(new Error('binary missing')),
             });
-            const working = makeTool({ id: 'rule-pack' });
+            const working = makeTool({ id: 'dependencies' });
 
             const result = await run(
                 makeStage([failing, working]),
@@ -157,7 +157,7 @@ describe('RunAnalyzersStage', () => {
             );
 
             expect(result.analyzerFindings).toHaveLength(1);
-            expect(result.analyzerFailures).toEqual(['rule-pack']);
+            expect(result.analyzerFailures).toEqual(['dependencies']);
         });
 
         // A failure must never read as "scanned and clean".
@@ -169,7 +169,7 @@ describe('RunAnalyzersStage', () => {
             const result = await run(makeStage([tool]), makeContext());
 
             expect(result.analyzerFindings).toBeUndefined();
-            expect(result.analyzerFailures).toEqual(['rule-pack']);
+            expect(result.analyzerFailures).toEqual(['dependencies']);
         });
 
         it('does nothing when the beta gate is closed', async () => {

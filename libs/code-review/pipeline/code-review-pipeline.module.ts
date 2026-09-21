@@ -73,18 +73,11 @@ import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
 import { CreateSandboxStage } from './stages/create-sandbox.stage';
 import { LoadCiEvidenceStage } from './stages/load-ci-evidence.stage';
 import { RunAnalyzersStage } from './stages/run-analyzers.stage';
-import { RulePackLoader } from '@libs/code-review/infrastructure/analyzers/rule-pack-loader.service';
 import { DeterministicEvidenceGate } from '@libs/code-review/infrastructure/analyzers/deterministic-evidence.gate';
 import { AnalyzerToolRouter } from '@libs/code-review/infrastructure/analyzers/analyzer-tool.router';
 import { ANALYZER_TOOLS_TOKEN } from '@libs/code-review/infrastructure/analyzers/tool.contract';
-import { RulePackTool } from '@libs/code-review/infrastructure/analyzers/tools/rule-pack.tool';
-import {
-    WorkflowAuditTool,
-    WorkflowLintTool,
-} from '@libs/code-review/infrastructure/analyzers/tools/workflow.tools';
 import { SecretScanTool } from '@libs/code-review/infrastructure/analyzers/tools/secret-scan.tool';
 import { DependencyScanTool } from '@libs/code-review/infrastructure/analyzers/tools/dependency-scan.tool';
-import { IacScanTool } from '@libs/code-review/infrastructure/analyzers/tools/iac-scan.tool';
 import { AgentReviewStage } from './stages/agent-review.stage';
 import { BugAgentProvider } from '../infrastructure/agents/providers/bug-agent.provider';
 import { SecurityAgentProvider } from '../infrastructure/agents/providers/security-agent.provider';
@@ -180,41 +173,21 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         CreateSandboxStage,
         LoadCiEvidenceStage,
         RunAnalyzersStage,
-        RulePackLoader,
         DeterministicEvidenceGate,
         AnalyzerToolRouter,
-        RulePackTool,
         SecretScanTool,
         DependencyScanTool,
-        IacScanTool,
-        WorkflowLintTool,
-        WorkflowAuditTool,
         {
             // The registry the router walks. New tools are added here; the
             // stage itself stays unchanged.
             provide: ANALYZER_TOOLS_TOKEN,
             useFactory: (
-                rulePack: RulePackTool,
                 secrets: SecretScanTool,
                 dependencies: DependencyScanTool,
-                iac: IacScanTool,
-                workflowLint: WorkflowLintTool,
-                workflowAudit: WorkflowAuditTool,
-            ) => [
-                rulePack,
-                secrets,
-                dependencies,
-                iac,
-                workflowLint,
-                workflowAudit,
-            ],
+            ) => [secrets, dependencies],
             inject: [
-                RulePackTool,
                 SecretScanTool,
                 DependencyScanTool,
-                IacScanTool,
-                WorkflowLintTool,
-                WorkflowAuditTool,
             ],
         },
         AgentReviewStage,
