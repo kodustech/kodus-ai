@@ -83,6 +83,7 @@ import {
     type LucideIcon,
 } from "lucide-react";
 import { useQueryState } from "nuqs";
+import { ErrorBoundary } from "react-error-boundary";
 import { useAllTeams } from "src/core/providers/all-teams-context";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { TEAM_STATUS } from "src/core/types";
@@ -97,12 +98,13 @@ import { useFeatureGates } from "src/features/ee/subscription/_hooks/use-feature
 import { useSubscriptionContext } from "src/features/ee/subscription/_providers/subscription-context";
 
 import { CommandPalette } from "../navbar/_components/command-palette";
+import { GithubStars } from "../navbar/_components/github-stars";
 import { NotificationBell } from "../navbar/_components/notification-bell";
 import { UserNav } from "../navbar/_components/user-nav";
 import { useMainNavItems } from "../navbar/use-main-nav-items";
 import { SIDEBAR_COLLAPSED_COOKIE } from "./collapsed-cookie";
 import { SidebarPlanStatus } from "./plan-status";
-import { useScopeTools } from "./scope-tools";
+import { useScopeTools, type ScopeTarget } from "./scope-tools";
 
 /**
  * The app's navigation: every destination in one left rail, Cloudflare-
@@ -255,6 +257,15 @@ export const AppSidebar = ({
                         "flex flex-col gap-1 px-2 pt-2 pb-1",
                         collapsed && "items-center",
                     )}>
+                    {/* Too wide for the rail, like it was for phones in
+                        the top bar. */}
+                    {!collapsed && (
+                        <ErrorBoundary fallback={null}>
+                            <div className="flex px-1 pb-1">
+                                <GithubStars />
+                            </div>
+                        </ErrorBoundary>
+                    )}
                     <SidebarPlanStatus collapsed={collapsed} />
                     {!isNarrow && (
                         <RailTooltip label="Expand sidebar">
@@ -402,6 +413,7 @@ const SidebarItem = ({
     badge,
     attention,
     locked,
+    prefetch,
 }: {
     href: string;
     icon: LucideIcon;
@@ -410,6 +422,7 @@ const SidebarItem = ({
     badge?: React.ReactNode;
     attention?: boolean;
     locked?: boolean;
+    prefetch?: boolean;
 }) => {
     const collapsed = useRail();
 
@@ -418,6 +431,7 @@ const SidebarItem = ({
             <li>
                 <Link
                     href={href}
+                    prefetch={prefetch}
                     noHoverUnderline
                     aria-label={collapsed ? label : undefined}
                     aria-current={active ? "page" : undefined}
@@ -558,7 +572,15 @@ const CODE_REVIEW_PAGES: Array<{
     },
 ];
 
-type Scope = { repositoryId: string; directoryId?: string };
+type Scope = ScopeTarget;
+
+/** The pages a scope can open: Linked repositories is repository-only. */
+const pagesAt = (scope: Scope) => {
+    const isRepository = scope.repositoryId !== "global" && !scope.directoryId;
+    return CODE_REVIEW_PAGES.filter(
+        (page) => !page.repoOnly || isRepository,
+    ).map((page) => page.href);
+};
 
 const CODE_REVIEW_PATH = /^\/settings\/code-review\/([^/]+)(?:\/([^/?#]+))?/;
 
@@ -568,6 +590,9 @@ const CodeReviewGroup = () => {
     const collapsed = useRail();
     const scopeTools = useScopeTools();
     const setCompactTools = scopeTools?.setCompact;
+    // Lent by the settings layout, like the tools below: counting needs the
+    // full configuration.
+    const renderOverrideCount = scopeTools?.renderOverrideCount;
     // The lent scope tools (menu, kodus-config.yml badge) switch to their
     // compact form in the rail rather than disappear from it.
     useEffect(() => {
@@ -650,6 +675,14 @@ const CodeReviewGroup = () => {
                     icon={page.icon}
                     label={page.label}
                     active={currentPage === page.href}
+                    badge={renderOverrideCount?.({
+                        scope,
+                        pages: [page.href],
+                    })}
+                    // Full-route prefetch, as the settings tabs had: the
+                    // pages are client components over one shared layout,
+                    // so a switch is instant rather than a round trip.
+                    prefetch
                 />
             ))}
         </SidebarGroup>
@@ -669,9 +702,16 @@ const ScopeSelector = ({
     const collapsed = useRail();
     const [open, setOpen] = useState(false);
     const scopes = useCodeReviewScopes();
-    // Only while a settings page lends it: creating a repository
-    // configuration needs the full config those pages load.
-    const addRepository = useScopeTools()?.addRepository;
+    // Only while a settings page lends them: creating a repository
+    // configuration and counting overrides need the full config those pages
+    // load.
+    const scopeTools = useScopeTools();
+    const addRepository = scopeTools?.addRepository;
+    const countFor = (target: Scope) =>
+        scopeTools?.renderOverrideCount?.({
+            scope: target,
+            pages: pagesAt(target),
+        });
     const canReadRepositories = usePermission(
         Action.Read,
         ResourceType.GitSettings,
@@ -780,6 +820,7 @@ const ScopeSelector = ({
                                         </span>
                                     )}
                                 </span>
+                                {countFor(scope)}
                                 <ChevronsUpDownIcon className="text-text-tertiary size-3.5 shrink-0" />
                             </>
                         )}
@@ -800,6 +841,7 @@ const ScopeSelector = ({
                                 icon={GlobeIcon}
                                 label="Global"
                                 sublabel="applies to every repository"
+                                count={countFor({ repositoryId: "global" })}
                                 selected={isCurrent({ repositoryId: "global" })}
                                 onSelect={() =>
                                     goToScope({ repositoryId: "global" })
@@ -815,6 +857,9 @@ const ScopeSelector = ({
                                             keywords={[item.name]}
                                             icon={FolderIcon}
                                             label={item.name}
+                                            count={countFor({
+                                                repositoryId: item.id,
+                                            })}
                                             selected={isCurrent({
                                                 repositoryId: item.id,
                                             })}
@@ -837,6 +882,10 @@ const ScopeSelector = ({
                                             label={item.name}
                                             sublabel={directoryScopeLabel(dir)}
                                             indent={item.isSelected}
+                                            count={countFor({
+                                                repositoryId: item.id,
+                                                directoryId: dir.id,
+                                            })}
                                             selected={isCurrent({
                                                 repositoryId: item.id,
                                                 directoryId: dir.id,
@@ -900,6 +949,7 @@ const ScopeItem = ({
     label,
     sublabel,
     indent,
+    count,
     selected,
     onSelect,
 }: {
@@ -909,6 +959,7 @@ const ScopeItem = ({
     label: string;
     sublabel?: string;
     indent?: boolean;
+    count?: React.ReactNode;
     selected: boolean;
     onSelect: () => void;
 }) => (
@@ -932,6 +983,7 @@ const ScopeItem = ({
                 </span>
             )}
         </span>
+        {count}
         {selected && (
             <CheckIcon
                 className="text-primary-light size-4 shrink-0"
@@ -1053,8 +1105,14 @@ const OrganizationGroup = () => {
                         align="end"
                         className="w-56">
                         <DropdownMenuLabel>Organization</DropdownMenuLabel>
+                        {/* The DS Link: with unsaved changes it points at them
+                            instead of leaving, like every other link here. */}
                         {visible.map(({ icon: Icon, ...item }) => (
-                            <NextLink key={item.href} href={item.href}>
+                            <Link
+                                key={item.href}
+                                href={item.href}
+                                noHoverUnderline
+                                className="block w-full text-inherit">
                                 <DropdownMenuItem leftIcon={<Icon />}>
                                     {item.label}
                                     {item.locked && (
@@ -1064,7 +1122,7 @@ const OrganizationGroup = () => {
                                         />
                                     )}
                                 </DropdownMenuItem>
-                            </NextLink>
+                            </Link>
                         ))}
                     </DropdownMenuContent>
                 </DropdownMenu>

@@ -18,9 +18,18 @@ import { createPortal } from "react-dom";
  * layout lends them to the sidebar while it is mounted — the menu and badge
  * through portals into two slots, "actions" beside the picker and "status"
  * under it (so they keep the settings contexts they read), the add action as
- * a callback the picker calls.
+ * a callback the picker calls, and the override counts as a render function
+ * the picker and the page links call per scope.
  */
 export type ScopeToolsSlot = "actions" | "status";
+
+export type ScopeTarget = { repositoryId: string; directoryId?: string };
+
+/** How many settings `scope` overrides across `pages`; nothing when none. */
+export type RenderOverrideCount = (request: {
+    scope: ScopeTarget;
+    pages: string[];
+}) => React.ReactNode;
 
 type ScopeTools = {
     slots: Record<ScopeToolsSlot, HTMLElement | null>;
@@ -31,6 +40,8 @@ type ScopeTools = {
     setStatusSlot: (element: HTMLElement | null) => void;
     addRepository: (() => void) | undefined;
     setAddRepository: (open: (() => void) | undefined) => void;
+    renderOverrideCount: RenderOverrideCount | undefined;
+    setRenderOverrideCount: (render: RenderOverrideCount | undefined) => void;
 };
 
 const ScopeToolsContext = createContext<ScopeTools | null>(null);
@@ -42,10 +53,18 @@ export const ScopeToolsProvider = ({ children }: React.PropsWithChildren) => {
     const [addRepository, setAddRepositoryState] = useState<
         (() => void) | undefined
     >();
+    const [renderOverrideCount, setRenderOverrideCountState] = useState<
+        RenderOverrideCount | undefined
+    >();
     // Wrapped: a function handed straight to a state setter would be called
     // as an updater.
     const setAddRepository = useCallback(
         (open: (() => void) | undefined) => setAddRepositoryState(() => open),
+        [],
+    );
+    const setRenderOverrideCount = useCallback(
+        (render: RenderOverrideCount | undefined) =>
+            setRenderOverrideCountState(() => render),
         [],
     );
 
@@ -58,8 +77,18 @@ export const ScopeToolsProvider = ({ children }: React.PropsWithChildren) => {
             setStatusSlot,
             addRepository,
             setAddRepository,
+            renderOverrideCount,
+            setRenderOverrideCount,
         }),
-        [actionsSlot, statusSlot, compact, addRepository, setAddRepository],
+        [
+            actionsSlot,
+            statusSlot,
+            compact,
+            addRepository,
+            setAddRepository,
+            renderOverrideCount,
+            setRenderOverrideCount,
+        ],
     );
 
     return (
@@ -89,4 +118,17 @@ export const useLendAddRepository = (open: (() => void) | undefined) => {
         setAddRepository?.(open);
         return () => setAddRepository?.(undefined);
     }, [open, setAddRepository]);
+};
+
+/** For the settings layout: offers the override counts. */
+export const useLendOverrideCount = (
+    render: RenderOverrideCount | undefined,
+) => {
+    const setRenderOverrideCount =
+        useContext(ScopeToolsContext)?.setRenderOverrideCount;
+
+    useEffect(() => {
+        setRenderOverrideCount?.(render);
+        return () => setRenderOverrideCount?.(undefined);
+    }, [render, setRenderOverrideCount]);
 };

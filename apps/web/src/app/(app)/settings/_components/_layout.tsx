@@ -19,7 +19,9 @@ import type { CustomMessageConfig } from "@services/pull-request-messages/types"
 import {
     ScopeToolsPortal,
     useLendAddRepository,
+    useLendOverrideCount,
     useScopeTools,
+    type RenderOverrideCount,
 } from "src/core/layout/sidebar/scope-tools";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { safeArray } from "src/core/utils/safe-array";
@@ -43,6 +45,7 @@ import {
 } from "./context";
 import { AddRepoModal } from "./copy-settings-modal";
 import { KodusConfigFileStatusBadge } from "./kodus-config-file-status";
+import { OverrideCount } from "./override-count";
 import { SidebarRepositoryOrDirectoryDropdown } from "./per-repository/options-dropdown";
 
 type InitialPlatformConfig = {
@@ -227,8 +230,9 @@ function SettingsLayoutShell({
 /**
  * The scope tools that need the full configuration this layout loads, lent
  * to the sidebar's scope picker (see scope-tools.tsx): the scope's options
- * menu and kodus-config.yml badge render under the picker, and "Add
- * repository configuration" joins the picker's footer.
+ * menu and kodus-config.yml badge render under the picker, "Add repository
+ * configuration" joins the picker's footer, and each scope and page gets its
+ * override count.
  */
 function CodeReviewScopeTools({
     configValue,
@@ -270,6 +274,20 @@ function CodeReviewScopeTools({
         [canAddRepository, configValue.repositories],
     );
     useLendAddRepository(openAddRepository);
+    const renderOverrideCount = useMemo<RenderOverrideCount>(
+        () =>
+            function renderOverrideCount({ scope, pages }) {
+                return (
+                    <OverrideCount
+                        config={configValue}
+                        scope={scope}
+                        pages={pages}
+                    />
+                );
+            },
+        [configValue],
+    );
+    useLendOverrideCount(renderOverrideCount);
     const compact = useScopeTools()?.compact ?? false;
 
     return (
