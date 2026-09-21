@@ -94,9 +94,9 @@ describe('recognizeCiAnalyzers', () => {
 });
 
 describe('isToolCoveredByCi', () => {
-    it('skips our rule pack when their CI runs an equivalent SAST', () => {
+    it('skips our dependency scan when their CI runs an equivalent', () => {
         expect(
-            isToolCoveredByCi(ManagedTool.RULE_PACK, [check('semgrep')]),
+            isToolCoveredByCi(ManagedTool.DEPENDENCIES, [check('dependabot')]),
         ).toBe(true);
     });
 
@@ -114,15 +114,29 @@ describe('isToolCoveredByCi', () => {
         );
     });
 
-    it('does not let a secret scanner cover the rule pack', () => {
+    it('does not let a secret scanner cover the dependency scan', () => {
         expect(
-            isToolCoveredByCi(ManagedTool.RULE_PACK, [check('gitleaks')]),
+            isToolCoveredByCi(ManagedTool.DEPENDENCIES, [check('gitleaks')]),
+        ).toBe(false);
+    });
+
+    // Recognition is broader than coverage: we still surface a CodeQL run as
+    // evidence, but it no longer stands in for anything we run ourselves.
+    it('recognizes a SAST run without it covering either tool', () => {
+        expect(recognizeCiAnalyzers([check('codeql')])).toEqual(
+            new Set(['codeql']),
+        );
+        expect(isToolCoveredByCi(ManagedTool.SECRETS, [check('codeql')])).toBe(
+            false,
+        );
+        expect(
+            isToolCoveredByCi(ManagedTool.DEPENDENCIES, [check('codeql')]),
         ).toBe(false);
     });
 
     it('runs our tool when CI has no recognized analyzer', () => {
         expect(
-            isToolCoveredByCi(ManagedTool.RULE_PACK, [check('build'), check('test')]),
+            isToolCoveredByCi(ManagedTool.SECRETS, [check('build'), check('test')]),
         ).toBe(false);
     });
 });

@@ -1,9 +1,12 @@
 import { CheckEvidence } from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
 
 /**
- * Analyzers we can recognize in a customer's CI. Recognition exists so we can
- * skip running our own equivalent — the list only needs to cover tools whose
- * output would duplicate ours, not every scanner in existence.
+ * Analyzers we can recognize in a customer's CI.
+ *
+ * Deliberately broader than what we run ourselves: recognition feeds the CI
+ * evidence shown to the reviewer as well as the duplication check, and knowing
+ * a repository already runs CodeQL is worth telling the reviewer even though we
+ * no longer run anything equivalent.
  */
 export type KnownAnalyzer =
     | 'semgrep'
@@ -28,11 +31,8 @@ export type KnownAnalyzer =
 
 /** Deterministic tools Kody can run itself. */
 export enum ManagedTool {
-    RULE_PACK = 'rule_pack',
     SECRETS = 'secrets',
-    WORKFLOW = 'workflow',
     DEPENDENCIES = 'dependencies',
-    IAC = 'iac',
 }
 
 const ANALYZER_ALIASES: Record<KnownAnalyzer, readonly string[]> = {
@@ -58,29 +58,18 @@ const ANALYZER_ALIASES: Record<KnownAnalyzer, readonly string[]> = {
 };
 
 /**
- * Which CI analyzers make one of our tools redundant. Deliberately does not
- * cross categories: a SAST run proves nothing about secret scanning.
+ * Which CI analyzers make one of our tools redundant. Only the two we actually
+ * run appear here, and it deliberately does not cross categories: a SAST run
+ * proves nothing about secret scanning.
  */
 const COVERED_BY: Record<ManagedTool, readonly KnownAnalyzer[]> = {
-    [ManagedTool.RULE_PACK]: [
-        'semgrep',
-        'opengrep',
-        'codeql',
-        'snyk',
-        'sonarqube',
-        'checkmarx',
-        'bandit',
-        'brakeman',
-    ],
     [ManagedTool.SECRETS]: [
         'gitleaks',
         'trufflehog',
         'ggshield',
         'detect-secrets',
     ],
-    [ManagedTool.WORKFLOW]: ['actionlint', 'zizmor'],
     [ManagedTool.DEPENDENCIES]: ['osv-scanner', 'dependabot', 'snyk', 'trivy'],
-    [ManagedTool.IAC]: ['trivy', 'checkov', 'tfsec'],
 };
 
 /**
