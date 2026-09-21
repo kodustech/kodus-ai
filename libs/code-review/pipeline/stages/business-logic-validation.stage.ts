@@ -1,6 +1,7 @@
 import { createThreadId } from '@libs/common/utils/thread-id';
 import { createLogger } from '@libs/core/log/logger';
 import { BusinessRulesValidationAgentProvider } from '@libs/agents/infrastructure/services/agents/business-rules-validation/businessRulesValidationAgent';
+import { NO_TASK_MCP_SENTINEL } from '@libs/agents/infrastructure/services/agents/business-rules-validation/no-task-mcp-sentinel';
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
@@ -223,9 +224,7 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
                 context: this.stageName,
                 metadata: {
                     prNumber: context.pullRequest?.number,
-                    isNoTaskMcpSentinel:
-                        result ===
-                        BusinessRulesValidationAgentProvider.NO_TASK_MCP_SENTINEL,
+                    isNoTaskMcpSentinel: result === NO_TASK_MCP_SENTINEL,
                     resultType: typeof result,
                     resultPreview:
                         typeof result === 'string'
@@ -236,10 +235,7 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
 
             // No task-management MCP connected — treat as if the category
             // were disabled: skip silently, no PR comment.
-            if (
-                result ===
-                BusinessRulesValidationAgentProvider.NO_TASK_MCP_SENTINEL
-            ) {
+            if (result === NO_TASK_MCP_SENTINEL) {
                 this.logger.log({
                     message:
                         '[BUSINESS-LOGIC] Skipped — no task-management MCP connected.',
@@ -662,12 +658,26 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
      * Returns true when the PR description contains business signals
      * (ticket keys or URLs) that match a connected task-management MCP.
      * Random URLs like bananinha.com are ignored if no MCP matches.
+     *
+     * The signal must be resolvable by the MCP that matched it. Git-issue
+     * references (`#1825`, `github.com/org/repo/issues/1825`) are resolved by
+     * a git-issues MCP (`gitissues` / `githubissues`) ONLY — a Jira-style key
+     * MCP like Atlassian Rovo cannot parse them. If the only reference is a
+     * git issue and no git-issues MCP is connected, we must not treat it as a
+     * signal: doing so makes the agent flail through the wrong tools and post
+     * "Insufficient Task Context" on a PR whose linked issue has a full
+     * description (#1908).
      */
     private hasRelevantBusinessSignals(
         body: string,
         connectedMcps: string[],
     ): boolean {
-        const ticketKeys = this.detectTicketKeys(body);
+        // Jira-style keys (`ABC-123`, `PROJ_1-42`) — resolvable by any
+        // ticket-key MCP (Jira, Rovo, Linear, ClickUp, GitHub/Git Issues).
+        // Exclude git-issue refs, which are NOT resolvable by those MCPs.
+        const ticketKeys = this.detectTicketKeys(body).filter(
+            (k) => !k.startsWith('#'),
+        );
         if (
             ticketKeys.length > 0 &&
             connectedMcps.some((mcp) =>
@@ -679,16 +689,27 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
             return true;
         }
 
-        // Git-issue-style references (e.g. "#256", "Closes #256") when a git
-        // issues task MCP is connected (Kodus "Git Issues" → 'gitissues', or a
-        // GitHub Issues MCP → 'githubissues'). The Jira-style TICKET_KEY_PATTERN
-        // (`ABC-123`) never matches `#N`, so handle it explicitly.
+        // Git-issue references ("#256", "Closes #256", full
+        // github.com/.../issues/256 URLs) count as a signal ONLY when a
+        // git-issues task MCP is connected (Kodus "Git Issues" →
+        // 'gitissues', or a GitHub Issues MCP → 'githubissues'). The
+        // Jira-style TICKET_KEY_PATTERN (`ABC-123`) never matches `#N`, so
+        // handle it explicitly.
         if (
-            (connectedMcps.includes('gitissues') ||
-                connectedMcps.includes('githubissues')) &&
-            /(?:^|[\s(])#\d+\b/.test(body)
+            connectedMcps.includes('gitissues') ||
+            connectedMcps.includes('githubissues')
         ) {
-            return true;
+            // URL forms must be anchored to an actual URL: a bare
+            // /issues/digits also matches test/fixtures/issues/123.json,
+            // branch names like fix/issues/191, or the prose phrase
+            // "see issues/2024" — none of which is a resolvable issue link.
+            // Mirror the scheme-anchored pattern detectTicketKeys uses.
+            const hasGitIssueRef =
+                /(?:^|[\s(])#\d+\b/.test(body) ||
+                /https?:\/\/[^\s)>\]"']*\/issues\/\d+/i.test(body);
+            if (hasGitIssueRef) {
+                return true;
+            }
         }
 
         // URLs are valid only if they match the domain pattern of a
@@ -731,7 +752,12 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
         const issueUrls =
             text.match(/https?:\/\/[^\s)>\]"']*\/issues\/(\d+)/gi) ?? [];
         for (const url of issueUrls) {
-            const num = url.match(/\/issues\/(\d+)/)?.[1];
+            // The /gi capture above also matches case-mixed paths such as
+            // `/ISSUES/`; re-extract the number case-insensitively so the
+            // signal (#N) is still produced — otherwise a mixed-case URL
+            // passes the /i gate but yields no number, sending the agent
+            // empty signals (#1908).
+            const num = url.match(/\/issues\/(\d+)/i)?.[1];
             if (num) {
                 keys.push(`#${num}`);
             }

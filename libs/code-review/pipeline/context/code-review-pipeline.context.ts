@@ -18,6 +18,7 @@ import { RouteDecision } from '@libs/code-review/infrastructure/analyzers/tool.c
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { CollectCrossFileContextsResult } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import type { TraceContextDecision } from '@libs/cli-review/domain/types/trace-context.types';
+import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 import { LlmErrorCategory } from '@libs/llm/error-classifier';
 import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import type { LinkedRepositoriesReviewMetadata } from '@libs/ee/linked-repositories';
@@ -217,6 +218,9 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     externalPromptContext?: IExternalPromptContext;
     /** Decisions recorded by Kodus Trace, scoped to the changed files. */
     traceDecisions?: TraceContextDecision[];
+    /** Suggestions already posted on THIS PR in a previous review round,
+     *  scoped to the changed files (issue #1313). */
+    previousDecisions?: PrDecisionRecord[];
     /** Camadas já formatadas para incluir no ContextPack (ex.: arquivos, instruções). */
     externalPromptLayers?: ContextLayer[];
 

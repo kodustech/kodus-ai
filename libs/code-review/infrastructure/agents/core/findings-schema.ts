@@ -23,7 +23,12 @@ const suggestionSchema = z.object({
     relevantLinesStart: z.number().optional(),
     relevantLinesEnd: z.number().optional(),
     severity: z.enum(['critical', 'high', 'medium', 'low']).optional(), // V2 compat
-    confidence: z.number().min(1).max(10).optional(), // 1-10: how confident the agent is in this finding
+    // Self-reported, telemetry-only (see review-finding.ts) — the model is
+    // prompted for 1-10 but not reliably in-range (prod audit 2026-09-17:
+    // ~150/619 [LLM_ENVELOPE] drops were an otherwise-valid suggestion
+    // discarded solely for confidence outside [1,10], commonly 0). Do not
+    // range-check here: an out-of-range value must not drop a real finding.
+    confidence: z.number().optional(),
     ruleUuid: z.string().optional(), // Kody Rules: UUID of the violated rule
 });
 
@@ -41,6 +46,14 @@ export type FindingsOutput = z.infer<typeof _findingsSchema>;
  */
 export function sanitizeFindingsResult(
     raw: FindingsOutput | null,
+    // Purely for the [LLM_ENVELOPE] logs below — this file logged no
+    // organizationId at all (prod audit 2026-09-17), so a bucket like
+    // "594 dropped-suggestion events" could never be attributed to 1 org vs
+    // many without a separate correlationId trace-hunt. Kept as an untyped
+    // inline shape (not @libs/core/log/langfuse's LangfuseTelemetryMetadata)
+    // on purpose — this file is deliberately decoupled from that dependency
+    // (see file header).
+    telemetryMetadata?: { organizationId?: string },
 ): FindingsOutput | null {
     if (!raw) return null;
     // SHAPE layer (#1786): coerce the container a non-strict model wrapped /
@@ -64,6 +77,7 @@ export function sanitizeFindingsResult(
             ),
             rawKeys: Object.keys(normalized ?? {}),
             hasSuggestions: Array.isArray((normalized as any)?.suggestions),
+            organizationId: telemetryMetadata?.organizationId,
         },
     });
     // Attempt partial recovery: keep only the suggestions that
@@ -83,7 +97,11 @@ export function sanitizeFindingsResult(
             logger.warn({
                 message: `${LLM_ENVELOPE_TAG} [DONE-TOOL] dropped ${dropped} suggestion(s) that failed item validation during partial recovery`,
                 context: 'FindingsSchema',
-                metadata: { kept: kept.length, dropped },
+                metadata: {
+                    kept: kept.length,
+                    dropped,
+                    organizationId: telemetryMetadata?.organizationId,
+                },
             });
         }
         return {

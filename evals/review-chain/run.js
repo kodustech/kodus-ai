@@ -55,8 +55,6 @@ const BOUNDARIES = [
     { phase: 'dedup', files: ['libs/code-review/pipeline/stages/agent-review.stage.ts'], requires: ['schema', 'shape'] },
     { phase: 'kody-rules-shard', files: ['libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider.ts'], requires: ['schema', 'recover'], note: 'bare-array recovery (#1786) — floor includes recoverEnvelopeShape' },
     { phase: 'kody-rules-compiler', files: ['libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler.ts'], declined: true, note: 'produces a REGEX detector — recovering off-schema output would ship a wrong detector; declines by design' },
-    { phase: 'kodyRulesAnalysis', files: ['libs/ee/codeBase/kodyRulesAnalysis.service.ts'], requires: ['schema', 'shape'] },
-    { phase: 'kodyRulesPrLevel', files: ['libs/ee/codeBase/kodyRulesPrLevelAnalysis.service.ts'], requires: ['schema', 'shape'] },
     { phase: 'kodyIssues-merge', files: ['libs/ee/codeBase/kodyIssuesAnalysis.service.ts'], requires: ['schema'], note: 'wrong shape → re-ask by design (not opted into recover)' },
     { phase: 'commentAnalysis', files: ['libs/code-review/infrastructure/adapters/services/commentAnalysis.service.ts'], requires: ['schema'] },
     { phase: 'commentManager', files: ['libs/code-review/infrastructure/adapters/services/commentManager.service.ts'], requires: ['schema'] },

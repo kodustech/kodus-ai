@@ -702,6 +702,26 @@ describe('recoverFindingsFromProse — request assembly (the LLM.run boundary)',
             recoverFindingsFromProse(prose, undefined, 'org'),
         ).resolves.toEqual([]);
     });
+
+    // Regression (prod audit 2026-09-17): OpenAI (and OpenAI-compatible
+    // providers, e.g. gpt-5.6-terra/gpt-5.6-sol) reject a `json_object`
+    // response-format request outright — "'messages' must contain the word
+    // 'json' in some form" — unless the literal word "json" appears
+    // somewhere in the input messages. LLM.run's own doc comment above says
+    // this call "owns... the json_schema→json_object fallback the recovery
+    // pass needs", but the prompt text never said "json" anywhere, so that
+    // fallback mode always 400'd for exactly the providers that need it
+    // (43 confirmed prod events) — recovery silently returned [] via the
+    // catch-all, discarding real findings the finder had already found and
+    // written as prose.
+    it("mentions the word 'json' in the prompt (OpenAI json_object mode requires it)", async () => {
+        const spy = jest
+            .spyOn(LLM, 'run')
+            .mockResolvedValue({ suggestions: [] } as any);
+        await recoverFindingsFromProse(prose, undefined, 'org');
+        const arg = spy.mock.calls[0][0] as any;
+        expect(arg.user.toLowerCase()).toContain('json');
+    });
 });
 
 // ─── D. Input variants ───────────────────────────────────────────────────────

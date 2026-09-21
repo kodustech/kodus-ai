@@ -246,7 +246,7 @@ kodus-ai/
 | 用户 | 无限制 | 无限制 | 无限制 |
 | Kody Rules | 最多 10 条 | 无限制 | 无限制 |
 | 活跃插件 | 最多 3 个 | 无限制 | 无限制 |
-| Kody Learnings 与 Memory | ✅ | ✅ | ✅ |
+| Kody 记忆 | ✅ | ✅ | ✅ |
 | Quality Radar issues | 无限制 | 无限制 | 无限制 |
 | Kody Agents 优先队列 | ❌ | ✅ | ✅ |
 | Engineering Metrics / Cockpit | ❌ | ✅ | ✅ |

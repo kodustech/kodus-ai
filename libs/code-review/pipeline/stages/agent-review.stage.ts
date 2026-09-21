@@ -21,7 +21,7 @@ import {
 import { buildPlatformEmbedder } from '@libs/common/utils/document';
 import {
     dedupReviewWarnings,
-    buildBadFixDroppedWarning,
+    buildBadFixDowngradedWarning,
     type ReviewWarning,
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import {
@@ -524,10 +524,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         }
 
         try {
-            // Build progress callback for real-time agent traces in PR timeline
+            // Build progress callback for real-time agent traces in PR timeline.
+            // `context.correlationId` is a `corr_<random>_<timestamp>` tracing
+            // id (id-generator.ts), never a real UUID — it must NOT be used
+            // here as a fallback. `writeAgentTrace` already falls back to a
+            // {pullRequestNumber, repositoryId} filter when this is undefined
+            // (prod incident, 2026-09-14: "invalid input syntax for type
+            // uuid" writing automation_execution whenever lastExecution.uuid
+            // was absent and the old `||` fallback poisoned the query).
             const executionUuid =
-                context.pipelineMetadata?.lastExecution?.uuid ||
-                context.correlationId;
+                context.pipelineMetadata?.lastExecution?.uuid;
             const repositoryId = context.repository?.id;
 
             // Shared telemetry metadata for all Langfuse-traced calls in this pipeline run
@@ -1294,13 +1300,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // with a broken "fix" reads as OUR mistake, not a miss. (Prose-
             // only detection was tried and removed — see is-usable-fix.ts's
             // header: no regex reliably tells English apart from code.)
-            // Runs AFTER the content formatter (which never touches
-            // improvedCode, only suggestionContent/llmPrompt) and BEFORE the
-            // Kody Rule link enrichment, so a dropped suggestion never pays
-            // for either.
+            // Rather than dropping the whole finding, strip the unusable
+            // improvedCode and publish as a plain comment: the renderer
+            // already omits the code block when improvedCode is empty
+            // (github.service.ts's `codeBlock = improvedCode ? ... : ''`),
+            // the same path PR-level Kody Rule findings with no existingCode
+            // already use. Runs AFTER the content formatter (which never
+            // touches improvedCode, only suggestionContent/llmPrompt) and
+            // BEFORE the Kody Rule link enrichment.
             {
                 const badFixCounts: Partial<Record<BadFixReason, number>> = {};
-                const kept: Partial<CodeSuggestion>[] = [];
                 for (const s of deduped) {
                     const reason = checkFix(
                         s.existingCode,
@@ -1308,21 +1317,18 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         s.language,
                     );
                     if (!reason) {
-                        kept.push(s);
                         continue;
                     }
                     badFixCounts[reason] = (badFixCounts[reason] ?? 0) + 1;
-                    allDiscarded.push({
-                        ...s,
-                        priorityStatus: PriorityStatus.DISCARDED_BY_BAD_FIX,
-                        deliveryStatus: DeliveryStatus.NOT_SENT,
-                    });
+                    s.improvedCode = '';
                 }
-                const totalBadFix = deduped.length - kept.length;
+                const totalBadFix = Object.values(badFixCounts).reduce(
+                    (sum: number, n) => sum + (n ?? 0),
+                    0,
+                );
                 if (totalBadFix > 0) {
-                    deduped = kept;
                     this.logger.log({
-                        message: `[AGENT] Dropped ${totalBadFix} suggestion(s) with unusable improvedCode`,
+                        message: `[AGENT] Downgraded ${totalBadFix} suggestion(s) with unusable improvedCode to plain comments`,
                         context: this.stageName,
                         metadata: {
                             prNumber,
@@ -1335,7 +1341,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     context = this.updateContext(context, (draft) => {
                         draft.reviewWarnings = dedupReviewWarnings([
                             ...(draft.reviewWarnings ?? []),
-                            buildBadFixDroppedWarning({
+                            buildBadFixDowngradedWarning({
                                 count: totalBadFix,
                                 modelName: getModelName(
                                     context.codeReviewConfig?.byokConfig,
@@ -1393,14 +1399,36 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 s.suggestionContent = content;
             }
 
-            // Separate PR-level kody rules (no file/lines) from file-level suggestions.
+            // Separate PR-level kody rules (no anchor) from file-level suggestions.
             // PR-level suggestions go to validSuggestionsByPR → CreatePrLevelCommentsStage.
             // A file-anchored finding takes the same route: it is about the
             // file, so there is no line in the diff to hang it on.
+            // A missing relevantFile alone already means it can't be anchored
+            // to a diff position — a lone relevantLinesStart with no
+            // relevantFile used to fall through to file-level grouping keyed
+            // on '', which never matches a real changed file and silently
+            // dropped the finding as DISCARDED_BY_CODE_DIFF.
+            //
+            // A relevantFile that names a file THIS PR TOUCHES but carries no
+            // line also can't be anchored: calculateCommentStartLine (in
+            // comment-builder.utils.ts) returns undefined for a missing
+            // relevantLinesStart, and create-file-comments.stage.ts posts the
+            // comment anyway with start_line/line both undefined — a broken
+            // inline comment, not a discard. Route it PR-level instead, same
+            // as the no-file case.
+            //
+            // A relevantFile naming a file OUTSIDE this PR must NOT take this
+            // branch even with no line citation: it still needs to go through
+            // the file-level branch below so the `changedFiles` guard discards
+            // it (KRC-20) instead of leaking out as an unanchored PR-level
+            // comment. `changedFilesByName` (built above for the diff-snap
+            // step) tells the two cases apart.
             const isPrLevelSuggestion = (s: Partial<CodeSuggestion>): boolean =>
                 s.label === 'kody_rules' &&
-                ((!s.relevantFile && !s.relevantLinesStart) ||
-                    s.fileAnchored === true);
+                (!s.relevantFile ||
+                    s.fileAnchored === true ||
+                    (!s.relevantLinesStart &&
+                        changedFilesByName.has(s.relevantFile)));
             const prLevelSuggestions = deduped.filter(isPrLevelSuggestion);
             const fileLevelSuggestions = deduped.filter(
                 (s) => !isPrLevelSuggestion(s),
@@ -1522,10 +1550,20 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             id:
                                 s.brokenKodyRulesIds?.[0] ||
                                 crypto.randomUUID(),
-                            // A file-anchored finding has to say WHERE, since
-                            // a PR-level comment carries no anchor of its own.
-                            suggestionContent: s.fileAnchored
-                                ? `\`${s.relevantFile}:${s.relevantLinesStart ?? 1}\` — ${s.suggestionContent || ''}`
+                            // Any finding that named a file has to say WHERE,
+                            // since a PR-level comment carries no anchor of
+                            // its own — true whether it's fileAnchored
+                            // (explicitly out-of-hunk) or just missing a
+                            // line. Cite a line only when one is real
+                            // (`!s.relevantLinesStart`, same falsy check
+                            // `isPrLevelSuggestion` uses above): fabricating
+                            // `:1` for a finding that has no line — the
+                            // empty/unparseable-patch case — would point at
+                            // a line that need not exist in the diff at all.
+                            suggestionContent: s.relevantFile
+                                ? s.relevantLinesStart
+                                    ? `\`${s.relevantFile}:${s.relevantLinesStart}\` — ${s.suggestionContent || ''}`
+                                    : `\`${s.relevantFile}\` — ${s.suggestionContent || ''}`
                                 : s.suggestionContent || '',
                             oneSentenceSummary: s.oneSentenceSummary || '',
                             label: (s.label as any) || 'kody_rules',

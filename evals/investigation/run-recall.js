@@ -89,63 +89,7 @@ function writeJson(file, payload) {
     fs.writeFileSync(file, JSON.stringify(payload, null, 2));
 }
 
-/**
- * Absolute per-model floors (evals/investigation/targets.json). Gate is on the
- * RUN MEAN across the case set — never per-PR (per-PR recall noise is ±20pp;
- * single PRs scoring 0 is normal). Besides recallFloor, two low-noise collapse
- * detectors trip when the engine breaks rather than when recall wobbles:
- * minMeanFindings (prompt lost / findings not parsed) and minMeanToolCalls
- * (tools dead / loop not engaging).
- */
-function evaluateGate(summary, rows, model) {
-    let targets;
-    try {
-        targets = require('./targets.json');
-    } catch (err) {
-        // Missing file → skip the gate. A malformed file must fail loudly
-        // rather than silently disabling the gate.
-        if (err.code === 'MODULE_NOT_FOUND') {
-            return { status: 'skipped', reason: 'targets.json missing' };
-        }
-        throw err;
-    }
-    const target = targets.models?.[model];
-    if (!target) {
-        return { status: 'skipped', reason: `no target for model ${model}` };
-    }
-
-    const meanFindings = avg(
-        rows.map((row) => {
-            const md = row.metadata || {};
-            const tp = md.tpFindings;
-            const fp = md.fpFindings;
-            if (typeof tp !== 'number' || typeof fp !== 'number') return null;
-            return tp + fp;
-        }),
-    );
-    const meanToolCalls = avg(rows.map((row) => row.metadata?.totalCalls));
-
-    const checks = [
-        {
-            name: 'recall_mean',
-            actual: summary.metrics.recall_mean,
-            floor: target.recallFloor,
-        },
-        { name: 'mean_findings', actual: meanFindings, floor: target.minMeanFindings },
-        { name: 'mean_tool_calls', actual: meanToolCalls, floor: target.minMeanToolCalls },
-    ].map((check) => ({
-        ...check,
-        pass:
-            typeof check.actual === 'number' &&
-            typeof check.floor === 'number' &&
-            check.actual >= check.floor,
-    }));
-
-    return {
-        status: checks.every((check) => check.pass) ? 'pass' : 'fail',
-        checks,
-    };
-}
+const { evaluateGate } = require('./gate');
 
 function tryParseJson(value) {
     if (typeof value !== 'string') return null;
@@ -264,10 +208,15 @@ async function main() {
         return;
     }
 
-    const { loadJudgeKey } = require('./recall-judge');
+    const { loadJudgeKey, JUDGE_MODEL, providerFor } = require('./recall-judge');
     if (!loadJudgeKey()) {
-        console.error(
-            'Missing judge key: set API_ANTHROPIC_API_KEY, ANTHROPIC_API_KEY, or BYOK_ANTHROPIC_API_KEY.',
+        const error = `Missing judge key for ${JUDGE_MODEL} (${providerFor(JUDGE_MODEL)}): set JUDGE_API_KEY.`;
+        console.error(error);
+        // Still write a result, so the report says what was missing instead of
+        // "crashed before writing its result".
+        writeJson(
+            args.output || path.join(RESULTS_DIR, `finder-recall-${args.model.replace(/[^\w.-]+/g, '-')}.json`),
+            { model: args.model, cases: 0, infraFailures: 0, error, metrics: {}, rows: [], gate: { status: 'off' } },
         );
         process.exit(2);
     }
@@ -306,6 +255,7 @@ async function main() {
     const rows = [];
     let infraFailures = 0;
     let qualityFailures = 0;
+    const startedAt = new Date().toISOString();
 
     console.log(
         `════ finder-recall · model=${args.model} · set=${args.all ? 'all' : args.cases ? 'custom' : args.set} · cases=${selectedTests.length} · threshold=${process.env.RECALL_THRESHOLD || 0} ════`,
@@ -415,12 +365,17 @@ async function main() {
             try {
                 await runOneCase(selectedTests[idx]);
             } catch (error) {
+                // Reaches here when scoring throws (e.g. the judge's key is
+                // rejected). It used to be counted without a word, so CI showed
+                // "INFRA failure(s): 8" for weeks and nobody could say why.
                 infraFailures += 1;
-                rows.push({
+                const row = {
                     caseId: selectedTests[idx]?.vars?.caseId || `idx-${idx}`,
                     status: 'infra',
                     reason: error instanceof Error ? error.message : String(error),
-                });
+                };
+                rows.push(row);
+                console.log(`INFRA ${row.caseId} ${row.reason.slice(0, 300)}`);
             }
         }
     };
@@ -432,12 +387,30 @@ async function main() {
     rows.sort(byOrder);
     submissionResults.sort(byOrder);
 
+    const tokens = rows.reduce(
+        (sum, row) => ({
+            prompt: sum.prompt + (row.tokenUsage?.prompt || 0),
+            completion: sum.completion + (row.tokenUsage?.completion || 0),
+        }),
+        { prompt: 0, completion: 0 },
+    );
+    const infraBudget = Math.ceil(rows.length * 0.05);
+    // Not measured = no recall on the row, whatever the status says. A case
+    // whose output failed to parse is written as a 'fail' with empty metadata
+    // and never counted as infra, so counting only infra rows would let a run
+    // that scored a handful of PRs report itself as a full one.
+    const unmeasured = rows.filter((row) => !Number.isFinite(row.metadata?.recall)).length;
     const summary = {
         model: args.model,
+        startedAt,
+        finishedAt: new Date().toISOString(),
+        tokens,
         cases: rows.length,
         passed: rows.filter((row) => row.status === 'pass').length,
         failed: qualityFailures,
         infraFailures,
+        unmeasured,
+        infraBudget,
         metrics: {
             recall_mean: avg(rows.map((row) => row.metadata?.recall)),
             precision_mean: avg(rows.map((row) => row.metadata?.precision)),
@@ -448,8 +421,9 @@ async function main() {
         rows,
     };
 
+    const setName = args.all ? 'all' : args.cases ? 'custom' : args.set;
     const gate = args.gate
-        ? evaluateGate(summary, rows, args.model)
+        ? evaluateGate(summary, rows, args.model, setName)
         : { status: 'off' };
     summary.gate = gate;
 
@@ -487,12 +461,27 @@ async function main() {
         console.log(`\ngate skipped: ${gate.reason}`);
     }
 
-    if (infraFailures > 0) {
-        console.error(`\nINFRA failure(s): ${infraFailures}`);
+    // A flaky provider call on one PR out of thirty should not cost the whole
+    // night: at 1% per-case flake, refusing any infra failure throws away a
+    // quarter of the nights. Up to 5% of the set may go unmeasured; the run
+    // then gates on the PRs that did measure and says how many it had.
+    if (unmeasured > infraBudget) {
+        console.error(`\n${unmeasured} PR(s) not measured (${infraFailures} infra), budget ${infraBudget}`);
+        process.exit(2);
+    }
+    if (unmeasured > 0) console.log(`\n${unmeasured} PR(s) not measured, within the budget of ${infraBudget}: gating on the ${rows.length - unmeasured} that were.`);
+
+    // --gate asked for a verdict against the floors; a gate that couldn't run
+    // (no targets, wrong judge) is not a pass. Exit 2 so the night is not
+    // recorded as green and never becomes the next night's baseline.
+    if (args.gate && gate.status === 'skipped') {
+        console.error(`\nGate requested but not evaluated: ${gate.reason}`);
         process.exit(2);
     }
 
-    if (qualityFailures > 0) {
+    // With --gate the run mean decides (per-PR results are noise); without it,
+    // per-case failures (RECALL_THRESHOLD, unparsed output) fail the run.
+    if (!args.gate && qualityFailures > 0) {
         console.error(`\nFinder recall gate failed in ${qualityFailures} case(s).`);
         process.exit(1);
     }
@@ -503,7 +492,11 @@ async function main() {
     }
 }
 
-main().catch((error) => {
-    console.error(error);
-    process.exit(2);
-});
+// Exit explicitly: the engine can leave a handle open after the last case, and
+// a finished run that never exits holds its CI job until the timeout.
+main()
+    .then(() => process.exit(0))
+    .catch((error) => {
+        console.error(error);
+        process.exit(2);
+    });

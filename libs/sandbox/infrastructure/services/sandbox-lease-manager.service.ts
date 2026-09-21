@@ -20,7 +20,10 @@ import { calculateBackoffInterval } from '@libs/common/utils/polling';
 import { SandboxLeaseRepository } from '../repositories/sandbox-lease.repository';
 import { SANDBOX_LEASE_CLEANUP_STATUS } from '../repositories/schemas/sandbox-lease.model';
 import { NULL_SANDBOX_INSTANCE } from '../providers/null-sandbox.service';
-import { buildE2BRemoteCommands } from '../providers/e2b-sandbox.service';
+import {
+    buildE2BRemoteCommands,
+    syncE2BSandboxRepo,
+} from '../providers/e2b-sandbox.service';
 import {
     isLocalSandboxPath,
     deleteLocalSandbox,
@@ -260,6 +263,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 consumer,
                 doc.state,
                 doc.sandboxId,
+                cloneParams,
             );
         } catch (err) {
             if (err instanceof SandboxStaleConnectionError) {
@@ -708,6 +712,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         consumer: string,
         state: string,
         sandboxId?: string,
+        cloneParams?: CreateSandboxParams,
     ): Promise<AcquireResult> {
         if (state === 'INVALIDATED') {
             // Finding 2 fix: do NOT delete the sandbox here — active leases
@@ -717,7 +722,13 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         }
 
         if (state === 'READY' && sandboxId) {
-            return this.connectToExisting(prKey, leaseId, consumer, sandboxId);
+            return this.connectToExisting(
+                prKey,
+                leaseId,
+                consumer,
+                sandboxId,
+                cloneParams,
+            );
         }
 
         // state === 'CREATING' (or PAUSED without sandboxId): poll until READY
@@ -748,6 +759,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                     leaseId,
                     consumer,
                     doc.sandboxId,
+                    cloneParams,
                 );
             }
         }
@@ -760,6 +772,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         leaseId: string,
         consumer: string,
         sandboxId: string,
+        cloneParams?: CreateSandboxParams,
     ): Promise<AcquireResult> {
         const apiKey = this.configService.get<string>('API_E2B_KEY');
 
@@ -801,6 +814,58 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             // the joiner here doesn't have them, so we throw a typed
             // error and let the caller retry with full params.
             throw new SandboxStaleConnectionError(prKey, sandboxId);
+        }
+
+        // Bring a reused sandbox's git checkout up to date with the CURRENT
+        // commit before handing it back — see syncE2BSandboxRepo's docstring
+        // for the stale-checkout bug this closes (#1313 e2e validation,
+        // 2026-09-11). Best-effort: a sync failure falls back to whatever
+        // was already on disk (the pre-fix behavior), it never fails the
+        // acquire.
+        //
+        // Skip the sync entirely when another consumer currently holds this
+        // lease (leaseCount > 1, e.g. round N's AgentReviewStage still
+        // reading files while round N+1 joins after a fast follow-up push):
+        // `checkout -f` + `clean -fd` rewrite the sandbox's ONE shared
+        // working tree, so running it here would yank the tree out from
+        // under that other consumer's in-flight readFile/grep calls — the
+        // exact identical-context/working-tree contradiction this sync was
+        // added to fix, just caused by the fix itself. Re-reading the doc
+        // right before the destructive commands narrows the race to the gap
+        // between this read and the checkout, instead of leaving it open for
+        // the other consumer's entire pipeline run.
+        if (cloneParams) {
+            // Best-effort re-read: a transient failure here must fall back to
+            // running the sync (the pre-fix behavior), not fail the acquire.
+            const currentDoc = await this.leaseRepo
+                .findByPrKey(prKey)
+                .catch(() => null);
+            if (currentDoc && currentDoc.leaseCount > 1) {
+                this.logger.log({
+                    message: `SandboxLeaseManager: skipping destructive git sync for sandboxId="${sandboxId}" prKey="${prKey}" — leaseCount=${currentDoc.leaseCount} other consumer(s) active`,
+                    context: SandboxLeaseManager.name,
+                    metadata: {
+                        organizationId: prKey.split(':')[0],
+                        prKey,
+                        sandboxId,
+                        leaseCount: currentDoc.leaseCount,
+                    },
+                });
+            } else {
+                try {
+                    await syncE2BSandboxRepo(e2bSandbox, cloneParams, {
+                        logger: this.logger,
+                        logContext: SandboxLeaseManager.name,
+                    });
+                } catch (err) {
+                    this.logger.warn({
+                        message: `SandboxLeaseManager: syncE2BSandboxRepo threw for sandboxId="${sandboxId}" prKey="${prKey}" — sandbox keeps its previous checkout`,
+                        context: SandboxLeaseManager.name,
+                        error: err,
+                        metadata: { prKey, sandboxId },
+                    });
+                }
+            }
         }
 
         const sandbox: SandboxInstance = this.buildSandboxInstance(

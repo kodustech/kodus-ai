@@ -48,6 +48,7 @@ API_JWT_REFRESH_SECRET
 CODE_MANAGEMENT_SECRET
 CODE_MANAGEMENT_WEBHOOK_TOKEN
 API_MCP_MANAGER_ENCRYPTION_SECRET
+API_MCP_MANAGER_JWT_SECRET
 API_BILLING_WEBHOOK_SECRET
 API_CREDITS_SERVICE_TOKEN
 WEB_ANALYTICS_SECRET
@@ -72,6 +73,11 @@ NEXTAUTH=$(derive nextauth)
 
 OVERRIDES=$(mktemp)
 KEYS=$(grep -oE '^[A-Z0-9_]+=op://' "$TEMPLATE" | cut -d= -f1 | sort -u)
+# Self-hosted-only MCP configuration is not in the cloud template, but the
+# preview compose consumes it and it must receive the same derived secret path.
+if ! echo "$KEYS" | grep -qx "API_MCP_MANAGER_JWT_SECRET"; then
+    KEYS=$(printf '%s\n%s\n' "$KEYS" API_MCP_MANAGER_JWT_SECRET)
+fi
 count=0
 for key in $KEYS; do
     case "$key" in

@@ -195,4 +195,59 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
         expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
         expect(notificationService.emit).not.toHaveBeenCalled();
     });
+
+    // #1844: a summary-only failure must NOT block auto-approve. By the time
+    // this stage runs, the actual review output (PR-level + line comments)
+    // already posted several stages earlier (createPrLevelComments ->
+    // createFileComments -> aggregateResults -> updateCommentsAndGenerateSummary
+    // -> HERE) — a broken PR-summary narrative says nothing about whether
+    // that already-posted review is trustworthy. Proved failing before the
+    // fix: a clean PR (0 findings) with ONLY this error never called
+    // approvePullRequest.
+    it('DOES approve a clean PR whose only error is a summary-generation failure', async () => {
+        const ctx = makeContext({
+            errors: [
+                {
+                    stage: 'UpdateCommentsAndGenerateSummaryStage',
+                    error: new Error(
+                        'Failed after 3 attempts. Last error: AI_APICallError: <none>',
+                    ),
+                    severity: 'partial',
+                    metadata: {
+                        message: 'Failed to generate summary',
+                        reason: 'summary_generation_failed',
+                    },
+                } as any,
+            ] as any,
+        });
+
+        await stage.execute(ctx);
+
+        expect(codeManagement.approvePullRequest).toHaveBeenCalled();
+    });
+
+    it('still refuses to approve when a summary failure co-occurs with a REAL partial failure', async () => {
+        // The exclusion is scoped to the summary's own error, not to
+        // "partial in general" — a genuinely concerning partial failure
+        // alongside it still blocks, unchanged.
+        const ctx = makeContext({
+            errors: [
+                {
+                    stage: 'UpdateCommentsAndGenerateSummaryStage',
+                    error: new Error('summary boom'),
+                    severity: 'partial',
+                    metadata: { reason: 'summary_generation_failed' },
+                } as any,
+                {
+                    stage: 'ValidateSuggestionsStage',
+                    error: new Error('validator timed out'),
+                    severity: 'partial',
+                } as any,
+            ] as any,
+        });
+
+        await stage.execute(ctx);
+
+        expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
+    });
 });

@@ -641,10 +641,10 @@ jobs:
               uses: ./.github/actions/discord-notify
               with:
                   # SH matrix runs as part of the release (gates promote) or
-                  # ad-hoc via dispatch. Either way, QA channel — the release
+                  # ad-hoc via dispatch. Either way, tests channel — the release
                   # workflow's own notify-discord-failure covers the release
                   # case with full context.
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
                   status: failure
                   title: "❌ E2E self-hosted matrix failed"
                   description: |
@@ -654,10 +654,9 @@ jobs:
     # Root-cause investigation — only when the run carries failures. A
     # read-only Claude Code agent follows each advisory/gating failure
     # through the evidence (droplet logs + result.json) into the repo,
-    # classifies it (product / test-side / infra) and proposes a fix; a
-    # deterministic step then upserts one issue per stable failure
-    # signature so a recurring failure updates a single issue instead of
-    # being rediscovered every run.
+    # classifies it (product / test-side / infra) and proposes a fix. The
+    # report lands on the run's Summary tab and in the `e2e-investigation`
+    # artifact — it deliberately opens no issues; triage is a human call.
     #
     # Auth is the Claude SUBSCRIPTION token (`claude setup-token` →
     # secret CLAUDE_CODE_OAUTH_TOKEN) — no per-token API billing. The
@@ -675,7 +674,6 @@ jobs:
         timeout-minutes: 25
         permissions:
             contents: read
-            issues: write
         steps:
             - name: Checkout monorepo
               uses: actions/checkout@v6.0.2
@@ -698,9 +696,8 @@ jobs:
                   fi
                   npm install -g @anthropic-ai/claude-code >/dev/null 2>&1
                   # The evidence the agent reads (droplet logs, scenario
-                  # errors) is untrusted text, and the NEXT step executes a
-                  # script from this checkout with GH_TOKEN — so the agent is
-                  # STRICTLY read-only: Bash/Write/Edit are denied (deny rules
+                  # errors) is untrusted text, so the agent is STRICTLY
+                  # read-only: Bash/Write/Edit are denied (deny rules
                   # take precedence over every allow, including any settings
                   # file in the checkout). Its report arrives on stdout; the
                   # trusted extractor below materializes the contract files.
@@ -723,12 +720,6 @@ jobs:
                           cat investigation.md
                       } >> "$GITHUB_STEP_SUMMARY" || true
                   fi
-
-            - name: Upsert one issue per failure signature
-              env:
-                  GH_TOKEN: ${{ github.token }}
-                  RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-              run: python3 tests/e2e/cli/upsert-investigation-issues.py investigation.json
 
             - name: Upload investigation artifact
               if: always()

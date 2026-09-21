@@ -88,7 +88,6 @@ export class LLMAnalysisService implements IAIAnalysisService {
             // exactly as the STRING/JSON path did, preserving the downstream mapping.
             const result = await LLM.run({
                 schema: severityAnalysisSchema,
-                system: '',
                 user: prompt_severity_analysis_user(codeSuggestions),
                 runName,
                 organizationId: organizationAndTeamData?.organizationId,
@@ -228,7 +227,6 @@ export class LLMAnalysisService implements IAIAnalysisService {
             // the downstream mapping.
             const result = await LLM.run({
                 schema: validateImplementedSchema,
-                system: '',
                 user: prompt_validateImplementedSuggestions(payload),
                 runName,
                 organizationId: organizationAndTeamData?.organizationId,

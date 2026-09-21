@@ -161,6 +161,11 @@ module.exports = async (output, context) => {
         pass: recall >= RECALL_THRESHOLD,
         score: recall,
         reason,
-        metadata: { recall, precision, f1, fairRecall, hitRate, totalCalls, unserved, matched, goldens: goldens.length, tpFindings, fpFindings, findings: candidates.length, realMiss, artifact, untestable },
+        metadata: {
+            recall, precision, f1, fairRecall, hitRate, totalCalls, unserved, matched, goldens: goldens.length, tpFindings, fpFindings, findings: candidates.length, realMiss, artifact, untestable,
+            // Which known bugs were found, by text: lets the nightly name the bugs
+            // it found last green night and missed tonight, not just a number.
+            goldenResults: goldens.map((g, gi) => ({ golden: String(typeof g === 'string' ? g : g.comment), found: goldenHit[gi] })),
+        },
     };
 };

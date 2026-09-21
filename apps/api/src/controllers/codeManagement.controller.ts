@@ -186,6 +186,12 @@ export class CodeManagementController {
             repositories: Repository[];
             teamId: string;
             type?: 'replace' | 'append';
+            /**
+             * Set by the chunked save on every request but the last, so
+             * webhooks are reconciled once against the complete selection
+             * instead of against each partially-persisted chunk.
+             */
+            deferWebhooks?: boolean;
         },
     ) {
         return this.createRepositoriesUseCase.execute(body);

@@ -93,7 +93,7 @@ if (!MOCK) {
 let lastPromptSeen = null;
 let lastModelError = null;
 
-const INFRA_RE = /quota|rate.?limit|429|timeout|ETIMEDOUT|ECONNRESET|ENOTFOUND|EAI_AGAIN|socket hang up|api key|unauthorized|forbidden|permission|denied|access|401|403|invalid.*(key|authentication)|overloaded|503|502|depleted|prepayment|insufficient|exhausted|resource_exhausted|billing|payment required/i;
+const INFRA_RE = /quota|rate.?limit|429|timeout|cannot connect|ECONNREFUSED|ETIMEDOUT|ECONNRESET|ENOTFOUND|EAI_AGAIN|socket hang up|api key|unauthorized|forbidden|permission|denied|access|401|403|invalid.*(key|authentication)|overloaded|503|502|depleted|prepayment|insufficient|exhausted|resource_exhausted|billing|payment required/i;
 // Classify from the whole error, not just .message — provider SDK errors carry
 // the real cause in statusCode / responseBody (e.g. Google's 403 PERMISSION_DENIED
 // puts "denied access" in the body, a generic string in .message).
@@ -464,6 +464,10 @@ async function main() {
     console.log(`\n✅ PASS (${MODEL})${infraCases.length ? ` — ${infraCases.length} case(s) skipped on infra` : ''}`);
 }
 
-main().catch((e) => {
-    infra(String(e && e.stack ? e.stack : e));
-});
+// Exit explicitly: the engine services it loads can leave a handle open, and a
+// finished eval that never exits hangs its CI job until the timeout.
+main()
+    .then(() => process.exit(0))
+    .catch((e) => {
+        infra(String(e && e.stack ? e.stack : e));
+    });

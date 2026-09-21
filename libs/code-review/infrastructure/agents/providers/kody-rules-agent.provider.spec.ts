@@ -472,6 +472,42 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
         expect(out.suggestions[0].relevantFile).toBe('src/a.ts');
     });
 
+    // Issue #1313 Fase 1b: this execute() override bypasses super.execute
+    // (see class docstring), so the base provider's loopParams-forwarding
+    // pattern for previousDecisions never applies here — this is the ONLY
+    // place that can thread it into the sharded judge.
+    it('forwards input.previousDecisions to judgeKodyRulesSharded (issue #1313)', async () => {
+        const { provider } = makeProvider([{ violations: [] }]);
+        const previousDecisions = [
+            {
+                suggestionId: 'sug-1',
+                relevantFile: 'src/a.ts',
+                suggestionContent: 'Use const instead of let.',
+                label: 'bug',
+                outcome: 'implemented' as const,
+                decidedAt: '2026-01-01T00:00:00.000Z',
+            },
+        ];
+        await provider.execute(
+            input({
+                kodyRules: [
+                    {
+                        uuid: 'no-any',
+                        title: 'no any',
+                        rule: 'do not use any',
+                        status: 'active',
+                        severity: 'high',
+                        path: '**/*.ts',
+                    },
+                ],
+                previousDecisions,
+            }) as any,
+        );
+        const lastCall =
+            mockJudge.mock.calls[mockJudge.mock.calls.length - 1][0];
+        expect(lastCall.previousDecisions).toBe(previousDecisions);
+    });
+
     // ── language resolution + forwarding (Starian GitLab MR !16111) ──────────
     // The sharded judge's system prompts have zero language templating on
     // their own; execute() must resolve `input.languageResultPrompt` via the

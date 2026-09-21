@@ -1,5 +1,11 @@
 # Prose-findings recovery eval
 
+> - **Answers:** When a model writes its findings as prose instead of the schema, are they recovered?
+> - **Runs:** the wiring layer is a unit spec in the normal test suite (`libs/code-review/infrastructure/agents/core/finder.agent.spec.ts`); the LLM layer is on demand.
+> - **Run it:** `node evals/parser/run.js`
+> - **Gate:** none. The LLM layer reports.
+> - **Cost:** LLM layer: one re-structuring call per fixture.
+
 Two layers validate the prose-findings recovery (`recoverFindingsFromProse` /
 `extractFindingsWithRecovery` in `finder.agent.ts`) — the fallback that recovers
 findings when the model writes them as prose in `reasoning` and omits the

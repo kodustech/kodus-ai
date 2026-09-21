@@ -145,6 +145,10 @@ describe('LLMAnalysisService — secondary analysis methods', () => {
             expect(arg.user).toBe(prompt_severity_analysis_user(suggestions));
             expect(arg.runName).toBe('severityAnalysis');
             expect(arg.byokConfig).toBe(byokConfig); // the org's slot, not undefined
+            // No system prompt at all (not even ''): some BYOK providers reject
+            // an explicit empty system content block outright (prod incident,
+            // 2026-09-16) — LLM.run must see it unset to omit the field.
+            expect(arg.system).toBeUndefined();
         });
 
         it('returns the parsed suggestions on success', async () => {
@@ -222,6 +226,11 @@ describe('LLMAnalysisService — secondary analysis methods', () => {
             // undefined here means the org has no BYOK slot for this task, so
             // LLM.run falls back to the managed default.
             expect(arg.byokConfig).toBeUndefined();
+            // No system prompt at all (not even ''): some BYOK providers reject
+            // an explicit empty system content block outright (prod incident,
+            // 2026-09-16, root cause of the implementation_rate_pct drop) —
+            // LLM.run must see it unset to omit the field.
+            expect(arg.system).toBeUndefined();
         });
 
         it('returns the parsed implemented-status suggestions on success', async () => {

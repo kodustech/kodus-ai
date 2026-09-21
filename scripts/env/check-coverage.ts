@@ -57,7 +57,7 @@ const ALLOWLIST: Array<{ pattern: RegExp; reason: string }> = [
     {
         // Generic names captured by the grep that are almost certainly
         // DI tokens or test identifiers, not env vars.
-        pattern: /^(API_KEY|API_KEY_SECRET|API_KEY_SECRET_PEPPER|API_SECRET_KEY|RUN_NAME)$/,
+        pattern: /^(API_KEY|API_KEY_SECRET|API_KEY_SECRET_PEPPER|API_SECRET_KEY|RUN_NAME|RUN_ID)$/,
         reason: 'generic name — likely DI token or test fixture (false positive)',
     },
     {

@@ -179,7 +179,12 @@ describe('SuggestionLLMValidator — LLM.run input contract', () => {
             expect(runSpy).toHaveBeenCalledTimes(1);
             const arg = runSpy.mock.calls[0][0];
             expect(arg.schema).toBe(validateCodeSemanticsSchema);
-            expect(arg.system).toBe('');
+            // No system prompt is passed at all (not even an empty string) —
+            // LLM.run's contract is that an empty/absent `system` omits the
+            // system message entirely; some BYOK providers reject an EXPLICIT
+            // empty string as an invalid empty content block (prod incident,
+            // 2026-09-16), so the field must stay unset, not `''`.
+            expect(arg.system).toBeUndefined();
             // toBe against the real (pure) builder proves every payload field —
             // code, filePath, language, diff — was threaded verbatim.
             expect(arg.user).toBe(prompt_validateCodeSemantics(payload));

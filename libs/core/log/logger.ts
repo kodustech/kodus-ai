@@ -1,3 +1,6 @@
+import { Agent, ClientRequest, IncomingMessage } from 'http';
+import { Socket } from 'net';
+
 import { trace } from '@opentelemetry/api';
 import pino from 'pino';
 
@@ -279,6 +282,9 @@ const SENSITIVE_KEYS = new Set([
     'clientsecret',
     'privatekey',
     'bearertoken',
+    // GitLab PAT header (`PRIVATE-TOKEN`) and webhook secret header.
+    'privatetoken',
+    'xgitlabtoken',
     // Amazon Bedrock BYOK credentials (normalized: lowercased, separators
     // stripped). These travel under aws* field names inside a credential's
     // `settings` and must be redacted at any log depth.
@@ -299,12 +305,17 @@ const SENSITIVE_KEYS = new Set([
 const KEY_SENSITIVITY_CACHE = new Map<string, boolean>();
 const KEY_SENSITIVITY_CACHE_MAX = 512;
 
+function isSensitiveName(name: string): boolean {
+    return SENSITIVE_KEYS.has(name.toLowerCase().replace(/[^a-z0-9]/g, ''));
+}
+
+// Object keys only. The cache never evicts, so names harvested from string
+// content (payload JSON keys, query params) would fill it for good; the
+// string scanners call isSensitiveName directly instead.
 function isSensitiveKey(key: string): boolean {
     let result = KEY_SENSITIVITY_CACHE.get(key);
     if (result === undefined) {
-        result = SENSITIVE_KEYS.has(
-            key.toLowerCase().replace(/[^a-z0-9]/g, ''),
-        );
+        result = isSensitiveName(key);
         if (KEY_SENSITIVITY_CACHE.size < KEY_SENSITIVITY_CACHE_MAX) {
             KEY_SENSITIVITY_CACHE.set(key, result);
         }
@@ -331,10 +342,64 @@ function isAuthorityTerminator(char: string | undefined): boolean {
 }
 
 /**
+ * Strips credentials embedded in a string: URL userinfo, sensitive query or
+ * form parameters, raw HTTP header lines and JSON key/value pairs. Key-based
+ * redaction in `deepSanitize` can't see these because the secret lives inside
+ * one string value — e.g. an AxiosError's `request._header` or `config.data`.
+ * Returns the original reference when nothing was redacted.
+ */
+function sanitizeString(value: string): string {
+    return redactEmbeddedSecrets(redactUrlUserinfo(value));
+}
+
+// Cheap pre-check so ordinary strings (stacks, messages) skip the regexes.
+// Loose on purpose: a false hit only costs the scans below. The gate is
+// fail-open, so every name in SENSITIVE_KEYS must match one of these stems —
+// a spec walks the set and fails when a new key has no stem here.
+const EMBEDDED_SECRET_HINT =
+    /auth|cookie|token|secret|passw|key|credential|jwt|connection|ssn|cpf|cvv|card/i;
+
+// Linear patterns (no nested or overlapping quantifiers).
+// The optional leading `+`/`-` covers unified-diff lines, which get logged.
+const HEADER_LINE_PATTERN =
+    /(^|[\r\n])([+-]?[ \t]*)([A-Za-z0-9_.-]{1,100})([ \t]*:[ \t]*)([^\r\n]*)/g;
+// The optional `+`/`-` marker mirrors HEADER_LINE_PATTERN for diff lines.
+const QUERY_PARAM_PATTERN =
+    /(^|[?&;\s])([+-]?)([A-Za-z0-9_.-]{1,100})=([^&#\s"'<>]*)/g;
+const JSON_PAIR_PATTERN = /"([^"\\]{1,100})"(\s*:\s*)"((?:[^"\\]|\\.)*)"/g;
+
+function redactEmbeddedSecrets(value: string): string {
+    if (!EMBEDDED_SECRET_HINT.test(value)) {
+        return value;
+    }
+
+    const result = value
+        .replace(
+            HEADER_LINE_PATTERN,
+            (match, lineStart, indent, name, separator, headerValue) =>
+                isSensitiveName(name) && headerValue
+                    ? `${lineStart}${indent}${name}${separator}[REDACTED]`
+                    : match,
+        )
+        .replace(
+            QUERY_PARAM_PATTERN,
+            (match, prefix, marker, name, paramValue) =>
+                isSensitiveName(name) && paramValue
+                    ? `${prefix}${marker}${name}=[REDACTED]`
+                    : match,
+        )
+        .replace(JSON_PAIR_PATTERN, (match, name, separator) =>
+            isSensitiveName(name) ? `"${name}"${separator}"[REDACTED]"` : match,
+        );
+
+    return result === value ? value : result;
+}
+
+/**
  * Strips credentials embedded in URL strings using a linear scan.
  * e.g. "mongodb://user:secret@host/db" → "mongodb://user:[REDACTED]@host/db"
  */
-function sanitizeString(value: string): string {
+function redactUrlUserinfo(value: string): string {
     let searchFrom = 0;
     let lastCommittedIndex = 0;
     let result = '';
@@ -421,6 +486,14 @@ const DEEP_SANITIZE_MAX_DEPTH = 24;
  * Depth-bounded: stops recursing past `DEEP_SANITIZE_MAX_DEPTH` and
  * returns a `[Max-Depth]` marker.
  */
+function isRedirectableRequest(obj: any): boolean {
+    return (
+        '_currentRequest' in obj &&
+        '_options' in obj &&
+        Array.isArray(obj._requestBodyBuffers)
+    );
+}
+
 function deepSanitize(obj: any, seen?: WeakSet<object>, depth = 0): any {
     if (obj === null || typeof obj !== 'object') {
         if (typeof obj === 'string') {
@@ -428,6 +501,38 @@ function deepSanitize(obj: any, seen?: WeakSet<object>, depth = 0): any {
             return sanitized !== obj ? sanitized : obj;
         }
         return obj;
+    }
+
+    // A Buffer (or any typed-array view) is walked index by index, comes out
+    // unchanged, and pino then serializes it via toJSON(): a 1 MB buffer costs
+    // ~131 ms here, expands to ~3 MB of JSON, and the bytes stay recoverable.
+    // This is also where an axios request body lands on a timeout
+    // (`_requestBodyBuffers`).
+    if (ArrayBuffer.isView(obj)) {
+        return `[Binary ${obj.byteLength} bytes]`;
+    }
+
+    // Live Node HTTP objects (an AxiosError's `request`, sockets, agents) carry
+    // the raw request head with credentials and TLS session buffers. Nothing
+    // in them is worth logging, so don't walk them.
+    if (obj instanceof ClientRequest) {
+        return '[ClientRequest]';
+    }
+    // follow-redirects' RedirectableRequest wraps the native request and is
+    // what axios attaches as `err.request` on timeouts and connection errors.
+    // It is a Writable, not a ClientRequest, and its `_options` carries the
+    // headers and the `auth` option ("user:password") under non-sensitive keys.
+    if (isRedirectableRequest(obj)) {
+        return '[RedirectableRequest]';
+    }
+    if (obj instanceof IncomingMessage) {
+        return '[IncomingMessage]';
+    }
+    if (obj instanceof Socket) {
+        return '[Socket]';
+    }
+    if (obj instanceof Agent) {
+        return '[Agent]';
     }
 
     if (
@@ -678,7 +783,13 @@ export class SimpleLogger {
 }
 
 /** Exported for testing only. */
-export { deepSanitize, isSensitiveKey, sanitizeString };
+export {
+    deepSanitize,
+    isSensitiveKey,
+    KEY_SENSITIVITY_CACHE,
+    sanitizeString,
+    SENSITIVE_KEYS,
+};
 
 export function createLogger(component: string): SimpleLogger {
     return new SimpleLogger(component);

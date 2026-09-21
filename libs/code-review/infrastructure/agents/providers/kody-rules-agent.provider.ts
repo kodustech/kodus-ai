@@ -595,6 +595,12 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                         contextSlices,
                         unmetRules,
                         fileContents,
+                        // Issue #1313 Fase 1b: this override bypasses
+                        // super.execute (see class docstring) and never went
+                        // through base-code-review-agent.provider.ts, so
+                        // without this line kody-rules stays permanently
+                        // blind to its own prior-round decisions.
+                        previousDecisions: input.previousDecisions,
                     }),
             );
             judgeViolations = result.violations;

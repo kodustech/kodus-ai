@@ -1,5 +1,6 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 
+import { createLogger } from '@libs/core/log/logger';
 import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
@@ -18,6 +19,8 @@ import { IIntegration } from '@libs/integrations/domain/integrations/interfaces/
 
 @Injectable()
 export class IntegrationService implements IIntegrationService {
+    private readonly logger = createLogger(IntegrationService.name);
+
     constructor(
         @Inject(INTEGRATION_REPOSITORY_TOKEN)
         private readonly integrationRepository: IIntegrationRepository,
@@ -140,7 +143,12 @@ export class IntegrationService implements IIntegrationService {
 
             return { integrationId: integration?.uuid, ...authDetails } as T;
         } catch (error) {
-            console.log('platformkeys', error);
+            this.logger.error({
+                message: 'Failed to get platform auth details',
+                context: IntegrationService.name,
+                error,
+                metadata: { organizationAndTeamData, platform },
+            });
         }
     }
 }

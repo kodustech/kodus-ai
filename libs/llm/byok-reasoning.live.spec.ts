@@ -27,7 +27,8 @@
  * `BYOK_<BRAND>_API_KEY`, and a brand that borrows reads the lender's.
  *
  *     BYOK_ANTHROPIC_API_KEY   -> anthropic, -modern, -opus-5, openai_compatible_claude
- *     BYOK_OPENAI_API_KEY      -> openai, openai_compatible_gpt5
+ *     BYOK_OPENAI_API_KEY      -> openai, openai_compatible_gpt5, openai_gpt56,
+ *                                 openai_compatible_gpt56, openai_gpt6_astra
  *     BYOK_ZHIPU_API_KEY       -> zai, zai_glm53 (Zhipu is Z.ai, the GLM vendor)
  *     BYOK_GOOGLE_API_KEY      -> google_gemini, google_gemini_flash
  *     BYOK_MOONSHOT_API_KEY    -> moonshot_code
@@ -68,6 +69,7 @@ import { z } from 'zod';
 
 import { LLM } from './llm';
 import type { NormalizedModel } from './byok-config';
+import { KODUS_CATALOG } from './providers/kodus/catalog';
 
 /**
  * Brand → the repo secrets that ALREADY hold its credential under a name that
@@ -95,7 +97,52 @@ const REPO_SECRET: Record<string, string[]> = {
     zai: ['BYOK_ZHIPU_API_KEY'],
     google_gemini: ['BYOK_GOOGLE_API_KEY', 'GEMINI_API_KEY'],
     openai: ['BYOK_OPENAI_API_KEY'],
+    // Not a customer key: the `kodus` provider routes over OUR upstream accounts
+    // and reads the platform key from this env at build time — the slot carries
+    // none. Naming it here is what lets the row gate and the module agree on the
+    // one variable, and what the credential invariants check against the job.
+    kodus: ['API_KODUS_PROVIDER_FIREWORKS_API_KEY'],
 };
+
+/**
+ * The Kodus catalog as live rows — GENERATED, never hand-written.
+ *
+ * `kodus` is the provider that bills a customer's credits: the org picks from a
+ * closed catalog and we route the call over our own upstream accounts. A model
+ * the upstream retires or renames does not degrade there — `build()` refuses an
+ * id the catalog cannot price, so the paying customer's review simply fails. That
+ * is the stale-KODUS_TRIAL_MODEL incident this workflow's header cites, one
+ * provider over, and until now nothing called these models at all.
+ *
+ * Generated from `KODUS_CATALOG` so the two cannot drift: adding a model to the
+ * price list adds its row, removing one removes it. A hand-written row per model
+ * is exactly the list that goes stale the week after someone edits the catalog.
+ *
+ * Measured before writing them (2026-09-18, direct against Fireworks): all five
+ * current entries answered and billed reasoning tokens, so `reasons: true` is a
+ * fact about them, not a hope. Going through `LLM.run` rather than a raw call is
+ * the point — it exercises the routing brand, the closed-catalog gate and the
+ * delegation to the upstream module, which a curl never touches.
+ */
+const kodusBrand = (id: string): string =>
+    `kodus_${id.split('/').pop()!.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}`;
+
+function kodusBorrows(): Record<string, string> {
+    return Object.fromEntries(KODUS_CATALOG.map((m) => [kodusBrand(m.id), 'kodus']));
+}
+
+function kodusCatalogRows() {
+    return KODUS_CATALOG.map((m) => ({
+        brand: kodusBrand(m.id),
+        why: `Kodus-as-provider: ${m.id} is a model we BILL credits for. A retired or renamed upstream id does not degrade — the closed catalog refuses it and the customer's review fails`,
+        slot: {
+            provider: 'kodus',
+            model: m.id,
+            reasoningEffort: 'medium',
+        },
+        reasons: true,
+    }));
+}
 
 /**
  * Brand → the brand whose credential it falls back to.
@@ -117,6 +164,13 @@ const BORROWS_FROM: Record<string, string> = {
     open_router_qwen: 'open_router',
     openai_compatible_gpt5: 'openai',
     openai_compatible_claude: 'anthropic',
+    openai_gpt56: 'openai',
+    openai_compatible_gpt56: 'openai',
+    openai_gpt6_astra: 'openai',
+    google_vertex_gemini: 'google_vertex',
+    google_vertex_modern: 'google_vertex',
+    google_vertex_legacy: 'google_vertex',
+    ...kodusBorrows(),
 };
 
 /**
@@ -164,6 +218,57 @@ const key = (brand: string): string | undefined => {
 const credentialFor = (row: { brand: string; requires?: () => boolean }) =>
     row.requires && !row.requires() ? undefined : key(row.brand);
 
+/**
+ * A dead credential is not drift — and this job spent two Mondays saying it was.
+ *
+ * Seven rows failed on 2026-09-07 and again on 2026-09-14 with `API key is
+ * invalid`, `Forbidden` and `INVALID_PAYMENT_INSTRUMENT`, and the alert they
+ * fired read "a provider changed how a model is configured" — the one thing
+ * that had demonstrably NOT happened. The request shape was never tested at
+ * all: the call died at the door.
+ *
+ * The failure stays a failure. A dead key means zero live coverage for every
+ * row that borrows it, which is precisely what this tier exists to notice, so
+ * downgrading it to a skip would hide the hole instead of the noise. What
+ * changes is that the message names the real cause — because an alert that
+ * misnames its cause is worse than no alert. Someone reads "provider drifted",
+ * goes looking for a changelog, finds nothing, and learns to ignore Monday.
+ */
+/*
+ * Every alternative here is a string a vendor ACTUALLY returned, not a guess at
+ * how one might phrase it. `incorrect api key provided` is in the list because
+ * the first version of this regex missed it and a local run caught that: OpenAI
+ * does not say "invalid", it says "incorrect", and a classifier that reads only
+ * the Anthropic wording sends the exact same misleading alert for the exact
+ * same cause. `dunning decision is deny` joined it the same way: Vertex says
+ * that when the GCP project's billing is delinquent, and nothing about the
+ * request shape is being judged when it does.
+ * Add a phrasing here only after seeing it in a log.
+ */
+const CREDENTIAL_FAILURE =
+    /(api key is invalid|invalid api key|incorrect api key|invalid[ _-]?anthropic[ _-]?api[ _-]?key|invalid[ _-]?x-api-key|invalid_api_key|authentication[ _]?error|unauthorized|forbidden|invalid_payment_instrument|access denied|permission denied|expired token|could not be authenticated|dunning decision is deny|billing[ _]?(is )?(disabled|not enabled)|has not enabled billing)/i;
+
+const onlyDrift = async <T>(brand: string, call: Promise<T>): Promise<T> => {
+    try {
+        return await call;
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (!CREDENTIAL_FAILURE.test(message)) {
+            throw err;
+        }
+        throw new Error(
+            `byok-live: ${brand} never reached the model. This is a CREDENTIAL ` +
+                `failure, NOT provider drift — the secret this row runs on is dead ` +
+                `(expired, rotated, or unpaid), so the reasoning shape was not ` +
+                `tested at all, and every row borrowing the same key is equally ` +
+                `uncovered. Rotate the secret and re-run. Do NOT read this as a ` +
+                `model changing its reasoning contract.\n` +
+                `Provider said: ${message}`,
+            { cause: err },
+        );
+    }
+};
+
 /** Does this row have SOMETHING to authenticate with? */
 const canRun = (row: { brand: string; requires?: () => boolean }): boolean => {
     if (row.requires && !row.requires()) {
@@ -184,8 +289,13 @@ function secretsPassedByCi(): string[] {
     );
     // The RUN line, not the first mention — the job's comments name the spec
     // several times above its own env block.
-    const runAt = workflow.indexOf(
-        'run: pnpm exec jest --config jest.config.ts libs/llm/byok-reasoning.live.spec.ts',
+    // Matched on the SPEC PATH, not on the whole command: pinning the exact
+    // command string meant that prefixing it (NODE_OPTIONS, for the Vertex
+    // rows' dynamic import) silently detached this parser from the job, and
+    // all three credential invariants went red for a reason that had nothing
+    // to do with credentials.
+    const runAt = workflow.search(
+        /^\s+run:.*byok-reasoning\.live\.spec\.ts/m,
     );
     if (runAt < 0) {
         throw new Error(
@@ -322,6 +432,107 @@ const LIVE = [
             provider: 'openai',
             model: 'gpt-5.4',
             reasoningEffort: 'medium', // prod: 18 de 22 slots usam medium
+        },
+        reasons: true,
+    },
+    // ── The 5.6 line: 18 production slots across three transports and, until
+    // now, not one row. That is the largest uncovered family in the corpus —
+    // bigger than every brand below it that does have a row — and it went
+    // uncovered for the ordinary reason: the rows were written when 5.4 was the
+    // newest id, and nothing re-asks that question when a vendor ships a line.
+    //
+    // Two rows, not five. The three ids (sol/luna/terra) are one family and the
+    // subject is the TRANSPORT, which is where the shapes actually differ: the
+    // Responses API natively, and the OpenAI protocol through a proxy. Both ride
+    // BYOK_OPENAI_API_KEY, so the pair costs no new secret.
+    // ── MEASURED 2026-09-18, and the result is the finding ────────────────────
+    // Both 5.6 rows came back 200 with ZERO reasoning tokens, on two different
+    // transports, while the control group in the SAME run reasoned normally:
+    //
+    //   gpt-5.4        native   medium -> 11 reasoning tokens
+    //   gpt-5.4        compat   medium -> 18
+    //   gpt-6-astra    native   medium -> 20
+    //   gpt-5.6-terra  native   medium ->  0
+    //   gpt-5.6-sol    compat   HIGH   ->  0
+    //
+    // Our side is not the problem: the request bodies were captured offline and
+    // the field goes out, identical in shape to the ones that DO reason —
+    // `reasoning:{effort,summary}` on the Responses API, `reasoning_effort` on
+    // the compatible transport. A higher effort on the compat row changed
+    // nothing, which is what rules out "the prompt was too easy".
+    //
+    // So these rows carry `reasons: false`, the same way `openai_compatible_claude`
+    // does below: it pins the gap rather than asserting a behaviour we wish for.
+    // 18 production slots run a gpt-5.6 with an effort configured, and that
+    // effort currently buys nothing. The day it starts buying something — or the
+    // day a 5.6 model begins reasoning on its own — these rows go red and
+    // somebody gets to find out on purpose.
+    {
+        brand: 'openai_gpt56',
+        why: 'the 5.6 line is 18 production slots and had NO row — the biggest uncovered family in the corpus. terra is its largest native group (5 slots, 3 at medium), and the id is a generation newer than every OpenAI row here',
+        slot: {
+            provider: 'openai',
+            model: 'gpt-5.6-terra',
+            reasoningEffort: 'medium', // prod: 3 de 5 slots do terra usam medium; 1 high, 1 ausente
+        },
+        // A KNOWN GAP, not a satisfied expectation. `reasons: false` is the
+        // right assertion — it is what was measured — but it makes the row
+        // green in exactly the degraded state it exists to document, and the
+        // coverage log cannot tell "verified reasoning" from "verified absence
+        // of it". `knownGap` is printed on its own line so a green weekly run
+        // never reads as "this brand is fine".
+        knownGap: true,
+        // Measured 0 — see the block above. Asserting the gap, not the wish.
+        reasons: false,
+    },
+    {
+        brand: 'openai_compatible_gpt56',
+        // Production points these at FIVE distinct customer proxies (the corpus
+        // holds them redacted). None of them is ours to call, and a row that
+        // named one would be testing that customer's gateway rather than the
+        // request we build — so this points at the vendor's own endpoint, the
+        // same choice `openai_compatible_gpt5` makes one row down.
+        why: 'sol is 5 production slots and every one of them rides an OpenAI-protocol proxy rather than the native API — a different transport for the newest reasoner id, and the majority store high',
+        slot: {
+            provider: 'openai_compatible',
+            model: 'gpt-5.6-sol',
+            baseURL: 'https://api.openai.com/v1',
+            reasoningEffort: 'high', // prod: 3 de 5 slots do sol usam high; 1 medium, 1 ausente
+        },
+        // A KNOWN GAP, not a satisfied expectation. `reasons: false` is the
+        // right assertion — it is what was measured — but it makes the row
+        // green in exactly the degraded state it exists to document, and the
+        // coverage log cannot tell "verified reasoning" from "verified absence
+        // of it". `knownGap` is printed on its own line so a green weekly run
+        // never reads as "this brand is fine".
+        knownGap: true,
+        // Measured 0 even at `high` — the effort level is not the variable.
+        reasons: false,
+    },
+    // ── gpt-6: ZERO production slots today, and the row is still justified —
+    // for a different reason than every row above it, so it says so rather than
+    // borrowing their argument.
+    //
+    // PR #1952 taught `isOpenAiReasonerId` a whole new family and
+    // `openaiReasoningConfig` a new level set: gpt-6 gets low/medium/high where
+    // gpt-5 exposes only medium/high. Both claims are a regex and a table read
+    // from a doc — offline facts about a model nothing has ever called. The
+    // first customer to store a gpt-6 slot is not the right person to discover
+    // that OpenAI disagrees.
+    //
+    // `medium`, not `low`, even though `low` is the level the family newly
+    // claims: this file already paid to learn that a low-effort row on this
+    // prompt returns zero reasoning tokens while behaving exactly as documented
+    // (see bedrock_opus47). A row that goes red for that is a row people mute.
+    // So the level stays where the prompt is known to make a reasoner think, and
+    // `low` on gpt-6 remains untested — deliberately, and written down.
+    {
+        brand: 'openai_gpt6_astra',
+        why: 'the newest family is detected by REGEX and configured from a table, both offline — nothing has ever called it. Proves OpenAI accepts the reasoning shape #1952 taught us to build, before a customer stores the first gpt-6 slot',
+        slot: {
+            provider: 'openai',
+            model: 'gpt-6-astra',
+            reasoningEffort: 'medium',
         },
         reasons: true,
     },
@@ -574,7 +785,161 @@ const LIVE = [
             baseURL: 'https://api.anthropic.com/v1',
             reasoningEffort: 'medium',
         },
+        // Same class as the gpt-5.6 rows: an effort a customer configured that
+        // reaches no parameter. Marked so the log stops reading it as covered.
+        knownGap: true,
         reasons: false,
+    },
+
+    // ── Vertex: a whole PROVIDER with no live row. `libs/llm/providers/vertex`
+    // builds TWO different SDK models from one provider id and resolves their
+    // reasoning through two different modules — Claude-on-Vertex speaks the
+    // Anthropic thinking protocol (PR #1303 exists because it did not), Gemini-
+    // on-Vertex speaks google thinkingConfig. Both claims are offline today.
+    //
+    // The credential is the service account JSON, base64, in `apiKey` — the
+    // provider decodes it itself (`vertexModelFromSaJson`), so this needs no
+    // `credentialField` and no new mechanism, just the secret.
+    {
+        brand: 'google_vertex',
+        // GATED OFF, and the gate is the point. The Vertex credential IS in CI,
+        // so without this the three Claude rows would run every Monday and fail
+        // every Monday on a GCP quota grant we do not currently hold — the
+        // red-every-week alarm this whole file is built to avoid.
+        //
+        // This gate is a DEBT, not a finding that the coverage is unnecessary.
+        // Self-hosted customers run Claude on Vertex today and no live call has
+        // ever checked what we send them. Set BYOK_VERTEX_CLAUDE=1 on a project
+        // that holds the quota and all three wake up — that is the whole fix.
+        // The Gemini row below stays live: it passes.
+        requires: () => !!process.env.BYOK_VERTEX_CLAUDE,
+        // NOT yet verified against a live vendor, and the reason is a GCP quota
+        // grant rather than anything in our code. Walked the whole path on
+        // 2026-09-17, on a project with billing enabled, roles/aiplatform.user
+        // bound, and all three Claude models accepted in Model Garden:
+        //
+        //   global    -> 429 RESOURCE_EXHAUSTED
+        //                "Quota exceeded for aiplatform.googleapis.com/
+        //                 global_online_prediction_requests_per_base_model
+        //                 with base model: anthropic-claude-sonnet"
+        //   us-east5  -> 404 Not Found (that host serves an older catalogue —
+        //                claude-3-opus and claude-sonnet-4-5 and nothing newer)
+        //
+        // Model Garden acceptance is NOT the blocker — with it missing the
+        // answer is 403 PERMISSION_DENIED, and this is 429. Acceptance and quota
+        // are two separate grants, and the self-service quota page offers a
+        // range of "0 to 0" on a project with no usage history: "não é possível
+        // aumentar a cota no momento ... entre em contato com nossa equipe de
+        // vendas". So these rows need a GCP project that ALREADY runs Vertex,
+        // not another form. The row stays on `global`, the route that answers.
+        why: 'Claude-on-Vertex resolves reasoning through the ANTHROPIC module, not google thinkingConfig — the whole reason PR #1303 exists. Nothing has ever called it',
+        slot: {
+            provider: 'google_vertex',
+            model: 'claude-sonnet-4-6',
+            vertexLocation: 'global',
+            reasoningEffort: 'medium',
+        },
+        reasons: true,
+    },
+    // The Vertex rows are one per SHAPE, not one per model — the id only selects
+    // a band in `resolveAnthropicModelTraits`, and two models in the same band
+    // produce the same request. Measured, not assumed:
+    //
+    //   claude-sonnet-4-6   adaptive-4-6   thinkingShape=adaptive  (row above)
+    //   claude-sonnet-5     modern         thinkingShape=adaptive
+    //   claude-haiku-4-5    legacy         thinkingShape=budget
+    //
+    // `claude-opus-5` resolves to `modern` exactly like `claude-sonnet-5`, so a
+    // row for each would run the same code twice. Sonnet is the cheaper of the
+    // two and the native tier already carries an Opus 5 row.
+    //
+    // AND THE CORPUS CANNOT SETTLE WHO RUNS VERTEX. `byok-prod-shapes.json` is
+    // built from the CLOUD replica (`$PROD_REPLICA_URL`); a self-hosted install
+    // keeps its own database and never appears there. Zero Vertex slots in it
+    // means zero CLOUD slots and nothing more — self-hosted customers DO run
+    // Claude on Vertex, and every claim this provider makes about them (the
+    // band, the thinking shape, the temperature policy) rests on offline tables
+    // no live call has ever checked.
+    {
+        brand: 'google_vertex_modern',
+        // GATED OFF, and the gate is the point. The Vertex credential IS in CI,
+        // so without this the three Claude rows would run every Monday and fail
+        // every Monday on a GCP quota grant we do not currently hold — the
+        // red-every-week alarm this whole file is built to avoid.
+        //
+        // This gate is a DEBT, not a finding that the coverage is unnecessary.
+        // Self-hosted customers run Claude on Vertex today and no live call has
+        // ever checked what we send them. Set BYOK_VERTEX_CLAUDE=1 on a project
+        // that holds the quota and all three wake up — that is the whole fix.
+        // The Gemini row below stays live: it passes.
+        requires: () => !!process.env.BYOK_VERTEX_CLAUDE,
+        // THE TEMPERATURE IS THE SUBJECT, and without it this row is redundant.
+        // Checked before writing it: `reasoning()` on Vertex returns the SAME
+        // body for both bands —
+        //   claude-sonnet-4-6  {thinking:{type:adaptive}, effort:medium}
+        //   claude-sonnet-5    {thinking:{type:adaptive}, effort:medium}
+        // so a second row asserting the thinking shape would run the row above
+        // again under a different name. Where they actually diverge is sampling:
+        //   temperaturePolicy(claude-sonnet-4-6) -> adjustable
+        //   temperaturePolicy(claude-sonnet-5)   -> unsupported
+        // On the 4.7+/5 line a temperature that reaches the wire is a 400, and
+        // the SDK only strips it by itself while thinking is ON. So the slot
+        // carries one the runtime must DROP — if it ever leaks, this row is
+        // where that shows, exactly as `openai_compatible_gpt5` does one tier up.
+        why: 'the `modern` band over Vertex, where temperature is UNSUPPORTED while the 4.6 row above takes it — the one place the two bands produce different requests. The slot carries a temperature the Vertex path must drop',
+        slot: {
+            provider: 'google_vertex',
+            model: 'claude-sonnet-5',
+            vertexLocation: 'global',
+            reasoningEffort: 'medium',
+            temperature: 0.2,
+        },
+        reasons: true,
+    },
+    {
+        brand: 'google_vertex_legacy',
+        // GATED OFF, and the gate is the point. The Vertex credential IS in CI,
+        // so without this the three Claude rows would run every Monday and fail
+        // every Monday on a GCP quota grant we do not currently hold — the
+        // red-every-week alarm this whole file is built to avoid.
+        //
+        // This gate is a DEBT, not a finding that the coverage is unnecessary.
+        // Self-hosted customers run Claude on Vertex today and no live call has
+        // ever checked what we send them. Set BYOK_VERTEX_CLAUDE=1 on a project
+        // that holds the quota and all three wake up — that is the whole fix.
+        // The Gemini row below stays live: it passes.
+        requires: () => !!process.env.BYOK_VERTEX_CLAUDE,
+        // `low` AND a cap of its own, because the budget shape states its
+        // ceiling out loud and the protocol requires max_tokens above it:
+        //   low 5,000 · medium 15,000 · high 40,000
+        // At the default 4,096 cap this row would have gone out with a budget
+        // larger than its own ceiling and been rejected — a 400 that says
+        // nothing about Vertex. `low` is safe here in a way it is not on an
+        // adaptive row: the budget is explicit, so the model is told to think
+        // rather than left to decide it needn't.
+        maxOutputTokens: 6_144,
+        why: 'the `legacy` budget shape — thinking {type:enabled, budget_tokens} — which has NO live row in any provider today. Haiku 4.5 is the only current model that still resolves to it, so this is the one place that shape reaches a real vendor',
+        slot: {
+            provider: 'google_vertex',
+            model: 'claude-haiku-4-5',
+            vertexLocation: 'global',
+            reasoningEffort: 'low',
+        },
+        reasons: true,
+    },
+    {
+        brand: 'google_vertex_gemini',
+        // VERIFIED LIVE 2026-09-17: 346-366 reasoning tokens across three runs,
+        // so the google thinkingConfig path on Vertex is real and this row
+        // measures it rather than asserting it.
+        why: 'the OTHER SDK model behind the same provider id: Gemini-on-Vertex takes google thinkingConfig, and a shared provider that builds two transports can regress on one of them alone',
+        slot: {
+            provider: 'google_vertex',
+            model: 'gemini-3.1-pro-preview',
+            vertexLocation: 'global',
+            reasoningEffort: 'medium',
+        },
+        reasons: true,
     },
 
     // ── families with real production weight and NO row at all. The code makes
@@ -608,6 +973,7 @@ const LIVE = [
     // or where no readable doc exists at all. Offline tests cannot settle any of
     // these — they prove what we SEND, and the question is what the vendor
     // ACCEPTS. Each one is a claim currently resting on inference. ──────────
+    ...kodusCatalogRows(),
     {
         brand: 'moonshot_code',
         why: 'k2.7-code is the pair to the k2.6 row and differs on BOTH facts we changed: thinking cannot be disabled, and platform.kimi.ai documents its temperature as not modifiable. The slot deliberately carries a temperature the runtime must DROP — if it ever reaches the wire this row is where that shows',
@@ -660,6 +1026,14 @@ describe('BYOK reasoning — LIVE provider contract', () => {
 
         let total = 0;
         const perRow: Array<[string, number]> = [];
+        // The probe fakes every row's credential so it can read the request.
+        // Most rows take theirs in the slot; the Kodus rows take the PLATFORM
+        // key from env at build time, so faking `apiKey` alone left the module
+        // refusing to build and the probe measuring nothing — which it reports,
+        // correctly, as a row with no ceiling.
+        const PLATFORM_KEY = 'API_KODUS_PROVIDER_FIREWORKS_API_KEY';
+        const platformKeyBefore = process.env[PLATFORM_KEY];
+        process.env[PLATFORM_KEY] ||= 'budget-probe';
         try {
             for (const c of LIVE) {
                 let sent: any;
@@ -720,6 +1094,8 @@ describe('BYOK reasoning — LIVE provider contract', () => {
             }
         } finally {
             globalThis.fetch = real;
+            if (platformKeyBefore === undefined) delete process.env[PLATFORM_KEY];
+            else process.env[PLATFORM_KEY] = platformKeyBefore;
         }
 
         // eslint-disable-next-line no-console
@@ -847,16 +1223,69 @@ describe('BYOK reasoning — LIVE provider contract', () => {
         }
     });
 
+    /**
+     * The weekly cron string is written THREE times — once in `on.schedule`,
+     * once in the daily job's `if` (to stand down on that day) and once in this
+     * job's `if` (to stand up). Nothing connected them, and they are exactly the
+     * kind of constant that gets edited in one place: move the day in the
+     * schedule alone and the weekly run fires with BOTH jobs disabled, which
+     * reports green having run nothing at all.
+     */
+    it('the weekly cron agrees across the schedule and both job gates', () => {
+        const workflow = readFileSync(
+            join(__dirname, '..', '..', '.github', 'workflows', 'contract-tests.yml'),
+            'utf8',
+        );
+        const crons = [...workflow.matchAll(/^\s+- cron:\s*"([^"]+)"/gm)].map(
+            (m) => m[1],
+        );
+        // The daily tier is the `* * *` one; the other is the weekly BYOK cron.
+        const weekly = crons.filter((c) => !/\*\s+\*\s+\*$/.test(c));
+        expect(weekly).toHaveLength(1);
+
+        const standsDown = workflow.match(
+            /if:\s*github\.event\.schedule\s*!=\s*'([^']+)'/,
+        )?.[1];
+        const standsUp = workflow.match(
+            /github\.event\.schedule\s*==\s*'([^']+)'/,
+        )?.[1];
+
+        expect([weekly[0], standsDown, standsUp]).toEqual([
+            weekly[0],
+            weekly[0],
+            weekly[0],
+        ]);
+    });
+
     it('reports which brands this run actually covered', () => {
         const covered = configured.map((c) => c.brand);
-        const skipped = LIVE.filter((c) => !canRun(c)).map((c) => c.brand);
+        // Two reasons a row sits out, and they mean opposite things. "No
+        // credential" is a secret someone can go set; "gated off" is a row
+        // deliberately parked behind a flag because the blocker is outside this
+        // repo. Reporting both as the first sends people hunting for a key that
+        // is already there — the Vertex rows hold a working service account and
+        // wait on a GCP quota grant.
+        const gated = LIVE.filter(
+            (c) => (c as { requires?: () => boolean }).requires?.() === false,
+        ).map((c) => c.brand);
+        const gatedSet = new Set(gated);
+        // Rows that RAN and passed while pinning a degraded upstream. Green for
+        // them means "the gap is still exactly as documented", never "this works".
+        const knownGaps = LIVE.filter(
+            (c) => (c as { knownGap?: boolean }).knownGap === true,
+        ).map((c) => c.brand);
+        const skipped = LIVE.filter(
+            (c) => !canRun(c) && !gatedSet.has(c.brand),
+        ).map((c) => c.brand);
         // Coverage is DATA, not a failure: a PARTIAL secret is a legitimate
         // green, and so is a fork PR with none. Printing it stops "green" from
         // being mistaken for "everything was checked".
         // eslint-disable-next-line no-console
         console.log(
             `[byok-live] covered: ${covered.join(', ') || '(none)'}\n` +
-                `[byok-live] skipped (no credential): ${skipped.join(', ') || '(none)'}`,
+                `[byok-live] skipped (no credential): ${skipped.join(', ') || '(none)'}\n` +
+                `[byok-live] gated off (blocker outside this repo): ${gated.join(', ') || '(none)'}\n` +
+                `[byok-live] known gap (effort configured upstream, no reasoning billed): ${knownGaps.join(', ') || '(none)'}`,
         );
         expect(LIVE.length).toBeGreaterThan(0);
 
@@ -880,6 +1309,76 @@ describe('BYOK reasoning — LIVE provider contract', () => {
         }
     });
 
+    /**
+     * The classifier itself, offline — because the failure it renames only
+     * happens on a Monday with a dead secret, and a helper that is only
+     * exercised then is a helper nobody knows is broken.
+     */
+    it('names a dead credential as a credential failure, not drift', async () => {
+        await expect(
+            onlyDrift('anthropic', Promise.reject(new Error('API key is invalid.'))),
+        ).rejects.toThrow(/CREDENTIAL failure, NOT provider drift/);
+        await expect(
+            onlyDrift('bedrock_opus47', Promise.reject(new Error('Forbidden'))),
+        ).rejects.toThrow(/CREDENTIAL failure/);
+        await expect(
+            onlyDrift(
+                'openai_compatible_claude',
+                Promise.reject(new Error('Invalid Anthropic API Key')),
+            ),
+        ).rejects.toThrow(/CREDENTIAL failure/);
+        await expect(
+            onlyDrift(
+                'amazon_bedrock',
+                Promise.reject(
+                    new Error('Model access is denied due to INVALID_PAYMENT_INSTRUMENT'),
+                ),
+            ),
+        ).rejects.toThrow(/CREDENTIAL failure/);
+
+        // Observed locally on 2026-09-17 with a revoked service-account key —
+        // OpenAI says "incorrect", not "invalid", and the first cut of the
+        // regex let this one through as drift.
+        await expect(
+            onlyDrift(
+                'openai_gpt56',
+                Promise.reject(
+                    new Error(
+                        'Incorrect API key provided: sk-svcac****. You can find your API key at https://platform.openai.com/account/api-keys.',
+                    ),
+                ),
+            ),
+        ).rejects.toThrow(/CREDENTIAL failure/);
+
+        // Observed live on 2026-09-17 against project kody-408918: GCP denies a
+        // delinquent project before the model ever sees the request.
+        await expect(
+            onlyDrift(
+                'google_vertex_gemini',
+                Promise.reject(
+                    new Error(
+                        'Lightning dunning decision is deny for project: projects/39158519179',
+                    ),
+                ),
+            ),
+        ).rejects.toThrow(/CREDENTIAL failure/);
+
+        // The vendor's own words survive — the rename adds a cause, it does not
+        // swallow the evidence.
+        await expect(
+            onlyDrift('anthropic', Promise.reject(new Error('API key is invalid.'))),
+        ).rejects.toThrow(/Provider said: API key is invalid\./);
+
+        // ...and real drift still reads as itself. A classifier that caught
+        // everything would relabel the very failure this tier exists to find.
+        await expect(
+            onlyDrift('zai', Promise.reject(new Error('unknown field `thinking`'))),
+        ).rejects.toThrow(/unknown field `thinking`/);
+        await expect(
+            onlyDrift('zai', Promise.reject(new Error('unknown field `thinking`'))),
+        ).rejects.not.toThrow(/CREDENTIAL failure/);
+    });
+
     for (const c of LIVE) {
         const credential = credentialFor(c);
         const run = canRun(c) ? it : it.skip;
@@ -896,7 +1395,7 @@ describe('BYOK reasoning — LIVE provider contract', () => {
                 // hands back the raw SDK result — and usage is what the
                 // reasoning assertion below reads. It is also a real production
                 // path: the review agent runs through exactly this door.
-                const result = await LLM.run({
+                const result = await onlyDrift(c.brand, LLM.run({
                     byokConfig: {
                         ...c.slot,
                         // Auth may be inherited even when the rest of the slot
@@ -944,7 +1443,7 @@ describe('BYOK reasoning — LIVE provider contract', () => {
                     // A row that emits a thinking BUDGET needs a cap above it
                     // (the request is rejected otherwise), so it states its own.
                     maxOutputTokens: (c as any).maxOutputTokens ?? 4_096,
-                });
+                }));
 
                 expect(typeof result.text).toBe('string');
 
@@ -1074,16 +1573,19 @@ describe('BYOK structured output — LIVE, through LLM.run (the one door)', () =
                 // Calling `runStructuredReviewCall` directly (the first version
                 // of this block) skipped what LLM.run owns: slot resolution and
                 // the primary->fallback cascade in `runWithModelFailover`.
-                const result = await LLM.run({
-                    byokConfig: {
-                        ...c.slot,
-                        apiKey,
-                    } as unknown as NormalizedModel,
-                    user: 'Reply with ok=true and word="ok".',
-                    runName: 'byok-live-structured',
-                    schema,
-                    maxOutputTokens: 4_096,
-                });
+                const result = await onlyDrift(
+                    c.brand,
+                    LLM.run({
+                        byokConfig: {
+                            ...c.slot,
+                            apiKey,
+                        } as unknown as NormalizedModel,
+                        user: 'Reply with ok=true and word="ok".',
+                        runName: 'byok-live-structured',
+                        schema,
+                        maxOutputTokens: 4_096,
+                    }),
+                );
 
                 // Getting a parsed object back means the whole composition held:
                 // the plan picked a channel the model accepts, the schema

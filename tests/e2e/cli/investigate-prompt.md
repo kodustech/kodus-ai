@@ -53,7 +53,7 @@ Your FINAL message must be, in this order:
 [
   {
     "signature": "<scenario-id>:<short-stable-slug-of-error-kind>",
-    "title": "<one-line issue title>",
+    "title": "<one-line summary of the failure>",
     "scenario": "<scenario id>",
     "cell": "<provider> × <license>",
     "classification": "product | test-side | infra",

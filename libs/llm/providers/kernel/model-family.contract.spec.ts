@@ -12,7 +12,11 @@
  * answers. A family added to the union with no row fails the coverage test; a
  * family added with a row that only one resolver can answer fails its own.
  */
-import { detectModelFamily, type ModelFamily } from './model-family';
+import {
+    detectModelFamily,
+    isOpenAiReasonerId,
+    type ModelFamily,
+} from './model-family';
 import { reasoningConfigForModel } from './model-reasoning';
 import { resolveCompatibleReasoningTraits } from './reasoning-traits';
 import { isAnthropicModel } from './anthropic-cache';
@@ -149,5 +153,49 @@ describe('model families are known to the WHOLE system, or to none of it', () =>
         expect(resolveCompatibleReasoningTraits('glm-5.2').canDisableThinking).toBe(true);
         // A GLM whose id merely contains the digits elsewhere is NOT GLM-5.3.
         expect(resolveCompatibleReasoningTraits('glm-4-turbo-r5.3x').canDisableThinking).toBe(true);
+    });
+
+    it('the OpenAI reasoner line excludes Azure\'s gpt-35-turbo alias but keeps two-digit ids', () => {
+        // Azure serves GPT-3.5 as `gpt-35-turbo`. A loose two-digit match reads
+        // that as a reasoner, which drops the user's temperature and renames
+        // max_tokens — but dropping two-digit support entirely would ALSO miss
+        // a real future id: Azure's own convention (dash-encoded minor version,
+        // `35` = "3.5") makes `gpt-55`/`gpt-65` (5.5/6.5) a realistic near-term
+        // shape, not a hypothetical one (kody-ai review, PR #1952).
+        expect(isOpenAiReasonerId('gpt-5.6-sol')).toBe(true);
+        expect(isOpenAiReasonerId('gpt-6-astra')).toBe(true);
+        expect(isOpenAiReasonerId('gpt-35-turbo')).toBe(false);
+        expect(isOpenAiReasonerId('gpt-35-turbo-16k')).toBe(false);
+        expect(isOpenAiReasonerId('gpt-35-turbo-instruct')).toBe(false);
+        expect(reasoningConfigForModel('gpt-35-turbo')).toBeUndefined();
+        // Positive two-digit assertions — a bare `gpt-[5-9]` single-digit
+        // pattern would silently regress these without failing any existing
+        // test, since every prior assertion here is single-digit or negative.
+        expect(isOpenAiReasonerId('gpt-55-turbo')).toBe(true);
+        expect(isOpenAiReasonerId('gpt-65-preview')).toBe(true);
+        expect(isOpenAiReasonerId('gpt-10')).toBe(true);
+        expect(reasoningConfigForModel('gpt-65-preview')).toEqual({
+            type: 'level',
+            options: ['low', 'medium', 'high'],
+        });
+    });
+
+    // Regression (kody-ai review, PR #1954): the fix above excluded ONLY
+    // `gpt-35-turbo` (the one Azure alias a prior test happened to name),
+    // but the comment's own rule — Azure dash-encodes the minor version, so
+    // `35` = 3.5 — implies the WHOLE pre-5 two-digit range is non-reasoning,
+    // not just 35. `gpt-40`/`gpt-41`/`gpt-45` (GPT-4.0/4.1/4.5) matched the
+    // old regex as reasoners, silently dropping temperature and renaming
+    // max_tokens for them — the exact failure this rule exists to prevent,
+    // just for a sibling id nobody happened to assert on.
+    it('excludes the whole pre-5 two-digit range (3x/4x), not just Azure\'s gpt-35 alias', () => {
+        for (const id of ['gpt-36', 'gpt-40', 'gpt-41', 'gpt-45', 'gpt-49-turbo']) {
+            expect(isOpenAiReasonerId(id)).toBe(false);
+        }
+        expect(reasoningConfigForModel('gpt-45-turbo')).toBeUndefined();
+        // Still recognizes real gpt-5-and-later two-digit ids — the fix must
+        // narrow the exclusion, not widen it into swallowing gpt-5x too.
+        expect(isOpenAiReasonerId('gpt-50')).toBe(true);
+        expect(isOpenAiReasonerId('gpt-55-turbo')).toBe(true);
     });
 });

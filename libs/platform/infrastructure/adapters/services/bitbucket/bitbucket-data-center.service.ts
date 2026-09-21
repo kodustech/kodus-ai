@@ -2780,6 +2780,12 @@ export class BitbucketDataCenterService implements Omit<
         configKey: IntegrationConfigKey;
         configValue: any;
         type?: 'replace' | 'append';
+        /**
+         * Set by the chunked repository save on every request but the last, so
+         * webhooks are reconciled once against the complete selection instead
+         * of against each partially-persisted chunk.
+         */
+        deferWebhooks?: boolean;
     }): Promise<void> {
         try {
             const integration = await this.integrationService.findOne({
@@ -2800,8 +2806,15 @@ export class BitbucketDataCenterService implements Omit<
                 params.type,
             );
 
-            // If repositories are updated, ensure webhooks are generated for them
-            if (params.configKey === IntegrationConfigKey.REPOSITORIES) {
+            // If repositories are updated, ensure webhooks are generated for
+            // them — except for an intermediate chunk of a chunked save, whose
+            // persisted selection is still partial. Reconciling against a
+            // partial selection removes the hooks of everything not in it; the
+            // last chunk arrives complete and runs this once.
+            if (
+                params.configKey === IntegrationConfigKey.REPOSITORIES &&
+                !params.deferWebhooks
+            ) {
                 this.createWebhook(params.organizationAndTeamData).catch(
                     (err) => {
                         this.logger.warn({

@@ -206,6 +206,27 @@ export interface Provider {
     // the diff there is nothing to validate a comment's anchor against.
     // Providers that don't implement it make the assertion self-skip.
     listChangedFiles?(pr: { number: number }): Promise<ChangedFile[]>;
+    // Optional: pushes a follow-up commit onto an ALREADY-OPEN PR's branch —
+    // used by scenarios that need a real 2nd review round (e.g. "the
+    // developer applies the suggestion for real", not just an `@kody
+    // review` re-trigger on the same diff). Optional because it needs a
+    // real git remote (cloneUrl), same constraint openPR already has.
+    pushFollowupCommit?(
+        pr: OpenedPR,
+        files: Record<string, string>,
+        commitMessage: string,
+    ): Promise<void>;
+    // Optional: raw bodies of Kody's real review comments (inline + PR-level,
+    // status/license-notice placeholders excluded) posted since `sinceIso`,
+    // optionally restricted to comments anchored to `path`. `pollForReview`
+    // only returns counts + one truncated sample — scenarios that need to
+    // pattern-match content across ALL of a round's comments (e.g. "did any
+    // comment re-raise the issue this file's fix already addressed") need
+    // this instead.
+    listReviewCommentBodies?(
+        pr: { number: number },
+        opts: { sinceIso: string; path?: string },
+    ): Promise<string[]>;
     // Idempotent pre-flight sweep — closes/abandons every PR (or MR) on
     // the fixture repo whose title starts with `[e2e]` and is still
     // open. Called once per (provider, target) pair at matrix start,

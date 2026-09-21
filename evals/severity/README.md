@@ -1,5 +1,11 @@
 # Severity eval
 
+> - **Answers:** Does severity reclassification push real bugs below the org's filter threshold?
+> - **Runs:** every engine PR, with the classifier mocked (`--mock=heuristic`, `evals/wiring-smoke.js`).
+> - **Run it:** `node evals/severity/run.js --mock=heuristic --gate` · `node evals/severity/run.js --model=gpt-5.4-mini --gate`
+> - **Gate:** `--gate` thresholds in `evals/severity/run.js`.
+> - **Cost:** mock: none. Live: one classification call per finding.
+
 Measures the review pipeline's **severity reclassification** step
 (`classify-severity.ts` / `severity-prompt.ts`) — the secondary pass that
 overwrites agent-assigned severity before `severityLevelFilter` and PR posting.

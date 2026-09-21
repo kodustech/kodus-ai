@@ -64,10 +64,11 @@ describe('model-context-window', () => {
             expect(getModelContextWindow('glm-4-7')).toBe(202_752);
         });
 
-        it('an override that agrees with the mirror is simply redundant', () => {
-            // claude-sonnet-4-5 was in both, with the same number. Deleting the
-            // duplicate changes nothing, which is the point of deleting it.
-            expect(getModelContextWindow('claude-sonnet-4-5')).toBe(200_000);
+        it('a model the mirror carries needs no override at all', () => {
+            // claude-sonnet-4-5 sits only in the mirror now, so a refresh moves
+            // its window on its own — which a duplicated override would have
+            // pinned in place.
+            expect(getModelContextWindow('claude-sonnet-4-5')).toBe(1_000_000);
         });
     });
 

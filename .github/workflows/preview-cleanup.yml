@@ -16,8 +16,8 @@ permissions:
     contents: read
 
 env:
-    RUNO_HOME: /home/runner/.runo-preview
-    RUNO_AWS_REGION: sa-east-1
+    RUNO_HOME: /home/runner/.runo-preview-ohio
+    RUNO_AWS_REGION: us-east-2
     RUNO_REF: main
 
 jobs:
@@ -53,11 +53,13 @@ jobs:
 
             - name: Destroy the environment
               env:
-                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-                  RUNO_SSH_KEY: ${{ secrets.PREVIEW_RUNO_SSH_KEY }}
+                  RUNO_SERVER: ${{ vars.PREVIEW_RUNO_SERVER }}
+                  RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
                   HEAD_REF: ${{ github.event.pull_request.head.ref }}
               run: |
+                  set -euo pipefail
+                  : "${RUNO_SERVER:?PREVIEW_RUNO_SERVER is not configured}"
+                  : "${RUNO_TOKEN:?PREVIEW_RUNO_TOKEN is not configured}"
                   # `runo destroy` exits 0 when there is nothing to destroy (the
                   # normal case for a PR that never got a preview) and non-zero
                   # on a real failure — which must stay loud, or a leaked VM
@@ -65,7 +67,7 @@ jobs:
                   $RUNO destroy --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml
 
             - name: Mark the preview as gone
-              if: always()
+              if: success()
               uses: actions/github-script@v9.0.0
               with:
                   script: |

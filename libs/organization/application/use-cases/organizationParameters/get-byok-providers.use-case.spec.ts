@@ -1,5 +1,16 @@
 import { GetByokProvidersUseCase } from './get-byok-providers.use-case';
 
+// `isProviderAvailableHere('kodus')` reads `environment.API_CLOUD_MODE` from
+// the COMPILED `libs/ee/configs/environment/environment.ts` — a generated
+// file that differs per local checkout (self-hosted vs cloud), not something
+// this spec controls. Mocked here so the "kodus provider" tests below assert
+// the use-case's own gate logic, not whatever cloud-mode this machine's
+// environment.ts happens to have been generated with.
+jest.mock(
+    '@libs/core/infrastructure/services/providers/kodus-provider-availability',
+    () => ({ isProviderAvailableHere: jest.fn(() => true) }),
+);
+
 /**
  * The use-case is a pure descriptor over the process-wide provider REGISTRY
  * (populated by the '@libs/llm/providers' barrel's self-registration side

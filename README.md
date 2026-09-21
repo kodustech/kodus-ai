@@ -246,7 +246,7 @@ For full setup instructions, follow the [Local Quickstart](https://docs.kodus.io
 | Users | Unlimited | Unlimited | Unlimited |
 | Kody Rules | Up to 10 | Unlimited | Unlimited |
 | Active plugins | Up to 3 | Unlimited | Unlimited |
-| Kody Learnings and Memory | ✅ | ✅ | ✅ |
+| Kody Memory | ✅ | ✅ | ✅ |
 | Quality Radar issues | Unlimited | Unlimited | Unlimited |
 | Priority queue for Kody Agents | ❌ | ✅ | ✅ |
 | Engineering Metrics / Cockpit | ❌ | ✅ | ✅ |

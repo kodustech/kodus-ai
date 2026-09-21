@@ -242,3 +242,124 @@ describe('#1826 — a whole-file finding is delivered as a PR comment', () => {
         expect(result.validSuggestions ?? []).toEqual([]);
     });
 });
+
+/**
+ * A kody_rules finding with a line but no file used to fall through to
+ * file-level grouping keyed on the empty string, which never matches a
+ * real changed file and silently discarded the finding as
+ * DISCARDED_BY_CODE_DIFF. `isPrLevelSuggestion` originally required BOTH
+ * fields missing (`&&`); a missing file alone already means the finding
+ * cannot be anchored to a diff position, so it must route to
+ * validSuggestionsByPR instead.
+ */
+describe('a kody_rules finding with a line but no file goes PR-level, not discarded', () => {
+    it('is delivered as a PR-level comment instead of DISCARDED_BY_CODE_DIFF', async () => {
+        const result = await run([
+            ruleFinding({ relevantFile: undefined, relevantLinesStart: 120 }),
+        ]);
+
+        expect(result.validSuggestionsByPR).toHaveLength(1);
+        expect(
+            (result.discardedSuggestions ?? []).some(
+                (s: any) => s.brokenKodyRulesIds?.[0] === CONTEXT_RULE,
+            ),
+        ).toBe(false);
+    });
+
+    // Kody's own review on this PR caught this: checking relevantLinesStart
+    // too (not just relevantFile) let a finding naming an out-of-PR file
+    // with no line citation bypass the changedFiles discard guard (KRC-20)
+    // and leak out as an unanchored PR-level comment.
+    it('still discards a finding naming a file outside the PR even with no line citation', async () => {
+        const result = await run([
+            ruleFinding({
+                relevantFile: 'src/not-in-this-pr.ts',
+                relevantLinesStart: undefined,
+                relevantLinesEnd: undefined,
+            }),
+        ]);
+
+        expect(result.validSuggestionsByPR ?? []).toEqual([]);
+        expect(
+            (result.discardedSuggestions ?? []).some(
+                (s: any) => s.relevantFile === 'src/not-in-this-pr.ts',
+            ),
+        ).toBe(true);
+    });
+
+    // Kody's review on this PR's second commit caught this too: a
+    // relevantFile that IS in the PR but whose patch has no valid diff
+    // ranges (extractValidDiffLines returns []) makes snapLinesToDiff
+    // return the finding unchanged (agent-review.stage.ts:178) — the line
+    // stays missing. Falling into the file-level branch then produced a
+    // broken inline comment (calculateCommentStartLine returns undefined
+    // for a missing relevantLinesStart, and create-file-comments.stage.ts
+    // posts it anyway with start_line/line both undefined).
+    it('routes a finding naming an in-PR file with an unparseable patch to PR-level instead of a line-less inline comment', async () => {
+        const result = await run(
+            [
+                ruleFinding({
+                    relevantFile: 'src/empty-patch.ts',
+                    relevantLinesStart: undefined,
+                    relevantLinesEnd: undefined,
+                    brokenKodyRulesIds: ['rule-unrelated'],
+                }),
+            ],
+            {
+                changedFiles: [
+                    { filename: 'src/user.ts', patch: PATCH },
+                    { filename: 'src/empty-patch.ts', patch: '' },
+                ],
+            },
+        );
+
+        expect(result.validSuggestionsByPR).toHaveLength(1);
+        // No line: cite the file alone, not a fabricated `:1` that need not
+        // exist in this file's diff (Kody's own review on this PR's third
+        // commit caught the earlier `?? 1` version doing exactly that).
+        expect(result.validSuggestionsByPR[0].suggestionContent).toContain(
+            '`src/empty-patch.ts`',
+        );
+        expect(result.validSuggestionsByPR[0].suggestionContent).not.toContain(
+            'src/empty-patch.ts:',
+        );
+        const emptyPatchFile = (result.fileAnalysisResults ?? []).find(
+            (f: any) => f.file?.filename === 'src/empty-patch.ts',
+        );
+        expect(emptyPatchFile?.validSuggestionsToAnalyze ?? []).toEqual([]);
+    });
+
+    // `??` only catches null/undefined, not 0 — a bare `relevantLinesStart
+    // ?? 1` would have let `0` slip through as a fabricated `:0` anchor. The
+    // fix instead branches on the same falsy check (`!relevantLinesStart`)
+    // isPrLevelSuggestion already uses, so 0 is treated as "no real line"
+    // too. relevantFile must resolve to a file with no valid diff ranges —
+    // otherwise snapLinesToDiff's own `!start` check (0 is falsy) would
+    // overwrite the 0 with a real snapped line before this code ever runs.
+    it('treats relevantLinesStart 0 as no real line, not a fabricated `:0` anchor', async () => {
+        const result = await run(
+            [
+                ruleFinding({
+                    relevantFile: 'src/empty-patch.ts',
+                    relevantLinesStart: 0,
+                    relevantLinesEnd: 0,
+                    brokenKodyRulesIds: ['rule-unrelated'],
+                }),
+            ],
+            {
+                changedFiles: [
+                    { filename: 'src/user.ts', patch: PATCH },
+                    { filename: 'src/empty-patch.ts', patch: '' },
+                ],
+            },
+        );
+
+        expect(result.validSuggestionsByPR).toHaveLength(1);
+        expect(result.validSuggestionsByPR[0].suggestionContent).toContain(
+            '`src/empty-patch.ts`',
+        );
+        expect(result.validSuggestionsByPR[0].suggestionContent).not.toMatch(
+            /:0/,
+        );
+    });
+});

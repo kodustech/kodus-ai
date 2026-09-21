@@ -27,6 +27,22 @@ export const createOrUpdateRepositories = (
     repositories: Repository[],
     teamId: string,
     type: "replace" | "append" = "replace",
+    options?: {
+        /**
+         * Tells the backend not to set up webhooks for this request because
+         * the selection it persists is not the complete one yet.
+         *
+         * Only the chunked save sets it. Every provider reconciles webhooks
+         * against the persisted selection, so an intermediate chunk makes them
+         * act on a partial one: with 200 repositories saved in chunks of 50,
+         * the first chunk persists 50 and the providers that remove webhooks
+         * for repositories outside the selection delete the other 150, which
+         * the later chunks then recreate. Those repositories are left without
+         * a webhook in between, which silently drops their PR events, and the
+         * hooks never come back if the process dies mid-save.
+         */
+        deferWebhooks?: boolean;
+    },
 ) => {
     return axiosAuthorized.post(
         CODE_MANAGEMENT_API_PATHS.CREATE_OR_UPDATE_REPOSITORIES_CONFIG,
@@ -34,6 +50,7 @@ export const createOrUpdateRepositories = (
             repositories,
             teamId,
             type,
+            ...(options?.deferWebhooks ? { deferWebhooks: true } : {}),
         },
     );
 };
@@ -58,8 +75,13 @@ export const createOrUpdateRepositoriesInChunks = async (
 
     for (let i = 0; i < chunks.length; i++) {
         const type = i === 0 ? "replace" : "append";
+        const isLastChunk = i === chunks.length - 1;
         try {
-            await createOrUpdateRepositories(chunks[i], teamId, type);
+            // Webhooks are set up once, by the last chunk, against the
+            // complete selection.
+            await createOrUpdateRepositories(chunks[i], teamId, type, {
+                deferWebhooks: !isLastChunk,
+            });
             results.success += chunks[i].length;
         } catch (error) {
             results.failed += chunks[i].length;

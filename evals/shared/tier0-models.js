@@ -48,7 +48,7 @@ const TIER0 = {
     // Mirrors the PROD trial/managed default (KODUS_DEFAULT_MODEL): DeepSeek
     // served via FIREWORKS, not DeepSeek-native — different transport + the
     // `-0731` build. Use this to eval what the trial actually runs.
-    'deepseek-v4-flash@fireworks': { provider: 'openai_compatible', doModel: 'accounts/fireworks/models/deepseek-v4-flash-0731', keyEnvs: ['API_FIREWORKS_API_KEY', 'FIREWORKS_API_KEY'], baseURL: 'https://api.fireworks.ai/inference/v1' },
+    'deepseek-v4-flash@fireworks': { provider: 'openai_compatible', doModel: 'accounts/fireworks/models/deepseek-v4-flash-0731', keyEnvs: ['API_FIREWORKS_API_KEY', 'FIREWORKS_API_KEY', 'BYOK_FIREWORKS_API_KEY'], baseURL: 'https://api.fireworks.ai/inference/v1' },
     // K3 usa chave própria (KIMI_NEW) — crédito limitado, ver custo antes de
     // disparar passada cheia: $3/$15 por milhão, ~3x o k2.7.
     'kimi-k3': { provider: 'openai_compatible', keyEnvs: ['KIMI_NEW', 'BYOK_MOONSHOT_API_KEY'], baseURL: 'https://api.moonshot.ai/v1' },
@@ -91,11 +91,26 @@ const TIER0 = {
     'gpt-5.6-sol@sub': { provider: 'codex_subscription', codexModel: 'gpt-5.6-sol', keyEnvs: [] },
     'gpt-5.6-luna@sub': { provider: 'codex_subscription', codexModel: 'gpt-5.6-luna', keyEnvs: [] },
     'gpt-5.6-terra@sub': { provider: 'codex_subscription', codexModel: 'gpt-5.6-terra', keyEnvs: [] },
+
+    // Scripted local model (evals/shared/fake-llm-server.js) for the wiring
+    // smoke: the real self-hosted openai_compatible route, pointed at 127.0.0.1.
+    // Measures nothing — it proves the harness still drives the engine.
+    'eval-fake': {
+        provider: 'openai_compatible',
+        keyEnvs: ['EVAL_FAKE_LLM_KEY'],
+        get baseURL() {
+            return process.env.EVAL_FAKE_LLM_URL;
+        },
+    },
 };
 
 // Models the benchmark excludes from the default full run (cost). Opt in with
 // --model to force one.
 const EXCLUDED_BY_DEFAULT = new Set(['claude-opus-4-7']);
+
+// Routes that only answer inside the wiring smoke (its local server is up only
+// while it runs): never offered as a runnable model.
+const LOCAL_ONLY = new Set(['eval-fake']);
 
 // The push-to-main gate matrix. Small on purpose: TIER0 is 23 routes and the
 // suite cannot run on all of them per merge. Adding a model here costs money on
@@ -107,7 +122,7 @@ function tier0() {
 // Every routable id minus the ones the benchmark skips by default (cost). NOT
 // the gate set — that is tier0(). Read by `run-recall --list-models`.
 function defaultMatrix() {
-    return Object.keys(TIER0).filter((id) => id !== 'gpt-5.4-mini' && !EXCLUDED_BY_DEFAULT.has(id));
+    return Object.keys(TIER0).filter((id) => id !== 'gpt-5.4-mini' && !EXCLUDED_BY_DEFAULT.has(id) && !LOCAL_ONLY.has(id));
 }
 
 // Point the env at `modelId` so buildModelFromSlot(undefined, ...) builds it.

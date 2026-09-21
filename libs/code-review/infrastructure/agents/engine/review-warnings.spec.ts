@@ -2,7 +2,7 @@ import {
     dedupReviewWarnings,
     buildProviderFallbackWarning,
     buildRuleContextUnavailableWarning,
-    buildBadFixDroppedWarning,
+    buildBadFixDowngradedWarning,
     type ReviewWarning,
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 
@@ -158,26 +158,26 @@ describe('buildRuleContextUnavailableWarning', () => {
     });
 });
 
-describe('buildBadFixDroppedWarning', () => {
-    it('reports the drop count in `detail`', () => {
-        const warning = buildBadFixDroppedWarning({
+describe('buildBadFixDowngradedWarning', () => {
+    it('reports the downgraded count in `detail`', () => {
+        const warning = buildBadFixDowngradedWarning({
             count: 3,
             modelName: 'gemini',
             agentName: 'bug',
         });
-        expect(warning.kind).toBe('BAD_FIX_DROPPED');
+        expect(warning.kind).toBe('BAD_FIX_DOWNGRADED');
         expect(warning.reason).toBe('unusable_fix');
         expect(warning.detail).toContain('3 suggestion(s)');
     });
 
     it('merges counts from two agents into one dashboard entry via dedup', () => {
         const out = dedupReviewWarnings([
-            buildBadFixDroppedWarning({
+            buildBadFixDowngradedWarning({
                 count: 2,
                 modelName: 'gemini',
                 agentName: 'bug',
             }),
-            buildBadFixDroppedWarning({
+            buildBadFixDowngradedWarning({
                 count: 1,
                 modelName: 'gemini',
                 agentName: 'security',

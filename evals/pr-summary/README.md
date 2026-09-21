@@ -1,5 +1,11 @@
 # PR-summary eval
 
+> - **Answers:** Is the PR summary generated, posted, and sent to the configured model?
+> - **Runs:** every engine PR, against the scripted model (`evals/wiring-smoke.js`) · Friday, on every tier-0 model (`evals/tier0-smoke.js`).
+> - **Run it:** `pnpm eval:pr-summary:mock` · `pnpm eval:pr-summary`
+> - **Gate:** binary assertions, with no numeric floor (see below).
+> - **Cost:** one model call per case; none mocked.
+
 Guards the **"generate PR summary on open"** feature — the AI description Kody
 writes to a PR when a client opens it.
 
@@ -71,14 +77,14 @@ Flags: `--model=<tier0 id>` · `--mock` (fixed summary text, no network) ·
 `2` infra (missing key / model-construction crash / all cases hit
 network errors — "not measured", never a silent green).
 
-## Where it runs in CI (`.github/workflows/code-review-evals.yml`)
+## Where it runs in CI
 
-- **PR** → `pr-summary-gate` matrix on `gpt-5.4-mini`, `kimi-k2.7-code`,
-  `gemini-3-flash-preview` (three models so one degrading can't hide behind a
-  healthy one), `--gate`, required via the `pr-evals-gate` rollup.
-- **push → main** → part of the full tier-0 suite (`run-suite.js`).
-- **harness** (`engine-gate.js --profile=harness`) → file + dataset preflight
-  (no model), so a deleted fixture or a behaviour gap fails fast with no secrets.
+- **PR** → `code-review-evals-pr.yml` runs it against the scripted local model
+  (`evals/wiring-smoke.js`): real routing and posting, no key, so a harness
+  break fails the PR that caused it.
+- **Friday** → `code-review-evals-tier0.yml` runs it on every tier-0 model with
+  the release train (`evals/tier0-smoke.js`), so one model degrading can't hide
+  behind a healthy one.
 
 ## No calibrated floor (by design)
 

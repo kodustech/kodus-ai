@@ -440,7 +440,7 @@ jobs:
               if: failure() && steps.readiness.outcome == 'failure'
               uses: ./.github/actions/discord-notify
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
                   status: failure
                   title: "🔌 E2E: QA unreachable — matrix did NOT run"
                   description: |
@@ -469,7 +469,7 @@ jobs:
                   steps.digest.outputs.verdict != 'inconclusive'
               uses: ./.github/actions/discord-notify
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
                   status: failure
                   title: "❌ E2E cloud matrix: ${{ steps.digest.outputs.headline || 'failed (no digest)' }}"
                   description: |
@@ -490,7 +490,7 @@ jobs:
                   steps.digest.outputs.verdict == 'inconclusive'
               uses: ./.github/actions/discord-notify
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
                   status: cancelled
                   title: "🚧 E2E cloud matrix INCONCLUSIVE: ${{ steps.digest.outputs.headline }}"
                   description: |
@@ -517,7 +517,7 @@ jobs:
                   steps.digest.outputs.found != 'true'
               uses: ./.github/actions/discord-notify
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
                   status: failure
                   title: '⏱️ E2E cloud matrix: ended with no result'
                   description: |
@@ -532,7 +532,7 @@ jobs:
               if: success() && steps.digest.outputs.advisory_count != '0' && steps.digest.outputs.advisory_count != ''
               uses: ./.github/actions/discord-notify
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
                   status: cancelled
                   title: "⚠️ E2E cloud matrix GREEN with advisories: ${{ steps.digest.outputs.headline }}"
                   description: |

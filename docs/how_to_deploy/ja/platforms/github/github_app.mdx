@@ -59,6 +59,22 @@ WebhookはKodusにプルリクエストのイベントを通知します。
 
 - **Active**オプションがチェックされていることを確認
 
+## リポジトリ権限とイベントを設定する
+
+**Repository permissions** で、有効にする機能に合わせて次の権限を設定します。すべてを **No access** のままにしないでください。
+
+| Permission | Access |
+| --- | --- |
+| Contents | 読み取り専用 |
+| Pull requests | 読み取りと書き込み |
+| Issues | 読み取りと書き込み |
+| Checks | 読み取りと書き込み |
+| Metadata | 読み取り専用 |
+
+Contents の書き込み権限が必要なのはファイルをコミットする機能です。コードを読むだけなら読み取り専用で十分です。対象リポジトリにアプリをインストールし、既存のインストールでは追加権限を承認してください。
+
+**Pull request**、**Pull request review comment**、**Issue comment**、**Push** を購読します。現在のハンドラーはこの4種類を受け付けます。他のイベントは無視されても 200 を返す場合があります。
+
 ## ステップ4：認証情報の収集と.envへの追加
 
 <img src="https://kodus.io/wp-content/uploads/2026/01/gthubapp-env.gif" alt="GitHub App Webhook" />
@@ -117,3 +133,14 @@ WEB_GITHUB_INSTALL_URL="https://github.com/apps/your-app/installations/new"
 ```
 
 GitHubで**Save Changes**をクリックし、Kodusアプリケーションを再起動して変更を適用してください。
+
+
+## 接続を確認する
+
+Webhook URL はフロントエンドのログイン画面ではなく、webhooks サービスに到達する必要があります。`API_DOMAIN` を使う場合は、プロキシで `/github/webhook` をそのサービスに転送してください。`WEB_DOMAIN` や 200/307 応答だけでは正しい配信を確認できません。
+
+**Redirect on update** を有効にしてください。インストールやリポジトリアクセスの変更後は、**Setup URL** を経由してブラウザで Kodus に戻るまで完了してください。`ping` の成功や無視された `installation` イベントだけでは Kodus の連携は作成されません。
+
+Kodus の Git Settings で対象リポジトリが接続済みであることを確認します。テスト用のプルリクエストを開き、GitHub の配信応答と Kodus の webhooks/worker ログを確認してください。接続がなければ、リポジトリの許可、承認済み権限、Setup URL、プロキシを確認します。
+
+[GitHub の登録ガイド](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app).

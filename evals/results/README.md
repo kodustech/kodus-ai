@@ -1,5 +1,11 @@
 # Eval results ledger
 
+> - **Answers:** What did past eval runs measure, per model, engine, config and judge?
+> - **Runs:** never on its own. Runs are appended by hand with `evals/results/record.js`; CI results live in workflow artifacts instead.
+> - **Run it:** `node evals/results/aggregate.js`
+> - **Gate:** none (a ledger).
+> - **Cost:** none.
+
 Durable, versioned record of eval runs so per-model / per-config performance is
 tracked over time instead of evaporating in `/tmp` each session.
 

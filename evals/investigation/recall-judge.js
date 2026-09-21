@@ -80,6 +80,11 @@ function findKeyInText(text, envNames) {
 // Resolve the API key for a given model's provider: process.env → .env files →
 // ~/.kodus-dev/config, in env-name priority order.
 function loadKeyForModel(model) {
+    // JUDGE_API_KEY wins: the finder's model setup overwrites API_OPEN_AI_API_KEY
+    // with the key of whatever openai-compatible model it runs (Fireworks for the
+    // nightly), so an OpenAI judge resolving by name would send that key to OpenAI.
+    if (process.env.JUDGE_API_KEY) return process.env.JUDGE_API_KEY;
+
     const envNames = PROVIDER_KEY_ENVS[providerFor(model)];
 
     for (const name of envNames) {
@@ -161,7 +166,9 @@ async function judgeCall(model, apiKey, prompt) {
                     messages: [{ role: 'user', content: prompt }],
                 };
             } else if (provider === 'openai') {
-                url = 'https://api.openai.com/v1/chat/completions';
+                // JUDGE_BASE_URL: any OpenAI-compatible endpoint. The wiring smoke
+                // points it at the local scripted model so scoring runs keyless.
+                url = `${(process.env.JUDGE_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '')}/chat/completions`;
                 headers = { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' };
                 // gpt-5.x uses max_completion_tokens; no temperature override
                 // (some minis only accept the default), and reasoning eats
@@ -170,6 +177,9 @@ async function judgeCall(model, apiKey, prompt) {
                     model,
                     max_completion_tokens: 2048,
                     messages: [{ role: 'user', content: prompt }],
+                    // JUDGE_REASONING_EFFORT (e.g. low): part of the judge's
+                    // identity — floors are calibrated under a model AND effort.
+                    ...(process.env.JUDGE_REASONING_EFFORT ? { reasoning_effort: process.env.JUDGE_REASONING_EFFORT } : {}),
                 };
             } else {
                 url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;

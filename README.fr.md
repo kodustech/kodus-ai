@@ -246,7 +246,7 @@ Pour des instructions d'installation complètes, suivez le [Démarrage rapide lo
 | Utilisateurs | Illimités | Illimités | Illimités |
 | Kody Rules | Jusqu'à 10 | Illimitées | Illimitées |
 | Plugins actifs | Jusqu'à 3 | Illimités | Illimités |
-| Kody Learnings et mémoire | ✅ | ✅ | ✅ |
+| Mémoire de Kody | ✅ | ✅ | ✅ |
 | Issues Quality Radar | Illimités | Illimités | Illimités |
 | File prioritaire pour les Kody Agents | ❌ | ✅ | ✅ |
 | Métriques d'ingénierie / Cockpit | ❌ | ✅ | ✅ |

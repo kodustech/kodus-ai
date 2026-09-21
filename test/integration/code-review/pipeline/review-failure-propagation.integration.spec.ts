@@ -351,11 +351,16 @@ describe('review failure propagation (agent → summary → approve → check)',
             );
         });
 
-        it('holds back the approval and marks the check NEUTRAL', async () => {
+        // #1844: a summary-only failure no longer holds back approval or
+        // degrades the check. The review itself completed cleanly (0
+        // suggestions, no agent failures) — only the decorative PR-summary
+        // narrative failed to generate afterward, which says nothing about
+        // whether the already-posted review is trustworthy.
+        it('still approves and marks the check SUCCESS', async () => {
             await run();
 
-            expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
-            expect(finalConclusion()).toBe(CheckConclusion.NEUTRAL);
+            expect(codeManagement.approvePullRequest).toHaveBeenCalledTimes(1);
+            expect(finalConclusion()).toBe(CheckConclusion.SUCCESS);
         });
     });
 

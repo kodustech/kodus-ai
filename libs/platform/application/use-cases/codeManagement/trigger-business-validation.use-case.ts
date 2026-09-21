@@ -4,6 +4,7 @@ import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 
 import { BusinessRulesValidationAgentProvider } from '@libs/agents/infrastructure/services/agents/business-rules-validation/businessRulesValidationAgent';
+import { NO_TASK_MCP_SENTINEL } from '@libs/agents/infrastructure/services/agents/business-rules-validation/no-task-mcp-sentinel';
 import { BusinessRulesPrepareContext } from '@libs/agents/infrastructure/services/agents/business-rules-validation/types';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
@@ -123,14 +124,29 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
             executionContext,
         });
 
-        const result = await this.businessRulesValidationAgentProvider.execute({
-            organizationAndTeamData,
-            thread: this.createThread({
+        const agentResult =
+            await this.businessRulesValidationAgentProvider.execute({
                 organizationAndTeamData,
-                context: executionContext,
-            }),
-            prepareContext,
-        });
+                thread: this.createThread({
+                    organizationAndTeamData,
+                    context: executionContext,
+                }),
+                prepareContext,
+            });
+
+        // NO_TASK_MCP_SENTINEL is an internal marker (never meant to reach a
+        // user) that the pipeline path silently swallows. This CLI-triggered
+        // path returns `result` straight through the API response to the
+        // `kodus` CLI's stdout, so leaving it unguarded here surfaces the raw
+        // "__NO_TASK_MCP__" string to whoever ran the command.
+        const result =
+            agentResult ===
+            NO_TASK_MCP_SENTINEL
+                ? 'No task-management MCP (Jira, GitHub Issues, Linear, Notion, ' +
+                  'ClickUp, etc.) is connected for this organization, so ' +
+                  'business rules validation has nothing to compare the PR ' +
+                  'against. Connect one in the Kodus settings to use this command.'
+                : agentResult;
 
         if (executionContext.mode === 'pull_request') {
             return {

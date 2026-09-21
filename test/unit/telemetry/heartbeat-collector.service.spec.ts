@@ -1,4 +1,6 @@
 import { HeartbeatCollectorService } from '@libs/telemetry/application/services/heartbeat-collector.service';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 type MockDataSource = {
     query: jest.Mock;
@@ -42,6 +44,10 @@ function build(opts: {
 
 describe('HeartbeatCollectorService.collect', () => {
     const originalEnv = { ...process.env };
+
+    beforeEach(() => {
+        delete process.env.RELEASE_VERSION;
+    });
 
     afterEach(() => {
         process.env = { ...originalEnv };
@@ -94,6 +100,39 @@ describe('HeartbeatCollectorService.collect', () => {
         expect(metrics.runtime.cpu_count).toBeGreaterThan(0);
         expect(metrics.runtime.db_type).toBe('postgres');
     });
+
+    it.each([
+        ['selfhosted-2.1.33', '2.1.33'],
+        ['v2.1.33', '2.1.33'],
+        ['2.1.33', '2.1.33'],
+        ['  selfhosted-2.1.33  ', '2.1.33'],
+        ['selfhosted-2.1.33-rc.1', '2.1.33-rc.1'],
+        ['v2.1.33-rc.1+build.42', '2.1.33-rc.1+build.42'],
+    ])('reports release %s as %s', async (release, expected) => {
+        process.env.RELEASE_VERSION = release;
+        const { service } = build({ dsHandler: dsRouter({}) });
+
+        const metrics = await service.collect({ firstSeenAt: new Date() });
+
+        expect(metrics.kodus.version).toBe(expected);
+    });
+
+    it.each([undefined, '', '   ', 'local', ' local '])(
+        'falls back to package.json for release %s',
+        async (release) => {
+            if (release !== undefined) {
+                process.env.RELEASE_VERSION = release;
+            }
+            const { service } = build({ dsHandler: dsRouter({}) });
+            const pkg = JSON.parse(
+                readFileSync(join(process.cwd(), 'package.json'), 'utf8'),
+            );
+
+            const metrics = await service.collect({ firstSeenAt: new Date() });
+
+            expect(metrics.kodus.version).toBe(pkg.version);
+        },
+    );
 
     it('truncates Postgres version() output to first two tokens', async () => {
         const { service } = build({

@@ -108,6 +108,10 @@ export class CreateRepositoriesUseCase implements IUseCase {
                 configKey: IntegrationConfigKey.REPOSITORIES,
                 configValue: params.repositories,
                 type: params.type,
+                // Forwarded so the adapters can tell an intermediate chunk of
+                // a chunked save from an authoritative one. Absent means
+                // authoritative, which is what every other caller sends.
+                deferWebhooks: params.deferWebhooks,
                 organizationAndTeamData: {
                     teamId: teamId,
                     organizationId: organizationId,

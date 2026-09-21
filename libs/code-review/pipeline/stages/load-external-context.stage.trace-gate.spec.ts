@@ -31,6 +31,10 @@ describe('LoadExternalContextStage Trace alpha gate', () => {
             getReleaseTrack: jest.fn().mockResolvedValue('alpha'),
         };
 
+        const buildPreviousReviewDecisionsUseCase = {
+            execute: jest.fn().mockResolvedValue([]),
+        };
+
         const stage = new LoadExternalContextStage(
             {} as any,
             {} as any,
@@ -38,6 +42,7 @@ describe('LoadExternalContextStage Trace alpha gate', () => {
             buildTraceContextPackUseCase as any,
             featureGate as any,
             organizationService as any,
+            buildPreviousReviewDecisionsUseCase as any,
         );
 
         return {

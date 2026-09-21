@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { ssoDropletName } from "../lib/sso-droplet-name.js";
 import type { RunContext, Scenario } from "../lib/types.js";
 
 // SSO cookie-domain regression as a release-matrix scenario.
@@ -31,6 +32,10 @@ const PROVISION = resolve(
     "provision.sh",
 );
 
+// See tests/e2e/lib/sso-droplet-name.ts for why CI and local/manual
+// runs must not share one fixed name.
+const DROPLET_NAME = ssoDropletName();
+
 interface ScriptResult {
     code: number;
     stdout: string;
@@ -52,6 +57,9 @@ function runScript(script: string, args: string[]): Promise<ScriptResult> {
                 // we set it explicitly so a stray --headed in someone's
                 // shell can't leak in.
                 SSO_E2E_HEADLESS: "1",
+                // See DROPLET_NAME above: keeps CI off the shared local
+                // debug droplet's name.
+                SSO_E2E_DROPLET_NAME: DROPLET_NAME,
             },
             stdio: ["ignore", "pipe", "pipe"],
         });
@@ -99,7 +107,7 @@ export const ssoCookieDomain: Scenario = {
         // re-run in the same machine completes in ~30s.
         const result = await runScript(PROVISION, [
             "--name",
-            "sso-e2e",
+            DROPLET_NAME,
             "--reuse",
         ]);
 
@@ -130,14 +138,17 @@ export const ssoCookieDomain: Scenario = {
         }
 
         return {
-            droplet: "sso-e2e",
+            droplet: DROPLET_NAME,
             passLine,
             // Pin the cookie Domain we observed — release notes /
             // postmortems can scan this for the actual shape that
             // landed, not just "tests passed".
             cookieDomain: passLine?.match(/Domain=([^,]+)/)?.[1]?.trim(),
             secureFlag: passLine?.includes("Secure=true") ?? false,
-            note: "Droplet kept alive for follow-up debugging. Tear down with `pnpm run sso-e2e:droplet:destroy --name sso-e2e`.",
+            note:
+                process.env.CI === "true"
+                    ? "Dedicated CI SSO droplet; torn down after the final SSO scenario."
+                    : `Droplet kept alive for follow-up debugging. Tear down with \`pnpm run sso-e2e:droplet:destroy --name ${DROPLET_NAME}\`.`,
         };
     },
 };

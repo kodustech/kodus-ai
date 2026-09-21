@@ -8,6 +8,7 @@ import {
     IPullRequests,
     IFile,
     ISuggestion,
+    ISuggestionByPR,
     IPullRequestWithDeliveredSuggestions,
     IPullRequestUserMapping,
     SuggestionCountsBySeverity,
@@ -178,6 +179,35 @@ export interface IPullRequestsRepository {
         prNumber: number,
         deliveryStatus: DeliveryStatus,
     ): Promise<ISuggestion[]>;
+    /**
+     * Like `findSuggestionsByPRAndFilename`, but for several files in one
+     * query and scoped by `deliveryStatus` — the multi-file read `PrDecisionStore`
+     * needs (issue #1313). Filters by `repository.fullName` (unlike
+     * `findSuggestionsByPR`, which matches on `number` alone and can cross
+     * repository boundaries when two repos in the same org happen to share a
+     * PR number).
+     */
+    findSuggestionsByPRAndFilenames(
+        prNumber: number,
+        repoFullName: string,
+        filenames: readonly string[],
+        organizationId: string,
+        deliveryStatus: DeliveryStatus,
+    ): Promise<ISuggestion[]>;
+    /**
+     * PR-LEVEL suggestions (stored separately in `prLevelSuggestions`, not
+     * nested under `files[]` — today exclusively kody-rules PULL_REQUEST-scope
+     * findings, which judge the diff as a whole and carry no `relevantFile`).
+     * Needed alongside `findSuggestionsByPRAndFilenames` for a complete
+     * `PrDecisionStore` read (issue #1313 Fase 1b) — a file-scoped query alone
+     * always misses these.
+     */
+    findPrLevelSuggestionsByPR(
+        prNumber: number,
+        repoFullName: string,
+        organizationId: string,
+        deliveryStatus: DeliveryStatus,
+    ): Promise<ISuggestionByPR[]>;
     findSuggestionsByRuleId(
         ruleId: string,
         organizationId: string,
@@ -235,6 +265,17 @@ export interface IPullRequestsRepository {
         totalDeleted: number;
         totalChanges: number;
     }>;
+
+    /**
+     * Server-side sum of the UTF-8 bytes embedded in `files[].patch` for one
+     * PR (`$strLenBytes`). Lets the caller enforce the aggregate embedded-diff
+     * budget against ground truth after a write instead of trusting a
+     * potentially stale in-memory read of `existingPR.files` (#1841).
+     */
+    computeEmbeddedPatchBytes(
+        prUuid: string,
+        organizationId: string,
+    ): Promise<number>;
 
     /** Generates a stable id for file/suggestion sub-documents. */
     newSubDocumentId(): string;

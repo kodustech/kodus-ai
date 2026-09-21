@@ -4,10 +4,9 @@ import { resolveConversationUserToken } from '../lib/conversation-user-token.js'
 import type { RunContext, Scenario, KodusSession } from '../lib/types.js';
 
 // Anthropic-BYOK variant of conversation-vertex-byok: drives the REAL @kody
-// conversation flow (webhook → ConversationAgent → BYOKPromptRunner → Anthropic
-// Sonnet → parser) on a real self-hosted env. Used to reproduce the
-// "Missing or invalid reasoning field" failure (old flow) and verify the fix
-// (new flow) end-to-end. Hardened: rejects the generic error fallback.
+// conversation flow (webhook → ConversationAgent → LLM.run → Anthropic
+// Sonnet → parser) on a real self-hosted env. Hardened: rejects the generic
+// error fallback.
 //
 // FIXTURE_BRANCHES: `bug/missing-null-check` is only confirmed mirrored on
 // GitHub (see code-review-basic.ts's own placeholder comment for the other
@@ -70,7 +69,7 @@ async function setAnthropicByok(
 
 export const conversationAnthropicByok: Scenario = {
     id: 'conversation-anthropic-byok',
-    title: 'Kody answers an @kody mention using an Anthropic Sonnet BYOK key (v2 path)',
+    title: 'Kody answers an @kody mention using an Anthropic Sonnet BYOK key',
     priority: 'P2',
     appliesTo: {
         target: ['self-hosted'],

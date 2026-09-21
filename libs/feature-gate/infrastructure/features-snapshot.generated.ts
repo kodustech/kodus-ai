@@ -5,7 +5,7 @@ import type { FeaturesSnapshot } from '../domain/snapshot.types';
 
 export const FEATURES_SNAPSHOT: FeaturesSnapshot = {
     "schema_version": 1,
-    "generated_at": "2026-09-14T19:30:26.085Z",
+    "generated_at": "2026-09-21T17:25:17.242Z",
     "source": "manual",
     "features": {
         "deterministic-evidence": {
