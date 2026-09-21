@@ -16,7 +16,6 @@ import {
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import type { CustomMessageConfig } from "@services/pull-request-messages/types";
-import { SettingsPageSkeleton } from "src/core/components/system/page-skeletons";
 import {
     ScopeToolsPortal,
     useLendAddRepository,
@@ -26,6 +25,7 @@ import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { safeArray } from "src/core/utils/safe-array";
 
 import { useCodeReviewRouteParams } from "../_hooks";
+import { RouteSkeleton } from "../../_components/route-skeleton";
 import {
     type CodeReviewGlobalConfig,
     type FormattedGlobalCodeReviewConfig,
@@ -216,7 +216,7 @@ function SettingsLayoutShell({
             </AutomationCodeReviewConfigProvider>
         </DefaultCodeReviewConfigProvider>
     ) : (
-        <SettingsPageSkeleton />
+        <RouteSkeleton />
     );
 
     return (
