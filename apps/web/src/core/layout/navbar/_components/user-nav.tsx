@@ -12,11 +12,14 @@ import {
     ActivityIcon,
     Building2Icon,
     ChartColumn,
+    ChevronsUpDownIcon,
     CreditCardIcon,
     FileTextIcon,
     FolderGit2Icon,
     LockIcon,
     LogOutIcon,
+    PanelLeftIcon,
+    PanelTopIcon,
     UserIcon,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "src/core/components/ui/avatar";
@@ -38,9 +41,22 @@ import { TEAM_STATUS } from "src/core/types";
 import { isSelfHosted } from "src/core/utils/self-hosted";
 import { useFeatureGates } from "src/features/ee/subscription/_hooks/use-feature-gates";
 
+import { useSetNavLayout } from "../../nav-layout";
 import { VersionInfo } from "./version-info";
 
-export function UserNav() {
+export function UserNav({
+    variant = "navbar",
+}: {
+    /**
+     * "sidebar": the account row at the foot of the sidebar navigation. The
+     * workspace switcher and the settings links live in the sidebar itself
+     * there, so the menu keeps only the account, help and sign-out.
+     */
+    variant?: "navbar" | "sidebar" | "rail";
+}) {
+    // "rail": the same menu behind a bare avatar, for the collapsed sidebar.
+    const inSidebar = variant === "sidebar" || variant === "rail";
+    const setNavLayout = useSetNavLayout();
     const { email } = useAuth();
     const { teams } = useAllTeams();
     const { teamId, setTeamId } = useSelectedTeamId();
@@ -84,87 +100,127 @@ export function UserNav() {
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button
-                    data-testid="user-nav-trigger"
-                    size="icon-md"
-                    variant="cancel"
-                    className="rounded-full">
-                    <Avatar className="size-full">
-                        {/* TODO: call user's avatar */}
-                        {/* <AvatarImage src="" alt="username" /> */}
-                        {/* TODO: call user's name and get initials */}
-                        <AvatarFallback>
-                            <UserIcon />
-                        </AvatarFallback>
-                    </Avatar>
-                </Button>
+                {variant === "rail" ? (
+                    <button
+                        type="button"
+                        data-testid="user-nav-trigger"
+                        aria-label={`Account: ${email}`}
+                        className="hover:bg-card-lv2 focus-visible:ring-ring flex size-9 items-center justify-center rounded-lg transition-colors focus:outline-none focus-visible:ring-2">
+                        <Avatar className="size-7">
+                            <AvatarFallback>
+                                <UserIcon className="size-4" />
+                            </AvatarFallback>
+                        </Avatar>
+                    </button>
+                ) : inSidebar ? (
+                    <button
+                        type="button"
+                        data-testid="user-nav-trigger"
+                        className="hover:bg-card-lv2 focus-visible:ring-ring flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors focus:outline-none focus-visible:ring-2">
+                        <Avatar className="size-7">
+                            <AvatarFallback>
+                                <UserIcon className="size-4" />
+                            </AvatarFallback>
+                        </Avatar>
+                        <span className="text-text-secondary min-w-0 flex-1 truncate text-xs">
+                            {email}
+                        </span>
+                        <ChevronsUpDownIcon className="text-text-tertiary size-3.5 shrink-0" />
+                    </button>
+                ) : (
+                    <Button
+                        data-testid="user-nav-trigger"
+                        size="icon-md"
+                        variant="cancel"
+                        className="rounded-full">
+                        <Avatar className="size-full">
+                            {/* TODO: call user's avatar */}
+                            {/* <AvatarImage src="" alt="username" /> */}
+                            {/* TODO: call user's name and get initials */}
+                            <AvatarFallback>
+                                <UserIcon />
+                            </AvatarFallback>
+                        </Avatar>
+                    </Button>
+                )}
             </DropdownMenuTrigger>
 
-            <DropdownMenuContent className="w-60" align="end">
+            <DropdownMenuContent
+                className="w-60"
+                align={inSidebar ? "start" : "end"}
+                side={
+                    variant === "rail" ? "right" : inSidebar ? "top" : "bottom"
+                }>
                 <DropdownMenuLabel className="text-text-primary text-sm font-normal">
                     {email}
                 </DropdownMenuLabel>
 
-                <DropdownMenuSeparator />
+                {!inSidebar && (
+                    <>
+                        <DropdownMenuSeparator />
 
-                <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
+                        <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
 
-                <DropdownMenuRadioGroup
-                    value={teamId}
-                    onValueChange={handleChangeWorkspace}>
-                    {teams.map((team) => (
-                        <DropdownMenuRadioItem
-                            key={team.uuid}
-                            value={team.uuid}
-                            disabled={team.status !== TEAM_STATUS.ACTIVE}>
-                            {team.name}
-                        </DropdownMenuRadioItem>
-                    ))}
-                </DropdownMenuRadioGroup>
+                        <DropdownMenuRadioGroup
+                            value={teamId}
+                            onValueChange={handleChangeWorkspace}>
+                            {teams.map((team) => (
+                                <DropdownMenuRadioItem
+                                    key={team.uuid}
+                                    value={team.uuid}
+                                    disabled={
+                                        team.status !== TEAM_STATUS.ACTIVE
+                                    }>
+                                    {team.name}
+                                </DropdownMenuRadioItem>
+                            ))}
+                        </DropdownMenuRadioGroup>
 
-                <DropdownMenuSeparator />
+                        <DropdownMenuSeparator />
 
-                {canEditOrg && (
-                    <Link href="/organization/general">
-                        <DropdownMenuItem leftIcon={<Building2Icon />}>
-                            Organization
-                        </DropdownMenuItem>
-                    </Link>
-                )}
+                        {canEditOrg && (
+                            <Link href="/organization/general">
+                                <DropdownMenuItem leftIcon={<Building2Icon />}>
+                                    Organization
+                                </DropdownMenuItem>
+                            </Link>
+                        )}
 
-                {canReadGitSettings && (
-                    <Link href="/settings/git">
-                        <DropdownMenuItem leftIcon={<FolderGit2Icon />}>
-                            Repositories
-                        </DropdownMenuItem>
-                    </Link>
-                )}
+                        {canReadGitSettings && (
+                            <Link href="/settings/git">
+                                <DropdownMenuItem leftIcon={<FolderGit2Icon />}>
+                                    Repositories
+                                </DropdownMenuItem>
+                            </Link>
+                        )}
 
-                {canReadBilling && (
-                    <Link href="/settings/subscription">
-                        <DropdownMenuItem leftIcon={<CreditCardIcon />}>
-                            Subscription
-                        </DropdownMenuItem>
-                    </Link>
-                )}
+                        {canReadBilling && (
+                            <Link href="/settings/subscription">
+                                <DropdownMenuItem leftIcon={<CreditCardIcon />}>
+                                    Subscription
+                                </DropdownMenuItem>
+                            </Link>
+                        )}
 
-                {canReadLogs && (
-                    <Link href="/user-logs">
-                        <DropdownMenuItem leftIcon={<ActivityIcon />}>
-                            Activity Logs
-                            {!gates.activityLogs && <LockedTag />}
-                        </DropdownMenuItem>
-                    </Link>
-                )}
+                        {canReadLogs && (
+                            <Link href="/user-logs">
+                                <DropdownMenuItem leftIcon={<ActivityIcon />}>
+                                    Activity Logs
+                                    {!gates.activityLogs && <LockedTag />}
+                                </DropdownMenuItem>
+                            </Link>
+                        )}
 
-                {canReadTokenUsage && (
-                    <Link href="/token-usage">
-                        <DropdownMenuItem
-                            data-testid="nav-token-usage"
-                            leftIcon={<ChartColumn />}>
-                            Token Usage
-                        </DropdownMenuItem>
-                    </Link>
+                        {canReadTokenUsage && (
+                            <Link href="/token-usage">
+                                <DropdownMenuItem
+                                    data-testid="nav-token-usage"
+                                    leftIcon={<ChartColumn />}>
+                                    Token Usage
+                                </DropdownMenuItem>
+                            </Link>
+                        )}
+                    </>
                 )}
 
                 <DropdownMenuSeparator />
@@ -194,6 +250,16 @@ export function UserNav() {
                 </NextLink>
 
                 <DropdownMenuSeparator />
+
+                <DropdownMenuItem
+                    leftIcon={inSidebar ? <PanelTopIcon /> : <PanelLeftIcon />}
+                    onSelect={() =>
+                        setNavLayout(inSidebar ? "top" : "sidebar")
+                    }>
+                    {inSidebar
+                        ? "Back to top navigation"
+                        : "Try sidebar navigation"}
+                </DropdownMenuItem>
 
                 <Link href="/sign-out" replace>
                     <DropdownMenuItem leftIcon={<LogOutIcon />}>

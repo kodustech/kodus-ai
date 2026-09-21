@@ -14,6 +14,7 @@ import {
 } from "@services/parameters/types";
 import type { CustomMessageConfig } from "@services/pull-request-messages/types";
 import { SettingsPageSkeleton } from "src/core/components/system/page-skeletons";
+import { useNavLayout } from "src/core/layout/nav-layout";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { safeArray } from "src/core/utils/safe-array";
 
@@ -237,8 +238,11 @@ function SettingsLayoutShell({
     }
 
     // Only the code review pages get the band of tabs, so only they sit
-    // below one.
-    const hasTabsBand = pathname.startsWith("/settings/code-review");
+    // below one. The sidebar navigation carries the scope and the pages
+    // itself, so it drops the band.
+    const navLayout = useNavLayout();
+    const hasTabsBand =
+        navLayout === "top" && pathname.startsWith("/settings/code-review");
     const belowBand = (page: React.ReactNode) =>
         hasTabsBand ? <Page.BelowTabs>{page}</Page.BelowTabs> : page;
 

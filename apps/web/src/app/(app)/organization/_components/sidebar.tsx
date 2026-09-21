@@ -22,6 +22,7 @@ import {
     LockIcon,
     ShieldIcon,
 } from "lucide-react";
+import { useNavLayout } from "src/core/layout/nav-layout";
 import {
     isBYOKSubscriptionPlan,
     isEnterprisePlan,
@@ -30,6 +31,7 @@ import { useSubscriptionContext } from "src/features/ee/subscription/_providers/
 import { useOrganizationContext } from "src/features/organization/_providers/organization-context";
 
 export const ConfigsSidebar = () => {
+    const navLayout = useNavLayout();
     const { organizationName } = useOrganizationContext();
     const pathname = usePathname();
     const { license } = useSubscriptionContext();
@@ -77,6 +79,9 @@ export const ConfigsSidebar = () => {
         visible: boolean;
         locked?: boolean;
     }>;
+
+    // The sidebar navigation lists these pages under Organization already.
+    if (navLayout === "sidebar") return null;
 
     return (
         <Sidebar className="bg-card-lv1">

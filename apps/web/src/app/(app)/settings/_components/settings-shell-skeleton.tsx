@@ -3,6 +3,7 @@
 import { Page, PAGE_MAX_WIDTH } from "@components/ui/page";
 import { Skeleton } from "@components/ui/skeleton";
 import { SettingsPageSkeleton } from "src/core/components/system/page-skeletons";
+import { useNavLayout } from "src/core/layout/nav-layout";
 import { cn } from "src/core/utils/components";
 
 // General · What to review · Kody Rules · What Kody writes · Linked repos
@@ -37,11 +38,22 @@ export const SettingsShellHeaderSkeleton = () => (
  * status, defaults, platform config) is still streaming: the frame the
  * loaded shell uses, with a settings page skeleton inside.
  */
-export const SettingsShellSkeleton = () => (
-    <div className="flex flex-1 flex-col overflow-hidden">
-        <SettingsShellHeaderSkeleton />
-        <Page.BelowTabs>
-            <SettingsPageSkeleton />
-        </Page.BelowTabs>
-    </div>
-);
+export const SettingsShellSkeleton = () => {
+    // The sidebar navigation has no tab band to stand in for.
+    const navLayout = useNavLayout();
+
+    return (
+        <div className="flex flex-1 flex-col overflow-hidden">
+            {navLayout === "top" ? (
+                <>
+                    <SettingsShellHeaderSkeleton />
+                    <Page.BelowTabs>
+                        <SettingsPageSkeleton />
+                    </Page.BelowTabs>
+                </>
+            ) : (
+                <SettingsPageSkeleton />
+            )}
+        </div>
+    );
+};

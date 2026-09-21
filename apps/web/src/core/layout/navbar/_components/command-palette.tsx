@@ -302,7 +302,15 @@ const topMatches = <T,>(
         .map((entry) => entry.item);
 };
 
-export const CommandPalette = () => {
+export const CommandPalette = ({
+    variant = "navbar",
+}: {
+    /**
+     * "sidebar": a full-width search field at the top of the sidebar nav;
+     * "rail": its icon-only form when the sidebar is collapsed.
+     */
+    variant?: "navbar" | "sidebar" | "rail";
+}) => {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
     const router = useRouter();
@@ -432,17 +440,39 @@ export const CommandPalette = () => {
 
     return (
         <>
-            <Button
-                size="xs"
-                variant="helper"
-                aria-label="Search and jump anywhere (⌘K)"
-                leftIcon={<SearchIcon />}
-                onClick={() => setOpen(true)}>
-                <span className="hidden lg:inline">Search</span>
-                <kbd className="bg-card-lv3/70 text-text-tertiary ml-1 hidden rounded px-1.5 py-0.5 font-mono text-[10px] lg:inline">
-                    ⌘K
-                </kbd>
-            </Button>
+            {variant === "rail" ? (
+                <button
+                    type="button"
+                    aria-label="Search and jump anywhere (⌘K)"
+                    onClick={() => setOpen(true)}
+                    className="bg-card-lv2 hover:bg-card-lv3 text-text-tertiary focus-visible:ring-ring flex size-9 items-center justify-center rounded-lg transition-colors focus:outline-none focus-visible:ring-2">
+                    <SearchIcon className="size-4" />
+                </button>
+            ) : variant === "sidebar" ? (
+                <button
+                    type="button"
+                    aria-label="Search and jump anywhere (⌘K)"
+                    onClick={() => setOpen(true)}
+                    className="bg-card-lv2 hover:bg-card-lv3 text-text-tertiary focus-visible:ring-ring flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-sm transition-colors focus:outline-none focus-visible:ring-2">
+                    <SearchIcon className="size-4 shrink-0" />
+                    <span className="flex-1 text-left">Search</span>
+                    <kbd className="bg-card-lv3/70 rounded px-1.5 py-0.5 font-mono text-[10px]">
+                        ⌘K
+                    </kbd>
+                </button>
+            ) : (
+                <Button
+                    size="xs"
+                    variant="helper"
+                    aria-label="Search and jump anywhere (⌘K)"
+                    leftIcon={<SearchIcon />}
+                    onClick={() => setOpen(true)}>
+                    <span className="hidden lg:inline">Search</span>
+                    <kbd className="bg-card-lv3/70 text-text-tertiary ml-1 hidden rounded px-1.5 py-0.5 font-mono text-[10px] lg:inline">
+                        ⌘K
+                    </kbd>
+                </Button>
+            )}
 
             <Dialog
                 open={open}
