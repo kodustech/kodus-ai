@@ -88,6 +88,12 @@ const TEAM_CONCURRENCY = 10;
 // slice of it stays around a fifth of that in practice.
 const PR_CONCURRENCY = 15;
 
+// How far back a completed review may be for its PR to be eligible for
+// automated approval, when the team's code review config does not set
+// `approvalLookbackDays`. Seven days was the hardcoded window before the
+// setting existed, so the default keeps that behaviour.
+const DEFAULT_APPROVAL_LOOKBACK_DAYS = 7;
+
 @Injectable()
 export class CheckIfPRCanBeApprovedCronProvider {
     private readonly logger = createLogger(
@@ -196,9 +202,9 @@ export class CheckIfPRCanBeApprovedCronProvider {
 
             const automationUuid = codeReviewAutomation[0].uuid;
 
-            // Calculate once outside loop
-            const sevenDaysAgo = new Date();
-            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+            // The end of the approval window is the same for every team. Its
+            // start depends on each team's `approvalLookbackDays`, so it is
+            // computed per team below, from this same instant.
             const now = new Date();
 
             // Both limiters are global for the run. teamLimit is the one
@@ -314,9 +320,23 @@ export class CheckIfPRCanBeApprovedCronProvider {
                             return;
                         }
 
+                        // A review completed before this instant is not
+                        // considered, so a PR whose review is older than the
+                        // team's lookback can never be auto-approved. The
+                        // window was a hardcoded seven days; a team that
+                        // keeps PRs open longer sets `approvalLookbackDays`.
+                        const approvalWindowStart = new Date(now);
+                        approvalWindowStart.setDate(
+                            approvalWindowStart.getDate() -
+                                this.resolveApprovalLookbackDays(
+                                    codeReviewConfig,
+                                    organizationAndTeamData,
+                                ),
+                        );
+
                         const eligiblePullRequestRefs =
                             await this.automationExecutionService.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId(
-                                sevenDaysAgo,
+                                approvalWindowStart,
                                 now,
                                 teamAutomation.uuid,
                             );
@@ -750,6 +770,47 @@ export class CheckIfPRCanBeApprovedCronProvider {
             Array.isArray(inProgressExecutions) &&
             inProgressExecutions.length > 0
         );
+    }
+
+    /**
+     * The number of days the approval window reaches back for a team.
+     *
+     * Reads `approvalLookbackDays` from the team's code review config and
+     * accepts only a positive integer; anything else — unset, zero, negative,
+     * fractional, or not a number — yields the default. A value that was set
+     * but rejected is logged, since a team that configured 30 and silently
+     * got 7 would see the same symptom this setting exists to fix.
+     */
+    private resolveApprovalLookbackDays(
+        codeReviewConfig: { approvalLookbackDays?: unknown } | undefined,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): number {
+        const configured = codeReviewConfig?.approvalLookbackDays;
+
+        if (configured === undefined || configured === null) {
+            return DEFAULT_APPROVAL_LOOKBACK_DAYS;
+        }
+
+        if (
+            typeof configured === 'number' &&
+            Number.isInteger(configured) &&
+            configured >= 1
+        ) {
+            return configured;
+        }
+
+        this.logger.warn({
+            message:
+                'Invalid approvalLookbackDays in code review config, using the default',
+            context: CheckIfPRCanBeApprovedCronProvider.name,
+            metadata: {
+                organizationAndTeamData,
+                configured,
+                default: DEFAULT_APPROVAL_LOOKBACK_DAYS,
+            },
+        });
+
+        return DEFAULT_APPROVAL_LOOKBACK_DAYS;
     }
 
     private getLastAnalyzedCommitSha(lastAnalyzedCommit?: any): string | null {

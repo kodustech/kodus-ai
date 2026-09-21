@@ -77,6 +77,54 @@ describe('CheckIfPRCanBeApprovedCronProvider (deterministic logic)', () => {
         jest.clearAllMocks();
     });
 
+    describe('resolveApprovalLookbackDays', () => {
+        let provider: CheckIfPRCanBeApprovedCronProvider;
+
+        beforeEach(() => {
+            provider = buildProvider(buildDeps());
+        });
+
+        const call = (config?: any): number =>
+            (provider as any).resolveApprovalLookbackDays(config, {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            });
+
+        // The window was a hardcoded seven days before the setting existed;
+        // a team that never set it must keep exactly that behaviour.
+        it('returns the default of 7 when there is no config', () => {
+            expect(call(undefined)).toBe(7);
+        });
+
+        it('returns the default of 7 when the field is unset', () => {
+            expect(call({ repositories: [] })).toBe(7);
+            expect(call({ approvalLookbackDays: null })).toBe(7);
+        });
+
+        it('returns a configured positive integer as-is', () => {
+            expect(call({ approvalLookbackDays: 30 })).toBe(30);
+            expect(call({ approvalLookbackDays: 1 })).toBe(1);
+        });
+
+        // A window of zero or less would make every review ineligible, and a
+        // fractional day is not a value the query can be trusted with, so
+        // each of these falls back rather than being passed through.
+        it('falls back to the default for zero or a negative number', () => {
+            expect(call({ approvalLookbackDays: 0 })).toBe(7);
+            expect(call({ approvalLookbackDays: -3 })).toBe(7);
+        });
+
+        it('falls back to the default for a non-integer', () => {
+            expect(call({ approvalLookbackDays: 2.5 })).toBe(7);
+            expect(call({ approvalLookbackDays: Number.NaN })).toBe(7);
+        });
+
+        it('falls back to the default for a value that is not a number', () => {
+            expect(call({ approvalLookbackDays: '30' })).toBe(7);
+            expect(call({ approvalLookbackDays: true })).toBe(7);
+        });
+    });
+
     describe('getLastAnalyzedCommitSha', () => {
         let provider: CheckIfPRCanBeApprovedCronProvider;
 
@@ -134,9 +182,9 @@ describe('CheckIfPRCanBeApprovedCronProvider (deterministic logic)', () => {
         });
 
         it('prefers .commitSha over .commit.sha when .sha is absent', () => {
-            expect(
-                call({ commitSha: 'sha-b', commit: { sha: 'sha-c' } }),
-            ).toBe('sha-b');
+            expect(call({ commitSha: 'sha-b', commit: { sha: 'sha-c' } })).toBe(
+                'sha-b',
+            );
         });
     });
 

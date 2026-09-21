@@ -428,6 +428,10 @@ class CodeReviewConfigWithoutLLMProviderDto {
     pullRequestApprovalActive?: boolean;
 
     @IsOptional()
+    @IsNumber()
+    approvalLookbackDays?: number;
+
+    @IsOptional()
     @IsBoolean()
     kodusConfigFileOverridesWebPreferences?: boolean;
 
