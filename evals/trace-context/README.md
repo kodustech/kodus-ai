@@ -1,5 +1,11 @@
 # Trace context A/B eval
 
+> - **Answers:** Do recorded Trace decisions improve review judgment without talking the reviewer out of real bugs?
+> - **Runs:** on demand only.
+> - **Run it:** `pnpm eval:trace-context --preset <model>`
+> - **Gate:** rollout gates listed below; not wired to CI.
+> - **Cost:** two arms (baseline, trace) of real model calls per scenario.
+
 This eval measures whether recorded Kodus Trace decisions improve Kody's review
 judgment without becoming a way to talk the reviewer out of real findings.
 

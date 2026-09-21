@@ -75,6 +75,7 @@ Everything runs via Docker (`docker-compose.dev.yml`):
 - An issue body carries what was observed, measured and read in the code. It is not a specification of the fix. A cause stated in an issue holds only for the version it was read at: confirm it in the current code before changing anything, and correct the issue when it no longer holds. Never ship a fix for a cause you did not confirm yourself.
 - The approach is decided in the design comment, not in the issue and not silently in code. Anything the issue or the design left as an open question gets resolved with its author before it is built.
 - A PR that touches the review pipeline, the agent harness or Kody Rules carries eval evidence: the run link, and for an improvement, the metric the issue named against its baseline.
+- The evals themselves: what runs when and how to read a red run is in `evals/README.md`; the rules for changing the engine or an eval are in `evals/AGENTS.md`.
 - Templates live in `.github/ISSUE_TEMPLATE/`. Blank issues are disabled on the web form, but `gh issue create` bypasses templates, which is why the skills exist.
 
 ## PRs and comments

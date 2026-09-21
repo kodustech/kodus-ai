@@ -1,5 +1,11 @@
 # review-chain — LLM-resilience ledger
 
+> - **Answers:** Is every LLM call in the review chain wired to the shared output recovery, and does that recovery normalize every wire shape?
+> - **Runs:** every engine PR (`evals/wiring-smoke.js`).
+> - **Run it:** `pnpm eval:review-chain` · `pnpm eval:shape-invariance`
+> - **Gate:** exit 1 on a boundary that lost its resilience, or on an LLM call-site missing from the manifest.
+> - **Cost:** none (no model).
+
 Two deterministic, no-key, gating checks over the review chain's LLM boundaries:
 
 1. **`run.js` — the wiring ledger. This is a LINT/tripwire, NOT behavioral
