@@ -20,6 +20,7 @@ import { SettingsPageSkeleton } from "src/core/components/system/page-skeletons"
 import {
     ScopeToolsPortal,
     useLendAddRepository,
+    useScopeTools,
 } from "src/core/layout/sidebar/scope-tools";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { safeArray } from "src/core/utils/safe-array";
@@ -269,11 +270,12 @@ function CodeReviewScopeTools({
         [canAddRepository, configValue.repositories],
     );
     useLendAddRepository(openAddRepository);
+    const compact = useScopeTools()?.compact ?? false;
 
     return (
         <>
             <ScopeToolsPortal slot="status">
-                <KodusConfigFileStatusBadge />
+                <KodusConfigFileStatusBadge compact={compact} />
             </ScopeToolsPortal>
             {repository && (
                 <ScopeToolsPortal slot="actions">

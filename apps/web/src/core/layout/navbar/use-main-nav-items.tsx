@@ -145,6 +145,7 @@ export const useMainNavItems = () => {
             ? subscription.license.planType
             : undefined,
         canReadPlugins,
+        canEditOrg,
         isMCPAvailable,
         canReadPullRequests,
         canReadCliReviews,

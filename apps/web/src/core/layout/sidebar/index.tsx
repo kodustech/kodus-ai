@@ -9,13 +9,14 @@ import {
     createContext,
     Suspense,
     useContext,
+    useEffect,
     useId,
     useMemo,
     useState,
     useSyncExternalStore,
 } from "react";
 import NextLink from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
     Command,
     CommandEmpty,
@@ -81,6 +82,7 @@ import {
     ShieldIcon,
     type LucideIcon,
 } from "lucide-react";
+import { useQueryState } from "nuqs";
 import { useAllTeams } from "src/core/providers/all-teams-context";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { TEAM_STATUS } from "src/core/types";
@@ -562,13 +564,19 @@ const CODE_REVIEW_PATH = /^\/settings\/code-review\/([^/]+)(?:\/([^/?#]+))?/;
 
 const CodeReviewGroup = () => {
     const pathname = usePathname();
-    const searchParams = useSearchParams();
+    const [queryDirectoryId] = useQueryState("directoryId");
     const collapsed = useRail();
     const scopeTools = useScopeTools();
+    const setCompactTools = scopeTools?.setCompact;
+    // The lent scope tools (menu, kodus-config.yml badge) switch to their
+    // compact form in the rail rather than disappear from it.
+    useEffect(() => {
+        setCompactTools?.(collapsed);
+    }, [collapsed, setCompactTools]);
     const match = CODE_REVIEW_PATH.exec(pathname);
     const scope: Scope = {
         repositoryId: match?.[1] ?? "global",
-        directoryId: (match && searchParams.get("directoryId")) || undefined,
+        directoryId: (match && queryDirectoryId) || undefined,
     };
     const currentPage = match?.[2];
     const isRepositoryLevel =
@@ -583,9 +591,21 @@ const CodeReviewGroup = () => {
 
     return (
         <SidebarGroup label="Code review">
-            <li className="mb-1 flex flex-col gap-1">
-                <div className="flex items-center gap-1">
-                    <div className="min-w-0 flex-1">
+            <li
+                className={cn(
+                    "mb-1 flex flex-col gap-1",
+                    collapsed && "items-center",
+                )}>
+                <div
+                    className={cn(
+                        "flex items-center gap-1",
+                        collapsed && "w-full flex-col",
+                    )}>
+                    <div
+                        className={cn(
+                            "min-w-0",
+                            collapsed ? "w-full" : "flex-1",
+                        )}>
                         <ScopeSelector
                             scope={scope}
                             pageFor={(target) => {
@@ -604,21 +624,22 @@ const CodeReviewGroup = () => {
                         />
                     </div>
                     {/* The settings layout lends the scope's options menu here
-                    and its kodus-config.yml badge below (scope-tools.tsx);
-                    both empty on any other page and in the rail. */}
-                    {!collapsed && (
-                        <div
-                            ref={scopeTools?.setActionsSlot}
-                            className="flex shrink-0 items-center empty:hidden"
-                        />
-                    )}
-                </div>
-                {!collapsed && (
+                        and its kodus-config.yml badge below (scope-tools.tsx);
+                        empty on any other page. Kept in the rail too: the menu
+                        is the only way to delete a repository's configuration,
+                        and narrow screens always get the rail. */}
                     <div
-                        ref={scopeTools?.setStatusSlot}
-                        className="flex px-1 empty:hidden"
+                        ref={scopeTools?.setActionsSlot}
+                        className="flex shrink-0 items-center empty:hidden"
                     />
-                )}
+                </div>
+                <div
+                    ref={scopeTools?.setStatusSlot}
+                    className={cn(
+                        "flex empty:hidden",
+                        collapsed ? "justify-center" : "px-1",
+                    )}
+                />
             </li>
             {CODE_REVIEW_PAGES.filter(
                 (page) => !page.repoOnly || isRepositoryLevel,

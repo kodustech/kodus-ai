@@ -24,6 +24,9 @@ export type ScopeToolsSlot = "actions" | "status";
 
 type ScopeTools = {
     slots: Record<ScopeToolsSlot, HTMLElement | null>;
+    /** The sidebar is the icon rail: lent tools render in their compact form. */
+    compact: boolean;
+    setCompact: (compact: boolean) => void;
     setActionsSlot: (element: HTMLElement | null) => void;
     setStatusSlot: (element: HTMLElement | null) => void;
     addRepository: (() => void) | undefined;
@@ -35,6 +38,7 @@ const ScopeToolsContext = createContext<ScopeTools | null>(null);
 export const ScopeToolsProvider = ({ children }: React.PropsWithChildren) => {
     const [actionsSlot, setActionsSlot] = useState<HTMLElement | null>(null);
     const [statusSlot, setStatusSlot] = useState<HTMLElement | null>(null);
+    const [compact, setCompact] = useState(false);
     const [addRepository, setAddRepositoryState] = useState<
         (() => void) | undefined
     >();
@@ -48,12 +52,14 @@ export const ScopeToolsProvider = ({ children }: React.PropsWithChildren) => {
     const value = useMemo<ScopeTools>(
         () => ({
             slots: { actions: actionsSlot, status: statusSlot },
+            compact,
+            setCompact,
             setActionsSlot,
             setStatusSlot,
             addRepository,
             setAddRepository,
         }),
-        [actionsSlot, statusSlot, addRepository, setAddRepository],
+        [actionsSlot, statusSlot, compact, addRepository, setAddRepository],
     );
 
     return (

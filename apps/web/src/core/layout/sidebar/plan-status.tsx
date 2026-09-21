@@ -167,7 +167,14 @@ export const SidebarPlanStatus = ({ collapsed }: { collapsed: boolean }) => {
         // Plan identity only: nothing to act on, so the rail leaves it out.
         case "active":
             return collapsed ? null : (
-                <PlanIdentity icon={CreditCardIcon} label="Teams plan" />
+                <PlanIdentity
+                    icon={CreditCardIcon}
+                    label={
+                        subscription.planType.startsWith("enterprise")
+                            ? "Enterprise plan"
+                            : "Teams plan"
+                    }
+                />
             );
 
         case "self-hosted":
