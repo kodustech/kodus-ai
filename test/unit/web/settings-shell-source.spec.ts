@@ -12,9 +12,9 @@ describe('settings shell source', () => {
         );
 
         expect(source).not.toContain('Loading settings...');
-        // The rail-era skeleton is gone; the tabs shell falls back to the
-        // page-shaped skeleton every other route uses.
-        expect(source).toContain('SettingsPageSkeleton');
+        // Falls back to the page-shaped skeleton of the target route (the
+        // same chooser the section loading boundaries use).
+        expect(source).toContain('RouteSkeleton');
     });
 
     it('does not branch the shell through hydrated or mounted flags', () => {
