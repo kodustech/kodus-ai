@@ -775,17 +775,27 @@ export class CheckIfPRCanBeApprovedCronProvider {
     /**
      * The number of days the approval window reaches back for a team.
      *
-     * Reads `approvalLookbackDays` from the team's code review config and
-     * accepts only a positive integer; anything else — unset, zero, negative,
+     * Takes the CODE_REVIEW_CONFIG parameter's `configValue` as stored, and
+     * reads `approvalLookbackDays` from its global settings delta,
+     * `configValue.configs` — where the update use-case writes it and where
+     * `CodeBaseConfigService` reads every other global setting from. The top
+     * level of `configValue` holds `id`, `configs` and `repositories`, never
+     * the settings themselves. Only the global value applies: the eligibility
+     * query runs once per team, before any repository is known, so a
+     * per-repository override has nothing to act on.
+     *
+     * Accepts only a positive integer; anything else — unset, zero, negative,
      * fractional, or not a number — yields the default. A value that was set
      * but rejected is logged, since a team that configured 30 and silently
      * got 7 would see the same symptom this setting exists to fix.
      */
     private resolveApprovalLookbackDays(
-        codeReviewConfig: { approvalLookbackDays?: unknown } | undefined,
+        codeReviewParameterValue:
+            { configs?: { approvalLookbackDays?: unknown } } | undefined,
         organizationAndTeamData: OrganizationAndTeamData,
     ): number {
-        const configured = codeReviewConfig?.approvalLookbackDays;
+        const configured =
+            codeReviewParameterValue?.configs?.approvalLookbackDays;
 
         if (configured === undefined || configured === null) {
             return DEFAULT_APPROVAL_LOOKBACK_DAYS;

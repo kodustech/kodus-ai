@@ -84,11 +84,19 @@ describe('CheckIfPRCanBeApprovedCronProvider (deterministic logic)', () => {
             provider = buildProvider(buildDeps());
         });
 
-        const call = (config?: any): number =>
-            (provider as any).resolveApprovalLookbackDays(config, {
+        // Called with the parameter's `configValue` as the update use-case
+        // stores it: `{ id, configs, repositories }`, with the global
+        // settings under `configs`.
+        const call = (configValue?: any): number =>
+            (provider as any).resolveApprovalLookbackDays(configValue, {
                 organizationId: 'org-1',
                 teamId: 'team-1',
             });
+        const withLookback = (value: unknown) => ({
+            id: 'global',
+            configs: { approvalLookbackDays: value },
+            repositories: [],
+        });
 
         // The window was a hardcoded seven days before the setting existed;
         // a team that never set it must keep exactly that behaviour.
@@ -97,31 +105,48 @@ describe('CheckIfPRCanBeApprovedCronProvider (deterministic logic)', () => {
         });
 
         it('returns the default of 7 when the field is unset', () => {
-            expect(call({ repositories: [] })).toBe(7);
-            expect(call({ approvalLookbackDays: null })).toBe(7);
+            expect(call({ id: 'global', configs: {}, repositories: [] })).toBe(
+                7,
+            );
+            expect(call({ id: 'global', repositories: [] })).toBe(7);
+            expect(call(withLookback(null))).toBe(7);
         });
 
         it('returns a configured positive integer as-is', () => {
-            expect(call({ approvalLookbackDays: 30 })).toBe(30);
-            expect(call({ approvalLookbackDays: 1 })).toBe(1);
+            expect(call(withLookback(30))).toBe(30);
+            expect(call(withLookback(1))).toBe(1);
+        });
+
+        // The setting lives under `configs`, never at the top level of
+        // `configValue`. A first version of this change read the top level,
+        // so a real saved value was never found; this pins the location.
+        it('ignores a value placed at the top level of configValue', () => {
+            expect(
+                call({
+                    id: 'global',
+                    approvalLookbackDays: 30,
+                    configs: {},
+                    repositories: [],
+                }),
+            ).toBe(7);
         });
 
         // A window of zero or less would make every review ineligible, and a
         // fractional day is not a value the query can be trusted with, so
         // each of these falls back rather than being passed through.
         it('falls back to the default for zero or a negative number', () => {
-            expect(call({ approvalLookbackDays: 0 })).toBe(7);
-            expect(call({ approvalLookbackDays: -3 })).toBe(7);
+            expect(call(withLookback(0))).toBe(7);
+            expect(call(withLookback(-3))).toBe(7);
         });
 
         it('falls back to the default for a non-integer', () => {
-            expect(call({ approvalLookbackDays: 2.5 })).toBe(7);
-            expect(call({ approvalLookbackDays: Number.NaN })).toBe(7);
+            expect(call(withLookback(2.5))).toBe(7);
+            expect(call(withLookback(Number.NaN))).toBe(7);
         });
 
         it('falls back to the default for a value that is not a number', () => {
-            expect(call({ approvalLookbackDays: '30' })).toBe(7);
-            expect(call({ approvalLookbackDays: true })).toBe(7);
+            expect(call(withLookback('30'))).toBe(7);
+            expect(call(withLookback(true))).toBe(7);
         });
     });
 

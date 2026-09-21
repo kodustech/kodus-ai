@@ -165,12 +165,15 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
     it("uses the team's approvalLookbackDays as the eligibility window", async () => {
         const { cron, deps } = makeCron();
         // A review completed 20 days ago is invisible to the hardcoded
-        // seven-day window; with a 30-day lookback it is inside.
+        // seven-day window; with a 30-day lookback it is inside. The value
+        // sits under `configValue.configs`, where the update use-case writes
+        // the global settings — the shape the cron reads in production.
         deps.parametersService.findOne.mockResolvedValue({
             ...makeParameter(),
             configValue: {
                 ...makeParameter().configValue,
-                approvalLookbackDays: 30,
+                id: 'global',
+                configs: { approvalLookbackDays: 30 },
             },
         });
         deps.automationExecutionService.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId.mockResolvedValue(
