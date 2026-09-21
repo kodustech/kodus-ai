@@ -19,8 +19,8 @@ precision, not recall — so this benchmark scores both.
 
 | Tranche | Count | Measures |
 |---|---|---|
-| `vuln` | 60 | Recall — can the tool find a real, published vulnerability? |
-| `noise` | 11 | Precision — does the tool stay quiet on code that only *looks* dangerous? |
+| `vuln` | 66 | Recall — can the tool find a real, published vulnerability? |
+| `noise` | 14 | Precision — does the tool stay quiet on code that only *looks* dangerous? |
 
 **Vulnerability samples** are built by inverting the fix commit of a published
 GitHub advisory. The resulting diff *introduces* the vulnerability as added
@@ -108,14 +108,74 @@ deserialization 1/6, XXE 1/6. Nothing on SQL injection, SSRF, hardcoded
 credentials, weak crypto, or code injection.
 
 The Kodus rule pack (`libs/code-review/infrastructure/analyzers/rule-pack/`,
-27 hand-written rules) beats it on both axes:
+27 hand-written rules) beats it on both axes. Measured against the current
+66/14 dataset, so recall is not directly comparable to the 60/11 baseline
+above — the absolute detections are the same eight:
 
 ```
-RECALL    8/60   (13.3%)
-PRECISION 11/11 noise samples clean
-VERBOSITY 0.32 findings per sample
+RECALL    8/66   (12.1%)
+PRECISION 14/14 noise samples clean
+VERBOSITY 0.29 findings per sample
           ~4s for the full dataset, versus ~10 min
 ```
+
+betterleaks covers the class the rule pack deliberately does not, and scores
+its own tranche exactly:
+
+```
+RECALL    6/66   (9.1%)  — 6/6 of the hardcoded-secret class, 0 elsewhere
+PRECISION 13/14 noise samples clean
+VERBOSITY 0.09 findings per sample
+```
+
+Together they detect 14 of the 66 vulnerability samples.
+
+**What this benchmark still cannot score:** every sample is application source
+code, so it exercises the rule pack and the secret scan only. It contains no
+workflows, Dockerfiles, lockfiles, OpenAPI specs or protobuf — the five
+analyzers that cover those cannot fire here any more than they can on the
+50-PR corpus.
+
+## Public rule sets
+
+Tried in place of writing more of our own. Scored the same way, on the same
+corpus. Point opengrep at a directory of ONLY rule files — given a repository
+root it tries to parse `.github/workflows/*.yml` as rules, fails with "Invalid
+rule schema", and produces nothing. The harness scores that as 0 recall with
+perfect precision, which looks like a result rather than a failure.
+
+| set | licence | rules | recall | noise clean | false findings |
+|---|---|---|---|---|---|
+| Kodus rule pack | — | 27 | 8/66 | 14/14 | 0 |
+| `0xdea/semgrep-rules` | MIT | 50 | **11/66** | 8/14 | **22** |
+| `trailofbits/semgrep-rules` | AGPL-3.0 | 142 | 0/66 | 14/14 | 0 |
+| `elttam/semgrep-rules` | MIT | 26 | 0/66 | 14/14 | 0 |
+| `dgryski/semgrep-go` | MIT | 43 | 0/66 | 14/14 | 0 |
+
+The zeros are real, not load failures: trailofbits runs 35 Go rules against a
+Go file calling `exec.Command("sh", "-c", ...)` and reports nothing, because its
+rules target specific library idioms rather than generic injection. dgryski's
+are Go correctness idioms, not security at all.
+
+`0xdea` is the only set with more recall than ours, and it buys 3 extra
+detections with 22 false findings across 6 of the 14 noise samples — it is a
+C/C++ repository whose rules fire on PHP, Python and JSON, which is what that
+precision collapse looks like.
+
+Crossed against the reviewer, adding `0xdea` lifts combined analyzer coverage
+from 14 to 20 of 66 and leaves **analyzer-only detections at zero**: of the 6
+samples it adds, the reviewer caught every one in all four runs.
+
+`semgrep/semgrep-rules` is excluded — the repository now carries a single
+`Semgrep Rules License v1.0` for everything, with no LGPL portion.
+
+## Secret validation
+
+`betterleaks --validation` checks a finding against the provider's live API and
+reports `ValidationStatus`. Our synthetic samples come back `invalid`, which is
+the correct answer and also the catch: enabling validation as a filter would
+take this benchmark's secret recall to zero, since every secret here is fake.
+It belongs as a confidence signal on a real review, not as a gate here.
 
 ## Known limitations
 
