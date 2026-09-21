@@ -275,6 +275,8 @@ const KEEP_FALSE =
     console.log(
         `\nReplay the corpus through the production extractor:\n  node evals/verifier-verdict/run.js --corpus ${file}`,
     );
+    // Explicit: a runner that just returns can hang CI on open handles.
+    process.exit(0);
 })().catch((e) => {
     console.error(`INFRA: ${e.message}`);
     process.exit(2);

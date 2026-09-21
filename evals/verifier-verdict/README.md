@@ -1,4 +1,15 @@
-# Verifier-verdict delivery eval
+# verifier-verdict — verdict delivery
+
+> - **Answers:** Does a verdict the verifier actually delivered reach the gate — and did the run get a step to deliver one at all?
+> - **Runs:** every engine PR (`evals/wiring-smoke.js`).
+> - **Run it:** `pnpm eval:verifier-verdict` · `pnpm eval:verifier-verdict:gate` · `pnpm eval:verifier-verdict:capture`
+> - **Gate:** exit 1 on a delivered verdict the extractor lost, or on a final step that can end with no verdict.
+> - **Cost:** none (no model). `capture.js` reads Langfuse only.
+
+Not [promotion](../promotion/README.md): that one asks whether the keep/drop
+_judgment_ is right on frozen evidence, with a model. This one asks whether the
+judgment the model already made survives the plumbing. A verdict can be perfect
+and still be thrown away.
 
 Issue #1937: the verifier wrote `{"keep": false}` in its final text instead of
 calling `submitVerdict`. Only the tool payload was read, so the refutation was
