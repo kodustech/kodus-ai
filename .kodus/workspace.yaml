@@ -6,6 +6,11 @@ setup:
   # tag; build paralelo do compose up tem race de export — igual aos scripts do repo)
   - docker compose -f docker-compose.dev.yml build kodus-api
   - pnpm install
+  # apps/web has its own lockfile, so the root install above skips it; its
+  # container gets deps from a named volume, but jest runs on the host and
+  # resolves web imports from apps/web/node_modules. Must run before compose
+  # up, which would otherwise create that dir root-owned as a mountpoint.
+  - pnpm --dir apps/web install --frozen-lockfile
 files:
   copy: [.env]
 services:
