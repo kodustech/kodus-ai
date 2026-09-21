@@ -52,7 +52,6 @@ import {
 import { safeArray } from "src/core/utils/safe-array";
 import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
 
-import { CodeReviewPagesBreadcrumb } from "../../../_components/breadcrumb";
 import { CentralizedConfigReadOnlyAlert } from "../../../_components/centralized-config-readonly-alert";
 import { DeleteKodyRuleConfirmationModal } from "../../../_components/delete-confirmation-modal";
 import { KodyRuleAddOrUpdateItemModal } from "../../../_components/modal";
@@ -931,7 +930,6 @@ const KodyRulesPageContent = () => {
     const headerDescription =
         "Review Rules run in the dedicated code review stage. Memories are injected across prompts and conversations to provide persistent context.";
 
-
     const canShowDiscovery = activeTab === "review-rules";
 
     return (
@@ -1351,8 +1349,7 @@ const KodyRulesPageContent = () => {
                             window.history.replaceState(
                                 null,
                                 "",
-                                window.location.pathname +
-                                    (qs ? `?${qs}` : ""),
+                                window.location.pathname + (qs ? `?${qs}` : ""),
                             );
                         }
                     }}

@@ -1,5 +1,6 @@
 import {
     PAGE_MAX_WIDTH,
+    PageBelowTabs,
     PageContent,
     PageDescription,
     PageFooter,
@@ -10,6 +11,7 @@ import {
     PageTitleContainer,
     PageWithSidebar,
 } from "./components";
+import { PageSaveActions } from "./save-actions";
 
 export const Page = {
     Root: PageRoot,
@@ -18,9 +20,11 @@ export const Page = {
     TitleContainer: PageTitleContainer,
     Description: PageDescription,
     HeaderActions: PageHeaderActions,
+    SaveActions: PageSaveActions,
     Content: PageContent,
     Footer: PageFooter,
     WithSidebar: PageWithSidebar,
+    BelowTabs: PageBelowTabs,
 };
 
 // The shared page width cap, for the few chrome elements that sit outside

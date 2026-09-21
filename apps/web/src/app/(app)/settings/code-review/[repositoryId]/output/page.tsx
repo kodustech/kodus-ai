@@ -7,7 +7,7 @@ import { toast } from "@components/ui/toaster/use-toast";
 import { KodyLearningStatus } from "@services/parameters/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
-import { EyeIcon, EyeOffIcon, RotateCcwIcon, SaveIcon } from "lucide-react";
+import { EyeIcon, EyeOffIcon } from "lucide-react";
 import { useFormContext, useFormState, useWatch } from "react-hook-form";
 import { PageBoundary } from "src/core/components/page-boundary";
 import { useUnsavedChangesGuard } from "src/core/hooks/use-unsaved-changes-guard";
@@ -17,7 +17,6 @@ import { unformatConfig } from "src/core/utils/helpers";
 
 import { CentralizedConfigReadOnlyAlert } from "../../_components/centralized-config-readonly-alert";
 import GeneratingConfig from "../../_components/generating-config";
-import { CodeReviewSaveButton } from "../../_components/save-button";
 import { useCodeReviewSettingsMutation } from "../../_hooks/use-code-review-settings-mutation";
 import { type CodeReviewFormType } from "../../_types";
 import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
@@ -239,7 +238,7 @@ function OutputContent() {
 
     return (
         <Page.Root>
-            <Page.Header>
+            <Page.Header sticky>
                 <Page.TitleContainer>
                     <Page.Title>What Kody writes</Page.Title>
                     <Page.Description>
@@ -248,7 +247,12 @@ function OutputContent() {
                     </Page.Description>
                 </Page.TitleContainer>
 
-                <Page.HeaderActions>
+                <Page.SaveActions
+                    isDirty={isDirty}
+                    isSaving={isSaving}
+                    canSave={canEdit && formIsValid}
+                    onReset={resetAll}
+                    onSave={saveAll}>
                     <Button
                         size="sm"
                         variant="helper"
@@ -257,26 +261,7 @@ function OutputContent() {
                         onClick={togglePreview}>
                         {previewOpen ? "Hide preview" : "Show preview"}
                     </Button>
-                    {isDirty && (
-                        <Button
-                            size="sm"
-                            variant="cancel"
-                            leftIcon={<RotateCcwIcon />}
-                            onClick={resetAll}
-                            disabled={isSaving}>
-                            Reset
-                        </Button>
-                    )}
-                    <CodeReviewSaveButton
-                        size="sm"
-                        variant="primary"
-                        leftIcon={<SaveIcon />}
-                        onClick={saveAll}
-                        disabled={!canEdit || !isDirty || !formIsValid}
-                        loading={isSaving}>
-                        Save settings
-                    </CodeReviewSaveButton>
-                </Page.HeaderActions>
+                </Page.SaveActions>
             </Page.Header>
 
             <Page.Content className="gap-6">

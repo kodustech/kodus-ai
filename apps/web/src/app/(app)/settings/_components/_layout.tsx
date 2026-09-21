@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { redirect, usePathname } from "next/navigation";
+import { Page } from "@components/ui/page";
 import {
     useCodeReviewSettingsShell,
     useSuspenseGetDefaultCodeReviewParameter,
@@ -235,12 +236,18 @@ function SettingsLayoutShell({
         }
     }
 
+    // Only the code review pages get the band of tabs, so only they sit
+    // below one.
+    const hasTabsBand = pathname.startsWith("/settings/code-review");
+    const belowBand = (page: React.ReactNode) =>
+        hasTabsBand ? <Page.BelowTabs>{page}</Page.BelowTabs> : page;
+
     const content = configValue ? (
         <DefaultCodeReviewConfigProvider config={defaultConfig}>
             <AutomationCodeReviewConfigProvider config={configValue}>
                 <ScopedCodeReviewConfigProvider config={scopedConfig}>
                     <PlatformConfigProvider config={platformConfig.configValue}>
-                        {pathname.startsWith("/settings/code-review") && (
+                        {hasTabsBand && (
                             <CodeReviewShellHeader
                                 configValue={configValue}
                                 platformConfigValue={platformConfig.configValue}
@@ -248,17 +255,15 @@ function SettingsLayoutShell({
                                 globalOverrideCount={globalOverrideCount}
                             />
                         )}
-                        {children}
+                        {belowBand(children)}
                     </PlatformConfigProvider>
                 </ScopedCodeReviewConfigProvider>
             </AutomationCodeReviewConfigProvider>
         </DefaultCodeReviewConfigProvider>
     ) : (
         <>
-            {pathname.startsWith("/settings/code-review") && (
-                <SettingsShellHeaderSkeleton />
-            )}
-            <SettingsPageSkeleton />
+            {hasTabsBand && <SettingsShellHeaderSkeleton />}
+            {belowBand(<SettingsPageSkeleton />)}
         </>
     );
 

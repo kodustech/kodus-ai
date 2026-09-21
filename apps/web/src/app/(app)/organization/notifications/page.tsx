@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { Badge } from "@components/ui/badge";
-import { Button } from "@components/ui/button";
 import { Heading } from "@components/ui/heading";
 import { Page } from "@components/ui/page";
 import { Skeleton } from "@components/ui/skeleton";
@@ -27,7 +26,7 @@ import type {
     RoutingRule,
     UpsertRoutingRulePayload,
 } from "@services/notifications/types";
-import { RotateCcwIcon, Save, Undo2 } from "lucide-react";
+import { Undo2 } from "lucide-react";
 import {
     Controller,
     FormProvider,
@@ -327,8 +326,10 @@ function NotificationsForm({
     return (
         <Page.Root>
             <FormProvider {...form}>
-                <form onSubmit={handleSubmit(saveSettings)}>
-                    <Page.Header>
+                <form
+                    className="flex flex-col gap-6"
+                    onSubmit={handleSubmit(saveSettings)}>
+                    <Page.Header sticky>
                         <Page.TitleContainer>
                             <Page.Title>Notification settings</Page.Title>
                             <Page.Description>
@@ -336,29 +337,15 @@ function NotificationsForm({
                                 for each event and role.
                             </Page.Description>
                         </Page.TitleContainer>
-                        <Page.HeaderActions>
-                            <Button
-                                type="button"
-                                size="sm"
-                                variant="cancel"
-                                leftIcon={<RotateCcwIcon />}
-                                onClick={() => reset()}
-                                disabled={!isDirty || isSaving}>
-                                Reset changes
-                            </Button>
-                            <Button
-                                type="submit"
-                                size="sm"
-                                variant="primary"
-                                leftIcon={<Save />}
-                                disabled={!isDirty || isSaving}
-                                loading={isSaving}>
-                                Save settings
-                            </Button>
-                        </Page.HeaderActions>
+                        <Page.SaveActions
+                            isDirty={isDirty}
+                            isSaving={isSaving}
+                            onReset={() => reset()}
+                            onSave={handleSubmit(saveSettings)}
+                        />
                     </Page.Header>
 
-                    <Page.Content className="mt-4">
+                    <Page.Content>
                         <Tabs
                             value={selectedRole}
                             onValueChange={setSelectedRole}>

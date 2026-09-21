@@ -1,9 +1,9 @@
 "use client";
 
-import { PAGE_MAX_WIDTH } from "@components/ui/page";
+import { Page, PAGE_MAX_WIDTH } from "@components/ui/page";
 import { Skeleton } from "@components/ui/skeleton";
-import { cn } from "src/core/utils/components";
 import { SettingsPageSkeleton } from "src/core/components/system/page-skeletons";
+import { cn } from "src/core/utils/components";
 
 // General · What to review · Kody Rules · What Kody writes · Linked repos
 const TAB_WIDTHS_REM = [3.5, 6.5, 5.5, 7.5, 8];
@@ -33,11 +33,6 @@ export const SettingsShellHeaderSkeleton = () => (
 );
 
 /**
- * Whole settings shell while the server part of the layout (teams, LLM
- * status, defaults, platform config) is still streaming: the same frame the
- * loaded shell uses in each mode, with a settings page skeleton inside.
- */
-/**
  * The whole settings shell while the server part of the layout (teams, LLM
  * status, defaults, platform config) is still streaming: the frame the
  * loaded shell uses, with a settings page skeleton inside.
@@ -45,6 +40,8 @@ export const SettingsShellHeaderSkeleton = () => (
 export const SettingsShellSkeleton = () => (
     <div className="flex flex-1 flex-col overflow-hidden">
         <SettingsShellHeaderSkeleton />
-        <SettingsPageSkeleton />
+        <Page.BelowTabs>
+            <SettingsPageSkeleton />
+        </Page.BelowTabs>
     </div>
 );

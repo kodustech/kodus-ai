@@ -11,11 +11,25 @@ const PageContext = createContext<{
 
 const PageScrollableContext = createContext<boolean>(false);
 
+const PageBelowTabsContext = createContext<boolean>(false);
+
 export const PageWithSidebar = (props: React.PropsWithChildren) => {
     return (
         <PageContext.Provider value={{ hasSidebar: true }}>
             {props.children}
         </PageContext.Provider>
+    );
+};
+
+// For pages rendered under a band of tabs (the code review settings shell).
+// The band already separates the page from the navbar, so the usual top
+// padding left a dead zone between the tabs and the title. Set once by the
+// shell instead of every page overriding Page.Root's padding by hand.
+export const PageBelowTabs = (props: React.PropsWithChildren) => {
+    return (
+        <PageBelowTabsContext.Provider value>
+            {props.children}
+        </PageBelowTabsContext.Provider>
     );
 };
 
@@ -45,13 +59,16 @@ export const PageRoot = ({
 }: React.ComponentProps<"div"> & {
     scrollable?: false;
 }) => {
-    const { hasSidebar } = useContext(PageContext);
+    const belowTabs = useContext(PageBelowTabsContext);
 
     return (
         <div
             {...props}
             className={cn(
-                "relative flex w-full flex-1 flex-col gap-6 pt-10 pb-16",
+                // A sticky Page.Header offsets itself by this same padding —
+                // change them together.
+                "relative flex w-full flex-1 flex-col gap-6 pb-16",
+                belowTabs ? "pt-4" : "pt-10",
                 // Scroll on the shell by default. A page can opt out with
                 // `scrollable={false}` (regardless of sidebar) when it owns an
                 // internal scroll region — e.g. a virtualized table — so the app
@@ -99,19 +116,33 @@ export const PageHeader = ({
      * column of form controls whose ONLY save action lives up here strands the
      * reader: flip a toggle near the bottom and the way to keep it is off
      * screen, with nothing down there saying anything is unsaved.
+     *
+     * Reads as chrome, not content: a solid surface with a hairline rule,
+     * so the page docks underneath instead of mashing into the bar.
+     * Same treatment as the sticky table headers — translucency was tried
+     * here and failed: white card text stays readable through 20% bleed.
      */
     sticky?: boolean;
 }) => {
     const { hasSidebar } = useContext(PageContext);
+    const insideScrollingRoot = useContext(PageScrollableContext);
+    const belowTabs = useContext(PageBelowTabsContext);
 
     return (
         <div
             {...props}
             className={cn(
                 "flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-x-6 gap-y-3 px-8",
-                sticky && "bg-background sticky top-0 z-20 py-2",
-                // A header whose only child rendered null (e.g. the code-review
-                // breadcrumb under the tabs shell) must not keep its 48px.
+                sticky &&
+                    "bg-background border-card-lv3/40 sticky top-0 z-20 border-b py-2",
+                // The browser docks a sticky child at its scroll container's
+                // PADDING edge, so at top-0 the bar stuck Page.Root's top
+                // padding below the chrome, with content scrolling in the gap.
+                // Pull it back by that same padding.
+                sticky &&
+                    insideScrollingRoot &&
+                    (belowTabs ? "-top-4" : "-top-10"),
+                // A header whose only child rendered null must not keep its 48px.
                 "empty:hidden",
                 hasSidebar ? WITH_SIDEBAR_CONTAINER : WITHOUT_SIDEBAR_CONTAINER,
                 props.className,

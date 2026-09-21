@@ -1,7 +1,6 @@
 "use client";
 
 import { Suspense, useMemo } from "react";
-import { Button } from "@components/ui/button";
 import { Page } from "@components/ui/page";
 import { Spinner } from "@components/ui/spinner";
 import { toast } from "@components/ui/toaster/use-toast";
@@ -9,14 +8,12 @@ import { useGetCodeReviewLabels } from "@services/parameters/hooks";
 import { KodyLearningStatus } from "@services/parameters/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
-import { RotateCcwIcon, SaveIcon } from "lucide-react";
 import { useFormContext, useFormState, useWatch } from "react-hook-form";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { unformatConfig } from "src/core/utils/helpers";
 
 import { CentralizedConfigReadOnlyAlert } from "../../_components/centralized-config-readonly-alert";
 import GeneratingConfig from "../../_components/generating-config";
-import { CodeReviewSaveButton } from "../../_components/save-button";
 import { useCodeReviewSettingsMutation } from "../../_hooks/use-code-review-settings-mutation";
 import { type CodeReviewFormType } from "../../_types";
 import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
@@ -151,7 +148,7 @@ function ReviewScopeContent() {
 
     return (
         <Page.Root>
-            <Page.Header>
+            <Page.Header sticky>
                 <Page.TitleContainer>
                     <Page.Title>What to review</Page.Title>
                     <Page.Description>
@@ -161,27 +158,13 @@ function ReviewScopeContent() {
                     </Page.Description>
                 </Page.TitleContainer>
 
-                <Page.HeaderActions>
-                    {formIsDirty && (
-                        <Button
-                            size="sm"
-                            variant="cancel"
-                            leftIcon={<RotateCcwIcon />}
-                            onClick={() => form.reset()}
-                            disabled={formIsSubmitting}>
-                            Reset
-                        </Button>
-                    )}
-                    <CodeReviewSaveButton
-                        size="sm"
-                        variant="primary"
-                        leftIcon={<SaveIcon />}
-                        onClick={handleSubmit}
-                        disabled={!canEdit || !formIsDirty || !formIsValid}
-                        loading={formIsSubmitting}>
-                        Save settings
-                    </CodeReviewSaveButton>
-                </Page.HeaderActions>
+                <Page.SaveActions
+                    isDirty={formIsDirty}
+                    isSaving={formIsSubmitting}
+                    canSave={canEdit && formIsValid}
+                    onReset={() => form.reset()}
+                    onSave={handleSubmit}
+                />
             </Page.Header>
 
             <Page.Content className="gap-6">

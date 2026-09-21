@@ -22,7 +22,7 @@ import {
     getSSODomainVerificationStatus,
     startSSOConnectionTest,
 } from "@services/ssoConfig/fetch";
-import { AlertCircle, Save, Upload } from "lucide-react";
+import { AlertCircle, Upload } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
 import { useAuth } from "src/core/providers/auth.provider";
 import { publicDomainsSet } from "src/core/utils/email";
@@ -679,10 +679,32 @@ export const ClientSsoOrganizationSettingsPage = (props: {
 
     return (
         <Page.Root>
-            <form onSubmit={handleSubmit(saveSettings)}>
-                <Page.Header>
-                    <Page.Title>SSO Settings</Page.Title>
-                    <Page.HeaderActions>
+            <form
+                className="flex flex-col gap-6"
+                onSubmit={handleSubmit(saveSettings)}>
+                <Page.Header sticky>
+                    <Page.TitleContainer>
+                        <Page.Title>SSO Settings</Page.Title>
+                        <Page.Description>
+                            Let your team sign in to Kodus through your identity
+                            provider over SAML.
+                        </Page.Description>
+                    </Page.TitleContainer>
+                    {/* No Reset: a restored test draft becomes the form's
+                        defaults, so resetting would land on the draft, not
+                        on the saved config, and read as a no-op. */}
+                    <Page.SaveActions
+                        isDirty={
+                            isDirty ||
+                            hasUnsavedChangesComparedToPersistedConfig
+                        }
+                        isSaving={isLoadingSubmitButton}
+                        canSave={
+                            isValid &&
+                            !(isEnabled && needsConnectionRetest) &&
+                            !needsDomainVerification
+                        }
+                        onSave={handleSubmit(saveSettings)}>
                         <Button
                             type="button"
                             size="sm"
@@ -694,23 +716,7 @@ export const ClientSsoOrganizationSettingsPage = (props: {
                             }>
                             Test connection
                         </Button>
-                        <Button
-                            type="submit"
-                            size="sm"
-                            variant="primary"
-                            leftIcon={<Save />}
-                            disabled={
-                                (!isDirty &&
-                                    !hasUnsavedChangesComparedToPersistedConfig) ||
-                                !isValid ||
-                                isLoadingSubmitButton ||
-                                (isEnabled && needsConnectionRetest) ||
-                                needsDomainVerification
-                            }
-                            loading={isLoadingSubmitButton}>
-                            Save settings
-                        </Button>
-                    </Page.HeaderActions>
+                    </Page.SaveActions>
                 </Page.Header>
 
                 <Page.Content className="flex flex-col gap-8">

@@ -1,7 +1,6 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Button } from "@components/ui/button";
 import { Card, CardHeader } from "@components/ui/card";
 import { FormControl } from "@components/ui/form-control";
 import { Input } from "@components/ui/input";
@@ -24,7 +23,6 @@ import {
     OrganizationParametersConfigKey,
     Timezone,
 } from "@services/parameters/types";
-import { Save } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
 import { publicDomainsSet } from "src/core/utils/email";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
@@ -154,22 +152,24 @@ export const GeneralOrganizationSettingsPage = (props: {
 
     return (
         <Page.Root>
-            <form onSubmit={handleSubmit(saveSettings)}>
-                <Page.Header>
-                    <Page.Title>General settings</Page.Title>
-                    <Page.HeaderActions>
-                        <Button
-                            type="submit"
-                            size="sm"
-                            variant="primary"
-                            leftIcon={<Save />}
-                            disabled={
-                                !isDirty || !isValid || isLoadingSubmitButton
-                            }
-                            loading={isLoadingSubmitButton}>
-                            Save settings
-                        </Button>
-                    </Page.HeaderActions>
+            <form
+                className="flex flex-col gap-6"
+                onSubmit={handleSubmit(saveSettings)}>
+                <Page.Header sticky>
+                    <Page.TitleContainer>
+                        <Page.Title>General settings</Page.Title>
+                        <Page.Description>
+                            Your organization&apos;s timezone and who can join
+                            it automatically.
+                        </Page.Description>
+                    </Page.TitleContainer>
+                    <Page.SaveActions
+                        isDirty={isDirty}
+                        isSaving={isLoadingSubmitButton}
+                        canSave={isValid}
+                        onReset={() => form.reset()}
+                        onSave={handleSubmit(saveSettings)}
+                    />
                 </Page.Header>
 
                 <Page.Content className="flex flex-col gap-8">

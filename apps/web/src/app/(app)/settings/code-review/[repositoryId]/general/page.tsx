@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { cn } from "src/core/utils/components";
 import { Button } from "@components/ui/button";
 import { ConfirmModal } from "@components/ui/confirm-modal";
 import { magicModal } from "@components/ui/magic-modal";
@@ -16,16 +15,14 @@ import {
 } from "@services/parameters/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
-import { RotateCcwIcon, SaveIcon, Settings2Icon } from "lucide-react";
+import { Settings2Icon } from "lucide-react";
 import { FormProvider, useFormContext, useFormState } from "react-hook-form";
 import { AsyncBoundary } from "src/core/components/async-boundary";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { unformatConfig } from "src/core/utils/helpers";
 
-import { CodeReviewPagesBreadcrumb } from "../../_components/breadcrumb";
 import { CentralizedConfigReadOnlyAlert } from "../../_components/centralized-config-readonly-alert";
 import GeneratingConfig from "../../_components/generating-config";
-import { CodeReviewSaveButton } from "../../_components/save-button";
 import { useCodeReviewSettingsMutation } from "../../_hooks/use-code-review-settings-mutation";
 import { FormattedConfigLevel, type CodeReviewFormType } from "../../_types";
 import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
@@ -204,54 +201,36 @@ export default function General() {
 
     return (
         <Page.Root>
-            <Page.Header>
-                <CodeReviewPagesBreadcrumb pageName="General" />
-            </Page.Header>
-
             {/* Sticky: this is a long column of toggles and the only way to
                 keep a change lives up here. Scrolled away, flipping something
                 near the bottom left the reader with no save in reach and
                 nothing on screen saying anything was pending. */}
             <Page.Header sticky>
-                <Page.Title>General settings</Page.Title>
-                <Page.HeaderActions>
+                <Page.TitleContainer>
+                    <Page.Title>General settings</Page.Title>
+                    <Page.Description>
+                        When Kody reviews, which pull requests and files it
+                        skips, and how it reports back on the pull request.
+                    </Page.Description>
+                </Page.TitleContainer>
+                <Page.SaveActions
+                    isDirty={formIsDirty}
+                    isSaving={formIsSubmitting}
+                    canSave={canEdit && formIsValid}
+                    onReset={() => form.reset()}
+                    onSave={handleSubmit}>
                     {isGlobalGeneralView && (
                         <Button
                             size="sm"
                             leftIcon={<Settings2Icon />}
                             onClick={() => setIsCentralizedModalOpen(true)}
                             variant="helper"
+                            className="whitespace-nowrap"
                             disabled={!canEdit}>
                             Configure centralized config
                         </Button>
                     )}
-
-                    {/* Kept mounted and merely hidden while the form is
-                        clean: mounting it on the first edit made the whole
-                        action bar jump sideways at the exact moment the reader
-                        touched a control. */}
-                    <Button
-                        size="md"
-                        variant="cancel"
-                        leftIcon={<RotateCcwIcon />}
-                        onClick={() => form.reset()}
-                        disabled={formIsSubmitting}
-                        className={cn(!formIsDirty && "invisible")}
-                        aria-hidden={!formIsDirty}
-                        tabIndex={formIsDirty ? undefined : -1}>
-                        Reset
-                    </Button>
-
-                    <CodeReviewSaveButton
-                        size="md"
-                        variant="primary"
-                        leftIcon={<SaveIcon />}
-                        onClick={handleSubmit}
-                        disabled={!canEdit || !formIsDirty || !formIsValid}
-                        loading={formIsSubmitting}>
-                        Save settings
-                    </CodeReviewSaveButton>
-                </Page.HeaderActions>
+                </Page.SaveActions>
             </Page.Header>
 
             <Page.Content>

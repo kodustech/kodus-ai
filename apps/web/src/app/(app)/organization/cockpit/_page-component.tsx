@@ -1,7 +1,6 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Button } from "@components/ui/button";
 import { Card, CardContent, CardHeader } from "@components/ui/card";
 import { Label } from "@components/ui/label";
 import { Page } from "@components/ui/page";
@@ -12,7 +11,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useAsyncAction } from "@hooks/use-async-action";
 import { updateCockpitMetricsVisibility } from "@services/organizationParameters/fetch";
 import { CockpitMetricsVisibility } from "@services/parameters/types";
-import { Save } from "lucide-react";
 import {
     Control,
     Controller,
@@ -221,31 +219,28 @@ export const CockpitOrganizationSettingsPage = (props: {
 
     return (
         <Page.Root>
-            <form onSubmit={handleSubmit(saveSettings)}>
-                <Page.Header>
-                    <Page.Title>Cockpit Configuration</Page.Title>
-                    <Page.HeaderActions>
-                        <Button
-                            type="submit"
-                            size="sm"
-                            variant="primary"
-                            leftIcon={<Save />}
-                            disabled={
-                                !isDirty || !isValid || isLoadingSubmitButton
-                            }
-                            loading={isLoadingSubmitButton}>
-                            Save settings
-                        </Button>
-                    </Page.HeaderActions>
+            <form
+                className="flex flex-col gap-6"
+                onSubmit={handleSubmit(saveSettings)}>
+                <Page.Header sticky>
+                    <Page.TitleContainer>
+                        <Page.Title>Cockpit Configuration</Page.Title>
+                        <Page.Description>
+                            Show or hide cockpit tabs and the metrics inside
+                            them. At least one tab must stay enabled.
+                        </Page.Description>
+                    </Page.TitleContainer>
+                    <Page.SaveActions
+                        isDirty={isDirty}
+                        isSaving={isLoadingSubmitButton}
+                        canSave={isValid}
+                        onReset={() => form.reset()}
+                        onSave={handleSubmit(saveSettings)}
+                    />
                 </Page.Header>
 
                 <Page.Content>
                     <div className="flex w-full max-w-3xl flex-col gap-4">
-                        <p className="text-text-secondary text-sm">
-                            Show or hide cockpit tabs and the metrics inside
-                            them. At least one tab must stay enabled.
-                        </p>
-
                         {/* Kodus Review tab — no per-metric configuration */}
                         <Card color="lv1" className="w-full">
                             <CardHeader>

@@ -1,18 +1,14 @@
 "use client";
 
-import { Button } from "@components/ui/button";
 import { Page } from "@components/ui/page";
 import { toast } from "@components/ui/toaster/use-toast";
 import { KodyLearningStatus } from "@services/parameters/types";
-import { RotateCcwIcon, Save } from "lucide-react";
 import { useFormContext, useFormState } from "react-hook-form";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { unformatConfig } from "src/core/utils/helpers";
 
-import { CodeReviewPagesBreadcrumb } from "../../_components/breadcrumb";
 import { CentralizedConfigReadOnlyAlert } from "../../_components/centralized-config-readonly-alert";
 import GeneratingConfig from "../../_components/generating-config";
-import { CodeReviewSaveButton } from "../../_components/save-button";
 import { useCodeReviewSettingsMutation } from "../../_hooks/use-code-review-settings-mutation";
 import {
     type AutomationCodeReviewConfigPageProps,
@@ -89,35 +85,16 @@ export default function PRSummary(props: AutomationCodeReviewConfigPageProps) {
 
     return (
         <Page.Root>
-            <Page.Header>
-                <CodeReviewPagesBreadcrumb pageName="PR summary" />
-            </Page.Header>
-
-            <Page.Header>
+            <Page.Header sticky>
                 <Page.Title>PR summary</Page.Title>
 
-                <Page.HeaderActions>
-                    {formIsDirty && (
-                        <Button
-                            size="md"
-                            variant="cancel"
-                            leftIcon={<RotateCcwIcon />}
-                            onClick={() => form.reset()}
-                            disabled={formIsSubmitting}>
-                            Reset
-                        </Button>
-                    )}
-
-                    <CodeReviewSaveButton
-                        size="md"
-                        variant="primary"
-                        leftIcon={<Save />}
-                        onClick={handleSubmit}
-                        disabled={!formIsDirty || !formIsValid}
-                        loading={formIsSubmitting}>
-                        Save settings
-                    </CodeReviewSaveButton>
-                </Page.HeaderActions>
+                <Page.SaveActions
+                    isDirty={formIsDirty}
+                    isSaving={formIsSubmitting}
+                    canSave={formIsValid}
+                    onReset={() => form.reset()}
+                    onSave={handleSubmit}
+                />
             </Page.Header>
 
             <Page.Content className="gap-8">
