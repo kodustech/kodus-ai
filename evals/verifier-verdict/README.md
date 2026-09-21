@@ -39,12 +39,9 @@ a run cut off mid-investigation with no text, and prose with no verdict at all.
 
 It is a regression gate, not a one-off: strip the text path and it goes red.
 
-Proven both ways at the time of writing, on the same 8 rows:
-
-| tree           | LOST refutations | gate exit |
-| -------------- | ---------------- | --------- |
-| before the fix | 4 of 5           | 1         |
-| after the fix  | 0 of 5           | 0         |
+Proven both ways: revert the text path and the refutation rows go RED with the
+production rationale `no parseable verdict — kept by default`; restore it and
+they pass. Run it and read the ledger rather than trusting a count here.
 
 `parseMode` reads `undefined` on every pre-fix row — the field was hardcoded to
 `'direct'` in `core-agent-loop.adapter.ts`, so the trace could not distinguish a
@@ -75,13 +72,10 @@ full (confidence < 5, evidence gate)  maxSteps=10
   8..10  -            yes            -
 ```
 
-Proven in three states, on the real spec:
-
-| verifier policies                            | ledger                                               | gate |
-| -------------------------------------------- | ---------------------------------------------------- | ---- |
-| `[budget]` (before)                          | 6 unguided final steps — light 3,4,5 and full 8,9,10 | 1    |
-| `[budget, force-finalize]` (forces the tool) | 6 steps restrict tools → contradicts the prompt      | 1    |
-| `[budget, force-text-finalize]` (now)        | clean                                                | 0    |
+Proven in three states on the real spec: with no finalize policy the last steps
+are unguided and the gate fails; with a tool-forcing policy the ledger reports
+tools restricted and fails; with the text-forcing one it passes. Run it to see
+the per-step table.
 
 Why `BudgetPolicy`'s `maxSteps < 6` short-circuit is **not** the bug: at light
 depth the first two steps genuinely are free, and `computeBudgetBand` goes quiet
@@ -112,50 +106,21 @@ or `.env`).
 customer source; `capture.js` writes to a temp dir by default. `fixtures.json`
 carries the same shapes rewritten against a neutral codebase.
 
-### Observed 2026-09-19 — 117 traces, 154 verifier runs, all orgs
+### What production delivers
 
-`capture.js --days 10 --limit 200` (83 of the 200 trace fetches failed and were
-skipped, so every count is a floor):
+The counts live in [observed.json](observed.json) — capture writes them, nothing
+is typed by hand, and `evals/AGENTS.md` forbids restating them here. Refresh:
 
-| delivery                                          | runs | share        |
-| ------------------------------------------------- | ---- | ------------ |
-| `tool` (called `submitVerdict`)                   | 77   | 50%          |
-| `text` (verdict in prose — all discarded pre-fix) | 46   | 30%          |
-| `none` (no verdict at all)                        | 31   | 20%          |
-| of the `text` rows: a `keep:false` verdict        | 2    | 1.3% of runs |
+```bash
+node evals/verifier-verdict/capture.js --days 10 --limit 200 --write-observed
+```
 
-Replayed through the production extractor (77 judgeable rows — the 77 `tool` rows
-predate `toolPayload` capture and were skipped):
-
-| tree           | refutations delivered | LOST  | gate |
-| -------------- | --------------------- | ----- | ---- |
-| before the fix | 2                     | **2** | 1    |
-| after the fix  | 2                     | 0     | 0    |
-
-After the fix, 43 rows read as `parseMode=text` and 34 as `default-keep`. Before
-it, all 77 read `undefined`.
-
-A third row carried `keep:false` somewhere in its text but `keep:true` as its
-LAST verdict, and its prose is a genuine confirmation. Taking the last object —
-the rule issue #1937's design comment asked for — is what keeps that real finding
-from being dropped; a naive "contains keep:false" match gets it wrong.
-
-Read this before trusting the issue's Impact section:
-
-- **Magnitude is ~1%, not ~9%.** The issue's ~9% came from one org
-  (`d088c820…`) with 169 text verdicts. Across orgs, half the runs call the tool
-  normally.
-- **The model moved.** The losses were `deepseek/deepseek-v4.1-flash` and
-  `GLM-5.3-FLASH`. `claude-sonnet-4-6` — the model in the issue title — had a
-  single text run and zero `keep:false` in this window; `claude-opus-5` had 17
-  text runs and zero.
-- **Sample skew:** newest-first, so this is 2026-09-17..19, not the issue's
-  2026-09-09..15 window. It is today's fleet, not a replication of the issue.
-- **A bigger hole sits next to this one:** most of those 31 `none` runs end with
-  a `tool_call`-only message and no text — the verifier was cut off mid-
-  investigation, step budget exhausted, and never produced a verdict. Fail-open
-  keeps the candidate. This eval records it; the fix does nothing for it (there
-  is nothing to parse) and no issue tracks it yet.
+Read `observed.json` before trusting issue #1937's Impact section. That section
+generalised from one org; across orgs the mix is different, the affected models
+have moved, and the `none` share — runs that deliver no verdict at all — is the
+larger hole. The file carries its own caveats and its capture date, because the
+fleet mix moves week to week: two captures ten days apart disagreed enough that
+any number quoted in prose would already be wrong.
 
 ## Known limits
 

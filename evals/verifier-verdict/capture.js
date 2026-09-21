@@ -4,6 +4,7 @@
 //   node evals/verifier-verdict/capture.js --days 10 --limit 200
 //   node evals/verifier-verdict/capture.js --trace <id>          # one trace
 //   node evals/verifier-verdict/capture.js --out DIR             # where to write
+//   node evals/verifier-verdict/capture.js --write-observed      # refresh observed.json
 //
 // Exit: 0 ok / 2 infra (missing keys / Langfuse error).
 //
@@ -272,6 +273,41 @@ const KEEP_FALSE =
         String(T.none).padEnd(5),
         T.refutations,
     );
+    // observed.json OWNS these numbers: evals/AGENTS.md forbids copying them into
+    // prose, and there is no other file that could own them — the corpus itself
+    // is customer source and never lands in a public repo. Counts only.
+    if (process.argv.includes('--write-observed')) {
+        const observedPath = path.join(__dirname, 'observed.json');
+        fs.writeFileSync(
+            observedPath,
+            JSON.stringify(
+                {
+                    __doc: [
+                        'Production delivery mix for the verify gate — what this eval protects.',
+                        'Counts only, no payloads: kodus-ai is public and the corpus is customer source,',
+                        'so capture.js writes the corpus outside the repo and only these aggregates land here.',
+                        'Regenerate: node evals/verifier-verdict/capture.js --days 10 --limit 200 --write-observed',
+                        'Every count is a FLOOR — trace fetches that failed are skipped, and the sample is newest-first.',
+                    ],
+                    capturedAt: new Date().toISOString(),
+                    traces: traces.length,
+                    verifierRuns: rows.length,
+                    delivery: { tool: T.tool, text: T.text + T['text?'], none: T.none },
+                    refutationsDeliveredAsText: T.refutations,
+                    byModel: agg,
+                    caveats: [
+                        'Counted per verifier run, not per published comment: a second verify pass (the evidence gate) can rescue a finding the first pass lost.',
+                        'No provider breakdown — byokProvider is not on the trace metadata, so the model id is the proxy.',
+                        'The verifier is identified by its system prompt; the per-finding observation name verifier.agent.ts builds never reaches the trace.',
+                    ],
+                },
+                null,
+                4,
+            ) + '\n',
+        );
+        console.log(`observed: ${observedPath}`);
+    }
+
     console.log(
         `\nReplay the corpus through the production extractor:\n  node evals/verifier-verdict/run.js --corpus ${file}`,
     );
