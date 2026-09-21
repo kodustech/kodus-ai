@@ -1,13 +1,10 @@
 import { PropsWithChildren } from "react";
-import { Page } from "@components/ui/page";
 
-import { ConfigsSidebar } from "./_components/sidebar";
-
+// The organization pages are listed in the sidebar's Organization group.
 export default async function Layout(props: PropsWithChildren) {
     return (
         <div className="flex flex-1 flex-row overflow-hidden">
-            <ConfigsSidebar />
-            <Page.WithSidebar>{props.children}</Page.WithSidebar>
+            {props.children}
         </div>
     );
 }

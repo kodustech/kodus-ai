@@ -9,7 +9,6 @@ import {
     GaugeIcon,
     GitPullRequestIcon,
     LockIcon,
-    SlidersHorizontalIcon,
     SparklesIcon,
     type LucideIcon,
 } from "lucide-react";
@@ -18,11 +17,9 @@ import { isCockpitTierAllowed } from "src/features/ee/cockpit/_helpers/tier-poli
 import { useSubscriptionContext } from "src/features/ee/subscription/_providers/subscription-context";
 
 export type MainNavItem = {
-    id: "reviews" | "cockpit" | "ai-providers" | "settings" | "plugins";
+    id: "reviews" | "cockpit" | "ai-providers" | "plugins";
     label: string;
     icon: LucideIcon;
-    /** The top bar's glyph size, when it differs from its default. */
-    navbarIconClassName?: string;
     href: string;
     visible: boolean;
     badge?: React.JSX.Element;
@@ -32,9 +29,9 @@ export type MainNavItem = {
 };
 
 /**
- * The product's main destinations, with their permission and plan gates.
- * Shared by the top bar and the sidebar navigation so both shells always
- * list the same places.
+ * The product's main destinations, with their permission and plan gates —
+ * the first group of the sidebar. Settings pages are listed by the sidebar's
+ * own groups (code review, workspace, organization).
  */
 export const useMainNavItems = () => {
     const subscription = useSubscriptionContext();
@@ -46,15 +43,6 @@ export const useMainNavItems = () => {
     const canReadCliReviews = usePermission(
         Action.Read,
         ResourceType.CliReview,
-    );
-    const canReadCodeReviewSettings = usePermission(
-        Action.Read,
-        ResourceType.CodeReviewSettings,
-    );
-    const canReadBilling = usePermission(Action.Read, ResourceType.Billing);
-    const canReadGitSettings = usePermission(
-        Action.Read,
-        ResourceType.GitSettings,
     );
     const canReadPlugins = usePermission(
         Action.Read,
@@ -69,7 +57,7 @@ export const useMainNavItems = () => {
 
     // Four destinations. Reviews folds Pull Requests + CLI Reviews (tabs on
     // the page); Issues lives inside the Cockpit; Library is reached from
-    // Kody Rules; Repositories + Subscription sit in the avatar menu.
+    // Kody Rules.
     const items = useMemo(() => {
         const items: Array<MainNavItem> = [
             {
@@ -91,8 +79,6 @@ export const useMainNavItems = () => {
                 // layout.tsx), so the nav item shows a lock instead of hiding.
                 visible: true,
                 icon: GaugeIcon,
-                // The gauge reads small beside the other glyphs at the same size.
-                navbarIconClassName: "size-6",
                 badge: isCockpitTierAllowed(
                     subscription.license,
                 ) ? undefined : (
@@ -102,9 +88,9 @@ export const useMainNavItems = () => {
 
             {
                 // Which model reviews the code and whose key pays for it —
-                // a first-order product decision, so it sits in the main nav
-                // instead of being reachable only from the avatar menu. The
-                // label matches the page's own title.
+                // a first-order product decision, so it sits with the main
+                // destinations, not among the settings. The label matches the
+                // page's own title.
                 id: "ai-providers",
                 label: "AI providers",
                 icon: SparklesIcon,
@@ -138,21 +124,6 @@ export const useMainNavItems = () => {
                     ) : undefined,
             },
             {
-                id: "settings",
-                label: "Settings",
-                icon: SlidersHorizontalIcon,
-                href: "/settings",
-                visible:
-                    canReadCodeReviewSettings ||
-                    canReadGitSettings ||
-                    canReadBilling,
-                // Plugins has its own entry below; keep it out of Settings'
-                // active state.
-                matcher: (path) =>
-                    path.startsWith("/settings") &&
-                    !path.startsWith("/settings/plugins"),
-            },
-            {
                 id: "plugins",
                 label: "Plugins",
                 icon: BlocksIcon,
@@ -173,9 +144,6 @@ export const useMainNavItems = () => {
         "planType" in subscription.license
             ? subscription.license.planType
             : undefined,
-        canReadCodeReviewSettings,
-        canReadGitSettings,
-        canReadBilling,
         canReadPlugins,
         isMCPAvailable,
         canReadPullRequests,

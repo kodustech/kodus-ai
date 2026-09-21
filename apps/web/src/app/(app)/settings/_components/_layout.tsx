@@ -2,31 +2,34 @@
 
 import { useMemo } from "react";
 import { redirect, usePathname } from "next/navigation";
-import { Page } from "@components/ui/page";
+import { magicModal } from "@components/ui/magic-modal";
 import {
     useCodeReviewSettingsShell,
     useSuspenseGetDefaultCodeReviewParameter,
     useSuspenseGetParameterPlatformConfigs,
 } from "@services/parameters/hooks";
 import {
+    KodyLearningStatus,
     ParametersConfigKey,
     type PlatformConfigValue,
 } from "@services/parameters/types";
+import { usePermission } from "@services/permissions/hooks";
+import { Action, ResourceType } from "@services/permissions/types";
 import type { CustomMessageConfig } from "@services/pull-request-messages/types";
 import { SettingsPageSkeleton } from "src/core/components/system/page-skeletons";
-import { useNavLayout } from "src/core/layout/nav-layout";
+import {
+    ScopeToolsPortal,
+    useLendAddRepository,
+} from "src/core/layout/sidebar/scope-tools";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { safeArray } from "src/core/utils/safe-array";
 
 import { useCodeReviewRouteParams } from "../_hooks";
-import { countConfigOverridesForRoutes } from "../_utils/count-overrides";
 import {
-    FormattedConfigLevel,
     type CodeReviewGlobalConfig,
     type FormattedGlobalCodeReviewConfig,
 } from "../code-review/_types";
 import { resolveCodeReviewConfigForScope } from "./code-review-config-scope";
-import { CodeReviewShellHeader } from "./code-review-shell-header";
 import {
     AutomationCodeReviewConfigProvider,
     CodeReviewConfigFetchStateProvider,
@@ -37,37 +40,9 @@ import {
     ScopedCodeReviewConfigProvider,
     type CodeReviewModelData,
 } from "./context";
-import { useCustomMessagesOverrideCount } from "./route-button-with-override-count";
-import { SettingsShellHeaderSkeleton } from "./settings-shell-skeleton";
-
-// One tab per question the user brings. Review categories, review filters
-// and the per-category prompts live inside "What to review"; the PR summary,
-// comment templates and Kody's voice live inside "What Kody writes".
-const routes = [
-    { label: "General", href: "general" },
-    { label: "What to review", href: "review-scope" },
-    { label: "Kody Rules", href: "kody-rules" },
-    { label: "What Kody writes", href: "output" },
-    // Cross-repo context (#1576): relationships are directional and
-    // repo-scoped by design (a global default would link EVERY repo to the
-    // same siblings), so the item only renders in repository submenus.
-    {
-        label: "Linked Repositories",
-        shortLabel: "Linked repos",
-        href: "linked-repositories",
-        repoOnly: true,
-    },
-] satisfies Array<{
-    label: string;
-    shortLabel?: string;
-    href: string;
-    repoOnly?: boolean;
-}>;
-
-// Global scope never shows repo-only routes (see `repoOnly` on `routes`).
-const globalSettingsRoutes = routes.filter(
-    (r) => !("repoOnly" in r && r.repoOnly),
-);
+import { AddRepoModal } from "./copy-settings-modal";
+import { KodusConfigFileStatusBadge } from "./kodus-config-file-status";
+import { SidebarRepositoryOrDirectoryDropdown } from "./per-repository/options-dropdown";
 
 type InitialPlatformConfig = {
     uuid: string;
@@ -188,20 +163,6 @@ function SettingsLayoutShell({
 }>) {
     const pathname = usePathname();
     const { repositoryId, pageName, directoryId } = useCodeReviewRouteParams();
-    const globalConfigOverrideCount = configValue
-        ? countConfigOverridesForRoutes(
-              configValue.configs,
-              globalSettingsRoutes.map((r) => r.href),
-              FormattedConfigLevel.GLOBAL,
-          )
-        : 0;
-    const globalCustomMessagesOverrideCount = useCustomMessagesOverrideCount({
-        scopeRepositoryId: "global",
-        level: FormattedConfigLevel.GLOBAL,
-        enabled: Boolean(configValue),
-    });
-    const globalOverrideCount =
-        globalConfigOverrideCount + globalCustomMessagesOverrideCount;
 
     const isShellLoading = !configValue;
 
@@ -237,43 +198,99 @@ function SettingsLayoutShell({
         }
     }
 
-    // Only the code review pages get the band of tabs, so only they sit
-    // below one. The sidebar navigation carries the scope and the pages
-    // itself, so it drops the band.
-    const navLayout = useNavLayout();
-    const hasTabsBand =
-        navLayout === "top" && pathname.startsWith("/settings/code-review");
-    const belowBand = (page: React.ReactNode) =>
-        hasTabsBand ? <Page.BelowTabs>{page}</Page.BelowTabs> : page;
-
     const content = configValue ? (
         <DefaultCodeReviewConfigProvider config={defaultConfig}>
             <AutomationCodeReviewConfigProvider config={configValue}>
                 <ScopedCodeReviewConfigProvider config={scopedConfig}>
                     <PlatformConfigProvider config={platformConfig.configValue}>
-                        {hasTabsBand && (
-                            <CodeReviewShellHeader
+                        {pathname.startsWith("/settings/code-review") && (
+                            <CodeReviewScopeTools
                                 configValue={configValue}
                                 platformConfigValue={platformConfig.configValue}
-                                routes={routes}
-                                globalOverrideCount={globalOverrideCount}
                             />
                         )}
-                        {belowBand(children)}
+                        {children}
                     </PlatformConfigProvider>
                 </ScopedCodeReviewConfigProvider>
             </AutomationCodeReviewConfigProvider>
         </DefaultCodeReviewConfigProvider>
     ) : (
-        <>
-            {hasTabsBand && <SettingsShellHeaderSkeleton />}
-            {belowBand(<SettingsPageSkeleton />)}
-        </>
+        <SettingsPageSkeleton />
     );
 
-    // The scope switcher and the page tabs live in a header band; the page
-    // owns the full width below it.
     return (
         <div className="flex flex-1 flex-col overflow-hidden">{content}</div>
+    );
+}
+
+/**
+ * The scope tools that need the full configuration this layout loads, lent
+ * to the sidebar's scope picker (see scope-tools.tsx): the scope's options
+ * menu and kodus-config.yml badge render under the picker, and "Add
+ * repository configuration" joins the picker's footer.
+ */
+function CodeReviewScopeTools({
+    configValue,
+    platformConfigValue,
+}: {
+    configValue: FormattedGlobalCodeReviewConfig;
+    platformConfigValue: PlatformConfigValue;
+}) {
+    const { repositoryId, directoryId } = useCodeReviewRouteParams();
+    const canCreate = usePermission(
+        Action.Create,
+        ResourceType.CodeReviewSettings,
+    );
+
+    const repository =
+        repositoryId && repositoryId !== "global"
+            ? safeArray(configValue.repositories).find(
+                  (item) => item.id === repositoryId,
+              )
+            : undefined;
+    const directory = directoryId
+        ? repository?.directories?.find((item) => item.id === directoryId)
+        : undefined;
+
+    const canAddRepository =
+        canCreate &&
+        platformConfigValue.kodyLearningStatus !==
+            KodyLearningStatus.GENERATING_CONFIG;
+    const openAddRepository = useMemo(
+        () =>
+            canAddRepository
+                ? () =>
+                      magicModal.show(() => (
+                          <AddRepoModal
+                              repositories={configValue.repositories}
+                          />
+                      ))
+                : undefined,
+        [canAddRepository, configValue.repositories],
+    );
+    useLendAddRepository(openAddRepository);
+
+    return (
+        <>
+            <ScopeToolsPortal slot="status">
+                <KodusConfigFileStatusBadge />
+            </ScopeToolsPortal>
+            {repository && (
+                <ScopeToolsPortal slot="actions">
+                    <SidebarRepositoryOrDirectoryDropdown
+                        repository={repository}
+                        directory={
+                            directory
+                                ? {
+                                      id: directory.id,
+                                      name: directory.name,
+                                      folders: directory.folders,
+                                  }
+                                : undefined
+                        }
+                    />
+                </ScopeToolsPortal>
+            )}
+        </>
     );
 }

@@ -21,9 +21,9 @@ export default async function SsoOrganizationSettingsPage() {
         () => null,
     );
 
-    // SSO is enterprise-only (trials get a preview). Mirrors the sidebar
-    // visibility in app/(app)/organization/_components/sidebar.tsx — the
-    // menu hides the link, this guard blocks direct URL access.
+    // SSO is enterprise-only (trials get a preview). Mirrors the padlock on
+    // SSO in the sidebar's Organization group (core/layout/sidebar) — the
+    // menu flags the link, this guard blocks direct URL access.
     const isTrial = license?.subscriptionStatus === "trial";
     const isEnterprise = license ? isEnterprisePlan(license) : false;
     if (!isEnterprise && !isTrial) {

@@ -11,25 +11,11 @@ const PageContext = createContext<{
 
 const PageScrollableContext = createContext<boolean>(false);
 
-const PageBelowTabsContext = createContext<boolean>(false);
-
 export const PageWithSidebar = (props: React.PropsWithChildren) => {
     return (
         <PageContext.Provider value={{ hasSidebar: true }}>
             {props.children}
         </PageContext.Provider>
-    );
-};
-
-// For pages rendered under a band of tabs (the code review settings shell).
-// The band already separates the page from the navbar, so the usual top
-// padding left a dead zone between the tabs and the title. Set once by the
-// shell instead of every page overriding Page.Root's padding by hand.
-export const PageBelowTabs = (props: React.PropsWithChildren) => {
-    return (
-        <PageBelowTabsContext.Provider value>
-            {props.children}
-        </PageBelowTabsContext.Provider>
     );
 };
 
@@ -59,16 +45,13 @@ export const PageRoot = ({
 }: React.ComponentProps<"div"> & {
     scrollable?: false;
 }) => {
-    const belowTabs = useContext(PageBelowTabsContext);
-
     return (
         <div
             {...props}
             className={cn(
-                // A sticky Page.Header offsets itself by this same padding —
+                // A sticky Page.Header offsets itself by this same pt-10 —
                 // change them together.
-                "relative flex w-full flex-1 flex-col gap-6 pb-16",
-                belowTabs ? "pt-4" : "pt-10",
+                "relative flex w-full flex-1 flex-col gap-6 pt-10 pb-16",
                 // Scroll on the shell by default. A page can opt out with
                 // `scrollable={false}` (regardless of sidebar) when it owns an
                 // internal scroll region — e.g. a virtualized table — so the app
@@ -126,7 +109,6 @@ export const PageHeader = ({
 }) => {
     const { hasSidebar } = useContext(PageContext);
     const insideScrollingRoot = useContext(PageScrollableContext);
-    const belowTabs = useContext(PageBelowTabsContext);
 
     return (
         <div
@@ -139,9 +121,7 @@ export const PageHeader = ({
                 // PADDING edge, so at top-0 the bar stuck Page.Root's top
                 // padding below the chrome, with content scrolling in the gap.
                 // Pull it back by that same padding.
-                sticky &&
-                    insideScrollingRoot &&
-                    (belowTabs ? "-top-4" : "-top-10"),
+                sticky && insideScrollingRoot && "-top-10",
                 // A header whose only child rendered null must not keep its 48px.
                 "empty:hidden",
                 hasSidebar ? WITH_SIDEBAR_CONTAINER : WITHOUT_SIDEBAR_CONTAINER,

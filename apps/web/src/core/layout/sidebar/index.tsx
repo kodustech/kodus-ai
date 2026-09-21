@@ -75,6 +75,7 @@ import {
     MessageSquareTextIcon,
     PanelLeftCloseIcon,
     PanelLeftOpenIcon,
+    PlusIcon,
     ScanSearchIcon,
     Settings2Icon,
     ShieldIcon,
@@ -93,19 +94,19 @@ import { isEnterprisePlan } from "src/features/ee/byok/_utils";
 import { useFeatureGates } from "src/features/ee/subscription/_hooks/use-feature-gates";
 import { useSubscriptionContext } from "src/features/ee/subscription/_providers/subscription-context";
 
-import { SIDEBAR_COLLAPSED_COOKIE } from "../nav-layout-cookie";
 import { CommandPalette } from "../navbar/_components/command-palette";
 import { NotificationBell } from "../navbar/_components/notification-bell";
 import { UserNav } from "../navbar/_components/user-nav";
 import { useMainNavItems } from "../navbar/use-main-nav-items";
+import { SIDEBAR_COLLAPSED_COOKIE } from "./collapsed-cookie";
 import { SidebarPlanStatus } from "./plan-status";
+import { useScopeTools } from "./scope-tools";
 
 /**
- * Sidebar navigation experiment (see nav-layout-cookie.ts): every destination
- * in one left rail, Cloudflare-style — workspace on top, the product areas,
- * then code review settings with its scope picker, the workspace's
- * repositories and the organization's settings. Replaces the top bar, the
- * settings tab band and the organization sub-sidebar while it is on.
+ * The app's navigation: every destination in one left rail, Cloudflare-
+ * style — workspace and search on top, the product areas, code review
+ * settings with its scope picker, the workspace's repositories and the
+ * organization's settings, and the plan at the foot.
  *
  * Folds down to an icon rail (labels move into tooltips) and remembers that
  * in a cookie, so the server renders the chosen width on the first paint.
@@ -209,10 +210,7 @@ export const AppSidebar = ({
                     )}>
                     <ul className="flex flex-col gap-0.5">
                         {mainItems
-                            .filter(
-                                (item) =>
-                                    item.visible && item.id !== "settings",
-                            )
+                            .filter((item) => item.visible)
                             .map((item) => (
                                 <SidebarItem
                                     key={item.id}
@@ -565,6 +563,8 @@ const CODE_REVIEW_PATH = /^\/settings\/code-review\/([^/]+)(?:\/([^/?#]+))?/;
 const CodeReviewGroup = () => {
     const pathname = usePathname();
     const searchParams = useSearchParams();
+    const collapsed = useRail();
+    const scopeTools = useScopeTools();
     const match = CODE_REVIEW_PATH.exec(pathname);
     const scope: Scope = {
         repositoryId: match?.[1] ?? "global",
@@ -583,22 +583,42 @@ const CodeReviewGroup = () => {
 
     return (
         <SidebarGroup label="Code review">
-            <li className="mb-1">
-                <ScopeSelector
-                    scope={scope}
-                    pageFor={(target) => {
-                        const targetIsRepository =
-                            target.repositoryId !== "global" &&
-                            !target.directoryId;
-                        const page = CODE_REVIEW_PAGES.find(
-                            (item) => item.href === currentPage,
-                        );
-                        return page && (!page.repoOnly || targetIsRepository)
-                            ? page.href
-                            : "general";
-                    }}
-                    hrefFor={hrefFor}
-                />
+            <li className="mb-1 flex flex-col gap-1">
+                <div className="flex items-center gap-1">
+                    <div className="min-w-0 flex-1">
+                        <ScopeSelector
+                            scope={scope}
+                            pageFor={(target) => {
+                                const targetIsRepository =
+                                    target.repositoryId !== "global" &&
+                                    !target.directoryId;
+                                const page = CODE_REVIEW_PAGES.find(
+                                    (item) => item.href === currentPage,
+                                );
+                                return page &&
+                                    (!page.repoOnly || targetIsRepository)
+                                    ? page.href
+                                    : "general";
+                            }}
+                            hrefFor={hrefFor}
+                        />
+                    </div>
+                    {/* The settings layout lends the scope's options menu here
+                    and its kodus-config.yml badge below (scope-tools.tsx);
+                    both empty on any other page and in the rail. */}
+                    {!collapsed && (
+                        <div
+                            ref={scopeTools?.setActionsSlot}
+                            className="flex shrink-0 items-center empty:hidden"
+                        />
+                    )}
+                </div>
+                {!collapsed && (
+                    <div
+                        ref={scopeTools?.setStatusSlot}
+                        className="flex px-1 empty:hidden"
+                    />
+                )}
             </li>
             {CODE_REVIEW_PAGES.filter(
                 (page) => !page.repoOnly || isRepositoryLevel,
@@ -628,6 +648,9 @@ const ScopeSelector = ({
     const collapsed = useRail();
     const [open, setOpen] = useState(false);
     const scopes = useCodeReviewScopes();
+    // Only while a settings page lends it: creating a repository
+    // configuration needs the full config those pages load.
+    const addRepository = useScopeTools()?.addRepository;
     const canReadRepositories = usePermission(
         Action.Read,
         ResourceType.GitSettings,
@@ -809,20 +832,37 @@ const ScopeSelector = ({
                             ))}
                         </CommandGroup>
                     </CommandList>
-                    {canReadRepositories && (
+                    {(addRepository || canReadRepositories) && (
                         <>
                             <CommandSeparator className="bg-card-lv3" />
                             <div className="p-1">
-                                <button
-                                    type="button"
-                                    onClick={() => go("/settings/git")}
-                                    className={cn(
-                                        "text-text-secondary hover:bg-card-lv2 hover:text-text-primary flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[13px] transition-colors",
-                                        CONTROL_STATES,
-                                    )}>
-                                    <FolderGit2Icon className="size-4 shrink-0" />
-                                    Choose which repositories Kody reviews
-                                </button>
+                                {addRepository && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setOpen(false);
+                                            addRepository();
+                                        }}
+                                        className={cn(
+                                            "text-text-secondary hover:bg-card-lv2 hover:text-text-primary flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[13px] transition-colors",
+                                            CONTROL_STATES,
+                                        )}>
+                                        <PlusIcon className="size-4 shrink-0" />
+                                        Add repository configuration
+                                    </button>
+                                )}
+                                {canReadRepositories && (
+                                    <button
+                                        type="button"
+                                        onClick={() => go("/settings/git")}
+                                        className={cn(
+                                            "text-text-secondary hover:bg-card-lv2 hover:text-text-primary flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[13px] transition-colors",
+                                            CONTROL_STATES,
+                                        )}>
+                                        <FolderGit2Icon className="size-4 shrink-0" />
+                                        Choose which repositories Kody reviews
+                                    </button>
+                                )}
                             </div>
                         </>
                     )}

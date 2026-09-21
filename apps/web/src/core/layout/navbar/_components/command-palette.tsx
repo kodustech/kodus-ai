@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@components/ui/button";
 import {
     Command,
     CommandEmpty,
@@ -20,6 +19,7 @@ import {
     rulePageHref,
     useCodeReviewScopes,
 } from "@services/parameters/use-code-review-scopes";
+import { Action, ResourceType } from "@services/permissions/types";
 import { useQuery } from "@tanstack/react-query";
 import {
     ActivityIcon,
@@ -47,20 +47,19 @@ import {
     TerminalIcon,
     TriangleAlertIcon,
 } from "lucide-react";
+import { useAuth } from "src/core/providers/auth.provider";
+import { usePermissions } from "src/core/providers/permissions.provider";
 import {
     hasUnsavedChanges,
     triggerNavigationBlock,
 } from "src/core/utils/navigation-guard";
+import { hasPermission } from "src/core/utils/permission-map";
 import { useFetch } from "src/core/utils/reactQuery";
 import {
     GATE_PLAN_LABEL,
     useFeatureGates,
     type GatedFeatureKey,
 } from "src/features/ee/subscription/_hooks/use-feature-gates";
-import { Action, ResourceType } from "@services/permissions/types";
-import { useAuth } from "src/core/providers/auth.provider";
-import { usePermissions } from "src/core/providers/permissions.provider";
-import { hasPermission } from "src/core/utils/permission-map";
 
 // ⌘K palette (prototype): one search box that jumps to any page, switches
 // the settings scope to a repository or directory, opens a Kody Rule by
@@ -83,7 +82,10 @@ const PAGES: Array<{
         href: "/pull-requests",
         icon: GitPullRequestIcon,
         keywords: "reviews prs",
-        permission: { action: Action.Read, resource: ResourceType.PullRequests },
+        permission: {
+            action: Action.Read,
+            resource: ResourceType.PullRequests,
+        },
     },
     {
         label: "CLI reviews",
@@ -113,7 +115,10 @@ const PAGES: Array<{
         href: "/settings/plugins",
         icon: PuzzleIcon,
         keywords: "mcp integrations tools",
-        permission: { action: Action.Read, resource: ResourceType.PluginSettings },
+        permission: {
+            action: Action.Read,
+            resource: ResourceType.PluginSettings,
+        },
     },
     {
         label: "Repositories",
@@ -303,13 +308,13 @@ const topMatches = <T,>(
 };
 
 export const CommandPalette = ({
-    variant = "navbar",
+    variant = "sidebar",
 }: {
     /**
-     * "sidebar": a full-width search field at the top of the sidebar nav;
+     * "sidebar": a full-width search field at the top of the sidebar;
      * "rail": its icon-only form when the sidebar is collapsed.
      */
-    variant?: "navbar" | "sidebar" | "rail";
+    variant?: "sidebar" | "rail";
 }) => {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
@@ -448,7 +453,7 @@ export const CommandPalette = ({
                     className="bg-card-lv2 hover:bg-card-lv3 text-text-tertiary focus-visible:ring-ring flex size-9 items-center justify-center rounded-lg transition-colors focus:outline-none focus-visible:ring-2">
                     <SearchIcon className="size-4" />
                 </button>
-            ) : variant === "sidebar" ? (
+            ) : (
                 <button
                     type="button"
                     aria-label="Search and jump anywhere (⌘K)"
@@ -460,18 +465,6 @@ export const CommandPalette = ({
                         ⌘K
                     </kbd>
                 </button>
-            ) : (
-                <Button
-                    size="xs"
-                    variant="helper"
-                    aria-label="Search and jump anywhere (⌘K)"
-                    leftIcon={<SearchIcon />}
-                    onClick={() => setOpen(true)}>
-                    <span className="hidden lg:inline">Search</span>
-                    <kbd className="bg-card-lv3/70 text-text-tertiary ml-1 hidden rounded px-1.5 py-0.5 font-mono text-[10px] lg:inline">
-                        ⌘K
-                    </kbd>
-                </Button>
             )}
 
             <Dialog

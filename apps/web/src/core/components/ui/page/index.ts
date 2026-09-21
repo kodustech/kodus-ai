@@ -1,6 +1,5 @@
 import {
     PAGE_MAX_WIDTH,
-    PageBelowTabs,
     PageContent,
     PageDescription,
     PageFooter,
@@ -24,7 +23,6 @@ export const Page = {
     Content: PageContent,
     Footer: PageFooter,
     WithSidebar: PageWithSidebar,
-    BelowTabs: PageBelowTabs,
 };
 
 // The shared page width cap, for the few chrome elements that sit outside
