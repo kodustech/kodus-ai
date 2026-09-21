@@ -11,10 +11,12 @@ import {
 /**
  * Release gate for the deterministic-evidence feature (beta).
  *
- * Both the CI-evidence read and the security rule pass go through here, so an
- * organization either gets the whole feature or none of it — a review that
- * consumed CI evidence but skipped the rule pack would be a confusing halfway
- * state to support.
+ * Both halves go through here — the CI-evidence read and the analyzer run — so
+ * an organization gets the whole feature or none of it. It is the OUTER gate:
+ * each half is additionally opted into per repository, the CI read by
+ * `deterministicEvidence.ciChecks` and each analyzer by its own mode, both
+ * defaulting to off. This one answers "may this organization have the feature
+ * at all", never "is it wanted on this repository".
  *
  * Fails CLOSED: if the gate cannot be resolved, the feature stays off. A beta
  * feature silently switching itself on during an outage is the worse failure.
