@@ -12,8 +12,9 @@ setup:
   # up, which would otherwise create that dir root-owned as a mountpoint.
   - pnpm --dir apps/web install --frozen-lockfile
   # The repo-lookup contract spec spawns ripgrep from PATH; the API image
-  # has it, the env's host (where jest runs) didn't.
-  - command -v rg >/dev/null || (sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ripgrep)
+  # has it, the env's host (where jest runs) didn't. Same form as the tests
+  # workflow: no env prefix on sudo, which restricted sudoers would reject.
+  - command -v rg >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep)
 files:
   copy: [.env]
 services:
