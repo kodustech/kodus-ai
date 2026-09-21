@@ -4,11 +4,13 @@ import path from 'node:path';
 const workspaceRoot = process.cwd();
 
 describe('navbar source', () => {
-    it('does not lazy-disable SSR for stable top-right navbar widgets', () => {
+    // The navigation is the sidebar now; its stable widgets (account menu,
+    // notifications, search) must still render on the server.
+    it('does not lazy-disable SSR for stable navigation widgets', () => {
         const navbarSource = fs.readFileSync(
             path.join(
                 workspaceRoot,
-                'apps/web/src/core/layout/navbar/index.tsx',
+                'apps/web/src/core/layout/sidebar/index.tsx',
             ),
             'utf8',
         );
