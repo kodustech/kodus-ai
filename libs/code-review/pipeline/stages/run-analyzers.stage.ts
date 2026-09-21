@@ -91,7 +91,15 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
 
         results.forEach((result, index) => {
             if (result.status === 'fulfilled') {
-                findings.push(...result.value);
+                // Tagged here because only the stage knows which tool ran
+                // which position; the tools never see each other.
+                const toolId = selected[index].tool.id;
+                findings.push(
+                    ...result.value.map((finding) => ({
+                        ...finding,
+                        tool: toolId,
+                    })),
+                );
                 return;
             }
             const toolId = selected[index].tool.id;

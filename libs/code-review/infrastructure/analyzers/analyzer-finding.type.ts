@@ -17,6 +17,11 @@ export type AnalyzerFinding = {
     message: string;
     /** CWE identifier from the rule's metadata, when it declares one. */
     cwe?: string;
+    /**
+     * Which tool produced this. Set by the stage, and what lets findings be
+     * published as one comment per category rather than one per advisory.
+     */
+    tool?: string;
 };
 
 /** Lines a unified-diff patch ADDS, on the new side of the file. */
