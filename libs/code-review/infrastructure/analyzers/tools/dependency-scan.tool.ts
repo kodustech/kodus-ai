@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { ManagedTool } from '@libs/code-review/infrastructure/adapters/services/ci-evidence/recognize-ci-analyzers';
 
 import { AnalyzerFinding } from '../analyzer-finding.type';
+import { revertPatch } from '../revert-patch';
 import { AnalyzerTool, ChangedFile, ToolRunInput } from '../tool.contract';
 
 const RUN_TIMEOUT_MS = 120_000;
@@ -38,20 +39,20 @@ const SEVERITY: Record<string, AnalyzerFinding['severity']> = {
 
 const quote = (value: string): string => `'${value.replace(/'/g, `'\\''`)}'`;
 
-/**
- * Added lines, each carrying the few patch lines immediately before it.
- *
- * A lockfile bump changes only the version line — the package NAME sits on an
- * unchanged context line above it. Matching the name against added lines alone
- * therefore misses the most common case, so each added line is paired with its
- * preceding context and matched against that.
- */
+type Vulnerable = {
+    name: string;
+    version: string;
+    id: string;
+    summary?: string;
+    severity?: string;
+};
+
+/** Lines the patch adds, each carrying nearby context for anchoring. */
 const CONTEXT_WINDOW = 6;
 
-function addedLinesWithContext(patch: string | undefined): Array<{
-    line: number;
-    haystack: string;
-}> {
+function addedLinesWithContext(
+    patch: string | undefined,
+): Array<{ line: number; haystack: string }> {
     const added: Array<{ line: number; haystack: string }> = [];
     if (!patch) {
         return added;
@@ -71,14 +72,9 @@ function addedLinesWithContext(patch: string | undefined): Array<{
         const text = raw.slice(1);
 
         if (raw.startsWith('+')) {
-            added.push({
-                line: cursor,
-                haystack: [...recent, text].join('\n'),
-            });
+            added.push({ line: cursor, haystack: [...recent, text].join('\n') });
             cursor++;
-        } else if (raw.startsWith('-')) {
-            // Old side only: does not advance the new-side cursor.
-        } else {
+        } else if (!raw.startsWith('-')) {
             cursor++;
         }
 
@@ -92,13 +88,21 @@ function addedLinesWithContext(patch: string | undefined): Array<{
 }
 
 /**
- * Known vulnerabilities in the dependencies this PR added or bumped.
+ * Known vulnerabilities the pull request INTRODUCES.
  *
- * A lockfile carries the whole dependency tree, so a scan of it reports every
- * pre-existing CVE in the project — which on a lockfile-touching PR would bury
- * the review. The filter that makes this usable is by PACKAGE, not by line:
- * a vulnerable package is reported only when the diff added a line mentioning
- * it, which is also what gives the finding an anchor inside the diff.
+ * A lockfile carries the whole dependency tree, so scanning the new one reports
+ * every pre-existing advisory in the project. The obvious filter — report a
+ * package whose name sits near an added line — does not survive a real
+ * dependency update: a pnpm-lock bump touching 576 lines puts most of the tree
+ * on added lines, and the scan then reports all of it. Measured over 130 real
+ * lockfile PRs that produced a median of 12 findings each and a maximum of 140,
+ * which is not a review.
+ *
+ * So the set decides what to report, and the diff only decides where to put it.
+ * The previous lockfile is reconstructed from the patch, both versions are
+ * scanned, and only advisories present in the new tree and absent from the old
+ * are findings. A package the change moved from one vulnerable version to
+ * another still counts — it is still a version this change chose.
  */
 @Injectable()
 export class DependencyScanTool implements AnalyzerTool {
@@ -110,15 +114,98 @@ export class DependencyScanTool implements AnalyzerTool {
             if (!file.filename || !file.patch) {
                 return false;
             }
-            const base = file.filename.split('/').pop() ?? '';
-            return MANIFEST.has(base);
+            return MANIFEST.has(file.filename.split('/').pop() ?? '');
         });
     }
 
     async run({ sandbox, files }: ToolRunInput): Promise<AnalyzerFinding[]> {
+        const head = await this.scan(sandbox, sandbox.repoDir);
+
+        // Nothing vulnerable in the new tree: no diff worth computing.
+        if (head.length === 0) {
+            return [];
+        }
+
+        const previous = await this.scanPrevious(sandbox, files);
+
+        // A reconstruction we could not trust gives no baseline. Reporting the
+        // whole tree instead would be the flood this exists to prevent.
+        if (previous === null) {
+            return [];
+        }
+
+        const before = new Set(previous.map((v) => this.key(v)));
+        const introduced = head.filter((v) => !before.has(this.key(v)));
+
+        return this.toFindings(introduced, files);
+    }
+
+    private key(v: Vulnerable): string {
+        return `${v.name}@${v.version}:${v.id}`;
+    }
+
+    /** Rebuilds the lockfiles as they were, and scans that tree instead. */
+    private async scanPrevious(
+        sandbox: ToolRunInput['sandbox'],
+        files: ChangedFile[],
+    ): Promise<Vulnerable[] | null> {
+        const baseDir = `/tmp/kody-deps-base-${Date.now()}-${Math.random()
+            .toString(36)
+            .slice(2, 10)}`;
+
+        const setup = [`rm -rf ${quote(baseDir)}`, `mkdir -p ${quote(baseDir)}`];
+
+        for (const file of files) {
+            let current: string;
+            try {
+                current = await sandbox.readFile(
+                    `${sandbox.repoDir}/${file.filename}`,
+                );
+            } catch {
+                return null;
+            }
+
+            const rewound = revertPatch(current, file.patch);
+            if (rewound === null) {
+                return null;
+            }
+
+            // A manifest the change ADDED has no previous version; leaving it
+            // out of the base tree is what makes its advisories count as new.
+            if (rewound.trim() === '') {
+                continue;
+            }
+
+            const target = `${baseDir}/${file.filename}`;
+            const cut = target.lastIndexOf('/');
+            setup.push(`mkdir -p ${quote(target.slice(0, cut))}`);
+            setup.push(
+                `printf %s ${quote(
+                    Buffer.from(rewound, 'utf8').toString('base64'),
+                )} | base64 -d > ${quote(target)}`,
+            );
+        }
+
+        const result = await sandbox.run(setup.join(' && '), {
+            timeoutMs: 30_000,
+        });
+        if (result.exitCode !== 0) {
+            return null;
+        }
+
+        try {
+            return await this.scan(sandbox, baseDir);
+        } finally {
+            await sandbox.run(`rm -rf ${quote(baseDir)}`, { timeoutMs: 15_000 });
+        }
+    }
+
+    private async scan(
+        sandbox: ToolRunInput['sandbox'],
+        dir: string,
+    ): Promise<Vulnerable[]> {
         const result = await sandbox.run(
-            `cd ${quote(sandbox.repoDir)} && osv-scanner scan source ` +
-                `--format json ${quote(sandbox.repoDir)}`,
+            `osv-scanner scan source --format json ${quote(dir)}`,
             { timeoutMs: RUN_TIMEOUT_MS },
         );
 
@@ -137,20 +224,11 @@ export class DependencyScanTool implements AnalyzerTool {
             return [];
         }
 
-        // Where each manifest's added lines are, so a vulnerable package can be
-        // matched to the line that introduced it.
-        const addedByFile = files.map((file) => ({
-            filename: file.filename,
-            added: addedLinesWithContext(file.patch),
-        }));
-
-        const findings: AnalyzerFinding[] = [];
+        const out: Vulnerable[] = [];
 
         for (const group of (report as { results?: unknown[] })?.results ?? []) {
-            const packages =
-                (group as { packages?: unknown[] })?.packages ?? [];
-
-            for (const entry of packages) {
+            for (const entry of (group as { packages?: unknown[] })?.packages ??
+                []) {
                 const typed = entry as {
                     package?: { name?: string; version?: string };
                     vulnerabilities?: Array<{
@@ -166,46 +244,58 @@ export class DependencyScanTool implements AnalyzerTool {
                     continue;
                 }
 
-                const anchor = this.findAnchor(addedByFile, name);
-                if (!anchor) {
-                    // Present in the tree but not touched by this PR.
-                    continue;
-                }
-
                 for (const vulnerability of typed.vulnerabilities) {
                     if (!vulnerability.id) {
                         continue;
                     }
-                    findings.push({
-                        ruleId: `osv/${vulnerability.id}`,
-                        path: anchor.filename,
-                        startLine: anchor.line,
-                        endLine: anchor.line,
-                        severity:
-                            SEVERITY[
-                                (
-                                    vulnerability.database_specific?.severity ??
-                                    ''
-                                ).toUpperCase()
-                            ] ?? 'warning',
-                        message:
-                            `${name}@${version} is affected by ${vulnerability.id}` +
-                            (vulnerability.summary
-                                ? `: ${vulnerability.summary}`
-                                : ''),
+                    out.push({
+                        name,
+                        version: version ?? '',
+                        id: vulnerability.id,
+                        summary: vulnerability.summary,
+                        severity: vulnerability.database_specific?.severity,
                     });
                 }
             }
         }
 
+        return out;
+    }
+
+    private toFindings(
+        introduced: Vulnerable[],
+        files: ChangedFile[],
+    ): AnalyzerFinding[] {
+        const addedByFile = files.map((file) => ({
+            filename: file.filename,
+            added: addedLinesWithContext(file.patch),
+        }));
+
+        const findings: AnalyzerFinding[] = [];
+
+        for (const v of introduced) {
+            const anchor = this.findAnchor(addedByFile, v.name);
+            if (!anchor) {
+                // Introduced transitively, with nothing in the diff naming it.
+                continue;
+            }
+
+            findings.push({
+                ruleId: `osv/${v.id}`,
+                path: anchor.filename,
+                startLine: anchor.line,
+                endLine: anchor.line,
+                severity: SEVERITY[(v.severity ?? '').toUpperCase()] ?? 'warning',
+                message:
+                    `${v.name}@${v.version} is affected by ${v.id}` +
+                    (v.summary ? `: ${v.summary}` : ''),
+            });
+        }
+
         return findings;
     }
 
-    /**
-     * First added line whose own text or nearby context names the package.
-     * Anchoring on an ADDED line is what lets the finding survive the
-     * pipeline's diff clipping.
-     */
+    /** Anchoring only — the set difference already decided what to report. */
     private findAnchor(
         addedByFile: Array<{
             filename: string;

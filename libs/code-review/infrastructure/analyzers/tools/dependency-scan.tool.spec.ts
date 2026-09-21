@@ -1,14 +1,28 @@
+import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
+
 import { ChangedFile } from '../tool.contract';
 import { DependencyScanTool } from './dependency-scan.tool';
 
 const LOCKFILE = 'package-lock.json';
 
-/**
- * A lockfile patch that bumps lodash and leaves minimist untouched — the
- * shape that distinguishes "this PR introduced it" from "it was already there".
- */
-const lockPatch = [
-    '@@ -4,7 +4,7 @@',
+/** Head lockfile: lodash at a vulnerable version, minimist untouched. */
+const HEAD = [
+    '{',
+    '  "packages": {',
+    '    "node_modules/lodash": {',
+    '      "version": "4.17.11"',
+    '    },',
+    '    "node_modules/minimist": {',
+    '      "version": "1.2.0"',
+    '    }',
+    '  }',
+    '}',
+].join('\n');
+
+/** The change bumped lodash; minimist was already there. */
+const PATCH = [
+    '@@ -1,10 +1,10 @@',
+    ' {',
     '   "packages": {',
     '     "node_modules/lodash": {',
     '-      "version": "4.17.21"',
@@ -16,9 +30,11 @@ const lockPatch = [
     '     },',
     '     "node_modules/minimist": {',
     '       "version": "1.2.0"',
+    '     }',
+    '   }',
 ].join('\n');
 
-const osvJson = (
+const osv = (
     packages: Array<{ name: string; version: string; id: string; sev?: string }>,
 ) =>
     JSON.stringify({
@@ -39,94 +55,196 @@ const osvJson = (
         ],
     });
 
-const sandboxWith = (stdout: string, exitCode = 0) =>
-    ({
+type Fake = SandboxInstance & { run: jest.Mock; commands: string[] };
+
+/**
+ * `head` is the scan of the working tree, `base` the scan of the
+ * reconstructed one. Both are driven off the directory in the command.
+ */
+const sandboxWith = (
+    head: string,
+    base: string,
+    opts: { exitCode?: number; content?: string } = {},
+): Fake => {
+    const commands: string[] = [];
+    return {
         repoDir: '/repo',
-        run: jest.fn().mockResolvedValue({ stdout, stderr: '', exitCode }),
+        commands,
+        run: jest.fn(async (command: string) => {
+            commands.push(command);
+            if (command.includes('osv-scanner')) {
+                const isBase = command.includes('kody-deps-base');
+                return {
+                    stdout: isBase ? base : head,
+                    stderr: '',
+                    exitCode: opts.exitCode ?? 0,
+                };
+            }
+            return { stdout: '', stderr: '', exitCode: 0 };
+        }),
+        readFile: jest.fn(async () => opts.content ?? HEAD),
         writeFile: jest.fn(),
-        readFile: jest.fn(),
-    }) as never;
+    } as never;
+};
+
+const file = (patch = PATCH): ChangedFile => ({ filename: LOCKFILE, patch });
 
 describe('DependencyScanTool', () => {
     const tool = new DependencyScanTool();
 
     describe('file selection', () => {
         it.each([
-            'package-lock.json',
-            'yarn.lock',
-            'pnpm-lock.yaml',
-            'go.sum',
-            'requirements.txt',
-            'Gemfile.lock',
-            'poetry.lock',
-            'Cargo.lock',
-            'composer.lock',
-            'apps/web/package-lock.json',
+            'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'go.sum',
+            'requirements.txt', 'Gemfile.lock', 'poetry.lock', 'Cargo.lock',
+            'composer.lock', 'apps/web/package-lock.json',
         ])('claims the manifest %s', (filename) => {
-            expect(
-                tool.selectFiles([{ filename, patch: lockPatch }]),
-            ).toHaveLength(1);
+            expect(tool.selectFiles([{ filename, patch: PATCH }])).toHaveLength(1);
         });
 
         it.each(['src/index.ts', 'package.json.md', 'README.md'])(
             'ignores %s',
             (filename) => {
                 expect(
-                    tool.selectFiles([{ filename, patch: lockPatch }]),
+                    tool.selectFiles([{ filename, patch: PATCH }]),
                 ).toHaveLength(0);
             },
         );
     });
 
-    // The point of the tool: a lockfile carries the whole dependency tree, so
-    // without this every review would re-report every pre-existing CVE.
-    describe('reporting only what this PR changed', () => {
-        it('reports a package whose version line the PR added', async () => {
-            const findings = await tool.run({
-                sandbox: sandboxWith(
-                    osvJson([
-                        { name: 'lodash', version: '4.17.11', id: 'GHSA-aaa' },
-                    ]),
-                ),
-                files: [{ filename: LOCKFILE, patch: lockPatch }],
-            });
+    /**
+     * The reason this tool compares two trees. A lockfile carries the whole
+     * dependency graph, and a real bump puts most of it on added lines — name
+     * proximity alone reported a median of 12 advisories per PR across 130 real
+     * lockfile PRs, and up to 140.
+     */
+    describe('reporting only what the change introduced', () => {
+        it('reports an advisory absent from the previous tree', async () => {
+            const sandbox = sandboxWith(
+                osv([{ name: 'lodash', version: '4.17.11', id: 'GHSA-aaa' }]),
+                osv([]),
+            );
+
+            const findings = await tool.run({ sandbox, files: [file()] });
 
             expect(findings).toEqual([
-                expect.objectContaining({
-                    ruleId: 'osv/GHSA-aaa',
-                    path: LOCKFILE,
-                }),
+                expect.objectContaining({ ruleId: 'osv/GHSA-aaa', path: LOCKFILE }),
             ]);
         });
 
-        it('ignores a vulnerable package the PR did not touch', async () => {
-            const findings = await tool.run({
-                sandbox: sandboxWith(
-                    osvJson([
-                        { name: 'minimist', version: '1.2.0', id: 'GHSA-bbb' },
-                    ]),
-                ),
-                files: [{ filename: LOCKFILE, patch: lockPatch }],
-            });
+        it('stays silent on an advisory the previous tree already had', async () => {
+            const already = osv([
+                { name: 'minimist', version: '1.2.0', id: 'GHSA-bbb' },
+            ]);
+            const sandbox = sandboxWith(already, already);
 
-            expect(findings).toEqual([]);
+            await expect(
+                tool.run({ sandbox, files: [file()] }),
+            ).resolves.toEqual([]);
         });
 
-        // The anchor must land on a line the diff added, or the pipeline's
-        // clipping drops the finding entirely.
-        it('anchors the finding to an added line', async () => {
-            const [finding] = await tool.run({
-                sandbox: sandboxWith(
-                    osvJson([
-                        { name: 'lodash', version: '4.17.11', id: 'GHSA-aaa' },
-                    ]),
-                ),
-                files: [{ filename: LOCKFILE, patch: lockPatch }],
+        // Still a version this change chose, so it is still introduced.
+        it('reports a package moved between two vulnerable versions', async () => {
+            const sandbox = sandboxWith(
+                osv([{ name: 'lodash', version: '4.17.11', id: 'GHSA-aaa' }]),
+                osv([{ name: 'lodash', version: '4.17.15', id: 'GHSA-aaa' }]),
+            );
+
+            const findings = await tool.run({ sandbox, files: [file()] });
+
+            expect(findings).toHaveLength(1);
+        });
+
+        it('separates the two trees, reporting only the difference', async () => {
+            const sandbox = sandboxWith(
+                osv([
+                    { name: 'lodash', version: '4.17.11', id: 'GHSA-aaa' },
+                    { name: 'minimist', version: '1.2.0', id: 'GHSA-bbb' },
+                ]),
+                osv([{ name: 'minimist', version: '1.2.0', id: 'GHSA-bbb' }]),
+            );
+
+            const findings = await tool.run({ sandbox, files: [file()] });
+
+            expect(findings.map((f) => f.ruleId)).toEqual(['osv/GHSA-aaa']);
+        });
+    });
+
+    describe('the reconstructed tree', () => {
+        it('rebuilds the previous lockfile and scans it separately', async () => {
+            const sandbox = sandboxWith(
+                osv([{ name: 'lodash', version: '4.17.11', id: 'GHSA-aaa' }]),
+                osv([]),
+            );
+
+            await tool.run({ sandbox, files: [file()] });
+
+            expect(
+                sandbox.commands.some((c) => c.includes('base64 -d')),
+            ).toBe(true);
+            expect(
+                sandbox.commands.filter((c) => c.includes('osv-scanner')),
+            ).toHaveLength(2);
+        });
+
+        it('cleans the reconstructed tree up', async () => {
+            const sandbox = sandboxWith(
+                osv([{ name: 'lodash', version: '4.17.11', id: 'GHSA-aaa' }]),
+                osv([]),
+            );
+
+            await tool.run({ sandbox, files: [file()] });
+
+            expect(
+                sandbox.commands.some((c) => /^rm -rf .*kody-deps-base/.test(c)),
+            ).toBe(true);
+        });
+
+        /**
+         * Without a baseline the only options are reporting the whole tree or
+         * reporting nothing, and the whole tree is the flood this prevents.
+         */
+        it('reports nothing when the previous tree cannot be rebuilt', async () => {
+            const sandbox = sandboxWith(
+                osv([{ name: 'lodash', version: '4.17.11', id: 'GHSA-aaa' }]),
+                osv([]),
+                { content: 'unrelated content the patch does not fit' },
+            );
+
+            await expect(
+                tool.run({ sandbox, files: [file()] }),
+            ).resolves.toEqual([]);
+        });
+
+        // A manifest the change added has no previous version at all, so
+        // everything it brings in is new.
+        it('treats a newly added manifest as all-new', async () => {
+            const added = [
+                '{',
+                '  "packages": {',
+                '    "node_modules/lodash": { "version": "4.17.11" }',
+                '  }',
+                '}',
+            ].join('\n');
+            const sandbox = sandboxWith(
+                osv([{ name: 'lodash', version: '4.17.11', id: 'GHSA-aaa' }]),
+                osv([]),
+                { content: added },
+            );
+
+            const findings = await tool.run({
+                sandbox,
+                files: [
+                    {
+                        filename: LOCKFILE,
+                        patch: [
+                            '@@ -0,0 +1,5 @@',
+                            ...added.split('\n').map((l) => `+${l}`),
+                        ].join('\n'),
+                    },
+                ],
             });
 
-            // New-side line 6 is the `+ "version": "4.17.11"` line; the
-            // removed line above it does not advance the new-side cursor.
-            expect(finding.startLine).toBe(6);
+            expect(findings).toHaveLength(1);
         });
     });
 
@@ -136,30 +254,39 @@ describe('DependencyScanTool', () => {
         ['MODERATE', 'warning'],
         ['LOW', 'note'],
     ])('maps %s severity to %s', async (dbSeverity, expected) => {
-        const [finding] = await tool.run({
-            sandbox: sandboxWith(
-                osvJson([
-                    {
-                        name: 'lodash',
-                        version: '4.17.11',
-                        id: 'GHSA-aaa',
-                        sev: dbSeverity,
-                    },
-                ]),
-            ),
-            files: [{ filename: LOCKFILE, patch: lockPatch }],
-        });
+        const sandbox = sandboxWith(
+            osv([
+                { name: 'lodash', version: '4.17.11', id: 'GHSA-aaa', sev: dbSeverity },
+            ]),
+            osv([]),
+        );
+
+        const [finding] = await tool.run({ sandbox, files: [file()] });
 
         expect(finding.severity).toBe(expected);
     });
 
+    it('anchors the finding on a line the change added', async () => {
+        const sandbox = sandboxWith(
+            osv([{ name: 'lodash', version: '4.17.11', id: 'GHSA-aaa' }]),
+            osv([]),
+        );
+
+        const [finding] = await tool.run({ sandbox, files: [file()] });
+
+        // New-side line 4 is `+      "version": "4.17.11"`: three context
+        // lines precede it, and the removed line does not advance the
+        // new-side cursor.
+        expect(finding.startLine).toBe(4);
+    });
+
     it('names the package and advisory in the message', async () => {
-        const [finding] = await tool.run({
-            sandbox: sandboxWith(
-                osvJson([{ name: 'lodash', version: '4.17.11', id: 'GHSA-aaa' }]),
-            ),
-            files: [{ filename: LOCKFILE, patch: lockPatch }],
-        });
+        const sandbox = sandboxWith(
+            osv([{ name: 'lodash', version: '4.17.11', id: 'GHSA-aaa' }]),
+            osv([]),
+        );
+
+        const [finding] = await tool.run({ sandbox, files: [file()] });
 
         expect(finding.message).toContain('lodash');
         expect(finding.message).toContain('4.17.11');
@@ -168,45 +295,29 @@ describe('DependencyScanTool', () => {
 
     describe('degradation', () => {
         it('throws when the binary is absent', async () => {
+            const sandbox = sandboxWith('osv-scanner: command not found', '', {
+                exitCode: 127,
+            });
+
             await expect(
-                tool.run({
-                    sandbox: sandboxWith('osv-scanner: command not found', 127),
-                    files: [{ filename: LOCKFILE, patch: lockPatch }],
-                }),
+                tool.run({ sandbox, files: [file()] }),
             ).rejects.toThrow(/unavailable/i);
         });
 
-        // osv-scanner exits non-zero precisely when it finds vulnerabilities.
-        it('reads results from a non-zero exit', async () => {
-            const findings = await tool.run({
-                sandbox: sandboxWith(
-                    osvJson([
-                        { name: 'lodash', version: '4.17.11', id: 'GHSA-aaa' },
-                    ]),
-                    1,
-                ),
-                files: [{ filename: LOCKFILE, patch: lockPatch }],
-            });
-
-            expect(findings).toHaveLength(1);
-        });
-
         it('survives unparseable output', async () => {
-            const findings = await tool.run({
-                sandbox: sandboxWith('not json'),
-                files: [{ filename: LOCKFILE, patch: lockPatch }],
-            });
+            const sandbox = sandboxWith('not json', 'not json');
 
-            expect(findings).toEqual([]);
+            await expect(
+                tool.run({ sandbox, files: [file()] }),
+            ).resolves.toEqual([]);
         });
 
-        it('returns nothing when no dependency is vulnerable', async () => {
-            const findings = await tool.run({
-                sandbox: sandboxWith(osvJson([])),
-                files: [{ filename: LOCKFILE, patch: lockPatch }],
-            });
+        it('returns nothing when the new tree is clean', async () => {
+            const sandbox = sandboxWith(osv([]), osv([]));
 
-            expect(findings).toEqual([]);
+            await expect(
+                tool.run({ sandbox, files: [file()] }),
+            ).resolves.toEqual([]);
         });
     });
 });
