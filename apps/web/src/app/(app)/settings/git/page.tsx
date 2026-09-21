@@ -96,7 +96,7 @@ export default async function GitSettings() {
         <Page.Root>
             <Page.Header>
                 <Page.TitleContainer>
-                    <Page.Title>Git Settings</Page.Title>
+                    <Page.Title>Repositories</Page.Title>
                     <Page.Description>
                         Which repositories Kody reviews, and which pull request
                         authors it includes or skips.

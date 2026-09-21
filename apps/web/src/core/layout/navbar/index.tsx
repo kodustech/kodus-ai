@@ -71,7 +71,7 @@ export const NavMenu = () => {
 
     // Four destinations. Reviews folds Pull Requests + CLI Reviews (tabs on
     // the page); Issues lives inside the Cockpit; Library is reached from
-    // Kody Rules; Git Settings + Subscription sit in the avatar menu.
+    // Kody Rules; Repositories + Subscription sit in the avatar menu.
     const items = useMemo(() => {
         const items: Array<{
             label: string;

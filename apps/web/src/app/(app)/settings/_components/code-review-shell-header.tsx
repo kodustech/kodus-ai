@@ -22,6 +22,7 @@ import {
 } from "@components/ui/dropdown-menu";
 import { Link } from "@components/ui/link";
 import { magicModal } from "@components/ui/magic-modal";
+import { PAGE_MAX_WIDTH } from "@components/ui/page";
 import {
     Popover,
     PopoverContent,
@@ -40,6 +41,7 @@ import {
     CheckIcon,
     ChevronDownIcon,
     FileTextIcon,
+    FolderGit2Icon,
     FolderIcon,
     FolderTreeIcon,
     GlobeIcon,
@@ -50,7 +52,6 @@ import {
     ScanSearchIcon,
     Settings2Icon,
 } from "lucide-react";
-import { PAGE_MAX_WIDTH } from "@components/ui/page";
 import { cn } from "src/core/utils/components";
 import {
     hasUnsavedChanges,
@@ -429,6 +430,10 @@ export const CodeReviewShellHeader = ({
         Action.Create,
         ResourceType.CodeReviewSettings,
     );
+    const canReadRepositories = usePermission(
+        Action.Read,
+        ResourceType.GitSettings,
+    );
     const [open, setOpen] = useState(false);
 
     const current: ScopeTarget = {
@@ -580,6 +585,16 @@ export const CodeReviewShellHeader = ({
             <AddRepoModal repositories={configValue.repositories} />
         ));
     };
+    // The scopes listed here only ever come from the repositories Kody
+    // already reviews, so this is where a missing one gets noticed.
+    const openRepositories = () => {
+        setOpen(false);
+        if (hasUnsavedChanges()) {
+            triggerNavigationBlock();
+            return;
+        }
+        router.push("/settings/git");
+    };
 
     return (
         // The band is a surface of its own (same tone as the navbar, hairline
@@ -655,18 +670,33 @@ export const CodeReviewShellHeader = ({
                                         ))}
                                     </CommandGroup>
                                 </CommandList>
-                                {canAddRepository && (
+                                {(canAddRepository || canReadRepositories) && (
                                     <>
                                         <CommandSeparator className="bg-card-lv3" />
                                         <div className="p-1">
-                                            <Button
-                                                size="sm"
-                                                variant="cancel"
-                                                className="w-full justify-start"
-                                                leftIcon={<PlusIcon />}
-                                                onClick={openAddRepository}>
-                                                Add repository configuration
-                                            </Button>
+                                            {canAddRepository && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="cancel"
+                                                    className="w-full justify-start"
+                                                    leftIcon={<PlusIcon />}
+                                                    onClick={openAddRepository}>
+                                                    Add repository configuration
+                                                </Button>
+                                            )}
+                                            {canReadRepositories && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="cancel"
+                                                    className="w-full justify-start"
+                                                    leftIcon={
+                                                        <FolderGit2Icon />
+                                                    }
+                                                    onClick={openRepositories}>
+                                                    Choose which repositories
+                                                    Kody reviews
+                                                </Button>
+                                            )}
                                         </div>
                                     </>
                                 )}

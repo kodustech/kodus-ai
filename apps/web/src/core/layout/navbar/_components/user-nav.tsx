@@ -14,7 +14,7 @@ import {
     ChartColumn,
     CreditCardIcon,
     FileTextIcon,
-    GitBranchIcon,
+    FolderGit2Icon,
     LockIcon,
     LogOutIcon,
     UserIcon,
@@ -134,8 +134,8 @@ export function UserNav() {
 
                 {canReadGitSettings && (
                     <Link href="/settings/git">
-                        <DropdownMenuItem leftIcon={<GitBranchIcon />}>
-                            Git Settings
+                        <DropdownMenuItem leftIcon={<FolderGit2Icon />}>
+                            Repositories
                         </DropdownMenuItem>
                     </Link>
                 )}
