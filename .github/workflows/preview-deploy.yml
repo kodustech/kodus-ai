@@ -231,6 +231,14 @@ jobs:
                   set -euo pipefail
                   : "${RUNO_SERVER:?PREVIEW_RUNO_SERVER is not configured}"
                   : "${RUNO_TOKEN:?PREVIEW_RUNO_TOKEN is not configured}"
+                  # Fail fast: a runo without --profile would silently treat both
+                  # shapes as the branch's one env — the second `up` would
+                  # overwrite the first, and `destroy --profile` would take the
+                  # branch's only VM. Cheaper to refuse than to reconcile wrong.
+                  if ! $RUNO help | grep -q -- '--profile'; then
+                    echo "::error::runo at RUNO_REF=$RUNO_REF does not support --profile; merge/deploy kodustech/runo#7 first"
+                    exit 1
+                  fi
                   # Previews created before shapes existed carry no profile.
                   # One of those for this branch would sit next to the new
                   # ones until the PR closed, so retire it first (the closing
