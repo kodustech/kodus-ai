@@ -163,7 +163,14 @@ export function verifierPromptFor(
  *  are not under strict tool use pick the text form — Anthropic and the
  *  OpenAI-compatible providers, per model-strictness.ts. Reading only the tool
  *  form published every refutation those models wrote (issue #1937). */
-export function extractVerdict(state: RunState): Verdict {
+export function extractVerdict(
+    state: RunState,
+    /** Caller's telemetry (org/team/PR/repo). Optional so the eval and the unit
+     *  tests can call this with a RunState alone, but ALWAYS threaded in
+     *  production by LlmVerifier.verify: without it a recovered verdict is a log
+     *  line nobody can trace back to the organization that produced it. */
+    telemetry?: LangfuseTelemetryMetadata,
+): Verdict {
     // The verifier's investigation tools for THIS finding — carried on the
     // verdict so the domain can attribute per-finding verifier evidence (which
     // files it read/grepped) to the observability trace. submitVerdict itself
@@ -177,6 +184,7 @@ export function extractVerdict(state: RunState): Verdict {
         logger.warn({
             message: `${LLM_ENVELOPE_TAG} recovered off-schema verifier verdict (${reason})`,
             context: 'VerifierAgent',
+            metadata: { reason, ...telemetry },
         });
     for (let i = state.artifacts.length - 1; i >= 0; i--) {
         const artifact = state.artifacts[i];
@@ -191,6 +199,11 @@ export function extractVerdict(state: RunState): Verdict {
         logger.log({
             message: `verifier verdict recovered from text (keep=${fromText.keep})`,
             context: 'VerifierAgent',
+            metadata: {
+                parseMode: 'text',
+                keep: fromText.keep,
+                ...telemetry,
+            },
         });
         return { ...fromText, toolCalls, parseMode: 'text' };
     }
@@ -361,6 +374,6 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
         this.accUsage.outputTokens += u.outputTokens ?? 0;
         this.accUsage.reasoningTokens += u.reasoningTokens ?? 0;
         this.accUsage.cacheReadTokens += u.cacheReadTokens ?? 0;
-        return extractVerdict(state);
+        return extractVerdict(state, this.params.telemetryMetadata);
     }
 }
