@@ -85,6 +85,39 @@ export const repeatedClusteringSchema = z.object({
     ),
 });
 
+/**
+ * The default Kody rule "Provide a complete PR description template" demands
+ * these five headings, so a summary generated without them is flagged by the
+ * very reviewer that wrote it. The generator has to satisfy the gate it
+ * enforces, which means the contract lives in the prompt rather than in a
+ * post-hoc check.
+ *
+ * Appended to `promptBase`, so the consolidation call inherits it for free:
+ * that prompt is built as `${promptBase}\n\n...`, and a second copy there
+ * would only spend tokens repeating a contract the model already has.
+ */
+const PR_DESCRIPTION_TEMPLATE_INSTRUCTIONS = `**Required Pull Request Description Template**:
+Use the exact Markdown headings below, in this exact order. Keep the headings in English, write the section content in the requested response language, and include at least one concrete bullet point in every section.
+
+## Motivation
+- Explain the problem, need, or functional goal that motivated the change.
+
+## Approach
+- Explain the chosen solution and its most important functional changes.
+
+## Considered Alternatives
+- Describe relevant alternatives and why they were not chosen. If no alternative is evident from the code changes, explicitly say so without inventing one.
+
+## Risk & Rollout
+- Risk: Identify concrete regression or operational risks supported by the code changes.
+- Rollout: Provide an explicit rollout or deployment plan. If no special rollout is needed, state that the normal merge and deployment process applies.
+- Rollback: Explain how to reverse the change if a regression occurs.
+
+## Testing Evidence
+- List the tests or validation evidence visible in the provided context. If no execution evidence is available, explicitly state that instead of inventing results.
+
+Do not omit, rename, combine, or leave any section empty. Do not add a preamble outside this template.`;
+
 @Injectable()
 export class CommentManagerService implements ICommentManagerService {
     private readonly llmResponseProcessor: LLMResponseProcessor;
@@ -406,7 +439,7 @@ export class CommentManagerService implements ICommentManagerService {
                     promptBase += `\n\n**Custom Instructions**:\n${customInstructionsText}`;
                 }
 
-                promptBase += `\n\n**Important**:
+                promptBase += `\n\n${PR_DESCRIPTION_TEMPLATE_INSTRUCTIONS}\n\n**Important**:
                     - Analyze the code changes to understand the functional purpose and impact
                     - Focus on WHAT was changed and WHY (based on the code context)
                     - Summarize the changes in business/functional terms when possible

@@ -342,6 +342,102 @@ describe('CommentManagerService.generateSummaryPR', () => {
         });
     });
 
+    // The default Kody rule "Provide a complete PR description template"
+    // flags a summary that lacks these headings — including the summaries
+    // Kody itself generates. The contract therefore belongs in the prompt.
+    describe('PR description quality-gate template', () => {
+        const requiredHeadings = [
+            '## Motivation',
+            '## Approach',
+            '## Considered Alternatives',
+            '## Risk & Rollout',
+            '## Testing Evidence',
+        ];
+
+        beforeEach(() => {
+            codeManagementService.getPullRequestByNumber.mockResolvedValue({
+                body: 'irrelevant for prompt-shape tests',
+            });
+        });
+
+        it('carries every required heading into the generation prompt', async () => {
+            await service.generateSummaryPR(
+                stubPR,
+                stubRepository,
+                [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
+                stubOrg,
+                'pt-BR',
+                summaryConfig,
+                false,
+                false,
+                undefined,
+                PlatformType.GITHUB,
+            );
+
+            const userPrompt = capturedPrompts.find(
+                (p) => p.role === 'user',
+            )?.prompt;
+
+            expect(userPrompt).toBeDefined();
+            for (const heading of requiredHeadings) {
+                expect(userPrompt).toContain(heading);
+            }
+        });
+
+        // The rule is satisfied by headings alone only if each section says
+        // something. These two lines are what stop the model from emitting an
+        // empty "Testing Evidence" or inventing a rollout plan.
+        it('forbids inventing evidence and demands an explicit rollout', async () => {
+            await service.generateSummaryPR(
+                stubPR,
+                stubRepository,
+                [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
+                stubOrg,
+                'pt-BR',
+                summaryConfig,
+                false,
+                false,
+                undefined,
+                PlatformType.GITHUB,
+            );
+
+            const userPrompt = capturedPrompts.find(
+                (p) => p.role === 'user',
+            )?.prompt;
+
+            expect(userPrompt).toContain(
+                'Provide an explicit rollout or deployment plan',
+            );
+            expect(userPrompt).toContain(
+                'explicitly state that instead of inventing results',
+            );
+        });
+
+        // The headings must not be translated away: a pt-BR body under
+        // English headings is what the rule actually matches on.
+        it('keeps the headings in English regardless of response language', async () => {
+            await service.generateSummaryPR(
+                stubPR,
+                stubRepository,
+                [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
+                stubOrg,
+                'pt-BR',
+                summaryConfig,
+                false,
+                false,
+                undefined,
+                PlatformType.GITHUB,
+            );
+
+            const userPrompt = capturedPrompts.find(
+                (p) => p.role === 'user',
+            )?.prompt;
+
+            expect(userPrompt).toContain('Keep the headings in English');
+        });
+    });
+
+
     // A provider failure and a deliberate skip must not share a return value.
     // `null` means "we chose not to generate one" (summary disabled, license
     // denied, diff too large) — callers treat it as a non-event. When the LLM
