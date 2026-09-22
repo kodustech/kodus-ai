@@ -482,15 +482,6 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             expect(statuses(results)).toEqual(['warn']);
             expectActionable(results);
         });
-
-        it('API_LOG_LEVEL=error', async () => {
-            const env = cleanEnv();
-            env.API_LOG_LEVEL = 'error';
-            const results = await configEnvCheck.run(ctx({ env }));
-            expect(
-                results.find((r) => r.check === 'env.log_level')?.status,
-            ).toBe('warn');
-        });
     });
 
     describe('advisory (i)', () => {
@@ -505,6 +496,15 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             delete env[key];
             const results = await configEnvCheck.run(ctx({ env }));
             expect(results.find((r) => r.check === check)?.status).toBe('info');
+        });
+
+        it('API_LOG_LEVEL=error (the installer default) is advisory, not degraded', async () => {
+            const env = cleanEnv();
+            env.API_LOG_LEVEL = 'error';
+            const results = await configEnvCheck.run(ctx({ env }));
+            expect(
+                results.find((r) => r.check === 'env.log_level')?.status,
+            ).toBe('info');
         });
 
         it('Community Edition', async () => {

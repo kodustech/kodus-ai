@@ -80,13 +80,15 @@ export const configEnvCheck: DoctorCheck = {
             });
         }
 
+        // `error` is the installer's default (.env.schema API_LOG_LEVEL), so it
+        // is advisory here: a clean install must not read as degraded.
         if ((env.API_LOG_LEVEL ?? '').toLowerCase() === 'error') {
             results.push({
                 check: 'env.log_level',
-                status: 'warn',
+                status: 'info',
                 title: 'Logs only show errors.',
                 impact: 'Reviews that are skipped or degraded log a warning, not an error, so the logs will not tell you why.',
-                fix: 'Set API_LOG_LEVEL=info (or warn) and restart api and worker.',
+                fix: 'While diagnosing, set API_LOG_LEVEL=warn (or info) and restart api and worker.',
             });
         }
 
