@@ -1048,19 +1048,19 @@ describe('verifier contract — verdict written as TEXT (#1937)', () => {
     // The production shape: reasoning prose, a blank line, then the verdict
     // object — carrying the `index` field the prompt template hands the model.
     // Wording neutral: this repo is public and the real payload is customer code.
-    const TEXT_VERDICT = `The cited comment on the same line states the limit was raised for this worker only. The finding assumes it was meant for the other service too, and the code says otherwise.
+    const TEXT_VERDICT = `The retry ceiling is read from the queue config, not hardcoded, and the loop breaks on the first success. The finding assumes a fixed ceiling that the code does not have.
 
 {
   "index": 0,
   "keep": false,
-  "rationale": "the inline comment states the intent explicitly; the finding is speculative and the code refutes its premise",
+  "rationale": "the ceiling is configuration-driven and the loop exits on success; the premise does not hold",
   "confidence": "high"
 }`;
 
     it('drops the finding on a text keep:false (the shape from issue #1937)', () => {
         const v = extractVerdict(textOnlyState(TEXT_VERDICT));
         expect(v.keep).toBe(false);
-        expect(v.rationale).toMatch(/the code refutes its premise/);
+        expect(v.rationale).toMatch(/the premise does not hold/);
         expect(v.confidence).toBe('high');
         expect(v.parseMode).toBe('text');
     });

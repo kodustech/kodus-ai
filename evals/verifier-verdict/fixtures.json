@@ -1,13 +1,13 @@
 {
-    "note": "Verifier FINAL-TEXT payloads, one per row. Shapes observed in production traces (issue #1937), rewritten against a neutral codebase: kodus-ai is public and the real payloads are customer source, so no wording, path or identifier from a customer review appears here. `expect` is what the verify gate MUST do with that payload. Capture a live corpus with capture.js when you need volume; this set is the CI floor.",
+    "note": "Verifier FINAL-TEXT payloads, one per row. Each reproduces a delivery SHAPE seen in production (issue #1937); the scenarios and wording are invented and map to no customer review. kodus-ai is public, so no path, identifier or phrasing from a real review appears here. `expect` is what the verify gate MUST do with that payload. Capture a live corpus with capture.js when you need volume; this set is the CI floor.",
     "rows": [
         {
             "id": "text-refutation-with-index-field",
             "model": "claude-sonnet-4-6",
-            "source": "shape: reasoning, a blank line, then the verdict object — carrying the \"index\" field the prompt template hands the model. Taken from the production trace named in issue #1937; the wording here is neutral.",
+            "source": "shape: reasoning, a blank line, then the verdict object carrying the \"index\" field the prompt template hands the model. The SHAPE is from the production traces in issue #1937; the scenario and wording are invented, and map to no single customer review.",
             "finishReason": "stop",
             "calledVerdictTool": false,
-            "text": "The cited comment on the same line states the limit was raised for this worker only. The finding assumes it was meant for the other service too, and the code says otherwise.\n\n{\n  \"index\": 0,\n  \"keep\": false,\n  \"rationale\": \"the inline comment states the intent explicitly; the finding is speculative and the code refutes its premise\",\n  \"confidence\": \"high\"\n}",
+            "text": "The retry ceiling is read from the queue config, not hardcoded, and the loop breaks on the first success. The finding assumes a fixed ceiling that the code does not have.\n\n{\n  \"index\": 0,\n  \"keep\": false,\n  \"rationale\": \"the ceiling is configuration-driven and the loop exits on success; the premise does not hold\",\n  \"confidence\": \"high\"\n}",
             "expect": {
                 "keep": false,
                 "parseMode": "text"
