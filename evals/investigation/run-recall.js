@@ -13,9 +13,25 @@ const { TIER0, defaultMatrix } = require('../shared/tier0-models');
 
 const RESULTS_DIR = path.join(__dirname, 'results');
 
+const KNOWN_FLAGS = new Set([
+    'model',
+    'all',
+    'set',
+    'cases',
+    'limit',
+    'threshold',
+    'output',
+    'concurrency',
+    'list-models',
+    'listModels',
+    'gate',
+    'no-judge',
+]);
+
 function parseArgs(argv) {
     const out = {
-        model: process.env.FINDER_MODEL || process.env.RECALL_MODEL || 'gpt-5.4',
+        model:
+            process.env.FINDER_MODEL || process.env.RECALL_MODEL || 'gpt-5.4',
         all: process.env.RECALL_ALL === '1',
         set: process.env.RECALL_SET || 'pr',
         cases: process.env.RECALL_CASES || '',
@@ -37,9 +53,21 @@ function parseArgs(argv) {
         if (!m) continue;
 
         const key = m[1];
+        if (!KNOWN_FLAGS.has(key)) {
+            // A silent no-op here is how `--no-judge` did nothing on its first
+            // run, and how a mistyped `--set` would quietly measure the default
+            // set instead of the one asked for.
+            console.error(
+                `unknown flag --${key}. Known: ${[...KNOWN_FLAGS].map((f) => `--${f}`).join(' ')}`,
+            );
+            process.exit(2);
+        }
         const inlineValue = m[2];
         const value = inlineValue ?? argv[i + 1];
-        const consumesNext = inlineValue === undefined && value && !String(value).startsWith('--');
+        const consumesNext =
+            inlineValue === undefined &&
+            value &&
+            !String(value).startsWith('--');
 
         if (key === 'model') {
             out.model = value || out.model;
@@ -77,7 +105,9 @@ function parseArgs(argv) {
 }
 
 function avg(values) {
-    const nums = values.filter((value) => typeof value === 'number' && Number.isFinite(value));
+    const nums = values.filter(
+        (value) => typeof value === 'number' && Number.isFinite(value),
+    );
     if (!nums.length) return null;
     return nums.reduce((sum, value) => sum + value, 0) / nums.length;
 }
@@ -121,25 +151,41 @@ function submissionResultFromOutput(caseId, output, tokenUsage) {
             // conceitual, ex.: padrao duplicado em outro arquivo, decorator).
             // Linha e 1-indexed, entao 0 nunca e valida — normaliza para null
             // em vez de deixar o schema rejeitar a submission inteira.
-            startLine: Number.isInteger(f.relevantLinesStart) && f.relevantLinesStart > 0 ? f.relevantLinesStart : null,
-            endLine: Number.isInteger(f.relevantLinesEnd) && f.relevantLinesEnd > 0 ? f.relevantLinesEnd : null,
+            startLine:
+                Number.isInteger(f.relevantLinesStart) &&
+                f.relevantLinesStart > 0
+                    ? f.relevantLinesStart
+                    : null,
+            endLine:
+                Number.isInteger(f.relevantLinesEnd) && f.relevantLinesEnd > 0
+                    ? f.relevantLinesEnd
+                    : null,
             severity: sev(f.severity),
-            ...(f.severity && !sev(f.severity) ? { severityRaw: String(f.severity) } : {}),
+            ...(f.severity && !sev(f.severity)
+                ? { severityRaw: String(f.severity) }
+                : {}),
             category: f.label ?? f.category ?? null,
-            description: [f.oneSentenceSummary, f.suggestionContent].filter(Boolean).join(' — '),
+            description: [f.oneSentenceSummary, f.suggestionContent]
+                .filter(Boolean)
+                .join(' — '),
         })),
         usage: {
             inputTokens: tokenUsage?.prompt ?? tokenUsage?.inputTokens ?? 0,
-            outputTokens: tokenUsage?.completion ?? tokenUsage?.outputTokens ?? 0,
+            outputTokens:
+                tokenUsage?.completion ?? tokenUsage?.outputTokens ?? 0,
             reasoningTokens: trace.usage?.reasoningTokens ?? null,
             cacheReadTokens: trace.usage?.cacheReadTokens ?? null,
         },
         trace: {
             finishReason: trace.finishReason ?? null,
             steps: typeof trace.steps === 'number' ? trace.steps : null,
-            replayCalls: typeof trace.replayCalls === 'number' ? trace.replayCalls : null,
+            replayCalls:
+                typeof trace.replayCalls === 'number'
+                    ? trace.replayCalls
+                    : null,
             unexpectedToolCalls: Array.isArray(trace.unexpectedToolCalls)
-                ? trace.unexpectedToolCalls.length : 0,
+                ? trace.unexpectedToolCalls.length
+                : 0,
         },
     };
 }
@@ -149,10 +195,17 @@ function runMetaOf(args) {
         harness: { name: 'kodus', version: process.env.KODUS_VERSION || 'dev' },
         model: {
             // id publico = modelo real; sufixo (@sub, @nvidia) e so roteamento
-            id: (TIER0[args.model] && (TIER0[args.model].codexModel || TIER0[args.model].doModel)) || args.model,
-            provider: (TIER0[args.model] && TIER0[args.model].provider) || 'unknown',
+            id:
+                (TIER0[args.model] &&
+                    (TIER0[args.model].codexModel ||
+                        TIER0[args.model].doModel)) ||
+                args.model,
+            provider:
+                (TIER0[args.model] && TIER0[args.model].provider) || 'unknown',
             accessPath:
-                TIER0[args.model]?.provider === 'codex_subscription' ? 'subscription' : 'api',
+                TIER0[args.model]?.provider === 'codex_subscription'
+                    ? 'subscription'
+                    : 'api',
         },
         executionMode: 'replay',
         // heavy = passadas de resample ativadas. Eixo de regime: não comparar
@@ -162,7 +215,10 @@ function runMetaOf(args) {
         // (ver withReasoningEffort em agent-provider.js); sem isto o artefato
         // registrava 'vendor-default' mesmo quando o run era em thinking high.
         reasoning: process.env.RECALL_REASONING_EFFORT
-            ? { config: 'explicit', effortRequested: process.env.RECALL_REASONING_EFFORT }
+            ? {
+                  config: 'explicit',
+                  effortRequested: process.env.RECALL_REASONING_EFFORT,
+              }
             : { config: 'vendor-default', effortRequested: null },
         runAt: new Date().toISOString(),
     };
@@ -218,15 +274,32 @@ async function main() {
     // is what rejudge.js (or any external judge) re-scores afterwards. It is never
     // a measurement: the run exits 2 with the reason.
     const NO_JUDGE = !!args.noJudge;
-    const { loadJudgeKey, JUDGE_MODEL, providerFor } = require('./recall-judge');
+    const {
+        loadJudgeKey,
+        JUDGE_MODEL,
+        providerFor,
+        matchComment,
+    } = require('./recall-judge');
     if (!NO_JUDGE && !loadJudgeKey()) {
         const error = `Missing judge key for ${JUDGE_MODEL} (${providerFor(JUDGE_MODEL)}): set JUDGE_API_KEY.`;
         console.error(error);
         // Still write a result, so the report says what was missing instead of
         // "crashed before writing its result".
         writeJson(
-            args.output || path.join(RESULTS_DIR, `finder-recall-${args.model.replace(/[^\w.-]+/g, '-')}.json`),
-            { model: args.model, cases: 0, infraFailures: 0, error, metrics: {}, rows: [], gate: { status: 'off' } },
+            args.output ||
+                path.join(
+                    RESULTS_DIR,
+                    `finder-recall-${args.model.replace(/[^\w.-]+/g, '-')}.json`,
+                ),
+            {
+                model: args.model,
+                cases: 0,
+                infraFailures: 0,
+                error,
+                metrics: {},
+                rows: [],
+                gate: { status: 'off' },
+            },
         );
         process.exit(2);
     }
@@ -245,6 +318,27 @@ async function main() {
     }
 
     process.env.RECALL_MODEL = args.model;
+
+    // The presence check above passed once while holding the FINDER's Fireworks
+    // key — applyModelEnv writes it over API_OPEN_AI_API_KEY — and the 401 only
+    // surfaced after 30 paid finder runs. Presence is not validity: spend one
+    // judge call before spending the finder.
+    if (!NO_JUDGE) {
+        try {
+            await matchComment(
+                'a null pointer when the map is read concurrently',
+                'possible NPE: the map is read without synchronisation',
+            );
+        } catch (error) {
+            const reason =
+                error instanceof Error ? error.message : String(error);
+            console.error(
+                `judge preflight failed for ${JUDGE_MODEL} (${providerFor(JUDGE_MODEL)}): ${reason.slice(0, 300)}\n` +
+                    'Not measured, and no finder run was paid for. Set JUDGE_API_KEY, or use --no-judge to save the findings for an external judge.',
+            );
+            process.exit(2);
+        }
+    }
 
     const tests = await buildTests();
     let selectedTests = Number.isFinite(args.limit)
@@ -280,7 +374,10 @@ async function main() {
     const checkpointBase = args.output
         ? path.basename(String(args.output)).replace(/\.json$/, '')
         : `finder-recall-${args.model.replace(/[^\w.-]+/g, '-')}`;
-    const checkpointPath = path.join(RESULTS_DIR, `${checkpointBase}.submission.partial.json`);
+    const checkpointPath = path.join(
+        RESULTS_DIR,
+        `${checkpointBase}.submission.partial.json`,
+    );
 
     const runOneCase = async (test) => {
         const caseId = test.vars?.caseId || test.description || 'unknown-case';
@@ -339,8 +436,10 @@ async function main() {
             submissionResults.push(saved);
             writeJson(checkpointPath, {
                 benchmarkVersion: `${args.all ? 'all50' : args.cases ? 'custom' : args.set}-v1`,
-                run: runMetaOf(args), partial: true,
-                completedCases: submissionResults.length, results: submissionResults,
+                run: runMetaOf(args),
+                partial: true,
+                completedCases: submissionResults.length,
+                results: submissionResults,
             });
             console.log(`SAVED  ${caseId} findings=${saved.findings.length}`);
             return;
@@ -381,13 +480,19 @@ async function main() {
             }
         }
         submissionResults.push(
-            submissionResultFromOutput(caseId, apiResult.output, apiResult.tokenUsage),
+            submissionResultFromOutput(
+                caseId,
+                apiResult.output,
+                apiResult.tokenUsage,
+            ),
         );
         // checkpoint por caso: passada longa que morre não pode perder o que já foi pago
         writeJson(checkpointPath, {
             benchmarkVersion: `${args.all ? 'all50' : args.cases ? 'custom' : args.set}-v1`,
-            run: runMetaOf(args), partial: true,
-            completedCases: submissionResults.length, results: submissionResults,
+            run: runMetaOf(args),
+            partial: true,
+            completedCases: submissionResults.length,
+            results: submissionResults,
         });
 
         console.log(
@@ -397,8 +502,13 @@ async function main() {
 
     // Pool: casos são independentes (replay determinístico próprio), então
     // sequencial era só desperdício de relógio.
-    const concurrency = Math.max(1, Math.min(Number(args.concurrency) || 4, selectedTests.length));
-    console.log(`(concorrência: ${concurrency}${process.env.RECALL_HEAVY === '1' ? ' · HEAVY' : ''})\n`);
+    const concurrency = Math.max(
+        1,
+        Math.min(Number(args.concurrency) || 4, selectedTests.length),
+    );
+    console.log(
+        `(concorrência: ${concurrency}${process.env.RECALL_HEAVY === '1' ? ' · HEAVY' : ''})\n`,
+    );
     let cursor = 0;
     const worker = async () => {
         for (;;) {
@@ -414,7 +524,8 @@ async function main() {
                 const row = {
                     caseId: selectedTests[idx]?.vars?.caseId || `idx-${idx}`,
                     status: 'infra',
-                    reason: error instanceof Error ? error.message : String(error),
+                    reason:
+                        error instanceof Error ? error.message : String(error),
                 };
                 rows.push(row);
                 console.log(`INFRA ${row.caseId} ${row.reason.slice(0, 300)}`);
@@ -424,8 +535,14 @@ async function main() {
     await Promise.all(Array.from({ length: concurrency }, worker));
 
     // pool devolve fora de ordem: reordena pela ordem do dataset (artefato estável)
-    const orderOf = new Map(selectedTests.map((t, i) => [t.vars?.caseId || t.description || `idx-${i}`, i]));
-    const byOrder = (a, b) => (orderOf.get(a.caseId) ?? 1e9) - (orderOf.get(b.caseId) ?? 1e9);
+    const orderOf = new Map(
+        selectedTests.map((t, i) => [
+            t.vars?.caseId || t.description || `idx-${i}`,
+            i,
+        ]),
+    );
+    const byOrder = (a, b) =>
+        (orderOf.get(a.caseId) ?? 1e9) - (orderOf.get(b.caseId) ?? 1e9);
     rows.sort(byOrder);
     submissionResults.sort(byOrder);
 
@@ -441,7 +558,9 @@ async function main() {
     // whose output failed to parse is written as a 'fail' with empty metadata
     // and never counted as infra, so counting only infra rows would let a run
     // that scored a handful of PRs report itself as a full one.
-    const unmeasured = rows.filter((row) => !Number.isFinite(row.metadata?.recall)).length;
+    const unmeasured = rows.filter(
+        (row) => !Number.isFinite(row.metadata?.recall),
+    ).length;
     const summary = {
         model: args.model,
         startedAt,
@@ -471,7 +590,10 @@ async function main() {
 
     const outputPath =
         args.output ||
-        path.join(RESULTS_DIR, `finder-recall-${args.model.replace(/[^\w.-]+/g, '-')}.json`);
+        path.join(
+            RESULTS_DIR,
+            `finder-recall-${args.model.replace(/[^\w.-]+/g, '-')}.json`,
+        );
     writeJson(outputPath, summary);
 
     const submissionPath = outputPath.replace(/\.json$/, '.submission.json');
@@ -480,7 +602,9 @@ async function main() {
         run: runMetaOf(args),
         results: submissionResults,
     });
-    try { fs.unlinkSync(checkpointPath); } catch {}
+    try {
+        fs.unlinkSync(checkpointPath);
+    } catch {}
 
     console.log('\n════ finder-recall summary ════');
     console.log(`model: ${summary.model}`);
@@ -504,7 +628,9 @@ async function main() {
         console.log('\n════ model floor gate (targets.json) ════');
         for (const check of gate.checks) {
             const actual =
-                typeof check.actual === 'number' ? check.actual.toFixed(3) : 'n/a';
+                typeof check.actual === 'number'
+                    ? check.actual.toFixed(3)
+                    : 'n/a';
             console.log(
                 `${check.pass ? 'OK  ' : 'FAIL'}  ${check.name}: ${actual} (floor ${check.floor})`,
             );
@@ -523,7 +649,10 @@ async function main() {
         );
         process.exit(2);
     }
-    if (unmeasured > 0) console.log(`\n${unmeasured} PR(s) not measured, within the budget of ${infraBudget}: gating on the ${rows.length - unmeasured} that were.`);
+    if (unmeasured > 0)
+        console.log(
+            `\n${unmeasured} PR(s) not measured, within the budget of ${infraBudget}: gating on the ${rows.length - unmeasured} that were.`,
+        );
 
     // --gate asked for a verdict against the floors; a gate that couldn't run
     // (no targets, wrong judge) is not a pass. Exit 2 so the night is not
@@ -536,12 +665,16 @@ async function main() {
     // With --gate the run mean decides (per-PR results are noise); without it,
     // per-case failures (RECALL_THRESHOLD, unparsed output) fail the run.
     if (!args.gate && qualityFailures > 0) {
-        console.error(`\nFinder recall gate failed in ${qualityFailures} case(s).`);
+        console.error(
+            `\nFinder recall gate failed in ${qualityFailures} case(s).`,
+        );
         process.exit(1);
     }
 
     if (gate.status === 'fail') {
-        console.error('\nModel floor gate FAILED (run mean below targets.json floor).');
+        console.error(
+            '\nModel floor gate FAILED (run mean below targets.json floor).',
+        );
         process.exit(1);
     }
 }
