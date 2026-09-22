@@ -19,7 +19,10 @@ import type {
     TemperaturePolicy,
 } from '@libs/llm/providers/kernel/model-types';
 import type { NormalizedModel } from '@libs/llm/byok-config';
-import type { ModelReasoningTraits } from './reasoning-traits';
+import type {
+    ModelReasoningTraits,
+    StructuredOutputMode,
+} from './reasoning-traits';
 
 /**
  * Provider capability descriptor. Extends the reasoning-only base
@@ -45,12 +48,10 @@ export interface ModelCapabilities extends BaseModelCapabilities {
      * The `json_schema` vs `json_object` half is INDICATIVE, not authoritative:
      * for `openai_compatible` the real answer depends on the baseURL, and this
      * method's signature cannot see it — nor can it tell `openai` from
-     * `openai_compatible`, since one module serves both ids. `build()` decides
-     * (`supportsStructuredOutputs`), and the two measurably disagree in both
-     * directions; `structured-output.contract.spec.ts` pins that and keeps the
-     * distinction from being branched on. Answering it properly means a
-     * `structuredOutputPolicy(cfg)` sibling to `temperaturePolicy(cfg)`, which
-     * takes the whole config for exactly this reason.
+     * `openai_compatible`, since one module serves both ids.
+     * `structuredOutputPolicy(cfg)` below is the authoritative answer, and it is
+     * what any caller branching on the distinction MUST read; this field stays
+     * for the UI capability gate, which only asks `=== 'none'`.
      */
     structuredOutput?: 'json_schema' | 'json_object' | 'none';
     /** Native tool/function calling support. */
@@ -264,6 +265,27 @@ export interface ProviderModule {
      *  capability — two statements of one rule, and they disagreed in production.
      *  The capability is gone; a module now answers, or it does not ship. */
     temperaturePolicy(cfg: ProviderBuildConfig): TemperaturePolicy;
+    /** How a STRUCTURED call for this config actually leaves the machine — the
+     *  wire channel, not a marketing capability. Sibling to `temperaturePolicy`,
+     *  and REQUIRED for the same reason: it takes the whole config, so it can see
+     *  what `capabilities(model)` cannot (the baseURL, and which of the ids this
+     *  module serves is being asked about).
+     *
+     *    'json_schema' — response_format carries the schema; the model is told
+     *                    the exact shape by the provider.
+     *    'none'        — no response_format at all: the schema travels on the
+     *                    protocol's own channel (the Anthropic wire's
+     *                    output_config / a forced tool definition).
+     *    'json_object' — the request says only "answer JSON". NOTHING about the
+     *                    shape reaches the model, and several providers reject
+     *                    the request outright unless the word "json" appears in
+     *                    the messages. A caller on this route MUST put the
+     *                    contract in the prompt itself (issue #1916).
+     *
+     *  `build()` MUST derive its `supportsStructuredOutputs` from this same
+     *  answer — one expression, so the declaration and the wire cannot drift
+     *  (they measurably did: see structured-output.contract.spec.ts). */
+    structuredOutputPolicy(cfg: ProviderBuildConfig): StructuredOutputMode;
     /** The Vercel AI SDK `providerOptions` namespace key this provider's adapter
      *  listens on, per requested id (a module may serve several ids with
      *  DIFFERENT namespaces — the openai module serves `openai` → 'openai' and

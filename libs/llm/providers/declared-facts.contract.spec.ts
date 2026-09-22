@@ -63,6 +63,7 @@ const NOT_APPLICABLE: Record<string, Record<string, string>> = {};
 const FACTS = [
     'reasoningTraits',
     'temperaturePolicy',
+    'structuredOutputPolicy',
     'providerOptionsNamespace',
 ] as const;
 
@@ -93,6 +94,7 @@ describe('every registered provider declares its own facts', () => {
                 const traits = mod.reasoningTraits?.(cfg as any);
                 const temp = mod.temperaturePolicy?.(cfg as any);
                 const ns = mod.providerOptionsNamespace?.(id, cfg.model);
+                const structured = mod.structuredOutputPolicy?.(cfg as any);
 
                 expect({
                     id,
@@ -105,6 +107,7 @@ describe('every registered provider declares its own facts', () => {
                             typeof traits?.forcedToolChoiceRejectsThinking,
                     },
                     tempKind: temp?.kind,
+                    structuredWire: structured,
                     namespaceIsNonEmptyString:
                         typeof ns === 'string' && ns.length > 0,
                 }).toEqual({
@@ -119,6 +122,13 @@ describe('every registered provider declares its own facts', () => {
                     // which is what sends the caller back to the fallback.
                     tempKind: expect.stringMatching(
                         /^(adjustable|fixed|unsupported)$/,
+                    ),
+                    // 'json_schema' | 'json_object' | 'none' — never undefined.
+                    // An absent answer sends the structured executor back to the
+                    // default, and a route that is really json_object would ship
+                    // with no contract at all (#1916).
+                    structuredWire: expect.stringMatching(
+                        /^(json_schema|json_object|none)$/,
                     ),
                     namespaceIsNonEmptyString: true,
                 });

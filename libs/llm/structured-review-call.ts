@@ -37,7 +37,9 @@ import {
     planStructuredCall,
     NON_REASONING_TRAITS,
     type StructuredCallPlan,
+    type StructuredOutputMode,
 } from '@libs/llm/providers/kernel/reasoning-traits';
+import { resolveStructuredOutputPolicy } from '@libs/llm/providers/kernel/structured-output';
 import { z } from 'zod';
 import {
     getLimiterForSlot,
@@ -210,6 +212,60 @@ function resolveStructuredPlan(
     }
 }
 
+/**
+ * What a structured call for this slot actually puts ON THE WIRE — the module's
+ * own `structuredOutputPolicy(cfg)`, the one answer that can see the provider id,
+ * the model AND the baseURL (see providers/kernel/structured-output.ts).
+ *
+ * No slot = the managed/env default, which is built with `structuredOutputs:
+ * true` against an upstream we control (Fireworks, or the self-hosted endpoint
+ * the operator opted in): the schema does reach the wire, so 'json_schema'.
+ */
+function resolveWireStructuredMode(
+    slot: NormalizedModel | undefined,
+): StructuredOutputMode {
+    const provider = slot?.provider as string | undefined;
+    if (!provider || !slot?.model || !REGISTRY.has(provider)) {
+        return 'json_schema';
+    }
+    try {
+        return resolveStructuredOutputPolicy(REGISTRY.get(provider), slot);
+    } catch {
+        // Best-effort lookup — never break the call over it. 'json_schema' is the
+        // answer that changes nothing (no prompt is added).
+        return 'json_schema';
+    }
+}
+
+/**
+ * Write the JSON contract INTO the prompt. Used by every path where the wire
+ * carries no schema of its own:
+ *
+ *   - `reroute-json` (always-thinking / no forced tool_choice),
+ *   - the bare `json_object` first attempt (issue #1916),
+ *   - the downgraded re-issue after a rejected/mismatched json_schema.
+ *
+ * Two things must be true of the result, and both are load-bearing:
+ *   1. it states the SHAPE, or the model invents one and the parse mismatches;
+ *   2. it contains the literal word "json" — OpenAI and every OpenAI-compatible
+ *      proxy REJECT a `response_format: json_object` request outright otherwise
+ *      ("'messages' must contain the word 'json' in some form"), with no
+ *      recovery anywhere downstream. Verified live against the real OpenAI API
+ *      (finder.agent.ts, 2026-09-17): same request, 400 without the sentence,
+ *      200 with it.
+ */
+export function withJsonContract(
+    system: string | undefined,
+    schemaForPrompt?: string,
+): string {
+    const contract = schemaForPrompt
+        ? `Return ONLY a JSON object that conforms EXACTLY to this JSON Schema (same property names, no extra keys):\n${schemaForPrompt}`
+        : // No stringifiable schema (rare): the shape is lost, but the keyword —
+          // the half that decides between a 400 and an answer — must not be.
+          'Return ONLY a valid JSON object as your entire response.';
+    return `${system ? `${system}\n\n` : ''}${contract}`;
+}
+
 async function runReviewCall<T>(
     params: BaseReviewCallParams,
     mode: ReviewCallMode<T>,
@@ -286,6 +342,31 @@ async function runReviewCall<T>(
         });
 
     const sentJsonSchema = structuredMode && mayUseJsonSchema(mainSlot);
+
+    // What the request will ACTUALLY carry. 'json_schema' → response_format
+    // holds the schema; 'none' → it rides the protocol's own channel (the
+    // Anthropic wire's output_config / a forced tool); both are a contract the
+    // model can read. 'json_object' is NOT: the body says "answer
+    // JSON" and nothing else, so unless the caller writes the shape and the
+    // keyword into the prompt the model invents a shape (silent mismatch) or the
+    // provider rejects the request outright ("must contain the word 'json'"),
+    // and dedup fails open and publishes every duplicate (issue #1916).
+    // A slot already proven to reject json_schema downgrades to the same route.
+    const declaredWireMode = structuredMode
+        ? resolveWireStructuredMode(mainSlot)
+        : 'json_schema';
+    const wireStructuredMode: StructuredOutputMode =
+        declaredWireMode === 'json_schema' && !sentJsonSchema
+            ? 'json_object'
+            : declaredWireMode;
+    // The first attempt must carry the contract itself on that route — the
+    // recovery ladder below only ever ran AFTER a failure, and for the 400 class
+    // there is no failure it can catch.
+    const schemaOnlyInPrompt =
+        structuredMode && wireStructuredMode === 'json_object';
+    const mainSystem = schemaOnlyInPrompt
+        ? withJsonContract(system, mode.schemaForPrompt)
+        : system;
     const {
         model: mainModel,
         modelName: mainModelName,
@@ -400,11 +481,16 @@ async function runReviewCall<T>(
     // issue #1786). `reason` is stamped on the re-issue span so a recovery is
     // observable instead of silent. Skipped by the caller when schemaForPrompt is
     // unset (a byte-identical retry would add nothing).
+    //
+    // Since #1916 a route that was ALREADY json_object carries this same contract
+    // on its first attempt, so for those the re-issue is no longer a different
+    // request — it is a second sample of the same one. That is still worth one
+    // call after a parse failure (the same prompt formats differently on a
+    // non-zero temperature), but it is a retry, not a recovery: the SCHEMA-
+    // rejection branch below no longer routes here for them.
     const reissueDowngraded = (reason: string): Promise<T> => {
         const downgraded = buildInvocation(false);
-        const downgradedSystem = mode.schemaForPrompt
-            ? `${system ? `${system}\n\n` : ''}Return ONLY a JSON object that conforms EXACTLY to this JSON Schema (same property names, no extra keys):\n${mode.schemaForPrompt}`
-            : system;
+        const downgradedSystem = withJsonContract(system, mode.schemaForPrompt);
         return call(downgraded.model, downgraded.modelName, downgradedSystem, {
             structuredRecovery: reason,
         });
@@ -419,9 +505,7 @@ async function runReviewCall<T>(
     // class, not a per-model special case.
     if (structuredPlan === 'reroute-json') {
         const inv = buildInvocation(false);
-        const reroutedSystem = mode.schemaForPrompt
-            ? `${system ? `${system}\n\n` : ''}Return ONLY a JSON object that conforms EXACTLY to this JSON Schema (same property names, no extra keys):\n${mode.schemaForPrompt}`
-            : system;
+        const reroutedSystem = withJsonContract(system, mode.schemaForPrompt);
         return call(
             inv.model,
             inv.modelName,
@@ -446,7 +530,7 @@ async function runReviewCall<T>(
     }
 
     try {
-        return await call(mainModel, mainModelName);
+        return await call(mainModel, mainModelName, mainSystem);
     } catch (err) {
         // json_schema → json_object fallback. A structured provider that
         // advertised support but rejected the json_schema body at runtime
@@ -456,7 +540,15 @@ async function runReviewCall<T>(
         // proof we did — so a json_object attempt never triggers a byte-identical
         // retry. Folds `withStructuredOutputFallback` into the ONE executor, so
         // every structured LLM.run caller gets this resilience, not just dedup.
-        if (sentJsonSchema && isJsonSchemaUnsupportedError(err)) {
+        if (
+            sentJsonSchema &&
+            // On the json_object route the schema was never on the wire (the
+            // flag only asks the SDK for it), so this error is not about schema
+            // support — and the re-issue would be byte-identical to the attempt
+            // that just failed, since the contract is already in the prompt.
+            wireStructuredMode !== 'json_object' &&
+            isJsonSchemaUnsupportedError(err)
+        ) {
             // The provider advertised json_schema but rejected the body at
             // runtime — a slot-level fact: cache it so future structured calls
             // skip json_schema, then re-issue once in json_object mode.
@@ -599,7 +691,7 @@ async function runReviewCall<T>(
         // caused. One re-issue only; a re-issue failure still propagates.
         if (category === RETRYABLE_CATEGORY) {
             await sleep(jitteredBackoffMs(1));
-            return await call(mainModel, mainModelName);
+            return await call(mainModel, mainModelName, mainSystem);
         }
         throw err;
     }

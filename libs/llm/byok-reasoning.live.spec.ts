@@ -1552,6 +1552,20 @@ const STRUCTURED_LIVE = [
             reasoningEffort: 'high',
         },
     },
+    {
+        brand: 'open_router_glm',
+        plan: 'as-is / json_object',
+        why: "a GLM through OpenRouter is outside the four allowlisted prefixes, so its structured call goes out as bare `response_format: json_object` — no schema on the wire, and the provider rejects the request outright unless the messages contain the word 'json'. This is the route 460 reviews published every duplicate on (#1916); what it proves is that the contract the executor now writes into the prompt is enough to get a PARSED object back over that channel",
+        slot: {
+            provider: 'open_router',
+            model: 'z-ai/glm-5.2',
+            // Pinned for the same reason the reasoning row above is: OpenRouter
+            // picks an upstream per call, and an unpinned row asserts the
+            // routing lottery instead of the request.
+            openrouterProviderOrder: ['z-ai'],
+            openrouterAllowFallbacks: false,
+        },
+    },
 ] as const;
 
 describe('BYOK structured output — LIVE, through LLM.run (the one door)', () => {
@@ -1595,4 +1609,102 @@ describe('BYOK structured output — LIVE, through LLM.run (the one door)', () =
             120_000,
         );
     }
+});
+
+/**
+ * The NEGATIVE control for the row above — the half that makes the fix a
+ * mechanism rather than a hope.
+ *
+ * The structured row proves our request works. It cannot prove WHY the previous
+ * one did not, and without that this layer is a cargo cult: someone deletes the
+ * contract sentence next year, the row still passes on a lenient upstream, and
+ * the 400 comes back for everyone else.
+ *
+ * So this issues the SAME `response_format: json_object` request twice, by hand
+ * (deliberately NOT through the door — the subject is the provider's rule, not
+ * our stack): once with no occurrence of the word "json" anywhere in the
+ * messages, once with the contract the executor injects.
+ *
+ * If the keyword requirement ever disappears upstream, this row goes red saying
+ * so. That is the correct reading: not "we broke something", but "the contract
+ * is now belt-and-braces on this route rather than load-bearing" — a fact worth
+ * knowing before anyone deletes it.
+ */
+describe('#1916 — the json_object keyword rule, live', () => {
+    const apiKey = key('open_router_glm');
+    const run = apiKey ? it : it.skip;
+
+    const CONTRACT =
+        'Return ONLY a JSON object that conforms EXACTLY to this JSON Schema ' +
+        '(same property names, no extra keys):\n' +
+        JSON.stringify({
+            type: 'object',
+            properties: { answer: { type: 'string' } },
+            required: ['answer'],
+        });
+
+    // Deliberately keyword-free: this is what `buildDedupPrompt` looked like on
+    // the wire — the word "json" appears exactly zero times.
+    const USER = 'Reply with the field answer set to ok.';
+
+    const ask = async (system?: string) => {
+        const res = await fetch(
+            'https://openrouter.ai/api/v1/chat/completions',
+            {
+                method: 'POST',
+                headers: {
+                    authorization: `Bearer ${apiKey}`,
+                    'content-type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model: 'z-ai/glm-5.2',
+                    provider: { order: ['z-ai'], allow_fallbacks: false },
+                    messages: [
+                        ...(system ? [{ role: 'system', content: system }] : []),
+                        { role: 'user', content: USER },
+                    ],
+                    response_format: { type: 'json_object' },
+                    max_tokens: 200,
+                }),
+            },
+        );
+        const body: any = await res.json().catch(() => ({}));
+        return {
+            status: res.status,
+            message: String(
+                body?.error?.message ?? body?.error?.metadata?.raw ?? '',
+            ),
+            content: String(body?.choices?.[0]?.message?.content ?? ''),
+        };
+    };
+
+    run(
+        'the same request is rejected without the keyword and answered with it',
+        async () => {
+            const bare = await ask();
+            const withContract = await ask(CONTRACT);
+
+            expect({
+                bareRejected: bare.status >= 400,
+                bareNamesTheKeyword: /must contain the word|['"]json['"]/i.test(
+                    bare.message,
+                ),
+                withContractAnswered: withContract.status === 200,
+                withContractParses: (() => {
+                    try {
+                        return typeof JSON.parse(withContract.content) ===
+                            'object';
+                    } catch {
+                        return false;
+                    }
+                })(),
+            }).toEqual({
+                bareRejected: true,
+                bareNamesTheKeyword: true,
+                withContractAnswered: true,
+                withContractParses: true,
+            });
+        },
+        120_000,
+    );
 });

@@ -38,6 +38,7 @@ import {
     isCompatibleReasoner,
     compatibleEffortValue,
     type ModelReasoningTraits,
+    type StructuredOutputMode,
 } from '../kernel/reasoning-traits';
 import {
     normalizeSdkResult,
@@ -95,6 +96,28 @@ export const openaiModule: ProviderModule = {
             streaming: true,
             promptCaching: true,
         };
+    },
+
+    // The WIRE answer, per id + model + baseURL — the three inputs
+    // `capabilities(model)` above cannot see (one module serves both ids, and
+    // the custom endpoint's behaviour is a property of the URL, not the id).
+    //
+    //   native `openai`        → strict json_schema, always.
+    //   `openai_compatible`    → strict only for the never-downgrade Kimi/
+    //                            Moonshot family or a baseURL we have evidence
+    //                            for (vLLM :8000, Fireworks, the ops allowlist).
+    //                            EVERY other upstream — DeepSeek, GLM, Qwen, a
+    //                            generic proxy — goes out as bare `json_object`,
+    //                            carrying neither the shape nor the keyword
+    //                            (issue #1916).
+    structuredOutputPolicy(cfg: ProviderBuildConfig): StructuredOutputMode {
+        if ((cfg.provider as string) !== 'openai_compatible') {
+            return 'json_schema';
+        }
+        return isNeverDowngradeModel(cfg.model) ||
+            openAiCompatibleHonorsJsonSchema(cfg.baseURL)
+            ? 'json_schema'
+            : 'json_object';
     },
 
     build(cfg: ProviderBuildConfig, opts?: ProviderBuildOptions): LanguageModel {
@@ -161,11 +184,12 @@ export const openaiModule: ProviderModule = {
                 // direct-Moonshot upstream (api.moonshot.ai) keeps json_schema
                 // ON even though shouldEnableJsonSchema alone would reject it
                 // (D-00b). Unknown upstreams still defer to the heuristic — the
-                // capability is additive, not a blanket force-on.
+                // capability is additive, not a blanket force-on. Read from the
+                // policy above so the declaration and this body are ONE
+                // expression.
                 supportsStructuredOutputs:
                     opts?.structuredOutputs !== false &&
-                    (isNeverDowngradeModel(cfg.model) ||
-                        openAiCompatibleHonorsJsonSchema(baseURL)),
+                    openaiModule.structuredOutputPolicy(cfg) === 'json_schema',
             })(cfg.model);
         }
 
