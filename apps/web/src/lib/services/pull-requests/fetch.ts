@@ -202,8 +202,15 @@ export const getReviewedPullRequestCount = async ({
 
         if (!payload || Array.isArray(payload)) return null;
 
-        const total = payload.pagination?.distinctPrTotal;
-        return typeof total === "number" ? total : null;
+        // `distinctPrTotal` is the accurate count, but the backend omits it
+        // when there is nothing to count — a workspace with no reviews comes
+        // back as `{ data: [], pagination: { totalItems: 0 } }`. Falling back
+        // to `totalItems` is what tells "none yet" apart from "couldn't ask",
+        // and those two lead to different screens.
+        const { distinctPrTotal, totalItems } = payload.pagination ?? {};
+        if (typeof distinctPrTotal === "number") return distinctPrTotal;
+        if (typeof totalItems === "number") return totalItems;
+        return null;
     } catch {
         return null;
     }

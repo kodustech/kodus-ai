@@ -124,7 +124,9 @@ async function CockpitLayoutBody({
                 description={
                     reviewedCount === 0
                         ? "The Cockpit measures the reviews Kody runs for you — and this workspace hasn't had one yet."
-                        : "Engineering metrics and Kody review analytics for your workspace are available on Teams and Enterprise plans."
+                        : hasReviews
+                          ? "Available on Teams and Enterprise."
+                          : "Engineering metrics and Kody review analytics for your workspace are available on Teams and Enterprise plans."
                 }
                 details={
                     <LockedCockpitDetails

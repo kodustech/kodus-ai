@@ -433,7 +433,7 @@ function LinkedRepositoriesPlanGate({
                                     {named.join(", ")}
                                 </span>
                                 {rest > 0
-                                    ? ` or ${rest} other ${rest === 1 ? "repo" : "repos"}`
+                                    ? ` and ${rest} other${rest === 1 ? "" : "s"}`
                                     : ""}
                                 . Linked repos let it read them as context, so
                                 it catches the contract that broke next door.

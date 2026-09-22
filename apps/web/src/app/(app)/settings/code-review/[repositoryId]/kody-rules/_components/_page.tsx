@@ -50,6 +50,10 @@ import {
     parseFiltersFromParams,
 } from "src/core/utils/kody-rules/serialize-filters";
 import { safeArray } from "src/core/utils/safe-array";
+import {
+    useCapOwnerLabel,
+    useIsResourceLimited,
+} from "src/features/ee/subscription/_hooks/use-resource-limits";
 import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
 
 import { CentralizedConfigReadOnlyAlert } from "../../../_components/centralized-config-readonly-alert";
@@ -143,7 +147,10 @@ const KodyRulesPageContent = () => {
         repositoryId,
     );
     const subscription = useSubscriptionStatus();
-    const isFreePlan = subscription.status === "free";
+    // Not just free_byok: every license the API calls invalid is capped
+    // the same way (see useIsResourceLimited).
+    const isFreePlan = useIsResourceLimited();
+    const capOwner = useCapOwnerLabel();
 
     // Scope rules and inherited rules are loaded in parallel (single
     // suspense boundary, both requests fired at once) to avoid the waterfall
@@ -996,18 +1003,22 @@ const KodyRulesPageContent = () => {
                         className="flex flex-row items-center justify-between gap-6 p-5">
                         <div className="flex flex-col gap-1">
                             <span className="text-text-primary text-sm font-semibold">
-                                {lockedRulesCount} of your Kody Rules{" "}
-                                {lockedRulesCount === 1 ? "is" : "are"} locked
+                                {lockedRulesCount} rule
+                                {lockedRulesCount === 1 ? "" : "s"} you wrote{" "}
+                                {lockedRulesCount === 1 ? "is" : "are"} skipped
+                                on every PR
                             </span>
                             <span className="text-text-secondary text-sm">
-                                The Free plan runs 10 active rules — locked
-                                rules stay in your list but are skipped on every
-                                PR. Upgrade to activate them all, plus unlimited
-                                plugins and the Cockpit.
+                                {capOwner[0].toUpperCase() + capOwner.slice(1)}{" "}
+                                applies 10 active rules; the rest stay in the
+                                list and never run. Teams runs every one of
+                                them, plus unlimited plugins and the Cockpit.
                             </span>
                         </div>
                         <GateCtaLink
                             feature="kody_rules"
+                            href="/choose-plan"
+                            label="See plans"
                             metadata={{
                                 surface: "locked_rules_banner",
                                 lockedRulesCount,

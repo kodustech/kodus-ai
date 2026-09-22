@@ -31,6 +31,7 @@ import { Action, ResourceType } from "@services/permissions/types";
 import { EditIcon, EyeIcon, LockIcon, PlayIcon, TrashIcon } from "lucide-react";
 import { SuggestionsModal } from "src/app/(app)/library/kody-rules/_components/suggestions-modal";
 import { resolveKodyRuleBadgeState } from "src/core/utils/kody-rules/resolve-badge-state";
+import { useIsResourceLimited } from "src/features/ee/subscription/_hooks/use-resource-limits";
 import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
 
 import { DeleteKodyRuleConfirmationModal } from "../../../_components/delete-confirmation-modal";
@@ -84,7 +85,9 @@ export const KodyRuleItem = ({
         repositoryId,
     );
     const subscription = useSubscriptionStatus();
-    const isFreePlan = subscription.status === "free";
+    // Not just free_byok: every license the API calls invalid is capped
+    // the same way (see useIsResourceLimited).
+    const isFreePlan = useIsResourceLimited();
 
     const isInherited = !!rule.inherited;
     const isExcluded = isInherited && !!rule.excluded;

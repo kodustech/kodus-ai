@@ -14,7 +14,13 @@ export const useMCPPluginsLimit = (installedCount: number) => {
     return useMemo(() => {
         const total = installedCount;
 
-        if (!subscription.valid)
+        // An invalid license (no license row, canceled, expired, failed
+        // payment) is capped by the backend exactly like Free — see
+        // `shouldLimitResources`. Reporting `limited: false` here hid the
+        // locked banner from precisely those orgs, so plugins were skipped
+        // during reviews with nothing on screen saying so. `inactive` is
+        // billing not answering, not a verdict, so it stays uncapped.
+        if (!subscription.valid && subscription.status === "inactive")
             return {
                 total,
                 canInstallMore: false,
@@ -24,6 +30,7 @@ export const useMCPPluginsLimit = (installedCount: number) => {
             };
 
         if (
+            !subscription.valid ||
             subscription.status === "free" ||
             subscription.status === "self-hosted"
         )

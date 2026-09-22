@@ -2,6 +2,7 @@
 
 import { Popover, PopoverContent } from "@components/ui/popover";
 import { captureGateHit } from "src/core/utils/gate-hit";
+import { useCapOwnerLabel } from "src/features/ee/subscription/_hooks/use-resource-limits";
 import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
 
 import { GateCtaLink } from "./gate-cta-link";
@@ -24,6 +25,7 @@ export const KodyRulesLimitPopover = ({
     children: React.ReactNode;
 }) => {
     const subscription = useSubscriptionStatus();
+    const capOwner = useCapOwnerLabel();
 
     return (
         <Popover
@@ -45,7 +47,7 @@ export const KodyRulesLimitPopover = ({
                 {ruleTitle ? (
                     <p>
                         <span className="font-semibold">{ruleTitle}</span> is
-                        saved, but Kody does not apply it: the Free plan runs{" "}
+                        saved, but Kody does not apply it: {capOwner} runs{" "}
                         <span className="text-primary-light font-semibold">
                             {limit} active rules
                         </span>{" "}
@@ -53,7 +55,7 @@ export const KodyRulesLimitPopover = ({
                     </p>
                 ) : (
                     <p>
-                        You've hit the Free plan cap of{" "}
+                        You've hit the cap of {capOwner}:{" "}
                         <span className="text-primary-light font-semibold">
                             {limit} Kody Rules
                         </span>

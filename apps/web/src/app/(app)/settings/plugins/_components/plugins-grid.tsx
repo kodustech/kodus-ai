@@ -19,6 +19,7 @@ import { CheckIcon, ImageOff, LockIcon } from "lucide-react";
 import type { AwaitedReturnType } from "src/core/types";
 import { cn } from "src/core/utils/components";
 import { captureGateHit } from "src/core/utils/gate-hit";
+import { useCapOwnerLabel } from "src/features/ee/subscription/_hooks/use-resource-limits";
 import {
     computeLockedPluginIds,
     countInstalledPlugins,
@@ -39,6 +40,7 @@ export const PluginsGrid = ({
     // they fall outside the runnable set computed from that list.
     const installedCount = countInstalledPlugins(plugins);
     const { limited, limit, plan } = useMCPPluginsLimit(installedCount);
+    const capOwner = useCapOwnerLabel();
 
     const lockedIds = useMemo(
         () =>
@@ -96,8 +98,8 @@ export const PluginsGrid = ({
                                 `${lockedIds.size} of your plugins ${lockedIds.size === 1 ? "is" : "are"} locked`}
                         </span>
                         <span className="text-text-secondary text-sm">
-                            The Free plan runs {limit} plugins at a time, so
-                            Kody skips{" "}
+                            {capOwner[0].toUpperCase() + capOwner.slice(1)} runs{" "}
+                            {limit} plugins at a time, so Kody skips{" "}
                             {lockedIds.size === 1 ? "this one" : "these"} during
                             every review. Teams runs them all, plus unlimited
                             Kody Rules and the Cockpit.

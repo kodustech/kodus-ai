@@ -2,6 +2,7 @@
 
 import { Popover, PopoverContent } from "@components/ui/popover";
 import { captureGateHit } from "src/core/utils/gate-hit";
+import { useCapOwnerLabel } from "src/features/ee/subscription/_hooks/use-resource-limits";
 import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
 
 import { GateCtaLink } from "./gate-cta-link";
@@ -25,6 +26,7 @@ export const MCPPluginsLimitPopover = ({
     children: React.ReactNode;
 }) => {
     const subscription = useSubscriptionStatus();
+    const capOwner = useCapOwnerLabel();
     const runningLabel = running.slice(0, 3).join(", ");
 
     return (
@@ -48,10 +50,10 @@ export const MCPPluginsLimitPopover = ({
                     {pluginName ? (
                         <>
                             <span className="font-semibold">{pluginName}</span>{" "}
-                            would stay locked: the Free plan runs{" "}
+                            would stay locked: {capOwner} runs{" "}
                         </>
                     ) : (
-                        <>This plugin would stay locked — the Free plan runs </>
+                        <>This plugin would stay locked — {capOwner} runs </>
                     )}
                     <span className="text-primary-light font-semibold">
                         {limit} plugin{limit === 1 ? "" : "s"}
