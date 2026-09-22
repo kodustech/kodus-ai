@@ -237,10 +237,10 @@ jobs:
                   # branch's only VM. Cheaper to refuse than to reconcile wrong.
                   # The usage text is the probe; its exit status is checked apart
                   # from its content so a runo that fails to start is reported as
-                  # that, not as "lacks --profile".
-                  if ! usage=$($RUNO help 2>&1); then
-                    printf '%s\n' "$usage" | tail -20
-                    echo "::error::runo at RUNO_REF=$RUNO_REF failed to run — see its output above"
+                  # that, not as "lacks --profile". Its output stays out of this
+                  # public log on purpose (same rule as the status report below).
+                  if ! usage=$($RUNO --help 2>&1); then
+                    echo "::error::runo at RUNO_REF=$RUNO_REF failed to run (exit $?); reproduce locally with: bun bin/runo.ts --help"
                     exit 1
                   fi
                   case "$usage" in
