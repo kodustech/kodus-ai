@@ -16,7 +16,7 @@ place you can query:
 | Contract tests, BYOK live | `contract-tests.yml` → GitHub check + Discord |
 | E2E (self-hosted matrix, cloud, cloud-aws, health report) | scoreboard in step summary + Discord |
 | Evals (nightly recall, Friday tier-0, wiring smoke, model benchmark) | job summary + artifact + Discord, hand-kept ledger in `evals/results` |
-| Prod errors | Sentry, PostHog error tracking, weekly kodus-insights digest |
+| Prod errors | HTTP error rate (own metrics mirror), BetterStack Uptime, weekly kodus-insights digest |
 | 👎 on suggestions | BigQuery mirror of prod, weekly kodus-insights buckets |
 | Review latency and cost | Langfuse |
 
@@ -35,7 +35,7 @@ flowchart LR
     A[.github/actions/report-signal]
   end
   subgraph kodus-quality repo
-    P[nightly pull job] -->|Sentry, PostHog, 👎, Langfuse| T
+    P[nightly pull job] -->|error rate, BetterStack, 👎, Langfuse| T
     D[daily digest] --> Discord
     U[dashboard app]
   end
@@ -48,7 +48,7 @@ Rules that keep it simple:
 
 - **Push, not pull, for CI.** A workflow writes its own row at the end. Nothing reads the
   GitHub API to reconstruct results.
-- **Pull only for what has no workflow**: Sentry, PostHog, 👎, Langfuse. One nightly job.
+- **Pull only for what has no workflow**: error rate, BetterStack, 👎, Langfuse. One nightly job.
 - **One row = one signal at one instant.** The dashboard never computes a status; it shows
   the one the producer wrote.
 - **Producers live in kodus-ai. Everything else lives in a new repo `kodustech/kodus-quality`**
@@ -92,10 +92,9 @@ e2e.selfhosted.matrix            value = gating_count, meta.advisory_count, meta
 e2e.cloud | e2e.cloud_aws | e2e.health
 evals.wiring                     evals.nightly.recall (ratio)  evals.nightly.precision
 evals.nightly.cost (usd)         evals.tier0.<model>           evals.benchmark.<model>.f1
-prod.sentry.<app>.new_issues     prod.sentry.<app>.unresolved  (count, 24h window)
-prod.posthog.<app>.errors        (count, 24h)
+prod.http.error_rate (pct)       prod.betterstack.monitors_down (count)
 feedback.thumbs_down.count       feedback.thumbs_down.rate (ratio, 24h)   meta.top_rules
-review.langfuse.latency_p95 (ms) review.langfuse.cost_per_review (usd)
+review.langfuse.<agent>.latency_p95 (ms)  review.langfuse.<agent>.cost_per_review (usd)
 ```
 
 Adding a signal = one new `name` and one call to the action. No schema change.
@@ -164,21 +163,28 @@ Start with the nightly and the matrix: they already hold a number and a verdict.
 
 - pnpm workspace, Node 22, TypeScript. Packages: `pull/`, `digest/`, `dashboard/`.
 - `bq` client: `@google-cloud/bigquery`, auth via WIF in Actions and via the reader key locally.
-- Secrets it needs: `SENTRY_AUTH_TOKEN`, `POSTHOG_API_KEY`, `LANGFUSE_PUBLIC_KEY`/`SECRET_KEY`,
+- Secrets it needs: `BETTERSTACK_API_TOKEN`, `LANGFUSE_PUBLIC_KEY`/`SECRET_KEY`,
   `DISCORD_WEBHOOK_QUALITY`. Listed in the README; the human adds them once.
 
 ### T5. Pull job — kodus-quality, nightly 05:00 UTC
 
 One workflow, one row per signal per night, all writing through the same insert helper:
 
-- **Sentry**: for each project (api, worker, webhooks, web): issues first seen in the last 24h
-  (`new_issues`), unresolved total (`unresolved`). `meta.top` = 5 issue titles + links.
-  Status: `red` if `new_issues` above a per-app threshold in `config.json`, else `green`.
-- **PostHog**: error tracking issues in the last 24h per app. Same shape.
+- **Prod HTTP error rate**: replicate the app's own error-rate monitor
+  (`error-rate-monitor.service.ts`) from the BigQuery prod mirror once Airbyte
+  syncs the `observability_metrics` collection: `SUM(http_errors_total)` /
+  `SUM(http_request_total)` over 24h. `meta.by_component` breaks it down.
+  Status by rate threshold (mirrors the app's 10%).
+- **BetterStack**: monitors currently down in Uptime (`prod.betterstack.monitors_down`).
+  `meta.top` = monitor names + urls. The nightly series is the history.
 - **👎**: query the BigQuery prod mirror (the SEOCopilot dataset already used by the weekly
   buckets pipeline): suggestions posted vs thumbs-down in the last 24h. `meta.top_rules` = the
   T0-regex detectors and rules with most 👎. Status by rate threshold.
-- **Langfuse**: `observations` for the last 24h: review latency p50/p95, cost per review.
+  Window on `suggestionCreatedAt` (`suggestions_mv.parsed_suggestion_ts` is all NULL).
+- **Langfuse**: Metrics API v1, trace-level, one call dimensioned by trace name,
+  filtered in code to the two review agents (`kodus-generalist-review-agent`,
+  `kodus-rules-review-agent`): latency p95 and cost per review per agent.
+  v1 is marked for removal in November 2026; v2 only accepts the observations view.
 - Verify: run once by `workflow_dispatch`; `SELECT name, status, value FROM quality.signals_daily WHERE DATE(ts)=CURRENT_DATE()` lists every name above.
 
 ### T6. Dashboard — kodus-quality, Next.js, deployed on Railway
@@ -227,5 +233,5 @@ each. T7 is one. Total: roughly 20 agent sessions and 30 human minutes.
 - Never write to BigQuery datasets other than `quality`.
 - Never store a JSON key in a repo, an `.env` committed to git, or a workflow file.
 - Never query prod Postgres or Mongo directly for a signal: everything comes from the mirror,
-  Sentry, PostHog, Langfuse or a workflow's own output.
+  BetterStack, Langfuse or a workflow's own output.
 - A PR touching `evals/**` follows `evals/AGENTS.md` and carries eval evidence.
