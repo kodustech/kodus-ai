@@ -8,6 +8,7 @@ import {
     ajvValidator,
     ensureValidatingSchema,
     extractJsonFromText,
+    extractLastJsonObjectWith,
     normalizeEnvelope,
     readOutput,
     repairAndValidate,
@@ -790,5 +791,68 @@ describe('normalizeEnvelope (the SHAPE layer — #1786)', () => {
             });
             expect(spy).not.toHaveBeenCalled();
         });
+    });
+});
+
+// The verdict parser's extractor (#1937): unlike extractJsonFromText, it walks
+// to the END of the text, so a quoted code block or an example object before the
+// answer cannot be mistaken for it.
+describe('extractLastJsonObjectWith', () => {
+    it('returns the last object carrying the key', () => {
+        expect(
+            extractLastJsonObjectWith(
+                'example {"keep": true, "r": 1} verdict {"keep": false, "r": 2}',
+                ['keep'],
+            ),
+        ).toEqual({ keep: false, r: 2 });
+    });
+
+    it('skips a fenced code block that is not JSON', () => {
+        expect(
+            extractLastJsonObjectWith(
+                '```ts\nconst o = { keep: true, n: 1 };\n```\n{"keep": false}',
+                ['keep'],
+            ),
+        ).toEqual({ keep: false });
+    });
+
+    it('descends into a wrapper to find the key', () => {
+        expect(
+            extractLastJsonObjectWith('{"result": {"keep": false}}', ['keep']),
+        ).toEqual({ keep: false });
+    });
+
+    it('matches an alias, convention-insensitively', () => {
+        expect(
+            extractLastJsonObjectWith('{"should_keep": false}', ['shouldKeep']),
+        ).toEqual({ should_keep: false });
+    });
+
+    it('survives an unbalanced object before the answer', () => {
+        expect(
+            extractLastJsonObjectWith('oops {"a": 1 \n{"keep": false}', ['keep']),
+        ).toEqual({ keep: false });
+    });
+
+    it('tolerates a trailing comma', () => {
+        expect(extractLastJsonObjectWith('{"keep": false,}', ['keep'])).toEqual({
+            keep: false,
+        });
+    });
+
+    it('returns null when nothing carries the key', () => {
+        expect(extractLastJsonObjectWith('{"other": 1}', ['keep'])).toBeNull();
+        expect(extractLastJsonObjectWith('just prose', ['keep'])).toBeNull();
+        expect(extractLastJsonObjectWith('', ['keep'])).toBeNull();
+        expect(extractLastJsonObjectWith(null as any, ['keep'])).toBeNull();
+    });
+
+    it('does not read a keep nested inside the matched object', () => {
+        expect(
+            extractLastJsonObjectWith(
+                '{"keep": false, "cited": {"keep": true}}',
+                ['keep'],
+            ),
+        ).toEqual({ keep: false, cited: { keep: true } });
     });
 });
