@@ -26,6 +26,15 @@ services:
         environment:
             - API_MCP_MANAGER_REDIRECT_URI=${RUNO_PUBLIC_URL}/setup/mcp/oauth
             - API_MCP_MANAGER_BACKEND_URL=http://kodus-api:3001
+        deploy:
+            resources:
+                limits:
+                    # its dev entrypoint runs the seeds under ts-node before
+                    # listening; at the 1G dev limit pnpm gets SIGKILLed on a
+                    # cold preview and the container crash-loops (16 restarts
+                    # seen on 2026-09-22), which is also what the readiness
+                    # probe on :3101 was waiting for.
+                    memory: 2G
 
     web:
         environment:

@@ -28,7 +28,12 @@ case "$PROFILE" in
     *) echo "unknown profile: $PROFILE (cloud | self-hosted)" >&2; exit 2 ;;
 esac
 
-runo() { $RUNO "$@" --branch "$HEAD_REF" --profile "$PROFILE"; }
+# runo's own flags go BEFORE `--`; everything after it is the remote command
+runo() {
+    local own=()
+    while [ $# -gt 0 ] && [ "$1" != "--" ]; do own+=("$1"); shift; done
+    $RUNO "${own[@]}" --branch "$HEAD_REF" --profile "$PROFILE" "$@"
+}
 compose="docker compose -f docker-compose.dev.yml -f docker-compose.preview.yml -f $OVERLAY --profile mcp"
 
 {
@@ -50,8 +55,9 @@ compose="docker compose -f docker-compose.dev.yml -f docker-compose.preview.yml 
     runo push --restart --recipe "$RECIPE"
     # Runo's data step retries automatically. Keep optional service readiness
     # outside it so one failed MCP/billing probe does not hide the real
-    # container logs for 15min.
-    runo exec -- "timeout 300 bash -c 'until $READY; do sleep 3; done'"
+    # container logs for 15min. A cold MCP manager runs its seeds under
+    # ts-node before it listens, which takes longer than the old 5min.
+    runo exec -- "timeout 900 bash -c 'until $READY; do sleep 5; done'"
     echo "::endgroup::"
 } >&2
 
