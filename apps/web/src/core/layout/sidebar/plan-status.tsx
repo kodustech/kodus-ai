@@ -1,8 +1,11 @@
 "use client";
 
-/* Hallmark · component: plan status (sidebar foot) · genre: modern-minimal · theme: system-tokens
- * states: trial · trial-expiring · trial-exhausted · free/canceled · payment-failed · plan identity · rail glyph
- * contrast: pass (40–41) · tokens: pass (48) · honest: pass (46, values from billing only)
+/* Hallmark · component: plan status (sidebar foot) · genre: modern-minimal · theme: system-tokens (card-lv*, text-*, primary · secondary · info)
+ * redesign: a muted text link for settled plans → one panel for every state, a tier chip (tone per tier) + one fact from billing
+ * states: default · hover · focus-visible · active · error (payment failed, canceled, license expired) · warning (trial/license ending) · unknown (billing unreachable) · rail glyph
+ * plans: trial (active · expiring · exhausted) · free · teams · enterprise · community self-hosted · enterprise self-hosted · canceled · expired · unconfirmed · payment failed
+ * contrast: pass (40–41) · tokens: pass (48) · honest: pass (46 — seats, days and reviews come from billing; nothing invented)
+ * pre-emit critique: P4 H5 E4 S5 R4 V4
  */
 import { Link } from "@components/ui/link";
 import {
@@ -12,10 +15,13 @@ import {
 } from "@components/ui/tooltip";
 import {
     AlertTriangleIcon,
-    CalendarClockIcon,
-    CreditCardIcon,
+    ArrowRightIcon,
+    Building2Icon,
+    CirclePauseIcon,
+    CloudOffIcon,
     ServerIcon,
     SparklesIcon,
+    UsersIcon,
 } from "lucide-react";
 import { cn } from "src/core/utils/components";
 import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
@@ -25,13 +31,61 @@ const CONTROL_STATES =
     "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring active:bg-card-lv3 link-focused:no-underline";
 
 const HREF = "/settings/subscription";
+// Out of free trial reviews, a plan doesn't bring them back — the trial runs
+// on until it ends. A key of their own does, unlimited on any plan (the same
+// way out the exhausted banner offers).
+const BYOK_HREF = "/byok";
+
+// One tone per tier, from the system's tokens: the chip carries the tier, the
+// panel's border echoes it. Trial takes the brand orange, Teams lavender,
+// Enterprise blue (the rose pair read as an error beside Payment failed).
+// Free and Community stay neutral — they are the floor, not a tier to show
+// off.
+type Tone = "neutral" | "primary" | "secondary" | "info" | "danger";
+
+const CHIP_TONES: Record<Tone, string> = {
+    neutral: "bg-card-lv3 text-text-secondary",
+    primary: "bg-primary-dark text-primary-light",
+    secondary: "bg-secondary-dark text-secondary-light",
+    info: "bg-info/15 text-info",
+    danger: "bg-danger/15 text-danger",
+};
+
+const PANEL_TONES: Record<Tone, string> = {
+    neutral: "border-card-lv3/60",
+    primary: "border-primary-light/25",
+    secondary: "border-secondary-light/25",
+    info: "border-info/30",
+    danger: "border-danger/40 bg-danger/10 hover:bg-danger/15",
+};
+
+const BAR_TONES: Record<Tone, string> = {
+    neutral: "bg-text-secondary",
+    primary: "bg-primary-light",
+    secondary: "bg-secondary-light",
+    info: "bg-info",
+    danger: "bg-danger",
+};
+
+const daysLabel = (days: number) =>
+    days <= 0 ? "Ends today" : `${days} day${days === 1 ? "" : "s"} left`;
+
+type Seats = { used: number; total: number };
+
+const seatsFrom = (
+    total: number | undefined,
+    users: Array<unknown> | undefined,
+): Seats | undefined =>
+    typeof total === "number" && total > 0
+        ? { used: users?.length ?? 0, total }
+        : undefined;
 
 /**
- * The plan, at the foot of the sidebar navigation. The top bar squeezes it
- * into one pill with the trial detail behind a hover; the rail has the room
- * to say it outright — days left and free reviews — and a plan-identity
- * label like "Self-hosted Enterprise" no longer has to fit beside the logo.
- * Collapsed, only the states that ask for action keep a glyph.
+ * The plan, at the foot of the sidebar: which tier the organization is on,
+ * and the one fact about it worth a glance — days and free reviews left in a
+ * trial, seats in use on a paid plan, the license clock on self-hosted
+ * Enterprise, or what to do when nothing is active. Collapsed, a tile in the
+ * tier's tone keeps it, with the rest in a tooltip.
  */
 export const SidebarPlanStatus = ({ collapsed }: { collapsed: boolean }) => {
     const subscription = useSubscriptionStatus();
@@ -46,7 +100,6 @@ export const SidebarPlanStatus = ({ collapsed }: { collapsed: boolean }) => {
             const daysLeft = Math.max(trialDaysLeft, 0);
             const expiring = subscription.status === "trial-expiring";
             const exhausted = subscription.status === "trial-exhausted";
-            const daysLabel = `${daysLeft}d left`;
             const reviewsLabel = byok
                 ? "BYOK · unlimited reviews"
                 : exhausted
@@ -54,26 +107,6 @@ export const SidebarPlanStatus = ({ collapsed }: { collapsed: boolean }) => {
                   : typeof remaining === "number"
                     ? `${remaining}${typeof total === "number" ? ` of ${total}` : ""} free reviews left`
                     : undefined;
-
-            if (collapsed) {
-                return (
-                    <RailStatus
-                        label={`Team trial · ${daysLabel}${reviewsLabel ? ` · ${reviewsLabel}` : ""}`}>
-                        <span
-                            className={cn(
-                                "text-[11px] font-semibold tabular-nums",
-                                exhausted
-                                    ? "text-alert"
-                                    : expiring
-                                      ? "text-warning"
-                                      : "text-text-primary",
-                            )}>
-                            {daysLeft}d
-                        </span>
-                    </RailStatus>
-                );
-            }
-
             // The bar drains as reviews are spent, matching "N left": a bar
             // of what was used read as nearly full when almost none remained.
             const remainingShare =
@@ -81,175 +114,330 @@ export const SidebarPlanStatus = ({ collapsed }: { collapsed: boolean }) => {
                 typeof remaining === "number" &&
                 typeof total === "number" &&
                 total > 0
-                    ? Math.min(1, Math.max(0, remaining / total))
+                    ? remaining / total
                     : undefined;
 
-            return (
-                <Card>
-                    <span className="flex items-center gap-2">
-                        <CalendarClockIcon className="text-text-tertiary size-3.5 shrink-0" />
-                        <span className="flex-1 text-xs font-semibold">
-                            Team trial
-                        </span>
+            if (collapsed) {
+                return (
+                    <RailStatus
+                        tone="primary"
+                        href={exhausted ? BYOK_HREF : HREF}
+                        label={`Trial · ${daysLabel(daysLeft)}${reviewsLabel ? ` · ${reviewsLabel}` : ""}${exhausted ? " · connect your AI key" : ""}`}>
                         <span
                             className={cn(
-                                "text-xs tabular-nums",
-                                expiring
-                                    ? "text-warning font-semibold"
-                                    : "text-text-secondary",
+                                "text-[11px] font-semibold tabular-nums",
+                                exhausted
+                                    ? "text-alert"
+                                    : expiring && "text-warning",
                             )}>
-                            {daysLabel}
+                            {daysLeft}d
                         </span>
-                    </span>
-                    {remainingShare !== undefined && (
-                        <span
-                            className="bg-card-lv3 block h-1 overflow-hidden rounded-full"
-                            aria-hidden>
-                            <span
-                                className={cn(
-                                    "block h-full rounded-full",
-                                    exhausted ? "bg-alert" : "bg-primary-light",
-                                )}
-                                style={{ width: `${remainingShare * 100}%` }}
-                            />
-                        </span>
+                    </RailStatus>
+                );
+            }
+
+            return (
+                <PlanPanel
+                    tone="primary"
+                    href={exhausted ? BYOK_HREF : HREF}
+                    chip="Trial"
+                    meta={daysLabel(daysLeft)}
+                    metaClassName={
+                        expiring ? "text-warning font-semibold" : undefined
+                    }>
+                    {/* Used up, the empty track only restates the line below. */}
+                    {remainingShare !== undefined && !exhausted && (
+                        <Meter share={remainingShare} tone="primary" />
                     )}
                     {reviewsLabel && (
-                        <span
+                        <Note
                             className={cn(
-                                "text-[11px]",
-                                byok
-                                    ? "text-success"
-                                    : exhausted
-                                      ? "text-alert font-medium"
-                                      : "text-text-tertiary",
+                                byok && "text-success",
+                                exhausted && "text-alert font-medium",
                             )}>
                             {reviewsLabel}
-                        </span>
+                        </Note>
                     )}
-                </Card>
+                    {exhausted ? (
+                        <Action>Connect your AI key</Action>
+                    ) : (
+                        expiring && <Action>Choose a plan</Action>
+                    )}
+                </PlanPanel>
             );
         }
 
         case "free":
-        case "canceled":
             return collapsed ? (
-                <RailStatus label="Upgrade subscription">
+                <RailStatus tone="neutral" label="Free plan · upgrade">
                     <SparklesIcon className="text-primary-light size-4" />
                 </RailStatus>
             ) : (
-                <Card className="border-primary-light/30 bg-primary-light/10 hover:bg-primary-light/15">
-                    <span className="text-primary-light flex items-center gap-2 text-xs font-semibold">
-                        <SparklesIcon className="size-3.5 shrink-0" />
-                        Upgrade subscription
-                    </span>
-                </Card>
+                <PlanPanel tone="neutral" chip="Free" meta="BYOK">
+                    <Action>Upgrade plan</Action>
+                </PlanPanel>
+            );
+
+        // Not Free: billing keeps a canceled license invalid (only a trial
+        // that ends is moved to Free, and billing never sets "expired"), and
+        // the review gate refuses an invalid license — so reviews stop.
+        case "canceled":
+        case "expired": {
+            const chip =
+                subscription.status === "canceled" ? "Canceled" : "Expired";
+
+            return collapsed ? (
+                <RailStatus
+                    tone="danger"
+                    label={`${chip} · reviews paused · choose a plan`}>
+                    <CirclePauseIcon className="size-4" />
+                </RailStatus>
+            ) : (
+                <PlanPanel tone="danger" chip={chip}>
+                    <Note className="text-text-secondary">
+                        Reviews are paused.
+                    </Note>
+                    <Action>Choose a plan</Action>
+                </PlanPanel>
+            );
+        }
+
+        // What the layout falls back to when billing didn't answer: the plan
+        // is unknown, not gone, so no "choose a plan" (the banner says it).
+        case "inactive":
+            return collapsed ? (
+                <RailStatus
+                    tone="neutral"
+                    label="Plan not confirmed · billing didn't answer">
+                    <CloudOffIcon className="size-4" />
+                </RailStatus>
+            ) : (
+                <PlanPanel tone="neutral" chip="Unconfirmed">
+                    <Note>Billing didn&apos;t answer.</Note>
+                </PlanPanel>
             );
 
         case "payment-failed":
             return collapsed ? (
-                <RailStatus label="Payment failed · update billing">
-                    <AlertTriangleIcon className="text-danger size-4" />
+                <RailStatus
+                    tone="danger"
+                    label="Payment failed · update billing">
+                    <AlertTriangleIcon className="size-4" />
                 </RailStatus>
             ) : (
-                // Red like the top bar's badge: reviews stop until it's fixed.
-                <Card className="border-danger/40 bg-danger/10 hover:bg-danger/15">
-                    <span className="text-danger flex items-center gap-2 text-xs font-semibold">
-                        <AlertTriangleIcon className="size-3.5 shrink-0" />
-                        Payment failed
-                    </span>
-                    <span className="text-text-secondary text-[11px]">
+                // Red like the banner: reviews stop until it's fixed.
+                <PlanPanel tone="danger" chip="Payment failed">
+                    <Note className="text-text-secondary">
                         Update billing to keep reviews running.
-                    </span>
-                </Card>
+                    </Note>
+                </PlanPanel>
             );
 
-        // Plan identity only: nothing to act on, so the rail leaves it out.
-        case "active":
-            return collapsed ? null : (
-                <PlanIdentity
-                    icon={CreditCardIcon}
-                    label={
-                        subscription.planType.startsWith("enterprise")
-                            ? "Enterprise plan"
-                            : "Teams plan"
-                    }
-                />
+        case "active": {
+            const enterprise = subscription.planType.startsWith("enterprise");
+            const tier = enterprise ? "Enterprise" : "Teams";
+            const tone = enterprise ? "info" : "secondary";
+            const seats = seatsFrom(
+                subscription.numberOfLicenses,
+                subscription.usersWithAssignedLicense,
             );
+            const billing = subscription.byok ? "BYOK" : "Managed";
+
+            return collapsed ? (
+                <RailStatus
+                    tone={tone}
+                    label={`${tier} plan · ${billing}${seats ? ` · ${seats.used} of ${seats.total} seats in use` : ""}`}>
+                    {enterprise ? (
+                        <Building2Icon className="size-4" />
+                    ) : (
+                        <UsersIcon className="size-4" />
+                    )}
+                </RailStatus>
+            ) : (
+                <PlanPanel tone={tone} chip={tier} meta={billing}>
+                    {seats && <SeatsLine seats={seats} tone={tone} />}
+                </PlanPanel>
+            );
+        }
 
         case "self-hosted":
-            return collapsed ? null : (
-                <PlanIdentity icon={ServerIcon} label="Self-hosted" />
-            );
-
-        case "licensed-self-hosted":
-            return collapsed ? null : (
-                <PlanIdentity
-                    icon={ServerIcon}
-                    label="Self-hosted Enterprise"
-                    detail={
-                        typeof subscription.daysRemaining === "number"
-                            ? `${Math.max(subscription.daysRemaining, 0)}d left`
-                            : undefined
-                    }
+            return collapsed ? (
+                <RailStatus tone="neutral" label="Community · self-hosted">
+                    <ServerIcon className="size-4" />
+                </RailStatus>
+            ) : (
+                <PlanPanel
+                    tone="neutral"
+                    chip="Community"
+                    meta={<SelfHostedMeta />}
                 />
             );
+
+        case "licensed-self-hosted": {
+            const seats = seatsFrom(
+                subscription.numberOfLicenses,
+                subscription.usersWithAssignedLicense,
+            );
+            const days = subscription.daysRemaining;
+            const licenseLabel =
+                typeof days !== "number"
+                    ? undefined
+                    : days <= 0
+                      ? "License expired"
+                      : `License · ${days} day${days === 1 ? "" : "s"} left`;
+            // A month out is when renewing needs someone's attention.
+            const licenseTone =
+                typeof days !== "number"
+                    ? undefined
+                    : days <= 0
+                      ? "text-danger font-medium"
+                      : days <= 30
+                        ? "text-warning font-medium"
+                        : undefined;
+
+            return collapsed ? (
+                <RailStatus
+                    tone={
+                        typeof days === "number" && days <= 0
+                            ? "danger"
+                            : "info"
+                    }
+                    label={`Enterprise · self-hosted${licenseLabel ? ` · ${licenseLabel}` : ""}`}>
+                    <ServerIcon className="size-4" />
+                </RailStatus>
+            ) : (
+                <PlanPanel
+                    tone="info"
+                    chip="Enterprise"
+                    meta={<SelfHostedMeta />}>
+                    {seats && <SeatsLine seats={seats} tone="info" />}
+                    {licenseLabel && (
+                        <Note className={licenseTone}>{licenseLabel}</Note>
+                    )}
+                </PlanPanel>
+            );
+        }
 
         default:
             return null;
     }
 };
 
-const Card = ({
-    className,
+const PlanPanel = ({
+    tone,
+    href = HREF,
+    chip,
+    meta,
+    metaClassName,
     children,
-}: React.PropsWithChildren<{ className?: string }>) => (
+}: React.PropsWithChildren<{
+    tone: Tone;
+    href?: string;
+    chip: string;
+    meta?: React.ReactNode;
+    metaClassName?: string;
+}>) => (
     <Link
-        href={HREF}
+        href={href}
         noHoverUnderline
         className={cn(
-            "border-card-lv3/60 hover:bg-card-lv2 text-text-primary flex w-full flex-col gap-1.5 rounded-lg border px-3 py-2.5 transition-colors",
+            "bg-card-lv2/40 hover:bg-card-lv2 text-text-primary flex w-full flex-col gap-2 rounded-lg border px-3 py-2.5 transition-colors",
             CONTROL_STATES,
-            className,
+            PANEL_TONES[tone],
         )}>
+        <span className="flex min-w-0 items-center gap-2">
+            <span
+                className={cn(
+                    "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide whitespace-nowrap uppercase",
+                    CHIP_TONES[tone],
+                )}>
+                {chip}
+            </span>
+            {meta && (
+                <span
+                    className={cn(
+                        "text-text-secondary ml-auto flex min-w-0 items-center gap-1 truncate text-xs tabular-nums",
+                        metaClassName,
+                    )}>
+                    {meta}
+                </span>
+            )}
+        </span>
         {children}
     </Link>
 );
 
-const PlanIdentity = ({
-    icon: Icon,
-    label,
-    detail,
+const SelfHostedMeta = () => (
+    <>
+        <ServerIcon className="size-3.5 shrink-0" aria-hidden />
+        Self-hosted
+    </>
+);
+
+const Meter = ({
+    share,
+    tone,
+    className,
 }: {
-    icon: React.ElementType;
-    label: string;
-    detail?: string;
+    share: number;
+    tone: Tone;
+    className?: string;
 }) => (
-    <Link
-        href={HREF}
-        noHoverUnderline
-        className={cn(
-            "text-text-tertiary hover:text-text-secondary flex w-full items-center gap-2 rounded-md px-2.5 py-1 text-xs transition-colors",
-            CONTROL_STATES,
-        )}>
-        <Icon className="size-3.5 shrink-0" />
-        <span className="flex-1 truncate">{label}</span>
-        {detail && <span className="tabular-nums">{detail}</span>}
-    </Link>
+    <span
+        className="bg-card-lv3 block h-1 overflow-hidden rounded-full"
+        aria-hidden>
+        <span
+            className={cn(
+                "block h-full rounded-full",
+                BAR_TONES[tone],
+                className,
+            )}
+            style={{ width: `${Math.min(1, Math.max(0, share)) * 100}%` }}
+        />
+    </span>
+);
+
+const SeatsLine = ({ seats, tone }: { seats: Seats; tone: Tone }) => (
+    <>
+        <Meter share={seats.used / seats.total} tone={tone} />
+        <Note>
+            {seats.used} of {seats.total} seats in use
+        </Note>
+    </>
+);
+
+const Note = ({
+    className,
+    children,
+}: React.PropsWithChildren<{ className?: string }>) => (
+    <span className={cn("text-text-tertiary text-[11px]", className)}>
+        {children}
+    </span>
+);
+
+// Reads as the panel's call to action; the whole panel is the link.
+const Action = ({ children }: React.PropsWithChildren) => (
+    <span className="text-primary-light flex items-center gap-1 text-xs font-medium">
+        {children}
+        <ArrowRightIcon className="size-3.5 shrink-0" aria-hidden />
+    </span>
 );
 
 const RailStatus = ({
+    tone,
+    href = HREF,
     label,
     children,
-}: React.PropsWithChildren<{ label: string }>) => (
+}: React.PropsWithChildren<{ tone: Tone; href?: string; label: string }>) => (
     <Tooltip delayDuration={500}>
         <TooltipTrigger asChild>
             <Link
-                href={HREF}
+                href={href}
                 noHoverUnderline
                 aria-label={label}
                 className={cn(
-                    "bg-card-lv2 hover:bg-card-lv3 flex size-9 items-center justify-center rounded-lg transition-colors",
+                    "flex size-9 items-center justify-center rounded-lg transition-[filter] hover:brightness-125",
+                    CHIP_TONES[tone],
                     CONTROL_STATES,
                 )}>
                 {children}

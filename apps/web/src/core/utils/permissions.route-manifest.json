@@ -56,6 +56,14 @@
     }
   },
   {
+    "route": "/dev/plan-status",
+    "expected": {
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
     "route": "/issues",
     "expected": {
       "billing_manager": "deny",

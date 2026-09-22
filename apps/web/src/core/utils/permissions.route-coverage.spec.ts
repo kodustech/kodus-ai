@@ -34,8 +34,12 @@ const ROUTELESS_RESOURCES = new Set<string>([
 
 // Routes that, by design, only the OWNER reaches (canAccessRoute early-returns
 // for owner). Anything not matched by resourceRoutes AND not listed here is a
-// bug. Empty today — add with a comment explaining the product decision.
-const OWNER_ONLY_ROUTES = new Set<string>([]);
+// bug. Add with a comment explaining the product decision.
+const OWNER_ONLY_ROUTES = new Set<string>([
+    // Dev-only review gallery of the sidebar's plan panel (404s in
+    // production builds); not a product page, so no role needs it.
+    "/dev/plan-status",
+]);
 
 function resourceMembers(): string[] {
     // String enum -> Object.keys returns the member names (All, TokenUsage, …)
