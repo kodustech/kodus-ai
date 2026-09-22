@@ -105,7 +105,7 @@ runs:
                 if (value !== null && Number.isNaN(value)) { console.error(`report-signal: value is not a number: ${process.env.IN_VALUE}`); process.exit(1); }
                 let meta = null;
                 if (process.env.IN_META.trim() !== "") {
-                  // A producer that interpolated an empty step output ends up with '{"total": }'.
+                  // A producer that interpolated an empty step output ends up with {"total": } (invalid).
                   // Telemetry must not fail the job: keep the raw text and warn.
                   try { meta = JSON.stringify(JSON.parse(process.env.IN_META)); }
                   catch { console.log(`::warning::report-signal: meta is not valid JSON, recorded as raw text`); meta = JSON.stringify({ raw_meta: process.env.IN_META }); }
