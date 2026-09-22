@@ -221,10 +221,13 @@ export const kodusModule: ProviderModule = {
     // Kodus is a billing wrapper, not a transport, so it must not invent one.
     // An unroutable id answers 'none': `capabilities()` already says the same
     // (NOT_ROUTABLE), and build() refuses it before anything reaches a wire.
-    structuredOutputPolicy(cfg: ProviderBuildConfig): StructuredOutputMode {
+    structuredOutputPolicy(
+        cfg: ProviderBuildConfig,
+        opts?: ProviderBuildOptions,
+    ): StructuredOutputMode {
         const up = upstreamFor(cfg.model);
         if (!up) return 'none';
-        return up.module.structuredOutputPolicy(asUpstream(cfg, up.ref));
+        return up.module.structuredOutputPolicy(asUpstream(cfg, up.ref), opts);
     },
 
     temperaturePolicy(cfg: ProviderBuildConfig): TemperaturePolicy {

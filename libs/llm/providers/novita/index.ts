@@ -89,7 +89,8 @@ export const novitaModule: ProviderModule = {
             // it always falls back to json_object (the removed
             // shouldEnableJsonSchema('novita', …) was a constant false).
             supportsStructuredOutputs:
-                novitaModule.structuredOutputPolicy(cfg) === 'json_schema',
+                novitaModule.structuredOutputPolicy(cfg, opts) ===
+                'json_schema',
         })(cfg.model);
     },
 

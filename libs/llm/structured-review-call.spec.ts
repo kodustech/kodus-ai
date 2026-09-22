@@ -464,6 +464,27 @@ describe('runStructuredReviewCall — json_object routes carry the contract (iss
         expect(systemOf(0)).toContain('groups');
     });
 
+    it('a downgraded slot whose build IGNORES the flag is NOT taxed', async () => {
+        // The mirror of the case above, and the one the first version of this
+        // change got wrong. `mayUseJsonSchema` false means we stop ASKING for a
+        // schema — but the native openai build takes no structured-output
+        // setting at all, so its body still carries `text.format: json_schema`.
+        // Treating "we stopped asking" as "the wire went bare" would append a
+        // contract to a prompt that already has the schema on the wire: the
+        // declaration-vs-wire drift this change exists to remove, and the prompt
+        // tax the route table forbids. The module decides, not the executor.
+        (mayUseJsonSchema as jest.Mock).mockReturnValueOnce(false);
+        mockGenerate.mockResolvedValueOnce(ok({ groups: [] }));
+
+        await runStructuredReviewCall({
+            ...base,
+            schema,
+            byokConfig: nativeOpenAi,
+        });
+
+        expect(systemOf(0)).toBe('sys');
+    });
+
     it('does not re-issue a byte-identical json_object call on a schema-ish 4xx', async () => {
         // The old code read `sentJsonSchema` — true whenever the SDK was ASKED
         // for a schema, even on a route that never sends one — and re-issued

@@ -22,16 +22,22 @@
  * request body are one expression and cannot drift.
  */
 
-import type { ProviderBuildConfig, ProviderModule } from './types';
+import type {
+    ProviderBuildConfig,
+    ProviderBuildOptions,
+    ProviderModule,
+} from './types';
 import type { StructuredOutputMode } from './reasoning-traits';
 
 export function resolveStructuredOutputPolicy(
     module: ProviderModule | undefined,
     cfg: ProviderBuildConfig,
+    opts?: ProviderBuildOptions,
 ): StructuredOutputMode {
     // The module's own answer — the only answer. It knows, per its id + this
-    // model + this baseURL, what response_format (if any) the request carries.
-    const declared = module?.structuredOutputPolicy?.(cfg);
+    // model + this baseURL + what the caller asked for, what response_format
+    // (if any) the request carries.
+    const declared = module?.structuredOutputPolicy?.(cfg, opts);
     if (declared) {
         return declared;
     }

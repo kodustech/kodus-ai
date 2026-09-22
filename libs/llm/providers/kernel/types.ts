@@ -284,8 +284,19 @@ export interface ProviderModule {
      *
      *  `build()` MUST derive its `supportsStructuredOutputs` from this same
      *  answer — one expression, so the declaration and the wire cannot drift
-     *  (they measurably did: see structured-output.contract.spec.ts). */
-    structuredOutputPolicy(cfg: ProviderBuildConfig): StructuredOutputMode;
+     *  (they measurably did: see structured-output.contract.spec.ts).
+     *
+     *  It takes the SAME `opts` as `build()` because the caller's
+     *  `structuredOutputs: false` is not a universal downgrade: the
+     *  openai-compatible builds AND it into their flag, while the native SDK
+     *  builds (openai, azure, gemini, vertex) ignore it and keep sending the
+     *  schema. A module that ignores the option must say so by ignoring it
+     *  here too — otherwise the executor believes the wire went bare when it
+     *  did not, and writes a contract into a prompt that already has one. */
+    structuredOutputPolicy(
+        cfg: ProviderBuildConfig,
+        opts?: ProviderBuildOptions,
+    ): StructuredOutputMode;
     /** The Vercel AI SDK `providerOptions` namespace key this provider's adapter
      *  listens on, per requested id (a module may serve several ids with
      *  DIFFERENT namespaces — the openai module serves `openai` → 'openai' and

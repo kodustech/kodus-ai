@@ -33,7 +33,10 @@ import {
 } from '@libs/llm/structured-output-repair';
 import { LLM_ENVELOPE_TAG } from '@libs/llm/log-tags';
 import { REGISTRY } from '@libs/llm/providers';
-import type { ProviderModule } from '@libs/llm/providers/kernel/types';
+import type {
+    ProviderBuildOptions,
+    ProviderModule,
+} from '@libs/llm/providers/kernel/types';
 import {
     planStructuredCall,
     NON_REASONING_TRAITS,
@@ -199,6 +202,8 @@ function askProviderModule<T>(
     slot: NormalizedModel | undefined,
     fallback: T,
     ask: (mod: ProviderModule, slot: NormalizedModel) => T,
+    what = 'provider lookup',
+    organizationId?: string,
 ): T {
     const provider = slot?.provider as string | undefined;
     if (!provider || !slot?.model || !REGISTRY.has(provider)) {
@@ -206,7 +211,19 @@ function askProviderModule<T>(
     }
     try {
         return ask(REGISTRY.get(provider), slot);
-    } catch {
+    } catch (err) {
+        // The fallback keeps the call alive, but it is NOT free: falling back to
+        // 'json_schema' means no contract is written into the prompt, so a route
+        // that only accepts json_object would go out bare — #1916 again, with
+        // nothing in the logs to explain it. Say so.
+        logger.warn({
+            message: `[structured-output] ${what} failed for ${provider}; using the default`,
+            context: 'askProviderModule',
+            error: err,
+            // The slot carries no org (it is a resolved MODEL, not a tenant),
+            // so the call's own organizationId is threaded in for traceability.
+            metadata: { provider, model: slot?.model, organizationId },
+        });
         return fallback;
     }
 }
@@ -219,12 +236,18 @@ function askProviderModule<T>(
  */
 function resolveStructuredPlan(
     slot: NormalizedModel | undefined,
+    organizationId?: string,
 ): StructuredCallPlan {
-    return askProviderModule(slot, 'as-is', (mod, s) =>
-        planStructuredCall(
-            mod.capabilities(s.model).structuredOutput,
-            mod.reasoningTraits?.(s as any) ?? NON_REASONING_TRAITS,
-        ),
+    return askProviderModule(
+        slot,
+        'as-is',
+        (mod, s) =>
+            planStructuredCall(
+                mod.capabilities(s.model).structuredOutput,
+                mod.reasoningTraits?.(s as any) ?? NON_REASONING_TRAITS,
+            ),
+        'structured-call plan',
+        organizationId,
     );
 }
 
@@ -240,8 +263,16 @@ function resolveStructuredPlan(
  */
 function resolveWireStructuredMode(
     slot: NormalizedModel | undefined,
+    opts: ProviderBuildOptions,
+    organizationId?: string,
 ): StructuredOutputMode {
-    return askProviderModule(slot, 'json_schema', resolveStructuredOutputPolicy);
+    return askProviderModule(
+        slot,
+        'json_schema',
+        (mod, resolved) => resolveStructuredOutputPolicy(mod, resolved, opts),
+        'wire-mode lookup',
+        organizationId,
+    );
 }
 
 /**
@@ -320,7 +351,7 @@ async function runReviewCall<T>(
     // JSON text so thinking may stay on (always-thinking Kimi k2.7-code/k3, GLM,
     // Claude Fable/Mythos); 'as-is' → normal. Text calls never plan.
     const structuredPlan: StructuredCallPlan = structuredMode
-        ? resolveStructuredPlan(mainSlot)
+        ? resolveStructuredPlan(mainSlot, organizationId)
         : 'as-is';
     // Either the per-model plan demands it (a disable-able model that would 400
     // on forced tool_choice + thinking), or the caller asked because the work
@@ -358,14 +389,20 @@ async function runReviewCall<T>(
     // keyword into the prompt the model invents a shape (silent mismatch) or the
     // provider rejects the request outright ("must contain the word 'json'"),
     // and dedup fails open and publishes every duplicate (issue #1916).
-    // A slot already proven to reject json_schema downgrades to the same route.
-    const declaredWireMode = structuredMode
-        ? resolveWireStructuredMode(mainSlot)
+    //
+    // `sentJsonSchema` goes to the MODULE rather than being applied out here: it
+    // is what the caller ASKED for, and only the builds that consume the option
+    // actually drop the schema when it is false. A native-SDK build (openai,
+    // azure, gemini, vertex) ignores it and keeps sending the schema, so
+    // downgrading here would tell the executor the wire went bare when it did
+    // not — the declaration-vs-wire drift this whole change exists to remove.
+    const wireStructuredMode: StructuredOutputMode = structuredMode
+        ? resolveWireStructuredMode(
+              mainSlot,
+              { structuredOutputs: sentJsonSchema },
+              organizationId,
+          )
         : 'json_schema';
-    const wireStructuredMode: StructuredOutputMode =
-        declaredWireMode === 'json_schema' && !sentJsonSchema
-            ? 'json_object'
-            : declaredWireMode;
     // The first attempt must carry the contract itself on that route — the
     // recovery ladder below only ever ran AFTER a failure, and for the 400 class
     // there is no failure it can catch.

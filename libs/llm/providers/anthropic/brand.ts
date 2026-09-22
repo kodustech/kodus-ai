@@ -115,8 +115,14 @@ export function anthropicBrandModule(spec: AnthropicBrandSpec): ProviderModule {
         // Intrinsic to the protocol → one source, the anthropic module: these
         // brands speak the Anthropic wire, which has no response_format — the
         // schema rides the protocol's own channel ('none').
-        structuredOutputPolicy(cfg: ProviderBuildConfig) {
-            return anthropicModule.structuredOutputPolicy(asCompatible(cfg));
+        structuredOutputPolicy(
+            cfg: ProviderBuildConfig,
+            opts?: ProviderBuildOptions,
+        ) {
+            return anthropicModule.structuredOutputPolicy(
+                asCompatible(cfg),
+                opts,
+            );
         },
         // The temperature policy is intrinsic to the protocol → one source, the
         // anthropic module (which knows the always-thinking brand ids pin it to 1).

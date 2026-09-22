@@ -133,6 +133,12 @@ const CASES: Row[] = [
         wire: 'json_schema',
     },
     {
+        id: 'google_gemini / gemini-3-pro-preview',
+        why: 'a native SDK that carries the schema in its own field, and whose build exposes no flag to read — so only the BODY can prove it',
+        slot: { provider: 'google_gemini', model: 'gemini-3-pro-preview' },
+        wire: 'json_schema',
+    },
+    {
         id: 'anthropic / claude-opus-5',
         why: "the Anthropic protocol has no response_format: the schema rides the protocol's own channel (output_config / a forced tool)",
         slot: { provider: 'anthropic', model: 'claude-opus-5' },
@@ -162,6 +168,30 @@ function promptText(body: any): string {
         body?.contents, // Gemini
         body?.systemInstruction, // Gemini system
     ]).toLowerCase();
+}
+
+/** Does this request BODY actually carry the schema, in whichever field its
+ *  protocol uses? Read from the body on purpose: `build()`'s
+ *  `supportsStructuredOutputs` flag does not exist on the native SDK builds, so
+ *  a guard that reads the flag scores those rows as "nothing to check" and a
+ *  regression that drops the schema passes green. */
+function schemaBearingChannel(body: any): boolean {
+    const props = (o: unknown) =>
+        !!o && typeof o === 'object' && Object.keys(o as object).length > 0;
+    return (
+        // OpenAI chat completions / openai-compatible
+        props(body?.response_format?.json_schema?.schema) ||
+        // OpenAI Responses API
+        props(body?.text?.format?.schema) ||
+        // Anthropic (its own structured channel) + forced tool-use
+        props(body?.output_config?.format?.schema) ||
+        (Array.isArray(body?.tools) &&
+            body.tools.some((t: any) =>
+                props(t?.input_schema?.properties ?? t?.parameters?.properties),
+            )) ||
+        // Gemini / Gemini-on-Vertex
+        props(body?.generationConfig?.responseSchema)
+    );
 }
 
 describe('every route declares what it puts on the wire', () => {
@@ -211,6 +241,10 @@ describe('#1916 — a json_object route carries the contract in the prompt', () 
 
             // The channel is what we said it is.
             expect(wire.body?.response_format).toEqual({ type: 'json_object' });
+            // ...and it carries NO schema of its own. This is the contrast that
+            // makes the assertion in the group below meaningful rather than
+            // vacuous: the same helper reads true there and false here.
+            expect(schemaBearingChannel(wire.body)).toBe(false);
 
             const text = promptText(wire.body);
             // (1) The keyword. Without it OpenAI-compatible providers reject the
@@ -241,6 +275,16 @@ describe('#1916 — a route that carries the schema is left alone', () => {
             // messages stay exactly as the caller wrote them.
             expect(text).not.toContain('conforms exactly to this json schema');
             expect(text).toContain(SYSTEM_NOTE.toLowerCase());
+
+            // And it really IS on the wire. Asserting only the absence of the
+            // prompt would score a body that carries NO schema at all as a pass
+            // — the #1916 shape exactly, and invisible for every module whose
+            // build exposes no `supportsStructuredOutputs` flag to read
+            // (gemini, azure, vertex-Gemini, the native openai id).
+            expect({
+                id: row.id,
+                carriesSchema: schemaBearingChannel(wire.body),
+            }).toEqual({ id: row.id, carriesSchema: true });
         },
         30_000,
     );

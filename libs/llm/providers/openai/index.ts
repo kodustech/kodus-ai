@@ -110,10 +110,20 @@ export const openaiModule: ProviderModule = {
     //                            generic proxy — goes out as bare `json_object`,
     //                            carrying neither the shape nor the keyword
     //                            (issue #1916).
-    structuredOutputPolicy(cfg: ProviderBuildConfig): StructuredOutputMode {
+    structuredOutputPolicy(
+        cfg: ProviderBuildConfig,
+        opts?: ProviderBuildOptions,
+    ): StructuredOutputMode {
+        // NATIVE openai: `build()` below passes no structured-output setting at
+        // all, so the SDK sends the schema whatever the caller asked for. The
+        // policy has to say the same, or the executor writes a JSON contract
+        // into a prompt whose body already carries the schema.
         if ((cfg.provider as string) !== 'openai_compatible') {
             return 'json_schema';
         }
+        // The compatible build ANDs the opt-out into its flag, so here it is
+        // part of the answer.
+        if (opts?.structuredOutputs === false) return 'json_object';
         return isNeverDowngradeModel(cfg.model) ||
             openAiCompatibleHonorsJsonSchema(cfg.baseURL)
             ? 'json_schema'
@@ -188,8 +198,8 @@ export const openaiModule: ProviderModule = {
                 // policy above so the declaration and this body are ONE
                 // expression.
                 supportsStructuredOutputs:
-                    opts?.structuredOutputs !== false &&
-                    openaiModule.structuredOutputPolicy(cfg) === 'json_schema',
+                    openaiModule.structuredOutputPolicy(cfg, opts) ===
+                    'json_schema',
             })(cfg.model);
         }
 

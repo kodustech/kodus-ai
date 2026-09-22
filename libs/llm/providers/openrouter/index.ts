@@ -69,7 +69,13 @@ export const openRouterModule: ProviderModule = {
     // bare `json_object` — no schema, no keyword — which is the route issue #1916
     // measured 166 reviews failing on. `build()` below reads THIS, so the
     // declaration and the request body are one expression.
-    structuredOutputPolicy(cfg: ProviderBuildConfig): StructuredOutputMode {
+    structuredOutputPolicy(
+        cfg: ProviderBuildConfig,
+        opts?: ProviderBuildOptions,
+    ): StructuredOutputMode {
+        // This build ANDs the caller's opt-out into its flag, so a caller that
+        // stops asking for a schema really does send bare json_object.
+        if (opts?.structuredOutputs === false) return 'json_object';
         return openRouterHonorsJsonSchema(cfg.model)
             ? 'json_schema'
             : 'json_object';
@@ -89,8 +95,8 @@ export const openRouterModule: ProviderModule = {
             baseURL: cfg.baseURL || 'https://openrouter.ai/api/v1',
             ...(opts?.fetch ? { fetch: opts.fetch } : {}),
             supportsStructuredOutputs:
-                opts?.structuredOutputs !== false &&
-                openRouterModule.structuredOutputPolicy(cfg) === 'json_schema',
+                openRouterModule.structuredOutputPolicy(cfg, opts) ===
+                'json_schema',
         })(cfg.model);
     },
 
