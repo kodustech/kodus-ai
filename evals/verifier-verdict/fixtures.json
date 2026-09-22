@@ -101,6 +101,26 @@
                 "keep": true,
                 "parseMode": "default-keep"
             }
+        },
+        {
+            "id": "derived-tool-refutation",
+            "model": "(derived expectation)",
+            "source": "no `expect`: exercises the path a captured corpus row takes. A healthy tool refutation — payload keep:false, no verdict in the text — must not be scored from the text (PR #1976 review).",
+            "finishReason": "stop",
+            "calledVerdictTool": true,
+            "toolPayload": {
+                "keep": false,
+                "rationale": "refuted through the verdict tool"
+            },
+            "text": ""
+        },
+        {
+            "id": "derived-text-quoted-boolean",
+            "model": "(derived expectation)",
+            "source": "no `expect`: a quoted boolean is a shape the parser does not read by design (see verifier.agent.contract.spec.ts row21..row23, it.failing). Must be reported, never gated as a loss.",
+            "finishReason": "stop",
+            "calledVerdictTool": false,
+            "text": "Refuted.\n{\"keep\": \"false\", \"rationale\": \"quoted boolean\"}"
         }
     ]
 }

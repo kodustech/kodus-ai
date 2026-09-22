@@ -119,11 +119,28 @@ function loadRows() {
     ).rows;
 }
 
-/** For a captured row with no declared expectation: what did the model write? */
-const KEEPRE = /^(keep|shouldkeep|should_keep|decision|verdict)$/i;
+/** What the model wrote as a verdict in its text, read the way the PARSER reads
+ *  it: a real JSON boolean. Matching a looser shape here would report a LOSS the
+ *  parser was never contracted to prevent — see writtenKeepLoose. */
 function writtenKeep(text) {
     const m = String(text || '').match(
-        /"(?:keep|shouldKeep|should_keep|decision|verdict)"\s*:\s*(false|true|"no"|"yes")/gi,
+        /"(?:keep|shouldKeep|should_keep|decision|verdict)"\s*:\s*(false|true)\b/gi,
+    );
+    if (!m || !m.length) return undefined;
+    return !m[m.length - 1].toLowerCase().includes('false');
+}
+
+/** The same read, but also accepting the quoted forms a model sometimes emits
+ *  (`"keep": "false"`, `"decision": "no"`). The parser does NOT read these: the
+ *  boolean-as-string / boolean-as-yes-no shapes are pinned as known degradations
+ *  in verifier.agent.contract.spec.ts (`row21`..`row23`, it.failing) for the
+ *  artifact path, and the text path inherits that contract deliberately. Counted
+ *  and reported, never gated — turning it into a failure here would claim a bug
+ *  the code does not have, and fixing it is a separate decision that would flip
+ *  those pinned rows. */
+function writtenKeepLoose(text) {
+    const m = String(text || '').match(
+        /"(?:keep|shouldKeep|should_keep|decision|verdict)"\s*:\s*(false|true|"no"|"yes"|"false"|"true")/gi,
     );
     if (!m || !m.length) return undefined;
     const last = m[m.length - 1].toLowerCase();
@@ -153,19 +170,34 @@ for (const row of rows) {
     } catch (e) {
         err = e.message;
     }
-    // A captured row's expectation IS its own text: a keep:false written down
-    // must come back as keep:false. When the model wrote NO verdict, fail-open is
-    // the correct answer (keep=true) — not an absent expectation, which would
-    // manufacture a failure for every run that legitimately decided nothing.
+    // A captured row's expectation is what the model DELIVERED, read in the order
+    // production reads it: the verdict tool's payload first, its final text only
+    // when the payload carries no boolean `keep`. Deriving a tool row's
+    // expectation from its text instead scored a healthy `{keep:false}` payload
+    // as `want=true, got=false` and reported FAIL against a pipeline that had
+    // behaved correctly. When the model delivered nothing, fail-open (keep=true)
+    // is the right answer, not an absent expectation.
+    const toolKeep =
+        row.calledVerdictTool && typeof row.toolPayload?.keep === 'boolean'
+            ? row.toolPayload.keep
+            : undefined;
     const written = row.expect ? undefined : writtenKeep(row.text);
+    const delivered = toolKeep ?? written;
     const want = row.expect ?? {
-        keep: written === undefined ? true : written,
-        parseMode: row.calledVerdictTool
-            ? 'tool'
-            : written === undefined
-              ? 'default-keep'
-              : 'text',
+        keep: delivered === undefined ? true : delivered,
+        parseMode:
+            toolKeep !== undefined
+                ? 'tool'
+                : written === undefined
+                  ? 'default-keep'
+                  : 'text',
     };
+    // Delivered in a shape the parser does not read (quoted boolean / yes-no).
+    const unreadShape =
+        !row.expect &&
+        toolKeep === undefined &&
+        written === undefined &&
+        writtenKeepLoose(row.text) !== undefined;
     const keepOk = err ? false : got.keep === want.keep;
     const modeOk = err ? false : got.parseMode === want.parseMode;
     // The loss this issue is about: the model wrote a refutation and the gate kept it.
@@ -173,6 +205,7 @@ for (const row of rows) {
     // Both extractors must agree — the bug lived in two places.
     const agree = err ? false : got.keep === gotGeneric.keep;
     results.push({
+        unreadShape,
         row,
         got,
         gotGeneric,
@@ -239,9 +272,16 @@ console.log(
             .join(' ') || '-'
     }`,
 );
+const unread = results.filter((r) => r.unreadShape);
 console.log(
     `refutations delivered ${results.filter((r) => r.want.keep === false).length} | LOST ${lost.length} | other failures ${failed.length} | parseMode drift ${modeDrift.length}`,
 );
+if (unread.length) {
+    // Reported, never gated: see writtenKeepLoose.
+    console.log(
+        `${unread.length} row(s) delivered a verdict as a quoted boolean or yes/no — a shape the parser does not read by design (verifier.agent.contract.spec.ts row21..row23, it.failing).`,
+    );
+}
 
 if (lost.length) {
     console.log(
