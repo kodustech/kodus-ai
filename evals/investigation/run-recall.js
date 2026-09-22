@@ -94,7 +94,7 @@ function parseArgs(argv) {
         } else if (key === 'concurrency') {
             out.concurrency = Number(value);
             if (consumesNext) i += 1;
-        } else if (key === 'list-models') {
+        } else if (key === 'list-models' || key === 'listModels') {
             out.listModels = true;
         } else if (key === 'gate') {
             out.gate = true;
@@ -326,6 +326,7 @@ async function main() {
     if (!NO_JUDGE) {
         try {
             await matchComment(
+                loadJudgeKey(),
                 'a null pointer when the map is read concurrently',
                 'possible NPE: the map is read without synchronisation',
             );
