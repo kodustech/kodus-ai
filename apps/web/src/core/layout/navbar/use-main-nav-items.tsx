@@ -6,6 +6,7 @@ import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import {
     BlocksIcon,
+    FolderGit2Icon,
     GaugeIcon,
     GitPullRequestIcon,
     LockIcon,
@@ -17,7 +18,7 @@ import { isCockpitTierAllowed } from "src/features/ee/cockpit/_helpers/tier-poli
 import { useSubscriptionContext } from "src/features/ee/subscription/_providers/subscription-context";
 
 export type MainNavItem = {
-    id: "reviews" | "cockpit" | "ai-providers" | "plugins";
+    id: "reviews" | "cockpit" | "repositories" | "ai-providers" | "plugins";
     label: string;
     icon: LucideIcon;
     href: string;
@@ -31,7 +32,7 @@ export type MainNavItem = {
 /**
  * The product's main destinations, with their permission and plan gates —
  * the first group of the sidebar. Settings pages are listed by the sidebar's
- * own groups (code review, workspace, organization).
+ * own groups (code review, organization).
  */
 export const useMainNavItems = () => {
     const subscription = useSubscriptionContext();
@@ -48,6 +49,10 @@ export const useMainNavItems = () => {
         Action.Read,
         ResourceType.PluginSettings,
     );
+    const canReadRepositories = usePermission(
+        Action.Read,
+        ResourceType.GitSettings,
+    );
     const canEditOrg = usePermission(
         Action.Update,
         ResourceType.OrganizationSettings,
@@ -55,7 +60,7 @@ export const useMainNavItems = () => {
     const credits = useKodusCreditBalance();
     const { data: isMCPAvailable = true } = useMCPAvailability(canReadPlugins);
 
-    // Four destinations. Reviews folds Pull Requests + CLI Reviews (tabs on
+    // Five destinations. Reviews folds Pull Requests + CLI Reviews (tabs on
     // the page); Issues lives inside the Cockpit; Library is reached from
     // Kody Rules.
     const items = useMemo(() => {
@@ -85,7 +90,16 @@ export const useMainNavItems = () => {
                     <LockIcon className="size-3.5" />
                 ),
             },
-
+            {
+                // Which repositories Kody reviews: where every workspace
+                // starts, so it sits with the product, not among settings.
+                id: "repositories",
+                label: "Repositories",
+                icon: FolderGit2Icon,
+                href: "/settings/git",
+                visible: canReadRepositories,
+                matcher: (path) => path.startsWith("/settings/git"),
+            },
             {
                 // Which model reviews the code and whose key pays for it —
                 // a first-order product decision, so it sits with the main
@@ -145,6 +159,7 @@ export const useMainNavItems = () => {
             ? subscription.license.planType
             : undefined,
         canReadPlugins,
+        canReadRepositories,
         canEditOrg,
         isMCPAvailable,
         canReadPullRequests,

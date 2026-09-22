@@ -108,8 +108,8 @@ import { useScopeTools, type ScopeTarget } from "./scope-tools";
 
 /**
  * The app's navigation: every destination in one left rail, Cloudflare-
- * style — workspace and search on top, the product areas, code review
- * settings with its scope picker, the workspace's repositories and the
+ * style — workspace and search on top, the product areas (repositories
+ * among them), code review settings with its scope picker and the
  * organization's settings, and the plan at the foot.
  *
  * Folds down to an icon rail (labels move into tooltips) and remembers that
@@ -156,10 +156,6 @@ export const AppSidebar = ({
     const canReadCodeReviewSettings = usePermission(
         Action.Read,
         ResourceType.CodeReviewSettings,
-    );
-    const canReadRepositories = usePermission(
-        Action.Read,
-        ResourceType.GitSettings,
     );
 
     return (
@@ -236,17 +232,6 @@ export const AppSidebar = ({
                         <Suspense fallback={null}>
                             <CodeReviewGroup />
                         </Suspense>
-                    )}
-
-                    {canReadRepositories && (
-                        <SidebarGroup label="Workspace">
-                            <SidebarItem
-                                href="/settings/git"
-                                icon={FolderGit2Icon}
-                                label="Repositories"
-                                active={pathname.startsWith("/settings/git")}
-                            />
-                        </SidebarGroup>
                     )}
 
                     <OrganizationGroup />
@@ -498,27 +483,26 @@ const WorkspaceSwitcher = () => {
         <DropdownMenu>
             <RailTooltip label={`Workspace: ${current?.name ?? ""}`}>
                 <DropdownMenuTrigger asChild>
+                    {/* A quiet row, not a card: most organizations have one
+                        workspace, so it names where you are rather than
+                        competing with the navigation below it. */}
                     <button
                         type="button"
                         aria-label={`Workspace: ${current?.name ?? ""}. Change workspace`}
                         className={cn(
-                            "bg-card-lv2 hover:bg-card-lv3 focus-visible:ring-ring flex items-center gap-2.5 rounded-lg text-left transition-colors focus:outline-none focus-visible:ring-2",
+                            "text-text-secondary hover:bg-card-lv2 hover:text-text-primary flex items-center gap-2 rounded-lg text-left text-sm transition-colors",
+                            CONTROL_STATES,
                             collapsed
                                 ? "size-9 justify-center"
-                                : "h-10 w-full px-2.5",
+                                : "h-8 w-full px-2",
                         )}>
-                        <span className="bg-primary-light/15 text-primary-light flex size-6 shrink-0 items-center justify-center rounded-md text-xs font-bold uppercase">
+                        <span className="bg-card-lv3 text-text-secondary flex size-5 shrink-0 items-center justify-center rounded text-[10px] font-semibold uppercase">
                             {current?.name?.[0] ?? "?"}
                         </span>
                         {!collapsed && (
                             <>
-                                <span className="flex min-w-0 flex-1 flex-col leading-tight">
-                                    <span className="text-text-tertiary text-[10px] font-semibold tracking-wide uppercase">
-                                        Workspace
-                                    </span>
-                                    <span className="truncate text-sm font-semibold">
-                                        {current?.name}
-                                    </span>
+                                <span className="min-w-0 flex-1 truncate font-medium">
+                                    {current?.name}
                                 </span>
                                 <ChevronsUpDownIcon className="text-text-tertiary size-3.5 shrink-0" />
                             </>
