@@ -9,9 +9,11 @@ description: 'Write one row to BigQuery quality.signals (see docs/quality-signal
 # (scripts/quality/bootstrap-gcp.sh sets them) as the three gcp_* inputs:
 # a composite action cannot read `vars` itself.
 #
-# Graceful degradation, like discord-notify: when gcp_wif_provider is empty
-# (fork, or the variable isn't set yet) we warn and exit 0. A missing
-# variable never fails a workflow.
+# Graceful degradation, like discord-notify: when any gcp_* input is empty
+# (fork, or the variable isn't set yet) we warn and exit 0, and the auth and
+# insert steps are continue-on-error. This is telemetry: it never turns a
+# green gate red. A missing row shows up as a gap in the series, which the
+# dashboard makes visible.
 
 inputs:
     name:
@@ -61,9 +63,12 @@ runs:
           shell: bash
           env:
               PROVIDER: ${{ inputs.gcp_wif_provider }}
+              SA: ${{ inputs.gcp_sa_email }}
+              PROJECT: ${{ inputs.gcp_project }}
+              NAME: ${{ inputs.name }}
           run: |
-              if [ -z "$PROVIDER" ]; then
-                  echo "::warning::gcp_wif_provider empty — quality signal '${{ inputs.name }}' not recorded."
+              if [ -z "$PROVIDER" ] || [ -z "$SA" ] || [ -z "$PROJECT" ]; then
+                  echo "::warning::gcp_wif_provider / gcp_sa_email / gcp_project not all set — quality signal '$NAME' not recorded."
                   echo "skip=true" >> "$GITHUB_OUTPUT"
               else
                   echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -84,8 +89,9 @@ runs:
               GH_REPO: ${{ github.repository }}
               GH_WORKFLOW_REF: ${{ github.workflow_ref }}
               GH_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-              GH_SHA: ${{ github.sha }}
-              GH_REF: ${{ github.ref_name }}
+              # On pull_request the default sha/ref are the synthetic merge commit and '<n>/merge'.
+              GH_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+              GH_REF: ${{ github.head_ref || github.ref_name }}
           run: |
               node -e '
                 const map = { success: "green", failure: "red", cancelled: "infra", skipped: "skipped" };
@@ -98,7 +104,12 @@ runs:
                 const value = process.env.IN_VALUE.trim() === "" ? null : Number(process.env.IN_VALUE);
                 if (value !== null && Number.isNaN(value)) { console.error(`report-signal: value is not a number: ${process.env.IN_VALUE}`); process.exit(1); }
                 let meta = null;
-                if (process.env.IN_META.trim() !== "") { meta = JSON.stringify(JSON.parse(process.env.IN_META)); }
+                if (process.env.IN_META.trim() !== "") {
+                  // A producer that interpolated an empty step output ends up with '{"total": }'.
+                  // Telemetry must not fail the job: keep the raw text and warn.
+                  try { meta = JSON.stringify(JSON.parse(process.env.IN_META)); }
+                  catch { console.log(`::warning::report-signal: meta is not valid JSON, recorded as raw text`); meta = JSON.stringify({ raw_meta: process.env.IN_META }); }
+                }
                 // github.workflow_ref = owner/repo/.github/workflows/<file>@<ref>
                 const file = (process.env.GH_WORKFLOW_REF.match(/\.github\/workflows\/([^@]+)@/) || [])[1] || "unknown";
                 const source = process.env.IN_SOURCE.trim() || `${process.env.GH_REPO.split("/")[1]}/${file}`;
@@ -114,6 +125,7 @@ runs:
 
         - name: Authenticate to GCP (WIF)
           if: steps.check.outputs.skip == 'false'
+          continue-on-error: true
           uses: google-github-actions/auth@v2
           with:
               workload_identity_provider: ${{ inputs.gcp_wif_provider }}
@@ -122,12 +134,14 @@ runs:
 
         - name: Set up bq
           if: steps.check.outputs.skip == 'false'
+          continue-on-error: true
           uses: google-github-actions/setup-gcloud@v2
           with:
               project_id: ${{ inputs.gcp_project }}
 
         - name: Insert row
           if: steps.check.outputs.skip == 'false'
+          continue-on-error: true
           shell: bash
           env:
               PROJECT: ${{ inputs.gcp_project }}

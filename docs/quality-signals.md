@@ -47,7 +47,7 @@ shows it grey.
       status: ${{ job.status }}          # or green|yellow|red|skipped|infra when you know better
       value: ${{ steps.jest.outputs.failed }}
       unit: count
-      meta: '{"total": ${{ steps.jest.outputs.total }}}'
+      meta: '{"total": ${{ steps.jest.outputs.total || 0 }}}'   # empty output would break the JSON
       gcp_wif_provider: ${{ vars.GCP_WIF_PROVIDER }}   # a composite action cannot read vars
       gcp_sa_email: ${{ vars.GCP_SA_EMAIL }}
       gcp_project: ${{ vars.GCP_PROJECT }}
