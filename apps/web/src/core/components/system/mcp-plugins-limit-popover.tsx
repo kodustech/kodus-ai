@@ -1,6 +1,7 @@
 "use client";
 
 import { Popover, PopoverContent } from "@components/ui/popover";
+import { planCtaTarget } from "@components/system/plan-cta-target";
 import { captureGateHit } from "src/core/utils/gate-hit";
 import { useCapOwnerLabel } from "src/features/ee/subscription/_hooks/use-resource-limits";
 import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
@@ -88,8 +89,7 @@ export const MCPPluginsLimitPopover = ({
                     planType={planType}
                     subscriptionStatus={subscription.status}
                     metadata={{ limit }}
-                    href="/choose-plan"
-                    label="See plans"
+                    {...planCtaTarget()}
                     size="xs"
                     className="mt-2 self-end"
                 />

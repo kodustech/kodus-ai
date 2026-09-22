@@ -1,4 +1,5 @@
 import { LockedFeatureOverlay } from "@components/system/locked-feature-overlay";
+import { planCtaTarget } from "@components/system/plan-cta-target";
 import { LockedFeatureUnlocks } from "@components/system/locked-feature-unlocks";
 import { LockedPagePreview } from "@components/system/locked-page-preview";
 import { captureGateHit } from "src/core/utils/gate-hit";
@@ -40,8 +41,7 @@ export default async function UserLogsPage() {
                     />
                 }
                 cta={{
-                    label: "See plans",
-                    href: "/choose-plan",
+                    ...planCtaTarget(),
                     feature: "activity_logs",
                     surface: "locked_preview",
                     planType: license?.planType,

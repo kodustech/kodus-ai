@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { planCtaTarget } from "@components/system/plan-cta-target";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import {
@@ -451,8 +452,7 @@ function LinkedRepositoriesPlanGate({
                     surface="settings_general"
                     planType={license.planType}
                     subscriptionStatus={license.subscriptionStatus}
-                    href="/choose-plan"
-                    label="See plans"
+                    {...planCtaTarget()}
                     size="sm"
                     metadata={{ siblingCount: siblings.length }}
                 />

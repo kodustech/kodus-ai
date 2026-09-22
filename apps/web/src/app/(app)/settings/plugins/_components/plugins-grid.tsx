@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
+import { planCtaTarget } from "@components/system/plan-cta-target";
 import { Avatar, AvatarImage } from "@components/ui/avatar";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
@@ -113,8 +114,7 @@ export const PluginsGrid = ({
                         surface="locked_banner"
                         planType={planType}
                         subscriptionStatus={plan}
-                        href="/choose-plan"
-                        label="See plans"
+                        {...planCtaTarget()}
                         metadata={{ lockedCount: lockedIds.size }}
                         size="sm"
                         className="shrink-0"

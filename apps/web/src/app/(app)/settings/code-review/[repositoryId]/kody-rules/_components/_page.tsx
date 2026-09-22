@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { planCtaTarget } from "@components/system/plan-cta-target";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { GateCtaLink } from "@components/system/gate-cta-link";
 import { Badge } from "@components/ui/badge";
@@ -1027,8 +1028,7 @@ const KodyRulesPageContent = () => {
                             surface="locked_rules_banner"
                             planType={gatePlanType}
                             subscriptionStatus={subscription.status}
-                            href="/choose-plan"
-                            label="See plans"
+                            {...planCtaTarget()}
                             metadata={{ lockedRulesCount }}
                             size="sm"
                             className="shrink-0"

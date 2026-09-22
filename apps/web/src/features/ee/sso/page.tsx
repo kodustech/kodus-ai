@@ -1,4 +1,5 @@
 import { LockedFeatureOverlay } from "@components/system/locked-feature-overlay";
+import { planCtaTarget } from "@components/system/plan-cta-target";
 import { LockedFeatureUnlocks } from "@components/system/locked-feature-unlocks";
 import { LockedPagePreview } from "@components/system/locked-page-preview";
 import { getSSOConfig } from "@services/ssoConfig/fetch";
@@ -50,8 +51,7 @@ export default async function SsoOrganizationSettingsPage() {
                     />
                 }
                 cta={{
-                    label: "See plans",
-                    href: "/choose-plan",
+                    ...planCtaTarget(),
                     feature: "sso",
                     surface: "locked_preview",
                     planType: license?.planType,

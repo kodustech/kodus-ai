@@ -1,4 +1,8 @@
 import { Suspense } from "react";
+import {
+    planCtaTarget,
+    unlockedByLabel,
+} from "@components/system/plan-cta-target";
 import { cookies } from "next/headers";
 import { LockedFeatureOverlay } from "@components/system/locked-feature-overlay";
 import { CockpitPageSkeleton } from "@components/system/page-skeletons";
@@ -111,6 +115,8 @@ async function CockpitLayoutBody({
             windowDays: LOCKED_PREVIEW_WINDOW_DAYS,
         });
         const hasReviews = reviewedCount !== null && reviewedCount > 0;
+        // Self-hosted has no plan chooser — it has a license key.
+        const planCta = planCtaTarget();
 
         await captureGateHit({
             feature: "cockpit",
@@ -127,8 +133,8 @@ async function CockpitLayoutBody({
                     reviewedCount === 0
                         ? "The Cockpit measures the reviews Kody runs for you — and this workspace hasn't had one yet."
                         : hasReviews
-                          ? "Available on Teams and Enterprise."
-                          : "Engineering metrics and Kody review analytics for your workspace are available on Teams and Enterprise plans."
+                          ? `Available with ${unlockedByLabel()}.`
+                          : `Engineering metrics and Kody review analytics for your workspace are available with ${unlockedByLabel()}.`
                 }
                 details={
                     <LockedCockpitDetails
@@ -137,8 +143,8 @@ async function CockpitLayoutBody({
                     />
                 }
                 cta={{
-                    label: hasReviews ? "See plans" : "Upgrade plan",
-                    href: "/choose-plan",
+                    label: planCta.label,
+                    href: planCta.href,
                     feature: "cockpit",
                     surface: "locked_preview",
                     planType: organizationLicense?.planType,
