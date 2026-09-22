@@ -39,6 +39,14 @@ a run cut off mid-investigation with no text, and prose with no verdict at all.
 
 It is a regression gate, not a one-off: strip the text path and it goes red.
 
+What it deliberately does **not** count as a delivered verdict: a value the
+parser cannot read. Production reaches the verdict through `JSON.parse`, which
+accepts only `true`/`false`, so a Python-style `{"keep": False}` correctly
+fail-opens — reading it as a refutation here would score a healthy run as a lost
+verdict. The key, by contrast, IS matched loosely (`normalizeKeyName` lowercases
+it and strips `_-` before production compares it). Such rows are counted and
+printed under the shapes the parser does not read by design, never gated.
+
 Proven both ways: revert the text path and the refutation rows go RED with the
 production rationale `no parseable verdict — kept by default`; restore it and
 they pass. Run it and read the ledger rather than trusting a count here.
