@@ -3,16 +3,10 @@
 import { Button } from "@components/ui/button";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
-import type { TeamMembersResponse } from "@services/setup/types";
 import { CreditCardIcon } from "lucide-react";
 import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
 
-import {
-    MembersFact,
-    PlanFact,
-    PlanSheet,
-    SeatsFact,
-} from "../../_components/plan-sheet";
+import { PlanFact, PlanSheet, SeatsFact } from "../../_components/plan-sheet";
 import { useManageBilling } from "../../_hooks/use-manage-billing";
 import {
     billingIntervalOf,
@@ -21,11 +15,7 @@ import {
     toneOfTier,
 } from "../../_utils/plan-tone";
 
-export const Active = ({
-    members,
-}: {
-    members: TeamMembersResponse["members"];
-}) => {
+export const Active = () => {
     const subscription = useSubscriptionStatus();
     const canEdit = usePermission(Action.Update, ResourceType.Billing);
     const [openBilling, { loading }] = useManageBilling();
@@ -66,7 +56,6 @@ export const Active = ({
                             tone={tone}
                         />
                     )}
-                    <MembersFact count={members.length} />
                     <PlanFact
                         label="Models"
                         value={models}

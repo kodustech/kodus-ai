@@ -4,10 +4,9 @@ import { useRouter } from "next/navigation";
 import { Button } from "@components/ui/button";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
-import type { TeamMembersResponse } from "@services/setup/types";
 import { ArrowUpCircle } from "lucide-react";
 
-import { MembersFact, PlanSheet } from "../../_components/plan-sheet";
+import { PlanSheet } from "../../_components/plan-sheet";
 import { useSubscriptionStatus } from "../../_hooks/use-subscription-status";
 
 /**
@@ -15,11 +14,7 @@ import { useSubscriptionStatus } from "../../_hooks/use-subscription-status";
  * was never provisioned. Without a valid license the review gate refuses
  * the org, so reviews aren't running until a plan exists.
  */
-export const NoPlan = ({
-    members,
-}: {
-    members: TeamMembersResponse["members"];
-}) => {
+export const NoPlan = () => {
     const subscription = useSubscriptionStatus();
     const router = useRouter();
     const canEdit = usePermission(Action.Update, ResourceType.Billing);
@@ -42,7 +37,6 @@ export const NoPlan = ({
                     Choose a plan
                 </Button>
             }
-            facts={<MembersFact count={members.length} />}
         />
     );
 };

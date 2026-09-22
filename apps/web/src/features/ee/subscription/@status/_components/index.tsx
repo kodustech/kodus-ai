@@ -106,7 +106,7 @@ const RedirectContent = ({
         if (hasStripeCustomerId) {
             return (
                 <div className="flex flex-col gap-4">
-                    <Expired members={members} />
+                    <Expired />
                     <CreditsCard />
                 </div>
             );

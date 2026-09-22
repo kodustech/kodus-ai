@@ -3,14 +3,9 @@
 import { Button } from "@components/ui/button";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
-import type { TeamMembersResponse } from "@services/setup/types";
 import { CreditCardIcon } from "lucide-react";
 
-import {
-    MembersFact,
-    PlanSheet,
-    SeatsFact,
-} from "../../_components/plan-sheet";
+import { PlanSheet, SeatsFact } from "../../_components/plan-sheet";
 import { useManageBilling } from "../../_hooks/use-manage-billing";
 import { tierOf } from "../../_utils/plan-tone";
 
@@ -26,14 +21,12 @@ export const LapsedPlan = ({
     summary,
     action,
     seats,
-    members,
 }: {
     chip: string;
     planType?: string;
     summary: string;
     action: string;
     seats: { used: number; total: number };
-    members: TeamMembersResponse["members"];
 }) => {
     const canEdit = usePermission(Action.Update, ResourceType.Billing);
     const [openBilling, { loading }] = useManageBilling();
@@ -56,16 +49,13 @@ export const LapsedPlan = ({
                 </Button>
             }
             facts={
-                <>
-                    {seats.total > 0 && (
-                        <SeatsFact
-                            used={seats.used}
-                            total={seats.total}
-                            tone="danger"
-                        />
-                    )}
-                    <MembersFact count={members.length} />
-                </>
+                seats.total > 0 ? (
+                    <SeatsFact
+                        used={seats.used}
+                        total={seats.total}
+                        tone="danger"
+                    />
+                ) : undefined
             }
         />
     );

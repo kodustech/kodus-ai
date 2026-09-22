@@ -150,11 +150,3 @@ export const SeatsFact = ({
         detail="People whose pull requests Kody reviews."
     />
 );
-
-export const MembersFact = ({ count }: { count: number }) => (
-    <PlanFact
-        label="Workspace members"
-        value={count}
-        detail="People who can open this workspace."
-    />
-);

@@ -1,15 +1,10 @@
 "use client";
 
-import type { TeamMembersResponse } from "@services/setup/types";
 import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
 
 import { LapsedPlan } from "./lapsed";
 
-export const PaymentFailed = ({
-    members,
-}: {
-    members: TeamMembersResponse["members"];
-}) => {
+export const PaymentFailed = () => {
     const subscription = useSubscriptionStatus();
     if (subscription.status !== "payment-failed") return null;
 
@@ -25,7 +20,6 @@ export const PaymentFailed = ({
                 used: subscription.usersWithAssignedLicense.length,
                 total: subscription.numberOfLicenses,
             }}
-            members={members}
         />
     );
 };

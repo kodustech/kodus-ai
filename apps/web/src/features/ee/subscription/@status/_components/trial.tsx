@@ -8,7 +8,7 @@ import { Action, ResourceType } from "@services/permissions/types";
 import type { TeamMembersResponse } from "@services/setup/types";
 import { ArrowUpCircle, KeyRoundIcon } from "lucide-react";
 
-import { MembersFact, PlanFact, PlanSheet } from "../../_components/plan-sheet";
+import { PlanFact, PlanSheet } from "../../_components/plan-sheet";
 import { TrialCreditsSummary } from "../../_components/trial-credits-summary";
 import { TRIAL_DAYS } from "../../_constants/trial";
 import { useSubscriptionStatus } from "../../_hooks/use-subscription-status";
@@ -148,7 +148,6 @@ export const Trial = ({
                             detail="During your trial."
                         />
                     )}
-                    <MembersFact count={members.length} />
                 </>
             }>
             <TrialCreditsSummary

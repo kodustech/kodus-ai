@@ -1,15 +1,10 @@
 "use client";
 
-import type { TeamMembersResponse } from "@services/setup/types";
 import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
 
 import { LapsedPlan } from "./lapsed";
 
-export const Canceled = ({
-    members,
-}: {
-    members: TeamMembersResponse["members"];
-}) => {
+export const Canceled = () => {
     const subscription = useSubscriptionStatus();
     if (subscription.status !== "canceled") return null;
 
@@ -23,7 +18,6 @@ export const Canceled = ({
                 used: subscription.usersWithAssignedLicense.length,
                 total: subscription.numberOfLicenses,
             }}
-            members={members}
         />
     );
 };
