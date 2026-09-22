@@ -27,6 +27,10 @@ export const MCPPluginsLimitPopover = ({
 }) => {
     const subscription = useSubscriptionStatus();
     const capOwner = useCapOwnerLabel();
+    // `planType` exists on some members of the status union only (a trial
+    // has no plan yet), so it is read defensively.
+    const planType =
+        "planType" in subscription ? subscription.planType : undefined;
     const runningLabel = running.slice(0, 3).join(", ");
 
     return (
@@ -35,8 +39,10 @@ export const MCPPluginsLimitPopover = ({
                 if (open)
                     captureGateHit({
                         feature: "mcp_plugins",
-                        plan: subscription.status,
-                        metadata: { surface: "install_limit_popover", limit },
+                        surface: "install_limit_popover",
+                        planType,
+                        subscriptionStatus: subscription.status,
+                        metadata: { limit },
                     });
             }}>
             {children}
@@ -78,8 +84,10 @@ export const MCPPluginsLimitPopover = ({
 
                 <GateCtaLink
                     feature="mcp_plugins"
-                    plan={subscription.status}
-                    metadata={{ surface: "install_limit_popover", limit }}
+                    surface="install_limit_popover"
+                    planType={planType}
+                    subscriptionStatus={subscription.status}
+                    metadata={{ limit }}
                     href="/choose-plan"
                     label="See plans"
                     size="xs"

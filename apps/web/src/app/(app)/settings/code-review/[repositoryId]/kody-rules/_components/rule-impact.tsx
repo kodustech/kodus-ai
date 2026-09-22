@@ -220,7 +220,8 @@ export const RuleImpact = ({
                             {" · "}
                             <GateCtaLink
                                 feature="cockpit"
-                                plan={license?.subscriptionStatus}
+                                planType={license?.planType}
+                                subscriptionStatus={license?.subscriptionStatus}
                                 metadata={{ surface: "rule_impact" }}
                                 label="Unlock implementation and feedback"
                                 size="xs"

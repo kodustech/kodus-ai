@@ -249,7 +249,7 @@ export const GlobalRulesSourceSetting = () => {
                                 </p>
                                 <GateCtaLink
                                     feature="kody_rules"
-                                    plan="free"
+                                    subscriptionStatus="free"
                                     metadata={{
                                         surface: "global_rules_source",
                                     }}

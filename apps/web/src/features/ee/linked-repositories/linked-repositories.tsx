@@ -388,11 +388,10 @@ function LinkedRepositoriesPlanGate({
         reported.current = true;
         void captureGateHit({
             feature: "linked_repositories",
-            plan: license.planType ?? license.subscriptionStatus,
-            metadata: {
-                surface: "settings_general",
-                siblingCount: siblings.length,
-            },
+            surface: "settings_general",
+            planType: license.planType,
+            subscriptionStatus: license.subscriptionStatus,
+            metadata: { siblingCount: siblings.length },
         });
     }, [license.planType, license.subscriptionStatus, siblings.length]);
 
@@ -449,14 +448,13 @@ function LinkedRepositoriesPlanGate({
                 </div>
                 <GateCtaLink
                     feature="linked_repositories"
-                    plan={license.planType ?? license.subscriptionStatus}
+                    surface="settings_general"
+                    planType={license.planType}
+                    subscriptionStatus={license.subscriptionStatus}
                     href="/choose-plan"
                     label="See plans"
                     size="sm"
-                    metadata={{
-                        surface: "settings_general",
-                        siblingCount: siblings.length,
-                    }}
+                    metadata={{ siblingCount: siblings.length }}
                 />
             </div>
         </FormControl.Root>

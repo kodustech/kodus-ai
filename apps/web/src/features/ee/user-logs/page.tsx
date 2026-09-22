@@ -22,8 +22,9 @@ export default async function UserLogsPage() {
     if (!isEnterprise && !isTrial) {
         await captureGateHit({
             feature: "activity_logs",
-            plan: license?.subscriptionStatus,
-            metadata: { surface: "locked_preview" },
+            surface: "locked_preview",
+            planType: license?.planType,
+            subscriptionStatus: license?.subscriptionStatus,
         });
         return (
             <LockedFeatureOverlay
@@ -42,8 +43,9 @@ export default async function UserLogsPage() {
                     label: "See plans",
                     href: "/choose-plan",
                     feature: "activity_logs",
-                    plan: license?.subscriptionStatus,
-                    metadata: { surface: "locked_preview" },
+                    surface: "locked_preview",
+                    planType: license?.planType,
+                    subscriptionStatus: license?.subscriptionStatus,
                 }}>
                 <LockedPagePreview title="Activity logs" rows={4} />
             </LockedFeatureOverlay>

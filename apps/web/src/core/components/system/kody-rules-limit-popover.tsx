@@ -26,6 +26,10 @@ export const KodyRulesLimitPopover = ({
 }) => {
     const subscription = useSubscriptionStatus();
     const capOwner = useCapOwnerLabel();
+    // `planType` exists on some members of the status union only (a trial
+    // has no plan yet), so it is read defensively.
+    const planType =
+        "planType" in subscription ? subscription.planType : undefined;
 
     return (
         <Popover
@@ -33,8 +37,10 @@ export const KodyRulesLimitPopover = ({
                 if (open)
                     captureGateHit({
                         feature: "kody_rules",
-                        plan: subscription.status,
-                        metadata: { surface: "limit_popover", limit },
+                        surface: "limit_popover",
+                        planType,
+                        subscriptionStatus: subscription.status,
+                        metadata: { limit },
                     });
             }}>
             {children}
@@ -74,8 +80,10 @@ export const KodyRulesLimitPopover = ({
 
                 <GateCtaLink
                     feature="kody_rules"
-                    plan={subscription.status}
-                    metadata={{ surface: "limit_popover", limit }}
+                    surface="limit_popover"
+                    planType={planType}
+                    subscriptionStatus={subscription.status}
+                    metadata={{ limit }}
                     href="/choose-plan"
                     label="See plans"
                     size="xs"

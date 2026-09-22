@@ -13,6 +13,9 @@ export const useMCPPluginsLimit = (installedCount: number) => {
 
     return useMemo(() => {
         const total = installedCount;
+        // Not on every member of the union — a trial has no plan type.
+        const planType =
+            "planType" in subscription ? subscription.planType : undefined;
 
         // An invalid license (no license row, canceled, expired, failed
         // payment) is capped by the backend exactly like Free — see
@@ -27,6 +30,7 @@ export const useMCPPluginsLimit = (installedCount: number) => {
                 limit: Number.POSITIVE_INFINITY,
                 limited: false,
                 plan: subscription.status,
+                planType,
             };
 
         if (
@@ -40,6 +44,7 @@ export const useMCPPluginsLimit = (installedCount: number) => {
                 limit: MCP_PLUGINS_FREE_LIMIT,
                 limited: true,
                 plan: subscription.status,
+                planType,
             };
 
         return {
@@ -48,6 +53,7 @@ export const useMCPPluginsLimit = (installedCount: number) => {
             limit: Number.POSITIVE_INFINITY,
             limited: false,
             plan: subscription.status,
+            planType,
         };
     }, [subscription, installedCount]);
 };

@@ -4,7 +4,7 @@ import { Heading } from "@components/ui/heading";
 import { Link } from "@components/ui/link";
 import { LockIcon } from "lucide-react";
 import { cn } from "src/core/utils/components";
-import type { GateFeature } from "src/core/utils/gate-hit";
+import type { GateFeature, GateSurface } from "src/core/utils/gate-hit";
 
 import { GateCtaLink } from "./gate-cta-link";
 
@@ -39,7 +39,9 @@ export const LockedFeatureOverlay = ({
         label: string;
         href: string;
         feature: GateFeature;
-        plan?: string;
+        surface?: GateSurface;
+        planType?: string;
+        subscriptionStatus?: string;
         metadata?: Record<string, unknown>;
     };
     altCta?: { label: string; href: string };
@@ -87,7 +89,11 @@ export const LockedFeatureOverlay = ({
                                         href={cta.href}
                                         label={cta.label}
                                         feature={cta.feature}
-                                        plan={cta.plan}
+                                        surface={cta.surface}
+                                        planType={cta.planType}
+                                        subscriptionStatus={
+                                            cta.subscriptionStatus
+                                        }
                                         metadata={cta.metadata}
                                     />
                                 )
@@ -98,7 +104,9 @@ export const LockedFeatureOverlay = ({
                                     href={cta.href}
                                     label={cta.label}
                                     feature={cta.feature}
-                                    plan={cta.plan}
+                                    surface={cta.surface}
+                                    planType={cta.planType}
+                                    subscriptionStatus={cta.subscriptionStatus}
                                     metadata={cta.metadata}
                                     size="sm"
                                     variant="cancel"

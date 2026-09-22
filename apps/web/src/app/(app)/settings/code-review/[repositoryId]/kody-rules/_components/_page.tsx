@@ -151,6 +151,10 @@ const KodyRulesPageContent = () => {
     // the same way (see useIsResourceLimited).
     const isFreePlan = useIsResourceLimited();
     const capOwner = useCapOwnerLabel();
+    // `planType` is absent on some members of the status union (a trial has
+    // no plan yet), so it is read defensively before going into the event.
+    const gatePlanType =
+        "planType" in subscription ? subscription.planType : undefined;
 
     // Scope rules and inherited rules are loaded in parallel (single
     // suspense boundary, both requests fired at once) to avoid the waterfall
@@ -205,9 +209,12 @@ const KodyRulesPageContent = () => {
         gateReported.current = true;
         captureGateHit({
             feature: "kody_rules",
-            metadata: { surface: "locked_rules_list", lockedRulesCount },
+            surface: "locked_rules_list",
+            planType: gatePlanType,
+            subscriptionStatus: subscription.status,
+            metadata: { lockedRulesCount },
         });
-    }, [lockedRulesCount]);
+    }, [lockedRulesCount, gatePlanType, subscription.status]);
 
     const isGlobalView = repositoryId === "global";
     const isRepoView = !isGlobalView && !directoryId;
@@ -1017,12 +1024,12 @@ const KodyRulesPageContent = () => {
                         </div>
                         <GateCtaLink
                             feature="kody_rules"
+                            surface="locked_rules_banner"
+                            planType={gatePlanType}
+                            subscriptionStatus={subscription.status}
                             href="/choose-plan"
                             label="See plans"
-                            metadata={{
-                                surface: "locked_rules_banner",
-                                lockedRulesCount,
-                            }}
+                            metadata={{ lockedRulesCount }}
                             size="sm"
                             className="shrink-0"
                         />

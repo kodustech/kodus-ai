@@ -114,8 +114,10 @@ async function CockpitLayoutBody({
 
         await captureGateHit({
             feature: "cockpit",
-            plan: organizationLicense?.subscriptionStatus,
-            metadata: { surface: "locked_preview", reviewedCount },
+            surface: "locked_preview",
+            planType: organizationLicense?.planType,
+            subscriptionStatus: organizationLicense?.subscriptionStatus,
+            metadata: { reviewedCount },
         });
 
         return (
@@ -138,8 +140,10 @@ async function CockpitLayoutBody({
                     label: hasReviews ? "See plans" : "Upgrade plan",
                     href: "/choose-plan",
                     feature: "cockpit",
-                    plan: organizationLicense?.subscriptionStatus,
-                    metadata: { surface: "locked_preview", reviewedCount },
+                    surface: "locked_preview",
+                    planType: organizationLicense?.planType,
+                    subscriptionStatus: organizationLicense?.subscriptionStatus,
+                    metadata: { reviewedCount },
                 }}
                 altCta={
                     reviewedCount === 0

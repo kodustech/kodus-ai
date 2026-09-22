@@ -32,8 +32,9 @@ export default async function SsoOrganizationSettingsPage() {
         // the gate instead of bouncing the user somewhere else.
         await captureGateHit({
             feature: "sso",
-            plan: license?.subscriptionStatus,
-            metadata: { surface: "locked_preview" },
+            surface: "locked_preview",
+            planType: license?.planType,
+            subscriptionStatus: license?.subscriptionStatus,
         });
         return (
             <LockedFeatureOverlay
@@ -52,8 +53,9 @@ export default async function SsoOrganizationSettingsPage() {
                     label: "See plans",
                     href: "/choose-plan",
                     feature: "sso",
-                    plan: license?.subscriptionStatus,
-                    metadata: { surface: "locked_preview" },
+                    surface: "locked_preview",
+                    planType: license?.planType,
+                    subscriptionStatus: license?.subscriptionStatus,
                 }}>
                 <LockedPagePreview title="SSO" />
             </LockedFeatureOverlay>

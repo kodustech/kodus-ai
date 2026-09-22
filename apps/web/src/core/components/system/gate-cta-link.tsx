@@ -3,7 +3,11 @@
 import { Button } from "@components/ui/button";
 import { Link } from "@components/ui/link";
 import { ArrowRightIcon } from "lucide-react";
-import { captureGateCtaClick, type GateFeature } from "src/core/utils/gate-hit";
+import {
+    captureGateCtaClick,
+    type GateFeature,
+    type GateSurface,
+} from "src/core/utils/gate-hit";
 
 /**
  * The "Upgrade plan" CTA every gate surface (Cockpit overlay, Plugins/Kody
@@ -13,7 +17,9 @@ import { captureGateCtaClick, type GateFeature } from "src/core/utils/gate-hit";
  */
 export const GateCtaLink = ({
     feature,
-    plan,
+    surface,
+    planType,
+    subscriptionStatus,
     metadata,
     href = "/settings/subscription",
     label = "Upgrade plan",
@@ -23,7 +29,9 @@ export const GateCtaLink = ({
     buttonClassName,
 }: {
     feature: GateFeature;
-    plan?: string;
+    surface?: GateSurface;
+    planType?: string;
+    subscriptionStatus?: string;
     metadata?: Record<string, unknown>;
     href?: string;
     label?: string;
@@ -43,7 +51,13 @@ export const GateCtaLink = ({
                 className={buttonClassName}
                 rightIcon={<ArrowRightIcon />}
                 onClick={() =>
-                    captureGateCtaClick({ feature, plan, metadata })
+                    captureGateCtaClick({
+                        feature,
+                        surface,
+                        planType,
+                        subscriptionStatus,
+                        metadata,
+                    })
                 }>
                 {label}
             </Button>

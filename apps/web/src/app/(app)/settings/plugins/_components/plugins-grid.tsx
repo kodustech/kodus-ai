@@ -39,7 +39,8 @@ export const PluginsGrid = ({
     // /mcp/connections at all, so they'd otherwise look "locked" whenever
     // they fall outside the runnable set computed from that list.
     const installedCount = countInstalledPlugins(plugins);
-    const { limited, limit, plan } = useMCPPluginsLimit(installedCount);
+    const { limited, limit, plan, planType } =
+        useMCPPluginsLimit(installedCount);
     const capOwner = useCapOwnerLabel();
 
     const lockedIds = useMemo(
@@ -81,10 +82,12 @@ export const PluginsGrid = ({
         gateReported.current = true;
         captureGateHit({
             feature: "mcp_plugins",
-            plan,
+            surface: "locked_banner",
+            planType,
+            subscriptionStatus: plan,
             metadata: { lockedCount: lockedIds.size, installedCount },
         });
-    }, [lockedIds.size, plan, installedCount]);
+    }, [lockedIds.size, plan, planType, installedCount]);
 
     return (
         <div className="flex flex-col gap-4">
@@ -107,13 +110,12 @@ export const PluginsGrid = ({
                     </div>
                     <GateCtaLink
                         feature="mcp_plugins"
-                        plan={plan}
+                        surface="locked_banner"
+                        planType={planType}
+                        subscriptionStatus={plan}
                         href="/choose-plan"
                         label="See plans"
-                        metadata={{
-                            surface: "locked_banner",
-                            lockedCount: lockedIds.size,
-                        }}
+                        metadata={{ lockedCount: lockedIds.size }}
                         size="sm"
                         className="shrink-0"
                     />
