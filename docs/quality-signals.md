@@ -48,6 +48,9 @@ shows it grey.
       value: ${{ steps.jest.outputs.failed }}
       unit: count
       meta: '{"total": ${{ steps.jest.outputs.total }}}'
+      gcp_wif_provider: ${{ vars.GCP_WIF_PROVIDER }}   # a composite action cannot read vars
+      gcp_sa_email: ${{ vars.GCP_SA_EMAIL }}
+      gcp_project: ${{ vars.GCP_PROJECT }}
 ```
 
 3. Run the workflow once and put the row in the PR description.

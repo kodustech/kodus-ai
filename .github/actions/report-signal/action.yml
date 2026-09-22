@@ -5,10 +5,11 @@ description: 'Write one row to BigQuery quality.signals (see docs/quality-signal
 # Auth is Workload Identity Federation: the caller needs
 #     permissions:
 #         id-token: write
-# and the repo variables GCP_WIF_PROVIDER, GCP_SA_EMAIL, GCP_PROJECT
-# (scripts/quality/bootstrap-gcp.sh sets them).
+# and passes the repo variables GCP_WIF_PROVIDER, GCP_SA_EMAIL, GCP_PROJECT
+# (scripts/quality/bootstrap-gcp.sh sets them) as the three gcp_* inputs:
+# a composite action cannot read `vars` itself.
 #
-# Graceful degradation, like discord-notify: when GCP_WIF_PROVIDER is empty
+# Graceful degradation, like discord-notify: when gcp_wif_provider is empty
 # (fork, or the variable isn't set yet) we warn and exit 0. A missing
 # variable never fails a workflow.
 
@@ -39,6 +40,18 @@ inputs:
         description: 'Defaults to <repo>/<workflow file>'
         required: false
         default: ''
+    gcp_wif_provider:
+        description: 'Pass vars.GCP_WIF_PROVIDER'
+        required: false
+        default: ''
+    gcp_sa_email:
+        description: 'Pass vars.GCP_SA_EMAIL'
+        required: false
+        default: ''
+    gcp_project:
+        description: 'Pass vars.GCP_PROJECT'
+        required: false
+        default: ''
 
 runs:
     using: composite
@@ -47,10 +60,10 @@ runs:
           id: check
           shell: bash
           env:
-              PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
+              PROVIDER: ${{ inputs.gcp_wif_provider }}
           run: |
               if [ -z "$PROVIDER" ]; then
-                  echo "::warning::GCP_WIF_PROVIDER not set — quality signal '${{ inputs.name }}' not recorded."
+                  echo "::warning::gcp_wif_provider empty — quality signal '${{ inputs.name }}' not recorded."
                   echo "skip=true" >> "$GITHUB_OUTPUT"
               else
                   echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -103,21 +116,21 @@ runs:
           if: steps.check.outputs.skip == 'false'
           uses: google-github-actions/auth@v2
           with:
-              workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
-              service_account: ${{ vars.GCP_SA_EMAIL }}
-              project_id: ${{ vars.GCP_PROJECT }}
+              workload_identity_provider: ${{ inputs.gcp_wif_provider }}
+              service_account: ${{ inputs.gcp_sa_email }}
+              project_id: ${{ inputs.gcp_project }}
 
         - name: Set up bq
           if: steps.check.outputs.skip == 'false'
           uses: google-github-actions/setup-gcloud@v2
           with:
-              project_id: ${{ vars.GCP_PROJECT }}
+              project_id: ${{ inputs.gcp_project }}
 
         - name: Insert row
           if: steps.check.outputs.skip == 'false'
           shell: bash
           env:
-              PROJECT: ${{ vars.GCP_PROJECT }}
+              PROJECT: ${{ inputs.gcp_project }}
           run: |
               bq insert --project_id="$PROJECT" quality.signals quality-signal-row.json
               rm -f quality-signal-row.json
