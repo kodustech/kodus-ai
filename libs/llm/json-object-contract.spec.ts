@@ -43,7 +43,12 @@ jest.mock('@libs/common/utils/crypto', () => ({
 }));
 
 import { z } from 'zod';
+import { jsonSchema } from 'ai';
 import type { NormalizedModel } from '@libs/llm/byok-config';
+import {
+    DEDUP_SCHEMA,
+    buildDedupPrompt,
+} from '@libs/code-review/infrastructure/agents/engine/dedup-prompt';
 import { captureByokWire } from '@libs/llm/testing/byok-wire';
 import { REGISTRY } from '@libs/llm/providers';
 import { resolveStructuredOutputPolicy } from '@libs/llm/providers/kernel/structured-output';
@@ -239,4 +244,54 @@ describe('#1916 — a route that carries the schema is left alone', () => {
         },
         30_000,
     );
+});
+
+describe("#1916 — the issue's own call, end to end", () => {
+    // The table above proves the ROUTE behaves. This proves the CALLER the
+    // issue is about still rides it: the real `buildDedupPrompt` (which contains
+    // the word "json" exactly zero times) and the real `DEDUP_SCHEMA` (a raw
+    // `jsonSchema()`, not a zod object — a different path through the wire-schema
+    // conversion). A generic row would stay green if dedup stopped going through
+    // `LLM.run`, or started passing its own `system` and shadowing the contract.
+    it('carries the dedup prompt AND the contract on a json_object route', async () => {
+        const user = buildDedupPrompt(
+            [
+                {
+                    relevantFile: 'src/a.ts',
+                    relevantLinesStart: 10,
+                    relevantLinesEnd: 12,
+                    oneSentenceSummary: 'missing idempotency guard on POST /complete',
+                },
+                {
+                    relevantFile: 'src/a.ts',
+                    relevantLinesStart: 10,
+                    relevantLinesEnd: 14,
+                    oneSentenceSummary: 'POST /complete can be replayed, no guard',
+                },
+            ],
+            (severity) => severity ?? 'medium',
+        );
+
+        const wire = await captureByokWire(
+            {
+                provider: 'open_router',
+                model: 'z-ai/glm-5.2',
+                apiKey: 'k',
+            } as unknown as NormalizedModel,
+            {
+                schema: jsonSchema(DEDUP_SCHEMA as any),
+                user,
+                cannedText: JSON.stringify({ groups: [], unique: [] }),
+            } as any,
+        );
+
+        expect(wire.body?.response_format).toEqual({ type: 'json_object' });
+        const text = promptText(wire.body);
+        // The caller's own prompt is still there, unchanged...
+        expect(text).toContain('cross-location duplicates');
+        // ...and the contract the route needs is there with it.
+        expect(text).toContain('json');
+        expect(text).toContain('groups');
+        expect(text).toContain('unique');
+    }, 30_000);
 });

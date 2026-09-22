@@ -163,6 +163,9 @@ export async function captureByokWire(
         /** System prompt to send, when a case asserts what happens AROUND it
          *  (e.g. that a prompt contract is appended, not substituted). */
         system?: string;
+        /** User prompt to send. Defaults to 'ping'; a case passes the caller's
+         *  REAL prompt when the claim is about that prompt reaching the wire. */
+        user?: string;
         /** Assistant text the canned response carries. A structured case passes
          *  a JSON body its schema accepts, so the parse succeeds and the run
          *  stops at ONE request instead of climbing the recovery ladder. */
@@ -220,7 +223,7 @@ export async function captureByokWire(
             // plain message turn through the loop executor (the original mode).
             ...(opts.system ? { system: opts.system } : {}),
             ...(opts.schema
-                ? { user: 'ping', schema: opts.schema }
+                ? { user: opts.user ?? 'ping', schema: opts.schema }
                 : {
                       messages: [{ role: 'user', content: 'ping' }],
                       loop: { tools: {}, maxSteps: 1 },
