@@ -1,3 +1,12 @@
+// The #1916 case at the bottom is the only one that builds a REAL model, and
+// the builder decrypts the slot's apiKey on the way. Every other case mocks
+// LLM.run and never reaches it, so an identity cipher here changes nothing for
+// them and lets that one case carry a usable key.
+jest.mock('@libs/common/utils/crypto', () => ({
+    decrypt: (v: string) => v,
+    encrypt: (v: string) => v,
+}));
+
 import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
 import { AgentReviewStage } from './agent-review.stage';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
@@ -1125,4 +1134,143 @@ describe('AgentReviewStage — dedup LLM.run contract matrix backfill (#1786)', 
             expect(out.suggestions).toHaveLength(1);
         });
     });
+});
+
+/**
+ * #1916 — the failure END TO END, with the provider's own rule as the double.
+ *
+ * Every case above mocks `LLM.run`, which is the right boundary for the parse
+ * contract but cannot see the one that actually broke: WHICH REQUEST goes out.
+ * The dedup prompt contains the word "json" zero times, and a route outside the
+ * four allowlisted OpenRouter prefixes sends bare `response_format:
+ * json_object` — which OpenAI and every OpenAI-compatible proxy REJECT unless
+ * the messages contain that word. In production that 400 reached the stage's
+ * catch, which recorded `failed-keep-all` and published every duplicate: 460
+ * reviews across 47 organizations.
+ *
+ * So this runs the REAL `LLM.run`, the real prompt and the real DEDUP_SCHEMA,
+ * and stubs only the network — with the provider's documented rule, not with a
+ * canned answer. `API_NODE_ENV=production` because the symptom under test is the
+ * production fail-open, not the dev re-throw.
+ *
+ * Kill the contract injection in `structured-review-call.ts` and this goes red
+ * exactly the way production did: two suggestions in, two out, `failed-keep-all`.
+ */
+describe('AgentReviewStage — dedup survives a keyword-enforcing provider (#1916)', () => {
+    const makeStage = () =>
+        new AgentReviewStage(
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+        );
+
+    // GLM through OpenRouter: outside the allowlisted prefixes, so its
+    // structured call goes out as bare json_object. The route from the issue.
+    const glmSlot = {
+        provider: 'open_router',
+        model: 'z-ai/glm-5.2',
+        apiKey: 'k',
+    } as any;
+
+    const dup = () => ({
+        relevantFile: 'src/user.ts',
+        relevantLinesStart: 10,
+        relevantLinesEnd: 12,
+        label: 'bug',
+        severity: 'high',
+        oneSentenceSummary: 'user object can be null and is dereferenced',
+        suggestionContent: 'user object can be null and is dereferenced here',
+        improvedCode: 'if (!user) return;',
+    });
+
+    let realFetch: typeof globalThis.fetch;
+    let prevEnv: string | undefined;
+    let sawKeyword: boolean;
+
+    beforeEach(() => {
+        realFetch = globalThis.fetch;
+        prevEnv = process.env.API_NODE_ENV;
+        process.env.API_NODE_ENV = 'production';
+        sawKeyword = false;
+
+        globalThis.fetch = (async (_input: any, init: any) => {
+            const body = init?.body ? JSON.parse(String(init.body)) : {};
+            const messages = JSON.stringify(body?.messages ?? '').toLowerCase();
+            // THE PROVIDER'S RULE, verbatim in behaviour: a json_object request
+            // whose messages never say "json" is rejected outright.
+            if (
+                body?.response_format?.type === 'json_object' &&
+                !messages.includes('json')
+            ) {
+                return new Response(
+                    JSON.stringify({
+                        error: {
+                            message:
+                                "'messages' must contain the word 'json' in some form, to use 'response_format' of type 'json_object'.",
+                            type: 'invalid_request_error',
+                        },
+                    }),
+                    {
+                        status: 400,
+                        headers: { 'content-type': 'application/json' },
+                    },
+                );
+            }
+            sawKeyword = true;
+            // The model answers correctly: the two findings are one duplicate.
+            return new Response(
+                JSON.stringify({
+                    id: 'x',
+                    object: 'chat.completion',
+                    created: 0,
+                    model: 'z-ai/glm-5.2',
+                    choices: [
+                        {
+                            index: 0,
+                            message: {
+                                role: 'assistant',
+                                content: JSON.stringify({
+                                    groups: [{ keep: 0, duplicates: [1] }],
+                                    unique: [],
+                                }),
+                            },
+                            finish_reason: 'stop',
+                        },
+                    ],
+                    usage: { prompt_tokens: 1, completion_tokens: 1 },
+                }),
+                { status: 200, headers: { 'content-type': 'application/json' } },
+            );
+        }) as typeof fetch;
+    });
+
+    afterEach(() => {
+        globalThis.fetch = realFetch;
+        if (prevEnv === undefined) delete process.env.API_NODE_ENV;
+        else process.env.API_NODE_ENV = prevEnv;
+        jest.clearAllMocks();
+    });
+
+    it('the request is accepted, and the duplicate is actually removed', async () => {
+        const stage = makeStage();
+        const out = (await (stage as any).deduplicateSuggestions(
+            [dup(), dup()],
+            7,
+            glmSlot,
+            { organizationId: 'org-1', teamId: 'team-1' },
+        )) as { suggestions: any[]; trace: any };
+
+        // The provider accepted the request — the keyword was on the wire.
+        expect(sawKeyword).toBe(true);
+        // And the pipeline outcome the issue measures flipped: a real dedup,
+        // not the fail-open that published both.
+        expect(out.trace.status).not.toBe('failed-keep-all');
+        expect(out.trace.removedCount).toBe(1);
+        expect(out.suggestions).toHaveLength(1);
+    }, 30_000);
 });
