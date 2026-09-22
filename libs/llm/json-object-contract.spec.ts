@@ -30,6 +30,12 @@
  * were never broken.
  *
  * Adding a provider or a model family is one row. Nothing else to wire.
+ *
+ * SIBLING TABLE: `byok-config-matrix.spec.ts` asks the other wire question —
+ * what a stored config puts in the body for reasoning, temperature and routing,
+ * over a plain (loop) turn. This file owns the STRUCTURED channel and what the
+ * messages carry on it. Same harness, different question; a new case belongs in
+ * whichever of the two asks its question, not in a third table.
  */
 jest.mock('@libs/common/utils/crypto', () => ({
     decrypt: (v: string) => v,

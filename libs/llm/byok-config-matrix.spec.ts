@@ -35,6 +35,12 @@
  *
  * The harness (`testing/byok-wire.ts`) runs the REAL stack — resolveModelConfig,
  * the real provider module, the real AI SDK — and only stubs `globalThis.fetch`.
+ *
+ * SIBLING TABLE: this file asks what a stored config puts on the wire for
+ * reasoning, temperature and routing, over a plain (loop) turn.
+ * `json-object-contract.spec.ts` asks the STRUCTURED question — which
+ * response_format channel the call goes out on, and what the messages must
+ * carry on it (#1916). Same harness, different question.
  */
 
 jest.mock('@libs/common/utils/crypto', () => ({

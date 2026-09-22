@@ -33,6 +33,7 @@ import {
 } from '@libs/llm/structured-output-repair';
 import { LLM_ENVELOPE_TAG } from '@libs/llm/log-tags';
 import { REGISTRY } from '@libs/llm/providers';
+import type { ProviderModule } from '@libs/llm/providers/kernel/types';
 import {
     planStructuredCall,
     NON_REASONING_TRAITS,
@@ -186,6 +187,31 @@ interface ReviewCallMode<T> {
  * both public entry points share this exact model policy and retry contract.
  */
 /**
+ * Ask the slot's provider module something, with ONE safe default.
+ *
+ * Both structured lookups below resolve the module identically — a slot whose
+ * provider is not registered IS the managed/env default, and a lookup that
+ * throws must never break the call. Written once because the two answers steer
+ * the same request: if they ever disagreed about which slots count as "known",
+ * a call could take a plan for one model and a wire contract for another.
+ */
+function askProviderModule<T>(
+    slot: NormalizedModel | undefined,
+    fallback: T,
+    ask: (mod: ProviderModule, slot: NormalizedModel) => T,
+): T {
+    const provider = slot?.provider as string | undefined;
+    if (!provider || !slot?.model || !REGISTRY.has(provider)) {
+        return fallback;
+    }
+    try {
+        return ask(REGISTRY.get(provider), slot);
+    } catch {
+        return fallback;
+    }
+}
+
+/**
  * Resolve the structured-call plan for a slot — a pure lookup over the provider's
  * `capabilities().structuredOutput` + `reasoningTraits()`. No slot (managed/env
  * default) → 'as-is' (the Fireworks default is a response_format model). All the
@@ -194,22 +220,12 @@ interface ReviewCallMode<T> {
 function resolveStructuredPlan(
     slot: NormalizedModel | undefined,
 ): StructuredCallPlan {
-    const provider = slot?.provider as string | undefined;
-    if (!provider || !slot?.model || !REGISTRY.has(provider)) {
-        return 'as-is';
-    }
-    try {
-        const mod = REGISTRY.get(provider);
-        const traits =
-            mod.reasoningTraits?.(slot as any) ?? NON_REASONING_TRAITS;
-        return planStructuredCall(
-            mod.capabilities(slot.model).structuredOutput,
-            traits,
-        );
-    } catch {
-        // Best-effort optimization — a lookup failure must never break the call.
-        return 'as-is';
-    }
+    return askProviderModule(slot, 'as-is', (mod, s) =>
+        planStructuredCall(
+            mod.capabilities(s.model).structuredOutput,
+            mod.reasoningTraits?.(s as any) ?? NON_REASONING_TRAITS,
+        ),
+    );
 }
 
 /**
@@ -219,22 +235,13 @@ function resolveStructuredPlan(
  *
  * No slot = the managed/env default, which is built with `structuredOutputs:
  * true` against an upstream we control (Fireworks, or the self-hosted endpoint
- * the operator opted in): the schema does reach the wire, so 'json_schema'.
+ * the operator opted in): the schema does reach the wire, so 'json_schema' —
+ * which is also the answer that changes nothing (no prompt is added).
  */
 function resolveWireStructuredMode(
     slot: NormalizedModel | undefined,
 ): StructuredOutputMode {
-    const provider = slot?.provider as string | undefined;
-    if (!provider || !slot?.model || !REGISTRY.has(provider)) {
-        return 'json_schema';
-    }
-    try {
-        return resolveStructuredOutputPolicy(REGISTRY.get(provider), slot);
-    } catch {
-        // Best-effort lookup — never break the call over it. 'json_schema' is the
-        // answer that changes nothing (no prompt is added).
-        return 'json_schema';
-    }
+    return askProviderModule(slot, 'json_schema', resolveStructuredOutputPolicy);
 }
 
 /**
