@@ -86,6 +86,12 @@ import {
     PullRequestReviewState,
     PullRequestWithFiles,
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
+import {
+    isDeniedStatus,
+    RepositoryAccessDiagnosis,
+    summarizeProviderError,
+    UNKNOWN_REPOSITORY_ACCESS,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryAccessDiagnosis.type';
 import { Repositories } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositories.type';
 import { RepositoryFile } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryFile.type';
 import {
@@ -4464,6 +4470,108 @@ export class GitlabService implements Omit<
 
             return false;
         }
+    }
+
+    async diagnoseRepositoryAccess(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; fullName?: string };
+    }): Promise<RepositoryAccessDiagnosis> {
+        const result: RepositoryAccessDiagnosis = {
+            ...UNKNOWN_REPOSITORY_ACCESS,
+        };
+
+        try {
+            const authDetails = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+
+            if (!authDetails) {
+                result.error = 'GitLab auth details not found';
+                return result;
+            }
+
+            const gitlabAPI = this.instanceGitlabApi(authDetails);
+
+            const repositoryId = params.repository.id;
+            const projectId =
+                typeof repositoryId === 'string' && /^\d+$/.test(repositoryId)
+                    ? Number(repositoryId)
+                    : repositoryId;
+
+            try {
+                await gitlabAPI.Commits.all(projectId, {
+                    perPage: 1,
+                    maxPages: 1,
+                });
+                result.read = 'ok';
+            } catch (error) {
+                result.read = isDeniedStatus(error) ? 'denied' : 'unknown';
+                result.error = summarizeProviderError(error);
+            }
+
+            try {
+                const project: any = await gitlabAPI.Projects.show(projectId);
+                // Posting MR notes needs Reporter (20); creating the webhook
+                // needs Maintainer (40). Access may come from the project or
+                // from its group, so the higher of the two applies.
+                const projectAccess =
+                    project?.permissions?.project_access?.access_level;
+                const groupAccess =
+                    project?.permissions?.group_access?.access_level;
+                const levels = [projectAccess, groupAccess].filter(
+                    (level): level is number => typeof level === 'number',
+                );
+                const maxLevel = levels.length ? Math.max(...levels) : null;
+
+                if (maxLevel !== null && maxLevel >= 20) {
+                    result.write = 'ok';
+                } else if (levels.length === 2) {
+                    result.write = 'denied';
+                }
+
+                // The role allows it, but a `read_api` token still cannot
+                // post. Personal/project/group access tokens report their
+                // scopes; an OAuth token cannot call this, so the role stands.
+                if (result.write === 'ok') {
+                    try {
+                        const token: any =
+                            await gitlabAPI.PersonalAccessTokens.show();
+                        if (
+                            Array.isArray(token?.scopes) &&
+                            !token.scopes.includes('api')
+                        ) {
+                            result.write = 'denied';
+                        }
+                    } catch {
+                        // not an access token: keep the role-based answer
+                    }
+                }
+            } catch (error) {
+                result.error ??= summarizeProviderError(error);
+            }
+
+            const webhookUrl =
+                this.configService.get<string>(
+                    'API_GITLAB_CODE_MANAGEMENT_WEBHOOK',
+                ) ?? process.env.API_GITLAB_CODE_MANAGEMENT_WEBHOOK;
+
+            try {
+                const hooks = await gitlabAPI.ProjectHooks.all(projectId);
+                result.hook = hooks.some(
+                    (hook) => !!webhookUrl && hook?.url === webhookUrl,
+                )
+                    ? 'present'
+                    : 'missing';
+            } catch (error) {
+                // Listing hooks needs Maintainer on the project; without it
+                // we cannot tell whether the hook exists.
+                result.error ??= summarizeProviderError(error);
+            }
+        } catch (error) {
+            result.error = summarizeProviderError(error);
+        }
+
+        return result;
     }
 
     async deleteWebhook(params: {

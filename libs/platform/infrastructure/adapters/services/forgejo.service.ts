@@ -77,6 +77,12 @@ import {
 import { Repositories } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositories.type';
 import { RepositoryFile } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryFile.type';
 import {
+    isDeniedStatus,
+    RepositoryAccessDiagnosis,
+    summarizeProviderError,
+    UNKNOWN_REPOSITORY_ACCESS,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryAccessDiagnosis.type';
+import {
     buildDefaultSourceBranchName,
     DEFAULT_COMMIT_MESSAGE,
     DEFAULT_PR_TITLE,
@@ -4066,6 +4072,114 @@ export class ForgejoService implements Omit<
             });
             return false;
         }
+    }
+
+    async diagnoseRepositoryAccess(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; fullName?: string };
+    }): Promise<RepositoryAccessDiagnosis> {
+        const result: RepositoryAccessDiagnosis = {
+            ...UNKNOWN_REPOSITORY_ACCESS,
+        };
+
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) {
+                result.error = 'Forgejo credential not found';
+                return result;
+            }
+
+            const repositories =
+                await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                    params.organizationAndTeamData,
+                    IntegrationConfigKey.REPOSITORIES,
+                );
+            const configured = repositories?.find(
+                (r: any) => r.id === params.repository.id,
+            );
+
+            const repoInfo = this.extractRepoInfo(
+                configured?.name ??
+                    params.repository.fullName ??
+                    params.repository.name,
+                'diagnoseRepositoryAccess',
+            );
+            if (!repoInfo) {
+                result.error = 'Could not parse repository name';
+                return result;
+            }
+
+            const client = this.createForgejoClient(authDetail);
+            const path = { owner: repoInfo.owner, repo: repoInfo.repo };
+
+            try {
+                await repoGetAllCommits({
+                    client,
+                    path,
+                    query: {
+                        limit: 1,
+                        stat: false,
+                        verification: false,
+                        files: false,
+                    },
+                    throwOnError: true,
+                });
+                result.read = 'ok';
+            } catch (error) {
+                result.read = isDeniedStatus(error) ? 'denied' : 'unknown';
+                result.error = summarizeProviderError(error);
+            }
+
+            try {
+                // `permissions` describes the authenticated user on this
+                // repository; absent means the server did not say. Read
+                // access can still comment on pull requests, so only a user
+                // without `pull` is a definite no.
+                const { data } = await repoGet({
+                    client,
+                    path,
+                    throwOnError: true,
+                });
+                const permissions = data?.permissions;
+                if (permissions?.push || permissions?.admin) {
+                    result.write = 'ok';
+                } else if (permissions && permissions.pull === false) {
+                    result.write = 'denied';
+                }
+            } catch (error) {
+                result.error ??= summarizeProviderError(error);
+            }
+
+            const webhookUrl = this.configService.get<string>(
+                'FORGEJO_WEBHOOK_URL',
+            );
+
+            if (webhookUrl) {
+                try {
+                    const { data: hooks } = await repoListHooks({
+                        client,
+                        path,
+                        throwOnError: true,
+                    });
+                    result.hook = (hooks ?? []).some(
+                        (hook) =>
+                            hook.config?.url === webhookUrl && hook.active,
+                    )
+                        ? 'present'
+                        : 'missing';
+                } catch (error) {
+                    // Listing hooks needs admin on the repository; without
+                    // it we cannot tell whether the hook exists.
+                    result.error ??= summarizeProviderError(error);
+                }
+            }
+        } catch (error) {
+            result.error = summarizeProviderError(error);
+        }
+
+        return result;
     }
 
     async addReactionToPR(params: {

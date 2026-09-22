@@ -70,6 +70,8 @@ import {
     createDocsBasicAuthMiddleware,
 } from './docs/docs-guard';
 import { ApiErrorDto } from './dtos/api-error.dto';
+import { startDoctorListener } from './doctor/doctor-listener';
+import { SelfHostedDoctorService } from './doctor/self-hosted-doctor.service';
 
 declare const module: any;
 
@@ -290,6 +292,17 @@ async function bootstrap() {
         await app.listen(apiPort, host, () => {
             console.log(`[API] - Ready on http://${host}:${apiPort}`);
         });
+
+        // Self-hosted doctor (#1987): loopback-only, token-gated, off in cloud.
+        const doctorServer = startDoctorListener({
+            cloudMode: !!environment.API_CLOUD_MODE,
+            env: process.env,
+            run: () => app.get(SelfHostedDoctorService).run(),
+            log: (message) => console.log(message),
+        });
+        if (doctorServer) {
+            app.getHttpServer().on('close', () => doctorServer.close());
+        }
 
         handleNestJSWebpackHmr(app, module);
     } catch (error) {

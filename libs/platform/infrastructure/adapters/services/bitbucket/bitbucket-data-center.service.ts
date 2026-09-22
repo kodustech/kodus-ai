@@ -44,6 +44,12 @@ import {
 import { Repository } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { RepositoryFile } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryFile.type';
 import {
+    isDeniedStatus,
+    RepositoryAccessDiagnosis,
+    summarizeProviderError,
+    UNKNOWN_REPOSITORY_ACCESS,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryAccessDiagnosis.type';
+import {
     EMPTY_REPO_SEED_COMMIT_MESSAGE,
     EMPTY_REPO_SEED_CONTENT,
     EMPTY_REPO_SEED_PATH,
@@ -991,6 +997,81 @@ export class BitbucketDataCenterService implements Omit<
             });
             return false;
         }
+    }
+
+    async diagnoseRepositoryAccess(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; fullName?: string };
+    }): Promise<RepositoryAccessDiagnosis> {
+        // `write` stays unknown: Data Center reports repository permissions
+        // only through admin listings, not for the authenticated user.
+        const result: RepositoryAccessDiagnosis = {
+            ...UNKNOWN_REPOSITORY_ACCESS,
+        };
+
+        try {
+            const authDetails = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetails) {
+                result.error = 'Bitbucket credential not found';
+                return result;
+            }
+
+            const repositories = <Repositories[]>(
+                    await this.integrationConfigService.findOne({
+                        team: { uuid: params.organizationAndTeamData.teamId },
+                        configKey: IntegrationConfigKey.REPOSITORIES,
+                    })
+                )?.configValue || [];
+
+            const targetRepo = repositories.find(
+                (r) => r.id === params.repository.id,
+            );
+            if (!targetRepo) {
+                result.error = 'Repository not found in the configured list';
+                return result;
+            }
+
+            const axiosClient = this.getAxiosInstance(authDetails);
+            const repoPath = `/projects/${targetRepo.workspaceId}/repos/${targetRepo.name}`;
+
+            try {
+                await axiosClient.get(`${repoPath}/commits`, {
+                    params: { limit: 1 },
+                });
+                result.read = 'ok';
+            } catch (error) {
+                result.read = isDeniedStatus(error) ? 'denied' : 'unknown';
+                result.error = summarizeProviderError(error);
+            }
+
+            const webhookUrl =
+                this.configService.get<string>(
+                    'GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK',
+                ) ?? process.env.GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK;
+
+            if (webhookUrl) {
+                try {
+                    const response = await axiosClient.get(
+                        `${repoPath}/webhooks`,
+                    );
+                    result.hook = response.data?.values?.some(
+                        (hook: any) => hook?.url === webhookUrl && hook?.active,
+                    )
+                        ? 'present'
+                        : 'missing';
+                } catch (error) {
+                    // Listing hooks needs repository admin; without it we
+                    // cannot tell whether the hook exists.
+                    result.error ??= summarizeProviderError(error);
+                }
+            }
+        } catch (error) {
+            result.error = summarizeProviderError(error);
+        }
+
+        return result;
     }
 
     async createCommentInPullRequest(params: {
