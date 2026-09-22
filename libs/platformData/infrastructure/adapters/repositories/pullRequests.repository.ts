@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import * as crypto from 'crypto';
 import { Model } from 'mongoose';
 import mongoose from 'mongoose';
 import { PullRequestsModel } from './schemas/pullRequests.model';

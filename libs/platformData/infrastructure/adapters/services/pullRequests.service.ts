@@ -461,6 +461,10 @@ export class PullRequestsService implements IPullRequestsService {
         return this.pullRequestsRepository.newSubDocumentId();
     }
 
+    newSuggestionId(): string {
+        return this.pullRequestsRepository.newSuggestionId();
+    }
+
     async findRecentByRepositoryId(
         organizationId: string,
         repositoryId: string,
