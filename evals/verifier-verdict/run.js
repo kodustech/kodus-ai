@@ -128,26 +128,73 @@ function loadRows() {
     ).rows;
 }
 
+/** Every balanced `{...}` in the text, outermost first: the same unit the
+ *  parser works in. Written here rather than imported from
+ *  structured-output-repair.ts on purpose — if the eval derived its expectation
+ *  with the parser's own scanner it could never disagree with it, and the text
+ *  rows would stop gating anything. */
+function topLevelJsonObjects(text) {
+    const out = [];
+    const s = String(text || '');
+    for (let i = 0; i < s.length; i++) {
+        if (s[i] !== '{') continue;
+        let depth = 0;
+        let inString = false;
+        let escaped = false;
+        for (let j = i; j < s.length; j++) {
+            const c = s[j];
+            if (escaped) {
+                escaped = false;
+            } else if (c === '\\') {
+                escaped = true;
+            } else if (c === '"') {
+                inString = !inString;
+            } else if (!inString && c === '{') {
+                depth++;
+            } else if (!inString && c === '}') {
+                depth--;
+                if (depth === 0) {
+                    out.push(s.slice(i, j + 1));
+                    i = j; // don't re-scan objects nested inside this one
+                    break;
+                }
+            }
+        }
+    }
+    return out;
+}
+
+const KEEPISH = new Set(['keep', 'shouldkeep', 'decision', 'verdict']);
+
 /** What the model wrote as a verdict in its text, read the way the PARSER reads
- *  it: a real JSON boolean. Matching a looser shape here would report a LOSS the
- *  parser was never contracted to prevent — see writtenKeepLoose.
+ *  it: the LAST balanced object that carries a verdict key AT ITS OWN TOP LEVEL,
+ *  and a real JSON boolean in it. Matching a looser shape here would report a
+ *  LOSS the parser was never contracted to prevent — see writtenKeepLoose.
  *
- *  The two halves are deliberately asymmetric, because production is:
- *   - the KEY is matched case- and separator-insensitively, because
- *     normalizeKeyName (structured-output-repair.ts) lowercases it and strips
- *     `_-` before comparing, so `"Should_Keep"` reaches the parser;
- *   - the VALUE is matched case-EXACTLY, because the parser gets there through
- *     JSON.parse, which accepts only `true`/`false`. A Python-style `False` is
- *     not JSON: production finds no object, fail-opens to keep=true, and that is
- *     correct. Reading it as a refutation here would score that correct run as a
- *     LOST verdict and turn the gate red against the pipeline — the same
- *     false-failure class as scoring a tool row from its text. */
+ *  Three things it deliberately does NOT do, each of which fabricated a failure:
+ *   - it does not scan for the key anywhere in the text. `{"keep": false,
+ *     "cited": {"keep": true}}` is ONE verdict of false; a last-match regex read
+ *     the nested `true`. So does a rationale that quotes `"keep": false` inside
+ *     a string — the brace scan above tracks strings for that reason.
+ *   - it does not read a value case-insensitively: the parser gets there through
+ *     JSON.parse, which accepts only `true`/`false`, so a Python-style `False`
+ *     correctly fail-opens and is not a lost verdict.
+ *   - it does not read the KEY case-exactly: normalizeKeyName lowercases it and
+ *     strips `_-`, so `"Should_Keep"` does reach the parser. */
 function writtenKeep(text) {
     let written;
-    for (const m of String(text || '').matchAll(
-        /"(?:keep|should[_\- ]?keep|decision|verdict)"\s*:\s*([A-Za-z]+)/gi,
-    )) {
-        if (m[1] === 'true' || m[1] === 'false') written = m[1] === 'true';
+    for (const slice of topLevelJsonObjects(text)) {
+        let obj;
+        try {
+            obj = JSON.parse(slice.replace(/,(\s*[}\]])/g, '$1'));
+        } catch {
+            continue;
+        }
+        if (!obj || typeof obj !== 'object' || Array.isArray(obj)) continue;
+        for (const [k, v] of Object.entries(obj)) {
+            if (!KEEPISH.has(k.toLowerCase().replace(/[_\-\s]/g, ''))) continue;
+            if (v === true || v === false) written = v;
+        }
     }
     return written;
 }
@@ -155,7 +202,7 @@ function writtenKeep(text) {
 /** The same read, but also accepting the quoted forms a model sometimes emits
  *  (`"keep": "false"`, `"decision": "no"`). The parser does NOT read these: the
  *  boolean-as-string / boolean-as-yes-no shapes are pinned as known degradations
- *  in verifier.agent.contract.spec.ts (`row21`..`row23`, it.failing) for the
+ *  in core-agent-loop.adapter.spec.ts (`row 21`..`row 23`, it.failing) for the
  *  artifact path, and the text path inherits that contract deliberately. Counted
  *  and reported, never gated — turning it into a failure here would claim a bug
  *  the code does not have, and fixing it is a separate decision that would flip
@@ -301,7 +348,7 @@ console.log(
 if (unread.length) {
     // Reported, never gated: see writtenKeepLoose.
     console.log(
-        `${unread.length} row(s) delivered a verdict as a quoted boolean or yes/no — a shape the parser does not read by design (verifier.agent.contract.spec.ts row21..row23, it.failing).`,
+        `${unread.length} row(s) delivered a verdict as a quoted boolean or yes/no — a shape the parser does not read by design (core-agent-loop.adapter.spec.ts row 21..23, it.failing).`,
     );
 }
 
