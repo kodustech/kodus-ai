@@ -81,16 +81,25 @@ jobs:
                   EOF
 
             - name: Run the mutation gate on changed files
+              id: run
               run: pnpm run mutation:diff "origin/${{ github.base_ref }}"
 
             - name: Mutation score (from reports/mutation/mutation.json)
               id: score
               if: always()
+              env:
+                  RUN_OUTCOME: ${{ steps.run.outcome }}
               run: |
                   node -e "
                     const fs = require(\"fs\"); const p = \"reports/mutation/mutation.json\";
                     const out = (k, v) => fs.appendFileSync(process.env.GITHUB_OUTPUT, k + \"=\" + v + \"\\n\");
-                    if (!fs.existsSync(p)) { out(\"status\", \"skipped\"); out(\"value\", \"\"); out(\"meta\", JSON.stringify({ note: \"no mutation report: nothing to mutate\" })); process.exit(0); }
+                    if (!fs.existsSync(p)) {
+                      // No report after a failed run is a crash or a timeout, not a deliberate skip.
+                      const died = process.env.RUN_OUTCOME && process.env.RUN_OUTCOME !== \"success\";
+                      out(\"status\", died ? \"infra\" : \"skipped\"); out(\"value\", \"\");
+                      out(\"meta\", JSON.stringify({ note: died ? \"mutation run \" + process.env.RUN_OUTCOME + \" before writing a report\" : \"no mutation report: nothing to mutate\" }));
+                      process.exit(0);
+                    }
                     const r = JSON.parse(fs.readFileSync(p, \"utf8\")); const c = { killed: 0, timeout: 0, survived: 0, no_coverage: 0, other: 0 };
                     for (const file of Object.values(r.files || {})) for (const m of file.mutants || []) {
                       const st = m.status; if (st === \"Killed\") c.killed++; else if (st === \"Timeout\") c.timeout++; else if (st === \"Survived\") c.survived++; else if (st === \"NoCoverage\") c.no_coverage++; else c.other++;

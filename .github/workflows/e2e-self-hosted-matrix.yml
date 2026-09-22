@@ -543,6 +543,7 @@ jobs:
                       tests/e2e/cli/render-scoreboard.py
                       tests/e2e/cli/llm-release-note.py
                       .github/actions/discord-notify
+                      .github/actions/report-signal
                   sparse-checkout-cone-mode: false
 
             - name: Download all evidence
