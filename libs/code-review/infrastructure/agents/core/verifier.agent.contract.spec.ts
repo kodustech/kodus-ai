@@ -884,7 +884,9 @@ describe('backfill E — N-model structured-output gate', () => {
 // rounds), and never records from an unrelated file.
 // =========================================================================
 describe('verifier contract — previous review decisions (issue #1313)', () => {
-    const decision = (over: Partial<PrDecisionRecord> = {}): PrDecisionRecord => ({
+    const decision = (
+        over: Partial<PrDecisionRecord> = {},
+    ): PrDecisionRecord => ({
         suggestionId: 'sug-1',
         relevantFile: 'src/x.ts',
         suggestionContent: 'Use const instead of let.',
@@ -905,14 +907,17 @@ describe('verifier contract — previous review decisions (issue #1313)', () => 
         expect(p).not.toContain('<PreviousReviewDecisions>');
     });
 
-    it('LlmVerifier.verify scopes previousDecisions to the candidate\'s own file, never by line range', async () => {
+    it("LlmVerifier.verify scopes previousDecisions to the candidate's own file, never by line range", async () => {
         const { runner, run } = fakeRunner(async () =>
             makeState({ keep: false, rationale: 'refuted: already applied' }),
         );
         const v = new LlmVerifier(runner, {
             ...inertParams(),
             previousDecisions: [
-                decision({ relevantFile: 'src/x.ts', suggestionContent: 'SAME FILE decision' }),
+                decision({
+                    relevantFile: 'src/x.ts',
+                    suggestionContent: 'SAME FILE decision',
+                }),
                 decision({
                     suggestionId: 'sug-2',
                     relevantFile: 'src/other.ts',
@@ -921,7 +926,10 @@ describe('verifier contract — previous review decisions (issue #1313)', () => 
             ],
         });
 
-        await v.verify(candidate({ relevantFile: 'src/x.ts' }), {} as ToolContext);
+        await v.verify(
+            candidate({ relevantFile: 'src/x.ts' }),
+            {} as ToolContext,
+        );
 
         const [, input] = run.mock.calls[0];
         expect(input.prompt).toContain('SAME FILE decision');
@@ -937,7 +945,10 @@ describe('verifier contract — previous review decisions (issue #1313)', () => 
             previousDecisions: [decision({ relevantFile: 'src/unrelated.ts' })],
         });
 
-        await v.verify(candidate({ relevantFile: 'src/x.ts' }), {} as ToolContext);
+        await v.verify(
+            candidate({ relevantFile: 'src/x.ts' }),
+            {} as ToolContext,
+        );
 
         const [, input] = run.mock.calls[0];
         expect(input.prompt).not.toContain('<PreviousReviewDecisions>');
@@ -1016,8 +1027,7 @@ describe('verifier contract — previous review decisions (issue #1313)', () => 
 });
 
 // ---- Text verdicts (issue #1937) -----------------------------------------
-// Production traces (`4639aa9af1083572bf45ee107a105468`,
-// `ebfe70f9537dfe7f2fc7972ea4acc7b0`, `b69fbef3acec1402ead741e19e8c15b1`) show
+// The production traces named in issue #1937 show
 // the verifier ending on `finish_reason: stop` with a `{"keep": false}` JSON in
 // its final TEXT and no submitVerdict call: the prompt asks for JSON, the tool
 // list offers submitVerdict, and strict tool use is off for Anthropic and the
@@ -1035,20 +1045,22 @@ describe('verifier contract — verdict written as TEXT (#1937)', () => {
         } as Partial<RunState>);
     }
 
-    // The real trace: reasoning prose, then the verdict object.
-    const TRACE_4639 = `The code's own inline comment explicitly states the CPU bump was scoped to the API task definition. The finding is purely speculative.
+    // The production shape: reasoning prose, a blank line, then the verdict
+    // object — carrying the `index` field the prompt template hands the model.
+    // Wording neutral: this repo is public and the real payload is customer code.
+    const TEXT_VERDICT = `The cited comment on the same line states the limit was raised for this worker only. The finding assumes it was meant for the other service too, and the code says otherwise.
 
 {
   "index": 0,
   "keep": false,
-  "rationale": "The code's own inline comment explicitly states the intent; the finding is purely speculative ('if the CPU increase was intended for BFF as well') and the code actively refutes the premise",
+  "rationale": "the inline comment states the intent explicitly; the finding is speculative and the code refutes its premise",
   "confidence": "high"
 }`;
 
-    it('drops the finding on a text keep:false (trace 4639aa9a…)', () => {
-        const v = extractVerdict(textOnlyState(TRACE_4639));
+    it('drops the finding on a text keep:false (the shape from issue #1937)', () => {
+        const v = extractVerdict(textOnlyState(TEXT_VERDICT));
         expect(v.keep).toBe(false);
-        expect(v.rationale).toMatch(/purely speculative/);
+        expect(v.rationale).toMatch(/the code refutes its premise/);
         expect(v.confidence).toBe('high');
         expect(v.parseMode).toBe('text');
     });
@@ -1113,21 +1125,18 @@ describe('verifier contract — verdict written as TEXT (#1937)', () => {
     });
 
     it('prefers the submitVerdict artifact over the final text', () => {
-        const state = makeState(
-            { keep: true, rationale: 'from the tool' },
-            {
-                steps: [
-                    {
-                        index: 0,
-                        message: {
-                            role: 'assistant',
-                            content: '{"keep": false, "rationale": "stale"}',
-                            toolCalls: [],
-                        },
+        const state = makeState({ keep: true, rationale: 'from the tool' }, {
+            steps: [
+                {
+                    index: 0,
+                    message: {
+                        role: 'assistant',
+                        content: '{"keep": false, "rationale": "stale"}',
+                        toolCalls: [],
                     },
-                ],
-            } as Partial<RunState>,
-        );
+                },
+            ],
+        } as Partial<RunState>);
         const v = extractVerdict(state);
         expect(v.keep).toBe(true);
         expect(v.rationale).toBe('from the tool');
@@ -1137,7 +1146,9 @@ describe('verifier contract — verdict written as TEXT (#1937)', () => {
     it('recovers a renamed/wrapped verdict written as text (#1786 shapes)', () => {
         expect(
             extractVerdict(
-                textOnlyState('{"result": {"shouldKeep": false, "rationale": "r"}}'),
+                textOnlyState(
+                    '{"result": {"shouldKeep": false, "rationale": "r"}}',
+                ),
             ).keep,
         ).toBe(false);
     });

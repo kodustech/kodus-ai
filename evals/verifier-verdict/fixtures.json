@@ -1,14 +1,17 @@
 {
-    "note": "Verifier FINAL-TEXT payloads, one per row. Shapes observed in production Langfuse traces (issue #1937), rewritten against a neutral codebase: kodus-ai is public and the real payloads are customer source. `expect` is what the verify gate MUST do with that payload. Capture a live corpus with capture.js when you need volume; this set is the CI floor.",
+    "note": "Verifier FINAL-TEXT payloads, one per row. Shapes observed in production traces (issue #1937), rewritten against a neutral codebase: kodus-ai is public and the real payloads are customer source, so no wording, path or identifier from a customer review appears here. `expect` is what the verify gate MUST do with that payload. Capture a live corpus with capture.js when you need volume; this set is the CI floor.",
     "rows": [
         {
-            "id": "trace-4639-text-refutation",
+            "id": "text-refutation-with-index-field",
             "model": "claude-sonnet-4-6",
-            "source": "issue #1937, trace 4639aa9af1083572bf45ee107a105468 (quoted verbatim in the issue)",
+            "source": "shape: reasoning, a blank line, then the verdict object — carrying the \"index\" field the prompt template hands the model. Taken from the production trace named in issue #1937; the wording here is neutral.",
             "finishReason": "stop",
             "calledVerdictTool": false,
-            "text": "The code's own inline comment explicitly states the CPU bump was scoped to the API task definition. The finding is purely speculative.\n\n{\n  \"index\": 0,\n  \"keep\": false,\n  \"rationale\": \"The code's own inline comment explicitly states the intent; the finding is purely speculative ('if the CPU increase was intended for BFF as well') and the code actively refutes the premise\",\n  \"confidence\": \"high\"\n}",
-            "expect": { "keep": false, "parseMode": "text" }
+            "text": "The cited comment on the same line states the limit was raised for this worker only. The finding assumes it was meant for the other service too, and the code says otherwise.\n\n{\n  \"index\": 0,\n  \"keep\": false,\n  \"rationale\": \"the inline comment states the intent explicitly; the finding is speculative and the code refutes its premise\",\n  \"confidence\": \"high\"\n}",
+            "expect": {
+                "keep": false,
+                "parseMode": "text"
+            }
         },
         {
             "id": "text-refutation-after-quoted-code",
@@ -17,7 +20,10 @@
             "finishReason": "stop",
             "calledVerdictTool": false,
             "text": "The claim is that these selectors do not exist. The cited file reads:\n\n```ts\nconst opts = { keep: true, retries: 3 };\nif (opts.keep) { flush({ keep: true }); }\n```\n\nBoth attributes are present, so the premise is false.\n\n```json\n{\"keep\": false, \"rationale\": \"both attributes exist in the cited file; the premise is demonstrably false\", \"confidence\": \"high\"}\n```",
-            "expect": { "keep": false, "parseMode": "text" }
+            "expect": {
+                "keep": false,
+                "parseMode": "text"
+            }
         },
         {
             "id": "text-confirmation",
@@ -26,7 +32,10 @@
             "finishReason": "stop",
             "calledVerdictTool": false,
             "text": "Read the handler and the guard is genuinely missing on the early-return path.\n\n{\"keep\": true, \"rationale\": \"the null guard is absent on the early-return branch\", \"confidence\": \"medium\"}",
-            "expect": { "keep": true, "parseMode": "text" }
+            "expect": {
+                "keep": true,
+                "parseMode": "text"
+            }
         },
         {
             "id": "text-refutation-renamed-key",
@@ -35,7 +44,10 @@
             "finishReason": "stop",
             "calledVerdictTool": false,
             "text": "Checked every caller. The claim does not hold.\n\n{\"result\": {\"shouldKeep\": false, \"rationale\": \"all three callers pass the argument\"}}",
-            "expect": { "keep": false, "parseMode": "text" }
+            "expect": {
+                "keep": false,
+                "parseMode": "text"
+            }
         },
         {
             "id": "text-example-then-verdict",
@@ -44,30 +56,39 @@
             "finishReason": "stop",
             "calledVerdictTool": false,
             "text": "The expected response format is {\"keep\": true, \"rationale\": \"...\"}. My verdict:\n\n{\"keep\": false, \"rationale\": \"the branch is unreachable, the finding is moot\"}",
-            "expect": { "keep": false, "parseMode": "text" }
+            "expect": {
+                "keep": false,
+                "parseMode": "text"
+            }
         },
         {
             "id": "tool-verdict",
             "model": "claude-sonnet-4-6",
-            "source": "issue #1937 counter-example, trace c7979f7b1ae7dce3b1cd5ad96ecb618b — the tool path works",
+            "source": "shape: the tool path, which works — the counter-example in issue #1937. Wording neutral.",
             "finishReason": "stop",
             "calledVerdictTool": true,
             "toolPayload": {
                 "keep": false,
-                "rationale": "the finding itself states 'No issue found here; this is a confirmation of correct wiring.'",
+                "rationale": "the finding reports no defect: its own text confirms the wiring is correct",
                 "confidence": "high"
             },
             "text": "",
-            "expect": { "keep": false, "parseMode": "tool" }
+            "expect": {
+                "keep": false,
+                "parseMode": "tool"
+            }
         },
         {
             "id": "budget-exhausted-no-verdict",
             "model": "accounts/fireworks/models/deepseek-v4-flash-0731",
-            "source": "shape: 39 of 247 production runs — cut off mid-investigation, last message is tool_call only, no text. Nothing to parse; fail-open is correct.",
+            "source": "shape: the largest bucket in observed.json — cut off mid-investigation, last message is tool_call only, no text. Nothing to parse; fail-open is correct.",
             "finishReason": "tool_call",
             "calledVerdictTool": false,
             "text": "",
-            "expect": { "keep": true, "parseMode": "default-keep" }
+            "expect": {
+                "keep": true,
+                "parseMode": "default-keep"
+            }
         },
         {
             "id": "prose-only-no-json",
@@ -76,7 +97,10 @@
             "finishReason": "stop",
             "calledVerdictTool": false,
             "text": "I could not reach a conclusion: the file the finding points at is not in the diff and I could not read it.",
-            "expect": { "keep": true, "parseMode": "default-keep" }
+            "expect": {
+                "keep": true,
+                "parseMode": "default-keep"
+            }
         }
     ]
 }
