@@ -13,25 +13,31 @@ describe("planCtaTarget", () => {
     };
 
     it("sends a cloud org to the plan chooser", async () => {
-        const { planCtaTarget, unlockedByLabel } = await load("development");
+        const { planCtaTarget, unlockedByLabel, availabilityLine } =
+            await load("development");
 
         expect(planCtaTarget()).toEqual({
             href: "/choose-plan",
             label: "See plans",
         });
         expect(unlockedByLabel()).toBe("Teams and Enterprise");
+        expect(availabilityLine()).toBe("Available on Teams and Enterprise.");
     });
 
     it("sends a self-hosted install to its license key, not to Stripe", async () => {
         // A self-hosted operator who lands on /choose-plan gets a screen
         // built around a checkout they cannot reach — capability there
         // comes from a license key.
-        const { planCtaTarget, unlockedByLabel } = await load("self-hosted");
+        const { planCtaTarget, unlockedByLabel, availabilityLine } =
+            await load("self-hosted");
 
         expect(planCtaTarget()).toEqual({
             href: "/settings/subscription",
             label: "Activate a license",
         });
         expect(unlockedByLabel()).toBe("an Enterprise license");
+        expect(availabilityLine()).toBe(
+            "Available with an Enterprise license.",
+        );
     });
 });
