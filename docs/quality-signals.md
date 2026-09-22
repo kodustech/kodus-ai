@@ -58,5 +58,5 @@ A new name needs no schema change. Add it to the list above.
 
 - `scripts/quality/bootstrap-gcp.sh`: dataset, service accounts, Workload Identity, repo variables. Idempotent.
 - `scripts/quality/apply.sh`: table and views. Idempotent.
-- `.github/workflows/quality-signal-smoke.yml`: writes and reads back one row. Run it when auth changes.
+- `.github/workflows/quality-signal-smoke.yml`: writes and reads back one row. Runs on PRs that touch the action; run it by hand when auth changes.
 - The writer service account can only touch the `quality` dataset. There is no JSON key anywhere.

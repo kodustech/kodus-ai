@@ -1,7 +1,8 @@
 name: Quality signal smoke
 
 # Proves .github/actions/report-signal can write to BigQuery from this repo:
-# writes one row named smoke.report_signal and reads it back. Manual only.
+# writes one row named smoke.report_signal and reads it back. Runs on PRs that
+# touch the action, and by hand when auth changes.
 
 permissions:
     contents: read
@@ -9,6 +10,10 @@ permissions:
 
 on:
     workflow_dispatch:
+    pull_request:
+        paths:
+            - .github/actions/report-signal/**
+            - .github/workflows/quality-signal-smoke.yml
 
 jobs:
     smoke:
