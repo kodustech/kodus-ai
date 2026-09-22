@@ -522,6 +522,30 @@ describe('runStructuredReviewCall — json_object routes carry the contract (iss
         expect(systemOf(0)).toBe('sys');
     });
 
+    it('a MARKED non-openai_compat env default is NOT taxed either', async () => {
+        // The case above leaves the flag ON, so it never reaches the guard. This
+        // one turns the flag OFF with no env configured: `resolveEnvProvider()`
+        // returns null, so the build is the managed Fireworks default, which
+        // hardcodes supportsStructuredOutputs and ignores the opt-out. A mark on
+        // `env:auto` must therefore NOT append the contract.
+        //
+        // Without this, dropping `kind === 'openai_compat'` from the guard keeps
+        // the whole suite green while every marked managed route gets a contract
+        // appended to a prompt whose wire still carries the schema — the drift
+        // and the prompt tax this change exists to remove.
+        const prevModel = process.env.API_LLM_PROVIDER_MODEL;
+        delete process.env.API_LLM_PROVIDER_MODEL;
+        try {
+            (mayUseJsonSchema as jest.Mock).mockReturnValueOnce(false);
+            mockGenerate.mockResolvedValueOnce(ok({ groups: [] }));
+            await runStructuredReviewCall({ ...base, schema });
+            expect(systemOf(0)).toBe('sys');
+        } finally {
+            if (prevModel !== undefined)
+                process.env.API_LLM_PROVIDER_MODEL = prevModel;
+        }
+    });
+
     it('does not re-issue a byte-identical json_object call on a schema-ish 4xx', async () => {
         // The old code read `sentJsonSchema` — true whenever the SDK was ASKED
         // for a schema, even on a route that never sends one — and re-issued

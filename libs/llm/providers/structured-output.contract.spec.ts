@@ -202,20 +202,38 @@ describe('build() is the authority on strict schema, and it disagrees', () => {
             open_router: { model: 'z-ai/glm-5.3' },
             novita: { model: 'deepseek/deepseek-v4-pro' },
         };
-        const drift = Object.entries(PROBE).filter(([id, { model, baseURL }]) => {
+        const read = Object.entries(PROBE).map(([id, { model, baseURL }]) => {
             const cfg = { provider: id, model, baseURL, apiKey: 'k' } as any;
             const built: any = REGISTRY.get(id).build(cfg, {
                 structuredOutputs: true,
             });
-            const flag = built?.config?.supportsStructuredOutputs;
-            if (flag === undefined) return false; // native SDK: no such flag
-            return (
-                flag !==
-                (resolveStructuredOutputPolicy(REGISTRY.get(id), cfg) ===
-                    'json_schema')
-            );
+            return {
+                id,
+                flag: built?.config?.supportsStructuredOutputs as
+                    | boolean
+                    | undefined,
+                strictByPolicy:
+                    resolveStructuredOutputPolicy(REGISTRY.get(id), cfg) ===
+                    'json_schema',
+            };
         });
-        expect(drift.map(([id]) => id)).toEqual([]);
+
+        const drift = read.filter(
+            (r) => r.flag !== undefined && r.flag !== r.strictByPolicy,
+        );
+        expect(drift.map((r) => r.id)).toEqual([]);
+
+        // A module whose build exposes NO flag is not "nothing to check" — it is
+        // checked somewhere ELSE, on the request body (json-object-contract
+        // .spec.ts asserts the schema-bearing channel per protocol). Silently
+        // skipping it is how a module that stops sending the schema while still
+        // declaring json_schema would pass this whole file green, which is the
+        // #1916 shape. So the skip is BOUNDED: these exact ids and no others. A
+        // new module joining them has to come here and say so, and then go add
+        // its row to the wire table.
+        expect(
+            read.filter((r) => r.flag === undefined).map((r) => r.id),
+        ).toEqual(['openai']);
     });
 
     it('a delegating module answers for the upstream it routes over, not for itself', () => {
