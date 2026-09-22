@@ -69,6 +69,19 @@ const SubscriptionInvalid = () => {
     );
 };
 
+// A failed payment isn't fixed by upgrading: the card on the subscription is.
+const PaymentFailed = () => {
+    return (
+        <div className="bg-danger/30 py-2 text-center text-sm">
+            Kody's off duty — the last payment didn&apos;t go through.{" "}
+            <Link href="/settings/subscription" className="font-bold">
+                Update your payment method
+            </Link>{" "}
+            to bring her back to work.
+        </div>
+    );
+};
+
 /**
  * The plan could not be verified — billing did not answer.
  *
@@ -122,7 +135,7 @@ const components: Partial<
     "trial-exhausted": TrialExhausted,
     "expired": SubscriptionInvalid,
     "canceled": SubscriptionInvalid,
-    "payment-failed": SubscriptionInvalid,
+    "payment-failed": PaymentFailed,
     // Was missing, which is why an unverifiable plan said nothing at all.
     "inactive": SubscriptionUnverified,
 };

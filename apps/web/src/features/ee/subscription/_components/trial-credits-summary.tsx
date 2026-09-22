@@ -3,7 +3,6 @@
 import type { ElementType } from "react";
 import { Button } from "@components/ui/button";
 import { Link } from "@components/ui/link";
-import { Progress } from "@components/ui/progress";
 import {
     Tooltip,
     TooltipContent,
@@ -21,7 +20,6 @@ import {
     UsersIcon,
 } from "lucide-react";
 
-import { TRIAL_DAYS } from "../_constants/trial";
 import type {
     TrialCreditTier,
     TrialReviewCredits,
@@ -101,7 +99,6 @@ export const TrialCreditsSummary = ({
     credits,
     trialUnlocks,
     byok,
-    daysLeft,
     companyEmailVerified,
     workspaceMembersCount,
     codeHostMembersCount,
@@ -111,7 +108,6 @@ export const TrialCreditsSummary = ({
     trialCreditTier?: TrialCreditTier;
     trialUnlocks?: TrialUnlock[];
     byok?: boolean;
-    daysLeft?: number;
     companyEmailVerified?: boolean;
     workspaceMembersCount?: number;
     codeHostMembersCount?: number;
@@ -132,108 +128,36 @@ export const TrialCreditsSummary = ({
             (u.kind === "action" ? 0 : 2) + (isDoneStatus(u.status) ? 1 : 0);
         return rank(a) - rank(b);
     });
-    const daysLeftValue = typeof daysLeft === "number" ? daysLeft : TRIAL_DAYS;
     // Legacy trials (started before the credit model shipped) have no live
     // credit data — they keep the old "unlimited during the trial" behavior.
     // The credit UI only shows for trials that actually carry credits.
     const showCredits =
         getTrialCardState({ byok, hasCredits: balance.hasLiveData }) ===
         "credits";
-    const trialReviewCopy = byok
-        ? "Unlimited reviews — they run on your key."
-        : showCredits
-          ? `${balance.remaining} of ${balance.total} free reviews left while you try.`
-          : "Unlimited reviews during your trial.";
 
     // Highlighted, non-BYOK-only disclosure: trial reviews run on our managed
     // models, and BYOK unlocks larger ones. Kept short so it reads as a callout.
     const trialModelsCopy =
         "Trial reviews run on efficient models we provide (DeepSeek V4 Flash on Fireworks, GPT Luna, Kimi K2.7). Connect your AI key for larger, frontier models.";
 
+    // Days and reviews left are the plan sheet's facts; this is the part
+    // under them — which models the trial uses, and how to keep reviewing.
     return (
         <section className="flex flex-col gap-5">
-            <div className="flex flex-col gap-3">
-                <div>
-                    <p className="text-text-primary text-base font-semibold">
-                        {byok
-                            ? "You're all set — reviews are unlimited"
-                            : showCredits
-                              ? "You're trying Kody for free"
-                              : "You're on a Team trial"}
-                    </p>
-                    <p className="text-text-secondary mt-1 text-sm">
-                        {byok
-                            ? `Reviews run on your AI key, so there's no review limit. Your ${TRIAL_DAYS}-day trial just unlocks the full Team features.`
-                            : showCredits
-                              ? `Your first ${balance.total} reviews are on us — start reviewing with zero setup.`
-                              : `Reviews are unlimited during your ${TRIAL_DAYS}-day trial.`}
+            {byok ? (
+                <div className="bg-success/10 text-success flex items-start gap-2 rounded-lg p-3 text-sm">
+                    <SparklesIcon className="mt-0.5 size-4 shrink-0" />
+                    <p>
+                        Your AI key is connected, so reviews are unlimited — on
+                        any plan, even after the trial ends.
                     </p>
                 </div>
-
-                <div className="border-card-lv3 grid grid-cols-1 gap-4 border-y py-3 md:grid-cols-2">
-                    <div>
-                        <p className="text-text-tertiary text-xs font-semibold uppercase">
-                            Team trial
-                        </p>
-                        <p className="text-text-primary mt-1 text-xl font-semibold">
-                            {daysLeftValue} days
-                        </p>
-                        <p className="text-text-secondary mt-1 text-xs">
-                            Full Team features for {daysLeftValue} more days.
-                        </p>
-                    </div>
-
-                    <div>
-                        <p className="text-text-tertiary text-xs font-semibold uppercase">
-                            {byok
-                                ? "Your AI key"
-                                : showCredits
-                                  ? "Reviews on us"
-                                  : "Reviews"}
-                        </p>
-                        <p
-                            className={`mt-1 text-xl font-semibold ${showCredits ? "text-text-primary" : "text-success"}`}>
-                            {byok
-                                ? "Connected"
-                                : showCredits
-                                  ? `${balance.remaining} of ${balance.total}`
-                                  : "Unlimited"}
-                        </p>
-                        <p className="text-text-secondary mt-1 text-xs">
-                            {trialReviewCopy}
-                        </p>
-                    </div>
+            ) : (
+                <div className="bg-primary-light/10 text-primary-light flex items-start gap-2 rounded-lg p-3 text-sm">
+                    <InfoIcon className="mt-0.5 size-4 shrink-0" />
+                    <p>{trialModelsCopy}</p>
                 </div>
-
-                {byok ? (
-                    <div className="bg-success/10 text-success flex items-start gap-2 rounded-lg p-3 text-sm">
-                        <SparklesIcon className="mt-0.5 size-4 shrink-0" />
-                        <p>
-                            Your AI key is connected, so reviews are unlimited —
-                            on any plan, even after the trial ends.
-                        </p>
-                    </div>
-                ) : showCredits ? (
-                    <div className="flex flex-col gap-2">
-                        <Progress
-                            value={balance.used}
-                            max={balance.total}
-                            variant={
-                                balance.remaining === 0 ? "tertiary" : "primary"
-                            }
-                        />
-                        <div className="bg-primary-light/10 text-primary-light flex items-start gap-2 rounded-lg p-3 text-sm">
-                            <InfoIcon className="mt-0.5 size-4 shrink-0" />
-                            <p>{trialModelsCopy}</p>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="bg-primary-light/10 text-primary-light flex items-start gap-2 rounded-lg p-3 text-sm">
-                        <InfoIcon className="mt-0.5 size-4 shrink-0" />
-                        <p>{trialModelsCopy}</p>
-                    </div>
-                )}
-            </div>
+            )}
 
             {!compact && showCredits && sortedUnlocks.length > 0 && (
                 <div className="border-card-lv3 flex flex-col gap-3 border-t pt-4">

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@components/ui/button";
 import { DataTable } from "@components/ui/data-table";
 import { magicModal } from "@components/ui/magic-modal";
+import { Skeleton } from "@components/ui/skeleton";
 import { toast } from "@components/ui/toaster/use-toast";
 import { useAsyncAction } from "@hooks/use-async-action";
 import { createOrUpdateOrganizationParameter } from "@services/organizationParameters/fetch";
@@ -20,7 +21,6 @@ import {
     UserMinusIcon,
     UserPlusIcon,
 } from "lucide-react";
-import { Skeleton } from "@components/ui/skeleton";
 import { AsyncBoundary } from "src/core/components/async-boundary";
 import { Switch } from "src/core/components/ui/switch";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
@@ -227,59 +227,78 @@ export const LicensesPageClient = ({
                         </div>
                     </div>
                 )}
-            {membersUnavailable && (
-                <div className="text-warning border-warning/40 bg-warning/10 flex items-start gap-2 rounded-lg border p-3 text-sm">
-                    <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" />
-                    <span className="text-pretty">
-                        We couldn&apos;t reach your code platform, so we
-                        can&apos;t tell who left the organization. Members shown
-                        here may be incomplete and seat cleanup is paused. If
-                        someone you need to license is missing, use{" "}
-                        <b>Assign by git ID</b> to give them a seat anyway.
-                    </span>
-                </div>
-            )}
-            <div className="flex justify-end gap-2">
-                {canEdit && canAssignSeats && (
-                    <AsyncBoundary
-                        errorVariant="silent"
-                        skeleton={<Skeleton className="h-8 w-36" />}>
-                        <AssignByGitIdButton
-                            onAssigned={() => router.refresh()}
-                            autoLicenseAssignmentConfig={
-                                autoLicenseAssignmentConfig
-                            }
-                        />
-                    </AsyncBoundary>
+            {/* One row: what the list can't be trusted for, beside what to
+                do about it. The note only points at "Assign by git ID" when
+                that button is actually here. */}
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                {membersUnavailable ? (
+                    <p className="text-text-secondary flex items-start gap-2 text-sm text-pretty md:max-w-2xl">
+                        <AlertTriangleIcon className="text-warning mt-0.5 size-4 shrink-0" />
+                        <span>
+                            Your code platform didn&apos;t answer, so this list
+                            may be missing people and automatic seat cleanup is
+                            paused.
+                            {canEdit && canAssignSeats && (
+                                <>
+                                    {" "}
+                                    Use <b>Assign by git ID</b> to seat someone
+                                    who isn&apos;t listed.
+                                </>
+                            )}
+                        </span>
+                    </p>
+                ) : (
+                    <span aria-hidden />
                 )}
-                {canEdit && reclaimableSeats.length > 0 && (
+                <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                    {canEdit && canAssignSeats && (
+                        <AsyncBoundary
+                            errorVariant="silent"
+                            skeleton={<Skeleton className="h-8 w-36" />}>
+                            <AssignByGitIdButton
+                                onAssigned={() => router.refresh()}
+                                autoLicenseAssignmentConfig={
+                                    autoLicenseAssignmentConfig
+                                }
+                            />
+                        </AsyncBoundary>
+                    )}
+                    {canEdit && reclaimableSeats.length > 0 && (
+                        <Button
+                            size="sm"
+                            variant="helper"
+                            leftIcon={<UserMinusIcon />}
+                            onClick={openPruneModal}>
+                            Release {reclaimableSeats.length} unused{" "}
+                            {reclaimableSeats.length === 1 ? "seat" : "seats"}
+                        </Button>
+                    )}
                     <Button
                         size="sm"
                         variant="helper"
-                        leftIcon={<UserMinusIcon />}
-                        onClick={openPruneModal}>
-                        Release {reclaimableSeats.length} unused{" "}
-                        {reclaimableSeats.length === 1 ? "seat" : "seats"}
+                        leftIcon={
+                            <RefreshCwIcon
+                                className={isRefreshing ? "animate-spin" : ""}
+                            />
+                        }
+                        disabled={isRefreshing}
+                        onClick={handleRefreshMembers}>
+                        Refresh members
                     </Button>
-                )}
-                <Button
-                    size="sm"
-                    variant="helper"
-                    leftIcon={
-                        <RefreshCwIcon
-                            className={isRefreshing ? "animate-spin" : ""}
-                        />
-                    }
-                    disabled={isRefreshing}
-                    onClick={handleRefreshMembers}>
-                    Refresh members
-                </Button>
+                </div>
             </div>
             <DataTable
                 data={data}
                 columns={columns}
                 state={{ globalFilter: query }}
                 onGlobalFilterChange={setQuery}
+                EmptyComponent={
+                    query
+                        ? `No one matches “${query}”.`
+                        : membersUnavailable
+                          ? "No one to list until your code platform answers."
+                          : "No members found in your git organization."
+                }
             />
         </div>
     );

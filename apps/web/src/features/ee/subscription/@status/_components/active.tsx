@@ -1,84 +1,83 @@
 "use client";
 
 import { Button } from "@components/ui/button";
-import { Card, CardHeader, CardTitle } from "@components/ui/card";
-import { useAsyncAction } from "@hooks/use-async-action";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import type { TeamMembersResponse } from "@services/setup/types";
-import { CircleDollarSign } from "lucide-react";
-import { useSelectedTeamId } from "src/core/providers/selected-team-context";
-import { pluralize } from "src/core/utils/string";
+import { CreditCardIcon } from "lucide-react";
 import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
 
-import { createManageBillingLinkAction } from "../../_actions/create-manage-billing-link";
+import {
+    MembersFact,
+    PlanFact,
+    PlanSheet,
+    SeatsFact,
+} from "../../_components/plan-sheet";
+import { useManageBilling } from "../../_hooks/use-manage-billing";
+import {
+    billingIntervalOf,
+    modelsOf,
+    tierOf,
+    toneOfTier,
+} from "../../_utils/plan-tone";
 
 export const Active = ({
     members,
 }: {
     members: TeamMembersResponse["members"];
 }) => {
-    const { teamId } = useSelectedTeamId();
     const subscription = useSubscriptionStatus();
     const canEdit = usePermission(Action.Update, ResourceType.Billing);
+    const [openBilling, { loading }] = useManageBilling();
+
     if (subscription.status !== "active") return null;
 
-    const totalLicenses = subscription.numberOfLicenses;
-
-    const assignedLicenses = subscription.usersWithAssignedLicense.length;
-    const organizationAdminsCount = members.length;
-
-    const [
-        createLinkToManageBilling,
-        { loading: isCreatingLinkToManageBilling },
-    ] = useAsyncAction(async () => {
-        const { url } = await createManageBillingLinkAction({ teamId });
-        window.location.href = url;
-    });
-
-    const formattedPlanName = subscription.planType
-        .replace("_byok", "")
-        .replaceAll("_", " ");
+    const tier = tierOf(subscription.planType) ?? "Paid plan";
+    const tone = toneOfTier(tier);
+    const models = modelsOf(subscription.planType);
 
     return (
-        <Card className="w-full">
-            <CardHeader className="flex flex-row justify-between gap-2">
-                <div className="flex flex-col gap-2">
-                    <p className="text-text-secondary text-sm">
-                        Paid subscription {subscription.byok && "(BYOK)"}
-                    </p>
-                    <CardTitle className="text-2xl">
-                        <span className="capitalize">{formattedPlanName}</span>{" "}
-                        plan
-                    </CardTitle>
-
-                    <div className="mt-4 flex gap-6">
-                        <p className="text-text-secondary text-sm">
-                            <strong>{assignedLicenses}</strong> of{" "}
-                            <strong>{totalLicenses}</strong> licenses assigned
-                        </p>
-
-                        <p className="text-text-secondary text-sm">
-                            <strong>{organizationAdminsCount}</strong> workspace{" "}
-                            {pluralize(organizationAdminsCount, {
-                                singular: "member",
-                                plural: "members",
-                            })}
-                        </p>
-                    </div>
-                </div>
-
+        <PlanSheet
+            tone={tone}
+            chip={tier}
+            title={tier}
+            summary={`${billingIntervalOf(subscription.planType)} through Stripe. ${
+                models === "BYOK"
+                    ? "Reviews run on your own AI key."
+                    : "Kodus runs the models your reviews use."
+            }`}
+            actions={
                 <Button
                     size="md"
                     variant="primary"
-                    className="h-fit"
-                    leftIcon={<CircleDollarSign />}
-                    loading={isCreatingLinkToManageBilling}
+                    leftIcon={<CreditCardIcon />}
+                    loading={loading}
                     disabled={!canEdit}
-                    onClick={() => createLinkToManageBilling()}>
+                    onClick={() => openBilling()}>
                     Manage billing
                 </Button>
-            </CardHeader>
-        </Card>
+            }
+            facts={
+                <>
+                    {subscription.numberOfLicenses > 0 && (
+                        <SeatsFact
+                            used={subscription.usersWithAssignedLicense.length}
+                            total={subscription.numberOfLicenses}
+                            tone={tone}
+                        />
+                    )}
+                    <MembersFact count={members.length} />
+                    <PlanFact
+                        label="Models"
+                        value={models}
+                        detail={
+                            models === "BYOK"
+                                ? "Your key pays for every review."
+                                : "Provided by Kodus."
+                        }
+                    />
+                </>
+            }
+        />
     );
 };

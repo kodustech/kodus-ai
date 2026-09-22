@@ -25,6 +25,12 @@ import {
 } from "lucide-react";
 import { cn } from "src/core/utils/components";
 import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
+import {
+    PLAN_BAR_TONE,
+    PLAN_BORDER_TONE,
+    PLAN_CHIP_TONE,
+    type PlanTone,
+} from "src/features/ee/subscription/_utils/plan-tone";
 
 // Same keyboard ring and pressed step as the rest of the rail.
 const CONTROL_STATES =
@@ -36,35 +42,16 @@ const HREF = "/settings/subscription";
 // way out the exhausted banner offers).
 const BYOK_HREF = "/byok";
 
-// One tone per tier, from the system's tokens: the chip carries the tier, the
-// panel's border echoes it. Trial takes the brand orange, Teams lavender,
-// Enterprise blue (the rose pair read as an error beside Payment failed).
-// Free and Community stay neutral — they are the floor, not a tier to show
-// off.
-type Tone = "neutral" | "primary" | "secondary" | "info" | "danger";
+// Tones are shared with the subscription page (plan-tone.ts), so the panel
+// and the page it opens read as one system.
+type Tone = PlanTone;
 
-const CHIP_TONES: Record<Tone, string> = {
-    neutral: "bg-card-lv3 text-text-secondary",
-    primary: "bg-primary-dark text-primary-light",
-    secondary: "bg-secondary-dark text-secondary-light",
-    info: "bg-info/15 text-info",
-    danger: "bg-danger/15 text-danger",
-};
-
+const CHIP_TONES = PLAN_CHIP_TONE;
+const BAR_TONES = PLAN_BAR_TONE;
+// A danger panel also fills, like the banner: reviews have stopped.
 const PANEL_TONES: Record<Tone, string> = {
-    neutral: "border-card-lv3/60",
-    primary: "border-primary-light/25",
-    secondary: "border-secondary-light/25",
-    info: "border-info/30",
-    danger: "border-danger/40 bg-danger/10 hover:bg-danger/15",
-};
-
-const BAR_TONES: Record<Tone, string> = {
-    neutral: "bg-text-secondary",
-    primary: "bg-primary-light",
-    secondary: "bg-secondary-light",
-    info: "bg-info",
-    danger: "bg-danger",
+    ...PLAN_BORDER_TONE,
+    danger: `${PLAN_BORDER_TONE.danger} bg-danger/10 hover:bg-danger/15`,
 };
 
 const daysLabel = (days: number) =>

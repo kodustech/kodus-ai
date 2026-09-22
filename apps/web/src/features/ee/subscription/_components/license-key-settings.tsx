@@ -2,27 +2,15 @@
 
 import { useState } from "react";
 import { Button } from "@components/ui/button";
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "@components/ui/card";
 import { Input } from "@components/ui/input";
 import { useToast } from "@components/ui/toaster/use-toast";
 import { authorizedFetch } from "@services/fetch";
-import {
-    CheckCircleIcon,
-    KeyIcon,
-    ServerIcon,
-    ShieldCheckIcon,
-    XCircleIcon,
-} from "lucide-react";
+import { CheckCircleIcon, KeyIcon, XCircleIcon } from "lucide-react";
 import { apiProxyPath } from "src/core/utils/api-proxy";
 import { cn } from "src/core/utils/components";
 
 import { useSubscriptionStatus } from "../_hooks/use-subscription-status";
+import { PlanFact, PlanSheet, SeatsFact } from "./plan-sheet";
 import { RequestTrialCta } from "./request-trial-cta";
 
 type LicenseActivationResult = {
@@ -66,7 +54,7 @@ export const LicenseKeySettings = () => {
                     title: "License activated",
                     description:
                         "Enterprise features are now unlocked. Reload the page to see changes.",
-                    variant: "default",
+                    variant: "success",
                 });
                 setLicenseKey("");
             } else {
@@ -74,7 +62,7 @@ export const LicenseKeySettings = () => {
                     title: "Invalid license key",
                     description:
                         "The provided key is invalid or expired. Please check and try again.",
-                    variant: "destructive",
+                    variant: "danger",
                 });
             }
         } catch {
@@ -82,7 +70,7 @@ export const LicenseKeySettings = () => {
                 title: "Activation failed",
                 description:
                     "Could not activate the license key. Please try again.",
-                variant: "destructive",
+                variant: "danger",
             });
         } finally {
             setLoading(false);
@@ -115,81 +103,59 @@ function ActiveLicenseCard({
 }) {
     if (subscription.status !== "licensed-self-hosted") return null;
 
-    const isExpiring =
-        subscription.daysRemaining != null && subscription.daysRemaining <= 30;
-    const isExpired =
-        subscription.daysRemaining != null && subscription.daysRemaining <= 0;
+    const days = subscription.daysRemaining;
+    const expired = days != null && days <= 0;
+    // A month out is when renewing needs someone's attention.
+    const ending = days != null && !expired && days <= 30;
+    const tone = expired ? "danger" : "info";
 
     return (
-        <Card>
-            <CardHeader className="flex flex-row items-start justify-between">
-                <div className="flex flex-col gap-1.5">
-                    <div className="flex items-center gap-2">
-                        <ShieldCheckIcon className="size-5 text-emerald-500" />
-                        <CardTitle>Active License</CardTitle>
-                    </div>
-                    <CardDescription>
-                        Enterprise features are enabled for this instance.
-                    </CardDescription>
-                </div>
-
-                {subscription.daysRemaining != null && (
-                    <span
-                        className={cn(
-                            "shrink-0 rounded-md px-2.5 py-1 text-xs font-medium tabular-nums",
-                            isExpired
-                                ? "bg-red-500/10 text-red-400"
-                                : isExpiring
-                                  ? "bg-yellow-500/10 text-yellow-400"
-                                  : "bg-emerald-500/10 text-emerald-400",
-                        )}>
-                        {isExpired
-                            ? "Expired"
-                            : `${subscription.daysRemaining} days remaining`}
-                    </span>
-                )}
-            </CardHeader>
-
-            <CardContent>
-                <div className="flex gap-6 text-sm">
-                    <div className="flex flex-col gap-0.5">
-                        <span className="text-text-secondary">Plan</span>
-                        <span className="font-medium capitalize">
-                            {subscription.planType}
-                        </span>
-                    </div>
-                    <div className="flex flex-col gap-0.5">
-                        <span className="text-text-secondary">Seats</span>
-                        <span className="font-medium tabular-nums">
-                            {subscription.usersWithAssignedLicense.length} /{" "}
-                            {subscription.numberOfLicenses}
-                        </span>
-                    </div>
-                </div>
-            </CardContent>
-        </Card>
+        <PlanSheet
+            tone={tone}
+            chip={expired ? "License expired" : "Enterprise"}
+            title="Enterprise"
+            summary="Self-hosted. Enterprise features are enabled for this instance."
+            facts={
+                <>
+                    <SeatsFact
+                        used={subscription.usersWithAssignedLicense.length}
+                        total={subscription.numberOfLicenses}
+                        tone={tone}
+                    />
+                    {days != null && (
+                        <PlanFact
+                            label="License"
+                            value={
+                                expired
+                                    ? "Expired"
+                                    : `${days} day${days === 1 ? "" : "s"} left`
+                            }
+                            detail={
+                                expired || ending
+                                    ? "Paste a renewed key below to keep the Enterprise features."
+                                    : "Replace the key below when you renew."
+                            }
+                            detailClassName={cn(
+                                expired && "text-danger",
+                                ending && "text-warning",
+                            )}
+                        />
+                    )}
+                </>
+            }
+        />
     );
 }
 
 function CommunityCard() {
     return (
-        <Card>
-            <CardHeader>
-                <div className="flex items-center gap-2">
-                    <ServerIcon className="text-text-secondary size-5" />
-                    <CardTitle>Community Edition</CardTitle>
-                </div>
-                <CardDescription className="text-pretty">
-                    You&apos;re running Kodus in self-hosted mode without a
-                    license. Don&apos;t have a key yet? Request a trial and
-                    we&apos;ll send you one to activate below.
-                </CardDescription>
-            </CardHeader>
-
-            <CardContent>
-                <RequestTrialCta />
-            </CardContent>
-        </Card>
+        <PlanSheet
+            tone="neutral"
+            chip="Community"
+            title="Community Edition"
+            summary="You're running Kodus in self-hosted mode without a license. Don't have a key yet? Request a trial and we'll send you one to activate below.">
+            <RequestTrialCta />
+        </PlanSheet>
     );
 }
 
@@ -208,25 +174,31 @@ function ActivateKeyCard({
     onLicenseKeyChange: (v: string) => void;
     onActivate: () => void;
 }) {
+    // Same surface as the plan sheet above it: one system on the page.
     return (
-        <Card>
-            <CardHeader>
-                <div className="flex items-center gap-2">
-                    <KeyIcon className="text-text-secondary size-5" />
-                    <CardTitle>
-                        {isLicensed
-                            ? "Update License Key"
-                            : "Activate License Key"}
-                    </CardTitle>
-                </div>
-                <CardDescription>
+        <section
+            aria-labelledby="license-key-heading"
+            className="bg-card-lv1 border-card-lv3/60 flex flex-col gap-4 rounded-2xl border p-6">
+            <div className="flex flex-col gap-1">
+                <h3
+                    id="license-key-heading"
+                    className="text-text-primary flex items-center gap-2 text-base font-semibold">
+                    <KeyIcon
+                        className="text-text-tertiary size-4"
+                        aria-hidden
+                    />
+                    {isLicensed
+                        ? "Update the license key"
+                        : "Activate a license key"}
+                </h3>
+                <p className="text-text-secondary text-sm">
                     {isLicensed
                         ? "Replace your current key with a new one."
                         : "Paste the license key you received from Kodus."}
-                </CardDescription>
-            </CardHeader>
+                </p>
+            </div>
 
-            <CardContent className="space-y-3">
+            <div className="flex flex-col gap-3">
                 <div className="flex gap-2">
                     <Input
                         size="md"
@@ -250,8 +222,8 @@ function ActivateKeyCard({
                 </div>
 
                 {activationResult?.valid && (
-                    <div className="flex items-start gap-2 rounded-lg bg-emerald-500/10 p-3 text-sm">
-                        <CheckCircleIcon className="mt-0.5 size-4 shrink-0 text-emerald-500" />
+                    <div className="bg-success/10 flex items-start gap-2 rounded-lg p-3 text-sm">
+                        <CheckCircleIcon className="text-success mt-0.5 size-4 shrink-0" />
                         <div className="flex flex-col gap-0.5">
                             <span className="font-medium">
                                 License activated successfully
@@ -268,15 +240,15 @@ function ActivateKeyCard({
                 )}
 
                 {activationResult && !activationResult.valid && (
-                    <div className="flex items-start gap-2 rounded-lg bg-red-500/10 p-3 text-sm">
-                        <XCircleIcon className="mt-0.5 size-4 shrink-0 text-red-400" />
+                    <div className="bg-danger/10 flex items-start gap-2 rounded-lg p-3 text-sm">
+                        <XCircleIcon className="text-danger mt-0.5 size-4 shrink-0" />
                         <span className="font-medium">
                             Invalid or expired license key. Please check and try
                             again.
                         </span>
                     </div>
                 )}
-            </CardContent>
-        </Card>
+            </div>
+        </section>
     );
 }

@@ -15,6 +15,7 @@ import { Expired } from "./expired";
 import { FreeByok } from "./free";
 import { PaymentFailed } from "./payment-failed";
 import { Trial } from "./trial";
+import { Unverified } from "./unverified";
 
 const components: Partial<
     Record<
@@ -29,6 +30,8 @@ const components: Partial<
     "free": FreeByok,
     "canceled": Canceled,
     "payment-failed": PaymentFailed,
+    // Billing didn't answer: said on the page too, not only in the banner.
+    "inactive": Unverified,
 };
 
 export const Redirect = ({
