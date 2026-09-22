@@ -177,7 +177,8 @@ jobs:
                   enc() { node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$1"; }
                   API_NODE_ENV=test \
                   TEST_MONGODB_URI="mongodb://$(enc "$MG_USER"):$(enc "$MG_PASS")@localhost:27017/kodus_test_integration?authSource=admin" \
-                  pnpm run test -- --json --outputFile=/tmp/jest-results.json
+                  # No `--`: pnpm forwards it to jest, which reads what follows as test-path patterns.
+                  pnpm run test --json --outputFile=/tmp/jest-results.json
 
             - name: Jest numbers (for the quality signal)
               id: jest
