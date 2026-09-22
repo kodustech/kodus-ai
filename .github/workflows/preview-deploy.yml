@@ -235,10 +235,18 @@ jobs:
                   # shapes as the branch's one env — the second `up` would
                   # overwrite the first, and `destroy --profile` would take the
                   # branch's only VM. Cheaper to refuse than to reconcile wrong.
-                  if ! $RUNO help | grep -q -- '--profile'; then
-                    echo "::error::runo at RUNO_REF=$RUNO_REF does not support --profile; merge/deploy kodustech/runo#7 first"
+                  # The usage text is the probe; its exit status is checked apart
+                  # from its content so a runo that fails to start is reported as
+                  # that, not as "lacks --profile".
+                  if ! usage=$($RUNO help 2>&1); then
+                    printf '%s\n' "$usage" | tail -20
+                    echo "::error::runo at RUNO_REF=$RUNO_REF failed to run — see its output above"
                     exit 1
                   fi
+                  case "$usage" in
+                    *--profile*) ;;
+                    *) echo "::error::runo at RUNO_REF=$RUNO_REF does not support --profile; merge/deploy kodustech/runo#7 first"; exit 1 ;;
+                  esac
                   # Previews created before shapes existed carry no profile.
                   # One of those for this branch would sit next to the new
                   # ones until the PR closed, so retire it first (the closing
