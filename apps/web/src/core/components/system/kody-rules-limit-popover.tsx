@@ -48,7 +48,7 @@ export const KodyRulesLimitPopover = ({
                     <p>
                         <span className="font-semibold">{ruleTitle}</span> is
                         saved, but Kody does not apply it: {capOwner} runs{" "}
-                        <span className="text-primary-light font-semibold">
+                        <span className="text-text-primary font-semibold">
                             {limit} active rules
                         </span>{" "}
                         and this one is over the cap.
@@ -56,7 +56,7 @@ export const KodyRulesLimitPopover = ({
                 ) : (
                     <p>
                         You've hit the cap of {capOwner}:{" "}
-                        <span className="text-primary-light font-semibold">
+                        <span className="text-text-primary font-semibold">
                             {limit} Kody Rules
                         </span>
                         .
@@ -65,7 +65,7 @@ export const KodyRulesLimitPopover = ({
 
                 <p>
                     Teams runs{" "}
-                    <span className="text-primary-light font-semibold">
+                    <span className="text-text-primary font-semibold">
                         every rule you write
                     </span>
                     , across all your repos — plus unlimited plugins and the

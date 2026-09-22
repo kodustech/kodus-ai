@@ -55,7 +55,7 @@ export const MCPPluginsLimitPopover = ({
                     ) : (
                         <>This plugin would stay locked — {capOwner} runs </>
                     )}
-                    <span className="text-primary-light font-semibold">
+                    <span className="text-text-primary font-semibold">
                         {limit} plugin{limit === 1 ? "" : "s"}
                     </span>{" "}
                     at a time
@@ -69,7 +69,7 @@ export const MCPPluginsLimitPopover = ({
 
                 <p>
                     Teams runs{" "}
-                    <span className="text-primary-light font-semibold">
+                    <span className="text-text-primary font-semibold">
                         every plugin you install
                     </span>
                     , across all your repos — plus unlimited Kody Rules and the

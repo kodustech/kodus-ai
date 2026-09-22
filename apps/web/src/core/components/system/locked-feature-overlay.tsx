@@ -58,7 +58,7 @@ export const LockedFeatureOverlay = ({
                     color="lv1"
                     className="flex w-lg max-w-full flex-col items-center gap-6 p-8 text-center sm:p-10">
                     <div className="bg-card-lv2 flex size-12 items-center justify-center rounded-full">
-                        <LockIcon className="text-primary-light size-5" />
+                        <LockIcon className="text-text-tertiary size-5" />
                     </div>
 
                     <div className="flex flex-col gap-2">

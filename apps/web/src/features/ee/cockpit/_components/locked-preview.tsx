@@ -43,7 +43,7 @@ export const CockpitLockedPreview = () => {
                                     {metric}
                                 </span>
                                 <div className="flex flex-col gap-2">
-                                    <span className="text-text-tertiary text-3xl font-semibold">
+                                    <span className="text-text-tertiary text-2xl font-semibold">
                                         —
                                     </span>
                                     <div
