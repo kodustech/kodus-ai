@@ -32,6 +32,10 @@ export const LicenseKeySettings = () => {
         useState<LicenseActivationResult | null>(null);
 
     const isLicensed = subscription.status === "licensed-self-hosted";
+    // The self-hosted license service answers an expired key with
+    // { valid: false, subscriptionStatus: "expired" }, not a licensed status
+    // with days below zero.
+    const isExpired = subscription.status === "expired";
 
     const handleActivate = async () => {
         if (!licenseKey.trim()) return;
@@ -81,11 +85,13 @@ export const LicenseKeySettings = () => {
         <div className="space-y-4">
             {isLicensed ? (
                 <ActiveLicenseCard subscription={subscription} />
+            ) : isExpired ? (
+                <ExpiredLicenseCard />
             ) : (
                 <CommunityCard />
             )}
             <ActivateKeyCard
-                isLicensed={isLicensed}
+                isLicensed={isLicensed || isExpired}
                 licenseKey={licenseKey}
                 loading={loading}
                 activationResult={activationResult}
@@ -114,7 +120,11 @@ function ActiveLicenseCard({
             tone={tone}
             chip={expired ? "License expired" : "Enterprise"}
             title="Enterprise"
-            summary="Self-hosted. Enterprise features are enabled for this instance."
+            summary={
+                expired
+                    ? "Self-hosted. The license expired, so the Enterprise features are off until you paste a renewed key below."
+                    : "Self-hosted. Enterprise features are enabled for this instance."
+            }
             facts={
                 <>
                     <SeatsFact
@@ -143,6 +153,17 @@ function ActiveLicenseCard({
                     )}
                 </>
             }
+        />
+    );
+}
+
+function ExpiredLicenseCard() {
+    return (
+        <PlanSheet
+            tone="danger"
+            chip="License expired"
+            title="Enterprise"
+            summary="Self-hosted. The license expired, so the Enterprise features are off until you paste a renewed key below."
         />
     );
 }

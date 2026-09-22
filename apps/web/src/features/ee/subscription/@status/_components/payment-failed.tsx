@@ -15,7 +15,7 @@ export const PaymentFailed = () => {
             chip="Payment failed"
             planType={subscription.planType}
             summary="The last payment didn't go through, so reviews are paused until billing is updated."
-            action="Update payment method"
+            action={{ label: "Update payment method", to: "portal" }}
             seats={{
                 used: subscription.usersWithAssignedLicense.length,
                 total: subscription.numberOfLicenses,

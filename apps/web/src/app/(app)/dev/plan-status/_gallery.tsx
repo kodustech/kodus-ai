@@ -18,6 +18,7 @@ const SELF_HOSTED = new Set([
     "community",
     "enterprise-self-hosted",
     "enterprise-self-hosted-ending",
+    "enterprise-self-hosted-expired",
 ]);
 
 export const PlanStatusGallery = () => {
@@ -83,6 +84,24 @@ export const PlanStatusGallery = () => {
                         Subscription page
                     </h2>
                     <ul className="flex flex-col gap-8">
+                        {/* Self-hosted only: the license service's answer
+                            to an expired key (on a self-hosted build the page
+                            routes it here; the sidebar is covered by its own
+                            spec). */}
+                        <li className="flex flex-col gap-3">
+                            <span className="text-text-secondary text-sm font-medium">
+                                Self-hosted · license key expired
+                            </span>
+                            <SubscriptionProvider
+                                license={{
+                                    valid: false,
+                                    subscriptionStatus: "expired",
+                                    numberOfLicenses: 0,
+                                }}
+                                usersWithAssignedLicense={[]}>
+                                <LicenseKeySettings />
+                            </SubscriptionProvider>
+                        </li>
                         {fixtures.map((fixture) => (
                             <li
                                 key={fixture.id}

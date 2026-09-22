@@ -19,11 +19,14 @@ import {
     Building2Icon,
     CirclePauseIcon,
     CloudOffIcon,
+    KeyRoundIcon,
     ServerIcon,
     SparklesIcon,
     UsersIcon,
 } from "lucide-react";
 import { cn } from "src/core/utils/components";
+import { isSelfHosted } from "src/core/utils/self-hosted";
+import { useHasAiKey } from "src/features/ee/subscription/_hooks/use-has-ai-key";
 import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
 import {
     PLAN_BAR_TONE,
@@ -76,6 +79,7 @@ const seatsFrom = (
  */
 export const SidebarPlanStatus = ({ collapsed }: { collapsed: boolean }) => {
     const subscription = useSubscriptionStatus();
+    const hasKey = useHasAiKey();
 
     switch (subscription.status) {
         case "trial-active":
@@ -154,14 +158,36 @@ export const SidebarPlanStatus = ({ collapsed }: { collapsed: boolean }) => {
             );
         }
 
+        // Free reviews only on a key of the org's own: without one nothing
+        // runs, so connecting it comes before any plan.
         case "free":
             return collapsed ? (
-                <RailStatus tone="neutral" label="Free plan · upgrade">
-                    <SparklesIcon className="text-primary-light size-4" />
+                <RailStatus
+                    tone="neutral"
+                    href={hasKey ? HREF : BYOK_HREF}
+                    label={
+                        hasKey
+                            ? "Free plan · upgrade"
+                            : "Free plan · no AI key · connect one"
+                    }>
+                    {hasKey ? (
+                        <SparklesIcon className="text-primary-light size-4" />
+                    ) : (
+                        <KeyRoundIcon className="text-alert size-4" />
+                    )}
                 </RailStatus>
             ) : (
-                <PlanPanel tone="neutral" chip="Free" meta="BYOK">
-                    <Action>Upgrade plan</Action>
+                <PlanPanel
+                    tone="neutral"
+                    href={hasKey ? HREF : BYOK_HREF}
+                    chip="Free"
+                    meta="BYOK">
+                    {!hasKey && (
+                        <Note className="text-alert">No AI key connected.</Note>
+                    )}
+                    <Action>
+                        {hasKey ? "Upgrade plan" : "Connect your AI key"}
+                    </Action>
                 </PlanPanel>
             );
 
@@ -170,8 +196,35 @@ export const SidebarPlanStatus = ({ collapsed }: { collapsed: boolean }) => {
         // the review gate refuses an invalid license — so reviews stop.
         case "canceled":
         case "expired": {
+            // Self-hosted "expired" is the license key's (the license
+            // service's answer to an expired key), fixed on the license page.
+            if (isSelfHosted && subscription.status === "expired") {
+                return collapsed ? (
+                    <RailStatus
+                        tone="danger"
+                        label="Enterprise · self-hosted · License expired">
+                        <ServerIcon className="size-4" />
+                    </RailStatus>
+                ) : (
+                    <PlanPanel
+                        tone="danger"
+                        chip="License expired"
+                        meta={<SelfHostedMeta />}>
+                        <Note className="text-text-secondary">
+                            Paste a renewed key to keep Enterprise.
+                        </Note>
+                    </PlanPanel>
+                );
+            }
+
+            // Same split as the subscription page: an expiry with no Stripe
+            // customer behind it was a trial, not a paid plan.
             const chip =
-                subscription.status === "canceled" ? "Canceled" : "Expired";
+                subscription.status === "canceled"
+                    ? "Canceled"
+                    : subscription.stripeCustomerId?.trim()
+                      ? "Expired"
+                      : "Trial ended";
 
             return collapsed ? (
                 <RailStatus
@@ -307,13 +360,28 @@ export const SidebarPlanStatus = ({ collapsed }: { collapsed: boolean }) => {
                 </RailStatus>
             ) : (
                 <PlanPanel
-                    tone="info"
-                    chip="Enterprise"
+                    tone={
+                        typeof days === "number" && days <= 0
+                            ? "danger"
+                            : "info"
+                    }
+                    chip={
+                        typeof days === "number" && days <= 0
+                            ? "License expired"
+                            : "Enterprise"
+                    }
                     meta={<SelfHostedMeta />}>
                     {seats && <SeatsLine seats={seats} tone="info" />}
-                    {licenseLabel && (
-                        <Note className={licenseTone}>{licenseLabel}</Note>
-                    )}
+                    {/* Expired, the chip already says so: the line says what
+                        to do instead. */}
+                    {licenseLabel &&
+                        (typeof days === "number" && days <= 0 ? (
+                            <Note className="text-text-secondary">
+                                Paste a renewed key to keep Enterprise.
+                            </Note>
+                        ) : (
+                            <Note className={licenseTone}>{licenseLabel}</Note>
+                        ))}
                 </PlanPanel>
             );
         }

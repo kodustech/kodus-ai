@@ -13,7 +13,7 @@ export const Canceled = () => {
             chip="Canceled"
             planType={subscription.planType}
             summary="The subscription was canceled, so reviews are paused until you subscribe again."
-            action="Subscribe again"
+            action={{ label: "Subscribe again", to: "plans" }}
             seats={{
                 used: subscription.usersWithAssignedLicense.length,
                 total: subscription.numberOfLicenses,

@@ -13,7 +13,9 @@ const fixtures = new Map(buildPlanFixtures().map((item) => [item.id, item]));
 // Every panel opens the subscription page, except a trial out of free
 // reviews: a key of its own is what brings reviews back.
 const hrefFor = (id: string) =>
-    id === "trial-exhausted" ? "/byok" : "/settings/subscription";
+    id === "trial-exhausted" || id === "free-no-key"
+        ? "/byok"
+        : "/settings/subscription";
 
 const renderPlan = (id: string, collapsed = false) => {
     const fixture = fixtures.get(id) as PlanFixture;
@@ -42,6 +44,10 @@ describe("SidebarPlanStatus", () => {
             ["Trial", "Free reviews used up", "Connect your AI key"],
         ],
         ["free", ["Free", "BYOK", "Upgrade plan"]],
+        [
+            "free-no-key",
+            ["Free", "No AI key connected.", "Connect your AI key"],
+        ],
         ["teams", ["Teams", "Managed", "12 of 25 seats in use"]],
         ["teams-byok", ["Teams", "BYOK", "10 of 10 seats in use"]],
         ["enterprise", ["Enterprise", "Managed", "143 of 200 seats in use"]],
@@ -56,9 +62,17 @@ describe("SidebarPlanStatus", () => {
             ],
         ],
         ["enterprise-self-hosted-ending", ["License · 18 days left"]],
+        [
+            "enterprise-self-hosted-expired",
+            ["License expired", "31 of 50 seats in use", "Paste a renewed key"],
+        ],
         ["payment-failed", ["Payment failed"]],
         ["canceled", ["Canceled", "Reviews are paused.", "Choose a plan"]],
         ["expired", ["Expired", "Reviews are paused.", "Choose a plan"]],
+        [
+            "expired-trial",
+            ["Trial ended", "Reviews are paused.", "Choose a plan"],
+        ],
         ["inactive", ["Unconfirmed", "Billing didn't answer."]],
         ["no-license", ["No plan", "Choose a plan"]],
     ])("%s shows its tier and fact", (id, texts) => {

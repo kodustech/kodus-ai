@@ -47,6 +47,10 @@ export default function SubscriptionLayout({
         isSelfHosted && subscription.status === "licensed-self-hosted";
     const isUnlicensedSelfHosted =
         isSelfHosted && subscription.status === "self-hosted";
+    // Self-hosted "expired" is the license key's, not a cloud plan's: it
+    // belongs on the license page, not on "choose a plan".
+    const isExpiredSelfHosted =
+        isSelfHosted && subscription.status === "expired";
 
     const tableTools = (
         <div className="flex w-full items-center gap-2 md:w-auto">
@@ -88,7 +92,9 @@ export default function SubscriptionLayout({
             <Page.Content>
                 {/* Self-hosted reads its plan from the license key, cloud
                     from billing; both land in the same plan sheet. */}
-                {isLicensedSelfHosted || isUnlicensedSelfHosted ? (
+                {isLicensedSelfHosted ||
+                isUnlicensedSelfHosted ||
+                isExpiredSelfHosted ? (
                     <LicenseKeySettings />
                 ) : (
                     status

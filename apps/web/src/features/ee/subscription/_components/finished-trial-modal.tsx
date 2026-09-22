@@ -13,6 +13,7 @@ import { Link } from "@components/ui/link";
 import { MagicModalContext } from "@components/ui/magic-modal";
 import { useConfig } from "@providers/ConfigProvider";
 import { ClientSideCookieHelpers } from "src/core/utils/cookie";
+import { isSelfHosted } from "src/core/utils/self-hosted";
 import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
 
 export const FinishedTrialModal = () => {
@@ -20,7 +21,9 @@ export const FinishedTrialModal = () => {
     const cfg = useConfig();
     const subscription = useSubscriptionStatus();
 
-    if (subscription.status !== "expired") return null;
+    // Self-hosted "expired" is an expired license key, not a trial, and
+    // there's no cloud plan to upgrade to from there.
+    if (isSelfHosted || subscription.status !== "expired") return null;
 
     const cookie = ClientSideCookieHelpers("trial-finished-modal-closed");
     if (cookie.has()) return null;

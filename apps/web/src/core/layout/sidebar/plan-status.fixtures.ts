@@ -84,6 +84,7 @@ export const buildPlanFixtures = (now = Date.now()): PlanFixture[] => {
             usersWithAssignedLicense: [],
         },
         {
+            // `byok` is the app layout's stamp: the org has its own key.
             id: "free",
             title: "Free",
             license: {
@@ -91,7 +92,20 @@ export const buildPlanFixtures = (now = Date.now()): PlanFixture[] => {
                 subscriptionStatus: "active",
                 planType: "free_byok",
                 numberOfLicenses: 0,
-            },
+                byok: true,
+            } as PlanFixture["license"],
+            usersWithAssignedLicense: [],
+        },
+        {
+            id: "free-no-key",
+            title: "Free · no AI key",
+            license: {
+                valid: true,
+                subscriptionStatus: "active",
+                planType: "free_byok",
+                numberOfLicenses: 0,
+                byok: false,
+            } as PlanFixture["license"],
             usersWithAssignedLicense: [],
         },
         {
@@ -158,6 +172,18 @@ export const buildPlanFixtures = (now = Date.now()): PlanFixture[] => {
             usersWithAssignedLicense: users(31),
         },
         {
+            id: "enterprise-self-hosted-expired",
+            title: "Enterprise self-hosted · license expired",
+            license: {
+                valid: true,
+                subscriptionStatus: "licensed-self-hosted",
+                planType: "enterprise",
+                numberOfLicenses: 50,
+                expiresAt: inDays(-3),
+            },
+            usersWithAssignedLicense: users(31),
+        },
+        {
             id: "payment-failed",
             title: "Payment failed",
             license: {
@@ -183,6 +209,19 @@ export const buildPlanFixtures = (now = Date.now()): PlanFixture[] => {
             // type still allows it.
             id: "expired",
             title: "Expired",
+            license: {
+                valid: false,
+                subscriptionStatus: "expired",
+                planType: "teams_managed",
+                numberOfLicenses: 10,
+                stripeCustomerId: "cus_test",
+            },
+            usersWithAssignedLicense: [],
+        },
+        {
+            // An expiry with no Stripe customer behind it was a trial.
+            id: "expired-trial",
+            title: "Expired · was a trial",
             license: {
                 valid: false,
                 subscriptionStatus: "expired",
