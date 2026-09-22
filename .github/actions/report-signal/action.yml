@@ -77,6 +77,9 @@ runs:
         - name: Build row
           if: steps.check.outputs.skip == 'false'
           id: row
+          # Telemetry: a bad status, name or value is the producer's bug, reported
+          # as a failed step of this action, never as a red gate for the caller.
+          continue-on-error: true
           shell: bash
           env:
               IN_NAME: ${{ inputs.name }}
@@ -99,7 +102,9 @@ runs:
                 const raw = (process.env.IN_STATUS || "").trim().toLowerCase();
                 const status = map[raw] || raw;
                 if (!allowed.has(status)) { console.error(`report-signal: unknown status "${raw}"`); process.exit(1); }
-                const name = (process.env.IN_NAME || "").trim();
+                // Producers interpolate model ids and similar into names: fold them to the contract
+                // (lowercase, [a-z0-9._-]) instead of failing, e.g. evals.tier0.minimax-m3@nvidia -> ..._nvidia.
+                const name = (process.env.IN_NAME || "").trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "_");
                 if (!/^[a-z0-9_]+(\.[a-z0-9_-]+)+$/.test(name)) { console.error(`report-signal: bad name "${name}"`); process.exit(1); }
                 const value = process.env.IN_VALUE.trim() === "" ? null : Number(process.env.IN_VALUE);
                 if (value !== null && Number.isNaN(value)) { console.error(`report-signal: value is not a number: ${process.env.IN_VALUE}`); process.exit(1); }
@@ -124,7 +129,7 @@ runs:
               '
 
         - name: Authenticate to GCP (WIF)
-          if: steps.check.outputs.skip == 'false'
+          if: steps.check.outputs.skip == 'false' && steps.row.outcome == 'success'
           continue-on-error: true
           uses: google-github-actions/auth@v2
           with:
@@ -133,14 +138,14 @@ runs:
               project_id: ${{ inputs.gcp_project }}
 
         - name: Set up bq
-          if: steps.check.outputs.skip == 'false'
+          if: steps.check.outputs.skip == 'false' && steps.row.outcome == 'success'
           continue-on-error: true
           uses: google-github-actions/setup-gcloud@v2
           with:
               project_id: ${{ inputs.gcp_project }}
 
         - name: Insert row
-          if: steps.check.outputs.skip == 'false'
+          if: steps.check.outputs.skip == 'false' && steps.row.outcome == 'success'
           continue-on-error: true
           shell: bash
           env:
