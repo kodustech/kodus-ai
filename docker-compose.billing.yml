@@ -1,0 +1,124 @@
+# Overlay: the billing service and a Stripe webhook forwarder, for runo
+# environments — the dev recipe (.kodus/workspace.yaml) and PR previews
+# (.kodus/workspace.preview.yaml) alike, so both run the billing production
+# runs instead of a stand-in, and a Checkout actually changes the plan.
+#
+# Billing is a separate repository; Compose builds it straight from GitHub.
+# Its env, .env.billing, comes from scripts/preview/materialize-billing-env.sh,
+# which accepts Stripe TEST credentials only: CI feeds it PREVIEW_BILLING_ENV,
+# a laptop feeds it 1Password through scripts/env/pull-billing-env.sh.
+services:
+    web:
+        environment:
+            # The billing proxy runs server-side inside this container, so it
+            # must use Docker DNS rather than the browser's localhost.
+            - WEB_HOSTNAME_BILLING=kodus-service-billing
+            - WEB_PORT_BILLING=3992
+
+    kodus-service-billing:
+        build:
+            # Compose/BuildKit fetches this public repo directly. This keeps a
+            # pre-existing Runo VM reconcilable too: it does not depend on a
+            # one-time setup clone having run before `runo up`.
+            context: https://github.com/kodustech/kodus-service-billing.git#main
+            dockerfile: DockerFiles/Dockerfile.dev
+        image: kodus-service-billing-preview:latest
+        container_name: kodus-service-billing
+        depends_on:
+            db_postgres:
+                condition: service_healthy
+            stripe-listen:
+                condition: service_healthy
+        env_file:
+            - .env.billing
+        environment:
+            # The billing repo reads these directly at module import time.
+            # Supplying them in the overlay keeps the generated secret file
+            # independent of the URL, which Runo only knows after exposing the
+            # VM. Production's FRONTEND_URL ends in /setup (a plan Checkout
+            # returns to /setup/subscription/success), so this one does too.
+            - CORS_URLS=${RUNO_PUBLIC_URL:-http://localhost:3000}
+            - FRONTEND_URL=${RUNO_PUBLIC_URL:-http://localhost:3000}/setup
+        # Stripe signs what the forwarder relays with the secret of ITS
+        # session, not with a dashboard endpoint's, so billing verifies against
+        # the one the forwarder wrote — read here, at start, because a running
+        # env's reconcile re-uploads .env.billing without re-running setup.
+        command:
+            - sh
+            - -c
+            - '[ -s /run/stripe/webhook-secret ] && export STRIPE_WEBHOOK_SECRET="$$(cat /run/stripe/webhook-secret)"; exec pnpm start:dev'
+        volumes:
+            - stripe-webhook:/run/stripe:ro
+        # Loopback only: the admin routes are behind a shared token, but a dev
+        # VM publishes every other port on its public address.
+        ports:
+            - '127.0.0.1:3992:3992'
+        restart: unless-stopped
+        networks:
+            - kodus-backend-services
+            - shared-network
+        healthcheck:
+            test:
+                [
+                    'CMD',
+                    'node',
+                    '-e',
+                    "fetch('http://127.0.0.1:3992/health/ready').then((res)=>process.exit(res.ok?0:1)).catch(()=>process.exit(1))",
+                ]
+            interval: 15s
+            timeout: 5s
+            retries: 12
+            start_period: 60s
+        deploy:
+            resources:
+                limits:
+                    memory: 1G
+                reservations:
+                    memory: 256M
+
+    # No public URL reaches billing's /webhook (a dev VM has none, and a
+    # preview's hostname changes per PR), so the Stripe CLI relays the events
+    # billing handles. Without a Stripe key billing still serves trials and
+    # the free plan; the forwarder then just stays out of the way.
+    stripe-listen:
+        image: stripe/stripe-cli:v1.51.1
+        container_name: kodus_stripe_listen
+        env_file:
+            - .env.billing
+        entrypoint:
+            - sh
+            - -c
+            - |
+                set -e
+                rm -f /run/stripe/ready /run/stripe/webhook-secret
+                if [ -z "$${STRIPE_SECRET_KEY:-}" ]; then
+                  echo "no STRIPE_SECRET_KEY in .env.billing: billing runs without Stripe"
+                  touch /run/stripe/ready
+                  exec sleep infinity
+                fi
+                case "$$STRIPE_SECRET_KEY" in
+                  sk_test_*) ;;
+                  *) echo "refusing a Stripe key that is not a test key" >&2; exit 1 ;;
+                esac
+                stripe listen --api-key "$$STRIPE_SECRET_KEY" --print-secret > /run/stripe/webhook-secret
+                touch /run/stripe/ready
+                exec stripe listen --api-key "$$STRIPE_SECRET_KEY" \
+                  --events checkout.session.completed,invoice.payment_failed,customer.subscription.updated,customer.subscription.deleted \
+                  --forward-to http://kodus-service-billing:3992/api/billing/webhook
+        volumes:
+            - stripe-webhook:/run/stripe
+        restart: unless-stopped
+        networks:
+            - kodus-backend-services
+        healthcheck:
+            test: ['CMD', 'test', '-f', '/run/stripe/ready']
+            interval: 5s
+            timeout: 3s
+            retries: 24
+        deploy:
+            resources:
+                limits:
+                    memory: 128M
+
+volumes:
+    stripe-webhook:

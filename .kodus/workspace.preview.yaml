@@ -16,9 +16,10 @@ files:
   copy: [.env, .env.billing]
 services:
   compose:
-    # the overlay adds what a public, non-laptop environment needs: the app's
-    # own public URL in its env, and memory limits sized for a 16GB VM
-    files: [docker-compose.dev.yml, docker-compose.preview.yml]
+    # billing (shared with the dev recipe) plus what a public, non-laptop
+    # environment needs: the app's own public URL in its env, and memory
+    # limits sized for a 16GB VM
+    files: [docker-compose.dev.yml, docker-compose.billing.yml, docker-compose.preview.yml]
     # MCP is intentionally opt-in for laptops, but a preview must represent the
     # complete product rather than the lightweight default developer stack.
     profiles: [mcp]
