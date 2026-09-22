@@ -97,7 +97,8 @@ describe('doctor listener', () => {
         const handler = createDoctorHandler({ cryptoKey: KEY, run });
         expect((await call(handler, {})).status).toBe(401);
         expect(
-            (await call(handler, { token: doctorToken('c'.repeat(64)) })).status,
+            (await call(handler, { token: doctorToken('c'.repeat(64)) }))
+                .status,
         ).toBe(401);
         expect((await call(handler, { token: 'short' })).status).toBe(401);
         expect(run).not.toHaveBeenCalled();
@@ -107,8 +108,12 @@ describe('doctor listener', () => {
         const run = jest.fn().mockResolvedValue(report);
         const handler = createDoctorHandler({ cryptoKey: KEY, run });
         const token = doctorToken(KEY);
-        expect((await call(handler, { token, method: 'POST' })).status).toBe(404);
-        expect((await call(handler, { token, url: '/other' })).status).toBe(404);
+        expect((await call(handler, { token, method: 'POST' })).status).toBe(
+            404,
+        );
+        expect((await call(handler, { token, url: '/other' })).status).toBe(
+            404,
+        );
     });
 
     it('returns the report for loopback + valid token', async () => {
@@ -154,7 +159,12 @@ describe('doctor listener', () => {
         const run = jest.fn();
         const log = jest.fn();
         expect(
-            startDoctorListener({ cloudMode: true, env: { API_CRYPTO_KEY: KEY }, run, log }),
+            startDoctorListener({
+                cloudMode: true,
+                env: { API_CRYPTO_KEY: KEY },
+                run,
+                log,
+            }),
         ).toBeNull();
         expect(
             startDoctorListener({
@@ -164,7 +174,9 @@ describe('doctor listener', () => {
                 log,
             }),
         ).toBeNull();
-        expect(startDoctorListener({ cloudMode: false, env: {}, run, log })).toBeNull();
+        expect(
+            startDoctorListener({ cloudMode: false, env: {}, run, log }),
+        ).toBeNull();
     });
 
     describe('client script against a real loopback listener', () => {
@@ -190,7 +202,11 @@ describe('doctor listener', () => {
         );
         const run = (args: string[], key = KEY) =>
             promisify(execFile)(process.execPath, [client, ...args], {
-                env: { PATH: process.env.PATH, API_CRYPTO_KEY: key, API_DOCTOR_PORT: String(port) },
+                env: {
+                    PATH: process.env.PATH,
+                    API_CRYPTO_KEY: key,
+                    API_DOCTOR_PORT: String(port),
+                },
             });
 
         it('prints the verdict first and problems before the summary', async () => {

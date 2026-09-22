@@ -55,7 +55,11 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                 const readDenied: string[] = [];
                 const writeDenied: string[] = [];
                 const hookMissing: string[] = [];
-                const unverified: string[] = [];
+                const unverified = {
+                    read: [] as string[],
+                    write: [] as string[],
+                    hook: [] as string[],
+                };
                 const errors = new Set<string>();
 
                 for (const repo of repos) {
@@ -73,12 +77,10 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                     if (d.hook === 'missing') {
                         hookMissing.push(repo.name);
                     }
-                    if (
-                        d.read === 'unknown' ||
-                        d.write === 'unknown' ||
-                        d.hook === 'unknown'
-                    ) {
-                        unverified.push(repo.name);
+                    for (const part of ['read', 'write', 'hook'] as const) {
+                        if (d[part] === 'unknown') {
+                            unverified[part].push(repo.name);
+                        }
                     }
                 }
 
@@ -116,13 +118,26 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                         fix: `Deselect and reselect these repositories in Settings > Git with a token that can manage webhooks (GitLab: Maintainer), or add the hook by hand pointing to ${ctx.env[WEBHOOK_URL_ENV[team.platform!]] || 'your webhook URL'} (pull request events).`,
                     });
                 }
-                if (unverified.length) {
+                const unverifiedParts = [
+                    [unverified.read, 'read'],
+                    [unverified.write, 'comment on pull requests in'],
+                    [unverified.hook, 'find the Kodus webhook on'],
+                ] as const;
+                for (const [repoNames, what] of unverifiedParts) {
+                    if (!repoNames.length) {
+                        continue;
+                    }
                     results.push({
                         check: 'git.unverified',
                         status: 'unknown',
                         scope,
-                        title: `Could not fully verify Git access for ${names(unverified)}.`,
-                        fix: `The provider does not report token permissions or webhooks to this token; check them in ${platformLabel(team.platform)}.${providerSaid}`,
+                        title: `Could not verify that the Git token can ${what} ${names(repoNames)}.`,
+                        fix:
+                            what === 'read'
+                                ? `Check the token in ${platformLabel(team.platform)}.${providerSaid}`
+                                : what === 'find the Kodus webhook on'
+                                  ? `The token cannot list webhooks (needs admin). Check the repository's webhooks in ${platformLabel(team.platform)} for ${ctx.env[WEBHOOK_URL_ENV[team.platform!]] || 'your webhook URL'}.`
+                                  : `${platformLabel(team.platform)} does not report this for this kind of token (fine-grained or app tokens). Make sure it has write access to pull requests.`,
                     });
                 }
                 if (team.repositories.length > repos.length) {
@@ -137,13 +152,13 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                     !readDenied.length &&
                     !writeDenied.length &&
                     !hookMissing.length &&
-                    !unverified.length
+                    !unverifiedParts.some(([repoNames]) => repoNames.length)
                 ) {
                     results.push({
                         check: 'git.access',
                         status: 'ok',
                         scope,
-                        title: `The Git token can read, comment and receive events on ${repos.length} repositories.`,
+                        title: `The Git token can read, comment and receive events on ${repos.length} ${repos.length === 1 ? 'repository' : 'repositories'}.`,
                     });
                 }
             }
@@ -189,7 +204,9 @@ export function webhookUrlCheck(deps: Pick<GitDeps, 'reach'>): DoctorCheck {
                         title: `The ${platform} webhook address answers (HTTP ${status}).`,
                     });
                 } catch (error: any) {
-                    const code = String(error?.cause?.code ?? error?.code ?? '');
+                    const code = String(
+                        error?.cause?.code ?? error?.code ?? '',
+                    );
                     const definite = [
                         'ENOTFOUND',
                         'EAI_AGAIN',

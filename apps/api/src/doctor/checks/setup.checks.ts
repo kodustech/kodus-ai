@@ -92,7 +92,7 @@ export const setupCheck: DoctorCheck = {
                               check: 'setup.team',
                               status: 'ok' as const,
                               scope,
-                              title: `${team.repositories.length} repositories selected on ${git}, review automation on.`,
+                              title: `${team.repositories.length} ${team.repositories.length === 1 ? 'repository' : 'repositories'} selected on ${git}, review automation on.`,
                           },
                       ]),
             );
@@ -144,11 +144,17 @@ export function skipSettingsCheck(
                     });
 
                 if (config.automatedReviewActive === false) {
-                    skip('Automatic reviews are off; Kody reviews only when asked with @kody start-review.');
+                    skip(
+                        'Automatic reviews are off; Kody reviews only when asked with @kody start-review.',
+                    );
                 } else if (config.reviewCadence?.type === 'manual') {
-                    skip('Review cadence is manual; Kody reviews only when asked.');
+                    skip(
+                        'Review cadence is manual; Kody reviews only when asked.',
+                    );
                 } else if (config.reviewCadence?.type === 'auto_pause') {
-                    skip('Review cadence is auto-pause; reviews pause after a burst of pushes.');
+                    skip(
+                        'Review cadence is auto-pause; reviews pause after a burst of pushes.',
+                    );
                 }
                 if (config.runOnDraft === false) {
                     skip('Draft pull requests are skipped.');
@@ -165,7 +171,10 @@ export function skipSettingsCheck(
                 }
                 if (config.ignoredTitleKeywords?.length) {
                     skip(
-                        `Pull requests whose title contains ${config.ignoredTitleKeywords.slice(0, 3).map((k) => `"${k}"`).join(', ')} are skipped.`,
+                        `Pull requests whose title contains ${config.ignoredTitleKeywords
+                            .slice(0, 3)
+                            .map((k) => `"${k}"`)
+                            .join(', ')} are skipped.`,
                     );
                 }
                 if (config.showStatusFeedback === false) {
@@ -220,7 +229,9 @@ export function seatsCheck(
 export function astGraphCheck(
     load: (
         ctx: DoctorContext,
-    ) => Promise<Array<{ team: DoctorTeam; repository: string; status: string | null }>>,
+    ) => Promise<
+        Array<{ team: DoctorTeam; repository: string; status: string | null }>
+    >,
 ): DoctorCheck {
     return {
         id: 'ast.graph',
@@ -269,7 +280,8 @@ export function sandboxCheck(
                 return []; // reported by configEnvCheck
             }
             const effective =
-                provider === 'e2b' || (provider === 'auto' && ctx.env.API_E2B_KEY)
+                provider === 'e2b' ||
+                (provider === 'auto' && ctx.env.API_E2B_KEY)
                     ? 'e2b'
                     : 'local';
             if (effective === 'e2b') {
@@ -323,7 +335,9 @@ export interface VersionStatusLike {
     updateAvailable?: boolean;
 }
 
-export function versionCheck(getStatus: () => Promise<VersionStatusLike>): DoctorCheck {
+export function versionCheck(
+    getStatus: () => Promise<VersionStatusLike>,
+): DoctorCheck {
     return {
         id: 'version',
         async run(): Promise<DoctorResult[]> {
@@ -412,7 +426,11 @@ export function analyticsCheck(
                     },
                 ];
             }
-            if (run.lagHours === null || run.lagHours > 26 || run.status === 'failed') {
+            if (
+                run.lagHours === null ||
+                run.lagHours > 26 ||
+                run.status === 'failed'
+            ) {
                 return [
                     {
                         check: 'analytics.ingestion',

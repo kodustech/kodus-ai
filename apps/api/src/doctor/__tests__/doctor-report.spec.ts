@@ -18,7 +18,9 @@ describe('doctor report', () => {
         expect(verdictOf([r('ok'), r('warn'), r('fail')])).toBe('NOT_RUNNING');
         expect(verdictOf([r('ok'), r('warn'), r('info')])).toBe('DEGRADED');
         // unknown / info / skip never change the verdict
-        expect(verdictOf([r('ok'), r('unknown'), r('info'), r('skip')])).toBe('OK');
+        expect(verdictOf([r('ok'), r('unknown'), r('info'), r('skip')])).toBe(
+            'OK',
+        );
     });
 
     it('orders worst first and keeps check order within a status', () => {
@@ -47,7 +49,8 @@ describe('doctor report', () => {
             API_CRYPTO_KEY: 'a'.repeat(64),
             API_OPEN_AI_API_KEY: 'sk-live-planted-openai-secret',
             API_PG_DB_PASSWORD: 'planted-pg-password',
-            API_RABBITMQ_URI: 'amqp://kodus:planted-rabbit-pass@rabbitmq:5672/kodus-ai',
+            API_RABBITMQ_URI:
+                'amqp://kodus:planted-rabbit-pass@rabbitmq:5672/kodus-ai',
             API_PORT: '3001',
             API_LOG_LEVEL: 'info',
         } as NodeJS.ProcessEnv;
@@ -67,6 +70,9 @@ describe('doctor report', () => {
                 'Authorization: Bearer abcdefghijklmnopqrstuvwxyz',
                 'token ghp_abcdefghijklmnopqrstuvwxyz0123',
                 'plain words stay',
+                'Optional: set KODUS_LICENSE_KEY and API_CRYPTO_KEY.',
+                'team key kodus_abcdefgh12345',
+                'Incorrect API key provided: sk-svcac****************VeAA. You c',
             ].join('\n');
             const out = redact(text, collectSecretValues(env));
             for (const secret of [
@@ -79,6 +85,11 @@ describe('doctor report', () => {
                 expect(out).not.toContain(secret);
             }
             expect(out).toContain('plain words stay');
+            // env var NAMES in fixes are not secrets
+            expect(out).toContain('KODUS_LICENSE_KEY and API_CRYPTO_KEY');
+            expect(out).not.toContain('kodus_abcdefgh12345');
+            expect(out).not.toContain('sk-svcac');
+            expect(out).not.toContain('VeAA');
             expect(out).toContain('gitlab.example.com');
         });
 

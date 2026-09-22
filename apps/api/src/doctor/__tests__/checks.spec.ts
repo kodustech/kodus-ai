@@ -1,6 +1,10 @@
 jest.mock('@libs/llm/llm', () => ({ LLM: { run: jest.fn() } }));
 
-import { BrokerProbe, brokerCheck, staleJobsCheck } from '../checks/broker.checks';
+import {
+    BrokerProbe,
+    brokerCheck,
+    staleJobsCheck,
+} from '../checks/broker.checks';
 import { bootEnvCheck, configEnvCheck } from '../checks/env.checks';
 import { gitAccessCheck, webhookUrlCheck } from '../checks/git.checks';
 import { llmCheck } from '../checks/llm.checks';
@@ -71,11 +75,13 @@ function expectActionable(results: DoctorResult[]) {
     }
 }
 
-const healthyBroker = (over: {
-    consumers?: Record<string, number | null>;
-    delayed?: boolean;
-    connectError?: Error;
-} = {}): BrokerProbe => ({
+const healthyBroker = (
+    over: {
+        consumers?: Record<string, number | null>;
+        delayed?: boolean;
+        connectError?: Error;
+    } = {},
+): BrokerProbe => ({
     connect: jest.fn(async () => {
         if (over.connectError) {
             throw over.connectError;
@@ -107,7 +113,9 @@ const llmDeps = (over: { byok?: any; fail?: Error } = {}) => ({
     }),
 });
 
-const healthyGit = (over: Partial<Record<'read' | 'write' | 'hook', string>> = {}) => ({
+const healthyGit = (
+    over: Partial<Record<'read' | 'write' | 'hook', string>> = {},
+) => ({
     diagnose: jest.fn(async () => ({
         read: 'ok',
         write: 'ok',
@@ -130,8 +138,13 @@ describe('doctor checks — each condition in scope, one at a time', () => {
                 ...(await llmCheck(llmDeps()).run(c)),
                 ...(await gitAccessCheck(healthyGit()).run(c)),
                 ...(await webhookUrlCheck(healthyGit()).run(c)),
-                ...(await seatsCheck(async () => ({ pullRequests: 0, since: new Date() })).run(c)),
-                ...(await sandboxCheck(async () => ({ repository: 'api' })).run(c)),
+                ...(await seatsCheck(async () => ({
+                    pullRequests: 0,
+                    since: new Date(),
+                })).run(c)),
+                ...(await sandboxCheck(async () => ({ repository: 'api' })).run(
+                    c,
+                )),
                 ...(await astGraphCheck(async () => [
                     { team: c.teams[0], repository: 'api', status: 'ready' },
                 ]).run(c)),
@@ -170,7 +183,9 @@ describe('doctor checks — each condition in scope, one at a time', () => {
         it('RabbitMQ disabled', async () => {
             const env = cleanEnv();
             env.API_RABBITMQ_ENABLED = 'false';
-            const results = await brokerCheck(healthyBroker()).run(ctx({ env }));
+            const results = await brokerCheck(healthyBroker()).run(
+                ctx({ env }),
+            );
             expect(statuses(results)).toEqual(['fail']);
             expectActionable(results);
         });
@@ -179,28 +194,44 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             const results = await brokerCheck(
                 healthyBroker({ connectError: new Error('ECONNREFUSED') }),
             ).run(ctx());
-            expect(results[0]).toMatchObject({ status: 'fail', check: 'broker.connect' });
+            expect(results[0]).toMatchObject({
+                status: 'fail',
+                check: 'broker.connect',
+            });
             expectActionable(results);
         });
 
         it('no code-review worker consuming', async () => {
             const results = await brokerCheck(
-                healthyBroker({ consumers: { 'workflow.jobs.code_review.queue': 0 } }),
+                healthyBroker({
+                    consumers: { 'workflow.jobs.code_review.queue': 0 },
+                }),
             ).run(ctx());
-            expect(results.find((r) => r.check === 'worker.consumers')?.status).toBe('fail');
+            expect(
+                results.find((r) => r.check === 'worker.consumers')?.status,
+            ).toBe('fail');
             expectActionable(results);
         });
 
         it('worker never started (queue missing)', async () => {
             const results = await brokerCheck(
-                healthyBroker({ consumers: { 'workflow.jobs.webhook.queue': null } }),
+                healthyBroker({
+                    consumers: { 'workflow.jobs.webhook.queue': null },
+                }),
             ).run(ctx());
-            expect(results.find((r) => r.check === 'worker.consumers')?.status).toBe('fail');
+            expect(
+                results.find((r) => r.check === 'worker.consumers')?.status,
+            ).toBe('fail');
         });
 
         it('delayed-message plugin missing', async () => {
-            const results = await brokerCheck(healthyBroker({ delayed: false })).run(ctx());
-            expect(results.find((r) => r.check === 'broker.delayed_plugin')?.status).toBe('fail');
+            const results = await brokerCheck(
+                healthyBroker({ delayed: false }),
+            ).run(ctx());
+            expect(
+                results.find((r) => r.check === 'broker.delayed_plugin')
+                    ?.status,
+            ).toBe('fail');
             expectActionable(results);
         });
 
@@ -213,12 +244,19 @@ describe('doctor checks — each condition in scope, one at a time', () => {
         });
 
         it('outbox rows not reaching the broker', async () => {
-            const results = await staleJobsCheck(dataSource({ unsent: { count: 2 } })).run(ctx());
-            expect(results[0]).toMatchObject({ status: 'fail', check: 'jobs.outbox' });
+            const results = await staleJobsCheck(
+                dataSource({ unsent: { count: 2 } }),
+            ).run(ctx());
+            expect(results[0]).toMatchObject({
+                status: 'fail',
+                check: 'jobs.outbox',
+            });
         });
 
         it('LLM completion fails (env model)', async () => {
-            const results = await llmCheck(llmDeps({ fail: new Error('401 invalid key') })).run(ctx());
+            const results = await llmCheck(
+                llmDeps({ fail: new Error('401 invalid key') }),
+            ).run(ctx());
             const line = results.find((r) => r.check === 'llm.completion');
             expect(line?.status).toBe('fail');
             expect(line?.fix).toContain('401 invalid key');
@@ -230,37 +268,54 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             delete env.API_LLM_PROVIDER_MODEL;
             const deps = llmDeps();
             const results = await llmCheck(deps).run(ctx({ env }));
-            expect(results[0]).toMatchObject({ status: 'fail', check: 'llm.configured' });
+            expect(results[0]).toMatchObject({
+                status: 'fail',
+                check: 'llm.configured',
+            });
             expect(deps.complete).not.toHaveBeenCalled();
         });
 
         it('git token cannot read', async () => {
-            const results = await gitAccessCheck(healthyGit({ read: 'denied' })).run(ctx());
-            expect(results.find((r) => r.check === 'git.read')?.status).toBe('fail');
+            const results = await gitAccessCheck(
+                healthyGit({ read: 'denied' }),
+            ).run(ctx());
+            expect(results.find((r) => r.check === 'git.read')?.status).toBe(
+                'fail',
+            );
             expectActionable(results);
         });
 
         it('git token cannot comment', async () => {
-            const results = await gitAccessCheck(healthyGit({ write: 'denied' })).run(ctx());
-            expect(results.find((r) => r.check === 'git.write')?.status).toBe('fail');
+            const results = await gitAccessCheck(
+                healthyGit({ write: 'denied' }),
+            ).run(ctx());
+            expect(results.find((r) => r.check === 'git.write')?.status).toBe(
+                'fail',
+            );
         });
 
         it('webhook missing on a selected repo', async () => {
-            const results = await gitAccessCheck(healthyGit({ hook: 'missing' })).run(ctx());
+            const results = await gitAccessCheck(
+                healthyGit({ hook: 'missing' }),
+            ).run(ctx());
             const line = results.find((r) => r.check === 'git.webhook');
             expect(line?.status).toBe('fail');
             expect(line?.fix).toContain('https://api.acme.dev/github/webhook');
         });
 
         it('GitHub App installs use the app-level hook (not a failure)', async () => {
-            const results = await gitAccessCheck(healthyGit({ hook: 'app-level' })).run(ctx());
+            const results = await gitAccessCheck(
+                healthyGit({ hook: 'app-level' }),
+            ).run(ctx());
             expect(problems(results)).toEqual([]);
         });
 
         it('webhook URL not set', async () => {
             const env = cleanEnv();
             delete env.API_GITHUB_CODE_MANAGEMENT_WEBHOOK;
-            const results = await webhookUrlCheck(healthyGit()).run(ctx({ env }));
+            const results = await webhookUrlCheck(healthyGit()).run(
+                ctx({ env }),
+            );
             expect(statuses(results)).toEqual(['fail']);
             expectActionable(results);
         });
@@ -268,7 +323,9 @@ describe('doctor checks — each condition in scope, one at a time', () => {
         it('webhook URL does not resolve', async () => {
             const git = healthyGit();
             git.reach.mockRejectedValue(
-                Object.assign(new Error('fetch failed'), { cause: { code: 'ENOTFOUND' } }),
+                Object.assign(new Error('fetch failed'), {
+                    cause: { code: 'ENOTFOUND' },
+                }),
             );
             const results = await webhookUrlCheck(git).run(ctx());
             expect(statuses(results)).toEqual(['fail']);
@@ -277,7 +334,9 @@ describe('doctor checks — each condition in scope, one at a time', () => {
         it('webhook URL times out from inside (NAT) is unverified, not failed', async () => {
             const git = healthyGit();
             git.reach.mockRejectedValue(
-                Object.assign(new Error('timeout'), { cause: { code: 'UND_ERR_CONNECT_TIMEOUT' } }),
+                Object.assign(new Error('timeout'), {
+                    cause: { code: 'UND_ERR_CONNECT_TIMEOUT' },
+                }),
             );
             const results = await webhookUrlCheck(git).run(ctx());
             expect(statuses(results)).toEqual(['unknown']);
@@ -290,19 +349,31 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             ['team not active', { teamStatus: 'pending' }],
             ['git connection disabled', { integrationActive: false }],
         ])('%s', async (_name, over) => {
-            const results = await setupCheck.run(ctx({ teams: [team(over as any)] }));
+            const results = await setupCheck.run(
+                ctx({ teams: [team(over as any)] }),
+            );
             expect(statuses(results)).toEqual(['fail']);
             expectActionable(results);
         });
 
         it('no Git provider connected', async () => {
-            const results = await setupCheck.run(ctx({ teams: [team({ platform: undefined })] }));
-            expect(results[0]).toMatchObject({ status: 'fail', check: 'setup.git_connected' });
+            const results = await setupCheck.run(
+                ctx({ teams: [team({ platform: undefined })] }),
+            );
+            expect(results[0]).toMatchObject({
+                status: 'fail',
+                check: 'setup.git_connected',
+            });
         });
 
         it('code review automation not seeded', async () => {
-            const results = await setupCheck.run(ctx({ codeReviewAutomationSeeded: false }));
-            expect(results[0]).toMatchObject({ status: 'fail', check: 'setup.automation_seed' });
+            const results = await setupCheck.run(
+                ctx({ codeReviewAutomationSeeded: false }),
+            );
+            expect(results[0]).toMatchObject({
+                status: 'fail',
+                check: 'setup.automation_seed',
+            });
         });
 
         it('licensed: recent PR authors without a seat', async () => {
@@ -316,9 +387,23 @@ describe('doctor checks — each condition in scope, one at a time', () => {
 
         it('Community Edition: seat check does not apply', async () => {
             const count = jest.fn();
-            const results = await seatsCheck(count).run(ctx({ licensed: false }));
+            const results = await seatsCheck(count).run(
+                ctx({ licensed: false }),
+            );
             expect(results).toEqual([]);
             expect(count).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('could not verify (?)', () => {
+        it('names the part that could not be verified, and is not a failure', async () => {
+            const results = await gitAccessCheck(
+                healthyGit({ write: 'unknown' }),
+            ).run(ctx());
+            expect(problems(results)).toEqual([]);
+            const line = results.find((r) => r.check === 'git.unverified');
+            expect(line?.status).toBe('unknown');
+            expect(line?.title).toContain('comment on pull requests in api');
         });
     });
 
@@ -327,7 +412,9 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             const env = cleanEnv();
             env.SANDBOX_PROVIDER = 'null';
             const results = await configEnvCheck.run(ctx({ env }));
-            expect(results.find((r) => r.check === 'sandbox.mode')?.status).toBe('warn');
+            expect(
+                results.find((r) => r.check === 'sandbox.mode')?.status,
+            ).toBe('warn');
             expectActionable(results);
         });
 
@@ -355,7 +442,9 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             const env = cleanEnv();
             env.API_LLM_PROVIDER_MODEL = 'gpt-3.5-turbo';
             const results = await llmCheck(llmDeps()).run(ctx({ env }));
-            expect(results.find((r) => r.check === 'llm.context_window')?.status).toBe('warn');
+            expect(
+                results.find((r) => r.check === 'llm.context_window')?.status,
+            ).toBe('warn');
             expectActionable(results);
         });
 
@@ -363,11 +452,15 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             const byok = {
                 version: 2,
                 credentials: [],
-                models: [{ id: 'm1', credentialId: 'missing', model: 'claude-x' }],
+                models: [
+                    { id: 'm1', credentialId: 'missing', model: 'claude-x' },
+                ],
                 routing: { defaultModelId: 'm1' },
             };
             const results = await llmCheck(llmDeps({ byok })).run(ctx());
-            expect(results.find((r) => r.check === 'llm.byok_fallback')?.status).toBe('warn');
+            expect(
+                results.find((r) => r.check === 'llm.byok_fallback')?.status,
+            ).toBe('warn');
             expectActionable(results);
         });
 
@@ -375,7 +468,9 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             const env = cleanEnv();
             env.WEB_NODE_ENV = 'production';
             const results = await configEnvCheck.run(ctx({ env }));
-            expect(results.find((r) => r.check === 'env.web_node_env')?.status).toBe('warn');
+            expect(
+                results.find((r) => r.check === 'env.web_node_env')?.status,
+            ).toBe('warn');
         });
 
         it('version behind latest release', async () => {
@@ -392,7 +487,9 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             const env = cleanEnv();
             env.API_LOG_LEVEL = 'error';
             const results = await configEnvCheck.run(ctx({ env }));
-            expect(results.find((r) => r.check === 'env.log_level')?.status).toBe('warn');
+            expect(
+                results.find((r) => r.check === 'env.log_level')?.status,
+            ).toBe('warn');
         });
     });
 
@@ -418,7 +515,11 @@ describe('doctor checks — each condition in scope, one at a time', () => {
         it('showStatusFeedback=false', async () => {
             const c = ctx();
             const results = await skipSettingsCheck(async () => [
-                { team: c.teams[0], repository: null, config: { showStatusFeedback: false } },
+                {
+                    team: c.teams[0],
+                    repository: null,
+                    config: { showStatusFeedback: false },
+                },
             ]).run(c);
             expect(statuses(results)).toEqual(['info']);
         });
@@ -436,7 +537,9 @@ describe('doctor checks — each condition in scope, one at a time', () => {
 
         it('not reported on Community Edition', async () => {
             const lastRun = jest.fn();
-            expect(await analyticsCheck(lastRun).run(ctx({ licensed: false }))).toEqual([]);
+            expect(
+                await analyticsCheck(lastRun).run(ctx({ licensed: false })),
+            ).toEqual([]);
             expect(lastRun).not.toHaveBeenCalled();
         });
     });

@@ -17,7 +17,11 @@ import { CodeManagementService } from '@libs/platform/infrastructure/adapters/se
 import { buildGitAuthHeader } from '@libs/sandbox/infrastructure/providers/git-auth-header';
 
 import { VersionCheckService } from '../services/version-check.service';
-import { brokerCheck, amqpBrokerProbe, staleJobsCheck } from './checks/broker.checks';
+import {
+    brokerCheck,
+    amqpBrokerProbe,
+    staleJobsCheck,
+} from './checks/broker.checks';
 import { bootEnvCheck, configEnvCheck } from './checks/env.checks';
 import { gitAccessCheck, webhookUrlCheck } from './checks/git.checks';
 import { liveLlmComplete, llmCheck } from './checks/llm.checks';
@@ -138,7 +142,12 @@ export class SelfHostedDoctorService {
                 check.run(ctx),
                 new Promise<never>((_, reject) => {
                     timer = setTimeout(
-                        () => reject(new Error(`timed out after ${CHECK_TIMEOUT_MS / 1000}s`)),
+                        () =>
+                            reject(
+                                new Error(
+                                    `timed out after ${CHECK_TIMEOUT_MS / 1000}s`,
+                                ),
+                            ),
                         CHECK_TIMEOUT_MS,
                     );
                 }),
@@ -315,8 +324,14 @@ export class SelfHostedDoctorService {
 
     private async loadAstStatuses(
         ctx: DoctorContext,
-    ): Promise<Array<{ team: DoctorTeam; repository: string; status: string | null }>> {
-        const out: Array<{ team: DoctorTeam; repository: string; status: string | null }> = [];
+    ): Promise<
+        Array<{ team: DoctorTeam; repository: string; status: string | null }>
+    > {
+        const out: Array<{
+            team: DoctorTeam;
+            repository: string;
+            status: string | null;
+        }> = [];
         for (const team of ctx.teams.filter(
             (t) => t.platform && t.repositories.length,
         )) {

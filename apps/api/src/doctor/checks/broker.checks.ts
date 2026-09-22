@@ -76,7 +76,9 @@ export function brokerCheck(probe: BrokerProbe): DoctorCheck {
     return {
         id: 'broker',
         async run({ env }: DoctorContext): Promise<DoctorResult[]> {
-            if ((env.API_RABBITMQ_ENABLED ?? 'true').toLowerCase() === 'false') {
+            if (
+                (env.API_RABBITMQ_ENABLED ?? 'true').toLowerCase() === 'false'
+            ) {
                 return [
                     {
                         check: 'broker.enabled',
