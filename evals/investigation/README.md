@@ -9,15 +9,13 @@
 Promptfoo harness for prompt and tool-use evals against the current review engine.
 
 Goals:
-
 - use the same prompt assembly as the active `generalist` review agent
 - use the same agent loop semantics, not a simplified text-only prompt
 - replay deterministic tool outputs so evals stay stable across runs
 - evaluate investigation behavior separately from final PR posting and summary generation
-- the recall suite drives the real pipeline through `runAgentLoopViaCore`, which is finder AND verify (`agent-provider.js`); a change to either shows up here. Judging whether a keep/drop decision was CORRECT on frozen evidence is the separate promotion suite
+- keep the current suite planner-only by default; finding correctness belongs in a separate promotion suite
 
 What is here now:
-
 - `agent-provider.js`: promptfoo provider that builds the live `generalist` review prompt from code and runs the current agent loop
 - `prompt-loader.js`: passes the full case payload into the provider
 - `parse-output.js`: shared parser for assertions
@@ -39,7 +37,7 @@ the agent's findings against each PR's golden bugs. Per PR it reports:
 - **recall** — goldens covered by ≥1 finding (did we catch the real bugs?)
 - **precision** — findings that hit ≥1 golden (is what we post real, not noise?)
 - **F1**
-- **fair-recall** — recall with _replay artifacts_ removed from the denominator. A
+- **fair-recall** — recall with *replay artifacts* removed from the denominator. A
   missed golden is an artifact if its code wasn't in the corpus the finder saw (the
   replay never gave it the file), so it's not a real recognition miss.
 - **loop-fidelity** — % of the agent's tool calls the replay could serve. Low
@@ -91,13 +89,11 @@ node extract-replay-from-trace.js --env verify-gemini \
 ```
 
 What belongs here next:
-
 - `datasets/`: real cases derived from benchmark traces
 - `fixtures/`: replayed `readFile`, `grep`, `checkTypes`, and later `searchDocs` outputs
 - `results/`: promptfoo outputs
 
 Recommended phases:
-
 1. `planner`
    Measure whether the agent requests the right next file, symbol, or query.
 2. `promotion`
@@ -106,7 +102,6 @@ Recommended phases:
    Add this later as a separate dimension. Keep the first pass local-only so tool behavior is reproducible.
 
 Rules for this eval:
-
 - do not copy prompts into static files
 - do not use `prompt_codereview_*_gemini_v2`
 - do not mock made-up tool content
@@ -119,38 +114,38 @@ Suggested case shape:
 
 ```json
 {
-    "caseId": "sentry-pagination-regression",
-    "mode": "planner",
-    "reviewInput": {
-        "title": "Enhanced Pagination Performance for Audit Logs and Issues Search",
-        "description": "...",
-        "changedFiles": ["src/sentry/api/paginator.py"],
-        "diff": "..."
+  "caseId": "sentry-pagination-regression",
+  "mode": "planner",
+  "reviewInput": {
+    "title": "Enhanced Pagination Performance for Audit Logs and Issues Search",
+    "description": "...",
+    "changedFiles": ["src/sentry/api/paginator.py"],
+    "diff": "..."
+  },
+  "toolReplay": [
+    {
+      "tool": "grep",
+      "match": {
+        "pattern": "get_item_key",
+        "path": "src/sentry/api"
+      },
+      "result": "..."
     },
-    "toolReplay": [
-        {
-            "tool": "grep",
-            "match": {
-                "pattern": "get_item_key",
-                "path": "src/sentry/api"
-            },
-            "result": "..."
-        },
-        {
-            "tool": "readFile",
-            "match": {
-                "path": "src/sentry/api/paginator.py",
-                "startLine": 150,
-                "endLine": 210
-            },
-            "result": "..."
-        }
-    ],
-    "expected": {
-        "sufficient": false,
-        "requiredQueries": ["get_item_key", "cursor"],
-        "forbiddenQueries": ["searchDocs"]
+    {
+      "tool": "readFile",
+      "match": {
+        "path": "src/sentry/api/paginator.py",
+        "startLine": 150,
+        "endLine": 210
+      },
+      "result": "..."
     }
+  ],
+  "expected": {
+    "sufficient": false,
+    "requiredQueries": ["get_item_key", "cursor"],
+    "forbiddenQueries": ["searchDocs"]
+  }
 }
 ```
 
@@ -226,7 +221,6 @@ pnpm run eval:investigation:no-cache \
 ```
 
 Supported custom flags:
-
 - `--preset <name>`: use a known model preset, can be repeated
 - `--provider <google|anthropic|openai|openai-compatible|openrouter>`: custom provider
 - `--model <id>`: custom model id
@@ -241,7 +235,6 @@ Supported custom flags:
 - `--require-provider-parameters`: for OpenRouter, set `provider.require_parameters=true`
 
 Rules:
-
 - use either repeated `--preset` flags or a single custom `--provider` + `--model`
 - do not mix presets with custom provider overrides in the same command
 
@@ -266,13 +259,11 @@ pnpm run eval:investigation:all:no-cache \
 ```
 
 Debug artifacts from the latest run:
-
 - `results/last-output.json`: raw provider output used by the assertion
 - `results/last-assertion.json`: exact pass/fail reason plus tool/file/finding details
 - `results/last-error.json`: provider crash details when the harness errors before assertion
 
 Important:
-
 - when you run multiple providers in one eval, the `last-*` files are only for the most recently finished provider/case combination
 - for precise debugging, rerun the failing provider on a single dataset
 
@@ -294,7 +285,6 @@ node evals/investigation/extract-benchmark-case.js \
 ```
 
 What the extractor gives you:
-
 - benchmark PR metadata from `scripts/benchmark/prs-benchmark.json`
 - real changed-file patches converted to `patchWithLinesStr`
 - `readFile` replay fixtures for the changed files at the PR head/commit SHA
@@ -302,13 +292,11 @@ What the extractor gives you:
 - golden comments attached for manual expectation tuning
 
 What you still need to refine by hand:
-
 - `grep` replay fixtures
 - the exact `expected*` assertions for the case
 - any extra non-diff files you want the agent to inspect
 
 Recommended workflow for a new real case:
-
 1. extract the benchmark seed with `eval:investigation:extract`
 2. prune the changed-file set to the files that matter for the investigation
 3. add `grep` fixtures for the symbols you expect the agent to chase
@@ -352,7 +340,6 @@ pnpm run eval:investigation:extract:candidates --top 10 --overwrite
 ```
 
 Heuristics used by the selector:
-
 - `missed-all`: the run missed every golden issue for that PR
 - `no-candidate`: the run generated zero candidates
 - `partial-recall`: the run found some issues but still missed others
@@ -360,7 +347,6 @@ Heuristics used by the selector:
 - `noise`: the run generated more false positives than true positives
 
 Use the shortlist to prioritize:
-
 1. `missed-all` + `no-candidate` cases for under-investigation
 2. `disagreement` cases where one model succeeds and another fails
 3. `partial-recall` cases to force deeper caller/callee expansion

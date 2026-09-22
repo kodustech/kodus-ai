@@ -86,39 +86,6 @@ describe('BusinessRulesVerifier.verify', () => {
         const verdict = await verifier.verify(claim, ctx);
         expect(verdict.keep).toBe(true);
     });
-
-    // Issue #1937: this verifier shares the harness extractVerdict, so a model
-    // that writes its verdict as TEXT instead of calling submitVerdict — the
-    // shape Anthropic and the OpenAI-compatible providers take, where strict
-    // tool use is off — must still refute the claim instead of failing open.
-    it('reads a keep=false the model wrote as text instead of calling submitVerdict', async () => {
-        const textState = {
-            ...runStateWithVerdict(true),
-            artifacts: [],
-            steps: [
-                {
-                    index: 0,
-                    message: {
-                        role: 'assistant',
-                        content:
-                            'The diff does revoke sessions.\n' +
-                            '{"keep": false, "rationale": "diff covers it"}',
-                        toolCalls: [],
-                    },
-                },
-            ],
-        } as unknown as RunState;
-        const runner = { run: jest.fn(async () => textState) };
-        const verifier = new BusinessRulesVerifier(runner as any, {
-            modelId: 'resolved',
-            diff: 'd',
-            taskContext: 't',
-        });
-        const verdict = await verifier.verify(claim, ctx);
-        expect(verdict.keep).toBe(false);
-        expect(verdict.rationale).toBe('diff covers it');
-        expect(verdict.parseMode).toBe('text');
-    });
 });
 
 describe('shouldVerifyValidationResult (opt-in gate)', () => {

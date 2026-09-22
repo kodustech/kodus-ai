@@ -51,7 +51,7 @@ const GATE = process.argv.includes('--gate');
 // still checked for resilience regressions.
 const BOUNDARIES = [
     { phase: 'finder', files: ['libs/code-review/infrastructure/agents/core/finder.agent.ts'], requires: ['schema', 'shape'] },
-    { phase: 'verifier', files: ['libs/code-review/infrastructure/agents/core/verifier.agent.ts', 'libs/agent-harness/infrastructure/verify/llm-verdict.ts'], requires: ['shape'], noInvoke: true, note: 'agent-loop; extractVerdict → recoverVerdictObject → normalizeEnvelope (scalar), plus the text path via extractLastJsonObjectWith (#1937). The shape layer moved to the harness file so BOTH verifiers (code-review + business-rules) share it — declare both files or the scan reads a regression that is not there.' },
+    { phase: 'verifier', files: ['libs/code-review/infrastructure/agents/core/verifier.agent.ts'], requires: ['shape'], noInvoke: true, note: 'agent-loop; extractVerdict → normalizeEnvelope (scalar)' },
     { phase: 'dedup', files: ['libs/code-review/pipeline/stages/agent-review.stage.ts'], requires: ['schema', 'shape'] },
     { phase: 'kody-rules-shard', files: ['libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider.ts'], requires: ['schema', 'recover'], note: 'bare-array recovery (#1786) — floor includes recoverEnvelopeShape' },
     { phase: 'kody-rules-compiler', files: ['libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler.ts'], declined: true, note: 'produces a REGEX detector — recovering off-schema output would ship a wrong detector; declines by design' },

@@ -311,7 +311,7 @@ export async function runAgentLoopViaCore(
                           index: i,
                           relevantFile: f.relevantFile,
                           action: 'keep' as const,
-                          parseMode: r.keptParseMode[i] ?? 'default-keep',
+                          parseMode: 'direct' as const,
                           rationale: '',
                           verifierEvidence: r.keptEvidence[i] ?? {
                               strongFiles: [],
@@ -322,7 +322,7 @@ export async function runAgentLoopViaCore(
                           index: r.kept.length + i,
                           relevantFile: d.finding.relevantFile,
                           action: 'drop' as const,
-                          parseMode: d.parseMode,
+                          parseMode: 'direct' as const,
                           rationale: d.evidence ?? '',
                           verifierEvidence: d.verifierEvidence,
                       })),

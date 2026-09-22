@@ -14,13 +14,6 @@
  */
 import type { ToolContext } from './tool.contract';
 
-/** HOW the verdict was read off the run — the verify funnel's own provenance.
- *  `tool` = the model called the verdict tool; `text` = it answered in text and
- *  the deterministic parser recovered the verdict; `default-keep` = nothing was
- *  parseable and the fail-open default applied. Recorded because "kept" alone
- *  cannot distinguish a judged keep from a parse miss (issue #1937). */
-export type VerdictParseMode = 'tool' | 'text' | 'default-keep';
-
 export interface VerdictDimension {
     readonly name: string;
     readonly pass: boolean;
@@ -44,8 +37,6 @@ export interface Verdict {
         readonly args?: Record<string, unknown>;
         readonly result?: string;
     }>;
-    /** How this verdict was obtained — see {@link VerdictParseMode}. */
-    readonly parseMode?: VerdictParseMode;
 }
 
 export interface Verifier<T> {

@@ -36,7 +36,6 @@ import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engi
 import type { DocumentationSearchAdapter } from '@libs/code-review/infrastructure/agents/engine/agent-tools.factory';
 import type { FindingsOutput } from '@libs/code-review/infrastructure/agents/core/findings-schema';
 import type { LinkedRepoAccess } from '@libs/ee/linked-repositories';
-import type { VerdictParseMode } from '@libs/agent-harness/domain/contracts/verifier.contract';
 
 export type { FindingsOutput } from '@libs/code-review/infrastructure/agents/core/findings-schema';
 
@@ -550,10 +549,7 @@ export interface VerificationDecisionTrace {
     index: number;
     relevantFile: string;
     action: 'keep' | 'drop' | 'refine';
-    /** How the verifier's verdict was read: `tool` = it called submitVerdict,
-     *  `text` = it answered in prose and the deterministic parser recovered the
-     *  verdict, `default-keep` = nothing parseable, fail-open (issue #1937). */
-    parseMode: VerdictParseMode;
+    parseMode: 'direct' | 'fallback-llm' | 'default-keep';
     rationale: string;
     confidence?: 'high' | 'medium' | 'low';
     verifierEvidence: ToolEvidenceSummary;
