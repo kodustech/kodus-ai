@@ -3,7 +3,7 @@
 /* Hallmark · component: plan status (sidebar foot) · genre: modern-minimal · theme: system-tokens (card-lv*, text-*, primary · secondary · info)
  * redesign: a muted text link for settled plans → one panel for every state, a tier chip (tone per tier) + one fact from billing
  * states: default · hover · focus-visible · active · error (payment failed, canceled, license expired) · warning (trial/license ending) · unknown (billing unreachable) · rail glyph
- * plans: trial (active · expiring · exhausted) · free · teams · enterprise · community self-hosted · enterprise self-hosted · canceled · expired · unconfirmed · payment failed
+ * plans: trial (active · expiring · exhausted) · free · teams · enterprise · community self-hosted · enterprise self-hosted · canceled · expired · unconfirmed · no license · payment failed
  * contrast: pass (40–41) · tokens: pass (48) · honest: pass (46 — seats, days and reviews come from billing; nothing invented)
  * pre-emit critique: P4 H5 E4 S5 R4 V4
  */
@@ -188,6 +188,19 @@ export const SidebarPlanStatus = ({ collapsed }: { collapsed: boolean }) => {
                 </PlanPanel>
             );
         }
+
+        // Billing has no license for the org (its trial was never
+        // provisioned): no plan, and reviews don't run without one.
+        case "no-license":
+            return collapsed ? (
+                <RailStatus tone="neutral" label="No plan · choose a plan">
+                    <SparklesIcon className="text-primary-light size-4" />
+                </RailStatus>
+            ) : (
+                <PlanPanel tone="neutral" chip="No plan">
+                    <Action>Choose a plan</Action>
+                </PlanPanel>
+            );
 
         // What the layout falls back to when billing didn't answer: the plan
         // is unknown, not gone, so no "choose a plan" (the banner says it).

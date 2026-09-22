@@ -191,6 +191,14 @@ export const buildPlanFixtures = (now = Date.now()): PlanFixture[] => {
             usersWithAssignedLicense: [],
         },
         {
+            // Billing answered with no license at all: the trial was never
+            // provisioned (e.g. an org seeded without onboarding).
+            id: "no-license",
+            title: "No license",
+            license: { valid: false } as PlanFixture["license"],
+            usersWithAssignedLicense: [],
+        },
+        {
             // The layout's fallback when billing didn't answer.
             id: "inactive",
             title: "Billing unreachable",

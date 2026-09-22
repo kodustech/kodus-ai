@@ -60,6 +60,7 @@ describe("SidebarPlanStatus", () => {
         ["canceled", ["Canceled", "Reviews are paused.", "Choose a plan"]],
         ["expired", ["Expired", "Reviews are paused.", "Choose a plan"]],
         ["inactive", ["Unconfirmed", "Billing didn't answer."]],
+        ["no-license", ["No plan", "Choose a plan"]],
     ])("%s shows its tier and fact", (id, texts) => {
         renderPlan(id);
 

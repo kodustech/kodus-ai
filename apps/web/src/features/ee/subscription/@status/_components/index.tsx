@@ -13,6 +13,7 @@ import { Active } from "./active";
 import { Canceled } from "./canceled";
 import { Expired } from "./expired";
 import { FreeByok } from "./free";
+import { NoPlan } from "./no-plan";
 import { PaymentFailed } from "./payment-failed";
 import { Trial } from "./trial";
 import { Unverified } from "./unverified";
@@ -32,6 +33,7 @@ const components: Partial<
     "payment-failed": PaymentFailed,
     // Billing didn't answer: said on the page too, not only in the banner.
     "inactive": Unverified,
+    "no-license": NoPlan,
 };
 
 export const Redirect = ({
