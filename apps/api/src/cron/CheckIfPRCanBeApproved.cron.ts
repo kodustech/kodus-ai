@@ -94,6 +94,22 @@ const PR_CONCURRENCY = 15;
 // setting existed, so the default keeps that behaviour.
 const DEFAULT_APPROVAL_LOOKBACK_DAYS = 7;
 
+// The largest window the setting accepts. Ten years is longer than any
+// repository this cron runs against has been open, so a team that means
+// "never expire" is already served by it, and anything larger is a typo
+// rather than an intent.
+//
+// The bound also keeps the value away from the point where it stops being
+// a window at all. The start of the eligibility window is derived with
+// `date.setDate(date.getDate() - lookback)`, and past roughly 1e8 days
+// that lands outside the range a Date can represent, so `setDate` yields
+// an Invalid Date. An Invalid Date cannot be serialised into the
+// eligibility query's filter, so the call rejects; the rejection is
+// swallowed by the `Promise.allSettled` the per-team work runs inside,
+// and the team is skipped on every run with nothing logged — the exact
+// silent failure this setting exists to remove.
+const MAX_APPROVAL_LOOKBACK_DAYS = 3650;
+
 @Injectable()
 export class CheckIfPRCanBeApprovedCronProvider {
     private readonly logger = createLogger(
@@ -784,10 +800,12 @@ export class CheckIfPRCanBeApprovedCronProvider {
      * query runs once per team, before any repository is known, so a
      * per-repository override has nothing to act on.
      *
-     * Accepts only a positive integer; anything else — unset, zero, negative,
-     * fractional, or not a number — yields the default. A value that was set
-     * but rejected is logged, since a team that configured 30 and silently
-     * got 7 would see the same symptom this setting exists to fix.
+     * Accepts only a positive integer no greater than
+     * `MAX_APPROVAL_LOOKBACK_DAYS`; anything else — unset, zero, negative,
+     * fractional, above the maximum, or not a number — yields the default. A
+     * value that was set but rejected is logged, since a team that configured
+     * 30 and silently got 7 would see the same symptom this setting exists to
+     * fix.
      */
     private resolveApprovalLookbackDays(
         codeReviewParameterValue:
@@ -804,7 +822,8 @@ export class CheckIfPRCanBeApprovedCronProvider {
         if (
             typeof configured === 'number' &&
             Number.isInteger(configured) &&
-            configured >= 1
+            configured >= 1 &&
+            configured <= MAX_APPROVAL_LOOKBACK_DAYS
         ) {
             return configured;
         }
@@ -816,6 +835,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
             metadata: {
                 organizationAndTeamData,
                 configured,
+                max: MAX_APPROVAL_LOOKBACK_DAYS,
                 default: DEFAULT_APPROVAL_LOOKBACK_DAYS,
             },
         });
