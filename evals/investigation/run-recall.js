@@ -27,6 +27,7 @@ function parseArgs(argv) {
         output: '',
         concurrency: Number(process.env.RECALL_CONCURRENCY) || 4,
         listModels: false,
+        noJudge: process.env.RECALL_NO_JUDGE === '1',
         gate: process.env.RECALL_GATE === '1',
     };
 
@@ -45,6 +46,8 @@ function parseArgs(argv) {
             if (consumesNext) i += 1;
         } else if (key === 'all') {
             out.all = true;
+        } else if (key === 'no-judge') {
+            out.noJudge = true;
         } else if (key === 'set') {
             out.set = value || out.set;
             if (consumesNext) i += 1;
@@ -208,8 +211,15 @@ async function main() {
         return;
     }
 
+    // --no-judge: run the finder and SAVE its findings, score nothing. The finder
+    // is the expensive half (~$3.5 a night) and a dead judge key used to throw it
+    // away — the scoring exception escaped runOneCase before the submission was
+    // pushed, so a night that paid for 30 finder runs kept 3. The saved submission
+    // is what rejudge.js (or any external judge) re-scores afterwards. It is never
+    // a measurement: the run exits 2 with the reason.
+    const NO_JUDGE = !!args.noJudge;
     const { loadJudgeKey, JUDGE_MODEL, providerFor } = require('./recall-judge');
-    if (!loadJudgeKey()) {
+    if (!NO_JUDGE && !loadJudgeKey()) {
         const error = `Missing judge key for ${JUDGE_MODEL} (${providerFor(JUDGE_MODEL)}): set JUDGE_API_KEY.`;
         console.error(error);
         // Still write a result, so the report says what was missing instead of
@@ -255,6 +265,7 @@ async function main() {
     const rows = [];
     let infraFailures = 0;
     let qualityFailures = 0;
+    let unscored = 0;
     const startedAt = new Date().toISOString();
 
     console.log(
@@ -301,6 +312,37 @@ async function main() {
             };
             rows.push(row);
             console.log(`INFRA ${caseId} ${row.reason.slice(0, 180)}`);
+            return;
+        }
+
+        if (NO_JUDGE) {
+            unscored += 1;
+            // Carry the trace summary even unscored: it holds the verify funnel
+            // (beforeCount / afterCount / droppedByVerifier and each decision's
+            // parseMode), which needs no judge and is the only way this mode can
+            // say whether the pipeline still works rather than just that it ran.
+            rows.push({
+                caseId,
+                status: 'unscored',
+                reason: 'judge skipped (--no-judge): findings saved for an external judge',
+                traceSummary: traceSummaryFromOutput(apiResult.output),
+            });
+            // Log what was SAVED, read off the saved record itself. Deriving the
+            // count separately is how this line came to print 0 while the
+            // submission held 4: the engine's output is a JSON string, not an
+            // object, so a second bespoke read of it silently found nothing.
+            const saved = submissionResultFromOutput(
+                caseId,
+                apiResult.output,
+                apiResult.tokenUsage,
+            );
+            submissionResults.push(saved);
+            writeJson(checkpointPath, {
+                benchmarkVersion: `${args.all ? 'all50' : args.cases ? 'custom' : args.set}-v1`,
+                run: runMetaOf(args), partial: true,
+                completedCases: submissionResults.length, results: submissionResults,
+            });
+            console.log(`SAVED  ${caseId} findings=${saved.findings.length}`);
             return;
         }
 
@@ -447,6 +489,16 @@ async function main() {
     console.log(`precision_mean: ${fmtPct(summary.metrics.precision_mean)}`);
     console.log(`fidelity_mean: ${fmtPct(summary.metrics.fidelity_mean)}`);
     console.log(`artifact: ${path.relative(process.cwd(), outputPath)}`);
+    if (NO_JUDGE) {
+        // The percentages above are empty by construction, not a result. Say so
+        // next to them: a 0% that looks like a measurement is how a dead judge
+        // went unseen for weeks.
+        console.log(
+            `\n--no-judge: ${unscored} case(s) ran the finder and were NOT scored.` +
+                `\nfindings saved: ${path.relative(process.cwd(), outputPath).replace(/\.json$/, '.submission.json')}` +
+                `\nthe percentages above are empty by construction — score them with evals/investigation/rejudge.js or an external judge.`,
+        );
+    }
 
     if (gate.status === 'pass' || gate.status === 'fail') {
         console.log('\n════ model floor gate (targets.json) ════');
@@ -466,7 +518,9 @@ async function main() {
     // quarter of the nights. Up to 5% of the set may go unmeasured; the run
     // then gates on the PRs that did measure and says how many it had.
     if (unmeasured > infraBudget) {
-        console.error(`\n${unmeasured} PR(s) not measured (${infraFailures} infra), budget ${infraBudget}`);
+        console.error(
+            `\n${unmeasured} PR(s) not measured (${infraFailures} infra${unscored ? `, ${unscored} unscored by --no-judge` : ''}), budget ${infraBudget}`,
+        );
         process.exit(2);
     }
     if (unmeasured > 0) console.log(`\n${unmeasured} PR(s) not measured, within the budget of ${infraBudget}: gating on the ${rows.length - unmeasured} that were.`);
