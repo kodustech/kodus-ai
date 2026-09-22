@@ -36,6 +36,14 @@
 // (its prompt asks for a JSON verdict and never names the done tool, and
 // constraining the output is measured harm — model-strictness.ts). Swap in a
 // tool-forcing policy and this section goes red on purpose.
+// libs/common/utils/crypto.ts reads API_CRYPTO_KEY at IMPORT time
+// (`Buffer.from(process.env.API_CRYPTO_KEY, 'hex')`), and the verifier agent
+// pulls it in through libs/llm/model-builders.ts. Without it the require throws
+// before a single row runs and the eval reports INFRA — which is what the PR
+// smoke, running with no keys, saw. This replay never encrypts anything, so a
+// throwaway key is enough; same line as every other engine-loading eval.
+if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
+
 require('ts-node/register/transpile-only');
 require('tsconfig-paths/register');
 
