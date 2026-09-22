@@ -1,14 +1,10 @@
-# Preview environment, CLOUD shape: one VM per pull request, driven by CI.
+# Preview environment, SELF-HOSTED shape: one VM per pull request, driven by CI.
 #
-# Separate from workspace.yaml on purpose — a developer box and a PR preview
-# are not the same machine. The dev recipe is optimized for someone SSH-ing in
-# and port-forwarding to localhost; this one is optimized for a link a reviewer
-# clicks.
-#
-# A pull request may need the product in its cloud shape (this recipe), its
-# self-hosted shape (workspace.preview.selfhosted.yaml) or both — each is a
-# separate runo env of the same branch, told apart by --profile:
-#   runo up --here --branch B --profile cloud --recipe .kodus/workspace.preview.yaml
+# The cloud shape is workspace.preview.yaml; the two differ only in the compose
+# overlay (docker-compose.preview.selfhosted.yml: cloud mode off, no billing)
+# and in what they copy. Everything else is kept identical on purpose, so a
+# difference between the two previews is a difference in the product.
+#   runo up --here --branch B --profile self-hosted --recipe .kodus/workspace.preview.selfhosted.yaml
 version: 1
 setup:
   - docker network create kodus-backend-services 2>/dev/null || true
@@ -18,14 +14,13 @@ setup:
   - docker compose -f docker-compose.dev.yml build kodus-api
   - pnpm install
 files:
-  copy: [.env, .env.billing]
+  copy: [.env]
 services:
   compose:
     # the overlay adds what a public, non-laptop environment needs: the app's
     # own public URL in its env, and memory limits sized for a 16GB VM
-    files: [docker-compose.dev.yml, docker-compose.preview.yml, docker-compose.preview.cloud.yml]
-    # MCP is intentionally opt-in for laptops, but a preview must represent the
-    # complete product rather than the lightweight default developer stack.
+    files: [docker-compose.dev.yml, docker-compose.preview.yml, docker-compose.preview.selfhosted.yml]
+    # MCP ships in the installer too, so the self-hosted preview keeps it.
     profiles: [mcp]
     # the web app is what a reviewer opens; it proxies to the API over the
     # compose network, so the API needs no public address of its own.

@@ -1,9 +1,22 @@
 name: "Preview: Deploy"
 
 # =============================================================================
-# One preview environment per pull request: the whole docker-compose stack the
-# team runs locally, on a VM managed by runo (github.com/kodustech/runo),
-# reachable over HTTPS.
+# One preview environment per pull request AND per shape of the product it
+# needs: the whole docker-compose stack the team runs locally, on a VM managed
+# by runo (github.com/kodustech/runo), reachable over HTTPS.
+#
+# Kodus ships the same code as cloud (billing, analytics) and as self-hosted.
+# A pull request may need neither, one or both previews; each shape is a runo
+# env of its own (`--profile cloud` / `--profile self-hosted`). This workflow
+# is a reconciler: it decides the wanted set, brings those up and tears the
+# rest down, so the fleet always reflects the decision and nothing else.
+#
+# Who decides (scripts/preview/decide-profiles.cjs):
+#   - labels, when present: preview:cloud, preview:self-hosted, preview:none.
+#     Add or remove one and this workflow re-runs.
+#   - otherwise rules over the changed files (docs-only → none; code that
+#     reads the deployment mode → both; the rest → cloud).
+#   - workflow_dispatch can force a set for one run.
 #
 # Replaces the Railway (API) + Vercel (web) pair. The reason is fidelity: a
 # preview now runs the same containers as `pnpm run docker:start` — worker,
@@ -34,8 +47,16 @@ on:
                 description: Pull request to validate on the Ohio preview fleet
                 required: true
                 type: number
+            profiles:
+                description: Which shapes to bring up (auto = labels, then rules)
+                required: false
+                default: auto
+                type: choice
+                options: [auto, cloud, self-hosted, both, none]
     pull_request:
-        types: [opened, synchronize, reopened]
+        # labeled/unlabeled: a preview:* label is a decision — act on it.
+        # Labels applied by this workflow's own token never re-trigger it.
+        types: [opened, synchronize, reopened, labeled, unlabeled]
 
 permissions:
     contents: read
@@ -56,16 +77,21 @@ jobs:
     preview:
         name: Preview environment
         # Secrets are not available to forks, and a fork branch name could
-        # collide with ours in the env registry.
-        if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+        # collide with ours in the env registry. Label events only matter
+        # when the label is one of ours.
+        if: >-
+            (github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository)
+            && (github.event.action != 'labeled' && github.event.action != 'unlabeled' || startsWith(github.event.label.name, 'preview:'))
         runs-on: ubuntu-latest
         environment: Preview
-        timeout-minutes: 60
+        # two shapes come up one after the other
+        timeout-minutes: 100
         permissions:
             contents: read
             pull-requests: write
         outputs:
-            url: ${{ steps.up.outputs.url }}
+            urls: ${{ steps.up.outputs.urls }}
+            profiles: ${{ steps.decide.outputs.profiles }}
         steps:
             - name: Resolve preview revision
               id: target
@@ -90,7 +116,33 @@ jobs:
             - name: Use the isolated preview instance family
               run: |
                   # Older PRs still carry the previous fleet's instance family.
-                  sed -i 's/instance: m7i-flex.xlarge/instance: t3.xlarge/' .kodus/workspace.preview.yaml
+                  sed -i 's/instance: m7i-flex.xlarge/instance: t3.xlarge/' .kodus/workspace.preview*.yaml
+
+            - name: Decide which shapes this pull request needs
+              id: decide
+              uses: actions/github-script@v9.0.0
+              env:
+                  PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+                  FORCED: ${{ inputs.profiles || 'auto' }}
+              with:
+                  script: |
+                      const { decide, PROFILES } = require(`${process.env.GITHUB_WORKSPACE}/scripts/preview/decide-profiles.cjs`);
+                      const pull_number = Number(process.env.PR_NUMBER);
+                      const forced = process.env.FORCED;
+                      let decision;
+                      if (forced && forced !== 'auto') {
+                        const profiles = forced === 'both' ? [...PROFILES] : forced === 'none' ? [] : [forced];
+                        decision = { profiles, reason: `workflow_dispatch: ${forced}`, source: 'manual' };
+                      } else {
+                        const { data: pr } = await github.rest.pulls.get({ owner: context.repo.owner, repo: context.repo.repo, pull_number });
+                        const files = await github.paginate(github.rest.pulls.listFiles, { owner: context.repo.owner, repo: context.repo.repo, pull_number, per_page: 100 });
+                        decision = decide({ labels: pr.labels.map((l) => l.name), files });
+                      }
+                      core.info(`profiles: [${decision.profiles.join(', ')}] — ${decision.reason} (${decision.source})`);
+                      core.setOutput('profiles', decision.profiles.join(' '));
+                      core.setOutput('unwanted', PROFILES.filter((p) => !decision.profiles.includes(p)).join(' '));
+                      core.setOutput('reason', decision.reason);
+                      core.setOutput('source', decision.source);
 
             - uses: oven-sh/setup-bun@v2
               with:
@@ -120,6 +172,7 @@ jobs:
                   PREVIEW_SECRET_SEED_BASE: ${{ secrets.PREVIEW_SECRET_SEED }}
                   PREVIEW_BILLING_ENV: ${{ secrets.PREVIEW_BILLING_ENV }}
                   HEAD_REF: ${{ steps.target.outputs.branch }}
+                  PROFILES: ${{ steps.decide.outputs.profiles }}
               run: |
                   # No token means previews are not configured for this
                   # repository (a fork, or before the secrets are added). That
@@ -152,9 +205,12 @@ jobs:
                   fi
                   # ...and then nothing real survives into a public environment
                   ./scripts/preview/neutralize-preview-env.sh .env .env.template
-                  printf '%s\n' "$PREVIEW_BILLING_ENV" > "$RUNNER_TEMP/preview-billing.env"
-                  ./scripts/preview/materialize-billing-env.sh \
-                    "$RUNNER_TEMP/preview-billing.env" .env .env.billing
+                  # billing exists in the cloud shape only
+                  case " $PROFILES " in *" cloud "*)
+                    printf '%s\n' "$PREVIEW_BILLING_ENV" > "$RUNNER_TEMP/preview-billing.env"
+                    ./scripts/preview/materialize-billing-env.sh \
+                      "$RUNNER_TEMP/preview-billing.env" .env .env.billing
+                  esac
                   # the seed runs on the VM and reads these from the same file
                   {
                     echo "PREVIEW_SEED_EMAIL=preview@kodus.io"
@@ -169,80 +225,111 @@ jobs:
                   RUNO_SERVER: ${{ vars.PREVIEW_RUNO_SERVER }}
                   RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
                   HEAD_REF: ${{ steps.target.outputs.branch }}
+                  PROFILES: ${{ steps.decide.outputs.profiles }}
+                  UNWANTED: ${{ steps.decide.outputs.unwanted }}
               run: |
                   set -euo pipefail
                   : "${RUNO_SERVER:?PREVIEW_RUNO_SERVER is not configured}"
                   : "${RUNO_TOKEN:?PREVIEW_RUNO_TOKEN is not configured}"
-                  # --branch: the checkout is a detached HEAD, so runo cannot
-                  # read the branch from git itself
-                  $RUNO up --here --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml
-                  # `up` runs setup for new VMs. Existing previews retain their
-                  # workspace; the billing compose context is remote and needs
-                  # no one-time checkout on the VM.
-                  # `up` only uploads code when it CREATES the VM; on every
-                  # later push the environment already exists and the new
-                  # commit travels with push (compose watch reloads it)
-                  # The billing context tracks its own repository. Rebuild its
-                  # pinned local image before restarting, otherwise compose can
-                  # keep serving the image baked by the previous PR push.
-                  $RUNO exec --branch "$HEAD_REF" -- \
-                    'docker compose -f docker-compose.dev.yml -f docker-compose.preview.yml --profile mcp build kodus-service-billing' || \
-                    echo "::warning::kodus-service-billing image rebuild failed — keeping the previous image"
-                  $RUNO push --restart --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml
-                  # Runo's data step retries automatically. Keep optional
-                  # service readiness outside it so one failed MCP/billing
-                  # probe does not hide the real container logs for 15min.
-                  $RUNO exec --branch "$HEAD_REF" -- \
-                    "timeout 300 bash -c 'until curl -fsS http://127.0.0.1:3101/health >/dev/null && curl -fsS http://127.0.0.1:3992/health/ready >/dev/null; do sleep 3; done'"
-                  URL=$($RUNO url --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml | head -1)
-                  echo "url=$URL" >> "$GITHUB_OUTPUT"
-                  echo "Preview: $URL"
-                  # Sharing is useful to QA but must not prevent a valid
-                  # application deploy from publishing its URL.
-                  $RUNO share qa --branch "$HEAD_REF" || \
-                      echo "::warning::preview deployed, but QA sharing failed"
+                  # Fail fast: a runo without --profile would silently treat both
+                  # shapes as the branch's one env — the second `up` would
+                  # overwrite the first, and `destroy --profile` would take the
+                  # branch's only VM. Cheaper to refuse than to reconcile wrong.
+                  # The usage text is the probe; its exit status is checked apart
+                  # from its content so a runo that fails to start is reported as
+                  # that, not as "lacks --profile". Its output stays out of this
+                  # public log on purpose (same rule as the status report below).
+                  if ! usage=$($RUNO --help 2>&1); then
+                    echo "::error::runo at RUNO_REF=$RUNO_REF failed to run (exit $?); reproduce locally with: bun bin/runo.ts --help"
+                    exit 1
+                  fi
+                  case "$usage" in
+                    *--profile*) ;;
+                    *) echo "::error::runo at RUNO_REF=$RUNO_REF does not support --profile; merge/deploy kodustech/runo#7 first"; exit 1 ;;
+                  esac
+                  # Previews created before shapes existed carry no profile.
+                  # One of those for this branch would sit next to the new
+                  # ones until the PR closed, so retire it first (the closing
+                  # cleanup would take it anyway; this just does it sooner).
+                  if $RUNO environments | jq -e --arg b "$HEAD_REF" \
+                       'map(select(.repo == "kodus-ai" and .branch == $b and (.profile // "") == "")) | length > 0' >/dev/null; then
+                    echo "retiring the pre-profile preview of $HEAD_REF"
+                    $RUNO destroy --branch "$HEAD_REF" --recipe .kodus/workspace.preview.yaml
+                  fi
+                  # Reconcile: a shape the PR no longer wants goes away (a
+                  # no-op when it never existed), the wanted ones come up.
+                  for profile in $UNWANTED; do
+                    recipe=.kodus/workspace.preview.yaml
+                    [ "$profile" = self-hosted ] && recipe=.kodus/workspace.preview.selfhosted.yaml
+                    $RUNO destroy --branch "$HEAD_REF" --profile "$profile" --recipe "$recipe"
+                  done
+                  urls=""
+                  for profile in $PROFILES; do
+                    url=$(./scripts/preview/up-profile.sh "$profile" "$HEAD_REF")
+                    echo "Preview [$profile]: $url"
+                    urls="$urls$profile=$url "
+                  done
+                  echo "urls=${urls% }" >> "$GITHUB_OUTPUT"
 
-            - name: Report MCP and billing status
+            - name: Report container status
               if: always() && steps.env.outputs.configured == 'true'
               env:
                   RUNO_SERVER: ${{ vars.PREVIEW_RUNO_SERVER }}
                   RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
                   HEAD_REF: ${{ steps.target.outputs.branch }}
+                  PROFILES: ${{ steps.decide.outputs.profiles }}
               run: |
                   # Keep public Actions logs free of request bodies, headers,
                   # token-bearing URLs, and Stripe payloads. Detailed logs are
                   # available through the authenticated Runo exec/logs path.
-                  $RUNO exec --branch "$HEAD_REF" -- \
-                    'docker compose -f docker-compose.dev.yml -f docker-compose.preview.yml --profile mcp ps' || true
+                  for profile in $PROFILES; do
+                    overlay=docker-compose.preview.cloud.yml
+                    [ "$profile" = self-hosted ] && overlay=docker-compose.preview.selfhosted.yml
+                    echo "== $profile"
+                    $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- \
+                      "docker compose -f docker-compose.dev.yml -f docker-compose.preview.yml -f $overlay --profile mcp ps" || true
+                  done
 
             - name: Comment the preview link
               if: always() && github.event_name == 'pull_request' && steps.env.outputs.configured == 'true'
               uses: actions/github-script@v9.0.0
               env:
-                  URL: ${{ steps.up.outputs.url }}
+                  URLS: ${{ steps.up.outputs.urls }}
                   OUTCOME: ${{ steps.up.outcome }}
+                  PROFILES: ${{ steps.decide.outputs.profiles }}
+                  REASON: ${{ steps.decide.outputs.reason }}
+                  SOURCE: ${{ steps.decide.outputs.source }}
               with:
                   script: |
                       const marker = '## Preview Environment';
                       const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-                      const body = process.env.URL
-                        ? [
-                            marker,
-                            '',
-                            `**${process.env.URL}**`,
-                            '',
-                            'Full stack (web, api, worker, webhooks, MCP, billing, mongo, postgres, rabbit) on one VM.',
-                            'Login: `preview@kodus.io` — password is the `PREVIEW_SEED_PASSWORD` secret.',
-                            '',
-                            'The VM suspends itself after 60min idle; a new push wakes it and updates this link.',
-                            '',
-                            `_Updated ${new Date().toISOString().replace('T', ' ').slice(0, 16)} UTC · [logs](${runUrl})_`,
-                          ].join('\n')
-                        : [
-                            marker,
-                            '',
-                            `Preview failed to come up — [see the logs](${runUrl}).`,
-                          ].join('\n');
+                      const stamp = `_Updated ${new Date().toISOString().replace('T', ' ').slice(0, 16)} UTC · [logs](${runUrl})_`;
+                      const wanted = (process.env.PROFILES || '').split(' ').filter(Boolean);
+                      const urls = Object.fromEntries((process.env.URLS || '').split(' ').filter(Boolean).map((kv) => kv.split(/=(.*)/s).slice(0, 2)));
+                      const label = { cloud: 'Cloud (billing, analytics)', 'self-hosted': 'Self-hosted (no billing, `API_CLOUD_MODE=false`)' };
+                      const decided = `Shapes: ${wanted.length ? wanted.join(' + ') : 'none'} — ${process.env.REASON} (${process.env.SOURCE}). ` +
+                        'Override with the labels `preview:cloud`, `preview:self-hosted` or `preview:none`.';
+                      let body;
+                      if (process.env.OUTCOME === 'success' && wanted.length === 0) {
+                        body = [marker, '', 'No preview for this pull request.', '', decided, '', stamp].join('\n');
+                      } else if (process.env.OUTCOME === 'success') {
+                        body = [
+                          marker,
+                          '',
+                          ...wanted.map((p) => `- **${label[p] ?? p}**: ${urls[p] ? `**${urls[p]}**` : '_failed_'}`),
+                          '',
+                          'Full stack (web, api, worker, webhooks, MCP, mongo, postgres, rabbit) on one VM per shape.',
+                          'Login: `preview@kodus.io` — password is the `PREVIEW_SEED_PASSWORD` secret.',
+                          '',
+                          decided,
+                          '',
+                          'Each VM suspends itself after 60min idle; a new push wakes it and updates this link.',
+                          '',
+                          stamp,
+                        ].join('\n');
+                      } else {
+                        body = [marker, '', `Preview failed to come up — [see the logs](${runUrl}).`, '', decided].join('\n');
+                      }
 
                       const { data: comments } = await github.rest.issues.listComments({
                         owner: context.repo.owner,
