@@ -562,6 +562,8 @@ jobs:
             - name: Render scoreboard (step summary + annotations)
               id: scoreboard
               if: always()
+              env:
+                  MATRIX_FILE: ${{ inputs.matrix_file || 'matrix/fast.yml' }}
               run: python3 tests/e2e/cli/render-scoreboard.py evidence
 
             # Interpretation on top of the deterministic facts: a cheap LLM
@@ -591,10 +593,7 @@ jobs:
                   status: ${{ steps.scoreboard.outputs.status || 'infra' }}
                   value: ${{ steps.scoreboard.outputs.gating_count }}
                   unit: count
-                  meta: >-
-                      {"advisory_count": ${{ steps.scoreboard.outputs.advisory_count || 0 }},
-                       "setup_skipped": ${{ steps.scoreboard.outputs.setup_skipped || 0 }},
-                       "matrix": "${{ inputs.matrix_file || 'matrix/fast.yml' }}"}
+                  meta: ${{ steps.scoreboard.outputs.meta }}
                   gcp_wif_provider: ${{ vars.GCP_WIF_PROVIDER }}
                   gcp_sa_email: ${{ vars.GCP_SA_EMAIL }}
                   gcp_project: ${{ vars.GCP_PROJECT }}

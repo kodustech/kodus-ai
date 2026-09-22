@@ -411,6 +411,9 @@ jobs:
                   if (n.advisoryFailures.length) body.push(`**Advisory (non-gating):**\n${fmt(n.advisoryFailures)}`);
                   if (n.setupSkipped) body.push(`Skipped for missing setup (coverage gap): ${n.setupSkipped}`);
                   if (n.retriedCells.length) body.push(`Passed only on retry (flaky): ${n.retriedCells.map((c) => `\`${c}\``).join(", ")}`);
+                  // One JSON line for the quality signal: the failing cells by name.
+                  const cap = (l) => (l ?? []).slice(0, 15).map((x) => ({ cell: x.cell, error: String(x.error ?? x.reason ?? "").slice(0, 200) }));
+                  out.push(`meta=${JSON.stringify({ headline: `${n.passed}/${executed} passed · verified ${executed}/${applicable} applicable`, gating_count: n.gatingFailures.length, advisory_count: n.advisoryFailures.length, unverified_count: (n.unverified ?? []).length, retried_count: n.retriedCells.length, gating: cap(n.gatingFailures), advisory: cap(n.advisoryFailures), unverified: cap(n.unverified), flaky: n.retriedCells.slice(0, 15), setup_skipped: n.setupSkipped ?? 0 })}`);
                   // GITHUB_OUTPUT multiline
                   out.push("details<<__EOF__");
                   out.push(body.join("\n") || "—");
@@ -445,7 +448,7 @@ jobs:
                   status: ${{ steps.digest.outputs.found != 'true' && 'infra' || steps.digest.outputs.verdict == 'inconclusive' && 'infra' || steps.digest.outputs.verdict }}
                   value: ${{ steps.digest.outputs.gating_count }}
                   unit: count
-                  meta: '{"advisory_count": ${{ steps.digest.outputs.advisory_count || 0 }}, "unverified_count": ${{ steps.digest.outputs.unverified_count || 0 }}, "retried_count": ${{ steps.digest.outputs.retried_count || 0 }}, "headline": "${{ steps.digest.outputs.headline }}"}'
+                  meta: ${{ steps.digest.outputs.meta }}
                   gcp_wif_provider: ${{ vars.GCP_WIF_PROVIDER }}
                   gcp_sa_email: ${{ vars.GCP_SA_EMAIL }}
                   gcp_project: ${{ vars.GCP_PROJECT }}

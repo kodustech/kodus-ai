@@ -406,7 +406,10 @@ jobs:
                     if (!fs.existsSync(p)) { out(\"recall\", \"\"); out(\"precision\", \"\"); out(\"meta\", JSON.stringify({ verdict: process.env.VERDICT, note: \"no nightly.json\" })); process.exit(0); }
                     const r = JSON.parse(fs.readFileSync(p, \"utf8\")); const m = r.metrics || {};
                     out(\"recall\", m.recall_mean == null ? \"\" : String(m.recall_mean)); out(\"precision\", m.precision_mean == null ? \"\" : String(m.precision_mean));
-                    out(\"meta\", JSON.stringify({ verdict: process.env.VERDICT, model: r.model || null, cases: r.cases || null, measured: (r.rows || []).filter((x) => x.metadata && Number.isFinite(x.metadata.recall)).length }));
+                    const measuredRows = (r.rows || []).filter((x) => x.metadata && Number.isFinite(x.metadata.recall));
+                    const worst = [...measuredRows].sort((a, b) => a.metadata.recall - b.metadata.recall).slice(0, 5).map((x) => ({ case: x.caseId || x.id || null, recall: x.metadata.recall }));
+                    let failedChecks = []; try { failedChecks = JSON.parse(fs.readFileSync(\"nightly-report/state.json\", \"utf8\")).failed || []; } catch {}
+                    out(\"meta\", JSON.stringify({ verdict: process.env.VERDICT, model: r.model || null, cases: r.cases || null, measured: measuredRows.length, failed_checks: failedChecks, worst_cases: worst }));
                   "
 
             - name: Report quality signal

@@ -101,14 +101,16 @@ jobs:
                       process.exit(0);
                     }
                     const r = JSON.parse(fs.readFileSync(p, \"utf8\")); const c = { killed: 0, timeout: 0, survived: 0, no_coverage: 0, other: 0 };
-                    for (const file of Object.values(r.files || {})) for (const m of file.mutants || []) {
+                    const survivors = [];
+                    for (const [fname, file] of Object.entries(r.files || {})) for (const m of file.mutants || []) {
                       const st = m.status; if (st === \"Killed\") c.killed++; else if (st === \"Timeout\") c.timeout++; else if (st === \"Survived\") c.survived++; else if (st === \"NoCoverage\") c.no_coverage++; else c.other++;
+                      if ((st === \"Survived\" || st === \"NoCoverage\") && survivors.length < 15) survivors.push({ file: fname, line: m.location && m.location.start ? m.location.start.line : null, mutator: m.mutatorName, status: st });
                     }
                     const valid = c.killed + c.timeout + c.survived + c.no_coverage;
                     const score = valid ? Math.round(((c.killed + c.timeout) / valid) * 10000) / 100 : null;
                     const low = (r.thresholds && r.thresholds.low) || 60;
                     out(\"status\", score === null ? \"skipped\" : score < low ? \"yellow\" : \"green\");
-                    out(\"value\", score === null ? \"\" : String(score)); out(\"meta\", JSON.stringify({ ...c, valid, low }));
+                    out(\"value\", score === null ? \"\" : String(score)); out(\"meta\", JSON.stringify({ ...c, valid, low, survivors }));
                   "
 
             - name: Report quality signal

@@ -30,3 +30,28 @@ SELECT * EXCEPT (rn) FROM (
   SELECT *, ROW_NUMBER() OVER (PARTITION BY name, DATE(ts) ORDER BY ts DESC) AS rn
   FROM `kody-408918.quality.signals`
 ) WHERE rn = 1;
+
+-- One row per production error signature per UTC day, written by kodus-insights
+-- (nightly-errors.yml). Real and noise signatures alike; `noise` says which.
+-- prod.errors.new_signatures / spikes are judged against the previous 14 days here.
+CREATE TABLE IF NOT EXISTS `kody-408918.quality.error_signatures` (
+  day          DATE      NOT NULL,
+  key          STRING    NOT NULL OPTIONS (description = 'service :: context :: normalized message'),
+  service      STRING,
+  context      STRING,
+  template     STRING    OPTIONS (description = 'message with ids, numbers, urls and quoted strings collapsed'),
+  count        INT64,
+  noise        BOOL      OPTIONS (description = 'matched a known noise signature (kodus-insights context/error-noise.json)'),
+  noise_reason STRING,
+  orgs_distinct INT64,
+  prs          INT64,
+  first_seen   TIMESTAMP,
+  last_seen    TIMESTAMP,
+  sample       STRING    OPTIONS (description = 'one raw message, truncated; never a PR body'),
+  error_names  JSON,
+  run_url      STRING,
+  ts           TIMESTAMP
+)
+PARTITION BY day
+CLUSTER BY key
+OPTIONS (description = 'Production error signatures per day. Source of the Sentry-like new/spike detection and the dashboard /errors page.');
