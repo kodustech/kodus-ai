@@ -1,4 +1,5 @@
 import { LockedFeatureOverlay } from "@components/system/locked-feature-overlay";
+import { LockedFeatureUnlocks } from "@components/system/locked-feature-unlocks";
 import { LockedPagePreview } from "@components/system/locked-page-preview";
 import { captureGateHit } from "src/core/utils/gate-hit";
 import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team-id";
@@ -27,10 +28,19 @@ export default async function UserLogsPage() {
         return (
             <LockedFeatureOverlay
                 title="Unlock activity logs"
-                description="Who changed what, and when: a full audit trail of your organization's settings, rules and reviews is available on the Enterprise plan."
+                description="Kody Rules, review settings and integrations change as your team works. Right now, nothing records who changed what."
+                details={
+                    <LockedFeatureUnlocks
+                        items={[
+                            "Every settings, rule and integration change, with who made it",
+                            "Filter by person, action and date",
+                            "The trail an audit or a bad review run asks for",
+                        ]}
+                    />
+                }
                 cta={{
-                    label: "Upgrade plan",
-                    href: "/settings/subscription",
+                    label: "See plans",
+                    href: "/choose-plan",
                     feature: "activity_logs",
                     plan: license?.subscriptionStatus,
                     metadata: { surface: "locked_preview" },

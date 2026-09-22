@@ -2,25 +2,25 @@ import { Card } from "@components/ui/card";
 import { Page } from "@components/ui/page";
 import { Greeting } from "@components/system/greeting";
 
-// Static sample values only — this preview renders behind the
-// LockedFeatureOverlay blur for orgs whose tier doesn't include the
-// Cockpit, so it must never fetch real analytics.
-const SAMPLE_STATS = [
-    { label: "Deploy Frequency", value: "4.2/week", diff: "+12%" },
-    { label: "PR Cycle Time", value: "26h", diff: "-8%" },
-    { label: "Bug Ratio", value: "12%", diff: "-3%" },
-    { label: "PR Size", value: "214 lines", diff: "-15%" },
-];
+// The Cockpit's shape, with no values in it — this preview renders behind the
+// LockedFeatureOverlay blur for orgs whose tier doesn't include the Cockpit,
+// so it must never fetch real analytics.
+//
+// It used to carry sample numbers ("4.2/week", "+12% vs previous period") and
+// hand-drawn charts. Blurred, they read as a real dashboard, which is exactly
+// the problem: the one thing a locked screen must not do is show invented
+// figures as if they were the org's. The metric names are real and stay — they
+// are what's locked — and every value is an empty slot.
+const METRICS = ["Deploy Frequency", "PR Cycle Time", "Bug Ratio", "PR Size"];
 
-const SAMPLE_LINE = [42, 38, 45, 40, 52, 48, 58, 54, 63, 60, 70, 66];
-const SAMPLE_BARS = [35, 55, 42, 68, 50, 74, 61, 80];
+const CHARTS = ["Lead Time Breakdown", "PRs Opened vs Closed"];
 
 export const CockpitLockedPreview = () => {
     return (
         <Page.Root>
             <Page.Header>
                 <Page.Title><Greeting /></Page.Title>
-                <div className="ml-auto flex items-center gap-2">
+                <div className="ml-auto flex items-center gap-2" aria-hidden>
                     <div className="bg-card-lv2 h-8 w-40 rounded-lg" />
                     <div className="bg-card-lv2 h-8 w-52 rounded-lg" />
                 </div>
@@ -28,75 +28,48 @@ export const CockpitLockedPreview = () => {
 
             <Page.Content>
                 <div className="flex flex-col gap-4">
-                    <div className="flex gap-2">
+                    <div className="flex gap-2" aria-hidden>
                         <div className="bg-card-lv2 h-9 w-32 rounded-lg" />
                         <div className="bg-card-lv2/50 h-9 w-32 rounded-lg" />
                     </div>
 
                     <div className="grid grid-cols-4 gap-2 *:h-56">
-                        {SAMPLE_STATS.map((stat) => (
+                        {METRICS.map((metric) => (
                             <Card
-                                key={stat.label}
+                                key={metric}
                                 color="lv1"
                                 className="flex flex-col justify-between p-6">
                                 <span className="text-text-secondary text-sm">
-                                    {stat.label}
+                                    {metric}
                                 </span>
-                                <div className="flex flex-col gap-1">
-                                    <span className="text-3xl font-semibold">
-                                        {stat.value}
+                                <div className="flex flex-col gap-2">
+                                    <span className="text-text-tertiary text-3xl font-semibold">
+                                        —
                                     </span>
-                                    <span className="text-success text-xs">
-                                        {stat.diff} vs previous period
-                                    </span>
+                                    <div
+                                        aria-hidden
+                                        className="bg-card-lv2 h-3 w-28 rounded"
+                                    />
                                 </div>
                             </Card>
                         ))}
                     </div>
 
                     <div className="grid grid-cols-2 gap-2 *:h-[400px]">
-                        <Card color="lv1" className="flex flex-col gap-4 p-6">
-                            <span className="text-text-secondary text-sm">
-                                Lead Time Breakdown
-                            </span>
-                            <svg
-                                className="min-h-0 flex-1"
-                                viewBox="0 0 240 100"
-                                preserveAspectRatio="none">
-                                <polyline
-                                    fill="none"
-                                    stroke="var(--color-primary-light)"
-                                    strokeWidth="2"
-                                    points={SAMPLE_LINE.map(
-                                        (y, i) =>
-                                            `${(i / (SAMPLE_LINE.length - 1)) * 240},${100 - y}`,
-                                    ).join(" ")}
+                        {CHARTS.map((chart) => (
+                            <Card
+                                key={chart}
+                                color="lv1"
+                                className="flex flex-col gap-4 p-6">
+                                <span className="text-text-secondary text-sm">
+                                    {chart}
+                                </span>
+                                <div
+                                    aria-hidden
+                                    className="bg-card-lv2/40 min-h-0 flex-1 rounded-lg"
                                 />
-                            </svg>
-                        </Card>
-
-                        <Card color="lv1" className="flex flex-col gap-4 p-6">
-                            <span className="text-text-secondary text-sm">
-                                PRs Opened vs Closed
-                            </span>
-                            <svg
-                                className="min-h-0 flex-1"
-                                viewBox="0 0 240 100"
-                                preserveAspectRatio="none">
-                                {SAMPLE_BARS.map((height, i) => (
-                                    <rect
-                                        key={i}
-                                        x={i * 30 + 6}
-                                        y={100 - height}
-                                        width={18}
-                                        height={height}
-                                        rx={2}
-                                        fill="var(--color-primary-light)"
-                                        opacity={0.7}
-                                    />
-                                ))}
-                            </svg>
-                        </Card>
+                            </Card>
+                        ))}
                     </div>
                 </div>
             </Page.Content>

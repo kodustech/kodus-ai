@@ -69,6 +69,16 @@ export const PluginModal = ({
     const mcpPluginsLimits = useMCPPluginsLimit(
         countInstalledPlugins(installedPlugins),
     );
+    // Same filter as the count above: default (system-managed) plugins don't
+    // consume a slot, so naming them as the reason this install is blocked
+    // would be wrong.
+    const runningPluginNames = useMemo(
+        () =>
+            installedPlugins
+                .filter((item) => item.isConnected && !item.isDefault)
+                .map((item) => item.name),
+        [installedPlugins],
+    );
 
     const isConnected = plugin.isConnected;
     const isDefault = plugin.isDefault;
@@ -544,7 +554,9 @@ export const PluginModal = ({
                                             </Button>
                                         ) : (
                                             <MCPPluginsLimitPopover
-                                                limit={mcpPluginsLimits.limit}>
+                                                limit={mcpPluginsLimits.limit}
+                                                pluginName={plugin.name}
+                                                running={runningPluginNames}>
                                                 <PopoverTrigger asChild>
                                                     <Button
                                                         size="md"

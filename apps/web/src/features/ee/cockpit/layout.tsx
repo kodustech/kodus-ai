@@ -5,6 +5,7 @@ import { CockpitPageSkeleton } from "@components/system/page-skeletons";
 import { Page } from "@components/ui/page";
 import { TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
 import { getCockpitMetricsVisibility } from "@services/organizationParameters/fetch";
+import { getReviewedPullRequestCount } from "@services/pull-requests/fetch";
 import type { CookieName } from "src/core/utils/cookie";
 import { captureGateHit } from "src/core/utils/gate-hit";
 import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team-id";
@@ -15,6 +16,7 @@ import { IssuesTabLink } from "./_components/cockpit-nav-tabs";
 import { CockpitTabs } from "./_components/cockpit-tabs";
 import { DateRangePicker } from "./_components/date-range-picker";
 import { ExpandableCardsLayout } from "./_components/expandable-cards-layout";
+import { LockedCockpitDetails } from "./_components/locked-cockpit-details";
 import { CockpitLockedPreview } from "./_components/locked-preview";
 import { CockpitNoDataBanner } from "./_components/no-data-banner";
 import { RepositoryPicker } from "./_components/repository-picker";
@@ -23,6 +25,9 @@ import { tabs, type TabValue } from "./_constants";
 import { extractApiData } from "./_helpers/api-data-extractor";
 import { isCockpitTierAllowed } from "./_helpers/tier-policy";
 import { getAnalyticsStatus } from "./_services/analytics/fetch";
+
+/** The window the locked screen counts reviews over. */
+const LOCKED_PREVIEW_WINDOW_DAYS = 30;
 
 export default function Layout(props: Parameters<typeof CockpitLayoutBody>[0]) {
     // The license check and the analytics status are awaited inside the
@@ -96,23 +101,52 @@ async function CockpitLayoutBody({
     // not rendered (their server fetches are rejected by the backend
     // tier policy anyway).
     if (!isCockpitTierAllowed(organizationLicense)) {
+        // What the workspace already has, in its own numbers: the same PRs the
+        // viewer can open on /pull-requests, counted. A locked screen that
+        // argues from the org's own reviews beats one that argues from sample
+        // charts — and when the count is zero, the honest next step is a
+        // repository, not a plan (see `altCta` below).
+        const reviewedCount = await getReviewedPullRequestCount({
+            teamId: selectedTeamId,
+            windowDays: LOCKED_PREVIEW_WINDOW_DAYS,
+        });
+        const hasReviews = reviewedCount !== null && reviewedCount > 0;
+
         await captureGateHit({
             feature: "cockpit",
             plan: organizationLicense?.subscriptionStatus,
-            metadata: { surface: "locked_preview" },
+            metadata: { surface: "locked_preview", reviewedCount },
         });
 
         return (
             <LockedFeatureOverlay
                 title="Unlock the Cockpit"
-                description="Engineering metrics and Kody review analytics for your team are available on Teams and Enterprise plans."
+                description={
+                    reviewedCount === 0
+                        ? "The Cockpit measures the reviews Kody runs for you — and this workspace hasn't had one yet."
+                        : "Engineering metrics and Kody review analytics for your workspace are available on Teams and Enterprise plans."
+                }
+                details={
+                    <LockedCockpitDetails
+                        reviewedCount={reviewedCount}
+                        windowDays={LOCKED_PREVIEW_WINDOW_DAYS}
+                    />
+                }
                 cta={{
-                    label: "Upgrade plan",
-                    href: "/settings/subscription",
+                    label: hasReviews ? "See plans" : "Upgrade plan",
+                    href: "/choose-plan",
                     feature: "cockpit",
                     plan: organizationLicense?.subscriptionStatus,
-                    metadata: { surface: "locked_preview" },
-                }}>
+                    metadata: { surface: "locked_preview", reviewedCount },
+                }}
+                altCta={
+                    reviewedCount === 0
+                        ? {
+                              label: "Connect a repository",
+                              href: "/settings/git",
+                          }
+                        : undefined
+                }>
                 <CockpitLockedPreview />
             </LockedFeatureOverlay>
         );

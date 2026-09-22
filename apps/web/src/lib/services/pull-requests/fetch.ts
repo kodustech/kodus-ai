@@ -1,4 +1,7 @@
+import { authorizedFetch } from "@services/fetch";
 import { pathToApiUrl } from "src/core/utils/helpers";
+
+import type { PullRequestExecutionsPayload } from "./types";
 
 export interface PullRequestFilters {
     teamId?: string;
@@ -159,3 +162,49 @@ export const PULL_REQUEST_API = {
         return pathToApiUrl(`/pull-requests/files?${searchParams.toString()}`);
     },
 } as const;
+
+/**
+ * How many distinct pull requests Kody reviewed for a team since a date.
+ *
+ * Server-side counterpart of the Reviews list: it asks for a single row and
+ * reads `pagination.distinctPrTotal`, the total the backend computes for the
+ * filters. Used by gated screens that want to say what the org already has
+ * instead of showing invented sample numbers — every viewer who sees this
+ * count can already read the same PRs on /pull-requests, so it leaks nothing.
+ *
+ * Returns `null` when the count can't be established (no team, request
+ * failed, older payload shape without a total), so callers can fall back to
+ * copy that claims no numbers at all.
+ */
+export const getReviewedPullRequestCount = async ({
+    teamId,
+    windowDays,
+}: {
+    teamId?: string;
+    /** Look back this many days; omit to count every review ever run. */
+    windowDays?: number;
+}): Promise<number | null> => {
+    if (!teamId) return null;
+
+    const since = windowDays
+        ? new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000)
+        : undefined;
+
+    try {
+        const payload = await authorizedFetch<PullRequestExecutionsPayload>(
+            PULL_REQUEST_API.GET_EXECUTIONS({
+                teamId,
+                limit: 1,
+                createdAtFrom: since?.toISOString(),
+            }),
+            { cache: "no-store" },
+        );
+
+        if (!payload || Array.isArray(payload)) return null;
+
+        const total = payload.pagination?.distinctPrTotal;
+        return typeof total === "number" ? total : null;
+    } catch {
+        return null;
+    }
+};

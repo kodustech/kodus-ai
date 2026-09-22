@@ -201,7 +201,7 @@ export const KodyRuleItem = ({
                         />
 
                         {isLockedByPlan ? (
-                            <KodyRulesLimitPopover limit={10}>
+                            <KodyRulesLimitPopover limit={10} ruleTitle={rule.title}>
                                 <PopoverTrigger asChild>
                                     <Badge
                                         active

@@ -269,7 +269,7 @@ export const RuleStatus = ({
         // the label opens the plan-limit popover.
         return (
             <span onClick={stop} className="inline-flex">
-                <KodyRulesLimitPopover limit={10}>
+                <KodyRulesLimitPopover limit={10} ruleTitle={rule.title}>
                     <PopoverTrigger asChild>
                         <button
                             type="button"

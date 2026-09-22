@@ -1,4 +1,5 @@
 import { LockedFeatureOverlay } from "@components/system/locked-feature-overlay";
+import { LockedFeatureUnlocks } from "@components/system/locked-feature-unlocks";
 import { LockedPagePreview } from "@components/system/locked-page-preview";
 import { getSSOConfig } from "@services/ssoConfig/fetch";
 import { auth } from "src/core/config/auth";
@@ -37,10 +38,19 @@ export default async function SsoOrganizationSettingsPage() {
         return (
             <LockedFeatureOverlay
                 title="Unlock single sign-on"
-                description="SAML SSO with your identity provider, domain-based access and enforced login are available on the Enterprise plan."
+                description="Your team signs in with passwords Kodus stores. On Enterprise, they sign in with your identity provider — and stop being able to sign in the day you offboard them."
+                details={
+                    <LockedFeatureUnlocks
+                        items={[
+                            "SAML with Okta, Entra ID, Google Workspace or any SAML 2.0 IdP",
+                            "Verified domains: only your people can join the org",
+                            "Enforced login — password sign-in switched off",
+                        ]}
+                    />
+                }
                 cta={{
-                    label: "Upgrade plan",
-                    href: "/settings/subscription",
+                    label: "See plans",
+                    href: "/choose-plan",
                     feature: "sso",
                     plan: license?.subscriptionStatus,
                     metadata: { surface: "locked_preview" },

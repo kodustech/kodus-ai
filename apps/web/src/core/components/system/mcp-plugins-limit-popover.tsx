@@ -6,14 +6,26 @@ import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-s
 
 import { GateCtaLink } from "./gate-cta-link";
 
+/**
+ * What the disabled "Install plugin" button opens once the free-plan cap is
+ * full. It names the plugin being installed and the ones already holding the
+ * slots, so the trade-off is concrete ("to run this one, stop running that
+ * one") instead of a cap stated in the abstract.
+ */
 export const MCPPluginsLimitPopover = ({
     children,
     limit,
+    pluginName,
+    running = [],
 }: {
     limit: number;
+    pluginName?: string;
+    /** Plugins currently occupying the free-plan slots. */
+    running?: string[];
     children: React.ReactNode;
 }) => {
     const subscription = useSubscriptionStatus();
+    const runningLabel = running.slice(0, 3).join(", ");
 
     return (
         <Popover
@@ -31,21 +43,34 @@ export const MCPPluginsLimitPopover = ({
                 align="end"
                 side="bottom"
                 collisionPadding={32}
-                className="flex flex-col gap-3 text-sm">
+                className="flex max-w-xs flex-col gap-3 text-sm">
                 <p>
-                    The Free plan runs{" "}
+                    {pluginName ? (
+                        <>
+                            <span className="font-semibold">{pluginName}</span>{" "}
+                            would stay locked: the Free plan runs{" "}
+                        </>
+                    ) : (
+                        <>This plugin would stay locked — the Free plan runs </>
+                    )}
                     <span className="text-primary-light font-semibold">
-                        {limit} plugins
+                        {limit} plugin{limit === 1 ? "" : "s"}
                     </span>{" "}
-                    at a time — this one would stay locked.
+                    at a time
+                    {runningLabel ? `, and ${runningLabel} ` : " "}
+                    {runningLabel
+                        ? running.length > 3
+                            ? "and others already hold the slots."
+                            : `already ${running.length === 1 ? "holds" : "hold"} the slots.`
+                        : "during reviews."}
                 </p>
 
                 <p>
                     Teams runs{" "}
                     <span className="text-primary-light font-semibold">
-                        unlimited plugins
-                    </span>{" "}
-                    across all your repos, plus unlimited Kody Rules and the
+                        every plugin you install
+                    </span>
+                    , across all your repos — plus unlimited Kody Rules and the
                     Cockpit engineering metrics.
                 </p>
 
@@ -53,6 +78,8 @@ export const MCPPluginsLimitPopover = ({
                     feature="mcp_plugins"
                     plan={subscription.status}
                     metadata={{ surface: "install_limit_popover", limit }}
+                    href="/choose-plan"
+                    label="See plans"
                     size="xs"
                     className="mt-2 self-end"
                 />
