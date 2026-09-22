@@ -28,6 +28,7 @@ on:
             - '**/*.ts'
             - '**/*.tsx'
             - '**/*.js'
+            - ".github/workflows/env-drift-check.yml"
 
 jobs:
     check:

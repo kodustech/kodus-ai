@@ -19,6 +19,7 @@ on:
             - "apps/**/*.ts"
             - "stryker.config.json"
             - "jest.stryker.config.ts"
+            - ".github/workflows/mutation-gate.yml"
 
 # Least privilege for the automatically-provisioned GITHUB_TOKEN. Without this
 # block the job inherits the repository default, which is broad enough to write
