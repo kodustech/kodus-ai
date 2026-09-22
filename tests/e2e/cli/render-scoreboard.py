@@ -261,6 +261,21 @@ def emit_outputs(cells):
         "gating_count={}".format(gating),
         "advisory_count={}".format(advisory),
         "setup_skipped={}".format(setup),
+        # One JSON line for the quality signal (report-signal `meta`): the
+        # failing cells by name, so the dashboard can say WHAT failed, not
+        # just how many. Capped so the row stays small.
+        "meta={}".format(json.dumps({
+            "digest": digest,
+            "matrix": os.environ.get("MATRIX_FILE") or None,
+            "gating_count": gating,
+            "advisory_count": advisory,
+            "setup_skipped": setup,
+            "gating": [{"cell": x.get("cell"), "error": (x.get("error") or x.get("reason") or "")[:200]} for c in cells for x in c["gating"]][:15],
+            "advisory": [{"cell": x.get("cell"), "priority": x.get("priority"), "error": (x.get("error") or x.get("reason") or "")[:200]} for c in cells for x in (c["advisory"] + c["unclassified_failed"])][:15],
+            "unverified": [{"cell": x.get("cell"), "reason": (x.get("reason") or x.get("error") or "")[:200]} for c in cells for x in c["unverified"]][:15],
+            "setup_skips": [{"scenario": x.get("scenario"), "reason": (x.get("reason") or "")[:120]} for c in cells for x in c["setup_skips"]][:10],
+            "flaky": [x for c in cells for x in c["flaky"]][:15],
+        })),
     ]
     if gh_output:
         with open(gh_output, "a") as fh:

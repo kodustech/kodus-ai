@@ -190,7 +190,13 @@ jobs:
                     const out = (k, v) => fs.appendFileSync(process.env.GITHUB_OUTPUT, k + \"=\" + v + \"\\n\");
                     if (!fs.existsSync(p)) { out(\"failed\", \"\"); out(\"meta\", JSON.stringify({ note: \"jest wrote no results file\" })); process.exit(0); }
                     const r = JSON.parse(fs.readFileSync(p, \"utf8\"));
-                    out(\"failed\", String(r.numFailedTests)); out(\"meta\", JSON.stringify({ total: r.numTotalTests, suites_failed: r.numFailedTestSuites, suites_total: r.numTotalTestSuites }));
+                    const rel = (f) => String(f).replace(/^.*\\/kodus-ai\\//, \"\");
+                    const failedTests = []; const failedSuites = [];
+                    for (const t of r.testResults || []) {
+                      if (t.status === \"failed\") failedSuites.push({ file: rel(t.name), message: (String(t.message || \"\").split(\"\\n\").find((l) => l.trim()) || \"\").slice(0, 200) });
+                      for (const a of t.assertionResults || []) if (a.status === \"failed\") failedTests.push({ file: rel(t.name), test: a.fullName });
+                    }
+                    out(\"failed\", String(r.numFailedTests)); out(\"meta\", JSON.stringify({ total: r.numTotalTests, suites_failed: r.numFailedTestSuites, suites_total: r.numTotalTestSuites, failed_tests: failedTests.slice(0, 20), failed_suites: failedSuites.slice(0, 10) }));
                   "
 
             - name: Report quality signal
