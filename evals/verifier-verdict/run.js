@@ -128,75 +128,81 @@ function loadRows() {
     ).rows;
 }
 
-/** Every balanced `{...}` in the text, outermost first: the same unit the
- *  parser works in. Written here rather than imported from
- *  structured-output-repair.ts on purpose — if the eval derived its expectation
- *  with the parser's own scanner it could never disagree with it, and the text
- *  rows would stop gating anything. */
-function topLevelJsonObjects(text) {
-    const out = [];
+/** The last object in the text that carries a verdict key AT ITS OWN TOP LEVEL,
+ *  scanned the way the parser scans: walk every `{`, and skip the rest of a
+ *  slice ONLY after it parsed AND carried a verdict key. Skipping every nested
+ *  object unconditionally would miss a wrapped verdict — `{"result":
+ *  {"shouldKeep": false}}`, which production reads (fixtures.json `wrapper-key`)
+ *  — and the eval would expect a fail-open against a real drop.
+ *
+ *  Written here rather than imported from structured-output-repair.ts on
+ *  purpose: an expectation derived with the parser's own scanner agrees with it
+ *  by construction, and the text rows would stop gating anything. */
+function lastVerdictObject(text) {
     const s = String(text || '');
+    let found;
     for (let i = 0; i < s.length; i++) {
         if (s[i] !== '{') continue;
-        let depth = 0;
-        let inString = false;
-        let escaped = false;
-        for (let j = i; j < s.length; j++) {
-            const c = s[j];
-            if (escaped) {
-                escaped = false;
-            } else if (c === '\\') {
-                escaped = true;
-            } else if (c === '"') {
-                inString = !inString;
-            } else if (!inString && c === '{') {
-                depth++;
-            } else if (!inString && c === '}') {
-                depth--;
-                if (depth === 0) {
-                    out.push(s.slice(i, j + 1));
-                    i = j; // don't re-scan objects nested inside this one
-                    break;
-                }
-            }
-        }
-    }
-    return out;
-}
-
-const KEEPISH = new Set(['keep', 'shouldkeep', 'decision', 'verdict']);
-
-/** What the model wrote as a verdict in its text, read the way the PARSER reads
- *  it: the LAST balanced object that carries a verdict key AT ITS OWN TOP LEVEL,
- *  and a real JSON boolean in it. Matching a looser shape here would report a
- *  LOSS the parser was never contracted to prevent — see writtenKeepLoose.
- *
- *  Three things it deliberately does NOT do, each of which fabricated a failure:
- *   - it does not scan for the key anywhere in the text. `{"keep": false,
- *     "cited": {"keep": true}}` is ONE verdict of false; a last-match regex read
- *     the nested `true`. So does a rationale that quotes `"keep": false` inside
- *     a string — the brace scan above tracks strings for that reason.
- *   - it does not read a value case-insensitively: the parser gets there through
- *     JSON.parse, which accepts only `true`/`false`, so a Python-style `False`
- *     correctly fail-opens and is not a lost verdict.
- *   - it does not read the KEY case-exactly: normalizeKeyName lowercases it and
- *     strips `_-`, so `"Should_Keep"` does reach the parser. */
-function writtenKeep(text) {
-    let written;
-    for (const slice of topLevelJsonObjects(text)) {
+        const slice = sliceBalanced(s, i);
+        if (!slice) continue; // unbalanced from here says nothing about later
         let obj;
         try {
             obj = JSON.parse(slice.replace(/,(\s*[}\]])/g, '$1'));
         } catch {
-            continue;
+            continue; // prose or code — keep scanning, nested objects included
         }
         if (!obj || typeof obj !== 'object' || Array.isArray(obj)) continue;
-        for (const [k, v] of Object.entries(obj)) {
-            if (!KEEPISH.has(k.toLowerCase().replace(/[_\-\s]/g, ''))) continue;
-            if (v === true || v === false) written = v;
+        if (!Object.keys(obj).some((k) => KEEPISH.has(normKey(k)))) continue;
+        found = obj;
+        i += slice.length - 1; // a hit owns its nested objects
+    }
+    return found;
+}
+
+/** The balanced `{...}` starting at `from`, or null. Tracks strings so a brace
+ *  inside a rationale does not close the object. */
+function sliceBalanced(s, from) {
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let j = from; j < s.length; j++) {
+        const c = s[j];
+        if (escaped) escaped = false;
+        else if (c === '\\') escaped = true;
+        else if (c === '"') inString = !inString;
+        else if (!inString && c === '{') depth++;
+        else if (!inString && c === '}' && --depth === 0) {
+            return s.slice(from, j + 1);
         }
     }
-    return written;
+    return null;
+}
+
+const normKey = (k) => k.toLowerCase().replace(/[_\-\s]/g, '');
+const KEEP_KEYS = ['keep', 'decision', 'verdict', 'shouldKeep'];
+const KEEPISH = new Set(KEEP_KEYS.map(normKey));
+
+/** What the model wrote as a verdict in its text, read the way the PARSER reads
+ *  it. Three things it deliberately does NOT do, each of which fabricated a
+ *  failure against a pipeline that had behaved:
+ *   - it does not scan for the key anywhere in the text. `{"keep": false,
+ *     "cited": {"keep": true}}` is ONE verdict of false.
+ *   - it does not read the value case-insensitively: the parser gets there
+ *     through JSON.parse, which accepts only `true`/`false`, so a Python-style
+ *     `False` correctly fail-opens and is not a lost verdict.
+ *   - it does not take the last key present. `locateKey` reads the FIRST of
+ *     [keep, decision, verdict, shouldKeep] — exact spellings first, then
+ *     case/separator-insensitive — so `{"keep": true, "decision": false}` is a
+ *     keep. The key is matched loosely on purpose; only the value is exact. */
+function writtenKeep(text) {
+    const obj = lastVerdictObject(text);
+    if (!obj) return undefined;
+    let key = KEEP_KEYS.find((k) =>
+        Object.prototype.hasOwnProperty.call(obj, k),
+    );
+    if (!key) key = Object.keys(obj).find((k) => KEEPISH.has(normKey(k)));
+    const value = obj[key];
+    return value === true || value === false ? value : undefined;
 }
 
 /** The same read, but also accepting the quoted forms a model sometimes emits
