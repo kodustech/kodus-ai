@@ -36,6 +36,7 @@
 // (its prompt asks for a JSON verdict and never names the done tool, and
 // constraining the output is measured harm — model-strictness.ts). Swap in a
 // tool-forcing policy and this section goes red on purpose.
+
 // libs/common/utils/crypto.ts reads API_CRYPTO_KEY at IMPORT time
 // (`Buffer.from(process.env.API_CRYPTO_KEY, 'hex')`), and the verifier agent
 // pulls it in through libs/llm/model-builders.ts. Without it the require throws
@@ -129,13 +130,26 @@ function loadRows() {
 
 /** What the model wrote as a verdict in its text, read the way the PARSER reads
  *  it: a real JSON boolean. Matching a looser shape here would report a LOSS the
- *  parser was never contracted to prevent — see writtenKeepLoose. */
+ *  parser was never contracted to prevent — see writtenKeepLoose.
+ *
+ *  The two halves are deliberately asymmetric, because production is:
+ *   - the KEY is matched case- and separator-insensitively, because
+ *     normalizeKeyName (structured-output-repair.ts) lowercases it and strips
+ *     `_-` before comparing, so `"Should_Keep"` reaches the parser;
+ *   - the VALUE is matched case-EXACTLY, because the parser gets there through
+ *     JSON.parse, which accepts only `true`/`false`. A Python-style `False` is
+ *     not JSON: production finds no object, fail-opens to keep=true, and that is
+ *     correct. Reading it as a refutation here would score that correct run as a
+ *     LOST verdict and turn the gate red against the pipeline — the same
+ *     false-failure class as scoring a tool row from its text. */
 function writtenKeep(text) {
-    const m = String(text || '').match(
-        /"(?:keep|shouldKeep|should_keep|decision|verdict)"\s*:\s*(false|true)\b/gi,
-    );
-    if (!m || !m.length) return undefined;
-    return !m[m.length - 1].toLowerCase().includes('false');
+    let written;
+    for (const m of String(text || '').matchAll(
+        /"(?:keep|should[_\- ]?keep|decision|verdict)"\s*:\s*([A-Za-z]+)/gi,
+    )) {
+        if (m[1] === 'true' || m[1] === 'false') written = m[1] === 'true';
+    }
+    return written;
 }
 
 /** The same read, but also accepting the quoted forms a model sometimes emits
