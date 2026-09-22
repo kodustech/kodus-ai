@@ -486,6 +486,37 @@ describe('runStructuredReviewCall — json_object routes carry the contract (iss
         expect(markJsonSchemaUnsupported).not.toHaveBeenCalled();
     });
 
+    it('appends the contract ONCE, even when the re-ask fires on top of it', async () => {
+        // Three paths build a contracted system (first attempt, reroute-json,
+        // the downgraded re-ask). Each must build from the CALLER's system, not
+        // from an already-contracted one — otherwise a re-ask stacks a second
+        // copy of the schema on a prompt that already carries it, and the model
+        // is told the shape twice in one message.
+        const parseFail = new NoObjectGeneratedError({
+            message: 'No object generated: could not parse the response',
+            text: 'not json at all',
+            cause: new JSONParseError({ text: 'not json at all', cause: null }),
+            usage: undefined,
+            finishReason: 'stop',
+            response: undefined,
+        } as any);
+        mockGenerate
+            .mockRejectedValueOnce(parseFail)
+            .mockResolvedValueOnce(ok({ groups: [] }));
+
+        await runStructuredReviewCall({
+            ...base,
+            schema,
+            byokConfig: glmViaOpenRouter,
+        });
+
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        const occurrences = (s: string) =>
+            (s.match(/Return ONLY a JSON object/g) ?? []).length;
+        expect(occurrences(systemOf(0))).toBe(1);
+        expect(occurrences(systemOf(1))).toBe(1);
+    });
+
     it('the D-00c re-issue keeps the contract (a transient blip must not drop it)', async () => {
         const blip: any = new Error('upstream 502');
         blip.status = 502;
