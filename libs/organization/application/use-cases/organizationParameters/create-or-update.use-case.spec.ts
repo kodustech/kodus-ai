@@ -41,7 +41,10 @@ function buildUseCase(
     };
     const request = { user: { uuid: 'user-1', email: 'u@k.io' } } as any;
     const eventEmitter = { emit: jest.fn() } as any;
-    const telemetry = { byokConfigured: jest.fn() } as any;
+    const telemetry = {
+        byokConfigured: jest.fn(),
+        organizationSettingsUpdated: jest.fn(),
+    } as any;
 
     // The Kodus provider is a private alpha; specs act as an allow-listed org
     // unless they pass their own gate.

@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 
 import { SaveMarketingSurveyUseCase } from '@libs/identity/application/use-cases/profile/save-marketing-survey.use-case';
 import { PROFILE_SERVICE_TOKEN } from '@libs/identity/domain/profile/contracts/profile.service.contract';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -26,6 +27,10 @@ describe('SaveMarketingSurveyUseCase', () => {
                 {
                     provide: PROFILE_SERVICE_TOKEN,
                     useValue: mockProfileService,
+                },
+                {
+                    provide: TelemetryService,
+                    useValue: { marketingSurveyAnswered: jest.fn() },
                 },
             ],
         }).compile();

@@ -11,6 +11,7 @@ import {
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { validateAndScopeIdeRulePath } from '@libs/common/utils/kody-rules/file-patterns';
 import { createLogger } from '@libs/core/log/logger';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 @Injectable()
 export class ImportFastKodyRulesUseCase {
@@ -18,6 +19,7 @@ export class ImportFastKodyRulesUseCase {
 
     constructor(
         private readonly createOrUpdateKodyRulesUseCase: CreateOrUpdateKodyRulesUseCase,
+        private readonly telemetry: TelemetryService,
         @Inject(REQUEST)
         private readonly request: Request & {
             user: {
@@ -115,6 +117,14 @@ export class ImportFastKodyRulesUseCase {
                 });
             }
         }
+
+        void this.telemetry.kodyRulesImported({
+            organizationId,
+            teamId: dto.teamId,
+            actorUserId: this.request.user?.uuid,
+            source: 'fast_import',
+            ruleCount: results.length,
+        });
 
         return results;
     }

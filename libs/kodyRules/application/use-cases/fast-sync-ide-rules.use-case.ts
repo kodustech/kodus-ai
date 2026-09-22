@@ -5,6 +5,7 @@ import { KodyRulesSyncService } from '@libs/kodyRules/infrastructure/adapters/se
 import { NotificationService } from '@libs/notifications/application/notification.service';
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 import { Inject, Injectable } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { v4 as uuid } from 'uuid';
@@ -27,6 +28,7 @@ export class FastSyncIdeRulesUseCase {
         private readonly codeManagementService: CodeManagementService,
         private readonly notificationService: NotificationService,
         private readonly validateRuleFileReferences: ValidateRuleFileReferencesUseCase,
+        private readonly telemetry: TelemetryService,
         @Inject(REQUEST)
         private readonly request: UserRequest,
     ) {}
@@ -103,6 +105,17 @@ export class FastSyncIdeRulesUseCase {
                 },
                 source: 'ide',
                 syncInitiatorUserId: this.request.user?.uuid,
+            });
+
+            void this.telemetry.kodyRulesImported({
+                organizationId,
+                teamId: params.teamId,
+                actorUserId: this.request.user?.uuid,
+                source: 'ide',
+                ruleCount: Array.isArray((result as any)?.rules)
+                    ? (result as any).rules.length
+                    : 0,
+                repositoryCount: 1,
             });
 
             return result;

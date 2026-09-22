@@ -9,6 +9,7 @@ import { KodyRulesSyncService } from '@libs/kodyRules/infrastructure/adapters/se
 import { NotificationService } from '@libs/notifications/application/notification.service';
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 import { ValidateRuleFileReferencesUseCase } from './validate-rule-file-references.use-case';
 
@@ -27,6 +28,7 @@ export class ResyncRulesFromIdeUseCase {
         private readonly codeManagementService: CodeManagementService,
         private readonly notificationService: NotificationService,
         private readonly validateRuleFileReferences: ValidateRuleFileReferencesUseCase,
+        private readonly telemetry: TelemetryService,
         @Inject(REQUEST)
         private readonly request: UserRequest,
     ) {}
@@ -62,6 +64,8 @@ export class ResyncRulesFromIdeUseCase {
                         : true,
                 );
 
+            let syncedRepositories = 0;
+
             for (const repo of filtered) {
                 try {
                     await this.kodyRulesSyncService.syncRepositoryMain({
@@ -76,6 +80,7 @@ export class ResyncRulesFromIdeUseCase {
                         },
                         path: params.path,
                     });
+                    syncedRepositories += 1;
                     await this.notifySynced(
                         organizationAndTeamData.organizationId,
                         repo.name,
@@ -111,6 +116,20 @@ export class ResyncRulesFromIdeUseCase {
                         String(repo.id),
                     );
                 }
+            }
+
+            if (syncedRepositories > 0) {
+                void this.telemetry.kodyRulesImported({
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: params.teamId,
+                    actorUserId: this.request.user?.uuid,
+                    source: 'ide',
+                    // `syncRepositoryMain` returns void, so there is no rule
+                    // count on this path — 0 means "synced", the same
+                    // convention the in-app notification uses.
+                    ruleCount: 0,
+                    repositoryCount: syncedRepositories,
+                });
             }
         } catch (error) {
             this.logger.error({

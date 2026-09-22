@@ -26,6 +26,7 @@ import { UserRoleChangeLogParams } from '@libs/ee/codeReviewSettingsLog/infrastr
 import { ActionType } from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
 import { NotificationService } from '@libs/notifications/application/notification.service';
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 @Injectable()
 export class UpdateAnotherUserUseCase implements IUseCase {
@@ -47,6 +48,8 @@ export class UpdateAnotherUserUseCase implements IUseCase {
         private readonly eventEmitter: EventEmitter2,
 
         private readonly notificationService: NotificationService,
+
+        private readonly telemetry: TelemetryService,
     ) {}
 
     async execute(
@@ -167,6 +170,13 @@ export class UpdateAnotherUserUseCase implements IUseCase {
                         context: UpdateAnotherUserUseCase.name,
                     });
                 }
+
+                void this.telemetry.memberRoleChanged({
+                    organizationId,
+                    actorUserId: userId,
+                    targetUserId,
+                    role,
+                });
             }
 
             return updatedUser.toObject();
