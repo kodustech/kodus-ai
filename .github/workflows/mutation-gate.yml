@@ -88,16 +88,16 @@ jobs:
               id: score
               if: always()
               env:
-                  RUN_OUTCOME: ${{ steps.run.outcome }}
+                  MUTATION_STEP_OUTCOME: ${{ steps.run.outcome }}
               run: |
                   node -e "
                     const fs = require(\"fs\"); const p = \"reports/mutation/mutation.json\";
                     const out = (k, v) => fs.appendFileSync(process.env.GITHUB_OUTPUT, k + \"=\" + v + \"\\n\");
                     if (!fs.existsSync(p)) {
                       // No report after a failed run is a crash or a timeout, not a deliberate skip.
-                      const died = process.env.RUN_OUTCOME && process.env.RUN_OUTCOME !== \"success\";
+                      const died = process.env.MUTATION_STEP_OUTCOME && process.env.MUTATION_STEP_OUTCOME !== \"success\";
                       out(\"status\", died ? \"infra\" : \"skipped\"); out(\"value\", \"\");
-                      out(\"meta\", JSON.stringify({ note: died ? \"mutation run \" + process.env.RUN_OUTCOME + \" before writing a report\" : \"no mutation report: nothing to mutate\" }));
+                      out(\"meta\", JSON.stringify({ note: died ? \"mutation run \" + process.env.MUTATION_STEP_OUTCOME + \" before writing a report\" : \"no mutation report: nothing to mutate\" }));
                       process.exit(0);
                     }
                     const r = JSON.parse(fs.readFileSync(p, \"utf8\")); const c = { killed: 0, timeout: 0, survived: 0, no_coverage: 0, other: 0 };
