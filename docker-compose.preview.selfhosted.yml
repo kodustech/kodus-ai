@@ -1,0 +1,35 @@
+# Self-hosted shape of a preview: what a customer runs from kodus-installer —
+# no billing container, cloud mode off, the web app in its self-hosted mode.
+# Layered on top of docker-compose.preview.yml by
+# .kodus/workspace.preview.selfhosted.yaml (runo --profile self-hosted).
+#
+# It stays on the dev compose (ts-node, watch) rather than the installer's
+# published images, because a preview has to run the pull request's code, not
+# a release. What it exercises is the application's self-hosted BEHAVIOR: every
+# `isSelfHosted` / `API_CLOUD_MODE` branch, the installer's defaults for
+# tokens and logging, the web without a billing backend.
+#
+# API_NODE_ENV stays `development` on purpose: the installer ships `production`
+# (hardened cookies), but that also disables the dev-seed endpoints the preview
+# login depends on. Cookie hardening is covered by the SSO tests instead.
+services:
+    kodus-api:
+        environment:
+            - API_CLOUD_MODE=false
+    worker:
+        environment:
+            - API_CLOUD_MODE=false
+    worker-analytics:
+        environment:
+            - API_CLOUD_MODE=false
+    webhooks:
+        environment:
+            - API_CLOUD_MODE=false
+    mcp-manager:
+        environment:
+            - API_CLOUD_MODE=false
+
+    web:
+        environment:
+            - API_CLOUD_MODE=false
+            - WEB_NODE_ENV=self-hosted
