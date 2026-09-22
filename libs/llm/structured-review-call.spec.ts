@@ -485,6 +485,43 @@ describe('runStructuredReviewCall — json_object routes carry the contract (iss
         expect(systemOf(0)).toBe('sys');
     });
 
+    it('the self-hosted env default gets the contract once its flag is off', async () => {
+        // No BYOK slot: the managed/env default, which never goes through the
+        // registry. The self-hosted OpenAI-compatible branch ANDs the caller's
+        // opt-out into its own supportsStructuredOutputs, so once this route is
+        // marked json_schema-unsupported it emits bare json_object — and then it
+        // needs the contract like any other bare route. Answering 'json_schema'
+        // blindly for "no slot" reproduced #1916 for self-hosted installs, with
+        // no recovery: that 400 is an APICallError, not NoObjectGeneratedError.
+        const prevModel = process.env.API_LLM_PROVIDER_MODEL;
+        const prevKey = process.env.API_OPEN_AI_API_KEY;
+        process.env.API_LLM_PROVIDER_MODEL = 'deepseek-v4-pro';
+        process.env.API_OPEN_AI_API_KEY = 'sk-self-hosted';
+        try {
+            (mayUseJsonSchema as jest.Mock).mockReturnValueOnce(false);
+            mockGenerate.mockResolvedValueOnce(ok({ groups: [] }));
+
+            await runStructuredReviewCall({ ...base, schema });
+
+            expect(systemOf(0).toLowerCase()).toContain('json');
+            expect(systemOf(0)).toContain('groups');
+        } finally {
+            if (prevModel === undefined)
+                delete process.env.API_LLM_PROVIDER_MODEL;
+            else process.env.API_LLM_PROVIDER_MODEL = prevModel;
+            if (prevKey === undefined) delete process.env.API_OPEN_AI_API_KEY;
+            else process.env.API_OPEN_AI_API_KEY = prevKey;
+        }
+    });
+
+    it('the managed default is NOT taxed while it still sends the schema', async () => {
+        // The mirror: same no-slot route, flag still on. Fireworks and the
+        // native managed branches keep the schema on the wire, so no contract.
+        mockGenerate.mockResolvedValueOnce(ok({ groups: [] }));
+        await runStructuredReviewCall({ ...base, schema });
+        expect(systemOf(0)).toBe('sys');
+    });
+
     it('does not re-issue a byte-identical json_object call on a schema-ish 4xx', async () => {
         // The old code read `sentJsonSchema` — true whenever the SDK was ASKED
         // for a schema, even on a route that never sends one — and re-issued
@@ -536,6 +573,49 @@ describe('runStructuredReviewCall — json_object routes carry the contract (iss
             (s.match(/Return ONLY a JSON object/g) ?? []).length;
         expect(occurrences(systemOf(0))).toBe(1);
         expect(occurrences(systemOf(1))).toBe(1);
+        // Pin WHICH path produced the second call. Counting alone would be
+        // satisfied by any other recovery branch, so the count would stop
+        // meaning "the re-ask builds from the caller's system".
+        expect(
+            observabilityService.runAiSdkLLMInSpan.mock.calls[1][0].attrs
+                .structuredRecovery,
+        ).toBe('schema-mismatch');
+    });
+
+    it('reroute-json builds from the caller system too (the third site)', async () => {
+        // The test above cannot reach this path: an 'as-is' plan never reroutes.
+        // A moonshot k2.7-code slot resolves to it for real — the REGISTRY is
+        // not mocked here.
+        //
+        // Note on why this is a PIN rather than a caught regression: a
+        // reroute-json plan requires `capabilities().structuredOutput === 'none'`
+        // (planStructuredCall), and a module that answers 'none' there answers
+        // 'none' in its wire policy too — pinned in declared-facts. So on this
+        // path `mainSystem === system` and the two contracted strings cannot
+        // both exist today. This holds the invariant for the day that coupling
+        // changes; it is not evidence that a stacking bug exists now.
+        mockGenerate.mockResolvedValueOnce({
+            text: '{"groups":[]}',
+            usage: {},
+        });
+
+        await runStructuredReviewCall({
+            ...base,
+            schema,
+            byokConfig: {
+                provider: 'moonshot',
+                model: 'kimi-k2.7-code',
+                apiKey: 'enc',
+            } as any,
+        });
+
+        const system = systemOf(0);
+        expect((system.match(/Return ONLY a JSON object/g) ?? []).length).toBe(
+            1,
+        );
+        expect(system).toContain('sys');
+        // It really took the reroute: plain generateText, no Output.object.
+        expect(mockGenerate.mock.calls[0][0]).not.toHaveProperty('output');
     });
 
     it('the D-00c re-issue keeps the contract (a transient blip must not drop it)', async () => {

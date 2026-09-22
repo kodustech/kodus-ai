@@ -53,6 +53,7 @@ import {
     type ByokModelOptions,
 } from '@libs/llm/byok-to-vercel';
 import { resolveModelConfig } from '@libs/llm/model-invocation';
+import { resolveEnvProvider } from '@libs/llm/managed-slot';
 import { agentModelIdentity } from '@libs/llm/model-identity';
 import {
     tracedGenerateText,
@@ -253,19 +254,35 @@ function resolveStructuredPlan(
 
 /**
  * What a structured call for this slot actually puts ON THE WIRE — the module's
- * own `structuredOutputPolicy(cfg)`, the one answer that can see the provider id,
- * the model AND the baseURL (see providers/kernel/structured-output.ts).
+ * own `structuredOutputPolicy(cfg, opts)`, the one answer that can see the
+ * provider id, the model, the baseURL AND what the caller asked for (see
+ * providers/kernel/structured-output.ts).
  *
- * No slot = the managed/env default, which is built with `structuredOutputs:
- * true` against an upstream we control (Fireworks, or the self-hosted endpoint
- * the operator opted in): the schema does reach the wire, so 'json_schema' —
- * which is also the answer that changes nothing (no prompt is added).
+ * NO SLOT is the managed/env default, and it is NOT automatically 'json_schema'.
+ * It does not go through the registry at all, so the question has to be answered
+ * here: of the managed branches, only the self-hosted OpenAI-compatible one
+ * (`resolveManagedSlot`'s inline exception) ANDs the caller's opt-out into its
+ * own `supportsStructuredOutputs`. Once that route is marked json_schema-
+ * unsupported for the process, it really does emit bare `json_object` — and
+ * then it needs the contract exactly like any BYOK route, or a self-hosted
+ * deployment reproduces #1916 with no way out (the 400 surfaces as an
+ * APICallError, which no recovery branch below catches).
+ *
+ * Every other managed branch — Fireworks (flag hardcoded on), Gemini, Vertex,
+ * Anthropic — ignores the opt-out and keeps sending the schema, so they stay
+ * 'json_schema' and no prompt is added.
  */
 function resolveWireStructuredMode(
     slot: NormalizedModel | undefined,
     opts: ProviderBuildOptions,
     organizationId?: string,
 ): StructuredOutputMode {
+    if (!slot) {
+        return opts.structuredOutputs === false &&
+            resolveEnvProvider()?.kind === 'openai_compat'
+            ? 'json_object'
+            : 'json_schema';
+    }
     return askProviderModule(
         slot,
         'json_schema',
