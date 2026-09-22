@@ -29,8 +29,10 @@ shows it grey.
 `gate.env_drift`, `gate.mutation`, `contract.api`, `contract.byok_live`,
 `e2e.selfhosted.matrix`, `e2e.cloud`, `e2e.cloud_aws`, `e2e.health`, `evals.wiring`,
 `evals.nightly.recall`, `evals.nightly.precision`, `evals.nightly.cost`, `evals.tier0.<model>`,
-`evals.benchmark.<model>.f1`, `prod.http.error_rate`, `prod.betterstack.monitors_down`,
-`feedback.thumbs_down.count`, `feedback.thumbs_down.rate`,
+`evals.benchmark.<model>.f1`, `prod.errors.<group>`, `prod.errors.total`, `prod.errors.noise`,
+`prod.errors.new_signatures`, `prod.errors.spikes` (from kodus-insights, CloudWatch),
+`prod.betterstack.monitors_down`, `feedback.thumbs_down.count`, `feedback.thumbs_down.rate`,
+`feedback.thumbs_down.weekly.*` (from kodus-insights),
 `review.langfuse.<agent>.latency_p95`, `review.langfuse.<agent>.cost_per_review`
 (`<agent>` = `generalist` | `rules`).
 

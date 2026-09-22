@@ -16,7 +16,7 @@ place you can query:
 | Contract tests, BYOK live | `contract-tests.yml` → GitHub check + Discord |
 | E2E (self-hosted matrix, cloud, cloud-aws, health report) | scoreboard in step summary + Discord |
 | Evals (nightly recall, Friday tier-0, wiring smoke, model benchmark) | job summary + artifact + Discord, hand-kept ledger in `evals/results` |
-| Prod errors | HTTP error rate (own metrics mirror), BetterStack Uptime, weekly kodus-insights digest |
+| Prod errors | CloudWatch via kodus-insights (weekly report + nightly counts), BetterStack Uptime |
 | 👎 on suggestions | BigQuery mirror of prod, weekly kodus-insights buckets |
 | Review latency and cost | Langfuse |
 
@@ -92,7 +92,8 @@ e2e.selfhosted.matrix            value = gating_count, meta.advisory_count, meta
 e2e.cloud | e2e.cloud_aws | e2e.health
 evals.wiring                     evals.nightly.recall (ratio)  evals.nightly.precision
 evals.nightly.cost (usd)         evals.tier0.<model>           evals.benchmark.<model>.f1
-prod.http.error_rate (pct)       prod.betterstack.monitors_down (count)
+prod.errors.<group> | .total | .noise | .new_signatures | .spikes   (count, kodus-insights)
+prod.betterstack.monitors_down (count)
 feedback.thumbs_down.count       feedback.thumbs_down.rate (ratio, 24h)   meta.top_rules
 review.langfuse.<agent>.latency_p95 (ms)  review.langfuse.<agent>.cost_per_review (usd)
 ```
@@ -170,11 +171,12 @@ Start with the nightly and the matrix: they already hold a number and a verdict.
 
 One workflow, one row per signal per night, all writing through the same insert helper:
 
-- **Prod HTTP error rate**: replicate the app's own error-rate monitor
-  (`error-rate-monitor.service.ts`) from the BigQuery prod mirror once Airbyte
-  syncs the `observability_metrics` collection: `SUM(http_errors_total)` /
-  `SUM(http_request_total)` over 24h. `meta.by_component` breaks it down.
-  Status by rate threshold (mirrors the app's 10%).
+- **Prod errors are not pulled here.** `kodustech/kodus-insights` already reads CloudWatch
+  (`/ecs/kodus-prod-orchestrator/*`, `level=error`) with noise rules and signature
+  clustering; its nightly `nightly-errors.yml` publishes `prod.errors.*` and its weekly jobs
+  publish the weekly counts and `feedback.thumbs_down.weekly.*`. The app's own metrics
+  collection was ruled out: one document per request, syncing it would double the heaviest
+  Airbyte stream.
 - **BetterStack**: monitors currently down in Uptime (`prod.betterstack.monitors_down`).
   `meta.top` = monitor names + urls. The nightly series is the history.
 - **👎**: query the BigQuery prod mirror (the SEOCopilot dataset already used by the weekly
