@@ -51,6 +51,7 @@ name: "Evals: nightly quality (DeepSeek, 30 PRs)"
 permissions:
     contents: read
     actions: read
+    id-token: write # quality signal (report-signal action, WIF)
 
 on:
     schedule:
@@ -391,6 +392,49 @@ jobs:
                       --last-green=nightly-report/last-green/nightly.json --commits=nightly-report/commits.tsv \
                       --investigation=nightly-investigation/investigation/investigation.json \
                       --previous-state=nightly-report/previous-state.json
+            - name: Nightly numbers (for the quality signal)
+              id: numbers
+              if: always()
+              env:
+                  VERDICT: ${{ steps.report.outputs.verdict }}
+              run: |
+                  node -e "
+                    const fs = require(\"fs\"); const p = \"nightly-report/nightly.json\";
+                    const out = (k, v) => fs.appendFileSync(process.env.GITHUB_OUTPUT, k + \"=\" + v + \"\\n\");
+                    const map = { pass: \"green\", improved: \"green\", oscillation: \"yellow\", ungated: \"yellow\", regression: \"red\", \"still-red\": \"red\", infra: \"infra\" };
+                    out(\"status\", map[process.env.VERDICT] || \"infra\");
+                    if (!fs.existsSync(p)) { out(\"recall\", \"\"); out(\"precision\", \"\"); out(\"meta\", JSON.stringify({ verdict: process.env.VERDICT, note: \"no nightly.json\" })); process.exit(0); }
+                    const r = JSON.parse(fs.readFileSync(p, \"utf8\")); const m = r.metrics || {};
+                    out(\"recall\", m.recall_mean == null ? \"\" : String(m.recall_mean)); out(\"precision\", m.precision_mean == null ? \"\" : String(m.precision_mean));
+                    out(\"meta\", JSON.stringify({ verdict: process.env.VERDICT, model: r.model || null, cases: r.cases || null, measured: (r.rows || []).filter((x) => x.metadata && Number.isFinite(x.metadata.recall)).length }));
+                  "
+
+            - name: Report quality signal
+              if: always()
+              uses: ./.github/actions/report-signal
+              with:
+                  name: evals.nightly.recall
+                  status: ${{ steps.numbers.outputs.status || 'infra' }}
+                  value: ${{ steps.numbers.outputs.recall }}
+                  unit: ratio
+                  meta: ${{ steps.numbers.outputs.meta }}
+                  gcp_wif_provider: ${{ vars.GCP_WIF_PROVIDER }}
+                  gcp_sa_email: ${{ vars.GCP_SA_EMAIL }}
+                  gcp_project: ${{ vars.GCP_PROJECT }}
+
+            - name: Report quality signal
+              if: always()
+              uses: ./.github/actions/report-signal
+              with:
+                  name: evals.nightly.precision
+                  status: ${{ steps.numbers.outputs.status || 'infra' }}
+                  value: ${{ steps.numbers.outputs.precision }}
+                  unit: ratio
+                  meta: ${{ steps.numbers.outputs.meta }}
+                  gcp_wif_provider: ${{ vars.GCP_WIF_PROVIDER }}
+                  gcp_sa_email: ${{ vars.GCP_SA_EMAIL }}
+                  gcp_project: ${{ vars.GCP_PROJECT }}
+
             - name: Notify Discord
               uses: ./.github/actions/discord-notify
               with:

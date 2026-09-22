@@ -86,6 +86,7 @@ jobs:
         # `cloud-matrix` job remains explicitly pinned to `contents: read`.
         permissions:
             contents: write
+            id-token: write # called workflow reports a quality signal (WIF)
         uses: ./.github/workflows/e2e-cloud.yml
         with:
             matrix_file: matrix/fast.yml
@@ -475,6 +476,7 @@ jobs:
         # matrix job inside the reusable workflow remains pinned to read-only.
         permissions:
             contents: write
+            id-token: write # called workflow reports a quality signal (WIF)
             packages: read
         uses: ./.github/workflows/e2e-self-hosted-matrix.yml
         with:

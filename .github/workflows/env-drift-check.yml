@@ -11,6 +11,7 @@ name: env-drift-check
 # minimum (CodeQL alert: actions/missing-workflow-permissions).
 permissions:
     contents: read
+    id-token: write # quality signal (report-signal action, WIF)
 
 on:
     pull_request:
@@ -53,3 +54,13 @@ jobs:
 
             - name: Check schema covers every env var used in code
               run: pnpm run env:check:coverage
+
+            - name: Report quality signal
+              if: always()
+              uses: ./.github/actions/report-signal
+              with:
+                  name: gate.env_drift
+                  status: ${{ job.status }}
+                  gcp_wif_provider: ${{ vars.GCP_WIF_PROVIDER }}
+                  gcp_sa_email: ${{ vars.GCP_SA_EMAIL }}
+                  gcp_project: ${{ vars.GCP_PROJECT }}

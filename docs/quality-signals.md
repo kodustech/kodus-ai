@@ -25,13 +25,28 @@ but something is worth a look (matrix advisories, mutation score under target wi
 measure": quota, missing secret, network. `infra` is never a quality result; the dashboard
 shows it grey.
 
-**Names in use.** `unit.jest`, `gate.typecheck`, `gate.di_graph`, `gate.permissions_matrix`,
-`gate.env_drift`, `gate.mutation`, `contract.api`, `contract.byok_live`,
-`e2e.selfhosted.matrix`, `e2e.cloud`, `e2e.cloud_aws`, `e2e.health`, `evals.wiring`,
-`evals.nightly.recall`, `evals.nightly.precision`, `evals.nightly.cost`, `evals.tier0.<model>`,
-`evals.benchmark.<model>.f1`, `prod.sentry.<app>.new_issues`, `prod.sentry.<app>.unresolved`,
-`prod.posthog.<app>.errors`, `feedback.thumbs_down.count`, `feedback.thumbs_down.rate`,
-`review.langfuse.latency_p95`, `review.langfuse.cost_per_review`.
+**Names in use** (producer in parentheses).
+
+| Name | Producer | Value |
+|---|---|---|
+| `unit.jest` | `tests.yml` | failed tests; `meta.total`, `meta.suites_failed` |
+| `gate.typecheck`, `gate.di_graph`, `gate.permissions_matrix`, `gate.env_drift` | one workflow each | status only |
+| `gate.mutation` | `mutation-gate.yml` | mutation score (pct); yellow under the `low` threshold, skipped when nothing to mutate |
+| `contract.api`, `contract.byok_live` | `contract-tests.yml` | status only |
+| `e2e.selfhosted.matrix` | `e2e-self-hosted-matrix.yml` (aggregate) | gating failures; status is the scoreboard's |
+| `e2e.cloud` | `e2e-cloud.yml` | gating failures; inconclusive or no digest = infra |
+| `e2e.cloud_aws`, `e2e.health` | `e2e-cloud-aws.yml`, `e2e-health-report.yml` | status / history rows |
+| `evals.wiring` | `code-review-evals-pr.yml` | status only |
+| `evals.nightly.recall`, `evals.nightly.precision` | `code-review-evals-nightly.yml` (notify) | ratio; status from the nightly verdict |
+| `evals.tier0.<model>` | `code-review-evals-tier0.yml` (one row per matrix model) | review seconds (ms); red when review or PR summary is broken |
+| `evals.benchmark` | `code-review-model-benchmark.yml` | lowest F1 across models; `meta.models` has each model's precision/recall/f1 |
+| `prod.errors.<group>`, `.total`, `.noise`, `.new_signatures`, `.spikes` | kodus-insights `nightly-errors.yml` (CloudWatch) | counts |
+| `prod.betterstack.monitors_down` | kodus-quality `pull.yml` | count |
+| `feedback.thumbs_down.count`, `.rate` | kodus-quality `pull.yml` | 24h |
+| `feedback.thumbs_down.weekly.*` | kodus-insights weekly job | week |
+| `review.langfuse.<agent>.latency_p95`, `.cost_per_review` | kodus-quality `pull.yml` | per review agent |
+
+Reusable workflows (`e2e-self-hosted-matrix`, `e2e-cloud`, `code-review-model-benchmark`) report from inside, so every caller grants `id-token: write` to the calling job.
 
 ## Adding a signal from a workflow
 
