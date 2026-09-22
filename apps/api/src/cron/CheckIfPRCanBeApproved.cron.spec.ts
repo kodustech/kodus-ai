@@ -148,6 +148,35 @@ describe('CheckIfPRCanBeApprovedCronProvider (deterministic logic)', () => {
             expect(call(withLookback('30'))).toBe(7);
             expect(call(withLookback(true))).toBe(7);
         });
+
+        // Ten years is longer than any repository this cron runs against has
+        // been open, so a team that means "never expire" is already served by
+        // the largest accepted value.
+        it('returns the largest accepted window as-is', () => {
+            expect(call(withLookback(3650))).toBe(3650);
+        });
+
+        it('falls back to the default for a value above the maximum', () => {
+            expect(call(withLookback(3651))).toBe(7);
+        });
+
+        // Far enough past the maximum the value stops being a window at all:
+        // subtracting it lands outside the range a Date can represent, and the
+        // Invalid Date that comes out cannot be serialised into the
+        // eligibility query's filter, so the call rejects. That rejection is
+        // swallowed by the `Promise.allSettled` the per-team work runs inside,
+        // and the team is skipped on every run with nothing logged. The probe
+        // below is the same arithmetic the call site does, so this pins the
+        // reason for the bound and not just the number.
+        it('falls back for a window large enough to break the date arithmetic', () => {
+            const overflowing = 1_000_000_000;
+
+            const probe = new Date();
+            probe.setDate(probe.getDate() - overflowing);
+            expect(Number.isNaN(probe.getTime())).toBe(true);
+
+            expect(call(withLookback(overflowing))).toBe(7);
+        });
     });
 
     describe('getLastAnalyzedCommitSha', () => {
