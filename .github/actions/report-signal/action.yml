@@ -105,7 +105,8 @@ runs:
                 // Producers interpolate model ids and similar into names: fold them to the contract
                 // (lowercase, [a-z0-9._-]) instead of failing, e.g. evals.tier0.minimax-m3@nvidia -> ..._nvidia.
                 const name = (process.env.IN_NAME || "").trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "_");
-                if (!/^[a-z0-9_]+(\.[a-z0-9_-]+)+$/.test(name)) { console.error(`report-signal: bad name "${name}"`); process.exit(1); }
+                // Accept exactly what the fold can produce. Only a name without a dot is still a producer bug.
+                if (!/^[a-z0-9_-]+(\.[a-z0-9_-]+)+$/.test(name)) { console.error(`report-signal: bad name "${name}": want <area>.<gate>[.<dimension>]`); process.exit(1); }
                 const value = process.env.IN_VALUE.trim() === "" ? null : Number(process.env.IN_VALUE);
                 if (value !== null && Number.isNaN(value)) { console.error(`report-signal: value is not a number: ${process.env.IN_VALUE}`); process.exit(1); }
                 let meta = null;

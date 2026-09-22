@@ -10,7 +10,7 @@ the status, the table records it. Plan and task list: `docs/quality-signals-plan
 |---|---|
 | `ts` | when it was measured |
 | `source` | producer, `kodus-ai/tests.yml` or `kodus-quality/pull` |
-| `name` | `<area>.<gate>[.<dimension>]`, lowercase, dots only; the action folds anything else (e.g. a model id) to `[a-z0-9._-]` |
+| `name` | `<area>.<gate>[.<dimension>]`: at least two dot-separated segments of `[a-z0-9_-]`. The action lowercases and folds every other character (e.g. `@` in a model id) to `_`; a name without a dot is rejected and no row is written |
 | `status` | `green` `yellow` `red` `skipped` `infra` |
 | `value`, `unit` | the number when there is one; `ratio` `count` `usd` `ms` `pct` |
 | `run_url` | where a human goes to see why |
