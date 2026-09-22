@@ -1,0 +1,123 @@
+name: 'Report quality signal'
+description: 'Write one row to BigQuery quality.signals (see docs/quality-signals.md)'
+
+# One block per workflow, always with `if: always()`, so red runs are rows too.
+# Auth is Workload Identity Federation: the caller needs
+#     permissions:
+#         id-token: write
+# and the repo variables GCP_WIF_PROVIDER, GCP_SA_EMAIL, GCP_PROJECT
+# (scripts/quality/bootstrap-gcp.sh sets them).
+#
+# Graceful degradation, like discord-notify: when GCP_WIF_PROVIDER is empty
+# (fork, or the variable isn't set yet) we warn and exit 0. A missing
+# variable never fails a workflow.
+
+inputs:
+    name:
+        description: '<area>.<gate>[.<dimension>], e.g. evals.nightly.recall'
+        required: true
+    status:
+        description: 'green | yellow | red | skipped | infra, or a GitHub job status (success | failure | cancelled | skipped), which is mapped'
+        required: true
+    value:
+        description: 'Optional number'
+        required: false
+        default: ''
+    unit:
+        description: 'ratio | count | usd | ms | pct'
+        required: false
+        default: ''
+    meta:
+        description: 'Optional JSON object as a string'
+        required: false
+        default: ''
+    run_url:
+        description: 'Defaults to this run'
+        required: false
+        default: ''
+    source:
+        description: 'Defaults to <repo>/<workflow file>'
+        required: false
+        default: ''
+
+runs:
+    using: composite
+    steps:
+        - name: Check WIF is configured
+          id: check
+          shell: bash
+          env:
+              PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
+          run: |
+              if [ -z "$PROVIDER" ]; then
+                  echo "::warning::GCP_WIF_PROVIDER not set — quality signal '${{ inputs.name }}' not recorded."
+                  echo "skip=true" >> "$GITHUB_OUTPUT"
+              else
+                  echo "skip=false" >> "$GITHUB_OUTPUT"
+              fi
+
+        - name: Build row
+          if: steps.check.outputs.skip == 'false'
+          id: row
+          shell: bash
+          env:
+              IN_NAME: ${{ inputs.name }}
+              IN_STATUS: ${{ inputs.status }}
+              IN_VALUE: ${{ inputs.value }}
+              IN_UNIT: ${{ inputs.unit }}
+              IN_META: ${{ inputs.meta }}
+              IN_RUN_URL: ${{ inputs.run_url }}
+              IN_SOURCE: ${{ inputs.source }}
+              GH_REPO: ${{ github.repository }}
+              GH_WORKFLOW_REF: ${{ github.workflow_ref }}
+              GH_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+              GH_SHA: ${{ github.sha }}
+              GH_REF: ${{ github.ref_name }}
+          run: |
+              node -e '
+                const map = { success: "green", failure: "red", cancelled: "infra", skipped: "skipped" };
+                const allowed = new Set(["green", "yellow", "red", "skipped", "infra"]);
+                const raw = (process.env.IN_STATUS || "").trim().toLowerCase();
+                const status = map[raw] || raw;
+                if (!allowed.has(status)) { console.error(`report-signal: unknown status "${raw}"`); process.exit(1); }
+                const name = (process.env.IN_NAME || "").trim();
+                if (!/^[a-z0-9_]+(\.[a-z0-9_-]+)+$/.test(name)) { console.error(`report-signal: bad name "${name}"`); process.exit(1); }
+                const value = process.env.IN_VALUE.trim() === "" ? null : Number(process.env.IN_VALUE);
+                if (value !== null && Number.isNaN(value)) { console.error(`report-signal: value is not a number: ${process.env.IN_VALUE}`); process.exit(1); }
+                let meta = null;
+                if (process.env.IN_META.trim() !== "") { meta = JSON.stringify(JSON.parse(process.env.IN_META)); }
+                // github.workflow_ref = owner/repo/.github/workflows/<file>@<ref>
+                const file = (process.env.GH_WORKFLOW_REF.match(/\.github\/workflows\/([^@]+)@/) || [])[1] || "unknown";
+                const source = process.env.IN_SOURCE.trim() || `${process.env.GH_REPO.split("/")[1]}/${file}`;
+                const row = {
+                  ts: new Date().toISOString(), source, name, status, value,
+                  unit: process.env.IN_UNIT.trim() || null,
+                  run_url: process.env.IN_RUN_URL.trim() || process.env.GH_RUN_URL,
+                  commit: process.env.GH_SHA, branch: process.env.GH_REF, meta,
+                };
+                require("fs").writeFileSync("quality-signal-row.json", JSON.stringify(row) + "\n");
+                console.log(JSON.stringify(row));
+              '
+
+        - name: Authenticate to GCP (WIF)
+          if: steps.check.outputs.skip == 'false'
+          uses: google-github-actions/auth@v2
+          with:
+              workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+              service_account: ${{ vars.GCP_SA_EMAIL }}
+              project_id: ${{ vars.GCP_PROJECT }}
+
+        - name: Set up bq
+          if: steps.check.outputs.skip == 'false'
+          uses: google-github-actions/setup-gcloud@v2
+          with:
+              project_id: ${{ vars.GCP_PROJECT }}
+
+        - name: Insert row
+          if: steps.check.outputs.skip == 'false'
+          shell: bash
+          env:
+              PROJECT: ${{ vars.GCP_PROJECT }}
+          run: |
+              bq insert --project_id="$PROJECT" quality.signals quality-signal-row.json
+              rm -f quality-signal-row.json
