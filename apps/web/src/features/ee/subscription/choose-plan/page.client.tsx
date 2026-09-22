@@ -1,5 +1,11 @@
 "use client";
 
+/* Hallmark · component: plan chooser (/choose-plan) · genre: modern-minimal · theme: Kodus system tokens + plan tones (plan-tone.ts)
+ * redesign: three cards each shouting its own accent (orange Free button, orange Teams, rose Enterprise with a red "Talk to sales") → tier tones shared with the sidebar and the subscription page, one primary action on the page, prices in text colour, a tier-tinted check per feature, and the plan you're on marked
+ * states: default · recommended (Teams) · current plan (CTA disabled) · CTA hover · focus-visible · active · loading (checkout, migrate) · disabled
+ * contrast: pass (40–41) · tokens: pass (48) · honest: pass (46 — prices and features from billing's plan catalog) · responsive: cards stack < md
+ * pre-emit critique: P4 H5 E4 S4 R5 V4
+ */
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@components/ui/button";
@@ -21,31 +27,32 @@ import { useAsyncAction } from "@hooks/use-async-action";
 import { useConfig } from "@providers/ConfigProvider";
 import {
     BadgeDollarSignIcon,
-    BookOpenIcon,
-    BrainIcon,
+    Building2Icon,
     CheckIcon,
     ExternalLinkIcon,
-    GaugeIcon,
     GitPullRequestIcon,
-    HeadphonesIcon,
     KeyIcon,
-    MessageCircleIcon,
-    PlugIcon,
-    RadarIcon,
-    RocketIcon,
-    ShieldCheckIcon,
     SparklesIcon,
     UsersIcon,
     type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "src/core/providers/auth.provider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
+import { cn } from "src/core/utils/components";
 import { CurrencyHelpers } from "src/core/utils/currency";
 import { addSearchParamsToUrl } from "src/core/utils/url";
 
 import { createCheckoutSessionAction } from "../_actions/create-checkout-session";
+import { useSubscriptionStatus } from "../_hooks/use-subscription-status";
 import { migrateToFree } from "../_services/billing/fetch";
 import type { Plan } from "../_services/billing/types";
+import {
+    PLAN_BORDER_TONE,
+    PLAN_CHIP_TONE,
+    PLAN_TEXT_TONE,
+    tierOf,
+    type PlanTone,
+} from "../_utils/plan-tone";
 import type { SimulatorModel } from "./_services/models";
 
 type PlansObject = Record<
@@ -55,7 +62,6 @@ type PlansObject = Record<
 
 export function ChoosePlanPageClient({
     plans,
-    simulatorModels,
     tokenProjectionSlot,
 }: {
     plans: PlansObject;
@@ -71,7 +77,7 @@ export function ChoosePlanPageClient({
                 user's own key. Plans only change features. */}
             <AllPlansInclude />
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-3">
                 {plans.free && <FreePlan plan={plans.free} />}
                 {plans.teams_byok && <TeamsPlan plan={plans.teams_byok} />}
                 {plans.enterprise && <EnterprisePlan plan={plans.enterprise} />}
@@ -86,34 +92,18 @@ const COMMON_FEATURES = [
     "Unlimited users",
 ];
 
-// Map feature keywords to icons
-const FEATURE_ICONS: Array<{ keywords: string[]; icon: LucideIcon }> = [
-    { keywords: ["kody rules", "rules"], icon: BookOpenIcon },
-    { keywords: ["plugin"], icon: PlugIcon },
-    { keywords: ["quality radar", "radar"], icon: RadarIcon },
-    { keywords: ["learning", "memory"], icon: BrainIcon },
-    { keywords: ["discord", "support", "email"], icon: MessageCircleIcon },
-    { keywords: ["priority queue", "queue"], icon: RocketIcon },
-    { keywords: ["metrics", "cockpit"], icon: GaugeIcon },
-    { keywords: ["sso", "saml"], icon: KeyIcon },
-    { keywords: ["soc 2", "soc2"], icon: ShieldCheckIcon },
-    { keywords: ["rbac", "audit"], icon: ShieldCheckIcon },
-    { keywords: ["hours", "onboarding", "dedicated"], icon: HeadphonesIcon },
-    {
-        keywords: ["private discord", "private channel"],
-        icon: MessageCircleIcon,
-    },
-];
-
-function getFeatureIcon(feature: string): LucideIcon {
-    const lowerFeature = feature.toLowerCase();
-    for (const { keywords, icon } of FEATURE_ICONS) {
-        if (keywords.some((kw) => lowerFeature.includes(kw))) {
-            return icon;
-        }
-    }
-    return CheckIcon;
-}
+/** Which plan card the organization is already on, if any. */
+const useCurrentPlan = (): "free" | "teams" | "enterprise" | undefined => {
+    const subscription = useSubscriptionStatus();
+    if (subscription.status === "free") return "free";
+    if (subscription.status !== "active") return undefined;
+    const tier = tierOf(subscription.planType);
+    return tier === "Teams"
+        ? "teams"
+        : tier === "Enterprise"
+          ? "enterprise"
+          : undefined;
+};
 
 function AllPlansInclude() {
     const items = [
@@ -123,7 +113,7 @@ function AllPlansInclude() {
     ];
 
     return (
-        <div className="bg-card-lv1 border-card-lv3 flex flex-col gap-3 rounded-lg border px-5 py-4 md:flex-row md:items-center md:justify-between md:gap-6">
+        <div className="bg-card-lv1 border-card-lv3/60 flex flex-col gap-3 rounded-2xl border px-5 py-4 md:flex-row md:items-center md:justify-between md:gap-6">
             <p className="text-text-primary text-sm font-semibold text-balance">
                 Reviews are unlimited on every plan — they run on your own AI
                 key.{" "}
@@ -132,26 +122,70 @@ function AllPlansInclude() {
                     review.
                 </span>
             </p>
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <ul className="flex flex-wrap items-center gap-x-6 gap-y-2">
                 {items.map(({ icon: Icon, label }) => (
-                    <div key={label} className="flex items-center gap-2">
-                        <div className="bg-success/20 flex size-6 items-center justify-center rounded-full">
-                            <Icon className="text-success size-3.5" />
-                        </div>
+                    <li key={label} className="flex items-center gap-2">
+                        <Icon
+                            className="text-success size-4 shrink-0"
+                            aria-hidden
+                        />
                         <span className="text-text-primary text-sm whitespace-nowrap">
                             {label}
                         </span>
-                    </div>
+                    </li>
                 ))}
-            </div>
+            </ul>
         </div>
     );
 }
+
+/** A plan's name in its tier's tone, and what it's for. */
+function PlanCardHeader({
+    icon: Icon,
+    tone,
+    plan,
+    marker,
+}: {
+    icon: LucideIcon;
+    tone: PlanTone;
+    plan: Plan;
+    marker?: ReactNode;
+}) {
+    return (
+        <CardHeader className="pb-2">
+            <div className="mb-3 flex items-center gap-2">
+                <div
+                    className={cn(
+                        "flex size-8 shrink-0 items-center justify-center rounded-lg",
+                        PLAN_CHIP_TONE[tone],
+                    )}>
+                    <Icon className="size-4" aria-hidden />
+                </div>
+                <CardTitle className="text-balance">{plan.label}</CardTitle>
+                {marker && <div className="ml-auto">{marker}</div>}
+            </div>
+            <CardDescription className="min-h-16 text-pretty">
+                {plan.description}
+            </CardDescription>
+        </CardHeader>
+    );
+}
+
+const Marker = ({ tone, children }: { tone: PlanTone; children: string }) => (
+    <span
+        className={cn(
+            "rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide whitespace-nowrap uppercase",
+            PLAN_CHIP_TONE[tone],
+        )}>
+        {children}
+    </span>
+);
 
 function FreePlan({ plan }: { plan: Plan }) {
     const { teamId } = useSelectedTeamId();
     const { organizationId } = useAuth();
     const router = useRouter();
+    const current = useCurrentPlan() === "free";
 
     const [handleMigrateToFree, { loading }] = useAsyncAction(async () => {
         if (!teamId || !organizationId) {
@@ -206,44 +240,34 @@ function FreePlan({ plan }: { plan: Plan }) {
 
     return (
         <Card className="flex flex-col overflow-hidden">
-            <CardHeader className="pb-2">
-                <div className="mb-3 flex items-center gap-2">
-                    <div className="bg-card-lv1 flex size-8 items-center justify-center rounded-lg">
-                        <SparklesIcon className="text-text-secondary size-4" />
-                    </div>
-                    <CardTitle className="text-balance">{plan.label}</CardTitle>
-                </div>
-                <CardDescription className="min-h-16 text-pretty">
-                    {plan.description}
-                </CardDescription>
-            </CardHeader>
+            <PlanCardHeader
+                icon={SparklesIcon}
+                tone="neutral"
+                plan={plan}
+                marker={
+                    current ? (
+                        <Marker tone="neutral">Current plan</Marker>
+                    ) : null
+                }
+            />
 
-            <CardContent className="flex-none pt-2 pb-4">
-                <div className="bg-card-lv1 rounded-lg p-4">
-                    <Heading variant="h2" className="text-primary-light">
-                        Free
-                    </Heading>
-                    <span className="text-text-tertiary text-sm">
-                        Forever free
-                    </span>
-                </div>
-            </CardContent>
+            <PriceBlock value="Free" note="Forever free" />
 
             <CardContent className="flex-1 pb-4">
-                <p className="text-text-tertiary mb-3 text-xs font-medium uppercase">
-                    Includes
-                </p>
-                <PlanFeatures features={plan.features} />
+                <FeaturesLabel>Includes</FeaturesLabel>
+                <PlanFeatures features={plan.features} tone="neutral" />
             </CardContent>
 
             <CardContent className="flex-none pt-0 pb-5">
+                {/* Secondary: outlined, since helper shares the card's fill. */}
                 <Button
                     size="md"
-                    variant="primary-dark"
-                    className="w-full"
+                    variant="helper"
+                    className="border-card-lv3 w-full border"
                     loading={loading}
+                    disabled={current}
                     onClick={() => handleMigrateToFree()}>
-                    Choose this plan
+                    {current ? "Your current plan" : "Choose Free"}
                 </Button>
             </CardContent>
         </Card>
@@ -254,12 +278,11 @@ function TeamsPlan({ plan }: { plan: Plan }) {
     const { teamId } = useSelectedTeamId();
     const [quantity, setQuantity] = useState(1);
     const [isAddonActive, setIsAddonActive] = useState(false);
+    // A second Checkout would start a second subscription: changing seats on
+    // the plan you have happens in Manage billing.
+    const current = useCurrentPlan() === "teams";
 
     const planPricing = plan.pricing.find((p) => p.interval === "month");
-    if (!planPricing) {
-        return null;
-    }
-
     const addon = plan.addons.at(0);
     const addonPricing = addon?.pricing.find((p) => p.interval === "month");
 
@@ -270,51 +293,41 @@ function TeamsPlan({ plan }: { plan: Plan }) {
                 planId: isAddonActive ? addon!.id : plan.id,
                 quantity,
             });
-            window.location.href = url;
+            window.location.assign(url);
         });
 
+    // After the hooks, so they run in the same order on every render.
+    if (!planPricing) {
+        return null;
+    }
+
     return (
-        <Card className="border-primary-dark relative flex flex-col overflow-hidden border-2">
-            {/* Popular badge */}
-            <div className="bg-primary-light absolute top-4 right-4 rounded-full px-3 py-1">
-                <span className="text-xs font-semibold text-black">
-                    Most popular
-                </span>
-            </div>
+        // The recommended plan: its tier's border, not a second accent.
+        <Card
+            className={cn(
+                "relative flex flex-col overflow-hidden border-2",
+                PLAN_BORDER_TONE.secondary,
+            )}>
+            <PlanCardHeader
+                icon={UsersIcon}
+                tone="secondary"
+                plan={plan}
+                marker={
+                    <Marker tone="secondary">
+                        {current ? "Current plan" : "Most popular"}
+                    </Marker>
+                }
+            />
 
-            <CardHeader className="pb-2">
-                <div className="mb-3 flex items-center gap-2">
-                    <div className="bg-primary-dark flex size-8 items-center justify-center rounded-lg">
-                        <UsersIcon className="text-primary-light size-4" />
-                    </div>
-                    <CardTitle className="text-balance">{plan.label}</CardTitle>
-                </div>
-                <CardDescription className="min-h-16 text-pretty">
-                    {plan.description}
-                </CardDescription>
-            </CardHeader>
-
-            <CardContent className="flex-none pt-2 pb-4">
-                <div className="bg-primary-dark/30 rounded-lg p-4">
-                    <div className="flex items-baseline gap-1">
-                        <Heading
-                            variant="h2"
-                            className="text-primary-light tabular-nums">
-                            {CurrencyHelpers.format({
-                                currency: planPricing.currency,
-                                amount: planPricing.amount,
-                                maximumFractionDigits: 0,
-                            })}
-                        </Heading>
-                        <span className="text-text-secondary text-sm">
-                            /dev/month
-                        </span>
-                    </div>
-                    <span className="text-text-tertiary text-sm">
-                        + AI token costs (pay-as-you-go)
-                    </span>
-                </div>
-            </CardContent>
+            <PriceBlock
+                value={CurrencyHelpers.format({
+                    currency: planPricing.currency,
+                    amount: planPricing.amount,
+                    maximumFractionDigits: 0,
+                })}
+                unit="/dev/month"
+                note="+ AI token costs (pay-as-you-go)"
+            />
 
             {addonPricing && (
                 <Label className="bg-card-lv1 mx-5 mb-4 flex cursor-pointer items-center justify-between gap-4 rounded-lg p-4">
@@ -323,7 +336,7 @@ function TeamsPlan({ plan }: { plan: Plan }) {
                             {addon?.description}
                         </p>
                         <p className="text-text-secondary text-sm">
-                            <span className="text-primary-light font-semibold">
+                            <span className="text-text-primary font-semibold tabular-nums">
                                 +{" "}
                                 {CurrencyHelpers.format({
                                     maximumFractionDigits: 0,
@@ -347,45 +360,47 @@ function TeamsPlan({ plan }: { plan: Plan }) {
             )}
 
             <CardContent className="flex-1 pb-4">
-                <p className="text-text-tertiary mb-3 text-xs font-medium uppercase">
-                    Everything in Free, plus
-                </p>
-                <PlanFeatures features={plan.features} />
+                <FeaturesLabel>Everything in Free, plus</FeaturesLabel>
+                <PlanFeatures features={plan.features} tone="secondary" />
             </CardContent>
 
             <CardContent className="flex flex-none flex-col gap-4 pt-0 pb-5">
-                <FormControl.Root>
-                    <FormControl.Label htmlFor="teams-quantity">
-                        Developer licenses
-                    </FormControl.Label>
+                {!current && (
+                    <FormControl.Root>
+                        <FormControl.Label htmlFor="teams-quantity">
+                            Developer licenses
+                        </FormControl.Label>
 
-                    <FormControl.Input>
-                        <NumberInput.Root
-                            min={1}
-                            size="md"
-                            value={quantity}
-                            onValueChange={setQuantity}>
-                            <NumberInput.Decrement />
-                            <NumberInput.Input id="teams-quantity" />
-                            <NumberInput.Increment />
-                        </NumberInput.Root>
-                    </FormControl.Input>
+                        <FormControl.Input>
+                            <NumberInput.Root
+                                min={1}
+                                size="md"
+                                value={quantity}
+                                onValueChange={setQuantity}>
+                                <NumberInput.Decrement />
+                                <NumberInput.Input id="teams-quantity" />
+                                <NumberInput.Increment />
+                            </NumberInput.Root>
+                        </FormControl.Input>
 
-                    <p className="text-text-tertiary text-xs">
-                        One license per developer whose PRs Kody reviews.
-                        Workspace members (reviewers, viewers, admins) are
-                        unlimited and free.
-                    </p>
-                </FormControl.Root>
+                        <p className="text-text-tertiary text-xs">
+                            One license per developer whose PRs Kody reviews.
+                            Workspace members (reviewers, viewers, admins) are
+                            unlimited and free.
+                        </p>
+                    </FormControl.Root>
+                )}
 
+                {/* The page's one primary action. */}
                 <Button
                     size="md"
                     variant="primary"
                     className="w-full"
-                    leftIcon={<BadgeDollarSignIcon />}
+                    leftIcon={current ? undefined : <BadgeDollarSignIcon />}
                     loading={isCreatingLinkToCheckout}
+                    disabled={current}
                     onClick={() => createLinkToCheckout()}>
-                    Choose this plan
+                    {current ? "Your current plan" : "Choose Teams"}
                 </Button>
             </CardContent>
         </Card>
@@ -395,42 +410,31 @@ function TeamsPlan({ plan }: { plan: Plan }) {
 function EnterprisePlan({ plan }: { plan: Plan }) {
     const { email } = useAuth();
     const cfg = useConfig();
+    const current = useCurrentPlan() === "enterprise";
 
     return (
         <Card className="flex flex-col overflow-hidden">
-            <CardHeader className="pb-2">
-                <div className="mb-3 flex items-center gap-2">
-                    <div className="bg-tertiary-dark flex size-8 items-center justify-center rounded-lg">
-                        <BadgeDollarSignIcon className="text-tertiary-light size-4" />
-                    </div>
-                    <CardTitle className="text-balance">{plan.label}</CardTitle>
-                </div>
-                <CardDescription className="min-h-16 text-pretty">
-                    {plan.description}
-                </CardDescription>
-            </CardHeader>
+            <PlanCardHeader
+                icon={Building2Icon}
+                tone="info"
+                plan={plan}
+                marker={
+                    current ? <Marker tone="info">Current plan</Marker> : null
+                }
+            />
 
-            <CardContent className="flex-none pt-2 pb-4">
-                <div className="bg-card-lv1 rounded-lg p-4">
-                    <Heading variant="h2" className="text-primary-light">
-                        Custom
-                    </Heading>
-                    <span className="text-text-tertiary text-sm">
-                        Tailored to your needs
-                    </span>
-                </div>
-            </CardContent>
+            <PriceBlock value="Custom" note="Tailored to your needs" />
 
             <CardContent className="flex-1 pb-4">
-                <p className="text-text-tertiary mb-3 text-xs font-medium uppercase">
-                    Everything in Teams, plus
-                </p>
-                <PlanFeatures features={plan.features} />
+                <FeaturesLabel>Everything in Teams, plus</FeaturesLabel>
+                <PlanFeatures features={plan.features} tone="info" />
             </CardContent>
 
             <CardContent className="flex-none pt-0 pb-5">
                 <Link
                     target="_blank"
+                    noHoverUnderline
+                    className="block w-full"
                     href={addSearchParamsToUrl(
                         cfg.supportTalkToFounderUrl || "",
                         {
@@ -441,9 +445,9 @@ function EnterprisePlan({ plan }: { plan: Plan }) {
                     <Button
                         size="md"
                         decorative
-                        variant="tertiary"
-                        className="w-full"
-                        leftIcon={<ExternalLinkIcon />}>
+                        variant="helper"
+                        className="border-card-lv3 w-full border"
+                        rightIcon={<ExternalLinkIcon />}>
                         Talk to sales
                     </Button>
                 </Link>
@@ -452,7 +456,46 @@ function EnterprisePlan({ plan }: { plan: Plan }) {
     );
 }
 
-function PlanFeatures({ features }: { features: Array<string> }) {
+/** The price, in text colour: the card's tone already says which tier. */
+function PriceBlock({
+    value,
+    unit,
+    note,
+}: {
+    value: string;
+    unit?: string;
+    note: string;
+}) {
+    return (
+        <CardContent className="flex-none pt-2 pb-4">
+            <div className="bg-card-lv1 rounded-lg p-4">
+                <div className="flex items-baseline gap-1">
+                    <Heading variant="h2" className="tabular-nums">
+                        {value}
+                    </Heading>
+                    {unit && (
+                        <span className="text-text-secondary text-sm">
+                            {unit}
+                        </span>
+                    )}
+                </div>
+                <span className="text-text-tertiary text-sm">{note}</span>
+            </div>
+        </CardContent>
+    );
+}
+
+const FeaturesLabel = ({ children }: { children: string }) => (
+    <p className="text-text-tertiary mb-3 text-xs font-medium">{children}</p>
+);
+
+function PlanFeatures({
+    features,
+    tone,
+}: {
+    features: Array<string>;
+    tone: PlanTone;
+}) {
     // Filter out common features that are shown in "All plans include"
     const filteredFeatures = features.filter(
         (f) =>
@@ -462,19 +505,22 @@ function PlanFeatures({ features }: { features: Array<string> }) {
     );
 
     return (
-        <div className="flex flex-col gap-3">
+        <ul className="flex flex-col gap-3">
             {filteredFeatures.map((f) => {
                 const textWithoutComingSoon = f.split("(coming soon)")[0];
-                const Icon = getFeatureIcon(f);
 
                 return (
-                    <div
+                    <li
                         key={f}
-                        className="text-text-secondary flex items-start gap-3 text-sm">
-                        <div className="bg-card-lv1 mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md">
-                            <Icon className="text-text-tertiary size-3.5" />
-                        </div>
-                        <div className="pt-0.5">
+                        className="text-text-secondary flex items-start gap-2.5 text-sm">
+                        <CheckIcon
+                            className={cn(
+                                "mt-0.5 size-4 shrink-0",
+                                PLAN_TEXT_TONE[tone],
+                            )}
+                            aria-hidden
+                        />
+                        <span>
                             {textWithoutComingSoon}
 
                             {f !== textWithoutComingSoon && (
@@ -482,10 +528,10 @@ function PlanFeatures({ features }: { features: Array<string> }) {
                                     (coming soon)
                                 </small>
                             )}
-                        </div>
-                    </div>
+                        </span>
+                    </li>
                 );
             })}
-        </div>
+        </ul>
     );
 }

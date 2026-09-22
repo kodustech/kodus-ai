@@ -33,6 +33,15 @@ export const PLAN_BAR_TONE: Record<PlanTone, string> = {
     danger: "bg-danger",
 };
 
+/** Marks drawn in the tier's hue, e.g. the checks of a plan's feature list. */
+export const PLAN_TEXT_TONE: Record<PlanTone, string> = {
+    neutral: "text-text-tertiary",
+    primary: "text-primary-light",
+    secondary: "text-secondary-light",
+    info: "text-info",
+    danger: "text-danger",
+};
+
 /** The tier a billing plan type belongs to, as the product names it. */
 export const tierOf = (planType?: string) =>
     planType?.startsWith("enterprise")
