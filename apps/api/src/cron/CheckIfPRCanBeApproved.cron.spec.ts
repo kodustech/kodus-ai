@@ -156,8 +156,12 @@ describe('CheckIfPRCanBeApprovedCronProvider (deterministic logic)', () => {
             expect(call(withLookback(3650))).toBe(3650);
         });
 
-        it('falls back to the default for a value above the maximum', () => {
-            expect(call(withLookback(3651))).toBe(7);
+        // Only rows saved before the API validated the range can hold a value
+        // above the maximum. A team that stored 36500 meant "never expire", so
+        // it gets the widest window rather than the narrowest.
+        it('clamps a value above the maximum to the maximum', () => {
+            expect(call(withLookback(3651))).toBe(3650);
+            expect(call(withLookback(36500))).toBe(3650);
         });
 
         // Far enough past the maximum the value stops being a window at all:
@@ -168,14 +172,14 @@ describe('CheckIfPRCanBeApprovedCronProvider (deterministic logic)', () => {
         // and the team is skipped on every run with nothing logged. The probe
         // below is the same arithmetic the call site does, so this pins the
         // reason for the bound and not just the number.
-        it('falls back for a window large enough to break the date arithmetic', () => {
+        it('clamps a window large enough to break the date arithmetic', () => {
             const overflowing = 1_000_000_000;
 
             const probe = new Date();
             probe.setDate(probe.getDate() - overflowing);
             expect(Number.isNaN(probe.getTime())).toBe(true);
 
-            expect(call(withLookback(overflowing))).toBe(7);
+            expect(call(withLookback(overflowing))).toBe(3650);
         });
     });
 
