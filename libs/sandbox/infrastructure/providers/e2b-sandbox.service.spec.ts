@@ -827,9 +827,31 @@ describe('syncE2BSandboxRepo — submodules on the reconnect path', () => {
     });
 
     it('a failed sync skips the submodule step — nothing to repopulate', async () => {
+        // The sync must REJECT, not resolve with a non-zero exit code:
+        // `sandbox.commands.run` throws `CommandExitError` and never resolves
+        // one (see 'is non-fatal on a failed fetch' above). And `.gitmodules`
+        // has to be answered, or the assertion below holds for the wrong
+        // reason — with no submodule declared there is nothing to fetch and
+        // the test stays green even if the guard is deleted.
         const run = jest.fn(async (cmd: string) => {
             if (cmd.includes('git checkout -f FETCH_HEAD')) {
-                return { stdout: '', stderr: 'boom', exitCode: 1 };
+                throw new CommandExitError({
+                    stdout: '',
+                    stderr: 'boom',
+                    exitCode: 1,
+                    error: '',
+                } as any);
+            }
+            if (cmd.includes('cat ') && cmd.includes('.gitmodules')) {
+                return { stdout: GITMODULES, stderr: '', exitCode: 0 };
+            }
+            if (cmd.includes("'--get-regexp'")) {
+                const declared = cmd.includes("'-f' '.gitmodules'");
+                return {
+                    stdout: declared ? DECLARED : RESOLVED,
+                    stderr: '',
+                    exitCode: 0,
+                };
             }
             return { stdout: '', stderr: '', exitCode: 0 };
         });

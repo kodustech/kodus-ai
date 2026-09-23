@@ -298,6 +298,34 @@ describe('fetchE2BSubmodules — the time budget covers ALL submodules together'
     });
 });
 
+describe('fetchE2BSubmodules — the deep retry deletes inside the checkout only', () => {
+    /** Shallow always fails, so every submodule reaches the deep retry. */
+    const shallowFails = (gm: Gitmodules, resolved: string) => {
+        const sandbox = makeSandbox(gm, resolved);
+        const inner = sandbox.commands.run;
+        sandbox.commands.run = jest.fn(async (cmd: string, opts: any) => {
+            if (cmd.includes("'--depth=1'")) throw new Error('unadvertised');
+            return inner(cmd, opts);
+        }) as any;
+        return sandbox;
+    };
+
+    it('removes `.git/modules/<name>` under the repo dir, never above it', async () => {
+        const sandbox = shallowFails(GITMODULES_SAME_HOST, RESOLVED_SAME_HOST);
+        await fetchE2BSubmodules(sandbox as any, REPO, AUTH);
+        const removals = sandbox.calls
+            .map((c) => c.cmd)
+            .filter((cmd) => cmd.includes('rm -rf'));
+        expect(removals).toHaveLength(1);
+        // Keyed by NAME, and the name is the declared one.
+        expect(removals[0]).toContain(
+            "'/home/user/repo/.git/modules/packages/commons'",
+        );
+        // Nothing that `rm -rf` receives may climb out of the checkout.
+        expect(removals[0]).not.toContain('..');
+    });
+});
+
 describe('fetchE2BSubmodules — never breaks a review', () => {
     it('does nothing at all when the repo has no .gitmodules', async () => {
         const sandbox = makeSandbox(null);

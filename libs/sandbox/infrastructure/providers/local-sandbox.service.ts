@@ -28,6 +28,7 @@ import {
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import {
     fetchSubmodules,
+    isContainedRelativePath,
     SubmoduleGitHost,
 } from '@libs/sandbox/infrastructure/providers/submodule-fetch';
 
@@ -284,6 +285,16 @@ export class LocalSandboxService implements ISandboxProvider {
                         : {}),
                 } as ExecFileOptions) as Promise<{ stdout: string }>,
             removeDir: async (relative) => {
+                // Built from the submodule NAME in `.gitmodules`, written by
+                // the pull request author, and this runs on the self-hosted
+                // customer's own machine. The shared module rejects a name
+                // with a `..` segment; the guard is repeated at the one place
+                // that deletes recursively.
+                if (!isContainedRelativePath(relative)) {
+                    throw new Error(
+                        `refusing to remove a path outside the checkout: ${relative}`,
+                    );
+                }
                 await rm(join(repoDir, relative), {
                     recursive: true,
                     force: true,

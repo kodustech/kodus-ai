@@ -200,6 +200,29 @@ export function parseResolvedSubmoduleUrls(
  * log exactly what was skipped and why — a submodule silently not fetched is
  * the bug this whole change exists to stop.
  */
+/**
+ * Does this value stay inside the directory it is joined to?
+ *
+ * Both the submodule NAME and its PATH come out of `.gitmodules`, which ships
+ * inside the pull request. The name is joined to `.git/modules/` and the
+ * result is handed to `removeDir`, which is `rm -rf` on E2B and a recursive
+ * `rm` on the self-hosted customer's own machine; the path is handed to
+ * `git submodule update --`. Neither may contain a `..` segment, at the start
+ * or in the middle, and neither may be absolute.
+ *
+ * git itself refuses a name with a `..` segment ("ignoring suspicious
+ * submodule name", the CVE-2018-11235 fix), so nothing that reaches here
+ * today carries one. That is git's guarantee, not this module's, and it is
+ * the only thing standing between a crafted `.gitmodules` and a recursive
+ * delete outside the checkout — so the check is made here too.
+ */
+export function isContainedRelativePath(value: string): boolean {
+    if (!value) return false;
+    if (value.startsWith('/')) return false;
+    const segments = value.split('/');
+    return !segments.some((seg) => seg === '' || seg === '.' || seg === '..');
+}
+
 export function decideSubmodules(
     declared: DeclaredSubmodules,
     resolvedUrls: Map<string, string>,
@@ -242,8 +265,12 @@ export function decideSubmodules(
             reason,
         });
 
-        if (!entry.path || entry.path.startsWith('..')) {
+        if (!isContainedRelativePath(entry.path)) {
             return deny('submodule path escapes the repository');
+        }
+        // The name reaches `rm -rf .git/modules/<name>` on the deep retry.
+        if (!isContainedRelativePath(entry.name)) {
+            return deny('submodule name escapes .git/modules');
         }
         if (!resolvedUrl) {
             // `git submodule init` did not register this one (or the dump was

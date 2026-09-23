@@ -14,6 +14,7 @@ import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/servic
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
 import {
     fetchSubmodules,
+    isContainedRelativePath,
     SubmoduleGitHost,
 } from '@libs/sandbox/infrastructure/providers/submodule-fetch';
 
@@ -333,6 +334,16 @@ export async function fetchE2BSubmodules(
                 },
             ),
         removeDir: async (relative) => {
+            // `relative` is built from the submodule NAME in `.gitmodules`,
+            // which the pull request author writes. `shSingleQuote` stops
+            // shell injection but not `..`, and this is `rm -rf`. The shared
+            // module rejects such a name, but the guard is repeated at the
+            // one place that deletes.
+            if (!isContainedRelativePath(relative)) {
+                throw new Error(
+                    `refusing to remove a path outside the checkout: ${relative}`,
+                );
+            }
             await sandbox.commands.run(
                 `rm -rf ${shSingleQuote(`${REPO_DIR}/${relative}`)}`,
                 { timeoutMs: TIMEOUTS.COMMAND_SHORT_MS },

@@ -494,6 +494,13 @@ export function buildAgentTools(
                     );
                 }
                 if (namesOnly) {
+                    // The note has to come BEFORE the file-name mapping: an
+                    // empty answer maps to an empty answer, and the agent
+                    // would read it as "this code does not exist" — the very
+                    // failure #1939 is about — with no marker on it.
+                    if (!result.trim() || result === 'No matches found.') {
+                        return withSubmoduleNote(result, searchPath);
+                    }
                     const files = [
                         ...new Set(
                             result

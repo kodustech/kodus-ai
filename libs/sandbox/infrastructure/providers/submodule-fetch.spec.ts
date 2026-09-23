@@ -6,6 +6,7 @@ import {
     decideSubmodules,
     scopedAuthHeaderConfigKey,
     buildSubmoduleUpdatePlan,
+    isContainedRelativePath,
 } from './submodule-fetch';
 
 /**
@@ -326,6 +327,92 @@ describe('decideSubmodules — a private git server is the NORMAL case self-host
                 repo: 'https://10.0.3.9/acme/app.git',
             }).allowed,
         ).toBe(false);
+    });
+});
+
+describe('decideSubmodules — the NAME reaches `rm -rf .git/modules/<name>`', () => {
+    /**
+     * On the deep retry a submodule's name is joined to `.git/modules/` and
+     * handed to `removeDir`: `rm -rf` on E2B, a recursive `rm` on the
+     * self-hosted customer's own machine. `.gitmodules` ships inside the pull
+     * request, so the name is attacker-authored.
+     *
+     * Measured against git 2.51: git refuses such a name itself
+     * ("ignoring suspicious submodule name", the CVE-2018-11235 fix) and
+     * registers nothing, so `resolvedUrls` comes back empty and the entry is
+     * denied for a different reason. That is git's guarantee, not this
+     * module's — these cases pin the guarantee here, where the delete is.
+     */
+    const decideNamed = (name: string, path = 'vendor/x') =>
+        decideSubmodules(
+            parseDeclaredSubmodules(
+                `submodule.${name}.path ${path}\n` +
+                    `submodule.${name}.url https://github.com/acme/x.git\n`,
+            ),
+            new Map([[name, 'https://github.com/acme/x.git']]),
+            REPO,
+        )[0];
+
+    it.each([
+        ['../../../../tmp/pwned'],
+        ['a/../../../tmp/pwned'],
+        ['./../../tmp/q'],
+        ['x/./../../tmp/p'],
+        ['/etc/cron.d'],
+        ['a//b'],
+    ])('refuses the name %s', (name) => {
+        const d = decideNamed(name);
+        expect(d.allowed).toBe(false);
+        expect((d as any).reason).toMatch(/escapes/);
+    });
+
+    it('an ordinary name is still allowed', () => {
+        expect(decideNamed('commons-mod').allowed).toBe(true);
+    });
+
+    it('a name that differs from the path is still allowed', () => {
+        const d = decideNamed('commons-mod', 'packages/commons');
+        expect(d.allowed).toBe(true);
+        expect(d.path).toBe('packages/commons');
+    });
+
+    it('an interior `..` in the PATH is refused too, not just a leading one', () => {
+        const d = decideNamed('ok', 'vendor/a/../../../tmp/pwned');
+        expect(d.allowed).toBe(false);
+        expect((d as any).reason).toMatch(/escapes the repository/);
+    });
+
+    it('no deep-retry entry is built for a refused name', () => {
+        const name = '../../../../tmp/pwned';
+        const plan = buildSubmoduleUpdatePlan({
+            declared: parseDeclaredSubmodules(
+                `submodule.${name}.path vendor/x\n` +
+                    `submodule.${name}.url https://github.com/acme/x.git\n`,
+            ),
+            resolvedUrls: new Map([[name, 'https://github.com/acme/x.git']]),
+            repoCloneUrl: REPO,
+            authHeader: AUTH,
+        });
+        expect(plan.deepRetry).toEqual([]);
+        expect(plan.updateArgs).toEqual([]);
+        expect(JSON.stringify(plan.deepRetry)).not.toContain('..');
+    });
+});
+
+describe('isContainedRelativePath', () => {
+    it.each([
+        ['packages/commons', true],
+        ['a', true],
+        ['a/b/c', true],
+        ['..', false],
+        ['../x', false],
+        ['a/../b', false],
+        ['a/./b', false],
+        ['/abs', false],
+        ['a//b', false],
+        ['', false],
+    ])('%s -> %s', (value, expected) => {
+        expect(isContainedRelativePath(value as string)).toBe(expected);
     });
 });
 

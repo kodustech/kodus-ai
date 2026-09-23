@@ -135,6 +135,34 @@ describe('tools — empty answer about an unfetched submodule explains itself', 
         expect(out).toMatch(/NOT evidence/i);
     });
 
+    it('grep with namesOnly — the branch that returns before the note', async () => {
+        // `namesOnly` maps the answer to a list of file names. An EMPTY
+        // answer maps to an empty answer, so the marker has to be applied
+        // before that mapping or this path silently reproduces the #1939
+        // false positive while every other grep shape is covered.
+        const out = await buildAgentTools(makeSandbox()).grep.execute({
+            pattern: 'coerceToDate',
+            path: 'packages/commons',
+            namesOnly: true,
+        });
+        expect(out).toContain(UNINITIALIZED_SUBMODULE_MARKER);
+        expect(out).toMatch(/NOT evidence/i);
+    });
+
+    it('grep with namesOnly still lists file names when there ARE matches', async () => {
+        const sandbox = makeSandbox();
+        sandbox.grep = jest.fn(
+            async () => 'packages/commons/date.ts:3:coerceToDate\n',
+        ) as any;
+        const out = await buildAgentTools(sandbox).grep.execute({
+            pattern: 'coerceToDate',
+            path: 'packages/commons',
+            namesOnly: true,
+        });
+        expect(out).toBe('packages/commons/date.ts');
+        expect(out).not.toContain(UNINITIALIZED_SUBMODULE_MARKER);
+    });
+
     it('grep on the PARENT directory — trace 6a5dbd2d used path="packages"', async () => {
         const out = await buildAgentTools(makeSandbox()).grep.execute({
             pattern: 'successPreSerialized',
