@@ -4176,6 +4176,11 @@ export class ForgejoService implements Omit<
                 }
             }
         } catch (error) {
+            // A 401/403/404 before any repository call (resolving the owner,
+            // building the client) still means the token cannot read.
+            if (isDeniedStatus(error)) {
+                result.read = 'denied';
+            }
             result.error = summarizeProviderError(error);
         }
 

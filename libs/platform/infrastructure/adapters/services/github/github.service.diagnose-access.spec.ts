@@ -236,6 +236,22 @@ describe('GithubService.diagnoseRepositoryAccess', () => {
         expect(listWebhooks).not.toHaveBeenCalled();
     });
 
+    it('401 while resolving the owner (revoked token) → read denied, not unknown', async () => {
+        const service = build({ authMode: AuthMode.TOKEN, octokit: octokit() });
+        (service as any).getCorrectOwner = jest
+            .fn()
+            .mockRejectedValue(httpError(401, 'Bad credentials'));
+        await expect(
+            service.diagnoseRepositoryAccess({
+                organizationAndTeamData,
+                repository,
+            }),
+        ).resolves.toMatchObject({
+            read: 'denied',
+            error: '401 Bad credentials',
+        });
+    });
+
     it('never throws when the client cannot be built', async () => {
         const service = build({ authMode: AuthMode.TOKEN, octokit: octokit() });
         (service as any).instanceOctokit = jest
