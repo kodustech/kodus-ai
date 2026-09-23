@@ -4555,17 +4555,21 @@ export class GitlabService implements Omit<
                     'API_GITLAB_CODE_MANAGEMENT_WEBHOOK',
                 ) ?? process.env.API_GITLAB_CODE_MANAGEMENT_WEBHOOK;
 
-            try {
-                const hooks = await gitlabAPI.ProjectHooks.all(projectId);
-                result.hook = hooks.some(
-                    (hook) => !!webhookUrl && hook?.url === webhookUrl,
-                )
-                    ? 'present'
-                    : 'missing';
-            } catch (error) {
-                // Listing hooks needs Maintainer on the project; without it
-                // we cannot tell whether the hook exists.
-                result.error ??= summarizeProviderError(error);
+            // Unset URL: nothing to match, so the hook stays unknown (the
+            // doctor reports the missing URL itself).
+            if (webhookUrl) {
+                try {
+                    const hooks = await gitlabAPI.ProjectHooks.all(projectId);
+                    result.hook = hooks.some(
+                        (hook) => hook?.url === webhookUrl,
+                    )
+                        ? 'present'
+                        : 'missing';
+                } catch (error) {
+                    // Listing hooks needs Maintainer on the project; without it
+                    // we cannot tell whether the hook exists.
+                    result.error ??= summarizeProviderError(error);
+                }
             }
         } catch (error) {
             // A 401/403/404 before any repository call (resolving the owner,

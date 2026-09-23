@@ -7075,7 +7075,14 @@ This is an experimental feature that generates committable changes. Review the d
                 params.organizationAndTeamData,
                 githubAuthDetail,
             );
-            const owner = await this.getCorrectOwner(githubAuthDetail, octokit);
+            // The repo's own owner, not the integration account's:
+            // getCorrectOwner resolves a personal PAT to the token user's
+            // login, which 404s on every repo the account only collaborates
+            // on (same reason as createPullRequestWebhook). That 404 would
+            // read as "cannot read" and a false NOT RUNNING.
+            const owner =
+                params.repository.fullName?.split('/')[0] ||
+                (await this.getCorrectOwner(githubAuthDetail, octokit));
             const repo = params.repository.name;
             const isApp = githubAuthDetail.authMode === AuthMode.OAUTH;
 
@@ -7134,12 +7141,14 @@ This is an experimental feature that generates committable changes. Review the d
                 }
             }
 
+            const webhookUrl = this.configService.get<string>(
+                'API_GITHUB_CODE_MANAGEMENT_WEBHOOK',
+            );
             if (isApp) {
                 result.hook = 'app-level';
-            } else {
-                const webhookUrl = this.configService.get<string>(
-                    'API_GITHUB_CODE_MANAGEMENT_WEBHOOK',
-                );
+            } else if (webhookUrl) {
+                // Unset URL: nothing to match, so the hook stays unknown
+                // (the doctor reports the missing URL itself).
                 try {
                     const { data: hooks } = await octokit.repos.listWebhooks({
                         owner,
@@ -7147,9 +7156,7 @@ This is an experimental feature that generates committable changes. Review the d
                     });
                     result.hook = hooks.some(
                         (hook) =>
-                            !!webhookUrl &&
-                            hook?.config?.url === webhookUrl &&
-                            hook?.active,
+                            hook?.config?.url === webhookUrl && hook?.active,
                     )
                         ? 'present'
                         : 'missing';

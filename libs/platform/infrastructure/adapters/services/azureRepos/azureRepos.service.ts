@@ -5040,26 +5040,31 @@ ${copyPrompt}
                     'GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK',
                 ) ?? process.env.GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK;
 
-            try {
-                const subscriptions =
-                    await this.azureReposRequestHelper.listSubscriptionsByProject(
-                        {
-                            orgName: authDetails.orgName,
-                            token: authDetails.token,
-                            projectId,
-                        },
-                    );
-                result.hook = subscriptions.some(
-                    (subscription) =>
-                        !!webhookUrl &&
-                        subscription.publisherInputs?.repository ===
-                            params.repository.id &&
-                        subscription.consumerInputs?.url?.includes(webhookUrl),
-                )
-                    ? 'present'
-                    : 'missing';
-            } catch (error) {
-                result.error ??= summarizeProviderError(error);
+            // Unset URL: nothing to match, so the hook stays unknown (the
+            // doctor reports the missing URL itself).
+            if (webhookUrl) {
+                try {
+                    const subscriptions =
+                        await this.azureReposRequestHelper.listSubscriptionsByProject(
+                            {
+                                orgName: authDetails.orgName,
+                                token: authDetails.token,
+                                projectId,
+                            },
+                        );
+                    result.hook = subscriptions.some(
+                        (subscription) =>
+                            subscription.publisherInputs?.repository ===
+                                params.repository.id &&
+                            subscription.consumerInputs?.url?.includes(
+                                webhookUrl,
+                            ),
+                    )
+                        ? 'present'
+                        : 'missing';
+                } catch (error) {
+                    result.error ??= summarizeProviderError(error);
+                }
             }
         } catch (error) {
             // A 401/403/404 before any repository call (resolving the owner,

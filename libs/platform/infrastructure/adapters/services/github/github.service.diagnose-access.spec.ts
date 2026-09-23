@@ -244,12 +244,40 @@ describe('GithubService.diagnoseRepositoryAccess', () => {
         await expect(
             service.diagnoseRepositoryAccess({
                 organizationAndTeamData,
-                repository,
+                // legacy config without full_name: owner comes from the token
+                repository: { id: '42', name: 'api' },
             }),
         ).resolves.toMatchObject({
             read: 'denied',
             error: '401 Bad credentials',
         });
+    });
+
+    it("uses the repository's own owner, not the PAT user's login (collaborator repos)", async () => {
+        const kit = octokit();
+        const service = build({ authMode: AuthMode.TOKEN, octokit: kit });
+        const getCorrectOwner = jest.fn().mockResolvedValue('pat-user');
+        (service as any).getCorrectOwner = getCorrectOwner;
+        await service.diagnoseRepositoryAccess({
+            organizationAndTeamData,
+            repository: { id: '42', name: 'api', fullName: 'someone-else/api' },
+        });
+        expect(kit.rest.repos.listCommits).toHaveBeenCalledWith(
+            expect.objectContaining({ owner: 'someone-else', repo: 'api' }),
+        );
+        expect(getCorrectOwner).not.toHaveBeenCalled();
+    });
+
+    it('webhook URL not configured → hook unknown, hooks not listed', async () => {
+        const kit = octokit();
+        const service = build({ authMode: AuthMode.TOKEN, octokit: kit });
+        (service as any).configService = { get: jest.fn(() => undefined) };
+        const d = await service.diagnoseRepositoryAccess({
+            organizationAndTeamData,
+            repository,
+        });
+        expect(d.hook).toBe('unknown');
+        expect(kit.repos.listWebhooks).not.toHaveBeenCalled();
     });
 
     it('never throws when the client cannot be built', async () => {

@@ -3851,8 +3851,22 @@ export class ForgejoService implements Omit<
 
             const client = this.createForgejoClient(authDetail);
             const webhookUrl = this.configService.get<string>(
-                'FORGEJO_WEBHOOK_URL',
+                'API_FORGEJO_CODE_MANAGEMENT_WEBHOOK',
             );
+            // Without a URL there is nothing of ours to match; comparing
+            // against undefined would delete hooks that have no URL.
+            if (!webhookUrl) {
+                this.logger.warn({
+                    message:
+                        'Forgejo webhook URL not configured (API_FORGEJO_CODE_MANAGEMENT_WEBHOOK): nothing to delete, existing hooks are left in place',
+                    context: ForgejoService.name,
+                    metadata: {
+                        organizationId:
+                            params.organizationAndTeamData?.organizationId,
+                    },
+                });
+                return;
+            }
 
             for (const repo of repositories) {
                 const repoInfo = this.extractRepoInfo(
@@ -4053,8 +4067,9 @@ export class ForgejoService implements Omit<
 
             const client = this.createForgejoClient(authDetail);
             const webhookUrl = this.configService.get<string>(
-                'FORGEJO_WEBHOOK_URL',
+                'API_FORGEJO_CODE_MANAGEMENT_WEBHOOK',
             );
+            if (!webhookUrl) return false;
 
             const result = await repoListHooks({
                 client,
@@ -4153,7 +4168,7 @@ export class ForgejoService implements Omit<
             }
 
             const webhookUrl = this.configService.get<string>(
-                'FORGEJO_WEBHOOK_URL',
+                'API_FORGEJO_CODE_MANAGEMENT_WEBHOOK',
             );
 
             if (webhookUrl) {

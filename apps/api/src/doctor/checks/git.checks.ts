@@ -79,6 +79,8 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
 
             for (const team of reviewableTeams(ctx)) {
                 const scope = teamScope(team);
+                const webhookUrlSet =
+                    !!ctx.env[WEBHOOK_URL_ENV[team.platform!]];
                 const candidates = team.repositories.slice(
                     0,
                     MAX_REPOS_PER_TEAM,
@@ -132,6 +134,11 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                         hookMissing.push(repo.name);
                     }
                     for (const part of ['read', 'write', 'hook'] as const) {
+                        // Without a webhook URL there is nothing to look for;
+                        // webhookUrlCheck already reports the missing URL.
+                        if (part === 'hook' && !webhookUrlSet) {
+                            continue;
+                        }
                         if (d[part] === 'unknown') {
                             unverified[part].push(repo.name);
                         }
@@ -234,11 +241,16 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                     verified([...readDenied, ...writeDenied], unverified.write),
                     'The Git token can comment on pull requests in',
                 );
-                okLine(
-                    'git.webhook',
-                    verified([...readDenied, ...hookMissing], unverified.hook),
-                    'Kodus receives pull request events from',
-                );
+                if (webhookUrlSet) {
+                    okLine(
+                        'git.webhook',
+                        verified(
+                            [...readDenied, ...hookMissing],
+                            unverified.hook,
+                        ),
+                        'Kodus receives pull request events from',
+                    );
+                }
             }
 
             return results;
