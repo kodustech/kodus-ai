@@ -859,6 +859,12 @@ describe('syncE2BSandboxRepo — submodules on the reconnect path', () => {
             }
             if (cmd.includes("'rev-parse'"))
                 throw new Error('unknown revision');
+            if (cmd.includes("'--blob'")) {
+                // git fails the blob read when the ref is absent, and the
+                // probe above already refused — this rejects so the fixture
+                // cannot quietly hand back a declaration that does not exist.
+                throw new Error("fatal: invalid object name 'origin/main'");
+            }
             if (cmd.includes("'--get-regexp'")) {
                 return {
                     stdout: cmd.includes("'-f' '.gitmodules'")
