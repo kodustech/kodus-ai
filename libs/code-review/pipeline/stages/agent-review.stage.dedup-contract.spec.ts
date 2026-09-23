@@ -1148,13 +1148,27 @@ describe('AgentReviewStage — dedup LLM.run contract matrix backfill (#1786)', 
  * catch, which recorded `failed-keep-all` and published every duplicate: 460
  * reviews across 47 organizations.
  *
- * So this runs the REAL `LLM.run`, the real prompt and the real DEDUP_SCHEMA,
+ * So this runs the REAL `LLM.run`, the real prompt and the real `DEDUP_SCHEMA`,
  * and stubs only the network — with the provider's documented rule, not with a
  * canned answer. `API_NODE_ENV=production` because the symptom under test is the
  * production fail-open, not the dev re-throw.
  *
- * Kill the contract injection in `structured-review-call.ts` and this goes red
- * exactly the way production did: two suggestions in, two out, `failed-keep-all`.
+ * ─── WHY IT CALLS DEDUP TWICE ──────────────────────────────────────────────
+ * Because calling it once does NOT discriminate, and the first version of this
+ * file claimed it did. On the old code the FIRST 400 is recovered: its body
+ * carries `response_format` and `invalid_request_error`, so
+ * `isJsonSchemaUnsupportedError` matches, the slot is marked, and the re-issue
+ * goes out with the contract and answers. One call is green on either side.
+ *
+ * The damage starts on the SECOND call. `markJsonSchemaUnsupported` writes to a
+ * PROCESS-WIDE cache keyed `provider:model:baseURL` — not per org — so from
+ * then on `sentJsonSchema` is false, the request goes out bare, 400s, and the
+ * old recovery is skipped because it was gated on `sentJsonSchema`. Every dedup
+ * on that route, for every org on that worker, lands in `failed-keep-all` until
+ * the process restarts. That is what the orgs sitting at 85-100% in the issue
+ * look like from the inside.
+ *
+ * So the second call is the assertion, and the first one only arms the cache.
  */
 describe('AgentReviewStage — dedup survives a keyword-enforcing provider (#1916)', () => {
     const makeStage = () =>
@@ -1191,12 +1205,17 @@ describe('AgentReviewStage — dedup survives a keyword-enforcing provider (#191
     let realFetch: typeof globalThis.fetch;
     let prevEnv: string | undefined;
     let sawKeyword: boolean;
+    /** How many requests the provider rejected. The fix means ZERO: not "the
+     *  ladder recovered after one", which is what the old code did on the first
+     *  call and what made the single-call version of this test pass on main. */
+    let rejected: number;
 
     beforeEach(() => {
         realFetch = globalThis.fetch;
         prevEnv = process.env.API_NODE_ENV;
         process.env.API_NODE_ENV = 'production';
         sawKeyword = false;
+        rejected = 0;
 
         globalThis.fetch = (async (_input: any, init: any) => {
             const body = init?.body ? JSON.parse(String(init.body)) : {};
@@ -1207,6 +1226,7 @@ describe('AgentReviewStage — dedup survives a keyword-enforcing provider (#191
                 body?.response_format?.type === 'json_object' &&
                 !messages.includes('json')
             ) {
+                rejected += 1;
                 return new Response(
                     JSON.stringify({
                         error: {
@@ -1256,21 +1276,32 @@ describe('AgentReviewStage — dedup survives a keyword-enforcing provider (#191
         jest.clearAllMocks();
     });
 
-    it('the request is accepted, and the duplicate is actually removed', async () => {
-        const stage = makeStage();
-        const out = (await (stage as any).deduplicateSuggestions(
-            [dup(), dup()],
-            7,
-            glmSlot,
-            { organizationId: 'org-1', teamId: 'team-1' },
-        )) as { suggestions: any[]; trace: any };
+    const runDedup = (stage: any) =>
+        stage.deduplicateSuggestions([dup(), dup()], 7, glmSlot, {
+            organizationId: 'org-1',
+            teamId: 'team-1',
+        }) as Promise<{ suggestions: any[]; trace: any }>;
 
-        // The provider accepted the request — the keyword was on the wire.
+    it('every call on the route dedups — not just the first one', async () => {
+        const stage = makeStage();
+
+        // Call 1 arms the process-wide no-json_schema cache (on the old code it
+        // is also the one the ladder recovers, which is why it proves nothing).
+        const first = await runDedup(stage);
+        // Call 2 is the assertion: the slot is now marked, so the request is
+        // built with the schema flag off. It must STILL carry the contract.
+        const second = await runDedup(stage);
+
+        // The provider accepted what it was sent — the keyword was on the wire.
         expect(sawKeyword).toBe(true);
-        // And the pipeline outcome the issue measures flipped: a real dedup,
-        // not the fail-open that published both.
-        expect(out.trace.status).not.toBe('failed-keep-all');
-        expect(out.trace.removedCount).toBe(1);
-        expect(out.suggestions).toHaveLength(1);
+        expect(rejected).toBe(0);
+
+        for (const out of [first, second]) {
+            // The pipeline outcome the issue measures: a real dedup, not the
+            // fail-open that published both.
+            expect(out.trace.status).not.toBe('failed-keep-all');
+            expect(out.trace.removedCount).toBe(1);
+            expect(out.suggestions).toHaveLength(1);
+        }
     }, 30_000);
 });
