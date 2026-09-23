@@ -295,7 +295,10 @@ export function sandboxCheck(
         id: 'sandbox',
         async run(ctx: DoctorContext): Promise<DoctorResult[]> {
             const provider = (ctx.env.SANDBOX_PROVIDER ?? 'auto').toLowerCase();
-            if (provider === 'null') {
+            if (
+                provider === 'null' ||
+                (provider === 'e2b' && !ctx.env.API_E2B_KEY)
+            ) {
                 return []; // reported by configEnvCheck
             }
             const effective =

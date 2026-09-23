@@ -238,10 +238,11 @@ describe('doctor listener', () => {
             ]);
         });
 
-        it('exits 3 when the token is wrong', async () => {
-            await expect(run([], 'd'.repeat(64))).rejects.toMatchObject({
-                code: 3,
-            });
+        it('exits 3 when the token is wrong, with the cause and without the body', async () => {
+            const failed = await run([], 'd'.repeat(64)).catch((e) => e);
+            expect(failed.code).toBe(3);
+            expect(failed.stderr).toContain('HTTP 401: the token was rejected');
+            expect(failed.stderr).not.toContain('invalid token');
         });
     });
 });

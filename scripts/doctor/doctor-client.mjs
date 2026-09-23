@@ -118,7 +118,15 @@ async function main() {
             signal: AbortSignal.timeout(15 * 60_000),
         });
         if (!res.ok) {
-            console.error(`The API doctor answered HTTP ${res.status}: ${oneLine(await res.text()).slice(0, 200)}`);
+            // The status says enough; the body is not printed (it is only
+            // ever our own listener's error, and logs outlive this run).
+            const why = {
+                401: 'the token was rejected: this container\'s API_CRYPTO_KEY differs from the one the api started with (restart the api after changing it)',
+                403: 'the call did not come from inside the api container',
+                404: 'this api has no doctor endpoint (is it an older version?)',
+                500: 'the report failed to build; check the api logs for "SelfHostedDoctor"',
+            }[res.status];
+            console.error(`The API doctor answered HTTP ${res.status}${why ? `: ${why}` : ''}.`);
             return 3;
         }
         report = await res.json();

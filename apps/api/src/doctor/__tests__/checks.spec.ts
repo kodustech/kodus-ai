@@ -405,6 +405,67 @@ describe('doctor checks — each condition in scope, one at a time', () => {
         });
     });
 
+    describe('time budgets (partial results instead of a lost check)', () => {
+        it('Git: probes what fits in the budget and lists the rest as not checked', async () => {
+            let clock = 0;
+            const git = healthyGit();
+            git.diagnose.mockImplementation(async () => {
+                clock += 25_000; // each probe takes 25s
+                return { read: 'ok', write: 'ok', hook: 'present' };
+            });
+            const repos = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map(
+                (n, i) => ({
+                    id: String(i),
+                    name: n,
+                }),
+            );
+            const results = await gitAccessCheck({
+                ...git,
+                now: () => clock,
+            }).run(ctx({ teams: [team({ repositories: repos })] }));
+            const truncated = results.find((r) => r.check === 'git.truncated');
+            expect(truncated?.status).toBe('info');
+            expect(truncated?.title).toContain('time budget reached');
+            expect(results.find((r) => r.check === 'git.read')?.status).toBe(
+                'ok',
+            );
+            expect(git.diagnose.mock.calls.length).toBeLessThan(repos.length);
+        });
+
+        it('LLM: an org the budget cannot cover is "?", the probed one keeps its result', async () => {
+            let clock = 0;
+            const deps = llmDeps();
+            deps.complete.mockImplementation(async () => {
+                clock += 68_000; // one slow provider eats the budget
+            });
+            const byok = {
+                version: 2,
+                credentials: [
+                    { id: 'c1', provider: 'google_gemini', apiKey: 'x' },
+                ],
+                models: [
+                    { id: 'm1', credentialId: 'c1', model: 'gemini-2.5-flash' },
+                ],
+                routing: { defaultModelId: 'm1' },
+            };
+            deps.getBYOKConfig.mockResolvedValue(byok as any);
+            const teams = [
+                team(),
+                team({
+                    organizationId: '33333333-3333-3333-3333-333333333333',
+                    organizationName: 'beta',
+                }),
+            ];
+            const results = await llmCheck({ ...deps, now: () => clock }).run(
+                ctx({ teams }),
+            );
+            const lines = results.filter((r) => r.check === 'llm.completion');
+            expect(lines.map((r) => r.status)).toEqual(['ok', 'unknown']);
+            expect(lines[1].title).toContain('ran out of time');
+            expect(deps.complete).toHaveBeenCalledTimes(1);
+        });
+    });
+
     describe('could not verify (?)', () => {
         it('names the part that could not be verified, and is not a failure', async () => {
             const results = await gitAccessCheck(
@@ -426,6 +487,24 @@ describe('doctor checks — each condition in scope, one at a time', () => {
                 results.find((r) => r.check === 'sandbox.mode')?.status,
             ).toBe('warn');
             expectActionable(results);
+        });
+
+        it('E2B selected without a key (reviews get no sandbox)', async () => {
+            const env = cleanEnv();
+            env.SANDBOX_PROVIDER = 'e2b';
+            delete env.API_E2B_KEY;
+            const results = await configEnvCheck.run(ctx({ env }));
+            expect(
+                results.find((r) => r.check === 'sandbox.mode')?.status,
+            ).toBe('warn');
+            // no advisory claiming the local sandbox is used
+            expect(
+                results.find((r) => r.check === 'advisory.e2b'),
+            ).toBeUndefined();
+            expectActionable(results);
+            const clone = jest.fn();
+            expect(await sandboxCheck(clone).run(ctx({ env }))).toEqual([]);
+            expect(clone).not.toHaveBeenCalled();
         });
 
         it('local sandbox cannot clone', async () => {
@@ -488,7 +567,7 @@ describe('doctor checks — each condition in scope, one at a time', () => {
                 current: '2.1.0',
                 latest: '2.3.0',
                 updateAvailable: true,
-            })).run();
+            })).run(ctx());
             expect(statuses(results)).toEqual(['warn']);
             expectActionable(results);
         });

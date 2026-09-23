@@ -9,19 +9,26 @@ import { DoctorCheck, DoctorContext, DoctorResult } from '../doctor.types';
 
 export const MIN_CONTEXT_WINDOW = 64_000;
 const PROBE_TIMEOUT_MS = 60_000;
+/** Stays under CHECK_TIMEOUT_MS: a probe past it would drop every result. */
+export const LLM_BUDGET_MS = 70_000;
+/** Below this, a probe would only report a timeout, so it is not started. */
+const MIN_PROBE_MS = 5_000;
 
 export interface LlmDeps {
+    now?: () => number;
     getBYOKConfig(organizationId: string): Promise<BYOKConfig | null>;
     /** One real completion; resolves when the model answered. */
     complete(params: {
         slot?: NormalizedModel;
         organizationId?: string;
+        timeoutMs: number;
     }): Promise<void>;
 }
 
 export const liveLlmComplete: LlmDeps['complete'] = async ({
     slot,
     organizationId,
+    timeoutMs,
 }) => {
     await LLM.run({
         // Strip the runtime fallback so a broken primary is reported, not
@@ -32,7 +39,7 @@ export const liveLlmComplete: LlmDeps['complete'] = async ({
         organizationId,
         // No output cap: reasoning models spend it thinking and would fail a
         // probe that the review itself passes.
-        timeoutMs: PROBE_TIMEOUT_MS,
+        timeoutMs,
     });
 };
 
@@ -62,6 +69,9 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
                 ? envDescriptor.model
                 : undefined;
             const tested = new Map<string, DoctorResult | null>();
+            const reported = new Set<DoctorResult>();
+            const now = deps.now ?? Date.now;
+            const deadline = now() + LLM_BUDGET_MS;
 
             const orgs = new Map<string, string>();
             for (const team of ctx.teams) {
@@ -114,11 +124,22 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
                 const key = slot
                     ? `byok:${slot.provider}:${slot.model}:${slot.baseURL ?? ''}:${organizationId}`
                     : 'env';
+                const remaining = deadline - now();
+                if (!tested.has(key) && remaining < MIN_PROBE_MS) {
+                    tested.set(key, {
+                        check: 'llm.completion',
+                        status: 'unknown',
+                        scope: slot ? scope : undefined,
+                        title: `Did not test the review model (${label}): the doctor ran out of time.`,
+                        fix: 'Run the doctor again; the models of the other organizations were slow to answer.',
+                    });
+                }
                 if (!tested.has(key)) {
                     try {
                         await deps.complete({
                             slot,
                             organizationId: organizationId || undefined,
+                            timeoutMs: Math.min(PROBE_TIMEOUT_MS, remaining),
                         });
                         tested.set(key, null);
                     } catch (error) {
@@ -136,7 +157,8 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
                 }
                 const failure = tested.get(key);
                 if (failure) {
-                    if (!results.includes(failure)) {
+                    if (!reported.has(failure)) {
+                        reported.add(failure);
                         results.push(failure);
                     }
                 } else {

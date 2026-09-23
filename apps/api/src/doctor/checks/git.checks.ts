@@ -1,6 +1,7 @@
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import type { RepositoryAccessDiagnosis } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryAccessDiagnosis.type';
 
+import { mapWithinBudget } from '../budget';
 import {
     DoctorCheck,
     DoctorContext,
@@ -12,6 +13,10 @@ import {
 
 /** Caps provider calls on installs with hundreds of selected repositories. */
 export const MAX_REPOS_PER_TEAM = 25;
+/** Repositories probed at once; each probe is a few provider calls. */
+export const GIT_PROBE_CONCURRENCY = 3;
+/** Stays under CHECK_TIMEOUT_MS so the repositories probed are still reported. */
+export const GIT_BUDGET_MS = 60_000;
 
 /** The env var holding each provider's webhook URL (see doctor.sh). */
 export const WEBHOOK_URL_ENV: Record<string, string> = {
@@ -23,6 +28,7 @@ export const WEBHOOK_URL_ENV: Record<string, string> = {
 };
 
 export interface GitDeps {
+    now?: () => number;
     diagnose(
         team: DoctorTeam,
         repository: DoctorTeam['repositories'][number],
@@ -48,10 +54,21 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
         id: 'git.access',
         async run(ctx: DoctorContext): Promise<DoctorResult[]> {
             const results: DoctorResult[] = [];
+            const now = deps.now ?? Date.now;
+            const deadline = now() + GIT_BUDGET_MS;
 
             for (const team of reviewableTeams(ctx)) {
                 const scope = teamScope(team);
-                const repos = team.repositories.slice(0, MAX_REPOS_PER_TEAM);
+                const candidates = team.repositories.slice(
+                    0,
+                    MAX_REPOS_PER_TEAM,
+                );
+                const { done, skipped } = await mapWithinBudget(
+                    candidates,
+                    { concurrency: GIT_PROBE_CONCURRENCY, deadline, now },
+                    (repo) => deps.diagnose(team, repo),
+                );
+                const repos = done.map(({ item }) => item);
                 const readDenied: string[] = [];
                 const writeDenied: string[] = [];
                 const hookMissing: string[] = [];
@@ -62,8 +79,7 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                 };
                 const errors = new Set<string>();
 
-                for (const repo of repos) {
-                    const d = await deps.diagnose(team, repo);
+                for (const { item: repo, result: d } of done) {
                     if (d.error) {
                         errors.add(d.error);
                     }
@@ -145,7 +161,10 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                         check: 'git.truncated',
                         status: 'info',
                         scope,
-                        title: `Checked the first ${repos.length} of ${team.repositories.length} selected repositories.`,
+                        title: `Checked ${repos.length} of ${team.repositories.length} selected repositories${skipped.length ? ' (time budget reached)' : ''}.`,
+                        fix: skipped.length
+                            ? 'Run the doctor again to check the rest; a slow Git provider makes each check take longer.'
+                            : undefined,
                     });
                 }
                 const verified = (list: string[], unknown: string[]) =>

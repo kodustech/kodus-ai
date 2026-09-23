@@ -63,6 +63,7 @@ export class SelfHostedDoctorService {
         @Inject(LICENSE_SERVICE_TOKEN)
         private readonly licenseService: ILicenseService,
         private readonly cockpitHealthService: CockpitHealthService,
+        private readonly versionCheckService: VersionCheckService,
     ) {}
 
     async run(env: NodeJS.ProcessEnv = process.env): Promise<DoctorReport> {
@@ -88,15 +89,17 @@ export class SelfHostedDoctorService {
             };
         }
 
-        for (const check of this.checks()) {
-            results.push(...(await this.runCheck(check, ctx)));
-        }
+        // Independent checks run together; runCheck turns a failure or a
+        // timeout into an `unknown` line, and map keeps the report order.
+        const checkResults = await Promise.all(
+            this.checks().map((check) => this.runCheck(check, ctx)),
+        );
+        results.push(...checkResults.flat());
 
         return buildReport({ results, env, startedAt });
     }
 
     checks(): DoctorCheck[] {
-        const versionService = new VersionCheckService();
         return [
             bootEnvCheck,
             brokerCheck(amqpBrokerProbe),
@@ -125,7 +128,7 @@ export class SelfHostedDoctorService {
             sandboxCheck((ctx) => this.testClone(ctx)),
             astGraphCheck((ctx) => this.loadAstStatuses(ctx)),
             configEnvCheck,
-            versionCheck(() => versionService.getStatus()),
+            versionCheck(() => this.versionCheckService.getStatus()),
             skipSettingsCheck((ctx) => this.loadCodeReviewSettings(ctx)),
             editionCheck,
             analyticsCheck(() => this.lastAnalyticsRun()),

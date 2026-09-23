@@ -7,7 +7,10 @@ import {
 } from '../doctor-report';
 import { DoctorResult } from '../doctor.types';
 
-const r = (status: DoctorResult['status'], title = status): DoctorResult => ({
+const r = (
+    status: DoctorResult['status'],
+    title: string = status,
+): DoctorResult => ({
     check: 'x',
     status,
     title,

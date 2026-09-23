@@ -4510,7 +4510,7 @@ export class GitlabService implements Omit<
             }
 
             try {
-                const project: any = await gitlabAPI.Projects.show(projectId);
+                const project = await gitlabAPI.Projects.show(projectId);
                 // Posting MR notes needs Reporter (20); creating the webhook
                 // needs Maintainer (40). Access may come from the project or
                 // from its group, so the higher of the two applies.

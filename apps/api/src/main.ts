@@ -16,7 +16,6 @@ if ((process.stderr as any)._handle?.setBlocking) {
 // other handler is installed. Default Node 22 behavior on unhandled
 // rejection is to exit with code 1 — fine, but we want the stack first.
 process.on('unhandledRejection', (reason) => {
-     
     console.error(
         '[BOOTSTRAP-EARLY] unhandledRejection before app handler installed:',
         reason instanceof Error ? reason.stack || reason.message : reason,
@@ -24,7 +23,6 @@ process.on('unhandledRejection', (reason) => {
     process.exit(1);
 });
 process.on('uncaughtException', (err) => {
-     
     console.error(
         '[BOOTSTRAP-EARLY] uncaughtException before app handler installed:',
         err?.stack || err?.message || err,
@@ -84,7 +82,7 @@ function handleNestJSWebpackHmr(app: INestApplication, module: any) {
 
 async function bootstrap() {
     process.env.COMPONENT_TYPE = 'api';
-     
+
     console.log('[BOOTSTRAP] calling NestFactory.create...');
     // NOTE: `snapshot: true` was removed here. That flag requires
     // `@nestjs/devtools-integration` (not installed in this repo). It
@@ -94,7 +92,7 @@ async function bootstrap() {
     // killed by the health check. Do not re-add without also adding
     // the devtools package.
     const app = await NestFactory.create<NestExpressApplication>(ApiModule);
-     
+
     console.log('[BOOTSTRAP] NestFactory.create returned, wiring app...');
 
     const logger = app.get(LoggerWrapperService);
@@ -298,7 +296,7 @@ async function bootstrap() {
             cloudMode: !!environment.API_CLOUD_MODE,
             env: process.env,
             run: () => app.get(SelfHostedDoctorService).run(),
-            log: (message) => console.log(message),
+            log: (message) => logger.log(message, 'SelfHostedDoctor'),
         });
         if (doctorServer) {
             app.getHttpServer().on('close', () => doctorServer.close());
@@ -334,7 +332,7 @@ bootstrap().catch((err) => {
     // code path inside bootstrap(). Without this, an unhandled
     // rejection causes Node to exit silently on some terminals and
     // the actual stack never reaches CloudWatch.
-     
+
     console.error(
         '[BOOTSTRAP] bootstrap() rejected:',
         err?.stack || err?.message || err,

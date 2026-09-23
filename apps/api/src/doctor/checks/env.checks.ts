@@ -113,6 +113,17 @@ export const configEnvCheck: DoctorCheck = {
                 impact: 'Kody reviews only the diff: no cross-file context and no checks that need the repository checked out.',
                 fix: 'Remove SANDBOX_PROVIDER=null (auto uses the local sandbox, or E2B when API_E2B_KEY is set).',
             });
+        } else if (sandbox === 'e2b' && !env.API_E2B_KEY) {
+            // sandbox.module.ts builds the E2B provider anyway; without a key
+            // it is unavailable and the lease manager hands every review a
+            // null sandbox (sandbox-lease-manager.service.ts, creator path).
+            results.push({
+                check: 'sandbox.mode',
+                status: 'warn',
+                title: 'The E2B sandbox is selected but has no API key.',
+                impact: 'Repository work silently runs without a sandbox: no cross-file context, and the code graph cannot be built.',
+                fix: 'Set API_E2B_KEY, or set SANDBOX_PROVIDER=auto (or local) to use the local sandbox.',
+            });
         } else {
             results.push({
                 check: 'sandbox.mode',
@@ -128,7 +139,9 @@ export const configEnvCheck: DoctorCheck = {
             });
         }
 
-        if (!env.API_E2B_KEY) {
+        if (sandbox === 'e2b' && !env.API_E2B_KEY) {
+            // already reported as sandbox.mode above
+        } else if (!env.API_E2B_KEY) {
             results.push({
                 check: 'advisory.e2b',
                 status: 'info',
