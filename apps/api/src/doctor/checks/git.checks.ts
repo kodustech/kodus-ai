@@ -24,6 +24,8 @@ export const GIT_BUDGET_MS = 60_000;
  */
 export const GIT_PROBE_GRACE_MS = 15_000;
 
+type ProbeResult = RepositoryAccessDiagnosis & { timedOut?: true };
+
 function withCeiling<T>(
     work: Promise<T>,
     ms: number,
@@ -88,15 +90,23 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                         withCeiling(
                             deps.diagnose(team, repo),
                             deadline + GIT_PROBE_GRACE_MS - now(),
+                            // Marked, so it is reported as "not checked" and
+                            // never as a diagnosis with token/webhook advice.
                             {
                                 read: 'unknown',
                                 write: 'unknown',
                                 hook: 'unknown',
-                                error: 'the Git provider did not answer in time',
-                            } as RepositoryAccessDiagnosis,
+                                timedOut: true,
+                            } as ProbeResult,
                         ),
                 );
-                const repos = done.map(({ item }) => item);
+                const cut = done
+                    .filter(({ result }) => (result as ProbeResult).timedOut)
+                    .map(({ item }) => item.name);
+                const answered = done.filter(
+                    ({ result }) => !(result as ProbeResult).timedOut,
+                );
+                const repos = answered.map(({ item }) => item);
                 const readDenied: string[] = [];
                 const writeDenied: string[] = [];
                 const hookMissing: string[] = [];
@@ -107,7 +117,7 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                 };
                 const errors = new Set<string>();
 
-                for (const { item: repo, result: d } of done) {
+                for (const { item: repo, result: d } of answered) {
                     if (d.error) {
                         errors.add(d.error);
                     }
@@ -184,7 +194,16 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                                   : `${platformLabel(team.platform)} does not report this for this kind of token (fine-grained or app tokens). Make sure it has write access to pull requests.`,
                     });
                 }
-                if (team.repositories.length > repos.length) {
+                if (cut.length) {
+                    results.push({
+                        check: 'git.timed_out',
+                        status: 'unknown',
+                        scope,
+                        title: `Did not finish checking ${names(cut)}: ${platformLabel(team.platform)} did not answer in time.`,
+                        fix: `Run the doctor again; if it repeats, check ${platformLabel(team.platform)}'s status or its rate limits.`,
+                    });
+                }
+                if (team.repositories.length > repos.length + cut.length) {
                     results.push({
                         check: 'git.truncated',
                         status: 'info',

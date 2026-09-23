@@ -444,9 +444,14 @@ describe('doctor checks — each condition in scope, one at a time', () => {
                 );
                 await jest.advanceTimersByTimeAsync(75_000);
                 const results = await pending;
-                const line = results.find((r) => r.check === 'git.unverified');
+                const line = results.find((r) => r.check === 'git.timed_out');
                 expect(line?.status).toBe('unknown');
-                expect(line?.fix).toContain('did not answer in time');
+                expect(line?.title).toContain('did not answer in time');
+                // no token or webhook advice for something never checked
+                expect(
+                    results.find((r) => r.check === 'git.unverified'),
+                ).toBeUndefined();
+                expect(results.some((r) => r.status === 'ok')).toBe(false);
             } finally {
                 jest.useRealTimers();
             }
