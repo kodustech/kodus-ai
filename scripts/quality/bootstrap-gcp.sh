@@ -56,6 +56,21 @@ json.dump({"access": ds["access"]}, open(path, "w"))
 PY
 bq update --source "$tmp" "$PROJECT:$DATASET" >/dev/null && echo "ok"
 
+step "Mirror datasets (writer=READER): the pull reads thumbs-down, suggestions and org names from the Airbyte mirror"
+for mirror in kodus_mongo kodus_postgres; do
+  bq show --format=prettyjson "$PROJECT:$mirror" > "$tmp"
+  python3 - "$tmp" "$WRITER_SA" <<'PY2'
+import json, sys
+path, writer = sys.argv[1:]
+ds = json.load(open(path))
+want = {"role": "READER", "userByEmail": writer}
+if want not in ds["access"]:
+    ds["access"].append(want)
+json.dump({"access": ds["access"]}, open(path, "w"))
+PY2
+  bq update --source "$tmp" "$PROJECT:$mirror" >/dev/null && echo "$mirror ok"
+done
+
 step "Project role: bigquery.jobUser (both SAs can run queries/inserts)"
 for sa in "$WRITER_SA" "$READER_SA"; do
   gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:$sa" \
