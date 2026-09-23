@@ -95,6 +95,7 @@ import { CentralizedConfigModule } from '@libs/centralized-config/modules/centra
 import { LangfuseShutdownProvider } from '@libs/core/log/langfuse-shutdown.provider';
 import { NotificationModule } from '@libs/notifications/modules/notification.module';
 import { NotificationController } from './controllers/notification.controller';
+import { SelfHostedDoctorModule } from './doctor/self-hosted-doctor.module';
 
 @Module({
     imports: [
@@ -159,6 +160,7 @@ import { NotificationController } from './controllers/notification.controller';
         GlobalCacheModule,
         CentralizedConfigModule,
         NotificationModule,
+        SelfHostedDoctorModule,
     ],
     controllers: [
         CodeManagementController,

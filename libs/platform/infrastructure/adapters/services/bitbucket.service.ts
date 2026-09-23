@@ -18,6 +18,7 @@ import {
 } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
 import { IntegrationConfigEntity } from '@libs/integrations/domain/integrationConfigs/entities/integration-config.entity';
 import { ReactionsInComments } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
+import { RepositoryAccessDiagnosis } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryAccessDiagnosis.type';
 import {
     CodeManagementIssue,
     GetIssueParams,
@@ -660,6 +661,16 @@ export class BitbucketService implements Omit<
             params.organizationAndTeamData,
         );
         return impl.isWebhookActive(params);
+    }
+
+    async diagnoseRepositoryAccess(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; fullName?: string };
+    }): Promise<RepositoryAccessDiagnosis> {
+        const impl = await this.getImplementation(
+            params.organizationAndTeamData,
+        );
+        return impl.diagnoseRepositoryAccess(params);
     }
 
     async deleteWebhook(params: any) {
