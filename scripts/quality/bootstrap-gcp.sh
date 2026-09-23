@@ -105,17 +105,7 @@ PROVIDER_NAME="projects/$PN/locations/global/workloadIdentityPools/$POOL/provide
 
 member_of() { echo "principalSet://iam.googleapis.com/projects/$PN/locations/global/workloadIdentityPools/$POOL/attribute.repository/$1"; }
 
-step "Impersonation: kodus-ai -> writer; kodus-quality, kodus-insights -> pull"
-for repo in "${WRITER_REPOS[@]}"; do
-  gcloud iam service-accounts add-iam-policy-binding "$WRITER_SA" --role=roles/iam.workloadIdentityUser --member="$(member_of "$repo")" --quiet >/dev/null && echo "$repo -> $WRITER"
-done
-for repo in "${PULL_REPOS[@]}"; do
-  gcloud iam service-accounts add-iam-policy-binding "$PULL_SA" --role=roles/iam.workloadIdentityUser --member="$(member_of "$repo")" --quiet >/dev/null && echo "$repo -> $PULL"
-  # Earlier versions let these repos impersonate the writer too; a repo has one identity.
-  gcloud iam service-accounts remove-iam-policy-binding "$WRITER_SA" --role=roles/iam.workloadIdentityUser --member="$(member_of "$repo")" --quiet >/dev/null 2>&1 || true
-done
-
-step "GitHub repo variables"
+step "GitHub repo variables (before any identity is revoked, so a failure cannot strand a repo)"
 set_vars() {
   gh variable set GCP_WIF_PROVIDER --repo "$1" --body "$PROVIDER_NAME"
   gh variable set GCP_SA_EMAIL     --repo "$1" --body "$2"
@@ -124,6 +114,17 @@ set_vars() {
 }
 for repo in "${WRITER_REPOS[@]}"; do set_vars "$repo" "$WRITER_SA"; done
 for repo in "${PULL_REPOS[@]}"; do set_vars "$repo" "$PULL_SA"; done
+
+step "Impersonation: kodus-ai -> writer; kodus-quality, kodus-insights -> pull"
+for repo in "${WRITER_REPOS[@]}"; do
+  gcloud iam service-accounts add-iam-policy-binding "$WRITER_SA" --role=roles/iam.workloadIdentityUser --member="$(member_of "$repo")" --quiet >/dev/null && echo "$repo -> $WRITER"
+done
+for repo in "${PULL_REPOS[@]}"; do
+  gcloud iam service-accounts add-iam-policy-binding "$PULL_SA" --role=roles/iam.workloadIdentityUser --member="$(member_of "$repo")" --quiet >/dev/null && echo "$repo -> $PULL"
+  # Earlier versions let these repos impersonate the writer too; a repo has one identity,
+  # and its GCP_SA_EMAIL already points at the pull SA by now.
+  gcloud iam service-accounts remove-iam-policy-binding "$WRITER_SA" --role=roles/iam.workloadIdentityUser --member="$(member_of "$repo")" --quiet >/dev/null 2>&1 || true
+done
 
 step "Done"
 echo "GCP_WIF_PROVIDER=$PROVIDER_NAME"
