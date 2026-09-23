@@ -124,9 +124,12 @@ for repo in "${WRITER_REPOS[@]}"; do set_vars "$repo" "$WRITER_SA"; done
 for repo in "${PULL_REPOS[@]}"; do set_vars "$repo" "$PULL_SA"; done
 
 step "Impersonation, revoke: the pull repos no longer impersonate the writer (a repo has one identity)"
+# Read the policy once, outside any condition: under set -e a failed read aborts here
+# instead of being mistaken for "member absent".
+writer_policy=$(gcloud iam service-accounts get-iam-policy "$WRITER_SA" --format=json)
 for repo in "${PULL_REPOS[@]}"; do
   m="$(member_of "$repo")"
-  if gcloud iam service-accounts get-iam-policy "$WRITER_SA" --format=json | grep -qF "\"$m\""; then
+  if grep -qF "\"$m\"" <<<"$writer_policy"; then
     # No "|| true": a revocation that fails must fail the run, the output is the operator's only check.
     gcloud iam service-accounts remove-iam-policy-binding "$WRITER_SA" --role=roles/iam.workloadIdentityUser --member="$m" --quiet >/dev/null
     echo "$repo -/-> $WRITER (revoked)"
