@@ -38,10 +38,15 @@ function changedFiles(base) {
 
 // Same host/port resolution as the integration specs.
 function isPostgresReachable() {
-    const host = process.env.TEST_PG_HOST ?? 'localhost';
+    // `||`, not `??`: an empty TEST_PG_PORT= must fall through to the default.
+    const host = process.env.TEST_PG_HOST || 'localhost';
     const port = Number(
-        process.env.TEST_PG_PORT ?? process.env.API_PG_DB_PORT ?? '5432',
+        process.env.TEST_PG_PORT || process.env.API_PG_DB_PORT || '5432',
     );
+    // net.connect throws synchronously on a bad port; treat it as unreachable.
+    if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+        return Promise.resolve(false);
+    }
     return new Promise((resolve) => {
         const socket = net.connect({ host, port });
         const done = (ok) => {
@@ -116,4 +121,7 @@ async function main() {
     });
 }
 
-main();
+main().catch((error) => {
+    console.error('[pre-push] Failed to run tests:', error.message);
+    process.exit(1);
+});

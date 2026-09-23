@@ -1,4 +1,4 @@
-# Fast, infra-free gate first — catch .env schema drift before the slow suite.
-# The bootstrap is a no-op once the checkout is set up; in a fresh worktree it
-# creates environment.ts and installs apps/web, which the suite needs.
-pnpm run env:check && ./scripts/dev/worktree-bootstrap.sh && node scripts/dev/pre-push-run-tests.js
+# Bootstrap first: env:check (ts-node) and the suite both need what it
+# installs. It is a no-op once the checkout is set up.
+# Then the fast, infra-free gate — catch .env schema drift before the suite.
+./scripts/dev/worktree-bootstrap.sh && pnpm run env:check && node scripts/dev/pre-push-run-tests.js
