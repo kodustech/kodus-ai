@@ -467,6 +467,20 @@ const LIVE = [
     // effort currently buys nothing. The day it starts buying something — or the
     // day a 5.6 model begins reasoning on its own — these rows go red and
     // somebody gets to find out on purpose.
+    //
+    // ── RE-MEASURED 2026-09-23: the NATIVE half closed ───────────────────────
+    // `gpt-5.6-terra` on the Responses API, same `medium` effort, same request
+    // shape, no change on our side:
+    //
+    //   gpt-5.6-terra  native   medium -> 29 reasoning tokens (was 0)
+    //   gpt-5.6-sol    compat   HIGH   ->  0                  (unchanged)
+    //
+    // The row went red for the reason it was written to go red, so the native
+    // one now asserts the behaviour instead of the gap. The compat row keeps
+    // `reasons: false`: the same family, the same key, still zero. That the two
+    // moved apart is itself the finding — whatever changed is in the Responses
+    // API, not in the model, because the OpenAI-protocol transport hitting the
+    // vendor's own endpoint still gets nothing for an effort it sends.
     {
         brand: 'openai_gpt56',
         why: 'the 5.6 line is 18 production slots and had NO row — the biggest uncovered family in the corpus. terra is its largest native group (5 slots, 3 at medium), and the id is a generation newer than every OpenAI row here',
@@ -475,15 +489,12 @@ const LIVE = [
             model: 'gpt-5.6-terra',
             reasoningEffort: 'medium', // prod: 3 de 5 slots do terra usam medium; 1 high, 1 ausente
         },
-        // A KNOWN GAP, not a satisfied expectation. `reasons: false` is the
-        // right assertion — it is what was measured — but it makes the row
-        // green in exactly the degraded state it exists to document, and the
-        // coverage log cannot tell "verified reasoning" from "verified absence
-        // of it". `knownGap` is printed on its own line so a green weekly run
-        // never reads as "this brand is fine".
-        knownGap: true,
-        // Measured 0 — see the block above. Asserting the gap, not the wish.
-        reasons: false,
+        // Was a known gap; closed on its own between 2026-09-18 and 2026-09-23
+        // with no change on our side (29 reasoning tokens at the same `medium`).
+        // `knownGap` is gone with it — this row now verifies reasoning rather
+        // than documenting its absence, which is the whole point of having
+        // written the gap down as an assertion instead of a comment.
+        reasons: true,
     },
     {
         brand: 'openai_compatible_gpt56',
@@ -612,12 +623,20 @@ const LIVE = [
         // identical — the response just carries empty thinking blocks unless
         // `display: 'summarized'` is asked for.
         //
-        // Native is NOT blind, though, and that is the difference from the
-        // Bedrock row below: Anthropic documents
-        // `usage.output_tokens_details.thinking_tokens` as reflecting the raw
-        // reasoning generated rather than the text returned, so the count
-        // survives `omitted` here. Which makes the zero below a statement
-        // about the request, not about visibility.
+        // A claim recorded here on 2026-09-23 and withdrawn the same day: that
+        // Anthropic's `output_tokens_details.thinking_tokens` reflects the raw
+        // reasoning rather than the text returned, so the count would survive
+        // `omitted`. The vendor does document that. This run cannot corroborate
+        // it, and nothing here should be read as if it had:
+        //
+        //     anthropic-modern  inputTokens 53  outputTokens 8  text 8  reasoning 0
+        //
+        // `output_tokens` is the billed output and it equals the text exactly,
+        // so there is no room in it for thinking that happened and went
+        // unreported. Nothing was hidden because nothing was generated — which
+        // does confirm the zero is about the request, but leaves the survival
+        // question untested, since a counter with nothing to count proves
+        // neither direction. It stays a vendor statement, not a measurement.
         //
         // Asked directly with the shape below at effort `high`, it answered:
         //
@@ -746,13 +765,29 @@ const LIVE = [
         // the billed count is identical under both settings — the response
         // just carries empty thinking blocks.
         //
-        // Native Claude still reports the count through
-        // `output_tokens_details.thinking_tokens`, so this pair only leaves
-        // BEDROCK without any signal. The gap is the transport's, not ours.
-        //
         // Measured together on 2026-09-23, same effort, prompt and key:
         //     amazon_bedrock (sonnet-4-6)  tokens=0  textChars=54
         //     bedrock_opus47 (opus-4-7)    tokens=0  textChars=0
+        //
+        // The raw `usage` from that run settles what those zeros mean, because
+        // `amazon_bedrock` and the native `anthropic` row are the SAME model at
+        // the SAME effort over two transports — `us.anthropic.claude-sonnet-4-6`
+        // and `claude-sonnet-4-6`:
+        //
+        //     native   in 40  out 58  ->  text  8  +  reasoning 50
+        //     bedrock  in 40  out 58  ->  text 58  +  reasoning absent
+        //
+        // Identical totals. Bedrock generated the same ~50 reasoning tokens and
+        // billed them; only the split is missing, and `text 58` is not evidence
+        // of 58 text tokens — `@ai-sdk/amazon-bedrock` copies the output total
+        // into `text` on the same line where it hardcodes `reasoning` away
+        // (dist/index.js:455), so that field carries no information at all.
+        //
+        // So the cost is visible on Bedrock and the composition is not. Every
+        // Bedrock reasoning number this repo reports is a floor of zero over a
+        // real spend, and per-model cost attribution splits it wrong by exactly
+        // the reasoning share. The gap is the transport's, not ours, but the
+        // wrong number is ours to stop publishing.
         //
         // So `reasons: true` here asserts something no request we send can
         // observe. Asking for `display: 'summarized'` would restore it, but
@@ -1493,15 +1528,27 @@ describe('BYOK reasoning — LIVE provider contract', () => {
 
                 expect(typeof result.text).toBe('string');
 
-                // Raw usage for EVERY row, asserted on or not. Two open
-                // questions need it and neither can be answered offline:
-                // whether Anthropic's `thinking_tokens` survives
-                // `display: 'omitted'` on 4.7+ (the docs say the count
-                // reflects raw reasoning rather than the returned text, which
-                // would mean native is not blind), and whether Converse passes
-                // any thinking count through the `catchall` that
-                // `@ai-sdk/amazon-bedrock` drops when it hardcodes
-                // `outputTokens.reasoning = void 0`.
+                // Raw usage for EVERY row, asserted on or not. It was added to
+                // settle two questions that could not be answered offline, and
+                // the first run it saw answered both:
+                //
+                //   - Converse passes NO thinking count. Not through the
+                //     catchall either: `amazon_bedrock` came back with
+                //     `outputTokenDetails: {textTokens: 58}` and no reasoning
+                //     key, against `text 8 + reasoning 50` from the same model
+                //     at the same effort natively. The count is gone at the
+                //     transport, not dropped by the SDK's `void 0`.
+                //   - Whether Anthropic's `thinking_tokens` survives
+                //     `display: 'omitted'` is still open, and the reason is on
+                //     the `anthropic-modern` row: that request generated no
+                //     reasoning at all, so there was no count to survive.
+                //
+                // It stays because the pair of numbers only means something
+                // side by side: a single row's zero reads as "did not think"
+                // and as "cannot see it" equally well, and the only thing that
+                // told them apart here was another transport's total for the
+                // same model. Keep printing it for every brand, including the
+                // ones that assert nothing.
                 //
                 // eslint-disable-next-line no-console
                 console.log(
