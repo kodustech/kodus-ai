@@ -1,0 +1,47 @@
+# Self-hosted environment: the same branch, running the way an on-prem
+# install runs it.
+#
+# Cloud and self-hosted are not a theme switch — they are different products
+# at the edges: no Stripe, capability from a pasted license key, Community as
+# the floor, and the analytics tier decided by that key instead of by a plan.
+# A branch that touches billing, gates or the sidebar has to be seen in both,
+# and flipping env vars on the cloud box loses the cloud box while you look.
+#
+#   runo up --here --profile selfhosted
+#
+# The only difference from workspace.yaml is the env layer: `setup` derives
+# `.env.selfhosted` from the copied `.env`, flipping the two variables that
+# decide the edition, and compose is pointed at it through `ENV_FILE`.
+version: 1
+setup:
+    - docker network create kodus-backend-services 2>/dev/null || true
+    - docker network create shared-network 2>/dev/null || true
+    # `WEB_NODE_ENV` is what `isSelfHosted` reads in the web app, and
+    # `API_CLOUD_MODE` is what the API checks before it provisions trials or
+    # talks to the billing service. Everything else is the cloud env verbatim.
+    - sed -e 's/^WEB_NODE_ENV=.*/WEB_NODE_ENV=self-hosted/' -e 's/^API_CLOUD_MODE=.*/API_CLOUD_MODE=false/' .env > .env.selfhosted
+    # sequential build of the shared image (api/worker/webhooks share the SAME
+    # tag; a parallel compose build races on export — same as the repo scripts)
+    - docker compose -f docker-compose.dev.yml build kodus-api
+    - pnpm install
+files:
+    copy: [.env]
+services:
+    compose:
+        file: docker-compose.dev.yml
+        public: [web]
+        health_timeout: 1800
+        env:
+            # web and the API read their env_file through this variable;
+            # API_CLOUD_MODE is also interpolated directly into the API's
+            # environment list, so it is set here too.
+            ENV_FILE: .env.selfhosted
+            API_CLOUD_MODE: 'false'
+            WEB_NODE_ENV: self-hosted
+data:
+    migrate: pnpm run migration:run
+    seed: pnpm run seed
+limits:
+    instance: t3.xlarge # 16 GiB, permitted by the isolated Ohio identity
+    disk: 100gb
+    idle_suspend: 30m
