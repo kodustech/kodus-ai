@@ -14,14 +14,15 @@ import {
     INTEGRATION_SERVICE_TOKEN,
 } from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
 
+const loggerMock = {
+    log: jest.fn(),
+    error: jest.fn(),
+    warn: jest.fn(),
+    debug: jest.fn(),
+    info: jest.fn(),
+};
 jest.mock('@libs/core/log/logger', () => ({
-    createLogger: () => ({
-        log: jest.fn(),
-        error: jest.fn(),
-        warn: jest.fn(),
-        debug: jest.fn(),
-        info: jest.fn(),
-    }),
+    createLogger: () => loggerMock,
 }));
 
 const repoListHooksMock = jest.fn();
@@ -194,9 +195,17 @@ describe('ForgejoService webhook URL variable', () => {
             expect(d.hook).not.toBe('present');
         });
 
-        it('deleteWebhook deletes nothing (never matches hooks without a URL)', async () => {
+        it('deleteWebhook deletes nothing and warns that hooks are left in place', async () => {
+            loggerMock.warn.mockClear();
             await service.deleteWebhook({ organizationAndTeamData: orgTeam });
             expect(repoDeleteHookMock).not.toHaveBeenCalled();
+            expect(loggerMock.warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining(
+                        'existing hooks are left in place',
+                    ),
+                }),
+            );
         });
     });
 });

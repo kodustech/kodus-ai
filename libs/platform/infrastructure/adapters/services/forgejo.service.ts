@@ -3855,7 +3855,18 @@ export class ForgejoService implements Omit<
             );
             // Without a URL there is nothing of ours to match; comparing
             // against undefined would delete hooks that have no URL.
-            if (!webhookUrl) return;
+            if (!webhookUrl) {
+                this.logger.warn({
+                    message:
+                        'Forgejo webhook URL not configured (API_FORGEJO_CODE_MANAGEMENT_WEBHOOK): nothing to delete, existing hooks are left in place',
+                    context: ForgejoService.name,
+                    metadata: {
+                        organizationId:
+                            params.organizationAndTeamData?.organizationId,
+                    },
+                });
+                return;
+            }
 
             for (const repo of repositories) {
                 const repoInfo = this.extractRepoInfo(
