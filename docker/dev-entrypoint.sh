@@ -18,16 +18,6 @@ set -eu
 export npm_config_store_dir=/usr/src/app/.pnpm-store
 mkdir -p "$npm_config_store_dir"
 
-# This script owns dependency installs (fingerprint + lock, below). pnpm 11
-# defaults `verify-deps-before-run` to `install`, so every `pnpm run` in the
-# container re-checks node_modules and, when it looks out of sync, installs
-# the whole tree under THAT service's memory cap. mcp-manager (three `pnpm
-# run`s at boot, 1G) got OOM-killed mid-install and crash-looped every ~30s,
-# re-downloading ~450MB each time (1.6TB in 30h on one preview). `warn`
-# keeps the signal without the install. Not "false": env values are
-# strings, and pnpm only skips the check on a falsy value.
-export pnpm_config_verify_deps_before_run=warn
-
 echo "▶ dev-entrypoint: starting (NODE_ENV=${NODE_ENV:-})"
 
 # ----------------------------------------------------------------

@@ -16,6 +16,9 @@ ENV WEB_NODE_ENV=development
 ENV NODE_ENV=development
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_OPTIONS="--max-old-space-size=4096"
+# node_modules comes from the volume seeded below; `pnpm start:dev` must not
+# reinstall it under the container's memory cap (see Dockerfile.dev).
+ENV pnpm_config_verify_deps_before_run=false
 
 RUN corepack enable
 
