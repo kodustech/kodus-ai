@@ -521,6 +521,14 @@ export function buildAgentTools(
                     if (answersNothing(result)) {
                         return withSubmoduleNote(result, searchPath);
                     }
+                    // A provider error answer is not a list of file names.
+                    // `remoteCommands.grep` returns `Error: <stderr>` for
+                    // every ripgrep exit >= 2 — an invalid regex, a
+                    // permission failure — and the mapping below would
+                    // reduce it to the bare literal `Error`, destroying the
+                    // message the agent needs to fix its own call. The `: `
+                    // keeps real match lines like `ErrorBoundary.tsx:12:`.
+                    if (result.startsWith('Error: ')) return result;
                     const files = [
                         ...new Set(
                             result

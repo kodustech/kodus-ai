@@ -272,6 +272,35 @@ describe('tools — a node_modules lookup says the dependencies were never insta
         expect(out).toContain(MISSING_DEPENDENCIES_MARKER);
     });
 
+    it.each([
+        ['Error: regex parse error: unclosed group'],
+        ['Error: Permission denied (os error 13)'],
+    ])('namesOnly keeps a provider error intact: %s', async (message) => {
+        // Not a #1939 case — there is no absence to explain — but the same
+        // mapping. `split(":")[0]` would hand the agent the literal `Error`
+        // and throw away the reason its own call failed.
+        const sandbox = makeSandbox({ gitmodules: null });
+        sandbox.grep = (async () => message) as any;
+        const out = await buildAgentTools(sandbox).grep.execute({
+            pattern: 'foo(?=bar)',
+            path: 'src',
+            namesOnly: true,
+        });
+        expect(out).toBe(message);
+    });
+
+    it('namesOnly still maps a file whose name starts with Error', async () => {
+        const sandbox = makeSandbox({ gitmodules: null });
+        sandbox.grep = (async () =>
+            'src/ErrorBoundary.tsx:12:catch\n') as any;
+        const out = await buildAgentTools(sandbox).grep.execute({
+            pattern: 'catch',
+            path: 'src',
+            namesOnly: true,
+        });
+        expect(out).toBe('src/ErrorBoundary.tsx');
+    });
+
     it('findFile — trace 6a5dbd2d also tried findFile("response.ts")', async () => {
         const out = await buildAgentTools(noInstall()).findFile.execute({
             pattern: 'response.ts',
