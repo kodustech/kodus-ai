@@ -83,12 +83,15 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
                 );
 
                 if (config && !slot) {
+                    const chosen = config.models?.find(
+                        (m) => m.id === verdict?.modelId,
+                    );
                     results.push({
                         check: 'llm.byok_fallback',
                         status: 'warn',
                         scope,
                         title: verdict?.modelId
-                            ? `The model chosen for reviews (${verdict.modelId}) has an incomplete credential, so reviews use the server default model instead.`
+                            ? `The model chosen for reviews (${chosen?.model ?? verdict.modelId}) has an incomplete credential, so reviews use the server default model instead.`
                             : 'Your own model settings could not be applied, so reviews use the server default model instead.',
                         impact: 'Reviews run on a different model than the one configured, with different cost and quality.',
                         fix: 'Open the BYOK page (user menu > BYOK), re-enter the API key of the review model and save; or remove the custom settings to use the server model on purpose.',
