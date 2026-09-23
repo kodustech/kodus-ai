@@ -38,13 +38,19 @@ function changedFiles(base) {
 
 // Same host/port resolution as the integration specs.
 function isPostgresReachable() {
-    // `||`, not `??`: an empty TEST_PG_PORT= must fall through to the default.
-    const host = process.env.TEST_PG_HOST || 'localhost';
-    const port = Number(
-        process.env.TEST_PG_PORT || process.env.API_PG_DB_PORT || '5432',
+    // Resolved exactly like the specs (`??` + parseInt) so both agree on what
+    // they connect to. A value the specs can't use (e.g. TEST_PG_PORT= → NaN)
+    // means they can't run, so it counts as unreachable. net.connect would
+    // also throw synchronously on it.
+    const host = process.env.TEST_PG_HOST ?? 'localhost';
+    const port = parseInt(
+        process.env.TEST_PG_PORT ?? process.env.API_PG_DB_PORT ?? '5432',
+        10,
     );
-    // net.connect throws synchronously on a bad port; treat it as unreachable.
-    if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+    if (!host || !Number.isInteger(port) || port <= 0 || port > 65535) {
+        console.warn(
+            `[pre-push] TEST_PG_HOST/TEST_PG_PORT resolve to "${host}:${port}", which the integration specs can't use.`,
+        );
         return Promise.resolve(false);
     }
     return new Promise((resolve) => {
