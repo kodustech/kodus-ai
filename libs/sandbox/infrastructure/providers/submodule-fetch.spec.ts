@@ -298,12 +298,41 @@ describe('decideSubmodules — same host is the only thing allowed', () => {
 describe('decideSubmodules — transports that bypass the header and the proxy', () => {
     it.each([
         ['git://github.com/acme/x.git', 'git protocol'],
-        ['ssh://git@github.com/acme/x.git', 'ssh url'],
-        ['git@github.com:acme/x.git', 'scp-like syntax'],
         ['file:///etc/passwd', 'file url'],
         ['/srv/local/repo.git', 'bare local path'],
+        ['ssh://git@evil.example/acme/x.git', 'ssh on another host'],
+        ['git@evil.example:acme/x.git', 'scp-like on another host'],
     ])('skips %s (%s)', (url) => {
         expect(decideOne(url).allowed).toBe(false);
+    });
+
+    // An ssh url on the repository's OWN host is the common shape in
+    // `.gitmodules`; refusing it leaves those repositories as broken as
+    // before the fix. It is fetched over https instead — the transport the
+    // clone already uses, and the one the scoped header covers.
+    it.each([
+        ['git@github.com:acme/x.git', 'git@github.com:'],
+        ['ssh://git@github.com/acme/x.git', 'ssh://git@github.com/'],
+        ['ssh://github.com/acme/x.git', 'ssh://github.com/'],
+    ])('rewrites %s to https', (url, prefix) => {
+        const d = decideOne(url);
+        expect(d.allowed).toBe(true);
+        expect((d as any).rewrite).toEqual({
+            key: 'url.https://github.com/.insteadOf',
+            value: prefix,
+        });
+    });
+
+    it('never rewrites onto http — the repo must be https', () => {
+        const d = decideOne('git@plain.internal:acme/x.git', {
+            repo: 'http://plain.internal/acme/app.git',
+        });
+        expect(d.allowed).toBe(false);
+    });
+
+    it('does not mistake a windows path or a url for an scp-like form', () => {
+        expect(decideOne('C:/repos/x.git').allowed).toBe(false);
+        expect(decideOne('file:///etc/passwd').allowed).toBe(false);
     });
 
     it('skips http when the repository itself is https', () => {
@@ -838,6 +867,68 @@ describe('scopedAuthHeaderConfigKey', () => {
     });
 });
 
+describe('buildSubmoduleUpdatePlan — an ssh submodule fetched over https', () => {
+    const planWith = (url: string, repo = REPO) =>
+        buildSubmoduleUpdatePlan({
+            declared: gitmodules(['pkg/sub', url]),
+            resolvedUrls: resolvedAs(['pkg/sub', url]),
+            repoCloneUrl: repo,
+            baseDeclared: gitmodules(['pkg/sub', url]),
+            authHeader: AUTH,
+        });
+
+    it('emits the insteadOf next to the scoped header, both as config', () => {
+        const plan = planWith('git@github.com:acme/commons.git');
+        expect(plan.paths).toEqual(['pkg/sub']);
+        expect(plan.env.GIT_CONFIG_COUNT).toBe('2');
+        const pairs = [0, 1].map((i) => [
+            plan.env[`GIT_CONFIG_KEY_${i}`],
+            plan.env[`GIT_CONFIG_VALUE_${i}`],
+        ]);
+        expect(pairs).toEqual(
+            expect.arrayContaining([
+                ['http.https://github.com/.extraHeader', AUTH],
+                ['url.https://github.com/.insteadOf', 'git@github.com:'],
+            ]),
+        );
+        // Never on the command line — same rule as the token.
+        expect(JSON.stringify(plan.updateArgs)).not.toContain('insteadOf');
+    });
+
+    it('emits ONE insteadOf for several submodules sharing a prefix', () => {
+        const plan = buildSubmoduleUpdatePlan({
+            declared: gitmodules(
+                ['pkg/a', 'git@github.com:acme/a.git'],
+                ['pkg/b', 'git@github.com:acme/b.git'],
+            ),
+            resolvedUrls: resolvedAs(
+                ['pkg/a', 'git@github.com:acme/a.git'],
+                ['pkg/b', 'git@github.com:acme/b.git'],
+            ),
+            repoCloneUrl: REPO,
+            baseDeclared: gitmodules(
+                ['pkg/a', 'git@github.com:acme/a.git'],
+                ['pkg/b', 'git@github.com:acme/b.git'],
+            ),
+            authHeader: AUTH,
+        });
+        expect(plan.paths).toEqual(['pkg/a', 'pkg/b']);
+        expect(plan.env.GIT_CONFIG_COUNT).toBe('2');
+    });
+
+    it('emits no insteadOf when nothing is ssh', () => {
+        const plan = planWith('https://github.com/acme/commons.git');
+        expect(plan.env.GIT_CONFIG_COUNT).toBe('1');
+        expect(JSON.stringify(plan.env)).not.toContain('insteadOf');
+    });
+
+    it('an ssh submodule on ANOTHER host contributes no rewrite and no fetch', () => {
+        const plan = planWith('git@evil.example:acme/x.git');
+        expect(plan.paths).toEqual([]);
+        expect(JSON.stringify(plan.env)).not.toContain('evil.example');
+    });
+});
+
 describe('buildSubmoduleUpdatePlan', () => {
     const planFor = (
         blocks: Array<[string, string]>,
@@ -855,7 +946,7 @@ describe('buildSubmoduleUpdatePlan', () => {
         const plan = planFor([
             ['packages/commons', 'https://github.com/acme/commons.git'],
             ['packages/evil', 'https://evil.example/x.git'],
-            ['packages/ssh', 'git@github.com:acme/y.git'],
+            ['packages/ssh', 'git@evil.example:acme/y.git'],
         ]);
         expect(plan.paths).toEqual(['packages/commons']);
         expect(plan.skipped.map((s) => s.path)).toEqual([

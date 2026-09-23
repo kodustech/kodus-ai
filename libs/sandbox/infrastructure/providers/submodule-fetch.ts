@@ -37,7 +37,14 @@
  */
 
 export type SubmoduleDecision =
-    | { path: string; name: string; url: string; allowed: true }
+    | {
+          path: string;
+          name: string;
+          url: string;
+          allowed: true;
+          /** Set for a same-host ssh url fetched over https instead. */
+          rewrite?: { key: string; value: string };
+      }
     | {
           path: string;
           name: string;
@@ -140,6 +147,58 @@ function normalizePath(value: string): string {
  * reached this module, and a value that is still relative here means the
  * resolution step was skipped — which must fail closed, not be re-resolved.
  */
+/**
+ * The ssh forms `.gitmodules` uses in practice, as {host, path}.
+ *
+ *   git@github.com:acme/x.git          scp-like, what most files carry
+ *   ssh://git@github.com/acme/x.git    the explicit form
+ *
+ * Recognising them is not the same as using them: ssh bypasses the scoped
+ * auth header and the proxy, so an ssh submodule is only ever fetched by
+ * REWRITING it to https on the repository's own host (`url.<https>.insteadOf`
+ * — see `sshRewriteFor`). Anything whose host is not the repository's is
+ * refused exactly as before.
+ */
+function parseSshUrl(url: string): { host: string; prefix: string } | null {
+    const raw = String(url || '').trim();
+    if (!raw) return null;
+    // ssh://[user@]host[:port]/path
+    const explicit = /^ssh:\/\/(?:[^@/]+@)?([^/:]+(?::\d+)?)\//i.exec(raw);
+    if (explicit) {
+        return {
+            host: explicit[1],
+            prefix: raw.slice(0, explicit[0].length),
+        };
+    }
+    // [user@]host:path — never a Windows drive letter, never a url scheme
+    const scp = /^([^@/\s]+@)?([^@/:\s]+):(?!\/)/.exec(raw);
+    if (scp && raw.indexOf('://') === -1 && scp[2].includes('.')) {
+        return { host: scp[2], prefix: `${scp[1] ?? ''}${scp[2]}:` };
+    }
+    return null;
+}
+
+/**
+ * The `url.<base>.insteadOf` pair that turns an ssh submodule on the
+ * repository's own host into an https fetch, or null when it must not be
+ * rewritten. Rewriting is only ever same-host and only onto https — the
+ * scheme the clone itself used and the one the scoped header covers.
+ */
+export function sshRewriteFor(
+    resolvedUrl: string,
+    repoCloneUrl: string,
+): { key: string; value: string } | null {
+    const repo = parseResolvedUrl(repoCloneUrl);
+    if (!repo || repo.protocol !== 'https:') return null;
+    const ssh = parseSshUrl(resolvedUrl);
+    if (!ssh) return null;
+    if (ssh.host.toLowerCase() !== repo.host.toLowerCase()) return null;
+    return {
+        key: `url.https://${repo.host}/.insteadOf`,
+        value: ssh.prefix,
+    };
+}
+
 function parseResolvedUrl(url: string): URL | null {
     const raw = String(url || '').trim();
     if (!raw) return null;
@@ -295,9 +354,38 @@ export function decideSubmodules(
 
         const target = parseResolvedUrl(resolvedUrl);
         if (!target) {
+            // `.gitmodules` very often carries `git@host:org/x.git`. Refusing
+            // it outright leaves those repositories exactly as broken as
+            // before the fix, so a SAME-HOST ssh url is rewritten to https
+            // and fetched over the transport the clone already uses. Any
+            // other host, or a non-https repository, still falls through to
+            // the refusal below.
+            const rewrite = sshRewriteFor(resolvedUrl, repoCloneUrl);
+            if (rewrite) {
+                return {
+                    path: entry.path,
+                    name: entry.name,
+                    url: resolvedUrl,
+                    allowed: true,
+                    rewrite,
+                };
+            }
             return deny('not an http(s) URL (ssh/scp/git/file transport)');
         }
         if (!ALLOWED_PROTOCOLS.has(target.protocol)) {
+            // `ssh://host/path` parses as a URL, so it lands here rather than
+            // in the scp-like branch above. Same rule: same host, rewritten
+            // onto https; anything else refused.
+            const rewrite = sshRewriteFor(resolvedUrl, repoCloneUrl);
+            if (rewrite) {
+                return {
+                    path: entry.path,
+                    name: entry.name,
+                    url: resolvedUrl,
+                    allowed: true,
+                    rewrite,
+                };
+            }
             return deny(`scheme ${target.protocol}// is not allowed`);
         }
         if (target.protocol !== repo.protocol) {
@@ -519,10 +607,26 @@ export function buildSubmoduleUpdatePlan(params: {
     const configKey = authHeader
         ? scopedAuthHeaderConfigKey(repoCloneUrl)
         : null;
+    const configPairs: Array<{ key: string; value: string }> = [];
     if (authHeader && configKey) {
-        env.GIT_CONFIG_COUNT = '1';
-        env.GIT_CONFIG_KEY_0 = configKey;
-        env.GIT_CONFIG_VALUE_0 = authHeader;
+        configPairs.push({ key: configKey, value: authHeader });
+    }
+    // One `insteadOf` per distinct ssh prefix among the allowed submodules,
+    // so git fetches them over https with the scoped header above instead of
+    // over ssh, which has neither.
+    for (const d of decisions) {
+        if (!d.allowed || !d.rewrite) continue;
+        const already = configPairs.some(
+            (p) => p.key === d.rewrite!.key && p.value === d.rewrite!.value,
+        );
+        if (!already) configPairs.push(d.rewrite);
+    }
+    if (configPairs.length) {
+        env.GIT_CONFIG_COUNT = String(configPairs.length);
+        configPairs.forEach(({ key, value }, i) => {
+            env[`GIT_CONFIG_KEY_${i}`] = key;
+            env[`GIT_CONFIG_VALUE_${i}`] = value;
+        });
     }
 
     // No `--init`: the init step already ran, and re-running it here would
