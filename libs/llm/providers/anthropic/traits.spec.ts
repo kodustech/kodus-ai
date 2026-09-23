@@ -87,19 +87,54 @@ describe('resolveAnthropicModelTraits', () => {
         expect(resolveAnthropicModelTraits(model).generation).toBe(generation);
     });
 
-    it('resolves a future Claude to modern without a code change', () => {
-        // The whole point of the open-ended patterns: a model released after
-        // this file was written must not fall back to the legacy shape, which
-        // 4.7+ rejects outright.
+    it('resolves a Claude newer than this file to adaptive + effort, never `disabled`', () => {
+        // #1996: `claude-opus-5-5` fell through the `$`-anchored 5.x pattern to
+        // `unknown`, so the effort on the slot never reached the request. Any
+        // id not on the closed list of older generations is newer, so it takes
+        // the adaptive shape — but whether it accepts `disabled` is not
+        // something the id says (Opus 5 does, Opus 5.5 does not).
         for (const model of [
+            'claude-opus-5-5',
             'claude-opus-6',
+            'claude-opus-6-1',
             'claude-sonnet-7',
+            'claude-haiku-5',
             'claude-opus-4-12',
+            'claude-newname-7',
+            // The same ids as the hosts spell them.
+            'global.anthropic.claude-opus-5-5-v1:0',
+            'anthropic.claude-opus-5-5',
+            'claude-opus-5-5@20260901',
         ]) {
-            const traits = resolveAnthropicModelTraits(model);
-            expect(traits.generation).toBe('modern');
-            expect(traits.thinkingShape).toBe('adaptive');
-            expect(traits.supportsSamplingParams).toBe(false);
+            expect({ model, traits: resolveAnthropicModelTraits(model) }).toEqual({
+                model,
+                traits: {
+                    generation: 'adaptive-unrecognized',
+                    thinkingShape: 'adaptive',
+                    canDisableThinking: false,
+                    supportsSamplingParams: false,
+                },
+            });
+        }
+    });
+
+    it('keeps a suffixed alias of an older generation in that generation', () => {
+        // The old patterns used to end in `$`, so a suffix sent the id to
+        // `unknown` (no thinking config). With newer-by-default, the same miss
+        // would send the adaptive shape to a model that 400s on it.
+        const cases: Array<[string, AnthropicGeneration]> = [
+            ['claude-opus-4-1-latest', 'legacy'],
+            ['claude-sonnet-4-0', 'legacy'],
+            ['claude-3-7-sonnet-latest', 'legacy'],
+            ['claude-3-5-haiku-latest', 'pre-thinking'],
+            ['claude-sonnet-4-6-latest', 'adaptive-4-6'],
+            ['claude-instant-1.2', 'pre-thinking'],
+            ['anthropic.claude-instant-v1', 'pre-thinking'],
+            ['claude-v2', 'pre-thinking'],
+        ];
+        for (const [model, generation] of cases) {
+            expect({ model, generation: resolveAnthropicModelTraits(model).generation })
+                .toEqual({ model, generation });
         }
     });
 

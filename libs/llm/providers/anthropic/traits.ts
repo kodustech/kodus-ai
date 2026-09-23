@@ -29,9 +29,13 @@
  *
  * Source: https://platform.claude.com/docs/en/about-claude/models/migration-guide
  *
- * Only the *older* generations need enumerating — that list is closed. Anything
- * newer is matched by the open-ended patterns below, so a Claude released after
- * this file was written resolves to `modern` without a code change.
+ *   unrecognized (any other `claude-*`: Opus 5.5, whatever ships next)
+ *            same as modern, but never sent `disabled` — Opus 5 accepts it,
+ *            Opus 5.5 does not, and the id cannot say which one a new model is
+ *
+ * Only the *older* generations need enumerating — that list is closed. A
+ * Claude released after this file was written resolves to `adaptive-
+ * unrecognized` without a code change, so the slot's effort still reaches it.
  *
  * Scope: real Anthropic endpoints only. `anthropic_compatible` providers (Kimi
  * Code, Z.ai, DeepSeek) speak the Anthropic protocol but implement only the
@@ -55,6 +59,12 @@ export type AnthropicGeneration =
     | 'adaptive-4-6'
     | 'modern'
     | 'always-thinking'
+    /** A `claude-*` id this file does not name — newer than it, since the list
+     *  of older generations is closed. Adaptive + effort like `modern`, but
+     *  never sent `disabled`: whether a new Claude accepts it is not
+     *  predictable (Opus 5 does, Opus 5.5 and Fable do not), and a wrong guess
+     *  is a 400 on every structured call and on every "Off". */
+    | 'adaptive-unrecognized'
     | 'unknown';
 
 export interface AnthropicModelTraits {
@@ -110,28 +120,45 @@ export function normalizeAnthropicModelName(modelName?: string): string {
     return name;
 }
 
-/** Claude 2.x / 3.x — always the budget shape. */
+/*
+ * The list below is CLOSED: every generation that takes a shape other than
+ * adaptive + effort is enumerated, and every Claude id that is not on it is a
+ * newer one. That is the direction the list can be finished in — the old
+ * generations stopped shipping, the new ones have not — and it is the default
+ * `@ai-sdk/anthropic` itself applies to a `claude-*` id it does not know.
+ *
+ * The older patterns end in `(?![-.]?\d)` rather than `$`: a suffixed alias
+ * (`claude-opus-4-1-latest`) is still that generation, and reading it as newer
+ * would send it the adaptive shape it rejects. The lookahead still stops
+ * `-4-1` from matching inside `-4-12`.
+ */
+
+/** Before 3.7: no extended thinking at all (2.x, instant, 3.0–3.5). Same
+ *  boundary as the SDK's own table (`claude-instant`, `claude-v2`, `claude-3`). */
 // Extended thinking arrives with 3.7. Everything earlier in the 2.x/3.x line
 // has no thinking parameter to send, which is a DIFFERENT fact from "thinks
 // with a budget" — and one regex used to answer both.
 const LEGACY_MAJOR = /^claude-3-7(\b|[-.])/;
-const PRE_THINKING = /^claude-[23](\b|[-.])/;
+const PRE_THINKING = /^claude-(instant(\b|-)|v?2(\b|[-.])|3(\b|[-.]))/;
 
-/** Claude 4 through 4.5, in either naming order (`opus-4-1`, `3-7-sonnet`). */
-const LEGACY_4X =
-    /^claude-(opus|sonnet|haiku)-4(-[0-5])?$/;
+/** Claude 4 through 4.5 — the budget shape. */
+const LEGACY_4X = /^claude-(opus|sonnet|haiku)-4(-[0-5])?(?![-.]?\d)/;
 
-/** Claude 4.6 and 4.7+ — `-4-6` is its own generation, `-4-7` and up are modern. */
-const FOUR_POINT_SIX = /^claude-(opus|sonnet|haiku)-4-6$/;
-const FOUR_POINT_SEVEN_PLUS =
-    /^claude-(opus|sonnet|haiku)-4-([7-9]|\d{2,})$/;
+/** Claude 4.6 — adaptive, but still takes sampling params. */
+const FOUR_POINT_SIX = /^claude-(opus|sonnet|haiku)-4-6(?![-.]?\d)/;
 
-/** Claude 5 and beyond (`claude-opus-5`, `claude-sonnet-5`, a future `-6`). */
-const MAJOR_FIVE_PLUS =
-    /^claude-(opus|sonnet|haiku)-([5-9]|\d{2,})$/;
+/** The released adaptive-only ids whose `disabled` is verified to work
+ *  (Opus 4.7 / 4.8, Opus 5, Sonnet 5). Anchored with `$` on purpose: a
+ *  point release of these (`claude-opus-5-5`) is NOT the same fact — Opus 5.5
+ *  rejects `disabled` — so it falls to `adaptive-unrecognized` below. */
+const MODERN = /^claude-((opus|sonnet|haiku)-4-[78]|(opus|sonnet)-5)$/;
 
 /** Thinking is permanently on for these — `disabled` is rejected. */
 const ALWAYS_THINKING = /^claude-(fable|mythos)/;
+
+/** Any Claude id. What reaches this without matching one of the above is a
+ *  Claude newer than this file. */
+const ANY_CLAUDE = /^claude-/;
 
 export function resolveAnthropicModelTraits(
     modelName?: string,
@@ -148,7 +175,9 @@ export function resolveAnthropicModelTraits(
                 : generation === 'unknown' || generation === 'pre-thinking'
                   ? 'none'
                   : 'adaptive',
-        canDisableThinking: generation !== 'always-thinking',
+        canDisableThinking:
+            generation !== 'always-thinking' &&
+            generation !== 'adaptive-unrecognized',
         // `pre-thinking` belongs here for the opposite reason to the others: it
         // takes a temperature precisely BECAUSE it never thinks. Leaving it out
         // would have traded one wrong answer for another — silently withholding
@@ -165,12 +194,11 @@ function resolveGeneration(name: string): AnthropicGeneration {
 
     if (ALWAYS_THINKING.test(name)) return 'always-thinking';
     if (FOUR_POINT_SIX.test(name)) return 'adaptive-4-6';
-    if (FOUR_POINT_SEVEN_PLUS.test(name) || MAJOR_FIVE_PLUS.test(name)) {
-        return 'modern';
-    }
+    if (MODERN.test(name)) return 'modern';
     if (LEGACY_4X.test(name) || LEGACY_MAJOR.test(name)) return 'legacy';
     // AFTER the 3.7 check above, so `claude-3-7` never falls in here.
     if (PRE_THINKING.test(name)) return 'pre-thinking';
+    if (ANY_CLAUDE.test(name)) return 'adaptive-unrecognized';
 
     return 'unknown';
 }
@@ -210,15 +238,15 @@ export function supportsSamplingParams(
 export function anthropicReasoningConfig(
     model?: string,
 ): ReasoningConfig | undefined {
-    const name = normalizeAnthropicModelName(model);
-    // Extended thinking exists only on 3.7, the 4.x line, 5.x, and Fable/Mythos.
-    const reasons =
-        /^claude-3-7(\b|[-.])/.test(name) ||
-        /^claude-(opus|sonnet|haiku)-([4-9]|\d{2,})/.test(name) ||
-        /^claude-(fable|mythos)/.test(name);
-    if (!reasons) return undefined;
-
-    return resolveAnthropicModelTraits(model).thinkingShape === 'adaptive'
-        ? { type: 'adaptive', options: ['low', 'medium', 'high'] }
-        : { type: 'budget', options: { min: 1024, default: 3000 } };
+    // Read from the generation, not from a second regex: the two drifted, and
+    // `claude-opus-5-5` was advertised with the BUDGET picker while the emitter
+    // sent it nothing.
+    switch (resolveAnthropicModelTraits(model).thinkingShape) {
+        case 'adaptive':
+            return { type: 'adaptive', options: ['low', 'medium', 'high'] };
+        case 'budget':
+            return { type: 'budget', options: { min: 1024, default: 3000 } };
+        default:
+            return undefined;
+    }
 }
