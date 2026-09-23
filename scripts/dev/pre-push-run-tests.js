@@ -7,7 +7,8 @@
 //   PRE_PUSH_FULL=1 git push   → run the whole suite instead
 
 const { spawn, execFileSync } = require('child_process');
-const net = require('net');
+const fs = require('fs');
+const dotenv = require('dotenv');
 
 const BASE_REF = 'origin/main';
 
@@ -36,33 +37,56 @@ function changedFiles(base) {
         .filter(Boolean);
 }
 
-// Same host/port resolution as the integration specs.
-function isPostgresReachable() {
-    // Resolved exactly like the specs (`??` + parseInt) so both agree on what
-    // they connect to. A value the specs can't use (e.g. TEST_PG_PORT= → NaN)
-    // means they can't run, so it counts as unreachable. net.connect would
-    // also throw synchronously on it.
-    const host = process.env.TEST_PG_HOST ?? 'localhost';
-    const port = parseInt(
-        process.env.TEST_PG_PORT ?? process.env.API_PG_DB_PORT ?? '5432',
-        10,
-    );
+// What the integration specs see after their `require('dotenv').config()`:
+// .env values, with the shell environment winning. Read here without being
+// loaded into the env jest inherits, so no other test sees .env earlier.
+function specEnv() {
+    let fileVars = {};
+    try {
+        fileVars = dotenv.parse(fs.readFileSync('.env'));
+    } catch {
+        // no .env: the specs see only the shell environment too
+    }
+    return { ...fileVars, ...process.env };
+}
+
+// Same connection check as the integration specs: log in with their
+// credentials and run SELECT 1. An open port is not enough; another
+// project's Postgres on 5432 answers TCP but rejects these credentials,
+// and the specs would then fail instead of skipping.
+async function isPostgresReachable() {
+    const { Client } = require('pg');
+    // Resolved exactly like the specs (`??` + parseInt). A value they can't
+    // use (e.g. TEST_PG_PORT= → NaN) means they can't run.
+    const env = specEnv();
+    const host = env.TEST_PG_HOST ?? 'localhost';
+    const port = parseInt(env.TEST_PG_PORT ?? env.API_PG_DB_PORT ?? '5432', 10);
     if (!host || !Number.isInteger(port) || port <= 0 || port > 65535) {
         console.warn(
             `[pre-push] TEST_PG_HOST/TEST_PG_PORT resolve to "${host}:${port}", which the integration specs can't use.`,
         );
-        return Promise.resolve(false);
+        return false;
     }
-    return new Promise((resolve) => {
-        const socket = net.connect({ host, port });
-        const done = (ok) => {
-            socket.destroy();
-            resolve(ok);
-        };
-        socket.setTimeout(1000, () => done(false));
-        socket.once('connect', () => done(true));
-        socket.once('error', () => done(false));
+    const client = new Client({
+        host,
+        port,
+        user: env.TEST_PG_USER ?? env.API_PG_DB_USERNAME ?? 'kodusdev',
+        password: env.TEST_PG_PASSWORD ?? env.API_PG_DB_PASSWORD ?? 'kodusdev',
+        database: env.TEST_PG_DB ?? env.API_PG_DB_DATABASE ?? 'kodus_db',
+        connectionTimeoutMillis: 2000,
     });
+    try {
+        await client.connect();
+        await client.query('SELECT 1');
+        return true;
+    } catch (error) {
+        console.warn(
+            `[pre-push] Postgres at ${host}:${port}: ${error.message}`,
+        );
+        return false;
+    } finally {
+        await client.end().catch(() => {});
+    }
 }
 
 async function main() {
