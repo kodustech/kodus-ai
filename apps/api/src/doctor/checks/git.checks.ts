@@ -148,19 +148,31 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                         title: `Checked the first ${repos.length} of ${team.repositories.length} selected repositories.`,
                     });
                 }
-                if (
-                    !readDenied.length &&
-                    !writeDenied.length &&
-                    !hookMissing.length &&
-                    !unverifiedParts.some(([repoNames]) => repoNames.length)
-                ) {
+                const verified = (list: string[], unknown: string[]) =>
+                    repos.length - list.length - unknown.length;
+                const okLine = (check: string, count: number, what: string) =>
+                    count > 0 &&
                     results.push({
-                        check: 'git.access',
+                        check,
                         status: 'ok',
                         scope,
-                        title: `The Git token can read, comment and receive events on ${repos.length} ${repos.length === 1 ? 'repository' : 'repositories'}.`,
+                        title: `${what} ${count} ${count === 1 ? 'repository' : 'repositories'}.`,
                     });
-                }
+                okLine(
+                    'git.read',
+                    verified(readDenied, unverified.read),
+                    'The Git token can read',
+                );
+                okLine(
+                    'git.write',
+                    verified([...readDenied, ...writeDenied], unverified.write),
+                    'The Git token can comment on pull requests in',
+                );
+                okLine(
+                    'git.webhook',
+                    verified([...readDenied, ...hookMissing], unverified.hook),
+                    'Kodus receives pull request events from',
+                );
             }
 
             return results;

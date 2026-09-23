@@ -303,6 +303,16 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             expect(line?.fix).toContain('https://api.acme.dev/github/webhook');
         });
 
+        it('a missing hook still shows read and comment access as conforming', async () => {
+            const results = await gitAccessCheck(
+                healthyGit({ hook: 'missing' }),
+            ).run(ctx());
+            const ok = results
+                .filter((r) => r.status === 'ok')
+                .map((r) => r.check);
+            expect(ok).toEqual(['git.read', 'git.write']);
+        });
+
         it('GitHub App installs use the app-level hook (not a failure)', async () => {
             const results = await gitAccessCheck(
                 healthyGit({ hook: 'app-level' }),

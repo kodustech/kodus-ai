@@ -252,7 +252,11 @@ export function astGraphCheck(
         id: 'ast.graph',
         async run(ctx: DoctorContext): Promise<DoctorResult[]> {
             const byTeam = new Map<DoctorTeam, string[]>();
-            for (const row of await load(ctx)) {
+            const rows = await load(ctx);
+            if (!rows.length) {
+                return []; // no selected repository: nothing to build
+            }
+            for (const row of rows) {
                 if (row.status !== 'ready') {
                     byTeam.set(row.team, [
                         ...(byTeam.get(row.team) ?? []),
