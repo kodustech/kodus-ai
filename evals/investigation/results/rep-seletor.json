@@ -1,0 +1,2002 @@
+{
+  "dump": "sol-teto2",
+  "modelo": "gpt-5.6-sol@sub",
+  "saida": {
+    "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+      "grupos": [
+        {
+          "indices": [
+            0
+          ],
+          "representante": 0,
+          "nota": 20,
+          "porque": "OrganizationCacheTest.java:400-414 omite um segundo acesso que exercite explicitamente o cache hit, mas isso é sobretudo uma lacuna de cobertura, não um defeito funcional demonstrado."
+        },
+        {
+          "indices": [
+            1
+          ],
+          "representante": 1,
+          "nota": 40,
+          "porque": "InfinispanIdentityProviderStorageProvider.java:233-240 acumula buscas por organizationId dentro de uma única entrada por modo, o que pode crescer bastante, embora o conjunto seja limitado pelas organizações do realm e possa ser uma escolha deliberada."
+        },
+        {
+          "indices": [
+            2,
+            3
+          ],
+          "representante": 3,
+          "nota": 50,
+          "porque": "InfinispanIdentityProviderStorageProvider.java:98-111 faz getByAlias no delegate antes de consultar uma entrada de alias válida, introduzindo uma leitura persistente evitável em toda remoção com cache hit."
+        },
+        {
+          "indices": [
+            4
+          ],
+          "representante": 4,
+          "nota": 90,
+          "porque": "InfinispanIdentityProviderStorageProvider.java:214-240 cria cache dependente da associação organização–IDP, mas a mutação dessa associação não aparece invalidando essas chaves, deixando ORG_ONLY/ALL obsoletos após vínculo ou desvínculo."
+        },
+        {
+          "indices": [
+            5
+          ],
+          "representante": 5,
+          "nota": 100,
+          "porque": "OrganizationCacheTest.java:380-381 registra repetidamente a remoção do alias literal \"alias\", não dos aliases idp-alias-* criados, deixando dados de teste no realm compartilhado."
+        }
+      ],
+      "candidatos": 6
+    },
+    "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+      "grupos": [
+        {
+          "indices": [
+            0
+          ],
+          "representante": 0,
+          "nota": 100,
+          "porque": "Em js/apps/admin-ui/maven-resources-community/theme/keycloak.v2/admin/messages/messages_es.properties:2798, a tradução troca os padrões específicos por algoritmo por um único valor obsoleto, fornecendo orientação funcionalmente incorreta aos administradores."
+        },
+        {
+          "indices": [
+            1,
+            3,
+            5
+          ],
+          "representante": 3,
+          "nota": 100,
+          "porque": "Em quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/UpdateCompatibilityMetadata.java:45-49, o feature gate é avaliado sem carregar o perfil persistido, podendo desabilitar incorretamente os comandos em instalações otimizadas."
+        },
+        {
+          "indices": [
+            2
+          ],
+          "representante": 2,
+          "nota": 40,
+          "porque": "Em services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:138-142, uma avaliação completa por cliente cria custo N+1; é um problema real de escala, embora possa ser tratado como otimização posterior."
+        },
+        {
+          "indices": [
+            4
+          ],
+          "representante": 4,
+          "nota": 40,
+          "porque": "Em services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:77-87, decisões globais e por cliente são reavaliadas durante listagens, elevando latência e carga; relaciona-se ao desempenho do candidato 2, mas descreve um caminho e remédio distintos."
+        },
+        {
+          "indices": [
+            6
+          ],
+          "representante": 6,
+          "nota": 100,
+          "porque": "Em services/src/main/java/org/keycloak/services/resources/admin/permissions/MgmtPermissionsV2.java:63-67, consumidores existentes recebem uma implementação cujas operações usadas pelos endpoints lançam UnsupportedOperationException, convertendo GET/PUT válidos em erros do servidor."
+        },
+        {
+          "indices": [
+            7
+          ],
+          "representante": 7,
+          "nota": 90,
+          "porque": "Em services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java:77-95, a limpeza ignora V2, deixando recursos órfãos após excluir clientes e possibilitando falha posterior ao resolver um ClientModel inexistente."
+        },
+        {
+          "indices": [
+            8
+          ],
+          "representante": 8,
+          "nota": 100,
+          "porque": "Em services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:214-224, a mera existência de um recurso específico impede considerar permissões globais, negando incorretamente acesso concedido no recurso de todos os clientes."
+        }
+      ],
+      "candidatos": 9
+    },
+    "add-html-sanitizer-for-translated-message-resources-keycloak": {
+      "grupos": [
+        {
+          "indices": [
+            0,
+            4,
+            5
+          ],
+          "representante": 0,
+          "nota": 100,
+          "porque": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties:101 (e o bundle de login correspondente) introduz texto italiano em fluxos destinados ao locale lituano."
+        },
+        {
+          "indices": [
+            1
+          ],
+          "representante": 1,
+          "nota": 90,
+          "porque": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties:112 usa caracteres de chinês tradicional em um bundle explicitamente zh_CN e inconsistente com as linhas seguintes."
+        },
+        {
+          "indices": [
+            2
+          ],
+          "representante": 2,
+          "nota": 60,
+          "porque": "misc/theme-verifier/src/test/resources/illegalHtmlTag_en.properties:17 usa um fechamento </div malformado, permitindo que o teste passe pela correção da sintaxe em vez de provar que div não está na allowlist."
+        },
+        {
+          "indices": [
+            3
+          ],
+          "representante": 3,
+          "nota": 20,
+          "porque": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:65-77 relê cada arquivo e o bundle inglês compartilhado, mas isso é sobretudo uma otimização de ferramenta de build sem evidência de impacto relevante."
+        },
+        {
+          "indices": [
+            6
+          ],
+          "representante": 6,
+          "nota": 10,
+          "porque": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:153-155 pode fazer varreduras repetidas, porém mensagens de tradução são pequenas e não tornam a complexidade teórica um problema prático."
+        },
+        {
+          "indices": [
+            7,
+            8
+          ],
+          "representante": 8,
+          "nota": 30,
+          "porque": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:76-80 converte falha ao abrir o bundle inglês em RuntimeException, embora a verificação pareça deliberadamente exigir esse arquivo e ainda falhe claramente no build."
+        }
+      ],
+      "candidatos": 9
+    },
+    "add-guest-management-functionality-to-existing-bookings-cal-com": {
+      "grupos": [
+        {
+          "indices": [
+            0,
+            5
+          ],
+          "representante": 5,
+          "nota": 90,
+          "porque": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts:3-6 aceita um array sem limite, permitindo que qualquer chamador autorizado provoque escrita e fan-out de calendário/e-mail desproporcionais."
+        },
+        {
+          "indices": [
+            1
+          ],
+          "representante": 1,
+          "nota": 30,
+          "porque": "packages/ui/form/MultiEmail.tsx:46 exibe “Remove email” sem tradução em um componente que já usa i18n para as demais ações."
+        },
+        {
+          "indices": [
+            2
+          ],
+          "representante": 2,
+          "nota": 60,
+          "porque": "apps/web/components/dialog/AddGuestsDialog.tsx:42-44 sempre mostra a mensagem bruta do erro remoto e torna o fallback genérico inalcançável, podendo expor detalhes internos."
+        },
+        {
+          "indices": [
+            3,
+            11
+          ],
+          "representante": 11,
+          "nota": 80,
+          "porque": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:167-168 envia `guests` em vez de `uniqueGuests`, classificando convidados filtrados como recém-adicionados e disparando o modelo de e-mail errado."
+        },
+        {
+          "indices": [
+            4,
+            6
+          ],
+          "representante": 6,
+          "nota": 90,
+          "porque": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:70-78 normaliza apenas a blacklist, de modo que variantes de caixa burlam tanto o bloqueio quanto a detecção de participantes existentes."
+        },
+        {
+          "indices": [
+            7
+          ],
+          "representante": 7,
+          "nota": 20,
+          "porque": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:74-78 faz buscas lineares aninhadas; é uma otimização válida, mas fica secundária se o tamanho da entrada for corretamente limitado."
+        },
+        {
+          "indices": [
+            8
+          ],
+          "representante": 8,
+          "nota": 10,
+          "porque": "packages/emails/email-manager.ts:539-546 usa `includes` durante o fan-out; trocar por Set é apenas uma micro-otimização sob limites razoáveis de convidados."
+        },
+        {
+          "indices": [
+            9
+          ],
+          "representante": 9,
+          "nota": 90,
+          "porque": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:74-78 não deduplica a própria entrada nem torna a checagem/inserção atômica, permitindo participantes e notificações duplicados."
+        },
+        {
+          "indices": [
+            10
+          ],
+          "representante": 10,
+          "nota": 90,
+          "porque": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:46-48 combina as verificações com `&&`, transformando a permissão de admin-ou-owner em owner-only e bloqueando administradores."
+        },
+        {
+          "indices": [
+            12
+          ],
+          "representante": 12,
+          "nota": 90,
+          "porque": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:50-55 concede a qualquer participante autenticado poder permanente de alterar convidados e disparar atualizações e convites, uma autorização excessiva para operação de host."
+        },
+        {
+          "indices": [
+            13
+          ],
+          "representante": 13,
+          "nota": 20,
+          "porque": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:35-39 carrega credenciais do organizador que nunca são usadas, mas o custo tende a ser pequeno e não afeta correção."
+        },
+        {
+          "indices": [
+            14
+          ],
+          "representante": 14,
+          "nota": 40,
+          "porque": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:108-120 resolve a mesma tradução uma vez por participante, repetindo trabalho potencialmente caro para cada locale compartilhado."
+        },
+        {
+          "indices": [
+            15
+          ],
+          "representante": 15,
+          "nota": 70,
+          "porque": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:96-98 não ordena participantes, enquanto packages/emails/templates/organizer-add-guests-email.ts:26-30 assume que o índice zero é o participante original, podendo gerar assunto vazio ou incorreto."
+        },
+        {
+          "indices": [
+            16
+          ],
+          "representante": 16,
+          "nota": 100,
+          "porque": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:92-165 persiste os convidados antes da atualização externa; se o provedor falhar, a chamada retorna erro após commit e a repetição não consegue reparar calendário nem e-mails."
+        }
+      ],
+      "candidatos": 17
+    },
+    "feat-2fa-backup-codes-cal-com": {
+      "grupos": [
+        {
+          "indices": [
+            0
+          ],
+          "representante": 0,
+          "nota": 40,
+          "porque": "apps/web/public/static/locales/en/common.json:2019 recomenda gerar códigos nas configurações, mas o fluxo mostrado não oferece regeneração para uma conta com 2FA já habilitado."
+        },
+        {
+          "indices": [
+            1
+          ],
+          "representante": 1,
+          "nota": 20,
+          "porque": "apps/web/components/settings/EnableTwoFactorModal.tsx:94-99 cria uma object URL e só revoga a URL anterior durante outro setup, sem cleanup no unmount; é um vazamento pequeno e de baixa frequência."
+        },
+        {
+          "indices": [
+            2
+          ],
+          "representante": 2,
+          "nota": 10,
+          "porque": "apps/web/playwright/login.2fa.e2e.ts:112-122 deixa de validar o conteúdo copiado/baixado, mas isso é uma lacuna de cobertura de teste, não um defeito funcional demonstrado no PR."
+        },
+        {
+          "indices": [
+            3
+          ],
+          "representante": 3,
+          "nota": 100,
+          "porque": "packages/features/auth/lib/next-auth-options.ts:131-157 permite que um totpCode arbitrário evite a verificação de senha enquanto backupCode seleciona o outro ramo, transformando o código de recuperação no único fator."
+        },
+        {
+          "indices": [
+            4,
+            5
+          ],
+          "representante": 4,
+          "nota": 20,
+          "porque": "packages/features/auth/lib/next-auth-options.ts:143-145 e apps/web/pages/api/auth/two-factor/totp/disable.ts:60-63 repetem a comparação não constante de códigos secretos, embora a explorabilidade remota por timing seja limitada por rede, rate limiting e demais requisitos."
+        },
+        {
+          "indices": [
+            6
+          ],
+          "representante": 6,
+          "nota": 80,
+          "porque": "packages/features/auth/lib/next-auth-options.ts:139-156 consome o código com read-modify-write não atômico, permitindo que requisições concorrentes autentiquem várias sessões com o mesmo código de uso único."
+        }
+      ],
+      "candidatos": 7
+    },
+    "dual-storage-architecture-grafana-codex": {
+      "grupos": [
+        {
+          "indices": [
+            0
+          ],
+          "representante": 0,
+          "nota": 10,
+          "porque": "Em pkg/apiserver/rest/dualwriter_mode3_test.go:145, o nome do teste está desatualizado, mas isso é apenas clareza de teste e não afeta o comportamento."
+        },
+        {
+          "indices": [
+            1,
+            3
+          ],
+          "representante": 1,
+          "nota": 100,
+          "porque": "Em pkg/apiserver/rest/dualwriter_mode3.go:106, o nome arbitrário do objeto é usado como label Prometheus no lugar de options.Kind, criando cardinalidade não limitada."
+        },
+        {
+          "indices": [
+            2,
+            6,
+            12
+          ],
+          "representante": 6,
+          "nota": 100,
+          "porque": "Em pkg/apiserver/rest/dualwriter_mode3.go:50-57 e nos demais writes assíncronos, o contexto herdado da requisição pode ser cancelado assim que a resposta retorna, impedindo a replicação para o legado."
+        },
+        {
+          "indices": [
+            4
+          ],
+          "representante": 4,
+          "nota": 50,
+          "porque": "Em pkg/apiserver/rest/dualwriter_mode3_test.go:65-75 e testes equivalentes, não se aguarda nem se verifica a chamada assíncrona ao legado, deixando a principal garantia do modo 3 sem cobertura confiável."
+        },
+        {
+          "indices": [
+            5,
+            7,
+            8
+          ],
+          "representante": 7,
+          "nota": 100,
+          "porque": "Em pkg/apiserver/rest/dualwriter_mode3.go:134-140, o UpdatedObjectInfo original é avaliado novamente no legado em vez de reutilizar o objeto já confirmado pelo unified store, podendo divergir os dados."
+        },
+        {
+          "indices": [
+            9
+          ],
+          "representante": 9,
+          "nota": 90,
+          "porque": "Em pkg/apiserver/rest/dualwriter_mode3.go:45 e :129, falhas do unified storage são registradas no histograma do legacy storage, tornando a telemetria operacional incorreta."
+        },
+        {
+          "indices": [
+            10
+          ],
+          "representante": 10,
+          "nota": 90,
+          "porque": "Em pkg/apiserver/rest/dualwriter_mode3.go:166, a duração de Legacy.DeleteCollection é registrada como storage, omitindo a amostra legada e contaminando a métrica do unified storage."
+        },
+        {
+          "indices": [
+            11
+          ],
+          "representante": 11,
+          "nota": 30,
+          "porque": "Em pkg/apiserver/rest/dualwriter_mode3.go:50-57, há fan-out de uma goroutine por mutação, mas o timeout de dez segundos limita a retenção e um limitador de concorrência pode ser uma decisão arquitetural posterior."
+        },
+        {
+          "indices": [
+            13
+          ],
+          "representante": 13,
+          "nota": 90,
+          "porque": "Em pkg/apiserver/rest/dualwriter_mode3.go:101-104, qualquer NotFound do unified storage retorna antes de apagar no legado, regredindo a reconciliação de estados parcialmente divergentes."
+        }
+      ],
+      "candidatos": 14
+    },
+    "anonymous-add-configurable-device-limit-grafana-codex": {
+      "grupos": [
+        {
+          "indices": [
+            0,
+            12,
+            14
+          ],
+          "representante": 12,
+          "nota": 100,
+          "porque": "Em pkg/login/social/support_bundle.go:84-86, o código acessa resp.Body antes de verificar o erro de client.Get, causando panic em falhas comuns de transporte."
+        },
+        {
+          "indices": [
+            1
+          ],
+          "representante": 1,
+          "nota": 30,
+          "porque": "Em pkg/login/social/github_oauth.go:174-181, HasMoreRecords pode indexar value[0] quando a chave Link existe com slice vazio, embora esse estado seja incomum com respostas HTTP normais."
+        },
+        {
+          "indices": [
+            2
+          ],
+          "representante": 2,
+          "nota": 20,
+          "porque": "Em pkg/services/ssosettings/ssosettings.go:23-24, a documentação de List promete todos os settings apesar do filtro de autorização; é uma correção válida, mas apenas contratual."
+        },
+        {
+          "indices": [
+            3
+          ],
+          "representante": 3,
+          "nota": 20,
+          "porque": "Em pkg/services/ssosettings/ssosettings.go:35-36, o comentário afirma incorretamente que Service.Reload implementa uma interface cuja assinatura é diferente."
+        },
+        {
+          "indices": [
+            4
+          ],
+          "representante": 4,
+          "nota": 40,
+          "porque": "Em pkg/login/social/github_oauth.go:240-245, memberships já obtidas não são reutilizadas, duplicando chamadas paginadas e consumo de rate limit quando team_ids está configurado."
+        },
+        {
+          "indices": [
+            5
+          ],
+          "representante": 5,
+          "nota": 100,
+          "porque": "Em pkg/login/social/support_bundle.go:16-24, no módulo Go 1.21 as closures capturam a mesma variável de range e todos os EnabledFn passam a consultar o último conector."
+        },
+        {
+          "indices": [
+            6
+          ],
+          "representante": 6,
+          "nota": 20,
+          "porque": "Em pkg/services/anonymous/anonimpl/client.go:44-50, a contabilização síncrona adiciona I/O ao caminho de autenticação, mas isso parece uma consequência deliberada da aplicação imediata do limite e não um erro funcional isolado."
+        },
+        {
+          "indices": [
+            7
+          ],
+          "representante": 7,
+          "nota": 90,
+          "porque": "Em pkg/login/social/common.go:88, respostas completas dos provedores OAuth são gravadas em debug, expondo dados pessoais e atributos de identidade nos logs."
+        },
+        {
+          "indices": [
+            8
+          ],
+          "representante": 8,
+          "nota": 100,
+          "porque": "Em pkg/login/social/generic_oauth.go:271-274, uma falha de parsing registra o oauth2.Token inteiro, potencialmente expondo access token, refresh token e ID token."
+        },
+        {
+          "indices": [
+            9,
+            10,
+            13
+          ],
+          "representante": 10,
+          "nota": 100,
+          "porque": "Em pkg/services/anonymous/anonimpl/impl.go:83-94, o dispositivo é cacheado antes da persistência; após ser recusado pelo limite, a tentativa seguinte acerta o cache e autentica."
+        },
+        {
+          "indices": [
+            11
+          ],
+          "representante": 11,
+          "nota": 100,
+          "porque": "Em pkg/services/anonymous/anonimpl/anonstore/database.go:109-117, count e insert não são atômicos, permitindo que admissões concorrentes ultrapassem o limite configurado."
+        },
+        {
+          "indices": [
+            15,
+            20
+          ],
+          "representante": 20,
+          "nota": 100,
+          "porque": "Em pkg/login/social/google_oauth.go:182-199, claims de identidade de um ID token apenas decodificado, sem validação criptográfica ou de issuer/audience/expiração, são usados para autenticar."
+        },
+        {
+          "indices": [
+            16,
+            19
+          ],
+          "representante": 19,
+          "nota": 100,
+          "porque": "Em pkg/login/social/okta_oauth.go:83-90, UnsafeClaimsWithoutVerification fornece diretamente a identidade autenticada, permitindo claims forjadas ou substituídas."
+        },
+        {
+          "indices": [
+            17
+          ],
+          "representante": 17,
+          "nota": 30,
+          "porque": "Em pkg/login/social/azuread_oauth_test.go:814-842, o teste nomeado para skip não habilita AzureADSkipOrgRoleSync e portanto não cobre o comportamento anunciado."
+        },
+        {
+          "indices": [
+            18
+          ],
+          "representante": 18,
+          "nota": 30,
+          "porque": "Em pkg/login/social/github_oauth_test.go:242-247, o caso combinado não repassa allow_assign_grafana_admin ao provider, deixando uma lacuna de cobertura."
+        },
+        {
+          "indices": [
+            21
+          ],
+          "representante": 21,
+          "nota": 60,
+          "porque": "Em pkg/login/social/support_bundle.go:72-85, URLs OAuth configuráveis são buscadas sem restrição de destino durante a geração do bundle, criando uma capacidade de SSRF para quem pode alterar SSO."
+        },
+        {
+          "indices": [
+            22
+          ],
+          "representante": 22,
+          "nota": 100,
+          "porque": "Em pkg/login/social/github_oauth.go:329-336, um único team ID inválido transforma toda a lista em vazia, que o fluxo interpreta como ausência de restrição e libera qualquer usuário GitHub."
+        }
+      ],
+      "candidatos": 23
+    },
+    "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+      "grupos": [
+        {
+          "indices": [
+            0
+          ],
+          "representante": 0,
+          "nota": 30,
+          "porque": "app/views/embed/best.html.erb:14 fixa formato e ordem da data fora do I18n, mas é uma inconsistência de localização pequena."
+        },
+        {
+          "indices": [
+            1
+          ],
+          "representante": 1,
+          "nota": 20,
+          "porque": "config/locales/server.en.yml:769 descreve itens como posts embora o importador crie tópicos, uma imprecisão administrativa de baixo impacto."
+        },
+        {
+          "indices": [
+            2
+          ],
+          "representante": 2,
+          "nota": 90,
+          "porque": "app/views/layouts/embed.html.erb:4 referencia um bundle standalone novo que, sem registro de precompilação, tende a falhar em produção; o mesmo registro é necessário para o script publicável."
+        },
+        {
+          "indices": [
+            3
+          ],
+          "representante": 3,
+          "nota": 100,
+          "porque": "spec/controllers/embed_controller_spec.rb:42-44 espera execução síncrona de TopicRetriever, mas app/controllers/embed_controller.rb:15 agora apenas enfileira o job, portanto o teste novo falha objetivamente."
+        },
+        {
+          "indices": [
+            4,
+            5
+          ],
+          "representante": 4,
+          "nota": 20,
+          "porque": "app/models/topic_embed.rb:48 e app/jobs/scheduled/poll_feed.rb:29 deixam o fechamento dos IOs de open-uri ao ciclo de vida/GC em vez de usar bloco; é uma melhoria defensiva, mas o risco prático é limitado."
+        },
+        {
+          "indices": [
+            6
+          ],
+          "representante": 6,
+          "nota": 40,
+          "porque": "spec/jobs/poll_feed_spec.rb:18-28 não torna verdadeiros os pré-requisitos anteriores do encadeamento &&, então dois testes podem passar sem exercitar a condição anunciada."
+        },
+        {
+          "indices": [
+            7
+          ],
+          "representante": 7,
+          "nota": 0,
+          "porque": "spec/controllers/embed_controller_spec.rb:13-17 usa embeddable_host nil e referer ausente; com a guarda de host removida, nil compara com nil e a requisição prossegue, de modo que o teste de fato detectaria essa remoção."
+        },
+        {
+          "indices": [
+            8
+          ],
+          "representante": 8,
+          "nota": 90,
+          "porque": "app/models/topic_embed.rb:48 busca uma URL controlada externamente após validar apenas o hostname inicial, sem bloquear IPs privados nem revalidar redirecionamentos, criando um vetor SSRF relevante."
+        },
+        {
+          "indices": [
+            9
+          ],
+          "representante": 9,
+          "nota": 100,
+          "porque": "app/models/topic_embed.rb:22 persiste HTML de feed remoto como raw_html e app/models/post.rb:133 evita integralmente o pipeline de renderização/sanitização, permitindo XSS armazenado."
+        },
+        {
+          "indices": [
+            10,
+            12
+          ],
+          "representante": 12,
+          "nota": 70,
+          "porque": "lib/topic_retriever.rb:40-42 executa o polling integral do mesmo feed em cada cache miss por URL, enquanto app/jobs/scheduled/poll_feed.rb:20-29 define uma chave de feed que nunca limita ou condiciona esse trabalho redundante."
+        },
+        {
+          "indices": [
+            11
+          ],
+          "representante": 11,
+          "nota": 80,
+          "porque": "app/controllers/embed_controller.rb:12-16 permite que clientes anônimos com Referer forjado enfileirem trabalho ilimitado usando URLs distintas, contornando o throttle que é apenas por URL."
+        },
+        {
+          "indices": [
+            13
+          ],
+          "representante": 13,
+          "nota": 70,
+          "porque": "app/models/topic_embed.rb:15-28 faz lookup seguido de criação não atômica apesar do índice único, então imports concorrentes do mesmo URL podem colidir e abortar um job."
+        },
+        {
+          "indices": [
+            14
+          ],
+          "representante": 14,
+          "nota": 30,
+          "porque": "app/models/topic_embed.rb:13 publica a URL completa de origem no corpo importado, o que pode expor parâmetros sensíveis, embora normalmente a URL canônica do artigo seja deliberadamente exibida."
+        },
+        {
+          "indices": [
+            15
+          ],
+          "representante": 15,
+          "nota": 90,
+          "porque": "app/jobs/scheduled/poll_feed.rb:35 chama scrub diretamente em i.content, que pode ser nil em RSS válido baseado apenas em description, abortando todo o polling."
+        },
+        {
+          "indices": [
+            16
+          ],
+          "representante": 16,
+          "nota": 40,
+          "porque": "app/models/topic_embed.rb:78-80 confia em um topic_id possivelmente órfão sem limpeza ou verificação, mas o impacto depende da semântica de exclusão de tópicos já existente."
+        }
+      ],
+      "candidatos": 17
+    },
+    "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+      "grupos": [
+        {
+          "indices": [
+            0
+          ],
+          "representante": 0,
+          "nota": 10,
+          "porque": "Em packages/lib/server/service/insightsBooking.ts:72-79 há ramos inalcançáveis, mas isso é apenas simplificação de controle de fluxo sem impacto funcional relevante."
+        },
+        {
+          "indices": [
+            1
+          ],
+          "representante": 1,
+          "nota": 40,
+          "porque": "Em packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:480-491 o cenário não inclui linhas que satisfaçam apenas autorização ou apenas filtro, então não detectaria uma regressão de AND para OR."
+        }
+      ],
+      "candidatos": 2
+    },
+    "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+      "grupos": [
+        {
+          "indices": [
+            0
+          ],
+          "representante": 0,
+          "nota": 20,
+          "porque": "Em src/sentry/incidents/grouptype.py:10-12, o comentário TODO contradiz a nova herança stateful, mas é apenas documentação obsoleta e não afeta execução."
+        },
+        {
+          "indices": [
+            1
+          ],
+          "representante": 1,
+          "nota": 40,
+          "porque": "Em src/sentry/workflow_engine/processors/detector.py:226-243, a docstring ainda promete uma lista embora a assinatura e a implementação agora retornem um dicionário, o que merece correção mas não quebra o runtime."
+        },
+        {
+          "indices": [
+            2,
+            3,
+            5,
+            6
+          ],
+          "representante": 3,
+          "nota": 100,
+          "porque": "Em src/sentry/incidents/grouptype.py:11-12, MetricAlertDetectorHandler herda uma classe abstrata sem implementar seus métodos obrigatórios, fazendo a instanciação do handler registrado falhar com TypeError."
+        },
+        {
+          "indices": [
+            4
+          ],
+          "representante": 4,
+          "nota": 30,
+          "porque": "Em tests/sentry/workflow_engine/processors/test_detector.py:36-39, o helper ignora value e o teste multigrupo constrói a expectativa do segundo grupo com 6 apesar da entrada 10, deixando sem cobertura a propagação do valor real, embora a implementação mostrada esteja correta."
+        }
+      ],
+      "candidatos": 7
+    },
+    "feature-automatically-downsize-large-images-discourse-cursor": {
+      "grupos": [
+        {
+          "indices": [
+            0
+          ],
+          "representante": 0,
+          "nota": 40,
+          "porque": "app/controllers/uploads_controller.rb:65-69 ignora falha ou ausência de progresso no redimensionamento e pode repetir inutilmente uma operação cara cinco vezes."
+        },
+        {
+          "indices": [
+            1,
+            2,
+            3,
+            4,
+            6
+          ],
+          "representante": 4,
+          "nota": 100,
+          "porque": "app/models/optimized_image.rb:149-151 redefine `downsize` em vez de sobrecarregá-lo, quebrando chamadas existentes com cinco argumentos por `ArgumentError`."
+        },
+        {
+          "indices": [
+            5
+          ],
+          "representante": 5,
+          "nota": 30,
+          "porque": "app/controllers/uploads_controller.rb:63-69 adiciona até cinco conversões síncronas, mas o impacto alegado depende do fluxo e pode ser uma escolha deliberada para viabilizar a redução."
+        },
+        {
+          "indices": [
+            7
+          ],
+          "representante": 7,
+          "nota": 30,
+          "porque": "app/controllers/uploads_controller.rb:63-69 amplia a exposição a imagens de grande dimensão decodificada, embora limites do ImageMagick ou validações existentes possam já mitigar o risco."
+        },
+        {
+          "indices": [
+            8
+          ],
+          "representante": 8,
+          "nota": 90,
+          "porque": "app/assets/javascripts/discourse/lib/utilities.js:182 substitui o limite configurável específico do tipo por 10 MiB, permitindo que anexos não-imagem excedam `max_attachment_size_kb` no fluxo descrito."
+        }
+      ],
+      "candidatos": 9
+    },
+    "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+      "grupos": [
+        {
+          "indices": [
+            0
+          ],
+          "representante": 0,
+          "nota": 10,
+          "porque": "tests/sentry/integrations/services/test_assignment_source.py:8-11 apenas nomeia incorretamente um teste que de fato cobre o input tipado e esperado (`dict`), sem indicar falha funcional."
+        },
+        {
+          "indices": [
+            1,
+            2,
+            7
+          ],
+          "representante": 7,
+          "nota": 100,
+          "porque": "src/sentry/integrations/services/assignment_source.py:18 avalia `timezone.now()` na definição da classe, fazendo todas as instâncias usarem um timestamp obsoleto; deve usar `field(default_factory=timezone.now)`."
+        },
+        {
+          "indices": [
+            3
+          ],
+          "representante": 3,
+          "nota": 10,
+          "porque": "src/sentry/integrations/utils/sync.py:94-116 faz pequenas alocações redundantes por grupo, mas o custo de criar essa dataclass é insignificante e não justifica bloquear o PR."
+        },
+        {
+          "indices": [
+            4
+          ],
+          "representante": 4,
+          "nota": 10,
+          "porque": "src/sentry/integrations/utils/sync.py:135-144 repete uma serialização minúscula por issue vinculada; é uma micro-otimização sem impacto material."
+        },
+        {
+          "indices": [
+            5,
+            8
+          ],
+          "representante": 5,
+          "nota": 90,
+          "porque": "src/sentry/integrations/mixins/issues.py:411-418 adiciona `assignment_source` por engano à API abstrata de status, embora o novo argumento seja usado no fluxo de assignee, criando um contrato incorreto e potencialmente incompatível com overrides."
+        },
+        {
+          "indices": [
+            6
+          ],
+          "representante": 6,
+          "nota": 20,
+          "porque": "src/sentry/integrations/utils/sync.py:136-144 pode ser incompatível com workers antigos em rollout, mas isso depende da arquitetura e estratégia de deploy/filas do projeto e costuma não ser tratado em cada alteração de assinatura de task."
+        }
+      ],
+      "candidatos": 9
+    },
+    "feature-localization-fallbacks-server-side-discourse-cursor": {
+      "grupos": [
+        {
+          "indices": [
+            0
+          ],
+          "representante": 0,
+          "nota": 20,
+          "porque": "app/controllers/application_controller.rb:159 pode impor custo de carregamento no primeiro request, mas isso ocorre apenas uma vez por locale e parece um trade-off intencional para garantir os fallbacks."
+        },
+        {
+          "indices": [
+            1
+          ],
+          "representante": 1,
+          "nota": 90,
+          "porque": "lib/freedom_patches/translate_accelerator.rb:62-68 carrega somente o locale ativo, enquanto a cadeia de fallbacks só é carregada pelo controller, deixando traduções em jobs e services sem os catálogos de fallback."
+        }
+      ],
+      "candidatos": 2
+    },
+    "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+      "grupos": [
+        {
+          "indices": [
+            0,
+            5,
+            12,
+            13
+          ],
+          "representante": 0,
+          "nota": 100,
+          "porque": "packages/core/EventManager.ts:118-120 dereferencia `mainHostDestinationCalendar.integration` quando o array pode estar vazio/nulo, causando erro de tipo e crash em runtime."
+        },
+        {
+          "indices": [
+            1,
+            3,
+            6,
+            11
+          ],
+          "representante": 3,
+          "nota": 90,
+          "porque": "packages/app-store/office365calendar/lib/CalendarService.ts:72-77 sempre usa o primeiro calendário de destino, ignorando a credencial do host coletivo corrente."
+        },
+        {
+          "indices": [
+            2
+          ],
+          "representante": 2,
+          "nota": 70,
+          "porque": "packages/features/bookings/lib/handleNewBooking.ts:757-761 devolve a mensagem bruta de um erro conhecido do Prisma pelo endpoint público."
+        },
+        {
+          "indices": [
+            4
+          ],
+          "representante": 4,
+          "nota": 90,
+          "porque": "packages/app-store/googlecalendar/lib/CalendarService.ts:254-256 procura um calendário cujo `externalId` seja igual ao argumento ausente, tornando o fallback sempre `undefined`."
+        },
+        {
+          "indices": [
+            7,
+            10
+          ],
+          "representante": 10,
+          "nota": 80,
+          "porque": "packages/features/bookings/lib/handleCancelBooking.ts:423-461 repete toda a varredura de exclusão da série para cada referência de calendário, gerando deletes duplicados."
+        },
+        {
+          "indices": [
+            8
+          ],
+          "representante": 8,
+          "nota": 30,
+          "porque": "packages/core/EventManager.ts:338-383 serializa consultas e chamadas de provedores por destino; é uma regressão de latência plausível, mas pode ser deliberado para limitar concorrência."
+        },
+        {
+          "indices": [
+            9
+          ],
+          "representante": 9,
+          "nota": 30,
+          "porque": "packages/core/EventManager.ts:339-355 faz um `findUnique` sequencial por credencial ausente, criando um N+1, embora o número de hosts costume ser pequeno."
+        },
+        {
+          "indices": [
+            14
+          ],
+          "representante": 14,
+          "nota": 90,
+          "porque": "packages/core/EventManager.ts:375-381 omite `destination.externalId` no caminho legado sem `credentialId`, perdendo o calendário selecionado e a referência necessária para atualizações."
+        },
+        {
+          "indices": [
+            15
+          ],
+          "representante": 15,
+          "nota": 80,
+          "porque": "packages/app-store/googlecalendar/lib/CalendarService.ts:147-177 usa `primary` no insert, mas mantém `selectedCalendar` indefinido no patch posterior do Google Meet."
+        },
+        {
+          "indices": [
+            16
+          ],
+          "representante": 16,
+          "nota": 0,
+          "porque": "packages/trpc/server/routers/viewer/organizations/create.handler.ts:151-153 não aparece no diff fornecido, portanto a alegação não é revisável neste PR."
+        }
+      ],
+      "candidatos": 17
+    },
+    "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+      "grupos": [
+        {
+          "indices": [
+            0,
+            1,
+            15
+          ],
+          "representante": 15,
+          "nota": 80,
+          "porque": "app/models/embeddable_host.rb:17 and db/migrate/20150818190757_create_embeddable_hosts.rb:3-7 allow duplicate case-insensitive normalized hosts and lack an index for the request-time lookup, making category choice ambiguous and lookup unnecessarily scan-based."
+        },
+        {
+          "indices": [
+            2,
+            3
+          ],
+          "representante": 2,
+          "nota": 30,
+          "porque": "spec/models/topic_spec.rb:1403-1411 describes and sets up a host prerequisite that app/models/topic.rb:869 no longer evaluates, so the test passes for unrelated predicates and documents a false contract."
+        },
+        {
+          "indices": [
+            4
+          ],
+          "representante": 4,
+          "nota": 90,
+          "porque": "app/models/embeddable_host.rb:14-17 compares lower(host) with an unnormalized URI hostname, so uppercase DNS names are incorrectly denied despite hostnames being case-insensitive."
+        },
+        {
+          "indices": [
+            5
+          ],
+          "representante": 5,
+          "nota": 70,
+          "porque": "db/migrate/20150818190757_create_embeddable_hosts.rb:2-31 uses change around irreversible raw data migration and destructive setting deletion, so rollback cannot safely reconstruct the prior configuration."
+        },
+        {
+          "indices": [
+            6,
+            12
+          ],
+          "representante": 12,
+          "nota": 100,
+          "porque": "db/migrate/20150818190757_create_embeddable_hosts.rb:9-16 dereferences the first query row before checking presence, so sites without a persisted embed_category override can fail the migration before fallback."
+        },
+        {
+          "indices": [
+            7
+          ],
+          "representante": 7,
+          "nota": 20,
+          "porque": "app/assets/javascripts/admin/components/embeddable-host.js.es6:33-38 rereads mutable categoryId after save, but the narrow pending-request interaction makes this a low-priority transient client inconsistency."
+        },
+        {
+          "indices": [
+            8,
+            11
+          ],
+          "representante": 11,
+          "nota": 100,
+          "porque": "db/migrate/20150818190757_create_embeddable_hosts.rb:18-25 copies legacy URL-form entries verbatim while app/models/embeddable_host.rb:14-17 looks up hostname-only values, silently disabling previously allowed embeds after upgrade."
+        },
+        {
+          "indices": [
+            9
+          ],
+          "representante": 9,
+          "nota": 90,
+          "porque": "db/migrate/20150818190757_create_embeddable_hosts.rb:18-25 interpolates persisted setting text directly into SQL, so legitimate quotes can abort deployment and crafted values can alter the statement."
+        },
+        {
+          "indices": [
+            10
+          ],
+          "representante": 10,
+          "nota": 90,
+          "porque": "app/models/embeddable_host.rb:2 and app/models/embeddable_host.rb:14-17 permit storing host:port but discard the request URL port during lookup, making every port-qualified allowlist entry unusable."
+        },
+        {
+          "indices": [
+            13
+          ],
+          "representante": 13,
+          "nota": 40,
+          "porque": "app/controllers/admin/embeddable_hosts_controller.rb:9-16 dereferences nil for stale or concurrently deleted IDs, returning a 500 rather than a not-found response."
+        },
+        {
+          "indices": [
+            14
+          ],
+          "representante": 14,
+          "nota": 80,
+          "porque": "app/models/embeddable_host.rb:5-8 calls sub! on a nil host before validation, turning a missing/null admin payload into a 500 instead of a validation error."
+        }
+      ],
+      "candidatos": 16
+    },
+    "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+      "grupos": [
+        {
+          "indices": [
+            0,
+            1,
+            10
+          ],
+          "representante": 1,
+          "nota": 90,
+          "porque": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:139-157 não sincroniza início/fim do leitor e pode tanto passar sem exercitar a concorrência quanto deixar a thread viva em falhas."
+        },
+        {
+          "indices": [
+            2,
+            6
+          ],
+          "representante": 6,
+          "nota": 70,
+          "porque": "server-spi-private/src/main/java/org/keycloak/models/utils/RepresentationToModel.java:637-656 remove e recria todos os escopos, introduzindo trabalho síncrono redundante e potencialmente quadrático em atualizações."
+        },
+        {
+          "indices": [
+            3,
+            7
+          ],
+          "representante": 7,
+          "nota": 100,
+          "porque": "core/src/main/java/org/keycloak/representations/account/ConsentScopeRepresentation.java:26-58 troca a propriedade pública correta displayText pelo typo displayTest, quebrando o contrato JSON/bean."
+        },
+        {
+          "indices": [
+            4
+          ],
+          "representante": 4,
+          "nota": 70,
+          "porque": "services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java:400 documenta que search combina com os filtros seguintes, mas a implementação os ignora quando search está presente."
+        },
+        {
+          "indices": [
+            5
+          ],
+          "representante": 5,
+          "nota": 80,
+          "porque": "services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java:422-425 pode retornar contagens irrestritas a administradores V2 com apenas permissão de consulta, expondo existência e totais de usuários não visíveis."
+        },
+        {
+          "indices": [
+            8,
+            12
+          ],
+          "representante": 12,
+          "nota": 90,
+          "porque": "services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java:419-425 ignora enabled e emailVerified quando search é informado, tornando a contagem inconsistente com os critérios solicitados."
+        },
+        {
+          "indices": [
+            9
+          ],
+          "representante": 9,
+          "nota": 80,
+          "porque": "tests/base/src/test/java/org/keycloak/tests/admin/UsersTest.java:43-51 descarta Responses de criação sem fechá-las, podendo reter conexões durante a suíte."
+        },
+        {
+          "indices": [
+            11
+          ],
+          "representante": 11,
+          "nota": 90,
+          "porque": "services/src/main/java/org/keycloak/jose/jws/DefaultTokenManager.java:246-247 remove a guarda de cliente nulo e pode causar NullPointerException ao codificar token ACCESS sem cliente no contexto."
+        },
+        {
+          "indices": [
+            13
+          ],
+          "representante": 13,
+          "nota": 80,
+          "porque": "test-framework/clustering/src/main/java/org/keycloak/testframework/server/ClusteredKeycloakServer.java:50-58 retorna do start antes de confirmar a formação do cluster, criando testes dependentes de corrida."
+        },
+        {
+          "indices": [
+            14
+          ],
+          "representante": 14,
+          "nota": 100,
+          "porque": "quarkus/dist/src/main/content/bin/kc.sh:56-61 remove suporte documentado a endereços IPv4/IPv6 em --debug e ainda encaminha o endereço rejeitado como argumento da aplicação."
+        },
+        {
+          "indices": [
+            15
+          ],
+          "representante": 15,
+          "nota": 50,
+          "porque": "services/src/main/java/org/keycloak/cookie/DefaultCookieProvider.java:79-80 deixa de reconhecer X-Forwarded-Proto isolado e passa a emitir diagnóstico incorreto para requisições HTTPS originadas em proxy."
+        }
+      ],
+      "candidatos": 16
+    },
+    "fixing-re-authentication-with-passkeys-keycloak": {
+      "grupos": [
+        {
+          "indices": [
+            0
+          ],
+          "representante": 0,
+          "nota": 90,
+          "porque": "Em services/src/main/java/org/keycloak/authentication/authenticators/browser/PasswordForm.java:51-56, o novo caminho preenche dados de passkey antes de renderizar login-password, mas o tema base que atende esse caminho não os consome, deixando passkeys indisponíveis para temas derivados."
+        },
+        {
+          "indices": [
+            1
+          ],
+          "representante": 1,
+          "nota": 90,
+          "porque": "Em themes/src/main/resources/theme/base/login/passkeys.ftl:11-17, omitir o formulário quando `authenticators` não existe conflita com a inicialização JavaScript posterior, que procura esse formulário no login descobrível sem usuário identificado e pode falhar com TypeError."
+        }
+      ],
+      "candidatos": 2
+    },
+    "frontend-asset-optimization-grafana-codex": {
+      "grupos": [
+        {
+          "indices": [
+            0,
+            1,
+            5,
+            6,
+            7
+          ],
+          "representante": 5,
+          "nota": 100,
+          "porque": "pkg/tsdb/azuremonitor/metrics/url-builder.go:68-70 indexa resourceNameArray sem validar o comprimento, fazendo entradas legadas ou malformadas causarem panic em vez de erro."
+        },
+        {
+          "indices": [
+            2
+          ],
+          "representante": 2,
+          "nota": 30,
+          "porque": "pkg/services/cloudmigration/model.go:40 mantém um comentário desatualizado sobre o armazenamento da chave, mas isso é sobretudo dívida de documentação interna e não altera o comportamento."
+        },
+        {
+          "indices": [
+            3
+          ],
+          "representante": 3,
+          "nota": 60,
+          "porque": "pkg/api/webassets/webassets.go:41-49 não verifica novamente o cache após obter o write lock, então requisições simultâneas no cold start repetem serialmente a mesma leitura."
+        },
+        {
+          "indices": [
+            4
+          ],
+          "representante": 4,
+          "nota": 40,
+          "porque": "pkg/api/webassets/webassets.go:48-60 mantém um mutex global durante I/O em todas as requisições de desenvolvimento, serializando recargas que poderiam ocorrer sem esse bloqueio."
+        },
+        {
+          "indices": [
+            8
+          ],
+          "representante": 8,
+          "nota": 100,
+          "porque": "pkg/services/cloudmigration/model.go:40 passa a persistir EncryptionKey em uma coluna sem a migração de schema e sem compatibilidade de leitura para snapshots existentes."
+        },
+        {
+          "indices": [
+            9
+          ],
+          "representante": 9,
+          "nota": 90,
+          "porque": "public/app/plugins/datasource/cloudwatch/language/cloudwatch-sql/SQLGenerator.ts:16-32 deixa de receber accountId, removendo silenciosamente o filtro de conta do SQL gerado."
+        },
+        {
+          "indices": [
+            10
+          ],
+          "representante": 10,
+          "nota": 100,
+          "porque": "packages/grafana-ui/src/components/Combobox/Combobox.tsx:76-78 mantém o contêiner absoluto de 600×400 montado quando fechado, criando uma sobreposição invisível que pode interceptar interação."
+        }
+      ],
+      "candidatos": 11
+    },
+    "github-oauth-security-enhancement-sentry": {
+      "grupos": [
+        {
+          "indices": [
+            0
+          ],
+          "representante": 0,
+          "nota": 20,
+          "porque": "src/sentry/integrations/github/integration.py:493-496 repete uma consulta já feita, mas é apenas uma otimização pequena no caminho de instalação."
+        },
+        {
+          "indices": [
+            1
+          ],
+          "representante": 1,
+          "nota": 50,
+          "porque": "src/sentry/integrations/github/integration.py:129-142 passa strings variáveis para gettext, impedindo a extração das novas mensagens curtas para tradução."
+        },
+        {
+          "indices": [
+            2
+          ],
+          "representante": 2,
+          "nota": 80,
+          "porque": "src/sentry/integrations/github/integration.py:501-504 indexa metadata['sender']['login'] sem defesa, podendo gerar KeyError para integrações existentes sem esses metadados."
+        },
+        {
+          "indices": [
+            3
+          ],
+          "representante": 3,
+          "nota": 60,
+          "porque": "tests/sentry/integrations/github/test_integration.py:388-396 usa state inválido e, assim, o teste nomeado como installation-not-found não chega ao caminho de 404 que deveria proteger."
+        },
+        {
+          "indices": [
+            4
+          ],
+          "representante": 4,
+          "nota": 60,
+          "porque": "tests/sentry/replays/consumers/test_recording.py:170-172 remove a única asserção explícita sobre outcomes justamente quando o PR altera a cobrança de replay em vídeo."
+        },
+        {
+          "indices": [
+            5
+          ],
+          "representante": 5,
+          "nota": 70,
+          "porque": "src/sentry/integrations/github/integration.py:416-420 omite no token exchange o redirect_uri enviado na autorização, o que pode fazer o OAuth ser rejeitado."
+        },
+        {
+          "indices": [
+            6,
+            7
+          ],
+          "representante": 7,
+          "nota": 100,
+          "porque": "src/sentry/integrations/github/integration.py:401-413 usa uma assinatura determinística global como OAuth state, anulando a proteção contra login CSRF."
+        },
+        {
+          "indices": [
+            8
+          ],
+          "representante": 8,
+          "nota": 80,
+          "porque": "src/sentry/integrations/github/integration.py:434-436 deixa exceções da consulta /user escaparem, transformando falhas normais do provedor em HTTP 500."
+        }
+      ],
+      "candidatos": 9
+    },
+    "fix-proper-handling-of-group-memberships-discourse-cursor": {
+      "grupos": [
+        {
+          "indices": [
+            0
+          ],
+          "representante": 0,
+          "nota": 70,
+          "porque": "app/controllers/groups_controller.rb:22-26 aceita `limit` e `offset` públicos sem limites, permitindo consultas inválidas ou respostas excessivamente grandes."
+        },
+        {
+          "indices": [
+            1,
+            3,
+            4,
+            5
+          ],
+          "representante": 3,
+          "nota": 100,
+          "porque": "app/assets/javascripts/admin/controllers/admin-group.js.es6:11-14 usa `floor(...)+1`, criando comprovadamente uma página vazia extra quando o total é múltiplo exato do limite."
+        },
+        {
+          "indices": [
+            2
+          ],
+          "representante": 2,
+          "nota": 60,
+          "porque": "app/assets/javascripts/discourse/models/group.js:23-36 aplica respostas assíncronas sem verificar qual requisição é a mais recente, então cliques rápidos podem fazer uma página antiga sobrescrever a atual."
+        },
+        {
+          "indices": [
+            6
+          ],
+          "representante": 6,
+          "nota": 100,
+          "porque": "app/controllers/admin/groups_controller.rb:84-90 passa um ID inteiro a `group.users.delete`, embora a associação espere um objeto `User`, fazendo a remoção falhar por incompatibilidade de tipo."
+        },
+        {
+          "indices": [
+            7,
+            8
+          ],
+          "representante": 8,
+          "nota": 30,
+          "porque": "app/controllers/admin/groups_controller.rb:71-75 faz consulta e inserção sequenciais por nome no endpoint em lote; é uma ineficiência real, mas provavelmente pequena para o tamanho normal da entrada do seletor."
+        },
+        {
+          "indices": [
+            9,
+            10
+          ],
+          "representante": 10,
+          "nota": 30,
+          "porque": "app/assets/javascripts/discourse/routes/group-members.js.es6:8-12 e app/assets/javascripts/admin/routes/admin_group_route.js:11-14 abandonam o `afterModel` aguardado e disparam a carga sem integrar falhas ao ciclo da rota, embora isso possa ser uma decisão intencional de carregamento assíncrono."
+        }
+      ],
+      "candidatos": 11
+    },
+    "implement-access-token-context-encoding-framework-keycloak": {
+      "grupos": [
+        {
+          "indices": [
+            0,
+            5,
+            6
+          ],
+          "representante": 5,
+          "nota": 90,
+          "porque": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java:482-484 usa o segmento errado e a comparação invertida, tornando ineficaz a verificação central do novo formato de ID."
+        },
+        {
+          "indices": [
+            1
+          ],
+          "representante": 1,
+          "nota": 80,
+          "porque": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java:29-33 adiciona um método abstrato a um SPI extensível e pode quebrar providers externos já compilados com AbstractMethodError durante a inicialização."
+        },
+        {
+          "indices": [
+            2,
+            4
+          ],
+          "representante": 4,
+          "nota": 90,
+          "porque": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java:72-73 verifica grantType duas vezes e deixa rawTokenId nulo ser aceito, podendo codificar o literal \"null\" no ID."
+        },
+        {
+          "indices": [
+            3,
+            8
+          ],
+          "representante": 8,
+          "nota": 100,
+          "porque": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java:109-117 aceita atalhos de tamanho arbitrário, embora o decoder exija exatamente dois caracteres; a própria documentação do SPI sugere três."
+        },
+        {
+          "indices": [
+            7
+          ],
+          "representante": 7,
+          "nota": 70,
+          "porque": "services/src/test/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderTest.java:78-84 captura RuntimeException e pode passar por NullPointerException da fixture, sem testar a rejeição pretendida do grant desconhecido."
+        },
+        {
+          "indices": [
+            9
+          ],
+          "representante": 9,
+          "nota": 70,
+          "porque": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java:110-115 sobrescreve silenciosamente o dono de um atalho duplicado descoberto em runtime, podendo reinterpretar IDs já emitidos."
+        }
+      ],
+      "candidatos": 10
+    },
+    "notification-rule-processing-engine-grafana-codex": {
+      "grupos": [
+        {
+          "indices": [
+            0
+          ],
+          "representante": 0,
+          "nota": 60,
+          "porque": "public/app/features/alerting/unified/hooks/useAbilities.ts:349-352 introduz consultas de pasta por regra/pasta na lista, criando um padrão de requisições que pode escalar mal."
+        },
+        {
+          "indices": [
+            1
+          ],
+          "representante": 1,
+          "nota": 20,
+          "porque": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx:16-27 mantém documentação obsoleta sobre uma consulta Ruler removida, mas isso não afeta o comportamento."
+        },
+        {
+          "indices": [
+            2,
+            6,
+            7,
+            9,
+            11
+          ],
+          "representante": 6,
+          "nota": 100,
+          "porque": "pkg/registry/apis/iam/serviceaccount/store.go:104-107 não preenche InternalID, fazendo AuthID retornar \"0\" para todas as contas e quebrando a autorização por recurso na listagem."
+        },
+        {
+          "indices": [
+            3,
+            4,
+            5,
+            10
+          ],
+          "representante": 4,
+          "nota": 100,
+          "porque": "pkg/registry/apis/iam/serviceaccount/rest_token.go:34-36 declara UserTeamList embora o endpoint produza ServiceAccountTokenList, corrompendo o contrato e o schema da resposta."
+        },
+        {
+          "indices": [
+            8
+          ],
+          "representante": 8,
+          "nota": 100,
+          "porque": "public/app/core/components/TimeSeries/utils.ts:396-399 usa == null sem limitar o índice, entrando em loop infinito para séries vazias ou compostas apenas por null."
+        },
+        {
+          "indices": [
+            12
+          ],
+          "representante": 12,
+          "nota": 20,
+          "porque": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx:85-101 não testa as opções prometidas pelo nome do teste, porém isso é apenas uma lacuna de cobertura."
+        },
+        {
+          "indices": [
+            13
+          ],
+          "representante": 13,
+          "nota": 30,
+          "porque": "public/app/features/alerting/unified/hooks/useAbilities.ts:287-293 cria assinaturas e cálculos duplicados por linha, mas a deduplicação do RTK Query reduz o impacto e a correção pode ficar para depois."
+        },
+        {
+          "indices": [
+            14
+          ],
+          "representante": 14,
+          "nota": 100,
+          "porque": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx:104-106 oferece Silence como permitido mas impede a abertura do drawer quando a linha fornece apenas promRule, tornando a ação visível um no-op."
+        }
+      ],
+      "candidatos": 15
+    },
+    "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+      "grupos": [
+        {
+          "indices": [
+            0
+          ],
+          "representante": 0,
+          "nota": 20,
+          "porque": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go:48-60 usa payloads vazios e, portanto, não testa o valor calculado para o tamanho; é uma lacuna de teste válida, mas não um defeito de produção por si só."
+        },
+        {
+          "indices": [
+            1
+          ],
+          "representante": 1,
+          "nota": 40,
+          "porque": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go:47-48 descreve bytes “returned”, embora o código registre o tamanho da requisição, podendo induzir consumidores da métrica ao erro."
+        },
+        {
+          "indices": [
+            2
+          ],
+          "representante": 2,
+          "nota": 80,
+          "porque": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go:127-138 converte para float somente após a divisão inteira de time.Duration, truncando milissegundos fracionários e registrando chamadas sub-ms como zero."
+        },
+        {
+          "indices": [
+            3
+          ],
+          "representante": 3,
+          "nota": 20,
+          "porque": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go:149-153 faz duas consultas consecutivas ao registry para QueryData e CallResource; é uma ineficiência real, mas provavelmente pequena e não bloqueadora."
+        },
+        {
+          "indices": [
+            4,
+            5,
+            8
+          ],
+          "representante": 5,
+          "nota": 100,
+          "porque": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go:76-81 reutiliza uma instância mutável e sobrescreve next a cada cadeia criada, causando data race e possível despacho pela cadeia de outra requisição."
+        },
+        {
+          "indices": [
+            6
+          ],
+          "representante": 6,
+          "nota": 80,
+          "porque": "pkg/plugins/log/fake.go:46-48 retorna um recorder novo em FromContext, então o LoggerMiddleware passa a emitir logs em uma instância descartada e quebra a observabilidade esperada do TestLogger injetado."
+        },
+        {
+          "indices": [
+            7
+          ],
+          "representante": 7,
+          "nota": 90,
+          "porque": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go:149-150 transforma falha de lookup de label em falha da operação e pode impedir que a requisição chegue ao plugin, tornando telemetria uma dependência de disponibilidade."
+        },
+        {
+          "indices": [
+            9
+          ],
+          "representante": 9,
+          "nota": 90,
+          "porque": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go:38-43 configura valores típicos de segundos numa métrica observada em milissegundos, de modo que toda latência acima de 100 ms cai apenas no bucket +Inf."
+        }
+      ],
+      "candidatos": 10
+    },
+    "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+      "grupos": [
+        {
+          "indices": [
+            0
+          ],
+          "representante": 0,
+          "nota": 10,
+          "porque": "packages/app-store/salesforce/lib/CalendarService.ts:86 throws before consuming the body, but Fetch implementations normally reclaim such responses and this is unlikely to justify a blocking change by itself."
+        },
+        {
+          "indices": [
+            1
+          ],
+          "representante": 1,
+          "nota": 70,
+          "porque": "packages/app-store/salesforce/lib/CalendarService.ts:75-99 now performs a provider refresh and database write on every client construction, creating material latency and rate-limit overhead unless this lifecycle is intentionally guaranteed to be rare."
+        },
+        {
+          "indices": [
+            2,
+            8,
+            11,
+            16
+          ],
+          "representante": 11,
+          "nota": 100,
+          "porque": "packages/app-store/googlecalendar/lib/CalendarService.ts:86-100 and packages/app-store/hubspot/lib/CalendarService.ts:177-202 consume the helper's native fetch Response as provider-specific SDK response objects, so synchronized refresh deterministically fails or persists invalid authentication state."
+        },
+        {
+          "indices": [
+            3,
+            9,
+            10,
+            12
+          ],
+          "representante": 10,
+          "nota": 100,
+          "porque": "packages/app-store/zoho-bigin/lib/CalendarService.ts:85-94 passes credential.id as the helper's userId, causing the sync endpoint to receive the wrong calcomUserId; candidate 3 additionally notes the related response-shape failure in this path."
+        },
+        {
+          "indices": [
+            4
+          ],
+          "representante": 4,
+          "nota": 40,
+          "porque": "apps/web/pages/api/webhook/app-credential.ts:9-29 has no timestamp or delivery identifier, so an intercepted authenticated delivery can be replayed to restore stale credentials, though transport security and deployment assumptions may make owners defer replay protection."
+        },
+        {
+          "indices": [
+            5
+          ],
+          "representante": 5,
+          "nota": 100,
+          "porque": "packages/app-store/salesforce/lib/CalendarService.ts:96-99 references prisma without importing it, which is a direct TypeScript build failure."
+        },
+        {
+          "indices": [
+            6
+          ],
+          "representante": 6,
+          "nota": 10,
+          "porque": "apps/web/pages/api/webhook/app-credential.ts:24-27 uses ordinary string comparison, but a practical remote timing attack against this header check is highly implausible and most owners would not block the PR on it."
+        },
+        {
+          "indices": [
+            7
+          ],
+          "representante": 7,
+          "nota": 30,
+          "porque": "apps/web/pages/api/webhook/app-credential.ts:56-59 decrypts AES ciphertext without an authentication tag, but the request is separately authenticated by the webhook secret, so whether AEAD is required depends on the intended threat model."
+        },
+        {
+          "indices": [
+            13
+          ],
+          "representante": 13,
+          "nota": 90,
+          "porque": "apps/web/pages/api/webhook/app-credential.ts:62-90 implements a non-atomic find-then-create without a compound uniqueness constraint, allowing concurrent initial deliveries to create duplicate active credentials."
+        },
+        {
+          "indices": [
+            14
+          ],
+          "representante": 14,
+          "nota": 100,
+          "porque": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:5-11 uses computed literal property names rather than a Zod catch-all, so ordinary documented sync token responses fail validation."
+        },
+        {
+          "indices": [
+            15
+          ],
+          "representante": 15,
+          "nota": 100,
+          "porque": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:25-27 inserts a literal placeholder refresh token that downstream callers persist, guaranteeing a later refresh failure when the sync response omits refresh_token as documented."
+        }
+      ],
+      "candidatos": 17
+    },
+    "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+      "grupos": [
+        {
+          "indices": [
+            0
+          ],
+          "representante": 0,
+          "nota": 20,
+          "porque": "src/sentry/monitors/logic/incident_occurrence.py:134-156 has a stale/inaccurate docstring example, but runtime behavior is unaffected and owners may accept the generated wording."
+        },
+        {
+          "indices": [
+            1
+          ],
+          "representante": 1,
+          "nota": 90,
+          "porque": "src/sentry/monitors/logic/incident_occurrence.py:160-168 computes the display-normalized config and then mistakenly returns the original config, defeating the intended event-context transformation."
+        }
+      ],
+      "candidatos": 2
+    },
+    "sms-workflow-reminder-retry-count-tracking-cal-com": {
+      "grupos": [
+        {
+          "indices": [
+            0
+          ],
+          "representante": 0,
+          "nota": 20,
+          "porque": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:28-42 has a stale comment, but this is documentation-only and is overshadowed by the actual predicate bug."
+        },
+        {
+          "indices": [
+            1
+          ],
+          "representante": 1,
+          "nota": 70,
+          "porque": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:190-197 can throw while already handling a per-reminder error, aborting the batch and changing the endpoint's prior failure isolation."
+        },
+        {
+          "indices": [
+            2
+          ],
+          "representante": 2,
+          "nota": 30,
+          "porque": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:178-197 adds sequential writes on failures, but batching is mainly an optimization and may complicate per-item processing."
+        },
+        {
+          "indices": [
+            3,
+            4
+          ],
+          "representante": 3,
+          "nota": 100,
+          "porque": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:31-43 places method=SMS in only one OR arm, so this SMS cron can permanently delete retry-exhausted reminders for other delivery methods."
+        },
+        {
+          "indices": [
+            5
+          ],
+          "representante": 5,
+          "nota": 80,
+          "porque": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:179-196 writes retryCount from a previously read value, so overlapping cron runs can lose failures and defeat the intended retry threshold."
+        },
+        {
+          "indices": [
+            6
+          ],
+          "representante": 6,
+          "nota": 70,
+          "porque": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:178-186 treats an undefined scheduling result as a retry failure, so a temporary SMS lock can exhaust retries and cause permanent deletion before the account is unlocked."
+        }
+      ],
+      "candidatos": 7
+    },
+    "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+      "grupos": [
+        {
+          "indices": [
+            0
+          ],
+          "representante": 0,
+          "nota": 20,
+          "porque": "src/sentry/spans/consumers/process/flusher.py:31-32 descreve incorretamente “one process per shard”, embora a implementação use um pool limitado e possa compartilhar processos; é uma correção documental válida, mas de baixo impacto."
+        },
+        {
+          "indices": [
+            1,
+            2,
+            5,
+            6
+          ],
+          "representante": 5,
+          "nota": 100,
+          "porque": "src/sentry/consumers/__init__.py:432-436 aceita zero e negativos para uma contagem que precisa ser positiva; zero ignora silenciosamente o limite por causa de flusher.py:51 e negativos deixam o consumidor sem flushers ou causam falhas de mapeamento."
+        },
+        {
+          "indices": [
+            3
+          ],
+          "representante": 3,
+          "nota": 50,
+          "porque": "src/sentry/spans/consumers/process/flusher.py:199 usa a tag `shards` enquanto as métricas relacionadas usam `shard`, quebrando a consistência e consultas correlacionadas da nova dimensão."
+        },
+        {
+          "indices": [
+            4
+          ],
+          "representante": 4,
+          "nota": 80,
+          "porque": "src/sentry/spans/consumers/process/flusher.py:253-259 substitui um Process morto sem `join()`/`close()`, podendo acumular zombies e descritores a cada reinício."
+        },
+        {
+          "indices": [
+            7,
+            10
+          ],
+          "representante": 10,
+          "nota": 90,
+          "porque": "src/sentry/spans/consumers/process/flusher.py:269-301 transforma as verificações síncronas antes únicas em O(processos), repetindo pipelines Redis e consultas INFO globais no caminho de submit e prejudicando throughput."
+        },
+        {
+          "indices": [
+            8
+          ],
+          "representante": 8,
+          "nota": 80,
+          "porque": "tests/sentry/spans/consumers/process/test_consumer.py:60-62 tenta aguardar com `time.sleep`, mas o próprio teste já o substituiu por no-op, portanto a sincronização não existe e a asserção pode ficar sujeita a corrida."
+        },
+        {
+          "indices": [
+            9
+          ],
+          "representante": 9,
+          "nota": 20,
+          "porque": "tests/sentry/spans/consumers/process/test_consumer.py:119-121 só conta entradas e não prova identidade/unicidade dos shards; melhora a cobertura, mas não demonstra defeito no código de produção atual."
+        },
+        {
+          "indices": [
+            11
+          ],
+          "representante": 11,
+          "nota": 100,
+          "porque": "src/sentry/spans/consumers/process/flusher.py:337-347 dá `break` quando o prazo expira antes de terminar o processo atual e os restantes, fazendo `join(timeout=...)` retornar com filhos ainda ativos e regredindo o shutdown anterior."
+        }
+      ],
+      "candidatos": 12
+    },
+    "replays-self-serve-bulk-delete-system-sentry": {
+      "grupos": [
+        {
+          "indices": [
+            0
+          ],
+          "representante": 0,
+          "nota": 20,
+          "porque": "src/sentry/issues/endpoints/browser_reporting_collector.py:106-123 mantém uma segunda estrutura validada do lote, mas o risco depende de limites de corpo já aplicados pela infraestrutura e é sobretudo otimização defensiva."
+        },
+        {
+          "indices": [
+            1
+          ],
+          "representante": 1,
+          "nota": 0,
+          "porque": "static/app/views/dashboards/widgets/tableWidget/tableWidgetVisualization.spec.tsx:15-20 nem aparece no diff fornecido, portanto não é um achado acionável neste PR."
+        },
+        {
+          "indices": [
+            2
+          ],
+          "representante": 2,
+          "nota": 50,
+          "porque": "src/sentry/integrations/source_code_management/commit_context.py:584-590 busca o evento recomendado dentro do loop de issues e pode introduzir N+1 e latência perceptível nos comentários de PR."
+        },
+        {
+          "indices": [
+            3,
+            6,
+            11
+          ],
+          "representante": 6,
+          "nota": 0,
+          "porque": "static/app/views/dashboards/widgetCard/chart.tsx:164-174 não faz parte do diff fornecido; apesar de os três candidatos descreverem o mesmo defeito, não há base para publicá-lo nesta revisão."
+        },
+        {
+          "indices": [
+            4,
+            10
+          ],
+          "representante": 10,
+          "nota": 0,
+          "porque": "static/app/views/performance/newTraceDetails/traceDrawer/details/span/eapSections/attributes.tsx:34-69 não está no diff fornecido, então este grupo é fora do escopo."
+        },
+        {
+          "indices": [
+            5
+          ],
+          "representante": 5,
+          "nota": 10,
+          "porque": "src/sentry/issues/endpoints/browser_reporting_collector.py:106-120 retorna no primeiro item inválido, comportamento fail-fast comum para lotes e sem obrigação clara de agregar todos os erros."
+        },
+        {
+          "indices": [
+            7
+          ],
+          "representante": 7,
+          "nota": 70,
+          "porque": "src/sentry/issues/endpoints/browser_reporting_collector.py:110-114 grava o relatório inválido completo, controlado por cliente e potencialmente sensível, em logs operacionais de um endpoint sem autenticação."
+        },
+        {
+          "indices": [
+            8
+          ],
+          "representante": 8,
+          "nota": 30,
+          "porque": "src/sentry/integrations/source_code_management/commit_context.py:584-590 publica o nome do ambiente no provedor SCM, mas isso parece parte intencional da nova apresentação e o repositório já recebe detalhes dos próprios issues."
+        },
+        {
+          "indices": [
+            9
+          ],
+          "representante": 9,
+          "nota": 0,
+          "porque": "static/app/views/explore/types.tsx:8-12 não consta no diff e aponta apenas documentação, logo não vale comentário neste PR."
+        },
+        {
+          "indices": [
+            12,
+            13
+          ],
+          "representante": 13,
+          "nota": 80,
+          "porque": "src/sentry/issues/endpoints/browser_reporting_collector.py:50-59 usa truthiness em vez de presença, permitindo que age=0 ou timestamp=0 contorne a exclusão mútua declarada."
+        },
+        {
+          "indices": [
+            14
+          ],
+          "representante": 14,
+          "nota": 90,
+          "porque": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:107-119 associa IDs a events.values() por posição, embora get_multi possa devolver outra ordem ou deduplicar, produzindo detalhes ligados ao erro errado."
+        },
+        {
+          "indices": [
+            15
+          ],
+          "representante": 15,
+          "nota": 100,
+          "porque": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:153-155 compara timestamps de eventos de erro em segundos diretamente com eventos de replay em milissegundos, corrompendo deterministicamente a ordem cronológica enviada ao Seer."
+        },
+        {
+          "indices": [
+            16
+          ],
+          "representante": 16,
+          "nota": 80,
+          "porque": "src/sentry/issues/endpoints/browser_reporting_collector.py:47-60 torna age e timestamp ambos opcionais e só valida campos presentes, aceitando relatórios que não correspondem a nenhum dos dois formatos alegadamente suportados."
+        }
+      ],
+      "candidatos": 17
+    },
+    "unified-storage-performance-optimizations-grafana-codex": {
+      "grupos": [
+        {
+          "indices": [
+            0
+          ],
+          "representante": 0,
+          "nota": 20,
+          "porque": "pkg/server/module_server_test.go:35-38 disables PostgreSQL coverage, but the explicit TODO and Drone-only failure make this likely a deliberate temporary CI quarantine rather than a merge-blocking product defect."
+        },
+        {
+          "indices": [
+            1,
+            2,
+            4,
+            7
+          ],
+          "representante": 2,
+          "nota": 90,
+          "porque": "pkg/storage/unified/search/bleve.go:137-139 narrows synchronization to publication, allowing concurrent same-key builds that can duplicate work, race on file-backed creation, overwrite an updated index, and leak the discarded index."
+        },
+        {
+          "indices": [
+            3
+          ],
+          "representante": 3,
+          "nota": 30,
+          "porque": "pkg/storage/unified/resource/server.go:258 eagerly initializes with an internally owned context, but constructor-owned lifetime context may be intentional and the caller-context contract is not established by this diff."
+        },
+        {
+          "indices": [
+            5
+          ],
+          "representante": 5,
+          "nota": 80,
+          "porque": "pkg/storage/unified/resource/search.go:207-216 calls TotalDocs after starting event processing, so if TotalDocs iterates the Bleve cache without locking, a concurrent cache insertion can cause a fatal concurrent map iteration/write panic."
+        },
+        {
+          "indices": [
+            6
+          ],
+          "representante": 6,
+          "nota": 90,
+          "porque": "pkg/storage/unified/resource/server.go:258-262 returns no server handle after Init failure even though search initialization may already have started a watcher goroutine, leaving resources running unless the constructor explicitly cleans them up."
+        }
+      ],
+      "candidatos": 8
+    }
+  }
+}

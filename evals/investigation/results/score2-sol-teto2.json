@@ -1,0 +1,286 @@
+{
+  "dump": "sol-teto2",
+  "modelo": "gpt-5.6-sol@sub",
+  "saida": {
+    "add-html-sanitizer-for-translated-message-resources-keycloak": {
+      "0": 99,
+      "1": 100,
+      "2": 98,
+      "3": 96,
+      "6": 94,
+      "8": 89
+    },
+    "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+      "0": 100,
+      "1": 90,
+      "3": 100,
+      "4": 75,
+      "5": 100
+    },
+    "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+      "0": 100,
+      "2": 50,
+      "3": 50,
+      "4": 50,
+      "6": 50,
+      "7": 50,
+      "8": 50
+    },
+    "add-guest-management-functionality-to-existing-bookings-cal-com": {
+      "1": 100,
+      "2": 94,
+      "5": 98,
+      "6": 96,
+      "7": 100,
+      "8": 100,
+      "9": 98,
+      "10": 98,
+      "11": 100,
+      "12": 95,
+      "13": 100,
+      "14": 86,
+      "15": 92,
+      "16": 100
+    },
+    "feat-2fa-backup-codes-cal-com": {
+      "0": 90,
+      "1": 98,
+      "2": 100,
+      "3": 98,
+      "4": 90,
+      "6": 95
+    },
+    "dual-storage-architecture-grafana-codex": {
+      "0": 100,
+      "1": 100,
+      "4": 98,
+      "6": 95,
+      "7": 95,
+      "9": 100,
+      "10": 100,
+      "11": 90,
+      "13": 100
+    },
+    "anonymous-add-configurable-device-limit-grafana-codex": {
+      "1": 50,
+      "2": 50,
+      "3": 50,
+      "4": 50,
+      "5": 50,
+      "6": 50,
+      "7": 50,
+      "8": 50,
+      "10": 50,
+      "11": 50,
+      "12": 50,
+      "17": 95,
+      "18": 50,
+      "19": 50,
+      "20": 50,
+      "21": 50,
+      "22": 50
+    },
+    "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+      "0": 100,
+      "1": 100,
+      "2": 75,
+      "3": 100,
+      "4": 95,
+      "6": 100,
+      "7": 45,
+      "8": 95,
+      "9": 100,
+      "11": 95,
+      "12": 100,
+      "13": 95,
+      "14": 100,
+      "15": 95,
+      "16": 75
+    },
+    "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+      "0": 100,
+      "2": 98
+    },
+    "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+      "0": 100,
+      "1": 100,
+      "3": 100,
+      "4": 100
+    },
+    "feature-automatically-downsize-large-images-discourse-cursor": {
+      "0": 98,
+      "4": 92,
+      "5": 90,
+      "7": 55,
+      "8": 55
+    },
+    "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+      "0": 100,
+      "3": 100,
+      "4": 100,
+      "5": 100,
+      "6": 75,
+      "7": 100
+    },
+    "feature-localization-fallbacks-server-side-discourse-cursor": {
+      "0": 75,
+      "1": 90
+    },
+    "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+      "0": 100,
+      "2": 90,
+      "3": 95,
+      "4": 100,
+      "8": 100,
+      "9": 100,
+      "10": 100,
+      "14": 100,
+      "15": 75,
+      "16": 0
+    },
+    "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+      "1": 50,
+      "4": 50,
+      "5": 50,
+      "6": 50,
+      "7": 100,
+      "9": 50,
+      "11": 50,
+      "12": 50,
+      "13": 50,
+      "14": 100,
+      "15": 50
+    },
+    "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+      "2": 100,
+      "4": 98,
+      "5": 96,
+      "7": 98,
+      "9": 100,
+      "10": 100,
+      "11": 99,
+      "12": 99,
+      "13": 100,
+      "14": 100,
+      "15": 99
+    },
+    "fixing-re-authentication-with-passkeys-keycloak": {
+      "0": 50,
+      "9": 50
+    },
+    "fix-proper-handling-of-group-memberships-discourse-cursor": {
+      "0": 100,
+      "2": 95,
+      "3": 100,
+      "6": 20,
+      "8": 90,
+      "9": 100,
+      "10": 100
+    },
+    "frontend-asset-optimization-grafana-codex": {
+      "2": 50,
+      "3": 50,
+      "4": 50,
+      "5": 50,
+      "8": 50,
+      "9": 50,
+      "10": 75
+    },
+    "github-oauth-security-enhancement-sentry": {
+      "0": 99,
+      "1": 98,
+      "2": 85,
+      "3": 99,
+      "4": 100,
+      "5": 92,
+      "7": 55,
+      "8": 78
+    },
+    "implement-access-token-context-encoding-framework-keycloak": {
+      "1": 94,
+      "5": 100,
+      "6": 99,
+      "8": 96,
+      "9": 100,
+      "10": 99
+    },
+    "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+      "0": 100,
+      "1": 100,
+      "2": 100,
+      "3": 100,
+      "5": 75,
+      "6": 100,
+      "7": 100,
+      "9": 100
+    },
+    "notification-rule-processing-engine-grafana-codex": {
+      "0": 50,
+      "1": 50,
+      "4": 50,
+      "6": 75,
+      "8": 50,
+      "12": 50,
+      "13": 50,
+      "14": 50
+    },
+    "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+      "0": 90,
+      "1": 98,
+      "3": 70,
+      "4": 100,
+      "5": 100,
+      "6": 45,
+      "7": 75,
+      "11": 100,
+      "13": 75,
+      "14": 100,
+      "15": 90,
+      "16": 100
+    },
+    "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+      "0": 100,
+      "1": 100
+    },
+    "sms-workflow-reminder-retry-count-tracking-cal-com": {
+      "0": 100,
+      "1": 100,
+      "2": 98,
+      "3": 100,
+      "5": 98,
+      "6": 75
+    },
+    "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+      "0": 100,
+      "3": 100,
+      "4": 95,
+      "5": 100,
+      "8": 100,
+      "9": 100,
+      "10": 75,
+      "12": 100
+    },
+    "replays-self-serve-bulk-delete-system-sentry": {
+      "0": 90,
+      "1": 50,
+      "2": 75,
+      "5": 100,
+      "6": 50,
+      "7": 100,
+      "8": 95,
+      "9": 50,
+      "10": 50,
+      "13": 100,
+      "14": 90,
+      "15": 75,
+      "16": 100
+    },
+    "unified-storage-performance-optimizations-grafana-codex": {
+      "0": 100,
+      "2": 85,
+      "3": 75,
+      "5": 75,
+      "6": 90
+    }
+  }
+}
