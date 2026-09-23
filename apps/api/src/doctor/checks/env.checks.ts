@@ -117,7 +117,14 @@ export const configEnvCheck: DoctorCheck = {
             results.push({
                 check: 'sandbox.mode',
                 status: 'ok',
-                title: `The code sandbox is on (${sandbox}).`,
+                // Same resolution as sandbox.module.ts: only `null` turns it
+                // off; anything else is local or E2B.
+                title: `The code sandbox is on (${
+                    sandbox === 'e2b' ||
+                    (sandbox !== 'local' && env.API_E2B_KEY)
+                        ? 'e2b'
+                        : 'local'
+                }).`,
             });
         }
 
