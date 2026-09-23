@@ -125,8 +125,14 @@ for repo in "${PULL_REPOS[@]}"; do set_vars "$repo" "$PULL_SA"; done
 
 step "Impersonation, revoke: the pull repos no longer impersonate the writer (a repo has one identity)"
 for repo in "${PULL_REPOS[@]}"; do
-  gcloud iam service-accounts remove-iam-policy-binding "$WRITER_SA" --role=roles/iam.workloadIdentityUser --member="$(member_of "$repo")" --quiet >/dev/null 2>&1 || true
-  echo "$repo -/-> $WRITER"
+  m="$(member_of "$repo")"
+  if gcloud iam service-accounts get-iam-policy "$WRITER_SA" --format=json | grep -qF "\"$m\""; then
+    # No "|| true": a revocation that fails must fail the run, the output is the operator's only check.
+    gcloud iam service-accounts remove-iam-policy-binding "$WRITER_SA" --role=roles/iam.workloadIdentityUser --member="$m" --quiet >/dev/null
+    echo "$repo -/-> $WRITER (revoked)"
+  else
+    echo "$repo -/-> $WRITER (already absent)"
+  fi
 done
 
 step "Done"
