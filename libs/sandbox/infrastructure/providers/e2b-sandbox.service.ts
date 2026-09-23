@@ -12,6 +12,10 @@ import {
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
+import {
+    fetchSubmodules,
+    SubmoduleGitHost,
+} from '@libs/sandbox/infrastructure/providers/submodule-fetch';
 
 // 35 minutes — aligned with the lease lifecycle ceiling.
 // Lease docs expire at DEFAULT_LEASE_TTL_MS (30 min) and the reaper cron
@@ -31,6 +35,11 @@ const TIMEOUTS = {
     PROXY_DAEMON_MS: 10_000,
     PROXY_CONFIG_MS: 5_000,
     VERIFY_MS: 10_000,
+    // Submodule fetch is best-effort and must never hold a review hostage:
+    // a repo with several large submodules gets 2 min, then the review
+    // proceeds with whatever was populated (the rest report themselves as
+    // uninitialized to the agent).
+    SUBMODULES_MS: 120_000,
     COMMAND_LONG_MS: 30_000,
     COMMAND_SHORT_MS: 10_000,
 };
@@ -160,10 +169,7 @@ export function buildE2BRemoteCommands(
             return result.stdout;
         },
 
-        listDir: async (
-            path: string,
-            maxDepth: number,
-        ): Promise<string> => {
+        listDir: async (path: string, maxDepth: number): Promise<string> => {
             // Same shape as `grep` above, deliberately: validate, then `cd` into
             // REPO_DIR and pass the ORIGINAL RELATIVE path, so the listing comes
             // back relative to the repo root.
@@ -263,6 +269,86 @@ function buildGitAuthHeader(
         default:
             return `Authorization: Basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`;
     }
+}
+
+/**
+ * Populate the submodules a repository declares, after the checkout.
+ *
+ * Standalone (like `resolvePrRefspec` / `buildGitAuthHeader` above) because
+ * BOTH the create path and the reconnect path need it, and a submodule that is
+ * populated on round 1 but not on round 2 is the stale-checkout bug in another
+ * costume.
+ *
+ * Best-effort by contract: the GitHub App token may simply have no access to a
+ * private submodule repository, and that must degrade to "the agent is told the
+ * directory was never fetched" (#1939's marker), never to a failed review.
+ *
+ * Which submodules are eligible, and the scoping of the auth header, are
+ * decided by `buildSubmoduleUpdatePlan` — shared with the local provider so the
+ * two cannot drift.
+ */
+export async function fetchE2BSubmodules(
+    sandbox: Sandbox,
+    cloneUrl: string,
+    authHeader: string | undefined,
+    opts: {
+        logger?: SimpleLogger;
+        logContext?: string;
+        /**
+         * Which review this belongs to. Several reviews share one worker, so
+         * without it the `[SUBMODULES]` lines of concurrent reviews are
+         * indistinguishable in the log — which is exactly the question an
+         * operator asks when one repository's submodules did not populate.
+         */
+        logMetadata?: Record<string, unknown>;
+    } = {},
+): Promise<void> {
+    const {
+        logger,
+        logContext = 'fetchE2BSubmodules',
+        logMetadata = {},
+    } = opts;
+
+    // Thin adapter: the ORDER, the retries, the time budget and the logging
+    // all live in `fetchSubmodules`, shared with the local provider so the two
+    // cannot drift. Only these three primitives differ between them.
+    const host: SubmoduleGitHost = {
+        readGitmodules: async () => {
+            try {
+                const read = await sandbox.commands.run(
+                    `cat ${REPO_DIR}/.gitmodules`,
+                    { timeoutMs: TIMEOUTS.VERIFY_MS },
+                );
+                return read.stdout || '';
+            } catch {
+                return null;
+            }
+        },
+        git: async (args, runOpts) =>
+            sandbox.commands.run(
+                `cd ${REPO_DIR} && git ${args.map((a) => shSingleQuote(a)).join(' ')}`,
+                {
+                    timeoutMs: runOpts?.timeoutMs ?? TIMEOUTS.VERIFY_MS,
+                    ...(runOpts?.env ? { envs: runOpts.env } : {}),
+                },
+            ),
+        removeDir: async (relative) => {
+            await sandbox.commands.run(
+                `rm -rf ${shSingleQuote(`${REPO_DIR}/${relative}`)}`,
+                { timeoutMs: TIMEOUTS.COMMAND_SHORT_MS },
+            );
+        },
+    };
+
+    await fetchSubmodules(host, {
+        repoCloneUrl: cloneUrl,
+        authHeader,
+        totalBudgetMs: TIMEOUTS.SUBMODULES_MS,
+        stepTimeoutMs: TIMEOUTS.COMMAND_LONG_MS,
+        logger,
+        logContext,
+        logMetadata,
+    });
 }
 
 export interface SyncE2BSandboxRepoOptions {
@@ -379,6 +465,21 @@ export async function syncE2BSandboxRepo(
         return;
     }
 
+    // Round N's commit can move the submodule pointers, and `git clean -fd`
+    // does not descend into submodule directories — so without this a reused
+    // sandbox keeps round 1's submodule contents (or none at all) while the
+    // diff describes round N.
+    await fetchE2BSubmodules(
+        sandbox,
+        cloneUrl,
+        hasAuth ? authHeader : undefined,
+        {
+            logger,
+            logContext: logContext ?? 'syncE2BSandboxRepo',
+            logMetadata: { prNumber },
+        },
+    );
+
     logger?.log?.({
         message: `[DEBUG] syncE2BSandboxRepo: synced reused sandbox to refspec=${refspec}`,
         context: logContext ?? 'syncE2BSandboxRepo',
@@ -491,7 +592,10 @@ export class E2BSandboxService implements ISandboxProvider {
                 repoDir: REPO_DIR,
                 run: async (
                     command: string,
-                    opts?: { timeoutMs?: number; envs?: Record<string, string> },
+                    opts?: {
+                        timeoutMs?: number;
+                        envs?: Record<string, string>;
+                    },
                 ): Promise<SandboxRunResult> => {
                     const result = await sandbox.commands.run(command, {
                         timeoutMs: opts?.timeoutMs ?? TIMEOUTS.COMMAND_LONG_MS,
@@ -685,6 +789,21 @@ export class E2BSandboxService implements ISandboxProvider {
             );
         }
 
+        // The checkout above is a shallow fetch with no submodule handling, so
+        // every path the repository declares in `.gitmodules` would otherwise
+        // be an empty directory the agent reads as "this code does not exist"
+        // (#1939).
+        await fetchE2BSubmodules(
+            sandbox,
+            cloneUrl,
+            hasAuth ? authHeader : undefined,
+            {
+                logger: this.logger,
+                logContext: E2BSandboxService.name,
+                logMetadata: { prNumber },
+            },
+        );
+
         // Verify repo contents after clone
         const verifyResult = await sandbox.commands.run(
             `ls -la ${REPO_DIR} && echo "---FILE-COUNT---" && find ${REPO_DIR} -maxdepth 2 -type f | head -20`,
@@ -805,13 +924,10 @@ export class E2BSandboxService implements ISandboxProvider {
             : `cd ${REPO_DIR} && git fetch --depth=1 ${safeCloneUrl} refs/heads/${safeBaseBranch}:refs/remotes/origin/${safeBaseBranch}`;
 
         try {
-            const result = await sandbox.commands.run(
-                baseCmd,
-                {
-                    timeoutMs: TIMEOUTS.CLONE_MS,
-                    ...(hasAuth && { envs: { GIT_AUTH_HEADER: authHeader } }),
-                },
-            );
+            const result = await sandbox.commands.run(baseCmd, {
+                timeoutMs: TIMEOUTS.CLONE_MS,
+                ...(hasAuth && { envs: { GIT_AUTH_HEADER: authHeader } }),
+            });
 
             if (result.exitCode === 0) {
                 this.logger.log({
@@ -859,7 +975,7 @@ export class E2BSandboxService implements ISandboxProvider {
                     timeoutMs: SANDBOX_TIMEOUT_MS,
                     apiKey,
                     metadata,
-                    lifecycle: { onTimeout: 'pause', autoResume: true },  // SBX-03: pause not kill; autoResume must be explicit
+                    lifecycle: { onTimeout: 'pause', autoResume: true }, // SBX-03: pause not kill; autoResume must be explicit
                 });
                 return { sandbox, usedTemplate: true };
             } catch (error) {
@@ -876,7 +992,7 @@ export class E2BSandboxService implements ISandboxProvider {
             timeoutMs: SANDBOX_TIMEOUT_MS,
             apiKey,
             metadata,
-            lifecycle: { onTimeout: 'pause', autoResume: true },  // SBX-03: pause not kill; autoResume must be explicit
+            lifecycle: { onTimeout: 'pause', autoResume: true }, // SBX-03: pause not kill; autoResume must be explicit
         });
         return { sandbox, usedTemplate: false };
     }

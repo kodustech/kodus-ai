@@ -4,6 +4,7 @@ import { createLogger } from '@libs/core/log/logger';
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import type { LinkedRepoAccess } from '@libs/ee/linked-repositories';
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
+import { createSubmoduleProbe } from '@libs/code-review/infrastructure/agents/engine/uninitialized-submodules';
 
 const logger = createLogger('AgentTools');
 
@@ -160,6 +161,59 @@ export function buildAgentTools(
     if (!remoteCommands) {
         return {};
     }
+
+    // The sandbox checkout never runs `git submodule update`, so every path a
+    // repository declares in `.gitmodules` is an EMPTY directory here. Without
+    // this probe, grep/listDir/findFile answer "nothing here" and the agent
+    // reads that as "this code does not exist" (#1939). The probe only runs on
+    // an already-empty result, and a repo with no `.gitmodules` pays a single
+    // failed read for the whole review.
+    const submoduleProbe = createSubmoduleProbe(remoteCommands);
+
+    /**
+     * Attach the "this was never fetched / never installed" note to a tool
+     * answer that found nothing, and ONLY to one that found nothing — a plain
+     * empty directory that no `.gitmodules` declares keeps answering plainly
+     * empty, and a search that did return results is left untouched.
+     *
+     * "Found nothing" covers a not-found ERROR as well as an empty answer: an
+     * uninitialized submodule directory exists and lists empty, but a
+     * `node_modules` path does not exist at all, so the providers answer it
+     * with `Error: … No such file or directory`. That is the exact string the
+     * reported trace got back before concluding the export was undefined.
+     *
+     * Never throws: a probe failure must not turn a working tool into an error.
+     */
+    const withSubmoduleNote = async (
+        result: string,
+        searchedPath: string,
+    ): Promise<string> => {
+        // Only the tool's OWN absence answers count. Matching the not-found
+        // phrases anywhere in the output would annotate real results: an agent
+        // grepping for "No such file or directory" while reviewing error
+        // handling would get its matches back with "this empty result is NOT
+        // evidence" appended, contradicting the matches it can see.
+        const foundNothing =
+            !result.trim() ||
+            result === 'No matches found.' ||
+            result.startsWith('No files matching') ||
+            (result.startsWith('Error') &&
+                /no such file or directory|os error 2/i.test(result));
+        if (!foundNothing) return result;
+        try {
+            const note = await submoduleProbe.explainEmptyResult(searchedPath);
+            if (!note) return result;
+            return result.trim() ? `${result}\n\n${note}` : note;
+        } catch (err) {
+            logger.warn({
+                message: `Submodule probe failed for "${searchedPath}": ${err instanceof Error ? err.message : String(err)}`,
+                context: 'agent-tools.submoduleProbe',
+                error: err,
+                metadata: { searchedPath },
+            });
+            return result;
+        }
+    };
 
     const linkedReposHint = linkedRepoAccess?.list()?.length
         ? ` Optional repo="<fullName>" searches a linked repository (${linkedRepoAccess
@@ -390,7 +444,10 @@ export function buildAgentTools(
                         }
                         // exit code 1 = no matches (not an error)
                         if (exitCode === 1 || !stdout.trim()) {
-                            return 'No matches found.';
+                            return withSubmoduleNote(
+                                'No matches found.',
+                                searchPath,
+                            );
                         }
                         if (exitCode === 0) {
                             const raw = stdout.trim();
@@ -429,7 +486,12 @@ export function buildAgentTools(
                         glob,
                     );
                 } catch (err) {
-                    return `Error searching for "${pattern}": ${err instanceof Error ? err.message : String(err)}`;
+                    // A "no such file" here is how a `node_modules` lookup
+                    // fails, so it goes through the note too (#1939).
+                    return withSubmoduleNote(
+                        `Error searching for "${pattern}": ${err instanceof Error ? err.message : String(err)}`,
+                        searchPath,
+                    );
                 }
                 if (namesOnly) {
                     const files = [
@@ -448,7 +510,7 @@ export function buildAgentTools(
                         lines.slice(0, MAX_GREP_MATCHES).join('\n') +
                         `\n... (${lines.length - MAX_GREP_MATCHES} more matches hidden — narrow with a more specific regex, glob='*.ts', path=<subdir>, or excludeTests=true)`;
                 }
-                return result;
+                return withSubmoduleNote(result, searchPath);
             },
         ),
 
@@ -723,7 +785,10 @@ export function buildAgentTools(
                     // reported to the model as a tool error, never thrown past
                     // the tool boundary. Reachable since the null sandbox stopped
                     // answering '' for a repository it cannot see (#1826).
-                    return `Error listing ${dirPath}: ${err instanceof Error ? err.message : String(err)}`;
+                    return withSubmoduleNote(
+                        `Error listing ${dirPath}: ${err instanceof Error ? err.message : String(err)}`,
+                        dirPath,
+                    );
                 }
                 // Filter out common noise directories
                 const IGNORE_DIRS = [
@@ -750,7 +815,7 @@ export function buildAgentTools(
                         result.substring(0, MAX_LIST_LENGTH) +
                         `\n... (truncated — pass a more specific path or a lower maxDepth to narrow the listing)`;
                 }
-                return result;
+                return withSubmoduleNote(result, dirPath);
             },
         ),
 
@@ -847,7 +912,10 @@ export function buildAgentTools(
                     } catch (err) {
                         // See the listDir tool above: tool errors are reported,
                         // not thrown past the boundary (#1826).
-                        return `Error searching for files under ${searchPath}: ${err instanceof Error ? err.message : String(err)}`;
+                        return withSubmoduleNote(
+                            `Error searching for files under ${searchPath}: ${err instanceof Error ? err.message : String(err)}`,
+                            searchPath,
+                        );
                     }
                     const matching = allFiles
                         .split('\n')
@@ -860,7 +928,10 @@ export function buildAgentTools(
                                 (!ext || f.endsWith(`.${ext}`)),
                         );
                     if (matching.length === 0) {
-                        return `No files matching "${pattern}" in ${searchPath}`;
+                        return withSubmoduleNote(
+                            `No files matching "${pattern}" in ${searchPath}`,
+                            searchPath,
+                        );
                     }
 
                     if (matching.length > 30) {
