@@ -28,6 +28,23 @@ export const DEFAULT_CONTEXT_WINDOW_TOKENS = 128_000;
 const MANUAL_OVERRIDES: Record<string, number> = {
     // OpenAI
     'gptoss': 131_072,
+    // Google — the 2.0 Flash pair lost its windowed row upstream on 2026-09-23.
+    // LiteLLM kept `vertex_ai/gemini-2.0-flash` but without `max_input_tokens`,
+    // and the refresh drops any row that cannot answer the question, so both
+    // names fell out of the mirror while the models stayed in production.
+    //
+    // Without these two keys the fallback below resolves `gemini-2.0-flash` to
+    // `gemini-2.0-flash-exp-image-generation` — the longest normalized key that
+    // contains it — and answers 32,768 for a model that holds 1,048,576. That is
+    // a thirty-twofold under-chunk, and it is the same longest-match trap the
+    // comment above describes for this table, still live at step 4 against the
+    // mirror. `-001` has no candidate at all and lands on the 128k default.
+    //
+    // 1,048,576 is Google's documented input limit and the value the mirror
+    // itself carried until upstream dropped the row. Delete both the day
+    // upstream publishes a window again.
+    'gemini20flash': 1_048_576,
+    'gemini20flash001': 1_048_576,
     // Google — the 3.x line is not in the mirror yet.
     'gemini31pro': 1_048_576,
     'gemini3pro': 1_048_576,
