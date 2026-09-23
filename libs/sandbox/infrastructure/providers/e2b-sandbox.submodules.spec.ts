@@ -324,6 +324,26 @@ describe('fetchE2BSubmodules — the deep retry deletes inside the checkout only
         // Nothing that `rm -rf` receives may climb out of the checkout.
         expect(removals[0]).not.toContain('..');
     });
+
+    it('deletes NOTHING when the shallow fetch succeeds', async () => {
+        // The other direction of the same guard: hoisting the cleanup out of
+        // the deep retry would wipe a healthy `.git/modules/<name>` on the
+        // happy path, and the test above — where every shallow fetch fails —
+        // would still pass.
+        const sandbox = makeSandbox(GITMODULES_SAME_HOST, RESOLVED_SAME_HOST);
+        await fetchE2BSubmodules(sandbox as any, REPO, AUTH);
+        expect(
+            sandbox.calls
+                .map((c) => c.cmd)
+                .filter((cmd) => cmd.includes('rm -rf')),
+        ).toHaveLength(0);
+        // And no deinit either — the recovery must not have started at all.
+        expect(
+            sandbox.calls
+                .map((c) => c.cmd)
+                .filter((cmd) => cmd.includes("'deinit'")),
+        ).toHaveLength(0);
+    });
 });
 
 describe('fetchE2BSubmodules — never breaks a review', () => {

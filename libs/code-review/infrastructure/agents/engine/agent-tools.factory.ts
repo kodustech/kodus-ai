@@ -149,6 +149,30 @@ function filterDiagnosticsToTarget(
  * (lazy clone on first access). Path traversal outside the linked root is
  * rejected.
  */
+/**
+ * Does this tool answer say "there is nothing here"?
+ *
+ * Shared by every caller that decides whether to attach the
+ * uninitialized-submodule note, so a new call site cannot cover a subset and
+ * silently reproduce #1939 on the shapes it missed. `remoteCommands.grep`
+ * RETURNS `Error: <stderr>` for a missing path rather than throwing
+ * (`e2b-sandbox.service.ts`), which is how a `node_modules` lookup fails, so
+ * that shape counts as nothing found too.
+ *
+ * Narrow on purpose: grepping for "No such file or directory" while reviewing
+ * error handling must get its real matches back, not a note telling the agent
+ * the result is not evidence.
+ */
+function answersNothing(result: string): boolean {
+    return (
+        !result.trim() ||
+        result === 'No matches found.' ||
+        result.startsWith('No files matching') ||
+        (result.startsWith('Error') &&
+            /no such file or directory|os error 2/i.test(result))
+    );
+}
+
 export function buildAgentTools(
     remoteCommands: RemoteCommands | undefined,
     gitHubToken?: string,
@@ -193,13 +217,7 @@ export function buildAgentTools(
         // grepping for "No such file or directory" while reviewing error
         // handling would get its matches back with "this empty result is NOT
         // evidence" appended, contradicting the matches it can see.
-        const foundNothing =
-            !result.trim() ||
-            result === 'No matches found.' ||
-            result.startsWith('No files matching') ||
-            (result.startsWith('Error') &&
-                /no such file or directory|os error 2/i.test(result));
-        if (!foundNothing) return result;
+        if (!answersNothing(result)) return result;
         try {
             const note = await submoduleProbe.explainEmptyResult(searchedPath);
             if (!note) return result;
@@ -494,11 +512,13 @@ export function buildAgentTools(
                     );
                 }
                 if (namesOnly) {
-                    // The note has to come BEFORE the file-name mapping: an
-                    // empty answer maps to an empty answer, and the agent
-                    // would read it as "this code does not exist" — the very
-                    // failure #1939 is about — with no marker on it.
-                    if (!result.trim() || result === 'No matches found.') {
+                    // The note has to come BEFORE the file-name mapping, and
+                    // on the SAME predicate the note itself uses. An empty
+                    // answer maps to an empty answer; worse, `Error: ... No
+                    // such file or directory` — what a missing `node_modules`
+                    // returns — maps to the bare literal `Error`, losing both
+                    // the marker and the message.
+                    if (answersNothing(result)) {
                         return withSubmoduleNote(result, searchPath);
                     }
                     const files = [

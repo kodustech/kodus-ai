@@ -235,6 +235,43 @@ describe('tools — a node_modules lookup says the dependencies were never insta
         expect(out).toMatch(/NOT evidence/i);
     });
 
+    /**
+     * The shape the E2B provider actually produces. `remoteCommands.grep`
+     * RETURNS `Error: <stderr>` when ripgrep exits >= 2 — it does not throw
+     * (`e2b-sandbox.service.ts`) — so the returning path needs its own
+     * coverage. The throwing fixture above only exercises the catch.
+     */
+    const noInstallReturns = () => {
+        const sandbox = makeSandbox({ gitmodules: null });
+        sandbox.grep = (async (_p: string, path: string) =>
+            path.includes('node_modules')
+                ? `Error: ${path}: No such file or directory (os error 2)`
+                : '') as any;
+        return sandbox;
+    };
+
+    it('grep — the provider RETURNS the error string instead of throwing', async () => {
+        const out = await buildAgentTools(noInstallReturns()).grep.execute({
+            pattern: 'successPreSerialized',
+            path: 'node_modules/@acme/commons',
+        });
+        expect(out).toContain(MISSING_DEPENDENCIES_MARKER);
+    });
+
+    it('grep with namesOnly on a missing node_modules keeps the message AND the marker', async () => {
+        // Without the shared predicate this maps `Error: <path>: No such
+        // file...` through `split(':')[0]` and hands the agent the bare
+        // literal `Error` — no marker, no message.
+        const out = await buildAgentTools(noInstallReturns()).grep.execute({
+            pattern: 'successPreSerialized',
+            path: 'node_modules/@acme/commons',
+            namesOnly: true,
+        });
+        expect(out).not.toBe('Error');
+        expect(out).toContain('No such file or directory');
+        expect(out).toContain(MISSING_DEPENDENCIES_MARKER);
+    });
+
     it('findFile — trace 6a5dbd2d also tried findFile("response.ts")', async () => {
         const out = await buildAgentTools(noInstall()).findFile.execute({
             pattern: 'response.ts',

@@ -218,8 +218,13 @@ export function parseResolvedSubmoduleUrls(
  */
 export function isContainedRelativePath(value: string): boolean {
     if (!value) return false;
-    if (value.startsWith('/')) return false;
-    const segments = value.split('/');
+    // Both separators, and both absolute forms. `.gitmodules` is authored by
+    // the pull request, the value is joined to a path this code then deletes,
+    // and `path.join` on a win32 host resolves `..\..` exactly like `../..`.
+    // Mirrors the guard at `local-sandbox.service.ts` on the exec path.
+    if (/^[/\\]/.test(value)) return false; // POSIX absolute, and UNC `\\host`
+    if (/^[a-zA-Z]:/.test(value)) return false; // win32 drive-relative or absolute
+    const segments = value.split(/[/\\]/);
     return !segments.some((seg) => seg === '' || seg === '.' || seg === '..');
 }
 

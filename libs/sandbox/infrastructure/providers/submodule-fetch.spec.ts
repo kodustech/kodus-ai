@@ -360,6 +360,9 @@ describe('decideSubmodules — the NAME reaches `rm -rf .git/modules/<name>`', (
         ['x/./../../tmp/p'],
         ['/etc/cron.d'],
         ['a//b'],
+        ['..\\..\\..\\..\\tmp\\pwned'],
+        ['a\\..\\..\\x'],
+        ['C:\\Windows\\Temp'],
     ])('refuses the name %s', (name) => {
         const d = decideNamed(name);
         expect(d.allowed).toBe(false);
@@ -411,6 +414,15 @@ describe('isContainedRelativePath', () => {
         ['/abs', false],
         ['a//b', false],
         ['', false],
+        // Windows separators: `path.join` resolves `..\\..` on a win32 host
+        // exactly like `../..`, and the name is never normalized.
+        ['..\\x', false],
+        ['a\\..\\..\\x', false],
+        ['..\\..\\..\\..\\tmp\\pwned', false],
+        ['\\\\server\\share', false],
+        ['C:\\Windows', false],
+        ['c:x', false],
+        ['/etc', false],
     ])('%s -> %s', (value, expected) => {
         expect(isContainedRelativePath(value as string)).toBe(expected);
     });
