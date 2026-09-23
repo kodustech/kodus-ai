@@ -432,6 +432,63 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             expect(git.diagnose.mock.calls.length).toBeLessThan(repos.length);
         });
 
+        it('Git: a probe that hangs is cut at the ceiling and reported as "?", not lost', async () => {
+            jest.useFakeTimers();
+            try {
+                const git = healthyGit();
+                git.diagnose.mockImplementation(
+                    () => new Promise(() => undefined),
+                );
+                const pending = gitAccessCheck({ ...git, now: () => 0 }).run(
+                    ctx(),
+                );
+                await jest.advanceTimersByTimeAsync(75_000);
+                const results = await pending;
+                const line = results.find((r) => r.check === 'git.unverified');
+                expect(line?.status).toBe('unknown');
+                expect(line?.fix).toContain('did not answer in time');
+            } finally {
+                jest.useRealTimers();
+            }
+        });
+
+        it('LLM: every probe gets the full 60s timeout (a shortened one would fail a slow model)', async () => {
+            let clock = 0;
+            const deps = llmDeps();
+            deps.complete.mockImplementation(async () => {
+                clock += 20_000; // 50s left: less than a full probe
+            });
+            const teams = [
+                team(),
+                team({
+                    organizationId: '33333333-3333-3333-3333-333333333333',
+                    organizationName: 'beta',
+                }),
+            ];
+            deps.getBYOKConfig.mockResolvedValue({
+                version: 2,
+                credentials: [
+                    { id: 'c1', provider: 'google_gemini', apiKey: 'x' },
+                ],
+                models: [
+                    { id: 'm1', credentialId: 'c1', model: 'gemini-2.5-flash' },
+                ],
+                routing: { defaultModelId: 'm1' },
+            } as any);
+            const results = await llmCheck({ ...deps, now: () => clock }).run(
+                ctx({ teams }),
+            );
+            expect(
+                deps.complete.mock.calls.map((c: any[]) => c[0].timeoutMs),
+            ).toEqual([60_000]);
+            expect(
+                results
+                    .filter((r) => r.check === 'llm.completion')
+                    .map((r) => r.status),
+            ).toEqual(['ok', 'unknown']);
+            expect(results.some((r) => r.status === 'fail')).toBe(false);
+        });
+
         it('LLM: an org the budget cannot cover is "?", the probed one keeps its result', async () => {
             let clock = 0;
             const deps = llmDeps();

@@ -17,6 +17,24 @@ export const MAX_REPOS_PER_TEAM = 25;
 export const GIT_PROBE_CONCURRENCY = 3;
 /** Stays under CHECK_TIMEOUT_MS so the repositories probed are still reported. */
 export const GIT_BUDGET_MS = 60_000;
+/**
+ * A probe started before the deadline may run this far past it, no more:
+ * each provider call has its own 60s timeout, so without a ceiling three
+ * in-flight probes could outlive CHECK_TIMEOUT_MS and lose every result.
+ */
+export const GIT_PROBE_GRACE_MS = 15_000;
+
+function withCeiling<T>(
+    work: Promise<T>,
+    ms: number,
+    onTimeout: T,
+): Promise<T> {
+    let timer: NodeJS.Timeout | undefined;
+    const ceiling = new Promise<T>((resolve) => {
+        timer = setTimeout(() => resolve(onTimeout), Math.max(0, ms));
+    });
+    return Promise.race([work, ceiling]).finally(() => clearTimeout(timer));
+}
 
 /** The env var holding each provider's webhook URL (see doctor.sh). */
 export const WEBHOOK_URL_ENV: Record<string, string> = {
@@ -66,7 +84,17 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                 const { done, skipped } = await mapWithinBudget(
                     candidates,
                     { concurrency: GIT_PROBE_CONCURRENCY, deadline, now },
-                    (repo) => deps.diagnose(team, repo),
+                    (repo) =>
+                        withCeiling(
+                            deps.diagnose(team, repo),
+                            deadline + GIT_PROBE_GRACE_MS - now(),
+                            {
+                                read: 'unknown',
+                                write: 'unknown',
+                                hook: 'unknown',
+                                error: 'the Git provider did not answer in time',
+                            } as RepositoryAccessDiagnosis,
+                        ),
                 );
                 const repos = done.map(({ item }) => item);
                 const readDenied: string[] = [];

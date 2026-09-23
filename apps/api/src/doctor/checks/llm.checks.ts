@@ -11,8 +11,6 @@ export const MIN_CONTEXT_WINDOW = 64_000;
 const PROBE_TIMEOUT_MS = 60_000;
 /** Stays under CHECK_TIMEOUT_MS: a probe past it would drop every result. */
 export const LLM_BUDGET_MS = 70_000;
-/** Below this, a probe would only report a timeout, so it is not started. */
-const MIN_PROBE_MS = 5_000;
 
 export interface LlmDeps {
     now?: () => number;
@@ -125,7 +123,10 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
                     ? `byok:${slot.provider}:${slot.model}:${slot.baseURL ?? ''}:${organizationId}`
                     : 'env';
                 const remaining = deadline - now();
-                if (!tested.has(key) && remaining < MIN_PROBE_MS) {
+                // A probe gets its full timeout or does not start: cutting it
+                // short would fail a slow but working model as "did not
+                // answer" and blame its key.
+                if (!tested.has(key) && remaining < PROBE_TIMEOUT_MS) {
                     tested.set(key, {
                         check: 'llm.completion',
                         status: 'unknown',
@@ -139,7 +140,7 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
                         await deps.complete({
                             slot,
                             organizationId: organizationId || undefined,
-                            timeoutMs: Math.min(PROBE_TIMEOUT_MS, remaining),
+                            timeoutMs: PROBE_TIMEOUT_MS,
                         });
                         tested.set(key, null);
                     } catch (error) {

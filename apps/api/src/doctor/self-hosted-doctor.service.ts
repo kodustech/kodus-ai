@@ -16,7 +16,10 @@ import { PermissionValidationService } from '@libs/ee/shared/services/permission
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { buildGitAuthHeader } from '@libs/sandbox/infrastructure/providers/git-auth-header';
 
-import { VersionCheckService } from '../services/version-check.service';
+import {
+    IVersionCheckService,
+    VERSION_CHECK_SERVICE_TOKEN,
+} from '../services/version-check.service';
 import {
     brokerCheck,
     amqpBrokerProbe,
@@ -63,7 +66,8 @@ export class SelfHostedDoctorService {
         @Inject(LICENSE_SERVICE_TOKEN)
         private readonly licenseService: ILicenseService,
         private readonly cockpitHealthService: CockpitHealthService,
-        private readonly versionCheckService: VersionCheckService,
+        @Inject(VERSION_CHECK_SERVICE_TOKEN)
+        private readonly versionCheckService: IVersionCheckService,
     ) {}
 
     async run(env: NodeJS.ProcessEnv = process.env): Promise<DoctorReport> {
