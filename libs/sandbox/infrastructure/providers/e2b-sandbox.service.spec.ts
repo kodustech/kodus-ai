@@ -863,7 +863,15 @@ describe('syncE2BSandboxRepo — submodules on the reconnect path', () => {
                 // git fails the blob read when the ref is absent, and the
                 // probe above already refused — this rejects so the fixture
                 // cannot quietly hand back a declaration that does not exist.
-                throw new Error("fatal: invalid object name 'origin/main'");
+                // `CommandExitError`, not a bare Error: that is what
+                // `sandbox.commands.run` throws for a non-zero git exit, and
+                // a bare one carries no stdout/stderr/exitCode to normalize.
+                throw new CommandExitError({
+                    stdout: '',
+                    stderr: "fatal: invalid object name 'origin/main'",
+                    exitCode: 128,
+                    error: '',
+                } as any);
             }
             if (cmd.includes("'--get-regexp'")) {
                 return {
