@@ -31,7 +31,11 @@ import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
-import { CodeReviewConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
+    CodeReviewConfig,
+    DEFAULT_APPROVAL_LOOKBACK_DAYS,
+    MAX_APPROVAL_LOOKBACK_DAYS,
+} from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { ConfigLevel } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
 import {
@@ -87,28 +91,6 @@ const TEAM_CONCURRENCY = 10;
 // trade is wrong. 15 keeps the git-provider work wide while the DB
 // slice of it stays around a fifth of that in practice.
 const PR_CONCURRENCY = 15;
-
-// How far back a completed review may be for its PR to be eligible for
-// automated approval, when the team's code review config does not set
-// `approvalLookbackDays`. Seven days was the hardcoded window before the
-// setting existed, so the default keeps that behaviour.
-const DEFAULT_APPROVAL_LOOKBACK_DAYS = 7;
-
-// The largest window the setting accepts. Ten years is longer than any
-// repository this cron runs against has been open, so a team that means
-// "never expire" is already served by it, and anything larger is a typo
-// rather than an intent.
-//
-// The bound also keeps the value away from the point where it stops being
-// a window at all. The start of the eligibility window is derived with
-// `date.setDate(date.getDate() - lookback)`, and past roughly 1e8 days
-// that lands outside the range a Date can represent, so `setDate` yields
-// an Invalid Date. An Invalid Date cannot be serialised into the
-// eligibility query's filter, so the call rejects; the rejection is
-// swallowed by the `Promise.allSettled` the per-team work runs inside,
-// and the team is skipped on every run with nothing logged — the exact
-// silent failure this setting exists to remove.
-const MAX_APPROVAL_LOOKBACK_DAYS = 3650;
 
 @Injectable()
 export class CheckIfPRCanBeApprovedCronProvider {
@@ -800,12 +782,14 @@ export class CheckIfPRCanBeApprovedCronProvider {
      * query runs once per team, before any repository is known, so a
      * per-repository override has nothing to act on.
      *
-     * Accepts only a positive integer no greater than
-     * `MAX_APPROVAL_LOOKBACK_DAYS`; anything else — unset, zero, negative,
-     * fractional, above the maximum, or not a number — yields the default. A
-     * value that was set but rejected is logged, since a team that configured
-     * 30 and silently got 7 would see the same symptom this setting exists to
-     * fix.
+     * A positive integer is used as-is up to `MAX_APPROVAL_LOOKBACK_DAYS`,
+     * and one above it is clamped to the maximum: the API now rejects such a
+     * value, so only rows saved before that validation can hold one, and a
+     * team that stored 36500 to mean "never expire" should get the widest
+     * window, not the narrowest. Anything else — unset, zero, negative,
+     * fractional, or not a number — yields the default. A value that was set
+     * but rejected is logged, since a team that configured 30 and silently
+     * got 7 would see the same symptom this setting exists to fix.
      */
     private resolveApprovalLookbackDays(
         codeReviewParameterValue:
@@ -822,10 +806,9 @@ export class CheckIfPRCanBeApprovedCronProvider {
         if (
             typeof configured === 'number' &&
             Number.isInteger(configured) &&
-            configured >= 1 &&
-            configured <= MAX_APPROVAL_LOOKBACK_DAYS
+            configured >= 1
         ) {
-            return configured;
+            return Math.min(configured, MAX_APPROVAL_LOOKBACK_DAYS);
         }
 
         this.logger.warn({
@@ -835,7 +818,6 @@ export class CheckIfPRCanBeApprovedCronProvider {
             metadata: {
                 organizationAndTeamData,
                 configured,
-                max: MAX_APPROVAL_LOOKBACK_DAYS,
                 default: DEFAULT_APPROVAL_LOOKBACK_DAYS,
             },
         });
