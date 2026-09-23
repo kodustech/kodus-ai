@@ -186,6 +186,13 @@ export function skipSettingsCheck(
                         impact: 'A skipped review leaves no trace on the pull request.',
                         fix: `Turn on "status feedback" in ${where} while you diagnose.`,
                     });
+                } else if (config.showStatusFeedback === true) {
+                    results.push({
+                        check: 'advisory.status_feedback',
+                        status: 'ok',
+                        scope,
+                        title: 'Kody says on the PR when it skips a review.',
+                    });
                 }
             }
             return results;
@@ -209,6 +216,14 @@ export function seatsCheck(
             for (const team of ctx.teams.filter((t) => t.platform)) {
                 const { pullRequests, since } =
                     await countUnlicensedSkips(team);
+                if (pullRequests === 0) {
+                    results.push({
+                        check: 'license.seats',
+                        status: 'ok',
+                        scope: teamScope(team),
+                        title: `No pull request since ${since.toISOString().slice(0, 10)} was skipped for a missing seat.`,
+                    });
+                }
                 if (pullRequests > 0) {
                     results.push({
                         check: 'license.seats',

@@ -78,6 +78,12 @@ export const configEnvCheck: DoctorCheck = {
                 impact: 'Settings pages behave as in Kodus Cloud: some self-hosted options are hidden and the update banner is off.',
                 fix: `Set WEB_NODE_ENV=self-hosted (now "${webNodeEnv}") and restart the web service.`,
             });
+        } else {
+            results.push({
+                check: 'env.web_node_env',
+                status: 'ok',
+                title: 'The web app runs in self-hosted mode.',
+            });
         }
 
         // `error` is the installer's default (.env.schema API_LOG_LEVEL), so it
@@ -90,6 +96,12 @@ export const configEnvCheck: DoctorCheck = {
                 impact: 'Reviews that are skipped or degraded log a warning, not an error, so the logs will not tell you why.',
                 fix: 'While diagnosing, set API_LOG_LEVEL=warn (or info) and restart api and worker.',
             });
+        } else {
+            results.push({
+                check: 'env.log_level',
+                status: 'ok',
+                title: `Logs include warnings (API_LOG_LEVEL=${env.API_LOG_LEVEL || 'info'}).`,
+            });
         }
 
         const sandbox = (env.SANDBOX_PROVIDER ?? 'auto').toLowerCase();
@@ -101,6 +113,12 @@ export const configEnvCheck: DoctorCheck = {
                 impact: 'Kody reviews only the diff: no cross-file context and no checks that need the repository checked out.',
                 fix: 'Remove SANDBOX_PROVIDER=null (auto uses the local sandbox, or E2B when API_E2B_KEY is set).',
             });
+        } else {
+            results.push({
+                check: 'sandbox.mode',
+                status: 'ok',
+                title: `The code sandbox is on (${sandbox}).`,
+            });
         }
 
         if (!env.API_E2B_KEY) {
@@ -109,6 +127,12 @@ export const configEnvCheck: DoctorCheck = {
                 status: 'info',
                 title: 'Remote sandbox (E2B) is not configured; the local sandbox is used.',
                 fix: 'Optional: set API_E2B_KEY to run repository work in E2B instead of the worker container.',
+            });
+        } else {
+            results.push({
+                check: 'advisory.e2b',
+                status: 'ok',
+                title: 'Remote sandbox (E2B) is configured.',
             });
         }
         if (!env.API_EXA_KEY) {
@@ -119,6 +143,12 @@ export const configEnvCheck: DoctorCheck = {
                 impact: 'Kody does not look up library documentation while reviewing.',
                 fix: 'Optional: set API_EXA_KEY.',
             });
+        } else {
+            results.push({
+                check: 'advisory.exa',
+                status: 'ok',
+                title: 'Documentation search is on.',
+            });
         }
         if ((env.API_MCP_SERVER_ENABLED ?? 'false').toLowerCase() !== 'true') {
             results.push({
@@ -126,6 +156,12 @@ export const configEnvCheck: DoctorCheck = {
                 status: 'info',
                 title: 'MCP integrations are off (no Jira, Linear or other tracker context).',
                 fix: 'Optional: set API_MCP_SERVER_ENABLED=true and run the kodus-mcp-manager service, then connect a tracker in Settings.',
+            });
+        } else {
+            results.push({
+                check: 'advisory.mcp',
+                status: 'ok',
+                title: 'MCP integrations are on.',
             });
         }
         if (!env.API_OPEN_AI_API_KEY) {
@@ -135,6 +171,12 @@ export const configEnvCheck: DoctorCheck = {
                 title: 'Duplicate-suggestion filtering by similarity is off.',
                 impact: 'Kody may post near-identical suggestions on the same PR.',
                 fix: 'Optional: set API_OPEN_AI_API_KEY (used for embeddings).',
+            });
+        } else {
+            results.push({
+                check: 'advisory.dedup',
+                status: 'ok',
+                title: 'Duplicate-suggestion filtering by similarity is on.',
             });
         }
 
@@ -153,6 +195,12 @@ export const configEnvCheck: DoctorCheck = {
                     emailProvider === 'smtp'
                         ? 'Optional: set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS and SMTP_FROM.'
                         : 'Optional: set RESEND_API_KEY, or API_NOTIFICATION_EMAIL_PROVIDER=smtp with the SMTP_* variables.',
+            });
+        } else {
+            results.push({
+                check: 'advisory.email',
+                status: 'ok',
+                title: `Email is configured (${emailProvider}).`,
             });
         }
 
