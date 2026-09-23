@@ -160,6 +160,50 @@ export function extractJsonFromText(text: string): string | null {
 }
 
 /**
+ * Scan free-form LLM text for EVERY balanced `{…}` and return the LAST one that
+ * parses AND carries one of `keys` at its top level.
+ *
+ * {@link extractJsonFromText} takes the FIRST fenced block / outermost value,
+ * which is the wrong end of the text when the model quotes code (or an example
+ * object) before writing its real answer: it returns the quote and the caller's
+ * parse fails. This walks to the end instead, so the answer wins over anything
+ * quoted on the way there. Key matching is convention-insensitive
+ * (`shouldKeep` ≡ `should_keep`) — the same rule {@link normalizeEnvelope} uses.
+ */
+export function extractLastJsonObjectWith(
+    text: string,
+    keys: readonly string[],
+): Record<string, unknown> | null {
+    if (typeof text !== 'string' || text.trim() === '' || keys.length === 0) {
+        return null;
+    }
+    const wanted = new Set(keys.map(normalizeKeyName));
+    let found: Record<string, unknown> | null = null;
+    for (let i = 0; i < text.length; i++) {
+        if (text[i] !== '{') continue;
+        const slice = sliceBalancedJson(text.slice(i));
+        // Unbalanced from HERE says nothing about a later `{` — keep scanning.
+        if (!slice) continue;
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(slice.replace(/,(\s*[}\]])/g, '$1'));
+        } catch {
+            continue; // prose/code, not JSON — keep scanning (incl. nested).
+        }
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            continue;
+        }
+        const obj = parsed as Record<string, unknown>;
+        if (!Object.keys(obj).some((k) => wanted.has(normalizeKeyName(k)))) {
+            continue; // maybe a wrapper — let the scan reach the inner object.
+        }
+        found = obj;
+        i += slice.length - 1; // don't re-match objects nested inside the hit.
+    }
+    return found;
+}
+
+/**
  * Deterministic, model-free repair of "almost JSON": a ```json fence, prose
  * around the object, or a trailing comma. Returns the cleaned string ONLY when
  * it (a) differs from the input and (b) parses — otherwise null, so the caller

@@ -5,6 +5,7 @@ name: "E2E: self-hosted matrix"
 # from secrets, not GITHUB_TOKEN. No job writes back to the repo.
 permissions:
     contents: read
+    id-token: write # quality signal (report-signal action, WIF)
 
 # Runs the matrix runner (tests/e2e/cli/run-matrix.ts) against a self-hosted
 # stack provisioned from the given image tag. Spawns one ephemeral droplet
@@ -542,6 +543,7 @@ jobs:
                       tests/e2e/cli/render-scoreboard.py
                       tests/e2e/cli/llm-release-note.py
                       .github/actions/discord-notify
+                      .github/actions/report-signal
                   sparse-checkout-cone-mode: false
 
             - name: Download all evidence
@@ -560,6 +562,8 @@ jobs:
             - name: Render scoreboard (step summary + annotations)
               id: scoreboard
               if: always()
+              env:
+                  MATRIX_FILE: ${{ inputs.matrix_file || 'matrix/fast.yml' }}
               run: python3 tests/e2e/cli/render-scoreboard.py evidence
 
             # Interpretation on top of the deterministic facts: a cheap LLM
@@ -580,6 +584,19 @@ jobs:
                   E2E_LLM_BASE_URL: ${{ vars.E2E_LLM_BASE_URL || 'https://api.fireworks.ai/inference/v1' }}
                   E2E_LLM_MODEL: ${{ vars.E2E_LLM_MODEL || 'accounts/fireworks/models/deepseek-v4-flash-0731' }}
               run: python3 tests/e2e/cli/llm-release-note.py evidence
+
+            - name: Report quality signal
+              if: always()
+              uses: ./.github/actions/report-signal
+              with:
+                  name: e2e.selfhosted.matrix
+                  status: ${{ steps.scoreboard.outputs.status || 'infra' }}
+                  value: ${{ steps.scoreboard.outputs.gating_count }}
+                  unit: count
+                  meta: ${{ steps.scoreboard.outputs.meta }}
+                  gcp_wif_provider: ${{ vars.GCP_WIF_PROVIDER }}
+                  gcp_sa_email: ${{ vars.GCP_SA_EMAIL }}
+                  gcp_project: ${{ vars.GCP_PROJECT }}
 
             - name: Upload combined evidence
               uses: actions/upload-artifact@v4

@@ -16,6 +16,7 @@ on:
             - "docker-compose.test.yml"
             - "docker/Dockerfile"
             - "jest.config.ts"
+            - ".github/workflows/tests.yml"
             - "tsconfig*.json"
             - "package.json"
             - "pnpm-lock.yaml"
@@ -28,6 +29,7 @@ jobs:
         permissions:
             contents: read
             pull-requests: write
+            id-token: write # quality signal (report-signal action, WIF)
 
         steps:
             - name: Checkout code
@@ -173,9 +175,42 @@ jobs:
                   MG_USER=$(grep -m1 '^API_MG_DB_USERNAME=' .env | cut -d= -f2-)
                   MG_PASS=$(grep -m1 '^API_MG_DB_PASSWORD=' .env | cut -d= -f2-)
                   enc() { node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$1"; }
+                  # --json/--outputFile feed the quality signal. No `--` before them:
+                  # pnpm forwards it to jest, which reads what follows as path patterns.
                   API_NODE_ENV=test \
                   TEST_MONGODB_URI="mongodb://$(enc "$MG_USER"):$(enc "$MG_PASS")@localhost:27017/kodus_test_integration?authSource=admin" \
-                  pnpm run test
+                  pnpm run test --json --outputFile=/tmp/jest-results.json
+
+            - name: Jest numbers (for the quality signal)
+              id: jest
+              if: always()
+              run: |
+                  node -e "
+                    const fs = require(\"fs\"); const p = \"/tmp/jest-results.json\";
+                    const out = (k, v) => fs.appendFileSync(process.env.GITHUB_OUTPUT, k + \"=\" + v + \"\\n\");
+                    if (!fs.existsSync(p)) { out(\"failed\", \"\"); out(\"meta\", JSON.stringify({ note: \"jest wrote no results file\" })); process.exit(0); }
+                    const r = JSON.parse(fs.readFileSync(p, \"utf8\"));
+                    const rel = (f) => String(f).replace(/^.*\\/kodus-ai\\//, \"\");
+                    const failedTests = []; const failedSuites = [];
+                    for (const t of r.testResults || []) {
+                      if (t.status === \"failed\") failedSuites.push({ file: rel(t.name), message: (String(t.message || \"\").split(\"\\n\").find((l) => l.trim()) || \"\").slice(0, 200) });
+                      for (const a of t.assertionResults || []) if (a.status === \"failed\") failedTests.push({ file: rel(t.name), test: a.fullName });
+                    }
+                    out(\"failed\", String(r.numFailedTests)); out(\"meta\", JSON.stringify({ total: r.numTotalTests, suites_failed: r.numFailedTestSuites, suites_total: r.numTotalTestSuites, failed_tests: failedTests.slice(0, 20), failed_suites: failedSuites.slice(0, 10) }));
+                  "
+
+            - name: Report quality signal
+              if: always()
+              uses: ./.github/actions/report-signal
+              with:
+                  name: unit.jest
+                  status: ${{ job.status }}
+                  value: ${{ steps.jest.outputs.failed }}
+                  unit: count
+                  meta: ${{ steps.jest.outputs.meta }}
+                  gcp_wif_provider: ${{ vars.GCP_WIF_PROVIDER }}
+                  gcp_sa_email: ${{ vars.GCP_SA_EMAIL }}
+                  gcp_project: ${{ vars.GCP_PROJECT }}
 
             - name: Docker Compose Action Cleanup
               uses: hoverkraft-tech/compose-action@v2.6.0

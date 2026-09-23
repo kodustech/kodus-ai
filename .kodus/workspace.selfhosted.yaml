@@ -9,6 +9,11 @@
 #
 #   runo up --here --profile selfhosted
 #
+# This is the developer box, the self-hosted twin of workspace.yaml: someone
+# SSH-es in and port-forwards. The CI preview of the same shape is
+# workspace.preview.selfhosted.yaml, which is public over HTTPS and gets its
+# dev-origin and MCP settings from docker-compose.preview.yml.
+#
 # The only difference from workspace.yaml is the env layer: `setup` derives
 # `.env.selfhosted` from the copied `.env`, flipping the two variables that
 # decide the edition, and compose is pointed at it through `ENV_FILE`.

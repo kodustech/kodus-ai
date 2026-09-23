@@ -100,6 +100,7 @@ async function main() {
         { name: 'preflight', args: ['evals/engine-gate.js', '--profile=harness'] },
         { name: 'review-chain', args: ['evals/review-chain/run.js', '--gate'] },
         { name: 'shape-invariance', args: ['evals/review-chain/shape-invariance.js', '--gate'] },
+        { name: 'verifier-verdict', args: ['evals/verifier-verdict/run.js', '--gate'] },
         { name: 'dedup', args: ['evals/dedup/run.js', '--mock=identity', '--gate'] },
         { name: 'severity', args: ['evals/severity/run.js', '--mock=heuristic', '--gate'] },
         { name: 'format', args: ['evals/format/run.js', '--mock=perfect', '--gate'] },
