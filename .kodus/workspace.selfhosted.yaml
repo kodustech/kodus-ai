@@ -29,6 +29,10 @@ files:
 services:
     compose:
         file: docker-compose.dev.yml
+        # MCP is opt-in for laptops; an environment that stands in for an
+        # install has to carry the plugins surface, or /settings/plugins
+        # answers 502 and the feature cannot be judged at all.
+        profiles: [mcp]
         public: [web]
         health_timeout: 1800
         env:
