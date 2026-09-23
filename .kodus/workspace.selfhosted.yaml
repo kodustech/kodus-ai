@@ -38,6 +38,13 @@ services:
             ENV_FILE: .env.selfhosted
             API_CLOUD_MODE: 'false'
             WEB_NODE_ENV: self-hosted
+            # `next dev` answers 403 to any /_next/* asset request from an
+            # origin it was not told about. A reviewer opens this VM by its
+            # public host, so without this every chunk 403s, React never
+            # hydrates, and the app looks alive but no form works.
+            ALLOWED_DEV_ORIGINS: '${RUNO_PUBLIC_HOST}'
+            RUNO_PUBLIC_URL: '${RUNO_PUBLIC_URL}'
+            RUNO_PUBLIC_HOST: '${RUNO_PUBLIC_HOST}'
 data:
     migrate: pnpm run migration:run
     seed: pnpm run seed
