@@ -600,12 +600,26 @@ const LIVE = [
             // prices for reviews that may carry no reasoning at all.
             reasoningEffort: 'high',
         },
-        // NO reasoning assertion — deliberately, and this is the only row in the
-        // table without one.
+        // NO reasoning assertion — deliberately.
         //
-        // Opus 4.7 is adaptive, and adaptive means the MODEL decides per
-        // request. Asked directly with the shape below at effort `high`, the
-        // level AWS documents as "Claude always thinks", it answered:
+        // The reason recorded here first was that "adaptive means the MODEL
+        // decides per request". That reading is wrong, and the correction is
+        // worth keeping because the same symptom is now on the Bedrock row
+        // below: `thinking.display` defaults to `omitted` from Opus 4.7
+        // (@ai-sdk/anthropic schema, "default for Opus 4.7+"), where 4.6 and
+        // earlier default to `summarized`. The model reasons and is billed for
+        // it either way — Anthropic's pricing table states the billed count is
+        // identical — the response just carries empty thinking blocks unless
+        // `display: 'summarized'` is asked for.
+        //
+        // Native is NOT blind, though, and that is the difference from the
+        // Bedrock row below: Anthropic documents
+        // `usage.output_tokens_details.thinking_tokens` as reflecting the raw
+        // reasoning generated rather than the text returned, so the count
+        // survives `omitted` here. Which makes the zero below a statement
+        // about the request, not about visibility.
+        //
+        // Asked directly with the shape below at effort `high`, it answered:
         //
         //     content blocks: [text]        (no thinking block)
         //     usage.output_tokens_details.thinking_tokens: 0
@@ -717,7 +731,39 @@ const LIVE = [
             reasoningEffort: 'high',
         },
         credentialField: 'awsBearerToken' as const,
-        reasons: true,
+        // NO reasoning assertion, for a reason this transport cannot work
+        // around: on Bedrock, reasoning TEXT is the only evidence available.
+        // `TokenUsage` in the Converse API carries inputTokens, outputTokens,
+        // totalTokens and the two cache counts — there is no thinking-token
+        // field to fall back on (AWS API reference, TokenUsage), which is why
+        // `@ai-sdk/amazon-bedrock` hardcodes `outputTokens.reasoning = void 0`
+        // and every Bedrock row here reads 0.
+        //
+        // And from Opus 4.7 the text is empty by default: `thinking.display`
+        // flipped from `summarized` to `omitted` with that generation
+        // (@ai-sdk/anthropic schema, "default for Opus 4.7+"). Claude still
+        // reasons and is still billed for it — Anthropic's pricing table says
+        // the billed count is identical under both settings — the response
+        // just carries empty thinking blocks.
+        //
+        // Native Claude still reports the count through
+        // `output_tokens_details.thinking_tokens`, so this pair only leaves
+        // BEDROCK without any signal. The gap is the transport's, not ours.
+        //
+        // Measured together on 2026-09-23, same effort, prompt and key:
+        //     amazon_bedrock (sonnet-4-6)  tokens=0  textChars=54
+        //     bedrock_opus47 (opus-4-7)    tokens=0  textChars=0
+        //
+        // So `reasons: true` here asserts something no request we send can
+        // observe. Asking for `display: 'summarized'` would restore it, but
+        // that is a PRODUCTION change — the returned text enters the message
+        // history, `sendReasoning` defaults true, and the compressor only
+        // truncates `tool` turns — so it belongs in its own change with its
+        // own measurement, not smuggled in through a contract row.
+        //
+        // What the row still earns its keep for: 4.7+ REJECTS budgetTokens,
+        // so a regression to the legacy shape is a hard 400 and turns this
+        // red. That is what it guards.
     },
     {
         brand: 'open_router_glm',
@@ -1446,6 +1492,21 @@ describe('BYOK reasoning — LIVE provider contract', () => {
                 }));
 
                 expect(typeof result.text).toBe('string');
+
+                // Raw usage for EVERY row, asserted on or not. Two open
+                // questions need it and neither can be answered offline:
+                // whether Anthropic's `thinking_tokens` survives
+                // `display: 'omitted'` on 4.7+ (the docs say the count
+                // reflects raw reasoning rather than the returned text, which
+                // would mean native is not blind), and whether Converse passes
+                // any thinking count through the `catchall` that
+                // `@ai-sdk/amazon-bedrock` drops when it hardcodes
+                // `outputTokens.reasoning = void 0`.
+                //
+                // eslint-disable-next-line no-console
+                console.log(
+                    `[byok-live-usage] ${c.brand}: ${JSON.stringify(result.usage)}`,
+                );
 
                 if (c.reasons) {
                     // THE drift detector. A vendor that renames or stops
