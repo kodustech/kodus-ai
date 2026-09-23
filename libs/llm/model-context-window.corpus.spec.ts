@@ -37,6 +37,14 @@ describe('production models resolve to a real context window', () => {
         ['global.anthropic.claude-opus-4-7', 1_000_000],
         ['gemini-3.5-flash', 1_048_576],
         ['deepseek-v4-pro', 1_000_000],
+        // Upstream dropped the windowed row for this pair on 2026-09-23 while
+        // customers kept running them. They are here because the fallback chain
+        // answers 32,768 for the first one when nothing holds the line — it
+        // matches an image-generation variant by substring — and 128k for the
+        // second. Both are served by MANUAL_OVERRIDES; if someone deletes those
+        // keys before upstream republishes a window, this is what says so.
+        ['gemini-2.0-flash', 1_048_576],
+        ['gemini-2.0-flash-001', 1_048_576],
     ])('%s → %i tokens', (model, expected) => {
         expect(getModelContextWindow(model as string)).toBe(expected);
     });
@@ -49,6 +57,14 @@ describe('production models resolve to a real context window', () => {
         // pinning the exact number would turn every refresh into a broken test.
         // What must never happen is coverage dropping — that is the mirror going
         // stale again. It stood at 75/322 before the first refresh.
+        //
+        // The floor was 140 and real coverage was 284, so it could not fail: a
+        // refresh was free to drop a hundred and forty models and still pass.
+        // 140 is the number `scripts/refresh-model-context-windows.mjs` prints,
+        // and that script resolves names with its own two-try lookup rather than
+        // the chain below — it reads the same corpus and gets a different answer.
+        // Until the two share one resolver, trust this one: it is the code that
+        // actually decides a chunk size.
         expect({
             covered: known.length,
             total: MODELS.length,
@@ -56,7 +72,7 @@ describe('production models resolve to a real context window', () => {
             covered: expect.any(Number),
             total: MODELS.length,
         });
-        expect(known.length).toBeGreaterThanOrEqual(140);
+        expect(known.length).toBeGreaterThanOrEqual(280);
     });
 
     it('no production model resolves to something absurd', () => {
