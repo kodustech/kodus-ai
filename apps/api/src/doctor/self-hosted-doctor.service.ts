@@ -392,23 +392,12 @@ export class SelfHostedDoctorService {
             };
         }
 
-        const args = ['-c', 'credential.helper='];
-        if (params.auth?.token) {
-            args.push(
-                '-c',
-                `http.extraHeader=${buildGitAuthHeader(
-                    params.provider as PlatformType,
-                    params.auth.token,
-                    params.auth.username,
-                )}`,
-            );
-        }
-        args.push('ls-remote', '--heads', params.url);
+        const { args, env: gitEnv } = gitLsRemoteInvocation(params);
 
         try {
             await execFileAsync('git', args, {
                 timeout: 30_000,
-                env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+                env: gitEnv,
             });
             return { repository: repository.name };
         } catch (error: any) {
@@ -418,7 +407,7 @@ export class SelfHostedDoctorService {
                 .slice(-2)
                 .join(' ')
                 .slice(0, 200);
-            // The header is in argv; never let it reach the report.
+            // Belt and braces: never let the token reach the report.
             return {
                 repository: repository.name,
                 error: params.auth?.token
@@ -449,4 +438,38 @@ export async function reachUrl(url: string): Promise<number> {
         signal: AbortSignal.timeout(8000),
     });
     return res.status;
+}
+
+/**
+ * `git ls-remote` of a repository with the stored credential. The auth
+ * header goes through GIT_CONFIG_* env, never argv, so the credential is not
+ * readable from ps, /proc/<pid>/cmdline or `docker top` (same as
+ * local-sandbox.service.ts).
+ */
+export function gitLsRemoteInvocation(params: {
+    url: string;
+    provider: string;
+    auth?: { token?: string; username?: string };
+}): { args: string[]; env: NodeJS.ProcessEnv } {
+    // Inherited GIT_CONFIG_* would mix another process's git config into
+    // this probe, so start without them.
+    const env: NodeJS.ProcessEnv = Object.fromEntries(
+        Object.entries(process.env).filter(
+            ([key]) => !key.startsWith('GIT_CONFIG_'),
+        ),
+    );
+    env.GIT_TERMINAL_PROMPT = '0';
+    if (params.auth?.token) {
+        env.GIT_CONFIG_COUNT = '1';
+        env.GIT_CONFIG_KEY_0 = 'http.extraHeader';
+        env.GIT_CONFIG_VALUE_0 = buildGitAuthHeader(
+            params.provider as PlatformType,
+            params.auth.token,
+            params.auth.username,
+        );
+    }
+    return {
+        args: ['-c', 'credential.helper=', 'ls-remote', '--heads', params.url],
+        env,
+    };
 }

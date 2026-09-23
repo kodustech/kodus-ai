@@ -3851,7 +3851,7 @@ export class ForgejoService implements Omit<
 
             const client = this.createForgejoClient(authDetail);
             const webhookUrl = this.configService.get<string>(
-                'FORGEJO_WEBHOOK_URL',
+                'API_FORGEJO_CODE_MANAGEMENT_WEBHOOK',
             );
 
             for (const repo of repositories) {
@@ -4053,7 +4053,7 @@ export class ForgejoService implements Omit<
 
             const client = this.createForgejoClient(authDetail);
             const webhookUrl = this.configService.get<string>(
-                'FORGEJO_WEBHOOK_URL',
+                'API_FORGEJO_CODE_MANAGEMENT_WEBHOOK',
             );
 
             const result = await repoListHooks({
@@ -4153,7 +4153,7 @@ export class ForgejoService implements Omit<
             }
 
             const webhookUrl = this.configService.get<string>(
-                'FORGEJO_WEBHOOK_URL',
+                'API_FORGEJO_CODE_MANAGEMENT_WEBHOOK',
             );
 
             if (webhookUrl) {

@@ -313,6 +313,18 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             expect(ok).toEqual(['git.read', 'git.write']);
         });
 
+        it('webhook URL unset: no per-repo webhook line, no false "receives events"', async () => {
+            const env = cleanEnv();
+            delete env.API_GITHUB_CODE_MANAGEMENT_WEBHOOK;
+            const results = await gitAccessCheck(
+                healthyGit({ hook: 'unknown' }),
+            ).run(ctx({ env }));
+            expect(results.map((r) => r.check)).toEqual([
+                'git.read',
+                'git.write',
+            ]);
+        });
+
         it('GitHub App installs use the app-level hook (not a failure)', async () => {
             const results = await gitAccessCheck(
                 healthyGit({ hook: 'app-level' }),
