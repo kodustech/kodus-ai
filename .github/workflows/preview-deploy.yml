@@ -123,11 +123,16 @@ jobs:
                       core.setOutput('sha', pr.head.sha);
                       core.setOutput('branch', pr.head.ref);
                       if (context.eventName === 'issue_comment') {
-                        // acknowledge the command; the preview comment gets the new link
-                        await github.rest.reactions.createForIssueComment({
-                          owner: context.repo.owner, repo: context.repo.repo,
-                          comment_id: context.payload.comment.id, content: 'rocket',
-                        });
+                        // acknowledge the command; the preview comment gets the new link.
+                        // Cosmetic: a rejected reaction must not stop the deploy.
+                        try {
+                          await github.rest.reactions.createForIssueComment({
+                            owner: context.repo.owner, repo: context.repo.repo,
+                            comment_id: context.payload.comment.id, content: 'rocket',
+                          });
+                        } catch (e) {
+                          core.warning(`could not react to the /preview comment: ${e.message}`);
+                        }
                       }
             - uses: actions/checkout@v6.0.2
               with:
