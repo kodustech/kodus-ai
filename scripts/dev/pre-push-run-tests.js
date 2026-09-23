@@ -45,7 +45,11 @@ function specEnv() {
     try {
         fileVars = dotenv.parse(fs.readFileSync('.env'));
     } catch {
-        // no .env: the specs see only the shell environment too
+        // The specs see only the shell environment too, so they would fall
+        // back to the same defaults; say so instead of skipping silently.
+        console.warn(
+            '[pre-push] No .env here (fresh worktree?): Postgres credentials fall back to the defaults. Run `pnpm run env:pull`.',
+        );
     }
     return { ...fileVars, ...process.env };
 }
@@ -55,7 +59,6 @@ function specEnv() {
 // project's Postgres on 5432 answers TCP but rejects these credentials,
 // and the specs would then fail instead of skipping.
 async function isPostgresReachable() {
-    const { Client } = require('pg');
     // Resolved exactly like the specs (`??` + parseInt). A value they can't
     // use (e.g. TEST_PG_PORT= → NaN) means they can't run.
     const env = specEnv();
@@ -64,6 +67,16 @@ async function isPostgresReachable() {
     if (!host || !Number.isInteger(port) || port <= 0 || port > 65535) {
         console.warn(
             `[pre-push] TEST_PG_HOST/TEST_PG_PORT resolve to "${host}:${port}", which the integration specs can't use.`,
+        );
+        return false;
+    }
+    let Client;
+    try {
+        ({ Client } = require('pg'));
+    } catch (error) {
+        // a partial install must not block the push over a probe
+        console.warn(
+            `[pre-push] Can't load pg to probe Postgres: ${error.message}`,
         );
         return false;
     }
