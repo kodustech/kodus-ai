@@ -26,7 +26,8 @@
  * blob: a brand reads the secret `REPO_SECRET` names for it, or derives
  * `BYOK_<BRAND>_API_KEY`, and a brand that borrows reads the lender's.
  *
- *     BYOK_ANTHROPIC_API_KEY   -> anthropic, -modern, -opus-5, openai_compatible_claude
+ *     BYOK_ANTHROPIC_API_KEY   -> anthropic, -modern, -opus-5, -opus-5-5,
+ *                                 openai_compatible_claude
  *     BYOK_OPENAI_API_KEY      -> openai, openai_compatible_gpt5, openai_gpt56,
  *                                 openai_compatible_gpt56, openai_gpt6_astra
  *     BYOK_ZHIPU_API_KEY       -> zai, zai_glm53 (Zhipu is Z.ai, the GLM vendor)
@@ -155,6 +156,7 @@ function kodusCatalogRows() {
 const BORROWS_FROM: Record<string, string> = {
     'anthropic-modern': 'anthropic',
     'anthropic-opus-5': 'anthropic',
+    'anthropic-opus-5-5': 'anthropic',
     moonshot_code: 'moonshot',
     zai_glm53: 'zai',
     bedrock_opus47: 'amazon_bedrock',
@@ -669,6 +671,18 @@ const LIVE = [
             // working perfectly returns ZERO reasoning tokens, and `reasons:
             // true` fails for the documented behaviour instead of a regression.
             // Proven live: bedrock_opus47 came back 200 with reasoningTokens=0.
+            reasoningEffort: 'high',
+        },
+        reasons: true,
+    },
+    {
+        brand: 'anthropic-opus-5-5',
+        why: '#1996: a point release the generation table does not name. It fell to `unknown` and ran with no effort at all; it now resolves as a newer Claude. This row is the proof the fallback reaches the vendor as adaptive + effort and is billed as reasoning — the same thing a Claude released after this file will rely on',
+        slot: {
+            provider: 'anthropic',
+            model: 'claude-opus-5-5',
+            // `high` for the same reason as the Opus 5 row above: at `low` a
+            // one-word prompt legitimately skips thinking.
             reasoningEffort: 'high',
         },
         reasons: true,

@@ -54,6 +54,11 @@ describe('BYOK reasoning contract — structured plan per (provider, model)', ()
             ['moonshot', 'kimi-k3'],
             ['anthropic', 'claude-fable-5'],
             ['anthropic', 'claude-mythos-5'],
+            // #1996: a Claude newer than the table is never sent `disabled`,
+            // so its structured calls reroute instead of suppressing.
+            ['anthropic', 'claude-opus-5-5'],
+            ['google_vertex', 'claude-opus-5-5'],
+            ['amazon_bedrock', 'global.anthropic.claude-opus-5-5-v1:0'],
             ['zai', 'glm-4.6'], // GLM: tool_choice auto-only → never force
             ['zai', 'glm-4.7'],
             ['zai', 'glm-5.3'], // GLM + always-thinking
@@ -92,6 +97,8 @@ describe('BYOK reasoning contract — structured plan per (provider, model)', ()
             ['moonshot', 'kimi-k2.7-code'],
             ['moonshot', 'kimi-k3'],
             ['anthropic', 'claude-fable-5'],
+            ['anthropic', 'claude-opus-5-5'],
+            ['google_vertex', 'claude-opus-5-5'],
             ['zai', 'glm-5.3'],
         ])('%s / %s → omit (no thinking param)', (p, m) => {
             expect(buildReasoningProviderOptions(p, 'none', m)).toEqual({});
@@ -126,7 +133,7 @@ describe('BYOK reasoning contract — structured plan per (provider, model)', ()
         // curated catalog that used to enumerate these is gone; the reasoning
         // TRAITS, not a model list, are what this invariant exercises).
         const PROBE: Record<string, string[]> = {
-            anthropic: ['claude-opus-5', 'claude-fable-5'],
+            anthropic: ['claude-opus-5', 'claude-fable-5', 'claude-opus-5-5'],
             anthropic_compatible: [
                 'kimi-k2.6',
                 'kimi-k2.7-code',
