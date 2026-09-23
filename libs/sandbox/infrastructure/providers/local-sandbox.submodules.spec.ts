@@ -40,8 +40,15 @@ const GITMODULES_FOREIGN_HOST =
  * `git config --get-regexp` exits 1 when nothing matched, which is normal.
  */
 const realDeclaredDump = (args: string[]) => {
+    // The base dump reads a blob from a ref this fake repo has no commit for,
+    // so replay it against the same `.gitmodules` on disk: the merged case,
+    // which is the only one that fetches. Divergence is covered in
+    // submodule-fetch.spec.ts.
+    const replay = args.map((a) =>
+        a === '--blob' ? '-f' : /:\.gitmodules$/.test(a) ? '.gitmodules' : a,
+    );
     try {
-        return execFileSync('git', args, { encoding: 'utf8' });
+        return execFileSync('git', replay, { encoding: 'utf8' });
     } catch {
         return '';
     }
@@ -51,16 +58,27 @@ const realDeclaredDump = (args: string[]) => {
 const isDeclaredDump = (args: string[]) =>
     args.includes('-f') && args.includes('.gitmodules');
 
+/** The BASE branch dump, read from the blob. */
+const isBaseDump = (args: string[]) => args.includes('--blob');
+
+/** Is this the cheap "is the base ref here?" probe? */
+const isRevParse = (args: string[]) => args.includes('rev-parse');
+
 /** `promisify(execFile)` calls it with (file, args, opts, callback). */
 function answerWith(resolved: string) {
     execFileMock.mockImplementation(
         (_file: string, args: string[], _opts: any, cb: any) => {
             const done = typeof _opts === 'function' ? _opts : cb;
+            if (isRevParse(args)) {
+                done(null, { stdout: 'abc123', stderr: '' });
+                return;
+            }
             if (args.includes('--get-regexp')) {
                 done(null, {
-                    stdout: isDeclaredDump(args)
-                        ? realDeclaredDump(args)
-                        : resolved,
+                    stdout:
+                        isDeclaredDump(args) || isBaseDump(args)
+                            ? realDeclaredDump(args)
+                            : resolved,
                     stderr: '',
                 });
                 return;
@@ -79,8 +97,15 @@ describe('LocalSandboxService.fetchSubmodules', () => {
     let repoDir: string;
     let service: LocalSandboxService;
 
+    const BASE_REF = 'refs/remotes/origin/main';
     const run = (gitmodules: string, authHeader = AUTH) =>
-        (service as any).fetchSubmodules(repoDir, REPO, authHeader);
+        (service as any).fetchSubmodules(
+            repoDir,
+            REPO,
+            authHeader,
+            {},
+            BASE_REF,
+        );
 
     beforeEach(async () => {
         execFileMock.mockReset();
@@ -209,13 +234,18 @@ describe('LocalSandboxService.fetchSubmodules', () => {
         execFileMock.mockImplementation(
             (_f: string, args: string[], opts: any, cb: any) => {
                 const done = typeof opts === 'function' ? opts : cb;
+                if (isRevParse(args)) {
+                    done(null, { stdout: 'abc123', stderr: '' });
+                    return;
+                }
                 if (args.includes('--get-regexp')) {
                     done(null, {
-                        stdout: isDeclaredDump(args)
-                            ? realDeclaredDump(args)
-                            : 'submodule.a.url https://github.com/acme/a.git\n' +
-                              'submodule.b.url https://github.com/acme/b.git\n' +
-                              'submodule.c.url https://github.com/acme/c.git\n',
+                        stdout:
+                            isDeclaredDump(args) || isBaseDump(args)
+                                ? realDeclaredDump(args)
+                                : 'submodule.a.url https://github.com/acme/a.git\n' +
+                                  'submodule.b.url https://github.com/acme/b.git\n' +
+                                  'submodule.c.url https://github.com/acme/c.git\n',
                         stderr: '',
                     });
                     return;
@@ -251,11 +281,16 @@ describe('LocalSandboxService.fetchSubmodules', () => {
             (_f: string, args: string[], opts: any, cb: any) => {
                 const done = typeof opts === 'function' ? opts : cb;
                 seen.push(args);
+                if (isRevParse(args)) {
+                    done(null, { stdout: 'abc123', stderr: '' });
+                    return;
+                }
                 if (args.includes('--get-regexp')) {
                     done(null, {
-                        stdout: isDeclaredDump(args)
-                            ? realDeclaredDump(args)
-                            : 'submodule.commons-mod.url https://github.com/acme/commons.git\n',
+                        stdout:
+                            isDeclaredDump(args) || isBaseDump(args)
+                                ? realDeclaredDump(args)
+                                : 'submodule.commons-mod.url https://github.com/acme/commons.git\n',
                         stderr: '',
                     });
                     return;
@@ -287,11 +322,16 @@ describe('LocalSandboxService.fetchSubmodules', () => {
         execFileMock.mockImplementation(
             (_f: string, args: string[], opts: any, cb: any) => {
                 const done = typeof opts === 'function' ? opts : cb;
+                if (isRevParse(args)) {
+                    done(null, { stdout: 'abc123', stderr: '' });
+                    return;
+                }
                 if (args.includes('--get-regexp')) {
                     done(null, {
-                        stdout: isDeclaredDump(args)
-                            ? realDeclaredDump(args)
-                            : 'submodule.commons-mod.url https://github.com/acme/commons.git\n',
+                        stdout:
+                            isDeclaredDump(args) || isBaseDump(args)
+                                ? realDeclaredDump(args)
+                                : 'submodule.commons-mod.url https://github.com/acme/commons.git\n',
                         stderr: '',
                     });
                     return;

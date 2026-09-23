@@ -439,7 +439,29 @@ describe('E2B submodule fetch — the real command strings, against real git', (
             { env: scrubbedGitEnv(GIT_ENV) },
         );
         await git(['-C', dir, 'checkout', 'pr-head']);
-        await fetchE2BSubmodules(makeSandbox(dir), cloneUrl, AUTH, { logger });
+        // The create path fetches the base branch before the submodule step,
+        // because only a submodule declared identically on the base is
+        // fetched. Same branch here = the MERGED case; the added/changed
+        // cases are covered in submodule-checkout.integration.spec.ts and
+        // submodule-fetch.spec.ts.
+        await execFileAsync(
+            'git',
+            [
+                '-C',
+                dir,
+                '-c',
+                `http.extraHeader=${AUTH}`,
+                'fetch',
+                '--depth=1',
+                cloneUrl,
+                'refs/heads/main:refs/remotes/origin/main',
+            ],
+            { env: scrubbedGitEnv(GIT_ENV) },
+        );
+        await fetchE2BSubmodules(makeSandbox(dir), cloneUrl, AUTH, {
+            logger,
+            baseRef: 'origin/main',
+        });
         return { dir, cloneUrl };
     };
 

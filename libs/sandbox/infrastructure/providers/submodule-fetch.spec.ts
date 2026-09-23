@@ -7,6 +7,7 @@ import {
     scopedAuthHeaderConfigKey,
     buildSubmoduleUpdatePlan,
     isContainedRelativePath,
+    type DeclaredSubmodules,
 } from './submodule-fetch';
 
 /**
@@ -46,12 +47,20 @@ const resolvedAs = (...blocks: Array<[string, string]>) =>
 
 const decideOne = (
     declaredUrl: string,
-    opts: { resolved?: string; repo?: string } = {},
+    opts: {
+        resolved?: string;
+        repo?: string;
+        base?: DeclaredSubmodules | null;
+    } = {},
 ) =>
     decideSubmodules(
         gitmodules(['pkg/sub', declaredUrl]),
         resolvedAs(['pkg/sub', opts.resolved ?? declaredUrl]),
         opts.repo ?? REPO,
+        // The base declares the same thing: the already-merged case, which is
+        // the only one that fetches. The pull-request-changed cases have their
+        // own describe below.
+        opts.base ?? gitmodules(['pkg/sub', declaredUrl]),
     )[0];
 
 describe('parseDeclaredSubmodules', () => {
@@ -140,6 +149,7 @@ describe('parseDeclaredSubmodules', () => {
             parseDeclaredSubmodules(CRAFTED_DUMP),
             CRAFTED_RESOLVED,
             REPO,
+            parseDeclaredSubmodules(CRAFTED_DUMP),
         );
         const evil = decisions.find((d) => d.path === 'vendor/evil');
         expect(evil).toMatchObject({ name: 'a', allowed: false });
@@ -152,6 +162,7 @@ describe('parseDeclaredSubmodules', () => {
             declared: parseDeclaredSubmodules(CRAFTED_DUMP),
             resolvedUrls: CRAFTED_RESOLVED,
             repoCloneUrl: REPO,
+            baseDeclared: parseDeclaredSubmodules(CRAFTED_DUMP),
             authHeader: AUTH,
         });
         expect(plan.paths).toEqual(['vendor/good']);
@@ -242,6 +253,7 @@ describe('decideSubmodules — relative urls are judged on what git resolved', (
             gitmodules(['pkg/sub', '../commons.git']),
             new Map(),
             REPO,
+            gitmodules(['pkg/sub', '../commons.git']),
         )[0];
         expect(d.allowed).toBe(false);
         expect((d as any).reason).toMatch(/did not resolve/);
@@ -351,6 +363,10 @@ describe('decideSubmodules — the NAME reaches `rm -rf .git/modules/<name>`', (
             ),
             new Map([[name, 'https://github.com/acme/x.git']]),
             REPO,
+            parseDeclaredSubmodules(
+                `submodule.${name}.path ${path}\n` +
+                    `submodule.${name}.url https://github.com/acme/x.git\n`,
+            ),
         )[0];
 
     it.each([
@@ -394,6 +410,10 @@ describe('decideSubmodules — the NAME reaches `rm -rf .git/modules/<name>`', (
             ),
             resolvedUrls: new Map([[name, 'https://github.com/acme/x.git']]),
             repoCloneUrl: REPO,
+            baseDeclared: parseDeclaredSubmodules(
+                `submodule.${name}.path vendor/x\n` +
+                    `submodule.${name}.url https://github.com/acme/x.git\n`,
+            ),
             authHeader: AUTH,
         });
         expect(plan.deepRetry).toEqual([]);
@@ -428,6 +448,110 @@ describe('isContainedRelativePath', () => {
     });
 });
 
+describe('decideSubmodules — only what the base branch already declares', () => {
+    /**
+     * Same host is not the same as authorized. The token the fetch uses is
+     * not scoped to the repository under review — GitHub mints the
+     * installation token with no `repositoryIds`, GitLab clones with the
+     * integrating user's own OAuth token or PAT — and nothing in the pipeline
+     * treats a pull request from a fork differently.
+     *
+     * So a fork PR against a public repository can point `.gitmodules` at a
+     * PRIVATE repository on the SAME host, which the host check allows, and
+     * the sandbox would fetch it with the org's token for an agent that then
+     * quotes it back in a comment the fork author reads.
+     */
+    const PRIVATE = 'https://github.com/acme/private.git';
+    const OK = 'https://github.com/acme/commons.git';
+
+    const decideAgainstBase = (
+        prBlocks: Array<[string, string]>,
+        baseBlocks: Array<[string, string]> | null,
+    ) =>
+        decideSubmodules(
+            gitmodules(...prBlocks),
+            resolvedAs(...prBlocks),
+            REPO,
+            baseBlocks === null ? null : gitmodules(...baseBlocks),
+        );
+
+    it('refuses a submodule the pull request ADDED, even on the repo host', () => {
+        const d = decideAgainstBase([['packages/x', PRIVATE]], [])[0];
+        expect(d.allowed).toBe(false);
+        expect((d as any).reason).toMatch(/added by this pull request/);
+    });
+
+    it('refuses a submodule whose URL the pull request CHANGED', () => {
+        const d = decideAgainstBase(
+            [['packages/commons', PRIVATE]],
+            [['packages/commons', OK]],
+        )[0];
+        expect(d.allowed).toBe(false);
+        expect((d as any).reason).toMatch(/changed by this pull request/);
+    });
+
+    it('refuses a submodule whose PATH the pull request changed', () => {
+        // Same name and url, repointed at another directory.
+        const d = decideSubmodules(
+            parseDeclaredSubmodules(
+                `submodule.commons.path packages/elsewhere\nsubmodule.commons.url ${OK}\n`,
+            ),
+            new Map([['commons', OK]]),
+            REPO,
+            parseDeclaredSubmodules(
+                `submodule.commons.path packages/commons\nsubmodule.commons.url ${OK}\n`,
+            ),
+        )[0];
+        expect(d.allowed).toBe(false);
+        expect((d as any).reason).toMatch(/changed by this pull request/);
+    });
+
+    it('fetches a submodule declared identically on the base — already merged', () => {
+        const d = decideAgainstBase(
+            [['packages/commons', OK]],
+            [['packages/commons', OK]],
+        )[0];
+        expect(d.allowed).toBe(true);
+    });
+
+    it('fetches the untouched sibling of one the pull request added', () => {
+        const ds = decideAgainstBase(
+            [
+                ['packages/commons', OK],
+                ['packages/x', PRIVATE],
+            ],
+            [['packages/commons', OK]],
+        );
+        expect(ds.find((d) => d.path === 'packages/commons')?.allowed).toBe(
+            true,
+        );
+        expect(ds.find((d) => d.path === 'packages/x')?.allowed).toBe(false);
+    });
+
+    it('fetches NOTHING when the base declaration could not be read', () => {
+        // No base ref, or the read failed. Failing open here would hand the
+        // pull request author whatever the token can reach.
+        const ds = decideAgainstBase([['packages/commons', OK]], null);
+        expect(ds[0].allowed).toBe(false);
+        expect((ds[0] as any).reason).toMatch(/base branch .gitmodules/);
+    });
+
+    it('the plan runs nothing and names no private host', () => {
+        const plan = buildSubmoduleUpdatePlan({
+            declared: gitmodules(['packages/x', PRIVATE]),
+            resolvedUrls: resolvedAs(['packages/x', PRIVATE]),
+            repoCloneUrl: REPO,
+            baseDeclared: new Map(),
+            authHeader: AUTH,
+        });
+        expect(plan.updateArgs).toEqual([]);
+        expect(plan.paths).toEqual([]);
+        expect(JSON.stringify([plan.updateArgs, plan.deepRetry])).not.toContain(
+            'private',
+        );
+    });
+});
+
 describe('decideSubmodules — path safety', () => {
     it('skips a path escaping the repository', () => {
         const d = decideSubmodules(
@@ -436,6 +560,9 @@ describe('decideSubmodules — path safety', () => {
             ),
             resolvedAs(['x', 'https://github.com/acme/x.git']),
             REPO,
+            parseDeclaredSubmodules(
+                'submodule.x.path ../../etc\nsubmodule.x.url https://github.com/acme/x.git\n',
+            ),
         )[0];
         expect(d.allowed).toBe(false);
         expect((d as any).reason).toMatch(/escapes/);
@@ -554,6 +681,7 @@ describe('every code platform: same host allowed, foreign host skipped', () => {
                 declared: gitmodules(['pkg/sub', sub]),
                 resolvedUrls: resolvedAs(['pkg/sub', sub]),
                 repoCloneUrl: repo,
+                baseDeclared: gitmodules(['pkg/sub', sub]),
                 authHeader: header,
             });
             expect(plan.env.GIT_CONFIG_VALUE_0).toBe(header);
@@ -635,6 +763,7 @@ describe('buildSubmoduleUpdatePlan — recovery from a failed shallow fetch', ()
             declared: gitmodules(...blocks),
             resolvedUrls: resolvedAs(...blocks),
             repoCloneUrl: REPO,
+            baseDeclared: gitmodules(...blocks),
             authHeader: AUTH,
         });
 
@@ -718,6 +847,7 @@ describe('buildSubmoduleUpdatePlan', () => {
             declared: gitmodules(...blocks),
             resolvedUrls: resolvedAs(...blocks),
             repoCloneUrl: REPO,
+            baseDeclared: gitmodules(...blocks),
             authHeader: opts.authHeader,
         });
 
@@ -790,6 +920,7 @@ describe('buildSubmoduleUpdatePlan', () => {
                 declared: new Map(),
                 resolvedUrls: new Map(),
                 repoCloneUrl: REPO,
+                baseDeclared: new Map(),
                 authHeader: AUTH,
             }).updateArgs,
         ).toEqual([]);
@@ -800,6 +931,10 @@ describe('buildSubmoduleUpdatePlan', () => {
             declared: gitmodules(['pkg/sub', 'https://github.com/acme/x.git']),
             resolvedUrls: new Map(),
             repoCloneUrl: REPO,
+            baseDeclared: gitmodules([
+                'pkg/sub',
+                'https://github.com/acme/x.git',
+            ]),
             authHeader: AUTH,
         });
         expect(plan.paths).toEqual([]);

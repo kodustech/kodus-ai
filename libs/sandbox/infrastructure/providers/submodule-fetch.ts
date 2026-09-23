@@ -1,64 +1,39 @@
 /**
  * Decide which submodules the review sandbox may fetch, and build the git
- * invocation that fetches them.
+ * invocation that fetches them. Both providers call this one module.
  *
- * Both providers (E2B and local/self-hosted) call this ONE module. The design
- * for #1939 asked for exactly that: the validation living in two places is how
- * this comes back the next time one provider is edited and the other is not.
+ * `.gitmodules` ships inside the pull request, so every value here is written
+ * by whoever opened it. Four rules, in the order they bind:
  *
- * ## Why validation is required, not defence in depth
+ * 1. ALREADY ON THE BASE BRANCH. Only a submodule whose declaration is
+ *    byte-identical to the base branch's is fetched. Same host is not the
+ *    same as authorized: the token is not scoped to the repository under
+ *    review, so without this a fork PR could point it at any repository that
+ *    token can read. See `baseDeclaredDumpArgs`.
+ * 2. SAME HOST, SAME SCHEME, http(s) only — compared against the url GIT
+ *    resolved, never one resolved here. `.gitmodules` usually holds a
+ *    relative url and git's resolution is not WHATWG URL resolution, so the
+ *    provider runs `git submodule init` first (config only, no network) and
+ *    this module judges what git wrote. Still relative at that point is
+ *    rejected. The scheme rule keeps `git://`, `ssh://` and `file://` out
+ *    without rejecting the plaintext-http servers some self-hosted installs
+ *    run.
+ * 3. THE AUTH HEADER IS SCOPED to that host (`http.<origin>.extraHeader`),
+ *    never global. With the global form a feasibility run captured the
+ *    customer's token arriving verbatim at a foreign host named in
+ *    `.gitmodules`; with the scoped key that host got no header at all.
+ * 4. NO RECURSION. A nested `.gitmodules` has not been through these rules,
+ *    so `--recursive` is deliberately absent. Nested submodules stay empty
+ *    and the uninitialized-submodule marker explains them.
  *
- * `.gitmodules` ships inside the pull request, so its URLs are authored by
- * whoever opened the PR. Measured on a local git server that required an exact
- * `Authorization` header (feasibility run for #1939):
+ * A private/link-local IP check was considered and left out: it protects
+ * nothing under rule 2 and would disable submodules for every self-hosted
+ * customer, whose git server is on a private address by definition.
  *
- *   - with the GLOBAL `http.extraHeader` both providers use for the clone
- *     today, `git submodule update` sent the customer's git token verbatim to
- *     a foreign host named in `.gitmodules`;
- *   - with the SCOPED `http.<repo-url>.extraHeader` key this module emits, that
- *     foreign host received no `Authorization` header at all.
- *
- * So turning submodule fetching on with the existing global header would have
- * been a token-exfiltration bug. Scoping is the fix, and it is load-bearing.
- *
- * ## The rules
- *
- * 1. Same host as the repository under review. The PR author can therefore
- *    only ever point us at the git server we already fetched the PR from —
- *    there is no new network reachable from the sandbox.
- *
- *    The host is compared against the url GIT resolved, never one this module
- *    resolved itself. `.gitmodules` usually holds a RELATIVE url (`../x.git`),
- *    and git's resolution is not WHATWG URL resolution — measured against
- *    git 2.x with origin `https://github.com/acme/app.git`:
- *
- *      ../commons.git                     git: https://github.com/acme/commons.git
- *                                        ­ URL: https://github.com/commons.git
- *      ../../../../../../evil.example/x.git  git: `.:evil.example/x.git`  ← scp-like,
- *                                        ­ URL: https://github.com/evil.example/x.git
- *
- *    The second row is why: resolving it here would have approved it as
- *    "same host github.com" while git went somewhere else entirely over a
- *    different transport. So the provider runs `git submodule init` first —
- *    which registers the RESOLVED urls in `.git/config` and makes no network
- *    request — and this module validates what git actually wrote.
- * 2. Same scheme as the repository under review, and that scheme must be
- *    http(s). This is rule 1 applied to the transport: it rules out `git://`,
- *    `ssh://` and `file://` (which bypass the header and the proxy), without
- *    rejecting the plaintext-http git servers some self-hosted installs run.
- * 3. The auth header is scoped to that host, never global.
- *
- * A private/link-local IP check was considered and deliberately left out: under
- * rule 1 the only reachable target is the git server the review already talks
- * to, so the check protects nothing, while rejecting private ranges would
- * disable submodules for every self-hosted customer — whose git server is on a
- * private address by definition. Revisit this if rule 1 is ever relaxed.
- *
- * Nested submodules are NOT fetched (`--recursive` is deliberately absent): a
- * submodule's own `.gitmodules` has not been through these rules, and passing
- * `--recursive` would let it send git to a host this module never approved. A
- * nested submodule stays empty and is reported by the uninitialized-submodule
- * marker, which is the honest answer.
+ * The measurements behind each rule — git's relative-url resolution, the
+ * captured token, the all-or-nothing behaviour of `submodule init` and
+ * `submodule update`, the shallow-fetch recovery — are in the pull request
+ * that introduced this file and in issue #1939.
  */
 
 export type SubmoduleDecision =
@@ -72,32 +47,44 @@ export type SubmoduleDecision =
       };
 
 /**
- * `git` arguments that dump what GIT reads out of `.gitmodules`.
+ * Dump what GIT reads out of `.gitmodules` — name, path and url all from
+ * git's own config parser, never from a scanner here.
  *
- * This module used to scan `.gitmodules` itself. It must not: git's config
- * parser accepts shapes a line scanner does not, and `.gitmodules` is authored
- * by whoever opened the pull request. Measured with git 2.51 — a variable on
- * the same line as the section header:
- *
- *     [submodule "b"]
- *         path = vendor/good
- *         url  = https://github.com/acme/good.git
- *     [submodule "a"] url = https://evil.example/e.git
- *         path = vendor/evil
- *
- * git reads `a.url=evil.example` with `a.path=vendor/evil`. A line scanner
- * that only recognises a header occupying the whole line skips that header and
- * attaches `path = vendor/evil` to section `b` — so it validates b's github
- * url and then hands `vendor/evil` to `git submodule update`, which fetches it
- * from `evil.example` using a's registered url. The same-host rule is bypassed
- * entirely, and the cleanup step never sees `submodule.a` to remove.
- *
- * So the name AND the path come from git, exactly like the resolved url does.
+ * git accepts a variable on the section-header line; a scanner that requires
+ * a whole-line header pairs one submodule's path with another's url, which
+ * walks the same-host rule straight past validation. The crafted file that
+ * did it is in `submodule-fetch.spec.ts`.
  */
 export const SUBMODULE_DECLARED_DUMP_ARGS = [
     'config',
     '-f',
     '.gitmodules',
+    '--get-regexp',
+    '^submodule\\.',
+];
+
+/**
+ * Dump what `.gitmodules` declares ON THE BASE BRANCH, read from the blob by
+ * git's own parser.
+ *
+ * Same host is not the same as authorized. The host check limits where git
+ * connects, not which repositories the token may read, and the token is
+ * scoped to neither: GitHub mints the installation token with no
+ * `repositoryIds` (`github.service.ts`), GitLab clones with the integrating
+ * user's OAuth token or PAT (`gitlab.service.ts`). Nothing in the pipeline
+ * treats a fork pull request differently. So a fork PR could declare a
+ * PRIVATE repository on the same host and have the sandbox fetch it for an
+ * agent that quotes it back in a comment the fork author reads.
+ *
+ * Only a declaration byte-identical to the base branch's is fetched: that
+ * content is already merged, and a pull request cannot change the base. One
+ * it adds or edits stays unfetched until it merges, with the marker
+ * explaining the empty directory meanwhile.
+ */
+export const baseDeclaredDumpArgs = (baseRef: string): string[] => [
+    'config',
+    '--blob',
+    `${baseRef}:.gitmodules`,
     '--get-regexp',
     '^submodule\\.',
 ];
@@ -232,6 +219,12 @@ export function decideSubmodules(
     declared: DeclaredSubmodules,
     resolvedUrls: Map<string, string>,
     repoCloneUrl: string,
+    /**
+     * What `.gitmodules` declares on the BASE branch. `null` means it could
+     * not be read, and then nothing is fetched — see `baseDeclaredDumpArgs`
+     * for why this, and not the host check, is what bounds the token.
+     */
+    baseDeclared: DeclaredSubmodules | null,
 ): SubmoduleDecision[] {
     // Every entry is keyed by the name GIT reported, and carries the path GIT
     // reported for that same name — never a pairing this module inferred.
@@ -269,6 +262,23 @@ export function decideSubmodules(
             allowed: false,
             reason,
         });
+
+        // Already merged, or not fetched. See `baseDeclaredDumpArgs`: the
+        // token is not scoped to the repository under review, so what a pull
+        // request may point it at has to be bounded by what the base branch
+        // already declares, not by the host alone.
+        if (!baseDeclared) {
+            return deny(
+                'base branch .gitmodules could not be read, nothing fetched',
+            );
+        }
+        const onBase = baseDeclared.get(entry.name);
+        if (!onBase) {
+            return deny('submodule added by this pull request, not fetched');
+        }
+        if (onBase.path !== entry.path || (onBase.url ?? '') !== entry.url) {
+            return deny('submodule changed by this pull request, not fetched');
+        }
 
         if (!isContainedRelativePath(entry.path)) {
             return deny('submodule path escapes the repository');
@@ -479,11 +489,19 @@ export function buildSubmoduleUpdatePlan(params: {
     declared: DeclaredSubmodules;
     resolvedUrls: Map<string, string>;
     repoCloneUrl: string;
+    /** What the BASE branch declares; `null` fetches nothing. */
+    baseDeclared: DeclaredSubmodules | null;
     /** The same header string the clone used; omitted for anonymous clones. */
     authHeader?: string;
 }): SubmoduleUpdatePlan {
-    const { declared, resolvedUrls, repoCloneUrl, authHeader } = params;
-    const decisions = decideSubmodules(declared, resolvedUrls, repoCloneUrl);
+    const { declared, resolvedUrls, repoCloneUrl, baseDeclared, authHeader } =
+        params;
+    const decisions = decideSubmodules(
+        declared,
+        resolvedUrls,
+        repoCloneUrl,
+        baseDeclared,
+    );
     const paths = decisions.filter((d) => d.allowed).map((d) => d.path);
     const rejected = decisions.filter(
         (d): d is Extract<SubmoduleDecision, { allowed: false }> => !d.allowed,
@@ -576,6 +594,15 @@ export interface SubmoduleLogger {
 
 export interface FetchSubmodulesParams {
     repoCloneUrl: string;
+    /**
+     * Ref of the pull request's BASE branch, e.g. `origin/main`. Only a
+     * submodule declared identically there is fetched — see
+     * `baseDeclaredDumpArgs`. Omitted, or unreadable, means nothing is
+     * fetched: the token this would use is not scoped to the repository
+     * under review, so failing open would hand a pull request author a read
+     * of any repository that token can reach.
+     */
+    baseRef?: string;
     /** The header the clone used; omitted for anonymous clones. */
     authHeader?: string;
     /** Budget for ALL submodules together, not per submodule. */
@@ -625,6 +652,7 @@ export async function fetchSubmodules(
 ): Promise<FetchSubmodulesResult> {
     const {
         repoCloneUrl,
+        baseRef,
         authHeader,
         totalBudgetMs,
         stepTimeoutMs,
@@ -660,10 +688,18 @@ export async function fetchSubmodules(
     // `.gitmodules` with thousands of sections would otherwise make the
     // per-path init fallback and the cleanup loop run thousands of sequential
     // commands before any deadline was consulted.
-    const deadline = now() + totalBudgetMs;
+    const startedAt = now();
+    const deadline = startedAt + totalBudgetMs;
     const remaining = () => deadline - now();
-    /** Never let a cheap local step outlive what is left of the budget. */
-    const stepMs = () => Math.min(stepTimeoutMs, Math.max(remaining(), 0));
+    /**
+     * Never let a cheap local step outlive what is left of the budget — and
+     * never hand out 0: both `sandbox.commands.run` (E2B) and `execFile`
+     * (node) read a 0 timeout as NO timeout, so an exhausted budget would
+     * remove the limit instead of enforcing it. 1ms kills on the spot, which
+     * is what an exhausted budget means.
+     */
+    const stepMs = () =>
+        Math.max(1, Math.min(stepTimeoutMs, Math.max(remaining(), 0)));
 
     let gitmodules: string | null;
     try {
@@ -683,12 +719,45 @@ export async function fetchSubmodules(
     // rule (see SUBMODULE_DECLARED_DUMP_ARGS).
     let declared: DeclaredSubmodules;
     let resolvedUrls: Map<string, string>;
+    /** null until read; stays null without a base ref, which fetches nothing. */
+    let baseDeclared: DeclaredSubmodules | null = null;
     try {
         const declaredDump = await host
             .git(SUBMODULE_DECLARED_DUMP_ARGS, { timeoutMs: stepMs() })
             .catch(() => ({ stdout: '' }));
         declared = parseDeclaredSubmodules(declaredDump.stdout || '');
         if (declared.size === 0) return emptyResult();
+
+        // What the BASE branch declares. Read through git's own parser, from
+        // the blob, so no temp file and no second parser. A repository with
+        // no `.gitmodules` on the base exits non-zero here, which is the same
+        // answer as "nothing was merged": an empty declaration.
+        if (baseRef) {
+            // Resolve the ref first, so "the base declares no submodule" and
+            // "the base ref is not in this sandbox" are not the same answer.
+            // Both fetch nothing; only the second is a problem to look into,
+            // and the log has to say which one happened.
+            const refPresent = await host
+                .git(
+                    ['rev-parse', '--verify', '--quiet', `${baseRef}^{commit}`],
+                    {
+                        timeoutMs: stepMs(),
+                    },
+                )
+                .then(() => true)
+                .catch(() => false);
+            if (refPresent) {
+                const baseDump = await host
+                    .git(baseDeclaredDumpArgs(baseRef), { timeoutMs: stepMs() })
+                    .catch(() => ({ stdout: '' }));
+                baseDeclared = parseDeclaredSubmodules(baseDump.stdout || '');
+            } else {
+                warn(
+                    `Base ref ${baseRef} is not in the sandbox; no submodule will be fetched`,
+                    { baseRef },
+                );
+            }
+        }
 
         try {
             await host.git(buildSubmoduleInitArgs(repoCloneUrl), {
@@ -724,6 +793,7 @@ export async function fetchSubmodules(
         declared,
         resolvedUrls,
         repoCloneUrl,
+        baseDeclared,
         authHeader,
     });
 
@@ -806,9 +876,19 @@ export async function fetchSubmodules(
         );
     }
     logger?.log?.({
-        message: `[SUBMODULES] Fetched ${fetched.length} of ${plan.updateArgs.length} submodule(s)`,
+        message: `[SUBMODULES] Fetched ${fetched.length} of ${plan.updateArgs.length} submodule(s) in ${
+            now() - startedAt
+        }ms`,
         context: logContext,
-        metadata: { ...logMetadata, fetched, failed },
+        // `durationMs` is the number to watch after rollout: this step is new
+        // latency on every sandbox create AND on every reconnect round, and
+        // the full-history retry has no size cap.
+        metadata: {
+            ...logMetadata,
+            fetched,
+            failed,
+            durationMs: now() - startedAt,
+        },
     });
 
     return { fetched, failed, skippedForTime, skippedByPolicy: plan.skipped };

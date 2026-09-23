@@ -84,6 +84,15 @@ describe('parseGitmodulesPaths', () => {
         expect(parseGitmodulesPaths('')).toEqual([]);
         expect(parseGitmodulesPaths('[submodule "a"]\n url = x\n')).toEqual([]);
     });
+
+    it('errs toward MARKING: a path in a section git would not read still counts', () => {
+        // The scanner is looser than git's parser. Here that is the safe
+        // direction — an extra note, never a missing one. See the docstring
+        // on parseGitmodulesPaths for why this side does not use git.
+        expect(parseGitmodulesPaths('[core]\n path = vendor/x\n')).toEqual([
+            'vendor/x',
+        ]);
+    });
 });
 
 describe('submodule probe', () => {
@@ -291,8 +300,7 @@ describe('tools — a node_modules lookup says the dependencies were never insta
 
     it('namesOnly still maps a file whose name starts with Error', async () => {
         const sandbox = makeSandbox({ gitmodules: null });
-        sandbox.grep = (async () =>
-            'src/ErrorBoundary.tsx:12:catch\n') as any;
+        sandbox.grep = (async () => 'src/ErrorBoundary.tsx:12:catch\n') as any;
         const out = await buildAgentTools(sandbox).grep.execute({
             pattern: 'catch',
             path: 'src',

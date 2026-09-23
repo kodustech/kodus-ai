@@ -65,10 +65,24 @@ function makeSandbox(
                     if (gitmodules === null) throw new Error('No such file');
                     return { stdout: gitmodules.file, stderr: '', exitCode: 0 };
                 }
-                // Two different dumps: `-f .gitmodules` is what the PR
-                // DECLARES, the plain one is what git RESOLVED into
-                // `.git/config` after `submodule init`.
+                // The base ref is present in the sandbox by default.
+                if (cmd.includes("'rev-parse'")) {
+                    return { stdout: 'abc123', stderr: '', exitCode: 0 };
+                }
+                // THREE dumps now: `--blob <ref>:.gitmodules` is what the BASE
+                // branch declares, `-f .gitmodules` what the PR declares, and
+                // the plain one what git RESOLVED after `submodule init`.
                 if (cmd.includes("'--get-regexp'")) {
+                    if (cmd.includes("'--blob'")) {
+                        // Identical to the PR's: the already-merged case,
+                        // which is the only one that fetches. The diverging
+                        // cases are asserted in submodule-fetch.spec.ts.
+                        return {
+                            stdout: gitmodules?.declared ?? '',
+                            stderr: '',
+                            exitCode: 0,
+                        };
+                    }
                     const declaredDump = cmd.includes("'-f' '.gitmodules'");
                     return {
                         stdout: declaredDump
@@ -84,6 +98,8 @@ function makeSandbox(
     };
 }
 
+const BASE_REF = 'origin/main';
+
 const RESOLVED_SAME_HOST =
     'submodule.packages/commons.url https://github.com/acme/commons.git\n';
 const RESOLVED_FOREIGN_HOST =
@@ -92,7 +108,9 @@ const RESOLVED_FOREIGN_HOST =
 describe('fetchE2BSubmodules — a same-host submodule is fetched', () => {
     it('issues one scoped `git submodule update` for the declared path', async () => {
         const sandbox = makeSandbox(GITMODULES_SAME_HOST, RESOLVED_SAME_HOST);
-        await fetchE2BSubmodules(sandbox as any, REPO, AUTH);
+        await fetchE2BSubmodules(sandbox as any, REPO, AUTH, {
+            baseRef: BASE_REF,
+        });
 
         const [call] = sandbox.submoduleCalls();
         expect(call).toBeDefined();
@@ -106,7 +124,9 @@ describe('fetchE2BSubmodules — a same-host submodule is fetched', () => {
 
     it('never puts the token in the command string', async () => {
         const sandbox = makeSandbox(GITMODULES_SAME_HOST, RESOLVED_SAME_HOST);
-        await fetchE2BSubmodules(sandbox as any, REPO, AUTH);
+        await fetchE2BSubmodules(sandbox as any, REPO, AUTH, {
+            baseRef: BASE_REF,
+        });
         for (const { cmd } of sandbox.calls) {
             expect(cmd).not.toContain(AUTH);
         }
@@ -114,7 +134,9 @@ describe('fetchE2BSubmodules — a same-host submodule is fetched', () => {
 
     it('never uses the global header key, which leaks the token to any host', async () => {
         const sandbox = makeSandbox(GITMODULES_SAME_HOST, RESOLVED_SAME_HOST);
-        await fetchE2BSubmodules(sandbox as any, REPO, AUTH);
+        await fetchE2BSubmodules(sandbox as any, REPO, AUTH, {
+            baseRef: BASE_REF,
+        });
         const [call] = sandbox.submoduleCalls();
         expect(Object.values(call.opts.envs ?? {})).not.toContain(
             'http.extraHeader',
@@ -123,7 +145,9 @@ describe('fetchE2BSubmodules — a same-host submodule is fetched', () => {
 
     it('is bounded by a timeout so a big repo cannot hang the review', async () => {
         const sandbox = makeSandbox(GITMODULES_SAME_HOST, RESOLVED_SAME_HOST);
-        await fetchE2BSubmodules(sandbox as any, REPO, AUTH);
+        await fetchE2BSubmodules(sandbox as any, REPO, AUTH, {
+            baseRef: BASE_REF,
+        });
         expect(sandbox.submoduleCalls()[0].opts.timeoutMs).toBeGreaterThan(0);
     });
 });
@@ -134,7 +158,9 @@ describe('fetchE2BSubmodules — a foreign-host submodule makes NO request', () 
             GITMODULES_FOREIGN_HOST,
             RESOLVED_FOREIGN_HOST,
         );
-        await fetchE2BSubmodules(sandbox as any, REPO, AUTH);
+        await fetchE2BSubmodules(sandbox as any, REPO, AUTH, {
+            baseRef: BASE_REF,
+        });
         expect(sandbox.submoduleCalls()).toHaveLength(0);
     });
 
@@ -143,7 +169,9 @@ describe('fetchE2BSubmodules — a foreign-host submodule makes NO request', () 
             GITMODULES_FOREIGN_HOST,
             RESOLVED_FOREIGN_HOST,
         );
-        await fetchE2BSubmodules(sandbox as any, REPO, AUTH);
+        await fetchE2BSubmodules(sandbox as any, REPO, AUTH, {
+            baseRef: BASE_REF,
+        });
         for (const { cmd } of sandbox.calls) {
             expect(cmd).not.toContain('evil.example');
         }
@@ -155,7 +183,7 @@ describe('fetchE2BSubmodules — a foreign-host submodule makes NO request', () 
             makeSandbox(GITMODULES_FOREIGN_HOST, RESOLVED_FOREIGN_HOST) as any,
             REPO,
             AUTH,
-            { logger: { warn } as any },
+            { logger: { warn } as any, baseRef: BASE_REF },
         );
         expect(warn).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -175,7 +203,9 @@ describe('fetchE2BSubmodules — the rejected url does not survive in the checko
             GITMODULES_FOREIGN_HOST,
             RESOLVED_FOREIGN_HOST,
         );
-        await fetchE2BSubmodules(sandbox as any, REPO, AUTH);
+        await fetchE2BSubmodules(sandbox as any, REPO, AUTH, {
+            baseRef: BASE_REF,
+        });
         const [cleanup] = sandbox.cleanupCalls();
         expect(cleanup).toBeDefined();
         expect(cleanup.cmd).toContain("'submodule.packages/commons'");
@@ -183,13 +213,17 @@ describe('fetchE2BSubmodules — the rejected url does not survive in the checko
 
     it('leaves an allowed submodule registered', async () => {
         const sandbox = makeSandbox(GITMODULES_SAME_HOST, RESOLVED_SAME_HOST);
-        await fetchE2BSubmodules(sandbox as any, REPO, AUTH);
+        await fetchE2BSubmodules(sandbox as any, REPO, AUTH, {
+            baseRef: BASE_REF,
+        });
         expect(sandbox.cleanupCalls()).toHaveLength(0);
     });
 
     it('resolves urls BEFORE deciding — init runs, and it makes no network call', async () => {
         const sandbox = makeSandbox(GITMODULES_SAME_HOST, RESOLVED_SAME_HOST);
-        await fetchE2BSubmodules(sandbox as any, REPO, AUTH);
+        await fetchE2BSubmodules(sandbox as any, REPO, AUTH, {
+            baseRef: BASE_REF,
+        });
         const order = sandbox.calls.map((c) => c.cmd);
         const initAt = order.findIndex((c) => c.includes("'submodule' 'init'"));
         const updateAt = order.findIndex((c) =>
@@ -201,7 +235,9 @@ describe('fetchE2BSubmodules — the rejected url does not survive in the checko
 
     it('fetches nothing when git resolved no urls — unresolved is unvalidated', async () => {
         const sandbox = makeSandbox(GITMODULES_SAME_HOST, '');
-        await fetchE2BSubmodules(sandbox as any, REPO, AUTH);
+        await fetchE2BSubmodules(sandbox as any, REPO, AUTH, {
+            baseRef: BASE_REF,
+        });
         expect(sandbox.submoduleCalls()).toHaveLength(0);
     });
 });
@@ -216,13 +252,34 @@ describe('fetchE2BSubmodules — the log says WHICH review it belongs to', () =>
             makeSandbox(GITMODULES_FOREIGN_HOST, RESOLVED_FOREIGN_HOST) as any,
             REPO,
             AUTH,
-            { logger: { warn } as any, logMetadata: { prNumber: 196 } },
+            {
+                logger: { warn } as any,
+                logMetadata: { prNumber: 196 },
+                baseRef: BASE_REF,
+            },
         );
         expect(warn).toHaveBeenCalledWith(
             expect.objectContaining({
                 metadata: expect.objectContaining({ prNumber: 196 }),
             }),
         );
+    });
+
+    it('reports how long the step took, for the p95 after rollout', async () => {
+        const log = jest.fn();
+        await fetchE2BSubmodules(
+            makeSandbox(GITMODULES_SAME_HOST, RESOLVED_SAME_HOST) as any,
+            REPO,
+            AUTH,
+            {
+                logger: { log, warn: jest.fn() } as any,
+                logMetadata: { prNumber: 196 },
+                baseRef: BASE_REF,
+            },
+        );
+        const entry = log.mock.calls[0][0];
+        expect(entry.metadata.durationMs).toEqual(expect.any(Number));
+        expect(entry.message).toMatch(/in \d+ms/);
     });
 
     it('tags the success line too', async () => {
@@ -234,6 +291,7 @@ describe('fetchE2BSubmodules — the log says WHICH review it belongs to', () =>
             {
                 logger: { log, warn: jest.fn() } as any,
                 logMetadata: { prNumber: 196 },
+                baseRef: BASE_REF,
             },
         );
         expect(log).toHaveBeenCalledWith(
@@ -275,7 +333,9 @@ describe('fetchE2BSubmodules — the time budget covers ALL submodules together'
 
     it('hands each submodule what is LEFT, not a fresh full allowance', async () => {
         const sandbox = slowSandbox();
-        await fetchE2BSubmodules(sandbox as any, REPO, AUTH);
+        await fetchE2BSubmodules(sandbox as any, REPO, AUTH, {
+            baseRef: BASE_REF,
+        });
         const budgets = sandbox
             .submoduleCalls()
             .map((c) => c.opts.timeoutMs as number);
@@ -290,7 +350,9 @@ describe('fetchE2BSubmodules — the time budget covers ALL submodules together'
 
     it('never hands out more than the total budget', async () => {
         const sandbox = slowSandbox();
-        await fetchE2BSubmodules(sandbox as any, REPO, AUTH);
+        await fetchE2BSubmodules(sandbox as any, REPO, AUTH, {
+            baseRef: BASE_REF,
+        });
         const budgets = sandbox
             .submoduleCalls()
             .map((c) => c.opts.timeoutMs as number);
@@ -312,7 +374,9 @@ describe('fetchE2BSubmodules — the deep retry deletes inside the checkout only
 
     it('removes `.git/modules/<name>` under the repo dir, never above it', async () => {
         const sandbox = shallowFails(GITMODULES_SAME_HOST, RESOLVED_SAME_HOST);
-        await fetchE2BSubmodules(sandbox as any, REPO, AUTH);
+        await fetchE2BSubmodules(sandbox as any, REPO, AUTH, {
+            baseRef: BASE_REF,
+        });
         const removals = sandbox.calls
             .map((c) => c.cmd)
             .filter((cmd) => cmd.includes('rm -rf'));
@@ -331,7 +395,9 @@ describe('fetchE2BSubmodules — the deep retry deletes inside the checkout only
         // happy path, and the test above — where every shallow fetch fails —
         // would still pass.
         const sandbox = makeSandbox(GITMODULES_SAME_HOST, RESOLVED_SAME_HOST);
-        await fetchE2BSubmodules(sandbox as any, REPO, AUTH);
+        await fetchE2BSubmodules(sandbox as any, REPO, AUTH, {
+            baseRef: BASE_REF,
+        });
         expect(
             sandbox.calls
                 .map((c) => c.cmd)
@@ -349,7 +415,9 @@ describe('fetchE2BSubmodules — the deep retry deletes inside the checkout only
 describe('fetchE2BSubmodules — never breaks a review', () => {
     it('does nothing at all when the repo has no .gitmodules', async () => {
         const sandbox = makeSandbox(null);
-        await fetchE2BSubmodules(sandbox as any, REPO, AUTH);
+        await fetchE2BSubmodules(sandbox as any, REPO, AUTH, {
+            baseRef: BASE_REF,
+        });
         expect(sandbox.submoduleCalls()).toHaveLength(0);
     });
 
@@ -368,13 +436,17 @@ describe('fetchE2BSubmodules — never breaks a review', () => {
             throw new Error('fatal: could not read Username');
         }) as any;
         await expect(
-            fetchE2BSubmodules(sandbox as any, REPO, AUTH),
+            fetchE2BSubmodules(sandbox as any, REPO, AUTH, {
+                baseRef: BASE_REF,
+            }),
         ).resolves.toBeUndefined();
     });
 
     it('works for an anonymous clone (public repo, no token)', async () => {
         const sandbox = makeSandbox(GITMODULES_SAME_HOST, RESOLVED_SAME_HOST);
-        await fetchE2BSubmodules(sandbox as any, REPO, undefined);
+        await fetchE2BSubmodules(sandbox as any, REPO, undefined, {
+            baseRef: BASE_REF,
+        });
         expect(sandbox.submoduleCalls()[0].opts.envs).toEqual({});
     });
 });

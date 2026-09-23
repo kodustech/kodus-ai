@@ -302,12 +302,18 @@ export async function fetchE2BSubmodules(
          * operator asks when one repository's submodules did not populate.
          */
         logMetadata?: Record<string, unknown>;
+        /**
+         * Ref of the pull request's base branch, e.g. `origin/main`. Without
+         * it nothing is fetched — see `baseDeclaredDumpArgs`.
+         */
+        baseRef?: string;
     } = {},
 ): Promise<void> {
     const {
         logger,
         logContext = 'fetchE2BSubmodules',
         logMetadata = {},
+        baseRef,
     } = opts;
 
     // Thin adapter: the ORDER, the retries, the time budget and the logging
@@ -353,6 +359,7 @@ export async function fetchE2BSubmodules(
 
     await fetchSubmodules(host, {
         repoCloneUrl: cloneUrl,
+        baseRef,
         authHeader,
         totalBudgetMs: TIMEOUTS.SUBMODULES_MS,
         stepTimeoutMs: TIMEOUTS.COMMAND_LONG_MS,
@@ -488,6 +495,12 @@ export async function syncE2BSandboxRepo(
             logger,
             logContext: logContext ?? 'syncE2BSandboxRepo',
             logMetadata: { prNumber },
+            // Round N reuses the sandbox, so the base ref is whatever the
+            // previous round fetched. Absent or stale, the shared module
+            // fetches nothing and says so.
+            baseRef: params.baseBranch
+                ? `origin/${params.baseBranch}`
+                : undefined,
         },
     );
 
@@ -578,6 +591,32 @@ export class E2BSandboxService implements ISandboxProvider {
             const resolvedBaseBranch = await this.fetchBaseBranch(
                 sandbox,
                 params,
+            );
+
+            // The checkout above is a shallow fetch with no submodule
+            // handling, so every path the repository declares in
+            // `.gitmodules` would otherwise be an empty directory the agent
+            // reads as "this code does not exist" (#1939). It runs HERE, not
+            // in `cloneRepository`, because the rule that bounds it needs the
+            // base branch to already be in the sandbox.
+            await fetchE2BSubmodules(
+                sandbox,
+                params.cloneUrl,
+                params.authToken
+                    ? this.buildAuthHeader(
+                          params.platform,
+                          params.authToken,
+                          params.authUsername,
+                      )
+                    : undefined,
+                {
+                    logger: this.logger,
+                    logContext: E2BSandboxService.name,
+                    logMetadata: { prNumber: params.prNumber },
+                    baseRef: resolvedBaseBranch
+                        ? `origin/${resolvedBaseBranch}`
+                        : undefined,
+                },
             );
 
             const remoteCommands = this.buildRemoteCommands(sandbox);
@@ -800,20 +839,9 @@ export class E2BSandboxService implements ISandboxProvider {
             );
         }
 
-        // The checkout above is a shallow fetch with no submodule handling, so
-        // every path the repository declares in `.gitmodules` would otherwise
-        // be an empty directory the agent reads as "this code does not exist"
-        // (#1939).
-        await fetchE2BSubmodules(
-            sandbox,
-            cloneUrl,
-            hasAuth ? authHeader : undefined,
-            {
-                logger: this.logger,
-                logContext: E2BSandboxService.name,
-                logMetadata: { prNumber },
-            },
-        );
+        // Submodules are fetched by the caller, AFTER the base branch is in
+        // the sandbox: only a submodule declared identically on the base is
+        // fetched, and that declaration is read from the base ref (#1939).
 
         // Verify repo contents after clone
         const verifyResult = await sandbox.commands.run(

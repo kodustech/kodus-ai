@@ -37,10 +37,19 @@ export const MISSING_DEPENDENCIES_MARKER =
 /**
  * Paths declared as submodules in a `.gitmodules` file.
  *
- * Deliberately a line scanner rather than a full INI parser: `.gitmodules` is
- * attacker-controlled (it ships in the PR), and the only thing we take from it
- * here is a set of repo-relative paths used for string comparison. `url` is NOT
- * read by this module — nothing here touches the network.
+ * A line scanner, unlike the fetch side, which reads the same file through
+ * `git config -f`. That asymmetry is deliberate: reading it through git here
+ * would mean running `git` inside the sandbox, and the local provider's
+ * `exec` is a strict allowlist of read-only programs precisely because it
+ * runs on the host with no container isolation (`local-sandbox.service.ts`).
+ * Widening that allowlist to make two parsers match is a worse trade than
+ * keeping this one.
+ *
+ * It is safe HERE because of what it is used for: a set of repo-relative
+ * paths, compared as strings, to decide whether an EMPTY answer gets a note.
+ * It reads no url and reaches no network, and it errs by matching `path =`
+ * too eagerly — which adds a note, never removes one. On the fetch side the
+ * same mistake picked the wrong url, which is why that side must use git.
  */
 export function parseGitmodulesPaths(content: string): string[] {
     const paths: string[] = [];

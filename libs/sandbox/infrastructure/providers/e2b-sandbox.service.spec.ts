@@ -624,6 +624,7 @@ describe('syncE2BSandboxRepo', () => {
         cloneUrl: 'https://github.com/kodustech/kodus-ai',
         authToken: 'tok123',
         branch: 'feature/x',
+        baseBranch: 'main',
         prNumber: 44,
         platform: PlatformType.GITHUB,
     };
@@ -771,6 +772,9 @@ describe('syncE2BSandboxRepo — submodules on the reconnect path', () => {
         cloneUrl: 'https://github.com/kodustech/kodus-ai',
         authToken: 'tok123',
         branch: 'feature/x',
+        // Round N reuses the sandbox, so the base ref is whatever the
+        // previous round fetched; without one nothing is fetched.
+        baseBranch: 'main',
         prNumber: 44,
         platform: PlatformType.GITHUB,
     };
@@ -781,8 +785,15 @@ describe('syncE2BSandboxRepo — submodules on the reconnect path', () => {
                 if (gitmodules === null) throw new Error('No such file');
                 return { stdout: gitmodules, stderr: '', exitCode: 0 };
             }
+            if (cmd.includes("'rev-parse'")) {
+                return { stdout: 'abc123', stderr: '', exitCode: 0 };
+            }
             if (cmd.includes("'--get-regexp'")) {
-                const declared = cmd.includes("'-f' '.gitmodules'");
+                // The base declares the same thing — the merged case, which
+                // is the only one that fetches.
+                const declared =
+                    cmd.includes("'-f' '.gitmodules'") ||
+                    cmd.includes("'--blob'");
                 return {
                     stdout: declared ? DECLARED : RESOLVED,
                     stderr: '',

@@ -278,6 +278,43 @@ describe('sandbox checkout of a repository with submodules', () => {
         };
         await buildSuperCrafted();
 
+        /**
+         * A pull request that ADDS a submodule: the base branch (`clean`) has
+         * no `.gitmodules` at all, the head adds one pointing at a repository
+         * on the same host. This is the fork-PR shape — same host, so the
+         * host check allows it — and the token the fetch would use is not
+         * scoped to the repository under review.
+         */
+        const buildSuperAdds = async () => {
+            const dir = join(scratch, 'super-adds');
+            await git(['init', '-b', 'clean', dir]);
+            await writeFile(
+                join(dir, 'app.ts'),
+                'export const a = 1;\n',
+                'utf8',
+            );
+            await git(['-C', dir, 'add', 'app.ts']);
+            await git(['-C', dir, 'commit', '-m', 'base with no submodule']);
+            await git(['-C', dir, 'checkout', '-q', '-b', 'main']);
+            await writeFile(
+                join(dir, '.gitmodules'),
+                `[submodule "packages/commons"]\n\tpath = packages/commons\n\turl = http://127.0.0.1:${port}/commons.git\n`,
+                'utf8',
+            );
+            await git(['-C', dir, 'add', '.gitmodules']);
+            await git([
+                '-C',
+                dir,
+                'update-index',
+                '--add',
+                '--cacheinfo',
+                `160000,${subSha.trim()},packages/commons`,
+            ]);
+            await git(['-C', dir, 'commit', '-m', 'add the submodule']);
+            await publish(dir, 'super-adds');
+        };
+        await buildSuperAdds();
+
         // The idiomatic form, and the one this fix stopped resolving itself:
         // origin is `<host>/super-relative.git`, so git resolves `../` to
         // `<host>/commons.git`.
@@ -407,11 +444,19 @@ describe('sandbox checkout of a repository with submodules', () => {
         foreignAuthSeen = [];
     });
 
-    const checkout = (repo: string) =>
+    /**
+     * `baseBranch` is the same branch here, which models the MERGED case: the
+     * `.gitmodules` entry the pull request carries is byte-identical to the
+     * one on the base, so it is fetched. Only that case fetches — see
+     * `baseDeclaredDumpArgs`. A pull request that ADDS a submodule has its
+     * own test at the bottom of this file.
+     */
+    const checkout = (repo: string, baseBranch = 'main') =>
         sandboxService.createSandboxWithRepo({
             cloneUrl: `http://127.0.0.1:${port}/${repo}.git`,
             authToken: 'test-token',
             branch: 'main',
+            baseBranch,
             platform: PlatformType.GITHUB,
         } as any);
 
@@ -606,6 +651,43 @@ describe('sandbox checkout of a repository with submodules', () => {
 
             // The point of the same-host rule: nothing was ever sent there.
             expect(foreignAuthSeen).toEqual([]);
+        } finally {
+            await sandbox.cleanup?.();
+        }
+    });
+
+    it('does NOT fetch a submodule the pull request adds, even on the repo host', async () => {
+        // Same host is not the same as authorized: the token is not scoped to
+        // the repository under review, so a pull request that ADDS a
+        // submodule could point it at any repository that token can read.
+        // Only a declaration already on the base branch is fetched.
+        const sandbox = await checkout('super-adds', 'clean');
+        try {
+            expect(sandbox.repoDir).toBeTruthy();
+            const listing = await readdir(
+                join(sandbox.repoDir, 'packages', 'commons'),
+            );
+            expect(listing).toEqual([]);
+
+            // And the agent is told the directory is unexplained, not empty.
+            const tools = buildAgentTools(sandbox.remoteCommands);
+            const grep = await tools.grep.execute({
+                pattern: 'coerceToDate',
+                path: 'packages/commons',
+            });
+            expect(grep).toContain(UNINITIALIZED_SUBMODULE_MARKER);
+        } finally {
+            await sandbox.cleanup?.();
+        }
+    });
+
+    it('fetches the same submodule once it IS on the base branch', async () => {
+        // The other direction: identical declaration on both sides.
+        const sandbox = await checkout('super-adds', 'main');
+        try {
+            const read = await sandbox.run('cat packages/commons/date.ts');
+            expect(read.exitCode).toBe(0);
+            expect(read.stdout).toContain('coerceToDate');
         } finally {
             await sandbox.cleanup?.();
         }
