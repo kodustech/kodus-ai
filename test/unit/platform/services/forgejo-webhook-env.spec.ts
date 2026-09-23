@@ -40,12 +40,14 @@ jest.mock('@libs/common/utils/crypto', () => ({
 let ForgejoService: any;
 const repoGetAllCommitsMock = jest.fn();
 const repoGetMock = jest.fn();
+const repoDeleteHookMock = jest.fn();
 jest.mock('@llamaduck/forgejo-ts', () => ({
     repoListHooks: (...args: unknown[]) => repoListHooksMock(...args),
     repoCreateHook: (...args: unknown[]) => repoCreateHookMock(...args),
     repoEditHook: (...args: unknown[]) => repoEditHookMock(...args),
     repoGetAllCommits: (...args: unknown[]) => repoGetAllCommitsMock(...args),
     repoGet: (...args: unknown[]) => repoGetMock(...args),
+    repoDeleteHook: (...args: unknown[]) => repoDeleteHookMock(...args),
 }));
 
 const URL = 'https://api.example.com/forgejo/webhook';
@@ -69,6 +71,7 @@ describe('ForgejoService webhook URL variable', () => {
         repoListHooksMock.mockReset();
         repoGetAllCommitsMock.mockReset();
         repoGetMock.mockReset();
+        repoDeleteHookMock.mockReset();
         const configService = {
             // only the variable the hook is created from is set
             get: jest.fn((key: string) =>
@@ -139,5 +142,61 @@ describe('ForgejoService webhook URL variable', () => {
             },
         });
         expect(d.hook).toBe('present');
+    });
+
+    it('deleteWebhook removes only the hook with the configured URL', async () => {
+        repoListHooksMock.mockResolvedValue({
+            data: [
+                { id: 1, active: true, config: { url: URL } },
+                {
+                    id: 2,
+                    active: true,
+                    config: { url: 'https://other.example/hook' },
+                },
+                { id: 3, active: true, config: {} },
+            ],
+        });
+        await service.deleteWebhook({ organizationAndTeamData: orgTeam });
+        expect(repoDeleteHookMock).toHaveBeenCalledTimes(1);
+        expect(repoDeleteHookMock.mock.calls[0][0].path.id).toBe(1);
+    });
+
+    describe('webhook URL not configured', () => {
+        beforeEach(() => {
+            (service as any).configService.get.mockReturnValue(undefined);
+            repoListHooksMock.mockResolvedValue({
+                data: [{ id: 3, active: true, config: {} }],
+            });
+        });
+
+        it('isWebhookActive is false, even for a hook without a URL', async () => {
+            await expect(
+                service.isWebhookActive({
+                    organizationAndTeamData: orgTeam,
+                    repositoryId: '22',
+                }),
+            ).resolves.toBe(false);
+        });
+
+        it('diagnoseRepositoryAccess does not report a hook as present', async () => {
+            repoGetAllCommitsMock.mockResolvedValue({ data: [{}] });
+            repoGetMock.mockResolvedValue({
+                data: { permissions: { push: true, pull: true } },
+            });
+            const d = await service.diagnoseRepositoryAccess({
+                organizationAndTeamData: orgTeam,
+                repository: {
+                    id: '22',
+                    name: 'kodustech/kodus-ai',
+                    fullName: 'kodustech/kodus-ai',
+                },
+            });
+            expect(d.hook).not.toBe('present');
+        });
+
+        it('deleteWebhook deletes nothing (never matches hooks without a URL)', async () => {
+            await service.deleteWebhook({ organizationAndTeamData: orgTeam });
+            expect(repoDeleteHookMock).not.toHaveBeenCalled();
+        });
     });
 });

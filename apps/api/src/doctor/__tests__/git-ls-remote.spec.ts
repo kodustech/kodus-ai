@@ -35,4 +35,28 @@ describe('gitLsRemoteInvocation', () => {
         });
         expect(env.GIT_CONFIG_VALUE_0).toBeUndefined();
     });
+
+    it("keeps the admin's git config sources, drops injected entries", () => {
+        const saved = { ...process.env };
+        process.env.GIT_CONFIG_GLOBAL = '/etc/kodus/gitconfig';
+        process.env.GIT_CONFIG_NOSYSTEM = '1';
+        process.env.GIT_CONFIG_COUNT = '2';
+        process.env.GIT_CONFIG_KEY_1 = 'http.extraHeader';
+        process.env.GIT_CONFIG_VALUE_1 = 'Authorization: Basic someone-elses';
+        process.env.GIT_CONFIG_PARAMETERS = "'http.proxy'='x'";
+        try {
+            const { env } = gitLsRemoteInvocation({
+                url: 'https://github.com/acme/api',
+                provider: 'GITHUB',
+            });
+            expect(env.GIT_CONFIG_GLOBAL).toBe('/etc/kodus/gitconfig');
+            expect(env.GIT_CONFIG_NOSYSTEM).toBe('1');
+            expect(env.GIT_CONFIG_COUNT).toBeUndefined();
+            expect(env.GIT_CONFIG_KEY_1).toBeUndefined();
+            expect(env.GIT_CONFIG_VALUE_1).toBeUndefined();
+            expect(env.GIT_CONFIG_PARAMETERS).toBeUndefined();
+        } finally {
+            process.env = saved;
+        }
+    });
 });

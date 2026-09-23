@@ -3853,6 +3853,9 @@ export class ForgejoService implements Omit<
             const webhookUrl = this.configService.get<string>(
                 'API_FORGEJO_CODE_MANAGEMENT_WEBHOOK',
             );
+            // Without a URL there is nothing of ours to match; comparing
+            // against undefined would delete hooks that have no URL.
+            if (!webhookUrl) return;
 
             for (const repo of repositories) {
                 const repoInfo = this.extractRepoInfo(
@@ -4055,6 +4058,7 @@ export class ForgejoService implements Omit<
             const webhookUrl = this.configService.get<string>(
                 'API_FORGEJO_CODE_MANAGEMENT_WEBHOOK',
             );
+            if (!webhookUrl) return false;
 
             const result = await repoListHooks({
                 client,

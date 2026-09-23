@@ -451,12 +451,13 @@ export function gitLsRemoteInvocation(params: {
     provider: string;
     auth?: { token?: string; username?: string };
 }): { args: string[]; env: NodeJS.ProcessEnv } {
-    // Inherited GIT_CONFIG_* would mix another process's git config into
-    // this probe, so start without them.
+    // Drop only injected config entries (another invocation's header could
+    // ride on them); keep the admin's config sources (GIT_CONFIG_GLOBAL,
+    // GIT_CONFIG_SYSTEM, GIT_CONFIG_NOSYSTEM), where a proxy or sslVerify
+    // setting the real clone relies on may live.
+    const injected = /^GIT_CONFIG_(COUNT|PARAMETERS|KEY_\d+|VALUE_\d+)$/;
     const env: NodeJS.ProcessEnv = Object.fromEntries(
-        Object.entries(process.env).filter(
-            ([key]) => !key.startsWith('GIT_CONFIG_'),
-        ),
+        Object.entries(process.env).filter(([key]) => !injected.test(key)),
     );
     env.GIT_TERMINAL_PROMPT = '0';
     if (params.auth?.token) {
