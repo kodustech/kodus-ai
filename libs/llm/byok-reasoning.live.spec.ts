@@ -1620,18 +1620,29 @@ describe('BYOK structured output — LIVE, through LLM.run (the one door)', () =
  * contract sentence next year, the row still passes on a lenient upstream, and
  * the 400 comes back for everyone else.
  *
- * So this issues the SAME `response_format: json_object` request twice, by hand
- * (deliberately NOT through the door — the subject is the provider's rule, not
- * our stack): once with no occurrence of the word "json" anywhere in the
- * messages, once with the contract the executor injects.
+ * ─── WHICH UPSTREAM, AND WHY IT MATTERS ────────────────────────────────────
+ * The first version of this row asked GLM-over-OpenRouter, because that is the
+ * route the fix targets. It ran (2026-09-23) and answered: `bareRejected:
+ * false`. That upstream does NOT enforce the keyword — it accepts a bare
+ * `json_object` and replies. Which is the issue's own point, stated in its
+ * table: the symptom depends on how each provider reacts, and the same missing
+ * contract shows up as a 400 on one upstream and an invented shape on another.
+ * So a negative control has to ask a provider that DOES enforce the rule, or it
+ * measures the wrong end of the failure.
  *
- * If the keyword requirement ever disappears upstream, this row goes red saying
- * so. That is the correct reading: not "we broke something", but "the contract
- * is now belt-and-braces on this route rather than load-bearing" — a fact worth
- * knowing before anyone deletes it.
+ * OpenAI is that provider: it documents the requirement, production logged 430
+ * dedup failures carrying its wording, and the finder's own recovery was
+ * verified against it live (finder.agent.ts, 2026-09-17). So this asks OpenAI
+ * directly, by hand — deliberately NOT through the door, since the subject is
+ * the provider's rule, not our stack.
+ *
+ * If the requirement ever disappears there, this row goes red saying so. That
+ * is the correct reading: not "we broke something", but "the contract is now
+ * belt-and-braces on OpenAI too rather than load-bearing" — worth knowing
+ * before anyone deletes it.
  */
 describe('#1916 — the json_object keyword rule, live', () => {
-    const apiKey = key('open_router_glm');
+    const apiKey = key('openai');
     const run = apiKey ? it : it.skip;
 
     const CONTRACT =
@@ -1643,37 +1654,31 @@ describe('#1916 — the json_object keyword rule, live', () => {
             required: ['answer'],
         });
 
-    // Deliberately keyword-free: this is what `buildDedupPrompt` looked like on
+    // Deliberately keyword-free: this is what `buildDedupPrompt` looks like on
     // the wire — the word "json" appears exactly zero times.
     const USER = 'Reply with the field answer set to ok.';
 
     const ask = async (system?: string) => {
-        const res = await fetch(
-            'https://openrouter.ai/api/v1/chat/completions',
-            {
-                method: 'POST',
-                headers: {
-                    authorization: `Bearer ${apiKey}`,
-                    'content-type': 'application/json',
-                },
-                body: JSON.stringify({
-                    model: 'z-ai/glm-5.2',
-                    provider: { order: ['z-ai'], allow_fallbacks: false },
-                    messages: [
-                        ...(system ? [{ role: 'system', content: system }] : []),
-                        { role: 'user', content: USER },
-                    ],
-                    response_format: { type: 'json_object' },
-                    max_tokens: 200,
-                }),
+        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                authorization: `Bearer ${apiKey}`,
+                'content-type': 'application/json',
             },
-        );
+            body: JSON.stringify({
+                model: 'gpt-5.4-mini',
+                messages: [
+                    ...(system ? [{ role: 'system', content: system }] : []),
+                    { role: 'user', content: USER },
+                ],
+                response_format: { type: 'json_object' },
+                max_completion_tokens: 200,
+            }),
+        });
         const body: any = await res.json().catch(() => ({}));
         return {
             status: res.status,
-            message: String(
-                body?.error?.message ?? body?.error?.metadata?.raw ?? '',
-            ),
+            message: String(body?.error?.message ?? ''),
             content: String(body?.choices?.[0]?.message?.content ?? ''),
         };
     };
@@ -1692,8 +1697,9 @@ describe('#1916 — the json_object keyword rule, live', () => {
                 withContractAnswered: withContract.status === 200,
                 withContractParses: (() => {
                     try {
-                        return typeof JSON.parse(withContract.content) ===
-                            'object';
+                        return (
+                            typeof JSON.parse(withContract.content) === 'object'
+                        );
                     } catch {
                         return false;
                     }
