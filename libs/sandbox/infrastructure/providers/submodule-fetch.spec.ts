@@ -323,6 +323,24 @@ describe('decideSubmodules — transports that bypass the header and the proxy',
         });
     });
 
+    it('accepts a single-label host — self-hosted `git@gitlab:acme/x.git`', () => {
+        // Requiring a dot would reject exactly the installs this exists for,
+        // and the `ssh://` form never required one.
+        const d = decideOne('git@gitlab:acme/commons.git', {
+            repo: 'https://gitlab/acme/app.git',
+        });
+        expect(d.allowed).toBe(true);
+        expect((d as any).rewrite).toEqual({
+            key: 'url.https://gitlab/.insteadOf',
+            value: 'git@gitlab:',
+        });
+    });
+
+    it('still refuses a windows drive path', () => {
+        expect(decideOne('C:\\repos\\x.git').allowed).toBe(false);
+        expect(decideOne('C:/repos/x.git').allowed).toBe(false);
+    });
+
     it('never rewrites onto http — the repo must be https', () => {
         const d = decideOne('git@plain.internal:acme/x.git', {
             repo: 'http://plain.internal/acme/app.git',
@@ -368,6 +386,68 @@ describe('decideSubmodules — a private git server is the NORMAL case self-host
                 repo: 'https://10.0.3.9/acme/app.git',
             }).allowed,
         ).toBe(false);
+    });
+});
+
+describe('decideSubmodules — one path, one section', () => {
+    /**
+     * Measured with git 2.51: when two sections claim the same path,
+     * `submodule init` registers the LAST one and only that one — including
+     * on the deep retry's `init -- <path>`. So the losers arrive here with no
+     * resolved url and are denied anyway. This refuses the whole path instead
+     * of leaning on that tie-break, which is undocumented and would be a
+     * silent security change if git ever picked the first.
+     */
+    const twoSectionsOnePath = (firstUrl: string, secondUrl: string) =>
+        decideSubmodules(
+            parseDeclaredSubmodules(
+                `submodule.commons.path packages/commons\nsubmodule.commons.url ${firstUrl}\n` +
+                    `submodule.evil.path packages/commons\nsubmodule.evil.url ${secondUrl}\n`,
+            ),
+            // What `init` actually registered: the last section only.
+            new Map([['evil', secondUrl]]),
+            REPO,
+            parseDeclaredSubmodules(
+                `submodule.commons.path packages/commons\nsubmodule.commons.url ${firstUrl}\n` +
+                    `submodule.evil.path packages/commons\nsubmodule.evil.url ${secondUrl}\n`,
+            ),
+        );
+
+    it('refuses BOTH sections, even the one identical to the base', () => {
+        const ds = twoSectionsOnePath(
+            'https://github.com/acme/commons.git',
+            'https://github.com/acme/private.git',
+        );
+        expect(ds.every((d) => !d.allowed)).toBe(true);
+        for (const d of ds) {
+            expect((d as any).reason).toMatch(/claimed by more than one/);
+        }
+    });
+
+    it('nothing is fetched and no path is handed to git', () => {
+        const declared = parseDeclaredSubmodules(
+            'submodule.commons.path packages/commons\nsubmodule.commons.url https://github.com/acme/commons.git\n' +
+                'submodule.evil.path packages/commons\nsubmodule.evil.url https://github.com/acme/private.git\n',
+        );
+        const plan = buildSubmoduleUpdatePlan({
+            declared,
+            resolvedUrls: new Map([
+                ['evil', 'https://github.com/acme/private.git'],
+            ]),
+            repoCloneUrl: REPO,
+            baseDeclared: declared,
+            authHeader: AUTH,
+        });
+        expect(plan.paths).toEqual([]);
+        expect(plan.updateArgs).toEqual([]);
+        expect(plan.deepRetry).toEqual([]);
+        expect(JSON.stringify(plan.env)).not.toContain('private');
+    });
+
+    it('a normal one-section-one-path declaration is unaffected', () => {
+        expect(decideOne('https://github.com/acme/commons.git').allowed).toBe(
+            true,
+        );
     });
 });
 

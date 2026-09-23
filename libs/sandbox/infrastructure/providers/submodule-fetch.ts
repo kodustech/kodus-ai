@@ -170,9 +170,17 @@ function parseSshUrl(url: string): { host: string; prefix: string } | null {
             prefix: raw.slice(0, explicit[0].length),
         };
     }
-    // [user@]host:path — never a Windows drive letter, never a url scheme
+    // [user@]host:path. A single-label host is legitimate self-hosted
+    // (`git@gitlab:acme/x.git`), so requiring a dot would reject exactly the
+    // installs this feature exists for — and the `ssh://` branch above never
+    // required one. Only two shapes are excluded: a url with a scheme, and a
+    // Windows drive (`C:\repos\x`), which is the one other thing that looks
+    // like `<token>:<path>`. Whether the host is the right one is decided by
+    // the same-host comparison in `sshRewriteFor`, not here.
+    if (raw.indexOf('://') !== -1) return null;
+    if (/^[A-Za-z]:[\\/]/.test(raw)) return null;
     const scp = /^([^@/\s]+@)?([^@/:\s]+):(?!\/)/.exec(raw);
-    if (scp && raw.indexOf('://') === -1 && scp[2].includes('.')) {
+    if (scp) {
         return { host: scp[2], prefix: `${scp[1] ?? ''}${scp[2]}:` };
     }
     return null;
@@ -295,6 +303,12 @@ export function decideSubmodules(
             url: v.url ?? '',
         }));
 
+    /** How many sections claim each path — see the check below. */
+    const pathClaims = new Map<string, number>();
+    for (const e of entries) {
+        pathClaims.set(e.path, (pathClaims.get(e.path) ?? 0) + 1);
+    }
+
     let repo: URL;
     try {
         repo = new URL(repoCloneUrl);
@@ -322,6 +336,18 @@ export function decideSubmodules(
             reason,
         });
 
+        // One path, one section. Measured with git 2.51: when two sections
+        // claim the same path, `submodule init` registers the LAST one and
+        // only that one, so `resolvedUrls` describes the section git will
+        // actually use and the losers are denied below for having no url.
+        // That makes the ambiguity harmless today — but it is undocumented
+        // git behaviour holding up a security boundary, and `update -- <path>`
+        // and the deep retry's `init -- <path>` both re-resolve the path
+        // through the pull request's own `.gitmodules`. Refusing the whole
+        // path removes the class instead of relying on the tie-break.
+        if ((pathClaims.get(entry.path) ?? 0) > 1) {
+            return deny('path claimed by more than one submodule section');
+        }
         // Already merged, or not fetched. See `baseDeclaredDumpArgs`: the
         // token is not scoped to the repository under review, so what a pull
         // request may point it at has to be bounded by what the base branch

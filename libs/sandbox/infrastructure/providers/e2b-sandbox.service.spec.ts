@@ -786,11 +786,22 @@ describe('syncE2BSandboxRepo — submodules on the reconnect path', () => {
                 return { stdout: gitmodules, stderr: '', exitCode: 0 };
             }
             if (cmd.includes("'rev-parse'")) {
+                // Only `refs/remotes/origin/<base>` exists in a reused
+                // sandbox, so the probe must ask for `origin/main` — asking
+                // for `main` finds nothing and silently stops repopulating
+                // submodules on every reconnect round.
+                if (!cmd.includes("'origin/main^{commit}'")) {
+                    throw new Error(`unexpected ref probe: ${cmd}`);
+                }
                 return { stdout: 'abc123', stderr: '', exitCode: 0 };
             }
             if (cmd.includes("'--get-regexp'")) {
                 // The base declares the same thing — the merged case, which
                 // is the only one that fetches.
+                if (cmd.includes("'--blob'")) {
+                    // Same reason: the blob is read off the base REF.
+                    expect(cmd).toContain("'origin/main:.gitmodules'");
+                }
                 const declared =
                     cmd.includes("'-f' '.gitmodules'") ||
                     cmd.includes("'--blob'");
@@ -825,6 +836,48 @@ describe('syncE2BSandboxRepo — submodules on the reconnect path', () => {
         );
         expect(checkoutAt).toBeGreaterThanOrEqual(0);
         expect(updateAt).toBeGreaterThan(checkoutAt);
+    });
+
+    it('reads the base declaration off origin/<base>, not <base>', async () => {
+        const run = runFor(GITMODULES);
+        await syncE2BSandboxRepo({ commands: { run } } as any, params);
+        const cmds = run.mock.calls.map(([cmd]) => cmd as string);
+        expect(cmds.some((c) => c.includes("'origin/main^{commit}'"))).toBe(
+            true,
+        );
+        expect(cmds.some((c) => c.includes("'origin/main:.gitmodules'"))).toBe(
+            true,
+        );
+    });
+
+    it('repopulates NOTHING when the base ref is not in the reused sandbox', async () => {
+        // A sandbox from an earlier round may not carry the base ref. Failing
+        // open here would fetch whatever the pull request declares.
+        const run = jest.fn(async (cmd: string) => {
+            if (cmd.includes('cat ') && cmd.includes('.gitmodules')) {
+                return { stdout: GITMODULES, stderr: '', exitCode: 0 };
+            }
+            if (cmd.includes("'rev-parse'"))
+                throw new Error('unknown revision');
+            if (cmd.includes("'--get-regexp'")) {
+                return {
+                    stdout: cmd.includes("'-f' '.gitmodules'")
+                        ? DECLARED
+                        : RESOLVED,
+                    stderr: '',
+                    exitCode: 0,
+                };
+            }
+            return { stdout: '', stderr: '', exitCode: 0 };
+        });
+        await syncE2BSandboxRepo({ commands: { run } } as any, params, {
+            logger: { warn: jest.fn(), log: jest.fn() } as any,
+        });
+        expect(
+            run.mock.calls.filter(([cmd]) =>
+                (cmd as string).includes("'submodule' 'update'"),
+            ),
+        ).toHaveLength(0);
     });
 
     it('does nothing extra for a repository with no .gitmodules', async () => {
