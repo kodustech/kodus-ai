@@ -133,13 +133,15 @@ export function normalizeAnthropicModelName(modelName?: string): string {
  * `-4-1` from matching inside `-4-12`.
  */
 
-/** Before 3.7: no extended thinking at all (2.x, instant, 3.0–3.5). Same
- *  boundary as the SDK's own table (`claude-instant`, `claude-v2`, `claude-3`). */
+/** Before 3.7: no extended thinking at all (1.x, 2.x, instant, 3.0–3.5). The
+ *  SDK's own table draws the same line (`claude-instant`, `claude-v2`,
+ *  `claude-3`); 1.x is added because under newer-by-default a miss here is an
+ *  adaptive request to a model that has never heard of thinking. */
 // Extended thinking arrives with 3.7. Everything earlier in the 2.x/3.x line
 // has no thinking parameter to send, which is a DIFFERENT fact from "thinks
 // with a budget" — and one regex used to answer both.
 const LEGACY_MAJOR = /^claude-3-7(\b|[-.])/;
-const PRE_THINKING = /^claude-(instant(\b|-)|v?2(\b|[-.])|3(\b|[-.]))/;
+const PRE_THINKING = /^claude-(instant(\b|-)|v?[12](\b|[-.])|3(\b|[-.]))/;
 
 /** Claude 4 through 4.5 — the budget shape. */
 const LEGACY_4X = /^claude-(opus|sonnet|haiku)-4(-[0-5])?(?![-.]?\d)/;

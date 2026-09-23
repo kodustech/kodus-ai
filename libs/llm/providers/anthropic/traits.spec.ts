@@ -131,6 +131,10 @@ describe('resolveAnthropicModelTraits', () => {
             ['claude-instant-1.2', 'pre-thinking'],
             ['anthropic.claude-instant-v1', 'pre-thinking'],
             ['claude-v2', 'pre-thinking'],
+            ['claude-1', 'pre-thinking'],
+            ['claude-1.2', 'pre-thinking'],
+            ['claude-v1', 'pre-thinking'],
+            ['anthropic.claude-v1', 'pre-thinking'],
         ];
         for (const [model, generation] of cases) {
             expect({ model, generation: resolveAnthropicModelTraits(model).generation })
