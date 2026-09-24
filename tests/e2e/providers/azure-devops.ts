@@ -27,6 +27,7 @@ interface AzureThread {
     isDeleted?: boolean;
     status?: string;
     comments?: AzureComment[];
+    threadContext?: { filePath?: string } | null;
 }
 
 interface AzureComment {
@@ -587,6 +588,8 @@ export class AzureDevOpsProvider extends BaseProvider {
             .filter(
                 (t) =>
                     !t.isDeleted &&
+                    // A finding sits on a file; the status comment does not.
+                    !!t.threadContext?.filePath &&
                     isKodyFinding(t.comments?.[0]?.content ?? ""),
             )
             .map((t) => ({

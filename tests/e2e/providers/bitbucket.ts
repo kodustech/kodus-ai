@@ -28,6 +28,7 @@ interface BitbucketComment {
     user: { uuid: string; display_name: string };
     parent?: { id: number };
     deleted?: boolean;
+    inline?: { path?: string } | null;
 }
 
 export class BitbucketProvider extends BaseProvider {
@@ -71,9 +72,13 @@ export class BitbucketProvider extends BaseProvider {
     }
 
     private cloneUrl(): string {
-        // BB_TEST_USER may be an Atlassian account email; unencoded, its `@`
-        // ends the userinfo early and git reads the token as a port.
-        return `https://${encodeURIComponent(this.user)}:${encodeURIComponent(this.appPassword)}@bitbucket.org/${this.workspaceSlug}.git`;
+        // An Atlassian API token (BB_TEST_USER is then the account email)
+        // authenticates git only under this fixed username; the REST calls
+        // keep using email:token.
+        const gitUser = this.user.includes("@")
+            ? "x-bitbucket-api-token-auth"
+            : this.user;
+        return `https://${encodeURIComponent(gitUser)}:${encodeURIComponent(this.appPassword)}@bitbucket.org/${this.workspaceSlug}.git`;
     }
 
     async repoRef(): Promise<ProviderRepoRef> {
@@ -659,6 +664,7 @@ export class BitbucketProvider extends BaseProvider {
             .filter(
                 (c) =>
                     !c.parent?.id &&
+                    !!c.inline &&
                     (c.content?.raw ?? "").includes("kody|code-review"),
             )
             .map((c) => ({ id: String(c.id), body: c.content?.raw ?? "" }));

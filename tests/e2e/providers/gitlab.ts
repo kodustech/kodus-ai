@@ -438,7 +438,8 @@ export class GitLabProvider extends BaseProvider {
         return (await this.discussions(prNumber))
             .filter(
                 (d) =>
-                    !d.individual_note &&
+                    // A finding sits on the diff; the status comment does not.
+                    d.notes?.[0]?.type === "DiffNote" &&
                     isKodyFinding(d.notes?.[0]?.body ?? ""),
             )
             .map((d) => ({ id: d.id, body: d.notes[0].body }));
@@ -481,7 +482,12 @@ export class GitLabProvider extends BaseProvider {
             {
                 id: string;
                 individual_note: boolean;
-                notes: { id: number; body: string; system?: boolean }[];
+                notes: {
+                    id: number;
+                    body: string;
+                    system?: boolean;
+                    type?: string | null;
+                }[];
             }[]
         >(
             `${this.apiBase}/projects/${projectId}/merge_requests/${prNumber}/discussions?per_page=100`,

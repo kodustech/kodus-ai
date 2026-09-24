@@ -29,7 +29,12 @@ export async function run(
         proc.on('close', (code) => {
             if (code === 0) resolve(stdout.trim());
             else {
-                const message = `${cmd} ${args.join(' ')} exited with code ${code}${stderr ? `\n${stderr}` : ''}`;
+                // Clone URLs carry credentials; never let them reach a log.
+                const redact = (text: string) =>
+                    text.replace(/\/\/[^/@\s]+@/g, '//***@');
+                const message = redact(
+                    `${cmd} ${args.join(' ')} exited with code ${code}${stderr ? `\n${stderr}` : ''}`,
+                );
                 reject(new Error(message));
             }
         });
