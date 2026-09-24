@@ -29,6 +29,14 @@ import {
 // onPipelineFinish observer calls sandbox.cleanup() on every exit path,
 // so this is a safety ceiling, not a cost floor.
 const SANDBOX_TIMEOUT_MS = 35 * 60 * 1000;
+
+// Every sandbox is tagged with the deployment that created it, so the orphan
+// sweep (SandboxLeaseReaperService) only ever kills its own: environments can
+// share one E2B key (dev and prod do), and a sweep only sees its own Mongo.
+export const E2B_DEPLOYMENT_METADATA_KEY = 'deployment';
+export function e2bDeploymentTag(apiNodeEnv: string | undefined): string {
+    return apiNodeEnv || 'unknown';
+}
 const REPO_DIR = '/home/user/repo';
 
 const TIMEOUTS = {
@@ -995,6 +1003,12 @@ export class E2BSandboxService implements ISandboxProvider {
         apiKey: string,
         metadata?: Record<string, string>,
     ): Promise<{ sandbox: Sandbox; usedTemplate: boolean }> {
+        metadata = {
+            ...metadata,
+            [E2B_DEPLOYMENT_METADATA_KEY]: e2bDeploymentTag(
+                this.configService.get<string>('API_NODE_ENV'),
+            ),
+        };
         const isGraphStage =
             metadata?.stage === 'graph-build' ||
             metadata?.stage === 'graph-incremental';

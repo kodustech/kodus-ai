@@ -306,6 +306,12 @@ describe('SandboxLeaseReaperService', () => {
     describe('sweepOrphanedSandboxes', () => {
         const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000);
 
+        beforeEach(() => {
+            configService.get.mockImplementation((key: string) =>
+                key === 'API_NODE_ENV' ? 'production' : 'fake-api-key',
+            );
+        });
+
         it('kills paused sandboxes that are old, ours, and have no lease', async () => {
             mockList.mockReturnValue(
                 paginatorOf(
@@ -347,9 +353,14 @@ describe('SandboxLeaseReaperService', () => {
 
             await service.sweepOrphanedSandboxes();
 
+            // Only this deployment's sandboxes: another environment sharing
+            // the E2B key keeps its leases in a Mongo we cannot see.
             expect(mockList).toHaveBeenCalledWith({
                 apiKey: 'fake-api-key',
-                query: { state: ['paused'] },
+                query: {
+                    state: ['paused'],
+                    metadata: { deployment: 'production' },
+                },
             });
             expect(
                 leaseRepository.findSandboxIdsWithLease,
@@ -386,7 +397,7 @@ describe('SandboxLeaseReaperService', () => {
         });
 
         it('does nothing without an E2B key (self-hosted / local sandboxes)', async () => {
-            configService.get.mockReturnValue(undefined);
+            configService.get.mockImplementation(() => undefined);
 
             await service.sweepOrphanedSandboxes();
 

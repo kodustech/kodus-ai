@@ -9,6 +9,10 @@ import {
 } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 import { SandboxLeaseRepository } from '@libs/sandbox/infrastructure/repositories/sandbox-lease.repository';
 import {
+    E2B_DEPLOYMENT_METADATA_KEY,
+    e2bDeploymentTag,
+} from '@libs/sandbox/infrastructure/providers/e2b-sandbox.service';
+import {
     isLocalSandboxPath,
     deleteLocalSandbox,
 } from './local-sandbox-cleanup.service';
@@ -38,8 +42,8 @@ const HARD_KILL_RETRY_LIMIT = 20;
 // every path that drops a lease without a successful kill leaks one (21k had
 // piled up by 2026-09-24). A sandbox in use is at most ~65 min old (lease TTL
 // 30 min + a busy retire's 30 min + reaper tick), so the 3h floor leaves wide
-// margin — also for another deployment sharing the same E2B key, whose
-// leases this Mongo cannot see. The per-run cap bounds a backlog.
+// margin. Ownership is the `deployment` tag, not this floor. The per-run cap
+// bounds a backlog.
 const ORPHAN_MIN_AGE_MS = 3 * 60 * 60 * 1000;
 const ORPHAN_SWEEP_MAX_PER_RUN = 2000;
 
@@ -381,8 +385,10 @@ export class SandboxLeaseReaperService {
 
     /**
      * Hourly safety net for every lease-drop path, known or not: kills PAUSED
-     * sandboxes created by us (they carry `metadata.stage`) that are older
-     * than ORPHAN_MIN_AGE_MS and have no lease doc left.
+     * sandboxes created by this deployment (`metadata.deployment`, set at
+     * create) that are older than ORPHAN_MIN_AGE_MS and have no lease doc
+     * left. Another deployment's sandboxes are never listed: its leases live
+     * in a Mongo this one cannot see.
      */
     @Cron(CronExpression.EVERY_HOUR)
     async sweepOrphanedSandboxes(): Promise<void> {
@@ -400,7 +406,14 @@ export class SandboxLeaseReaperService {
             const candidates: string[] = [];
             const paginator = Sandbox.list({
                 apiKey,
-                query: { state: ['paused'] },
+                query: {
+                    state: ['paused'],
+                    metadata: {
+                        [E2B_DEPLOYMENT_METADATA_KEY]: e2bDeploymentTag(
+                            this.configService.get<string>('API_NODE_ENV'),
+                        ),
+                    },
+                },
             });
             while (
                 paginator.hasNext &&
@@ -459,6 +472,9 @@ export class SandboxLeaseReaperService {
                 error: error instanceof Error ? error : undefined,
                 metadata: {
                     minAgeMs: ORPHAN_MIN_AGE_MS,
+                    deployment: e2bDeploymentTag(
+                        this.configService.get<string>('API_NODE_ENV'),
+                    ),
                     maxPerRun: ORPHAN_SWEEP_MAX_PER_RUN,
                 },
             });
