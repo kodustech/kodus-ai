@@ -2245,7 +2245,23 @@ export class ChatWithKodyFromGitUseCase {
         return (
             KODY_IDENTIFIERS.LOGIN_KEYWORDS.some((keyword) =>
                 login?.includes(keyword),
-            ) || body.includes(bodyWithoutMarkdown)
+            ) ||
+            body.includes(bodyWithoutMarkdown) ||
+            this.isKodyFixedMessage(comment.body)
+        );
+    }
+
+    /**
+     * Texts Kody posts with no marker on Bitbucket, where raw HTML would show.
+     * There Kody often posts through the customer's own account, so without
+     * this its "Analyzing your request..." acknowledgment reads as a new human
+     * reply in its thread and gets answered.
+     */
+    private isKodyFixedMessage(body: string): boolean {
+        const text = (body ?? '').replace(/[\u200B\s]+$/u, '').trim();
+        return (
+            text === ACKNOWLEDGMENT_MESSAGES.DEFAULT ||
+            text === CONVERSATION_PLAN_GATE_MESSAGE
         );
     }
 

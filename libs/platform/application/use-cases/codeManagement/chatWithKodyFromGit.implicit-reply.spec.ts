@@ -478,6 +478,53 @@ describe('ChatWithKodyFromGitUseCase — replies without @kody (#1946)', () => {
         ).toHaveBeenCalledWith(expect.objectContaining({ body: 'an answer' }));
     });
 
+    it("Bitbucket: does not answer its own acknowledgment posted under the customer's account", async () => {
+        const { useCase, conversationAgentUseCase, codeManagementService } =
+            setup([
+                {
+                    id: 30,
+                    body: '`kody|code-review` `bug` The lock is released early.',
+                    createdAt: at(0),
+                    author: { name: 'Gabriel', username: 'gabriel' },
+                },
+                {
+                    id: 31,
+                    body: 'why?',
+                    createdAt: at(1),
+                    parent: { id: 30 },
+                    author: { name: 'Gabriel', username: 'gabriel' },
+                },
+                {
+                    id: 32,
+                    body: 'Analyzing your request...',
+                    createdAt: at(2),
+                    parent: { id: 31 },
+                    author: { name: 'Gabriel', username: 'gabriel' },
+                },
+            ]);
+
+        await useCase.execute({
+            event: 'pullrequest:comment_created',
+            platformType: PlatformType.BITBUCKET,
+            payload: {
+                repository: { name: 'api', uuid: '{repo-1}' },
+                pullrequest: { id: 7 },
+                comment: {
+                    id: 32,
+                    content: { raw: 'Analyzing your request...' },
+                    parent: { id: 31 },
+                },
+                actor: { display_name: 'Gabriel', uuid: '{u-1}' },
+            },
+        } as any);
+
+        expect(classify).not.toHaveBeenCalled();
+        expect(conversationAgentUseCase.execute).not.toHaveBeenCalled();
+        expect(
+            codeManagementService.createResponseToComment,
+        ).not.toHaveBeenCalled();
+    });
+
     it('Azure DevOps: answers a reply in a Kody thread', async () => {
         classify.mockResolvedValue(true);
         const { useCase, conversationAgentUseCase } = setup([
