@@ -4745,6 +4745,11 @@ This is an experimental feature that generates committable changes. Review the d
                     });
                 }
 
+                // Same branch: the base read would repeat the identical call.
+                if (pullRequest.base?.ref === pullRequest.head?.ref) {
+                    throw error;
+                }
+
                 // If it fails, try to fetch from the base branch
                 const lines = (await octokit.repos.getContent({
                     owner: githubAuthDetail?.org,
@@ -4758,7 +4763,16 @@ This is an experimental feature that generates committable changes. Review the d
         } catch (error) {
             const status =
                 (error as any)?.status ?? (error as any)?.response?.status;
-            if (!(params.suppressNotFoundLogs && status === 404)) {
+            if (status === 404) {
+                // Missing on both refs: a normal answer, not a failure.
+                if (!params.suppressNotFoundLogs) {
+                    this.logger.warn({
+                        message: 'File not found on PR head or base branch',
+                        context: GithubService.name,
+                        metadata: { ...params },
+                    });
+                }
+            } else {
                 this.logger.error({
                     message: 'Error getting file content to branch base',
                     context: GithubService.name,

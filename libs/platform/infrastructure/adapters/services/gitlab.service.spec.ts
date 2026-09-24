@@ -476,4 +476,141 @@ describe('GitlabService', () => {
             expect(result?.isDraft).toBe(false);
         });
     });
+
+    describe('getRepositoryContentFile 404 classification', () => {
+        // Gitbeaker puts the HTTP response on `cause`, not on the error itself.
+        const gitbeaker404 = (description: string) =>
+            Object.assign(new Error(description), {
+                cause: { description, response: { status: 404 } },
+            });
+
+        it('logs a missing file as warn on every attempt, not as error', async () => {
+            Object.defineProperty(service, 'getAuthDetails', {
+                value: jest.fn().mockResolvedValue({
+                    accessToken: 'oauth-token',
+                    authMode: AuthMode.OAUTH,
+                }),
+            });
+            jest.spyOn(service, 'getDefaultBranch').mockResolvedValue('main');
+            mockedGitlab.mockReturnValue({
+                RepositoryFiles: {
+                    show: jest
+                        .fn()
+                        .mockRejectedValue(gitbeaker404('404 File Not Found')),
+                },
+            });
+            const logger = (service as any).logger;
+
+            const result = await service.getRepositoryContentFile({
+                organizationAndTeamData,
+                repository: { id: 'repo-1', name: 'repo' },
+                file: { filename: 'kodus-config.yml' },
+                pullRequest: {
+                    head: { ref: 'feature' },
+                    base: { ref: 'main' },
+                },
+            });
+
+            expect(result).toBeNull();
+            expect(logger.error).not.toHaveBeenCalled();
+            expect(logger.warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: 'File not found in GitLab attempt',
+                }),
+            );
+            expect(logger.warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: 'File not found in GitLab default branch attempt',
+                }),
+            );
+        });
+
+        it('logs an unknown user ID as warn, not as error', async () => {
+            Object.defineProperty(service, 'getAuthDetails', {
+                value: jest.fn().mockResolvedValue({
+                    accessToken: 'oauth-token',
+                    authMode: AuthMode.OAUTH,
+                }),
+            });
+            mockedGitlab.mockReturnValue({
+                Users: {
+                    show: jest
+                        .fn()
+                        .mockRejectedValue(gitbeaker404('404 User Not Found')),
+                },
+            });
+            const logger = (service as any).logger;
+
+            const result = await service.getUserById({
+                organizationAndTeamData,
+                userId: '116',
+            });
+
+            expect(result).toBeNull();
+            expect(logger.error).not.toHaveBeenCalled();
+            expect(logger.warn).toHaveBeenCalledTimes(1);
+        });
+    });
+    // The author lookup ran on every review for the same people (a user that
+    // timed out 3×5s did so 21 times in one day), and its cache key had no
+    // organization in it — an org could be served another org's GitLab user.
+    describe('getUserByEmailOrNameWithRetry cache', () => {
+        const store = new Map<string, string>();
+        const lookup = (orgId: string) =>
+            (service as any).getUserByEmailOrNameWithRetry(
+                {
+                    organizationAndTeamData: {
+                        organizationId: orgId,
+                        teamId: 't',
+                    },
+                    email: 'dev@acme.io',
+                    userName: 'Dev',
+                },
+                1,
+                50,
+            );
+
+        beforeEach(() => {
+            store.clear();
+            cacheService.getFromCache.mockImplementation(async (k: string) =>
+                store.has(k) ? JSON.parse(store.get(k)!) : null,
+            );
+            cacheService.addToCache.mockImplementation(
+                async (k: string, v: unknown) => {
+                    store.set(k, JSON.stringify(v));
+                },
+            );
+        });
+
+        it('does not serve one organization the user found for another', async () => {
+            const byEmail = jest
+                .spyOn(service, 'getUserByEmailOrName')
+                .mockResolvedValueOnce({ id: 1, username: 'org-a-user' })
+                .mockResolvedValueOnce({ id: 2, username: 'org-b-user' });
+
+            expect((await lookup('org-a')).username).toBe('org-a-user');
+            expect((await lookup('org-b')).username).toBe('org-b-user');
+            expect(byEmail).toHaveBeenCalledTimes(2);
+        });
+
+        it('remembers a user that does not exist instead of searching again', async () => {
+            const byEmail = jest
+                .spyOn(service, 'getUserByEmailOrName')
+                .mockResolvedValue(null);
+
+            expect(await lookup('org-a')).toBeNull();
+            expect(await lookup('org-a')).toBeNull();
+            expect(byEmail).toHaveBeenCalledTimes(1);
+        });
+
+        it('remembers a lookup that timed out instead of paying the timeout again', async () => {
+            const byEmail = jest
+                .spyOn(service, 'getUserByEmailOrName')
+                .mockImplementation(() => new Promise(() => undefined));
+
+            expect(await lookup('org-a')).toBeNull();
+            expect(await lookup('org-a')).toBeNull();
+            expect(byEmail).toHaveBeenCalledTimes(1);
+        });
+    });
 });

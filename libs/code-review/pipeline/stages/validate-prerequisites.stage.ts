@@ -273,9 +273,16 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
         // license yet its onboarding is complete, provision the trial now and
         // re-validate so this very review can proceed instead of posting a
         // "your trial has ended" comment.
+        // Only a MISSING license is healable: billing reports an existing one
+        // (canceled, expired…) with its subscriptionStatus, and answers 409 to
+        // a trial request for it.
+        const licenseExists = Boolean(
+            validationResult.metadata?.validation?.subscriptionStatus,
+        );
         if (
             !validationResult.allowed &&
             validationResult.errorType === ValidationErrorType.INVALID_LICENSE &&
+            !licenseExists &&
             (await this.tryHealMissingTrial(context))
         ) {
             validationResult =
