@@ -535,11 +535,12 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         // The 60s timeout above only PAUSES the sandbox (onTimeout: 'pause').
         // Retire instead of delete so the idle-kill cron still kills it.
         if (doc.sandboxId) {
-            await this.leaseRepo.retire(
-                prKey,
-                doc.sandboxId,
-                new Date(Date.now() + INVALIDATE_DRAIN_MS),
-            );
+            // A consumer still mid-review keeps the sandbox until the lease
+            // TTL, the same ceiling the reaper enforces on any lease.
+            await this.leaseRepo.retire(prKey, doc.sandboxId, {
+                idleKillAt: new Date(Date.now() + INVALIDATE_DRAIN_MS),
+                busyKillAt: new Date(Date.now() + DEFAULT_LEASE_TTL_MS),
+            });
         } else {
             await this.leaseRepo.delete(prKey);
         }
@@ -574,7 +575,10 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 metadata: { prKey, sandboxId },
             });
             await this.leaseRepo
-                .retire(prKey, sandboxId, new Date())
+                .retire(prKey, sandboxId, {
+                    idleKillAt: new Date(),
+                    busyKillAt: new Date(),
+                })
                 .catch(() => {});
         }
     }
@@ -851,16 +855,16 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             this.leaseIdToPrKey.delete(leaseId);
             // Retire, not delete: connect can fail transiently while the
             // sandbox still exists (paused), and a dropped lease is the
-            // last trace the kill crons had of it. killAt is the lease TTL,
-            // not the 60s drain: a concurrent holder may still be using the
-            // sandbox, and the TTL reaper would have killed it then anyway.
-            // If it really is gone, the kill 404s and the doc is removed.
+            // last trace the kill crons had of it. A co-tenant still using
+            // it (leaseCount beyond our own hold) keeps it until the lease
+            // TTL, when the reaper would have killed it anyway. If it really
+            // is gone, the kill 404s and the retired doc is removed.
             await this.leaseRepo
-                .retire(
-                    prKey,
-                    sandboxId,
-                    new Date(Date.now() + DEFAULT_LEASE_TTL_MS),
-                )
+                .retire(prKey, sandboxId, {
+                    idleKillAt: new Date(Date.now() + INVALIDATE_DRAIN_MS),
+                    busyKillAt: new Date(Date.now() + DEFAULT_LEASE_TTL_MS),
+                    ownHolds: 1,
+                })
                 .catch(() => {});
             // Re-acquire from scratch. With doc deleted, upsertAcquire
             // will hit creator path and cold-create. cloneParams must be

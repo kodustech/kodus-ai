@@ -303,10 +303,21 @@ describe('SandboxLeaseManager', () => {
         expect(leaseRepo.retire).toHaveBeenCalledWith(
             prKey,
             'e2b-to-invalidate',
-            expect.any(Date),
+            expect.objectContaining({
+                idleKillAt: expect.any(Date),
+                busyKillAt: expect.any(Date),
+            }),
         );
-        const killAt = leaseRepo.retire.mock.calls[0][2] as Date;
-        expect(killAt.getTime()).toBeGreaterThanOrEqual(before + 60_000);
+        const { idleKillAt, busyKillAt, ownHolds } = leaseRepo.retire.mock
+            .calls[0][2] as any;
+        // Nobody holding it: dies after the 60s drain.
+        expect(idleKillAt.getTime()).toBeGreaterThanOrEqual(before + 60_000);
+        // A review still mid-flight (force-push/close during review) keeps
+        // it until the lease TTL — it must not die after 60s.
+        expect(busyKillAt.getTime()).toBeGreaterThanOrEqual(
+            before + 29 * 60 * 1000,
+        );
+        expect(ownHolds ?? 0).toBe(0);
     });
 
     it('creator failure whose Sandbox.kill also fails retires the lease instead of dropping it', async () => {
@@ -335,7 +346,7 @@ describe('SandboxLeaseManager', () => {
         expect(leaseRepo.retire).toHaveBeenCalledWith(
             prKey,
             'mock-sandbox-id',
-            expect.any(Date),
+            expect.objectContaining({ idleKillAt: expect.any(Date) }),
         );
     });
 
@@ -734,12 +745,12 @@ describe('SandboxLeaseManager', () => {
         expect(leaseRepo.retire).toHaveBeenCalledWith(
             prKey,
             'dead-sandbox-id',
-            expect.any(Date),
+            expect.objectContaining({ ownHolds: 1 }),
         );
-        // A concurrent holder may still be using it after a transient
-        // connect error: no earlier kill than the lease TTL reaper's.
-        const killAt = leaseRepo.retire.mock.calls[0][2] as Date;
-        expect(killAt.getTime()).toBeGreaterThanOrEqual(
+        // A co-tenant may still be using it after a transient connect
+        // error: it keeps the sandbox until the lease TTL.
+        const { busyKillAt } = leaseRepo.retire.mock.calls[0][2] as any;
+        expect(busyKillAt.getTime()).toBeGreaterThanOrEqual(
             Date.now() + 29 * 60 * 1000,
         );
         // Cold-start succeeded — fresh sandbox created

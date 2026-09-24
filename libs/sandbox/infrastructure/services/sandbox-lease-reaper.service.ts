@@ -36,9 +36,11 @@ const HARD_KILL_RETRY_LIMIT = 20;
 // acquire() ever resumes a sandbox, and it only knows ids from leases — so it
 // sits paused forever. Sandboxes are created with onTimeout: 'pause', so
 // every path that drops a lease without a successful kill leaks one (21k had
-// piled up by 2026-09-24). The age floor keeps the sweep clear of a sandbox
-// whose lease is still being written; the per-run cap bounds a backlog.
-const ORPHAN_MIN_AGE_MS = 60 * 60 * 1000;
+// piled up by 2026-09-24). A sandbox in use is at most ~65 min old (lease TTL
+// 30 min + a busy retire's 30 min + reaper tick), so the 3h floor leaves wide
+// margin — also for another deployment sharing the same E2B key, whose
+// leases this Mongo cannot see. The per-run cap bounds a backlog.
+const ORPHAN_MIN_AGE_MS = 3 * 60 * 60 * 1000;
 const ORPHAN_SWEEP_MAX_PER_RUN = 2000;
 
 const E2B_ALREADY_GONE_RE =
@@ -455,6 +457,10 @@ export class SandboxLeaseReaperService {
                 message: '[SANDBOX-ORPHAN-SWEEP] Sweep failed',
                 context: SandboxLeaseReaperService.name,
                 error: error instanceof Error ? error : undefined,
+                metadata: {
+                    minAgeMs: ORPHAN_MIN_AGE_MS,
+                    maxPerRun: ORPHAN_SWEEP_MAX_PER_RUN,
+                },
             });
         } finally {
             await this.releaseCronLock(
