@@ -55,6 +55,31 @@ export const createOrUpdateRepositories = (
     );
 };
 
+export type WebhookCreationFailure = {
+    reason: string;
+    at: string;
+};
+
+/**
+ * Repositories whose webhook could not be created when the selection was last
+ * saved. Nothing shows them in the UI otherwise: the save succeeds, and the
+ * failure only reaches the server log, so the team keeps waiting for reviews
+ * that never run.
+ */
+export const getWebhookCreationFailures = async (
+    teamId: string,
+): Promise<Record<string, WebhookCreationFailure>> => {
+    const {
+        data,
+    }: { data: { failures: Record<string, WebhookCreationFailure> } } =
+        await axiosAuthorized.fetcher(
+            CODE_MANAGEMENT_API_PATHS.GET_WEBHOOK_CREATION_FAILURES,
+            { params: { teamId } },
+        );
+
+    return data?.failures ?? {};
+};
+
 export const createOrUpdateRepositoriesInChunks = async (
     repositories: Repository[],
     teamId: string,

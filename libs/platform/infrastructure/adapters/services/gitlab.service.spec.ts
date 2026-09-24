@@ -3,6 +3,7 @@ import { Gitlab } from '@gitbeaker/rest';
 import axios from 'axios';
 
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
+import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
 import { GitlabService } from './gitlab.service';
 
 jest.mock('axios');
@@ -640,6 +641,118 @@ describe('GitlabService', () => {
 
             expect(await lookup('org-a')).toBeNull();
             expect([...ttls.values()]).toEqual([600000]);
+        });
+    });
+
+    describe('createMergeRequestWebhook', () => {
+        const webhookUrl = 'https://kodus.example/webhook/gitlab';
+
+        const setUpWebhookCreation = ({
+            repositories,
+            add,
+        }: {
+            repositories: Array<{ id: number }>;
+            add: jest.Mock;
+        }) => {
+            const createOrUpdateConfig = jest.fn().mockResolvedValue(undefined);
+
+            (service as any).integrationConfigService = {
+                createOrUpdateConfig,
+            };
+
+            jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({
+                accessToken: 'token',
+                authMode: AuthMode.TOKEN,
+                host: 'gitlab.example.com',
+            });
+            jest.spyOn(service as any, 'instanceGitlabApi').mockReturnValue({
+                ProjectHooks: {
+                    all: jest.fn().mockResolvedValue([]),
+                    add,
+                },
+            });
+            jest.spyOn(
+                service as any,
+                'findOneByOrganizationAndTeamDataAndConfigKey',
+            ).mockResolvedValue(repositories);
+
+            process.env.API_GITLAB_CODE_MANAGEMENT_WEBHOOK = webhookUrl;
+
+            return { createOrUpdateConfig };
+        };
+
+        afterEach(() => {
+            delete process.env.API_GITLAB_CODE_MANAGEMENT_WEBHOOK;
+        });
+
+        it('keeps the hooks of the reachable projects and records the refused ones', async () => {
+            const add = jest.fn().mockImplementation((projectId: number) => {
+                if (projectId === 22) {
+                    return Promise.reject({
+                        response: { status: 403, statusText: 'Forbidden' },
+                    });
+                }
+
+                return Promise.resolve({});
+            });
+
+            const { createOrUpdateConfig } = setUpWebhookCreation({
+                repositories: [{ id: 11 }, { id: 22 }],
+                add,
+            });
+
+            await service.createMergeRequestWebhook({
+                organizationAndTeamData,
+            });
+
+            // The project GitLab refuses must not cost the next one its hook.
+            expect(add).toHaveBeenCalledWith(
+                11,
+                webhookUrl,
+                expect.any(Object),
+            );
+            expect(add).toHaveBeenCalledWith(
+                22,
+                webhookUrl,
+                expect.any(Object),
+            );
+
+            expect(createOrUpdateConfig).toHaveBeenCalledWith(
+                IntegrationConfigKey.WEBHOOK_CREATION_FAILURES,
+                {
+                    '22': expect.objectContaining({
+                        reason: expect.stringContaining('HTTP 403'),
+                        at: expect.any(String),
+                    }),
+                },
+                'integration-1',
+                organizationAndTeamData,
+            );
+
+            const [, failures] = createOrUpdateConfig.mock.calls[0];
+
+            expect(failures['22'].reason).toContain('Maintainer or Owner');
+            expect(failures['11']).toBeUndefined();
+        });
+
+        it('clears the recorded failures once every project has its hook', async () => {
+            const add = jest.fn().mockResolvedValue({});
+
+            const { createOrUpdateConfig } = setUpWebhookCreation({
+                repositories: [{ id: 11 }],
+                add,
+            });
+
+            await service.createMergeRequestWebhook({
+                organizationAndTeamData,
+            });
+
+            expect(createOrUpdateConfig).toHaveBeenCalledWith(
+                IntegrationConfigKey.WEBHOOK_CREATION_FAILURES,
+                {},
+                'integration-1',
+                organizationAndTeamData,
+            );
         });
     });
 });
