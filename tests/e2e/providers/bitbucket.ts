@@ -71,7 +71,9 @@ export class BitbucketProvider extends BaseProvider {
     }
 
     private cloneUrl(): string {
-        return `https://${this.user}:${this.appPassword}@bitbucket.org/${this.workspaceSlug}.git`;
+        // BB_TEST_USER may be an Atlassian account email; unencoded, its `@`
+        // ends the userinfo early and git reads the token as a port.
+        return `https://${encodeURIComponent(this.user)}:${encodeURIComponent(this.appPassword)}@bitbucket.org/${this.workspaceSlug}.git`;
     }
 
     async repoRef(): Promise<ProviderRepoRef> {
