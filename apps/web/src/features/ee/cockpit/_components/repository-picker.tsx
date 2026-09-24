@@ -52,7 +52,10 @@ export const RepositoryPicker = ({ cookieValue, teamId }: Props) => {
         }
         if (!cookieValue) return "";
         try {
-            return JSON.parse(cookieValue) as string;
+            const parsed = JSON.parse(cookieValue) as
+                | string
+                | { repository?: string };
+            return typeof parsed === "string" ? parsed : parsed.repository ?? "";
         } catch {
             return "";
         }
@@ -61,12 +64,20 @@ export const RepositoryPicker = ({ cookieValue, teamId }: Props) => {
     // Persist to cookie (cross-session default) and push the selection
     // onto the URL (source of truth) so the view is shareable. An empty
     // value means "all repositories".
-    const commitRepository = (repositoryFullName: string) => {
+    const commitRepository = (
+        repositoryFullName: string,
+        repositoryId?: string,
+    ) => {
         const params = new URLSearchParams(searchParams.toString());
         params.set(COCKPIT_PARAM.repository, repositoryFullName);
+        if (repositoryId) {
+            params.set(COCKPIT_PARAM.repositoryId, repositoryId);
+        } else {
+            params.delete(COCKPIT_PARAM.repositoryId);
+        }
 
         startTransition(async () => {
-            await setCockpitRepositoryCookie(repositoryFullName);
+            await setCockpitRepositoryCookie(repositoryFullName, repositoryId);
             router.push(`${pathname}?${params.toString()}`);
         });
     };
@@ -85,12 +96,12 @@ export const RepositoryPicker = ({ cookieValue, teamId }: Props) => {
     const displayedRepositories = filteredRepositories.slice(0, displayedCount);
     const hasMore = displayedCount < filteredRepositories.length;
 
-    const handleSelect = (repositoryFullName: string) => {
+    const handleSelect = (repositoryFullName: string, repositoryId: string) => {
         if (!repositoryFullName) return;
 
         setSelectedRepository(repositoryFullName);
         setOpen(false);
-        commitRepository(repositoryFullName);
+        commitRepository(repositoryFullName, repositoryId);
     };
 
     const handleClearFilter = () => {
@@ -245,7 +256,7 @@ export const RepositoryPicker = ({ cookieValue, teamId }: Props) => {
                                                 key={r.id}
                                                 value={fullName || r.id}
                                                 onSelect={() =>
-                                                    handleSelect(fullName)
+                                                    handleSelect(fullName, r.id)
                                                 }>
                                                 <span>{displayName}</span>
                                                 {selectedRepository ===

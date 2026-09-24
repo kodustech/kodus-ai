@@ -71,26 +71,30 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
         return sent === 0 ? 0 : this.round(implemented / sent);
     }
 
-    /**
-     * Azure repositories have existed in the warehouse as both `repo` and
-     * `project/repo`. Keep old cockpit links and the canonical picker value
-     * working while preserving exact matching for full repository names.
-     */
     private operationalRepositoryFilter(
         repository: string | undefined,
+        repositoryId: string | undefined,
         params: unknown[],
     ): string {
-        if (!repository) return '';
-
-        params.push(repository);
-        const repositoryParam = `$${params.length}`;
-
-        if (repository.includes('/')) {
-            params.push(repository.split('/').pop());
-            const repositoryNameParam = `$${params.length}`;
-            return `AND (roe."repo_full_name" = ${repositoryParam} OR roe."repo_full_name" = ${repositoryNameParam})`;
+        if (repositoryId) {
+            params.push(repositoryId);
+            const idParam = `$${params.length}`;
+            if (!repository) {
+                return `AND roe."repositoryId" = ${idParam}`;
+            }
+            params.push(repository);
+            const nameParam = `$${params.length}`;
+            return `AND (roe."repositoryId" = ${idParam} OR (roe."repositoryId" IS NULL AND roe."repo_full_name" = ${nameParam}))`;
         }
 
+        if (!repository) return '';
+
+        // Name-only links cannot safely include a bare suffix: another
+        // project may own a repository with the same name. Current picker
+        // and health-table selections carry repositoryId and include legacy
+        // bare rows through the identity branch above.
+        params.push(repository);
+        const repositoryParam = `$${params.length}`;
         return `AND roe."repo_full_name" = ${repositoryParam}`;
     }
 
@@ -101,10 +105,13 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
      */
     private closedPrWhere(q: CockpitRangeQuery, params: unknown[]): string {
         params.push(q.organizationId, q.startDate, q.endDate);
-        const repoFilter = q.repository
-            ? (params.push(q.repository),
-              `AND pr.repo_full_name = $${params.length}`)
-            : '';
+        const repoFilter = q.repositoryId
+            ? (params.push(q.repositoryId),
+              `AND pr."repositoryId" = $${params.length}`)
+            : q.repository
+              ? (params.push(q.repository),
+                `AND pr.repo_full_name = $${params.length}`)
+              : '';
         // `s."organizationId" = $1` is redundant with the join (s.org always
         // equals pr.org) but lets the planner restrict suggestions_mv via
         // `idx_sugg_mv_org` instead of seq-scanning the whole table — the
@@ -333,6 +340,7 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
             // to the prior double-scan (verified), ~53% faster cold / ~18% warm.
             `WITH base AS MATERIALIZED (
                 SELECT
+                    pr."repositoryId" AS repository_id,
                     COALESCE(pr.repo_full_name, 'Unknown') AS repository,
                     COALESCE(s."label", 'Unknown') AS category,
                     s."pullRequestId" AS pull_request_id,
@@ -341,41 +349,42 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
                 ${scope}
             ),
             per_category AS (
-                SELECT repository, category,
+                SELECT repository_id, repository, category,
                        COUNT(*)::int AS sent,
                        COUNT(*) FILTER (WHERE impl_status ${IMPLEMENTED})::int AS implemented
                   FROM base
-                 GROUP BY repository, category
+                 GROUP BY repository_id, repository, category
             ),
             per_repo AS (
-                SELECT repository,
+                SELECT repository_id, repository,
                        SUM(sent)::int AS sent,
                        SUM(implemented)::int AS implemented
                   FROM per_category
-                 GROUP BY repository
+                 GROUP BY repository_id, repository
             ),
             -- distinct PRs cannot be derived from per_category (it groups away
             -- PR identity); re-aggregate from the shared base instead.
             repo_prs AS (
-                SELECT b.repository,
+                SELECT b.repository_id, b.repository,
                        COUNT(DISTINCT b.pull_request_id)::int AS prs_reviewed,
                        COALESCE(SUM(f."thumbs_up"), 0)::int AS thumbs_up,
                        COALESCE(SUM(f."thumbs_down"), 0)::int AS thumbs_down
                   FROM base b
                   LEFT JOIN "analytics"."suggestion_feedback" f
                          ON f."suggestion_id" = b.suggestion_id
-                 GROUP BY b.repository
+                 GROUP BY b.repository_id, b.repository
             ),
             weakest AS (
-                SELECT DISTINCT ON (repository)
-                       repository, category, sent, implemented
+                SELECT DISTINCT ON (repository_id, repository)
+                       repository_id, repository, category, sent, implemented
                   FROM per_category
                  WHERE sent >= ${WEAKEST_CATEGORY_MIN_SENT}
-                 ORDER BY repository,
+                 ORDER BY repository_id, repository,
                           (implemented::numeric / NULLIF(sent, 0)) ASC,
                           sent DESC
             )
-            SELECT pr_agg.repository,
+            SELECT pr_agg.repository_id,
+                   pr_agg.repository,
                    rp.prs_reviewed,
                    rp.thumbs_up,
                    rp.thumbs_down,
@@ -384,12 +393,17 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
                    w.category AS weakest_category,
                    w.sent AS weakest_sent,
                    w.implemented AS weakest_implemented
-              FROM per_repo pr_agg
-              JOIN repo_prs rp ON rp.repository = pr_agg.repository
-              LEFT JOIN weakest w ON w.repository = pr_agg.repository
+             FROM per_repo pr_agg
+             JOIN repo_prs rp
+               ON rp.repository_id IS NOT DISTINCT FROM pr_agg.repository_id
+              AND rp.repository = pr_agg.repository
+             LEFT JOIN weakest w
+               ON w.repository_id IS NOT DISTINCT FROM pr_agg.repository_id
+              AND w.repository = pr_agg.repository
              ORDER BY pr_agg.sent DESC`,
             params,
         )) as Array<{
+            repository_id: string | null;
             repository: string;
             prs_reviewed: number;
             thumbs_up: number;
@@ -402,6 +416,7 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
         }>;
 
         return rows.map((r) => ({
+            repositoryId: r.repository_id,
             repository: r.repository,
             prsReviewed: Number(r.prs_reviewed),
             suggestionsSent: Number(r.sent),
@@ -599,6 +614,7 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
         const params: unknown[] = [q.organizationId, q.startDate, q.endDate];
         const repositoryFilter = this.operationalRepositoryFilter(
             q.repository,
+            q.repositoryId,
             params,
         );
 
@@ -675,6 +691,7 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
         const params: unknown[] = [q.organizationId, q.startDate, q.endDate];
         const repositoryFilter = this.operationalRepositoryFilter(
             q.repository,
+            q.repositoryId,
             params,
         );
 

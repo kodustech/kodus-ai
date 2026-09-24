@@ -382,16 +382,20 @@ export class CockpitReportsService implements ICockpitReportsService {
         });
 
         const prevByRepo = new Map(
-            previous.map((r) => [r.repository, r.implementationRate]),
+            previous.map((r) => [repositoryKey(r), r.implementationRate]),
         );
 
-        let best: { repository: string; from: number; to: number } | null =
-            null;
+        let best: {
+            repositoryId: string | null;
+            repository: string;
+            from: number;
+            to: number;
+        } | null = null;
         for (const repo of current) {
             if (repo.prsReviewed < HIGHLIGHT_MIN_REVIEWS) {
                 continue;
             }
-            const from = prevByRepo.get(repo.repository);
+            const from = prevByRepo.get(repositoryKey(repo));
             if (from === undefined) {
                 continue;
             }
@@ -401,6 +405,7 @@ export class CockpitReportsService implements ICockpitReportsService {
             }
             if (!best || delta > best.to - best.from) {
                 best = {
+                    repositoryId: repo.repositoryId,
                     repository: repo.repository,
                     from,
                     to: repo.implementationRate,
@@ -415,6 +420,7 @@ export class CockpitReportsService implements ICockpitReportsService {
         return [
             {
                 kind: 'impl_rate_growth',
+                repositoryId: best.repositoryId,
                 repository: best.repository,
                 detail: `Implementation rate ${pct(best.from)} → ${pct(
                     best.to,
@@ -582,6 +588,7 @@ function emptyOrgReport(
 
 function toRanking(
     repos: {
+        repositoryId: string | null;
         repository: string;
         prsReviewed: number;
         implementationRate: number;
@@ -592,10 +599,18 @@ function toRanking(
         .sort((a, b) => b.implementationRate - a.implementationRate)
         .map((r, i) => ({
             rank: i + 1,
+            repositoryId: r.repositoryId,
             repository: r.repository,
             reviews: r.prsReviewed,
             implementationRate: r.implementationRate,
         }));
+}
+
+function repositoryKey(row: {
+    repositoryId: string | null;
+    repository: string;
+}): string {
+    return `${row.repositoryId ?? ''}\u0000${row.repository}`;
 }
 
 /** Trend from a percentage-point delta (rates are 0..1). */
