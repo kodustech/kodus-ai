@@ -178,7 +178,18 @@ async function bootstrap() {
             });
         });
 
-        app.use(bodyParser.json({ limit: '25mb' }));
+        app.use(
+            bodyParser.json({
+                limit: '25mb',
+                // Billing callbacks are HMAC-signed over the exact bytes sent;
+                // keep them only for that route (BillingEventsController).
+                verify: (req: any, _res, buf) => {
+                    if (req.originalUrl?.startsWith('/billing/events/')) {
+                        req.rawBody = buf;
+                    }
+                },
+            }),
+        );
         app.use(bodyParser.urlencoded({ limit: '25mb', extended: true }));
         app.set('trust proxy', 1);
         app.useStaticAssets('static');

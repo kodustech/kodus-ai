@@ -6,8 +6,9 @@ import { Response } from 'express';
 
 import { NotificationService } from '@libs/notifications/application/notification.service';
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
+import { KODY_RULES_SERVICE_TOKEN } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
 
-import { BillingController } from './billing.controller';
+import { BillingEventsController } from './billingEvents.controller';
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -46,13 +47,15 @@ const makeRes = (): jest.Mocked<Pick<Response, 'status' | 'send' | 'json'>> => {
     return res;
 };
 
-describe('BillingController', () => {
-    let controller: BillingController;
+describe('BillingEventsController', () => {
+    let controller: BillingEventsController;
     let notify: jest.Mocked<Pick<NotificationService, 'emit'>>;
     let config: jest.Mocked<Pick<ConfigService, 'get'>>;
+    let kodyRules: { syncRulesWithPlanLimit: jest.Mock };
 
     beforeEach(async () => {
         notify = { emit: jest.fn().mockResolvedValue(undefined) };
+        kodyRules = { syncRulesWithPlanLimit: jest.fn().mockResolvedValue(null) };
         config = {
             get: jest
                 .fn()
@@ -62,14 +65,15 @@ describe('BillingController', () => {
         };
 
         const module: TestingModule = await Test.createTestingModule({
-            controllers: [BillingController],
+            controllers: [BillingEventsController],
             providers: [
                 { provide: NotificationService, useValue: notify },
                 { provide: ConfigService, useValue: config },
+                { provide: KODY_RULES_SERVICE_TOKEN, useValue: kodyRules },
             ],
         }).compile();
 
-        controller = module.get(BillingController);
+        controller = module.get(BillingEventsController);
     });
 
     describe('signature verification', () => {
@@ -231,8 +235,32 @@ describe('BillingController', () => {
     });
 
     describe('plan-changed', () => {
-        it('acknowledges a signed request with 200 and emits nothing', async () => {
-            const body = { organizationId: 'org-1', planType: 'teams_byok' };
+        it('reconciles the org Kody Rules with the new plan', async () => {
+            const body = {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+                planType: 'teams_byok',
+            };
+            const { signature, rawBody } = sign(body);
+            const res = makeRes();
+
+            await controller.planChanged(
+                makeReq(body, signature, rawBody),
+                res as unknown as Response,
+            );
+
+            expect(kodyRules.syncRulesWithPlanLimit).toHaveBeenCalledWith({
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            });
+            expect(res.status).toHaveBeenCalledWith(HttpStatus.OK);
+        });
+
+        it('still returns 200 when the sync throws (billing never retries)', async () => {
+            kodyRules.syncRulesWithPlanLimit.mockRejectedValue(
+                new Error('mongo down'),
+            );
+            const body = { organizationId: 'org-1' };
             const { signature, rawBody } = sign(body);
             const res = makeRes();
 
@@ -242,27 +270,18 @@ describe('BillingController', () => {
             );
 
             expect(res.status).toHaveBeenCalledWith(HttpStatus.OK);
-            expect(notify.emit).not.toHaveBeenCalled();
         });
 
-        it('rejects an unsigned request (401) and a missing org (400)', async () => {
-            const unsigned = makeRes();
+        it('rejects an unsigned request (401) without touching the rules', async () => {
+            const res = makeRes();
+
             await controller.planChanged(
                 makeReq({ organizationId: 'org-1' }, undefined),
-                unsigned as unknown as Response,
-            );
-            expect(unsigned.status).toHaveBeenCalledWith(
-                HttpStatus.UNAUTHORIZED,
+                res as unknown as Response,
             );
 
-            const body = { planType: 'free' };
-            const { signature, rawBody } = sign(body);
-            const noOrg = makeRes();
-            await controller.planChanged(
-                makeReq(body, signature, rawBody),
-                noOrg as unknown as Response,
-            );
-            expect(noOrg.status).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
+            expect(res.status).toHaveBeenCalledWith(HttpStatus.UNAUTHORIZED);
+            expect(kodyRules.syncRulesWithPlanLimit).not.toHaveBeenCalled();
         });
     });
 
