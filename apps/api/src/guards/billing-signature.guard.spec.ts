@@ -14,6 +14,7 @@ jest.mock('@libs/core/log/logger', () => ({
 }));
 
 const SECRET = 'test-shared-secret';
+const PATH = '/billing/events/plan-changed';
 
 const contextFor = (req: object): ExecutionContext =>
     ({
@@ -27,31 +28,49 @@ const guardWith = (secret: string | undefined) =>
 
 describe('BillingSignatureGuard', () => {
     const raw = Buffer.from('{"organizationId":"org-1"}');
-    const signature = createHmac('sha256', SECRET).update(raw).digest('hex');
 
-    it('passes a request signed over its raw bytes', () => {
-        const req = {
+    const signedRequest = (overrides: Record<string, unknown> = {}) => {
+        const timestamp = String(Date.now());
+        const signature = createHmac('sha256', SECRET)
+            .update(['POST', PATH, '', timestamp, raw.toString()].join('\n'))
+            .digest('hex');
+        return {
+            method: 'POST',
+            originalUrl: PATH,
             body: { organizationId: 'org-1' },
             rawBody: raw,
-            headers: { 'x-kodus-signature': signature },
+            headers: {
+                'x-kodus-signature': signature,
+                'x-kodus-timestamp': timestamp,
+            },
+            ...overrides,
         };
-        expect(guardWith(SECRET).canActivate(contextFor(req))).toBe(true);
+    };
+
+    it('passes a request signed over method, path, timestamp and raw bytes', () => {
+        expect(guardWith(SECRET).canActivate(contextFor(signedRequest()))).toBe(
+            true,
+        );
+    });
+
+    it('401 when the same signature targets another path', () => {
+        const req = signedRequest({ originalUrl: '/billing/events/credits-low' });
+        expect(() => guardWith(SECRET).canActivate(contextFor(req))).toThrow(
+            UnauthorizedException,
+        );
     });
 
     // Never verify a re-serialized body: it can differ from the bytes billing
     // signed, and would hide a broken raw-body parser mount.
     it('fails closed (500) when the raw body was not captured', () => {
-        const req = {
-            body: { organizationId: 'org-1' },
-            headers: { 'x-kodus-signature': signature },
-        };
+        const req = signedRequest({ rawBody: undefined });
         expect(() => guardWith(SECRET).canActivate(contextFor(req))).toThrow(
             InternalServerErrorException,
         );
     });
 
     it('500 when the secret is missing, 401 when the signature is', () => {
-        const req = { body: {}, rawBody: raw, headers: {} };
+        const req = signedRequest({ headers: {} });
         expect(() => guardWith(undefined).canActivate(contextFor(req))).toThrow(
             InternalServerErrorException,
         );
@@ -61,11 +80,8 @@ describe('BillingSignatureGuard', () => {
     });
 
     it('401 when the signature has a different length (no timingSafeEqual throw)', () => {
-        const req = {
-            body: {},
-            rawBody: raw,
-            headers: { 'x-kodus-signature': 'short' },
-        };
+        const req = signedRequest();
+        req.headers['x-kodus-signature'] = 'short';
         expect(() => guardWith(SECRET).canActivate(contextFor(req))).toThrow(
             UnauthorizedException,
         );

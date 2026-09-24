@@ -29,8 +29,20 @@ jest.mock('@libs/core/log/logger', () => ({
 
 const SECRET = 'test-shared-secret';
 
-const hmac = (raw: string, secret = SECRET) =>
-    createHmac('sha256', secret).update(raw).digest('hex');
+/** The shared scheme: METHOD\n/path\n<query>\n<timestamp>\n<raw body>. */
+const sign = (
+    event: string,
+    raw: string,
+    timestamp: string,
+    secret = SECRET,
+) =>
+    createHmac('sha256', secret)
+        .update(
+            ['POST', `${BILLING_EVENTS_PATH}/${event}`, '', timestamp, raw].join(
+                '\n',
+            ),
+        )
+        .digest('hex');
 
 /**
  * Real HTTP through the controller, the signature guard, both use-cases and
@@ -43,16 +55,29 @@ describe('BillingEventsController (HTTP)', () => {
     let notify: { emit: jest.Mock };
     let kodyRules: { syncRulesWithPlanLimit: jest.Mock };
 
-    const post = (event: string, body: object | string, signature?: string) => {
+    const post = (
+        event: string,
+        body: object | string,
+        signature?: string,
+        timestamp: string | undefined = String(Date.now()),
+    ) => {
         const raw = typeof body === 'string' ? body : JSON.stringify(body);
         const req = request(app.getHttpServer())
             .post(`${BILLING_EVENTS_PATH}/${event}`)
             .set('Content-Type', 'application/json');
         if (signature !== undefined) req.set('x-kodus-signature', signature);
+        if (timestamp !== undefined) req.set('x-kodus-timestamp', timestamp);
         return req.send(raw);
     };
-    const signedPost = (event: string, body: object) =>
-        post(event, body, hmac(JSON.stringify(body)));
+    const signedPost = (event: string, body: object) => {
+        const timestamp = String(Date.now());
+        return post(
+            event,
+            body,
+            sign(event, JSON.stringify(body), timestamp),
+            timestamp,
+        );
+    };
 
     beforeEach(async () => {
         secret = SECRET;
@@ -103,6 +128,7 @@ describe('BillingEventsController (HTTP)', () => {
     });
 
     afterEach(async () => {
+        jest.restoreAllMocks();
         await app.close();
     });
 
@@ -122,12 +148,48 @@ describe('BillingEventsController (HTTP)', () => {
         });
 
         it('401 when the body was altered after signing', async () => {
-            const signature = hmac(JSON.stringify({ organizationId: 'org-1' }));
+            const timestamp = String(Date.now());
+            const signature = sign(
+                'plan-changed',
+                JSON.stringify({ organizationId: 'org-1' }),
+                timestamp,
+            );
             await post(
                 'plan-changed',
                 { organizationId: 'org-2' },
                 signature,
+                timestamp,
             ).expect(401);
+        });
+
+        it('401 when a signature for one route is replayed on another', async () => {
+            const body = { organizationId: 'org-1' };
+            const timestamp = String(Date.now());
+            const signature = sign(
+                'credits-purchased',
+                JSON.stringify(body),
+                timestamp,
+            );
+            await post('plan-changed', body, signature, timestamp).expect(401);
+            expect(kodyRules.syncRulesWithPlanLimit).not.toHaveBeenCalled();
+        });
+
+        it('401 when the timestamp is missing or outside the 5-minute window', async () => {
+            const body = { organizationId: 'org-1' };
+            const stale = String(Date.now() - 6 * 60 * 1000);
+            await post(
+                'plan-changed',
+                body,
+                sign('plan-changed', JSON.stringify(body), stale),
+                stale,
+            ).expect(401);
+            await post(
+                'plan-changed',
+                body,
+                sign('plan-changed', JSON.stringify(body), ''),
+                undefined,
+            ).expect(401);
+            expect(kodyRules.syncRulesWithPlanLimit).not.toHaveBeenCalled();
         });
 
         it('500 when the secret is not configured', async () => {
@@ -143,10 +205,12 @@ describe('BillingEventsController (HTTP)', () => {
         // — change both.
         it('accepts the golden vector billing sends', async () => {
             secret = 'golden-vector-secret';
+            jest.spyOn(Date, 'now').mockReturnValue(1790000000000);
             await post(
                 'plan-changed',
                 '{"organizationId":"org-1","teamId":"team-1","planType":"teams_byok","subscriptionStatus":"active"}',
-                'dc0921843a6b8747d3750476608ef2fe4089b94b14963bae7792c0814eaae023',
+                'a1e66b1c95da6a84331fc3813b4d5c0853d3c0a674080aa3ac4833bfa0fb5297',
+                '1790000000000',
             ).expect(200);
             expect(kodyRules.syncRulesWithPlanLimit).toHaveBeenCalledWith({
                 organizationId: 'org-1',
