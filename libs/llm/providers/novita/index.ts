@@ -22,6 +22,7 @@ import {
     compatibleTemperaturePolicy,
     isCompatibleReasoner,
     type ModelReasoningTraits,
+    type StructuredOutputMode,
 } from '../kernel/reasoning-traits';
 import {
     normalizeSdkResult,
@@ -67,6 +68,14 @@ export const novitaModule: ProviderModule = {
         return compatibleTemperaturePolicy(cfg.model, cfg.reasoningEffort);
     },
 
+    // The WIRE answer: Novita varies too wildly by upstream to trust strict
+    // json_schema, so EVERY model here goes out as bare `json_object` — no
+    // schema and no keyword reach the model unless the caller writes them into
+    // the prompt (issue #1916).
+    structuredOutputPolicy(_cfg: ProviderBuildConfig): StructuredOutputMode {
+        return 'json_object';
+    },
+
     build(
         cfg: ProviderBuildConfig,
         opts?: ProviderBuildOptions,
@@ -79,7 +88,9 @@ export const novitaModule: ProviderModule = {
             // Novita varies too wildly by upstream to trust strict json_schema;
             // it always falls back to json_object (the removed
             // shouldEnableJsonSchema('novita', …) was a constant false).
-            supportsStructuredOutputs: false,
+            supportsStructuredOutputs:
+                novitaModule.structuredOutputPolicy(cfg, opts) ===
+                'json_schema',
         })(cfg.model);
     },
 

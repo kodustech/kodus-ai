@@ -1674,6 +1674,20 @@ const STRUCTURED_LIVE = [
             reasoningEffort: 'high',
         },
     },
+    {
+        brand: 'open_router_glm',
+        plan: 'as-is / json_object',
+        why: "a GLM through OpenRouter is outside the four allowlisted prefixes, so its structured call goes out as bare `response_format: json_object` — no schema on the wire, and the provider rejects the request outright unless the messages contain the word 'json'. This is the route 460 reviews published every duplicate on (#1916); what it proves is that the contract the executor now writes into the prompt is enough to get a PARSED object back over that channel",
+        slot: {
+            provider: 'open_router',
+            model: 'z-ai/glm-5.2',
+            // Pinned for the same reason the reasoning row above is: OpenRouter
+            // picks an upstream per call, and an unpinned row asserts the
+            // routing lottery instead of the request.
+            openrouterProviderOrder: ['z-ai'],
+            openrouterAllowFallbacks: false,
+        },
+    },
 ] as const;
 
 describe('BYOK structured output — LIVE, through LLM.run (the one door)', () => {
@@ -1717,4 +1731,108 @@ describe('BYOK structured output — LIVE, through LLM.run (the one door)', () =
             120_000,
         );
     }
+});
+
+/**
+ * The NEGATIVE control for the row above — the half that makes the fix a
+ * mechanism rather than a hope.
+ *
+ * The structured row proves our request works. It cannot prove WHY the previous
+ * one did not, and without that this layer is a cargo cult: someone deletes the
+ * contract sentence next year, the row still passes on a lenient upstream, and
+ * the 400 comes back for everyone else.
+ *
+ * ─── WHICH UPSTREAM, AND WHY IT MATTERS ────────────────────────────────────
+ * The first version of this row asked GLM-over-OpenRouter, because that is the
+ * route the fix targets. It ran (2026-09-23) and answered: `bareRejected:
+ * false`. That upstream does NOT enforce the keyword — it accepts a bare
+ * `json_object` and replies. Which is the issue's own point, stated in its
+ * table: the symptom depends on how each provider reacts, and the same missing
+ * contract shows up as a 400 on one upstream and an invented shape on another.
+ * So a negative control has to ask a provider that DOES enforce the rule, or it
+ * measures the wrong end of the failure.
+ *
+ * OpenAI is that provider: it documents the requirement, production logged 430
+ * dedup failures carrying its wording, and the finder's own recovery was
+ * verified against it live (finder.agent.ts, 2026-09-17). So this asks OpenAI
+ * directly, by hand — deliberately NOT through the door, since the subject is
+ * the provider's rule, not our stack.
+ *
+ * If the requirement ever disappears there, this row goes red saying so. That
+ * is the correct reading: not "we broke something", but "the contract is now
+ * belt-and-braces on OpenAI too rather than load-bearing" — worth knowing
+ * before anyone deletes it.
+ */
+describe('#1916 — the json_object keyword rule, live', () => {
+    const apiKey = key('openai');
+    const run = apiKey ? it : it.skip;
+
+    const CONTRACT =
+        'Return ONLY a JSON object that conforms EXACTLY to this JSON Schema ' +
+        '(same property names, no extra keys):\n' +
+        JSON.stringify({
+            type: 'object',
+            properties: { answer: { type: 'string' } },
+            required: ['answer'],
+        });
+
+    // Deliberately keyword-free: this is what `buildDedupPrompt` looks like on
+    // the wire — the word "json" appears exactly zero times.
+    const USER = 'Reply with the field answer set to ok.';
+
+    const ask = async (system?: string) => {
+        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                authorization: `Bearer ${apiKey}`,
+                'content-type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: 'gpt-5.4-mini',
+                messages: [
+                    ...(system ? [{ role: 'system', content: system }] : []),
+                    { role: 'user', content: USER },
+                ],
+                response_format: { type: 'json_object' },
+                max_completion_tokens: 200,
+            }),
+        });
+        const body: any = await res.json().catch(() => ({}));
+        return {
+            status: res.status,
+            message: String(body?.error?.message ?? ''),
+            content: String(body?.choices?.[0]?.message?.content ?? ''),
+        };
+    };
+
+    run(
+        'the same request is rejected without the keyword and answered with it',
+        async () => {
+            const bare = await ask();
+            const withContract = await ask(CONTRACT);
+
+            expect({
+                bareRejected: bare.status >= 400,
+                bareNamesTheKeyword: /must contain the word|['"]json['"]/i.test(
+                    bare.message,
+                ),
+                withContractAnswered: withContract.status === 200,
+                withContractParses: (() => {
+                    try {
+                        return (
+                            typeof JSON.parse(withContract.content) === 'object'
+                        );
+                    } catch {
+                        return false;
+                    }
+                })(),
+            }).toEqual({
+                bareRejected: true,
+                bareNamesTheKeyword: true,
+                withContractAnswered: true,
+                withContractParses: true,
+            });
+        },
+        120_000,
+    );
 });

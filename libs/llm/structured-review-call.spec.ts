@@ -53,6 +53,7 @@ import {
     getLimiterForSlot,
     isJsonSchemaUnsupportedError,
     markJsonSchemaUnsupported,
+    mayUseJsonSchema,
 } from '@libs/llm/byok-to-vercel';
 
 const mockGenerate = tracedGenerateText as unknown as jest.Mock;
@@ -97,6 +98,7 @@ beforeEach(() => {
     mockGetLimiter.mockReturnValue(null); // default: slot not in cooldown
     (markJsonSchemaUnsupported as jest.Mock).mockClear();
     (isJsonSchemaUnsupportedError as jest.Mock).mockReturnValue(false);
+    (mayUseJsonSchema as jest.Mock).mockReturnValue(true);
     observabilityService.runAiSdkLLMInSpan.mockClear();
     (buildProviderOptions as jest.Mock).mockClear();
     // The executor records its span through the observability PORT — register
@@ -382,6 +384,280 @@ describe('runStructuredReviewCall — json_schema → json_object fallback', () 
         // exactly two attempts: the json_schema try + the one json_object retry.
         expect(mockGenerate).toHaveBeenCalledTimes(2);
         expect(out).toEqual({ recovered: true });
+    });
+});
+
+describe('runStructuredReviewCall — json_object routes carry the contract (issue #1916)', () => {
+    // The REGISTRY is REAL here, so these exercise the true per-model policy.
+    // `z-ai/glm-*` through OpenRouter is outside the four allowlisted prefixes,
+    // so its structured call goes out as bare `response_format: json_object`:
+    // no schema on the wire, and no "json" anywhere unless we put it there.
+    const glmViaOpenRouter = {
+        provider: 'open_router',
+        model: 'z-ai/glm-5.3',
+        apiKey: 'enc',
+    } as any;
+    const nativeOpenAi = {
+        provider: 'openai',
+        model: 'gpt-5.4',
+        apiKey: 'enc',
+    } as any;
+
+    const systemOf = (callIndex: number) =>
+        mockGenerate.mock.calls[callIndex][0].system as string;
+
+    const schema = z.object({ groups: z.array(z.number()) });
+
+    it('FIRST attempt already states the shape and the word json', async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ groups: [] }));
+
+        await runStructuredReviewCall({
+            ...base,
+            schema,
+            byokConfig: glmViaOpenRouter,
+        });
+
+        // One attempt — the contract is not a retry, it is the request.
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        const system = systemOf(0);
+        // The keyword: without it OpenAI-compatible providers 400 outright
+        // ("'messages' must contain the word 'json' in some form") and nothing
+        // downstream recovers it.
+        expect(system.toLowerCase()).toContain('json');
+        // The shape: without it the model invents one and the parse mismatches.
+        expect(system).toContain('groups');
+        // The caller's own system prompt is kept, not replaced.
+        expect(system).toContain('sys');
+    });
+
+    it('leaves a json_schema route untouched — no prompt tax where nothing was broken', async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ groups: [] }));
+
+        await runStructuredReviewCall({
+            ...base,
+            schema,
+            byokConfig: nativeOpenAi,
+        });
+
+        expect(systemOf(0)).toBe('sys');
+    });
+
+    it('a slot already proven to reject json_schema gets the contract too', async () => {
+        // `markJsonSchemaUnsupported` downgraded this slot earlier in the
+        // process. An ALLOWLISTED OpenRouter prefix normally carries the schema
+        // on the wire; downgraded, its build emits bare json_object instead — so
+        // it lands on the same route, and needs the same contract.
+        (mayUseJsonSchema as jest.Mock).mockReturnValueOnce(false);
+        mockGenerate.mockResolvedValueOnce(ok({ groups: [] }));
+
+        await runStructuredReviewCall({
+            ...base,
+            schema,
+            byokConfig: {
+                provider: 'open_router',
+                model: 'openai/gpt-5.4',
+                apiKey: 'enc',
+            } as any,
+        });
+
+        expect(systemOf(0).toLowerCase()).toContain('json');
+        expect(systemOf(0)).toContain('groups');
+    });
+
+    it('a downgraded slot whose build IGNORES the flag is NOT taxed', async () => {
+        // The mirror of the case above, and the one the first version of this
+        // change got wrong. `mayUseJsonSchema` false means we stop ASKING for a
+        // schema — but the native openai build takes no structured-output
+        // setting at all, so its body still carries `text.format: json_schema`.
+        // Treating "we stopped asking" as "the wire went bare" would append a
+        // contract to a prompt that already has the schema on the wire: the
+        // declaration-vs-wire drift this change exists to remove, and the prompt
+        // tax the route table forbids. The module decides, not the executor.
+        (mayUseJsonSchema as jest.Mock).mockReturnValueOnce(false);
+        mockGenerate.mockResolvedValueOnce(ok({ groups: [] }));
+
+        await runStructuredReviewCall({
+            ...base,
+            schema,
+            byokConfig: nativeOpenAi,
+        });
+
+        expect(systemOf(0)).toBe('sys');
+    });
+
+    it('the self-hosted env default gets the contract once its flag is off', async () => {
+        // No BYOK slot: the managed/env default, which never goes through the
+        // registry. The self-hosted OpenAI-compatible branch ANDs the caller's
+        // opt-out into its own supportsStructuredOutputs, so once this route is
+        // marked json_schema-unsupported it emits bare json_object — and then it
+        // needs the contract like any other bare route. Answering 'json_schema'
+        // blindly for "no slot" reproduced #1916 for self-hosted installs, with
+        // no recovery: that 400 is an APICallError, not NoObjectGeneratedError.
+        const prevModel = process.env.API_LLM_PROVIDER_MODEL;
+        const prevKey = process.env.API_OPEN_AI_API_KEY;
+        process.env.API_LLM_PROVIDER_MODEL = 'deepseek-v4-pro';
+        process.env.API_OPEN_AI_API_KEY = 'sk-self-hosted';
+        try {
+            (mayUseJsonSchema as jest.Mock).mockReturnValueOnce(false);
+            mockGenerate.mockResolvedValueOnce(ok({ groups: [] }));
+
+            await runStructuredReviewCall({ ...base, schema });
+
+            expect(systemOf(0).toLowerCase()).toContain('json');
+            expect(systemOf(0)).toContain('groups');
+        } finally {
+            if (prevModel === undefined)
+                delete process.env.API_LLM_PROVIDER_MODEL;
+            else process.env.API_LLM_PROVIDER_MODEL = prevModel;
+            if (prevKey === undefined) delete process.env.API_OPEN_AI_API_KEY;
+            else process.env.API_OPEN_AI_API_KEY = prevKey;
+        }
+    });
+
+    it('the managed default is NOT taxed while it still sends the schema', async () => {
+        // The mirror: same no-slot route, flag still on. Fireworks and the
+        // native managed branches keep the schema on the wire, so no contract.
+        mockGenerate.mockResolvedValueOnce(ok({ groups: [] }));
+        await runStructuredReviewCall({ ...base, schema });
+        expect(systemOf(0)).toBe('sys');
+    });
+
+    it('a MARKED non-openai_compat env default is NOT taxed either', async () => {
+        // The case above leaves the flag ON, so it never reaches the guard. This
+        // one turns the flag OFF with no env configured: `resolveEnvProvider()`
+        // returns null, so the build is the managed Fireworks default, which
+        // hardcodes supportsStructuredOutputs and ignores the opt-out. A mark on
+        // `env:auto` must therefore NOT append the contract.
+        //
+        // Without this, dropping `kind === 'openai_compat'` from the guard keeps
+        // the whole suite green while every marked managed route gets a contract
+        // appended to a prompt whose wire still carries the schema — the drift
+        // and the prompt tax this change exists to remove.
+        const prevModel = process.env.API_LLM_PROVIDER_MODEL;
+        delete process.env.API_LLM_PROVIDER_MODEL;
+        try {
+            (mayUseJsonSchema as jest.Mock).mockReturnValueOnce(false);
+            mockGenerate.mockResolvedValueOnce(ok({ groups: [] }));
+            await runStructuredReviewCall({ ...base, schema });
+            expect(systemOf(0)).toBe('sys');
+        } finally {
+            if (prevModel !== undefined)
+                process.env.API_LLM_PROVIDER_MODEL = prevModel;
+        }
+    });
+
+    it('does not re-issue a byte-identical json_object call on a schema-ish 4xx', async () => {
+        // The old code read `sentJsonSchema` — true whenever the SDK was ASKED
+        // for a schema, even on a route that never sends one — and re-issued
+        // "with json_object" into a request that was already json_object. With
+        // the contract in the first attempt, that retry is the same bytes.
+        (isJsonSchemaUnsupportedError as jest.Mock).mockReturnValue(true);
+        mockGenerate.mockRejectedValueOnce(
+            new Error("'messages' must contain the word 'json' in some form"),
+        );
+
+        await expect(
+            runStructuredReviewCall({
+                ...base,
+                schema,
+                byokConfig: glmViaOpenRouter,
+            }),
+        ).rejects.toThrow('must contain the word');
+
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        expect(markJsonSchemaUnsupported).not.toHaveBeenCalled();
+    });
+
+    it('appends the contract ONCE, even when the re-ask fires on top of it', async () => {
+        // Three paths build a contracted system (first attempt, reroute-json,
+        // the downgraded re-ask). Each must build from the CALLER's system, not
+        // from an already-contracted one — otherwise a re-ask stacks a second
+        // copy of the schema on a prompt that already carries it, and the model
+        // is told the shape twice in one message.
+        const parseFail = new NoObjectGeneratedError({
+            message: 'No object generated: could not parse the response',
+            text: 'not json at all',
+            cause: new JSONParseError({ text: 'not json at all', cause: null }),
+            usage: undefined,
+            finishReason: 'stop',
+            response: undefined,
+        } as any);
+        mockGenerate
+            .mockRejectedValueOnce(parseFail)
+            .mockResolvedValueOnce(ok({ groups: [] }));
+
+        await runStructuredReviewCall({
+            ...base,
+            schema,
+            byokConfig: glmViaOpenRouter,
+        });
+
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        const occurrences = (s: string) =>
+            (s.match(/Return ONLY a JSON object/g) ?? []).length;
+        expect(occurrences(systemOf(0))).toBe(1);
+        expect(occurrences(systemOf(1))).toBe(1);
+        // Pin WHICH path produced the second call. Counting alone would be
+        // satisfied by any other recovery branch, so the count would stop
+        // meaning "the re-ask builds from the caller's system".
+        expect(
+            observabilityService.runAiSdkLLMInSpan.mock.calls[1][0].attrs
+                .structuredRecovery,
+        ).toBe('schema-mismatch');
+    });
+
+    it('reroute-json builds from the caller system too (the third site)', async () => {
+        // The test above cannot reach this path: an 'as-is' plan never reroutes.
+        // A moonshot k2.7-code slot resolves to it for real — the REGISTRY is
+        // not mocked here.
+        //
+        // Note on why this is a PIN rather than a caught regression: a
+        // reroute-json plan requires `capabilities().structuredOutput === 'none'`
+        // (planStructuredCall), and a module that answers 'none' there answers
+        // 'none' in its wire policy too — pinned in declared-facts. So on this
+        // path `mainSystem === system` and the two contracted strings cannot
+        // both exist today. This holds the invariant for the day that coupling
+        // changes; it is not evidence that a stacking bug exists now.
+        mockGenerate.mockResolvedValueOnce({
+            text: '{"groups":[]}',
+            usage: {},
+        });
+
+        await runStructuredReviewCall({
+            ...base,
+            schema,
+            byokConfig: {
+                provider: 'moonshot',
+                model: 'kimi-k2.7-code',
+                apiKey: 'enc',
+            } as any,
+        });
+
+        const system = systemOf(0);
+        expect((system.match(/Return ONLY a JSON object/g) ?? []).length).toBe(
+            1,
+        );
+        expect(system).toContain('sys');
+        // It really took the reroute: plain generateText, no Output.object.
+        expect(mockGenerate.mock.calls[0][0]).not.toHaveProperty('output');
+    });
+
+    it('the D-00c re-issue keeps the contract (a transient blip must not drop it)', async () => {
+        const blip: any = new Error('upstream 502');
+        blip.status = 502;
+        mockGenerate
+            .mockRejectedValueOnce(blip)
+            .mockResolvedValueOnce(ok({ groups: [] }));
+
+        await runStructuredReviewCall({
+            ...base,
+            schema,
+            byokConfig: glmViaOpenRouter,
+        });
+
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        expect(systemOf(1).toLowerCase()).toContain('json');
+        expect(systemOf(1)).toContain('groups');
     });
 });
 

@@ -34,6 +34,7 @@ import { REGISTRY, registerProvider } from '../kernel/registry';
 import {
     NON_REASONING_TRAITS,
     type ModelReasoningTraits,
+    type StructuredOutputMode,
 } from '../kernel/reasoning-traits';
 import type { TemperaturePolicy } from '../kernel/model-types';
 import type {
@@ -214,6 +215,19 @@ export const kodusModule: ProviderModule = {
         const up = upstreamFor(cfg.model);
         if (!up || !up.module.systemCacheControl) return undefined;
         return up.module.systemCacheControl(asUpstream(cfg, up.ref));
+    },
+
+    // The WIRE answer comes from the UPSTREAM the catalog entry points at —
+    // Kodus is a billing wrapper, not a transport, so it must not invent one.
+    // An unroutable id answers 'none': `capabilities()` already says the same
+    // (NOT_ROUTABLE), and build() refuses it before anything reaches a wire.
+    structuredOutputPolicy(
+        cfg: ProviderBuildConfig,
+        opts?: ProviderBuildOptions,
+    ): StructuredOutputMode {
+        const up = upstreamFor(cfg.model);
+        if (!up) return 'none';
+        return up.module.structuredOutputPolicy(asUpstream(cfg, up.ref), opts);
     },
 
     temperaturePolicy(cfg: ProviderBuildConfig): TemperaturePolicy {

@@ -1,3 +1,12 @@
+// The #1916 case at the bottom is the only one that builds a REAL model, and
+// the builder decrypts the slot's apiKey on the way. Every other case mocks
+// LLM.run and never reaches it, so an identity cipher here changes nothing for
+// them and lets that one case carry a usable key.
+jest.mock('@libs/common/utils/crypto', () => ({
+    decrypt: (v: string) => v,
+    encrypt: (v: string) => v,
+}));
+
 import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
 import { AgentReviewStage } from './agent-review.stage';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
@@ -1125,4 +1134,174 @@ describe('AgentReviewStage — dedup LLM.run contract matrix backfill (#1786)', 
             expect(out.suggestions).toHaveLength(1);
         });
     });
+});
+
+/**
+ * #1916 — the failure END TO END, with the provider's own rule as the double.
+ *
+ * Every case above mocks `LLM.run`, which is the right boundary for the parse
+ * contract but cannot see the one that actually broke: WHICH REQUEST goes out.
+ * The dedup prompt contains the word "json" zero times, and a route outside the
+ * four allowlisted OpenRouter prefixes sends bare `response_format:
+ * json_object` — which OpenAI and every OpenAI-compatible proxy REJECT unless
+ * the messages contain that word. In production that 400 reached the stage's
+ * catch, which recorded `failed-keep-all` and published every duplicate: 460
+ * reviews across 47 organizations.
+ *
+ * So this runs the REAL `LLM.run`, the real prompt and the real `DEDUP_SCHEMA`,
+ * and stubs only the network — with the provider's documented rule, not with a
+ * canned answer. `API_NODE_ENV=production` because the symptom under test is the
+ * production fail-open, not the dev re-throw.
+ *
+ * ─── WHY IT CALLS DEDUP TWICE ──────────────────────────────────────────────
+ * Because calling it once does NOT discriminate, and the first version of this
+ * file claimed it did. On the old code the FIRST 400 is recovered: its body
+ * carries `response_format` and `invalid_request_error`, so
+ * `isJsonSchemaUnsupportedError` matches, the slot is marked, and the re-issue
+ * goes out with the contract and answers. One call is green on either side.
+ *
+ * The damage starts on the SECOND call. `markJsonSchemaUnsupported` writes to a
+ * PROCESS-WIDE cache keyed `provider:model:baseURL` — not per org — so from
+ * then on `sentJsonSchema` is false, the request goes out bare, 400s, and the
+ * old recovery is skipped because it was gated on `sentJsonSchema`. Every dedup
+ * on that route, for every org on that worker, lands in `failed-keep-all` until
+ * the process restarts. That is what the orgs sitting at 85-100% in the issue
+ * look like from the inside.
+ *
+ * So the second call is the assertion, and the first one only arms the cache.
+ */
+describe('AgentReviewStage — dedup survives a keyword-enforcing provider (#1916)', () => {
+    const makeStage = () =>
+        new AgentReviewStage(
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+        );
+
+    // GLM through OpenRouter: outside the allowlisted prefixes, so its
+    // structured call goes out as bare json_object. The route from the issue.
+    const glmSlot = {
+        provider: 'open_router',
+        model: 'z-ai/glm-5.2',
+        apiKey: 'k',
+    } as any;
+
+    const dup = () => ({
+        relevantFile: 'src/user.ts',
+        relevantLinesStart: 10,
+        relevantLinesEnd: 12,
+        label: 'bug',
+        severity: 'high',
+        oneSentenceSummary: 'user object can be null and is dereferenced',
+        suggestionContent: 'user object can be null and is dereferenced here',
+        improvedCode: 'if (!user) return;',
+    });
+
+    let realFetch: typeof globalThis.fetch;
+    let prevEnv: string | undefined;
+    let sawKeyword: boolean;
+    /** How many requests the provider rejected. The fix means ZERO: not "the
+     *  ladder recovered after one", which is what the old code did on the first
+     *  call and what made the single-call version of this test pass on main. */
+    let rejected: number;
+
+    beforeEach(() => {
+        realFetch = globalThis.fetch;
+        prevEnv = process.env.API_NODE_ENV;
+        process.env.API_NODE_ENV = 'production';
+        sawKeyword = false;
+        rejected = 0;
+
+        globalThis.fetch = (async (_input: any, init: any) => {
+            const body = init?.body ? JSON.parse(String(init.body)) : {};
+            const messages = JSON.stringify(body?.messages ?? '').toLowerCase();
+            // THE PROVIDER'S RULE, verbatim in behaviour: a json_object request
+            // whose messages never say "json" is rejected outright.
+            if (
+                body?.response_format?.type === 'json_object' &&
+                !messages.includes('json')
+            ) {
+                rejected += 1;
+                return new Response(
+                    JSON.stringify({
+                        error: {
+                            message:
+                                "'messages' must contain the word 'json' in some form, to use 'response_format' of type 'json_object'.",
+                            type: 'invalid_request_error',
+                        },
+                    }),
+                    {
+                        status: 400,
+                        headers: { 'content-type': 'application/json' },
+                    },
+                );
+            }
+            sawKeyword = true;
+            // The model answers correctly: the two findings are one duplicate.
+            return new Response(
+                JSON.stringify({
+                    id: 'x',
+                    object: 'chat.completion',
+                    created: 0,
+                    model: 'z-ai/glm-5.2',
+                    choices: [
+                        {
+                            index: 0,
+                            message: {
+                                role: 'assistant',
+                                content: JSON.stringify({
+                                    groups: [{ keep: 0, duplicates: [1] }],
+                                    unique: [],
+                                }),
+                            },
+                            finish_reason: 'stop',
+                        },
+                    ],
+                    usage: { prompt_tokens: 1, completion_tokens: 1 },
+                }),
+                { status: 200, headers: { 'content-type': 'application/json' } },
+            );
+        }) as typeof fetch;
+    });
+
+    afterEach(() => {
+        globalThis.fetch = realFetch;
+        if (prevEnv === undefined) delete process.env.API_NODE_ENV;
+        else process.env.API_NODE_ENV = prevEnv;
+        jest.clearAllMocks();
+    });
+
+    const runDedup = (stage: any) =>
+        stage.deduplicateSuggestions([dup(), dup()], 7, glmSlot, {
+            organizationId: 'org-1',
+            teamId: 'team-1',
+        }) as Promise<{ suggestions: any[]; trace: any }>;
+
+    it('every call on the route dedups — not just the first one', async () => {
+        const stage = makeStage();
+
+        // Call 1 arms the process-wide no-json_schema cache (on the old code it
+        // is also the one the ladder recovers, which is why it proves nothing).
+        const first = await runDedup(stage);
+        // Call 2 is the assertion: the slot is now marked, so the request is
+        // built with the schema flag off. It must STILL carry the contract.
+        const second = await runDedup(stage);
+
+        // The provider accepted what it was sent — the keyword was on the wire.
+        expect(sawKeyword).toBe(true);
+        expect(rejected).toBe(0);
+
+        for (const out of [first, second]) {
+            // The pipeline outcome the issue measures: a real dedup, not the
+            // fail-open that published both.
+            expect(out.trace.status).not.toBe('failed-keep-all');
+            expect(out.trace.removedCount).toBe(1);
+            expect(out.suggestions).toHaveLength(1);
+        }
+    }, 30_000);
 });

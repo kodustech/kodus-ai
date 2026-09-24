@@ -1,38 +1,37 @@
 /**
- * NINTH instance of this layer's recurring defect, caught BEFORE it shipped —
- * and the honest finding is that it has not shipped, which is why the fix here
- * is a guard rather than a behaviour change.
+ * NINTH instance of this layer's recurring defect — and it did eventually ship.
  *
- * "Does this model do strict json_schema" is answered in two places:
+ * "Does this model do strict json_schema" was answered in two places:
  *
  *   capabilities(model).structuredOutput   — model id only
  *   build(cfg).supportsStructuredOutputs   — model id AND baseURL
  *
- * They disagree in BOTH directions, measured:
+ * They disagreed in BOTH directions, measured:
  *
  *   llama-3-70b @ :8000       declares json_object  builds strict   (baseURL wins)
  *   qwen-72b @ fireworks      declares json_object  builds strict
  *   gpt-4o @ unknown proxy    declares json_schema  builds loose
  *   gpt-5.4 @ unknown gateway declares json_schema  builds loose
  *
- * WHY IT IS NOT A BUG TODAY: nothing branches on the distinction. Every consumer
- * — `planStructuredCall`, `StaticTaskStrategy`, the web capability gate — tests
- * only `=== 'none'`, and 'none' IS derivable from the model alone (it means
- * "structured output goes through forced tool-use", the Anthropic protocol).
- * The json_schema/json_object half is decoration that happens to be wrong.
+ * This file used to say the trap was harmless because nothing branched on the
+ * distinction. That held until the cost of NOT branching came due: a call that
+ * goes out as bare `json_object` carries no schema and no "json" keyword, so
+ * the provider either rejects it outright or the model invents a shape — 460
+ * reviews published every duplicate they were meant to deduplicate (#1916).
  *
- * WHY IT CANNOT BE FIXED IN PLACE: the contract is `capabilities(model: string)`.
- * For `openai_compatible` the correct answer depends on the baseURL, which that
- * signature cannot see — and the openai module serves BOTH `openai` and
- * `openai_compatible`, so it cannot even tell which id it is answering for. The
- * module source already notes this. A real fix is a `structuredOutputPolicy(cfg)`
- * sibling to `temperaturePolicy(cfg)`, which takes the whole config for exactly
- * this reason; that is a contract change across every module, so it is a decision
- * to make deliberately rather than a cleanup to slip in.
+ * The fix is the third answer this file predicted: `structuredOutputPolicy(cfg)`,
+ * a sibling to `temperaturePolicy(cfg)`, taking the whole config so it can see
+ * the baseURL and the requested id. It is REQUIRED of every module
+ * (declared-facts.contract.spec.ts), `build()` derives its flag from it, and the
+ * structured executor branches on it. So this file now pins three things:
  *
- * So this file pins the two things that keep the latent trap from becoming the
- * live bug: the distinction stays non-load-bearing, and `build()` stays the
- * authority.
+ *   - 'none' is still the only half `capabilities(model)` can answer honestly,
+ *     and planStructuredCall still reads only that;
+ *   - the POLICY and `build()` agree, everywhere, because they are one
+ *     expression;
+ *   - `capabilities(model)` still disagrees with both — which is FINE, and
+ *     documented, as long as nothing branches on it. That is the invariant that
+ *     replaces "nobody branches at all".
  */
 jest.mock('@libs/common/utils/crypto', () => ({
     decrypt: (v: string) => v,
@@ -40,18 +39,36 @@ jest.mock('@libs/common/utils/crypto', () => ({
 }));
 
 import { REGISTRY } from '.';
-import {
-    isNeverDowngradeModel,
-    openAiCompatibleHonorsJsonSchema,
-} from '../structured-output-gate';
+import { resolveStructuredOutputPolicy } from './kernel/structured-output';
 import {
     NON_REASONING_TRAITS,
     planStructuredCall,
 } from './kernel/reasoning-traits';
 
-/** What `build()` will actually turn on, by the same expression the module uses. */
+/** What `build()` will actually turn on — read off the BUILT model, not off a
+ *  local copy of the module's expression. A copy is what let the two answers
+ *  drift in the first place. */
 const buildsStrictSchema = (model: string, baseURL?: string) =>
-    isNeverDowngradeModel(model) || openAiCompatibleHonorsJsonSchema(baseURL);
+    (
+        REGISTRY.get('openai_compatible').build(
+            {
+                provider: 'openai_compatible',
+                model,
+                baseURL,
+                apiKey: 'k',
+            } as any,
+            { structuredOutputs: true },
+        ) as any
+    )?.config?.supportsStructuredOutputs === true;
+
+/** What the module DECLARES this whole config puts on the wire. */
+const declaredWire = (model: string, baseURL?: string) =>
+    resolveStructuredOutputPolicy(REGISTRY.get('openai_compatible'), {
+        provider: 'openai_compatible',
+        model,
+        baseURL,
+        apiKey: 'k',
+    } as any);
 
 describe('structured output: only "none" is load-bearing', () => {
     it('planStructuredCall cannot tell json_schema from json_object', () => {
@@ -156,5 +173,91 @@ describe('build() is the authority on strict schema, and it disagrees', () => {
             return (declared === 'json_schema') !== buildsStrictSchema(model, baseURL);
         });
         expect(disagreements.length).toBeGreaterThan(0);
+    });
+
+    it('the POLICY does not disagree — it and build() are one expression', () => {
+        // This is what makes the branch in the structured executor safe. The
+        // executor writes the JSON contract into the prompt exactly when the
+        // policy says 'json_object'; if the policy and the body could differ, it
+        // would either tax a strict route or leave the broken one bare again.
+        const drift = CASES.filter(
+            ({ model, baseURL }) =>
+                (declaredWire(model, baseURL) === 'json_schema') !==
+                buildsStrictSchema(model, baseURL),
+        );
+        expect(drift).toEqual([]);
+    });
+
+    it('every registered module agrees with its own build(), not just these rows', () => {
+        // The rows above are openai_compatible shapes. This sweeps the other
+        // modules that carry the flag, so a NEW one cannot declare one thing and
+        // build another — the recurring defect, caught by the contract instead
+        // of by a customer.
+        const PROBE: Record<string, { model: string; baseURL?: string }> = {
+            openai: { model: 'gpt-5.4' },
+            openai_compatible: {
+                model: 'deepseek-v4-pro',
+                baseURL: 'https://api.deepseek.com/v1',
+            },
+            open_router: { model: 'z-ai/glm-5.3' },
+            novita: { model: 'deepseek/deepseek-v4-pro' },
+        };
+        const read = Object.entries(PROBE).map(([id, { model, baseURL }]) => {
+            const cfg = { provider: id, model, baseURL, apiKey: 'k' } as any;
+            const built: any = REGISTRY.get(id).build(cfg, {
+                structuredOutputs: true,
+            });
+            return {
+                id,
+                flag: built?.config?.supportsStructuredOutputs as
+                    | boolean
+                    | undefined,
+                strictByPolicy:
+                    resolveStructuredOutputPolicy(REGISTRY.get(id), cfg) ===
+                    'json_schema',
+            };
+        });
+
+        const drift = read.filter(
+            (r) => r.flag !== undefined && r.flag !== r.strictByPolicy,
+        );
+        expect(drift.map((r) => r.id)).toEqual([]);
+
+        // A module whose build exposes NO flag is not "nothing to check" — it is
+        // checked somewhere ELSE, on the request body (json-object-contract
+        // .spec.ts asserts the schema-bearing channel per protocol). Silently
+        // skipping it is how a module that stops sending the schema while still
+        // declaring json_schema would pass this whole file green, which is the
+        // #1916 shape. So the skip is BOUNDED: these exact ids and no others. A
+        // new module joining them has to come here and say so, and then go add
+        // its row to the wire table.
+        expect(
+            read.filter((r) => r.flag === undefined).map((r) => r.id),
+        ).toEqual(['openai']);
+    });
+
+    it('a delegating module answers for the upstream it routes over, not for itself', () => {
+        // `kodus` bills our own accounts and routes over a real upstream, so its
+        // wire answer must come from that upstream WITH the endpoint it will be
+        // built against — the same `asUpstream(cfg)` build() uses. Answering for
+        // itself would put the contract on a Fireworks call that carries a
+        // schema, or leave it off one that does not. (Build is not exercised
+        // here: it needs the platform key.)
+        expect(
+            resolveStructuredOutputPolicy(REGISTRY.get('kodus'), {
+                provider: 'kodus',
+                model: 'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731',
+                apiKey: '',
+            } as any),
+        ).toBe('json_schema');
+
+        // An id the closed catalog cannot price is never routed at all.
+        expect(
+            resolveStructuredOutputPolicy(REGISTRY.get('kodus'), {
+                provider: 'kodus',
+                model: 'not-in-the-catalog',
+                apiKey: '',
+            } as any),
+        ).toBe('none');
     });
 });
