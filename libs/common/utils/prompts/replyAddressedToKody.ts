@@ -68,7 +68,14 @@ function clean(body: string): string {
     let previous: string;
     do {
         previous = text;
-        text = text.replace(/<!--[\s\S]*?-->/g, '').replace(/<!--/g, '');
+        // Whole comments first, so a comment that only forms after one pass
+        // is removed with its content rather than split open.
+        let inner: string;
+        do {
+            inner = text;
+            text = text.replace(/<!--[\s\S]*?-->/g, '');
+        } while (text !== inner);
+        text = text.replace(/<!--/g, '');
     } while (text !== previous);
     const withoutHtmlComments = text.trim();
     return withoutHtmlComments.length > MAX_BODY_CHARS
