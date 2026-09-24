@@ -475,7 +475,9 @@ describe('ChatWithKodyFromGitUseCase — replies without @kody (#1946)', () => {
         expect(conversationAgentUseCase.execute).toHaveBeenCalled();
         expect(
             codeManagementService.updateResponseToComment,
-        ).toHaveBeenCalledWith(expect.objectContaining({ body: 'an answer' }));
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({ body: '`kody|code-review` an answer' }),
+        );
     });
 
     it("Bitbucket: does not answer its own acknowledgment posted under the customer's account", async () => {
@@ -523,6 +525,66 @@ describe('ChatWithKodyFromGitUseCase — replies without @kody (#1946)', () => {
         expect(
             codeManagementService.createResponseToComment,
         ).not.toHaveBeenCalled();
+    });
+
+    it("Bitbucket: a second reply sees Kody's earlier answer as Kody's, under the customer's account", async () => {
+        classify.mockResolvedValue(false);
+        const same = { name: 'Gabriel', username: 'gabriel' };
+        const { useCase } = setup([
+            {
+                id: 30,
+                body: '`kody|code-review` `bug` The lock is released early.',
+                createdAt: at(0),
+                author: same,
+            },
+            {
+                id: 31,
+                body: 'why?',
+                createdAt: at(1),
+                parent: { id: 30 },
+                author: same,
+            },
+            {
+                id: 32,
+                body: '`kody|code-review` Because the finally block runs first.',
+                createdAt: at(2),
+                parent: { id: 31 },
+                author: same,
+            },
+            {
+                id: 33,
+                body: 'and if we move it up?',
+                createdAt: at(3),
+                parent: { id: 32 },
+                author: same,
+            },
+        ]);
+
+        await useCase.execute({
+            event: 'pullrequest:comment_created',
+            platformType: PlatformType.BITBUCKET,
+            payload: {
+                repository: { name: 'api', uuid: '{repo-1}' },
+                pullrequest: { id: 7 },
+                comment: {
+                    id: 33,
+                    content: { raw: 'and if we move it up?' },
+                    parent: { id: 32 },
+                },
+                actor: { display_name: 'Gabriel', uuid: '{u-1}' },
+            },
+        } as any);
+
+        expect(classify).toHaveBeenCalledWith(
+            expect.objectContaining({
+                thread: [
+                    expect.objectContaining({ id: 30, isKody: true }),
+                    expect.objectContaining({ id: 31, isKody: false }),
+                    expect.objectContaining({ id: 32, isKody: true }),
+                    expect.objectContaining({ id: 33, isKody: false }),
+                ],
+            }),
+        );
     });
 
     it('Azure DevOps: answers a reply in a Kody thread', async () => {

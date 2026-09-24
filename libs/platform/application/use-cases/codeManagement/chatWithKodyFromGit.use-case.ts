@@ -1869,16 +1869,17 @@ export class ChatWithKodyFromGitUseCase {
      * the reply webhook they trigger is recognized as Kody's own without
      * depending on the bot's login. The second marker tells an answer apart
      * from a finding for anything reading the PR (the e2e harness does).
-     * Bitbucket renders raw HTML as text, so its answers stay as they are and
-     * rely on the login.
+     * Bitbucket renders raw HTML as text, so there the answer opens with the
+     * visible chip its findings already carry; without it, a later reply's
+     * thread would show Kody's earlier answer as written by the customer's
+     * account.
      */
     private withKodyMarker(body: string, platformType: PlatformType): string {
-        if (
-            platformType === PlatformType.BITBUCKET ||
-            typeof body !== 'string' ||
-            isKodyAuthoredBody(body)
-        ) {
+        if (typeof body !== 'string' || isKodyAuthoredBody(body)) {
             return body;
+        }
+        if (platformType === PlatformType.BITBUCKET) {
+            return `\`${KODY_IDENTIFIERS.MARKDOWN_IDENTIFIERS.BITBUCKET}\` ${body}`;
         }
         return `${body}\n\n${KODY_CONVERSATION_MARKER}`;
     }
