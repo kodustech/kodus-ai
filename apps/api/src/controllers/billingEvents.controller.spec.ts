@@ -115,6 +115,21 @@ describe('BillingEventsController', () => {
             expect(notify.emit).not.toHaveBeenCalled();
         });
 
+        it('refuses (500) instead of re-serializing when the raw body was not captured', async () => {
+            const body = { organizationId: 'org-1' };
+            const { signature } = sign(body);
+            const req = makeReq(body, signature);
+            delete req.rawBody;
+            const res = makeRes();
+
+            await controller.planChanged(req, res as unknown as Response);
+
+            expect(res.status).toHaveBeenCalledWith(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+            expect(kodyRules.syncRulesWithPlanLimit).not.toHaveBeenCalled();
+        });
+
         it('rejects when the secret env var is missing (500)', async () => {
             config.get.mockReturnValue(undefined as any);
             const body = { organizationId: 'org-1' };
@@ -254,6 +269,36 @@ describe('BillingEventsController', () => {
                 teamId: 'team-1',
             });
             expect(res.status).toHaveBeenCalledWith(HttpStatus.OK);
+        });
+
+        // Cross-service contract: kodus-service-billing sends these exact
+        // bytes. The same literal vector is pinned in its
+        // src/services/KodusNotificationClient.spec.ts — change both.
+        it('accepts the golden vector billing sends', async () => {
+            config.get.mockImplementation((key: string) =>
+                key === 'API_BILLING_WEBHOOK_SECRET'
+                    ? 'golden-vector-secret'
+                    : undefined,
+            );
+            const rawBody = Buffer.from(
+                '{"organizationId":"org-1","teamId":"team-1","planType":"teams_byok","subscriptionStatus":"active"}',
+            );
+            const res = makeRes();
+
+            await controller.planChanged(
+                makeReq(
+                    JSON.parse(rawBody.toString()),
+                    'dc0921843a6b8747d3750476608ef2fe4089b94b14963bae7792c0814eaae023',
+                    rawBody,
+                ),
+                res as unknown as Response,
+            );
+
+            expect(res.status).toHaveBeenCalledWith(HttpStatus.OK);
+            expect(kodyRules.syncRulesWithPlanLimit).toHaveBeenCalledWith({
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            });
         });
 
         it('still returns 200 when the sync throws (billing never retries)', async () => {

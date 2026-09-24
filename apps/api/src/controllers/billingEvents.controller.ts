@@ -112,7 +112,7 @@ export class BillingEventsController {
                 .send('Missing organizationId');
         }
 
-        await this.safeEmit(() =>
+        await this.safeEmit(body.organizationId, () =>
             this.notificationService.emit({
                 event: NotificationEvent.BILLING_PAYMENT_FAILED,
                 payload: {
@@ -147,7 +147,7 @@ export class BillingEventsController {
                 .send('Missing organizationId');
         }
 
-        await this.safeEmit(() =>
+        await this.safeEmit(body.organizationId, () =>
             this.notificationService.emit({
                 event: NotificationEvent.BILLING_TRIAL_EXPIRING,
                 payload: {
@@ -225,7 +225,7 @@ export class BillingEventsController {
                 .send('Missing organizationId');
         }
 
-        await this.safeEmit(() =>
+        await this.safeEmit(body.organizationId, () =>
             this.notificationService.emit({
                 event: NotificationEvent.CREDITS_PURCHASED,
                 payload: {
@@ -260,7 +260,7 @@ export class BillingEventsController {
         }
 
         const balanceUsd = Number(body.balanceUsd ?? 0);
-        await this.safeEmit(() =>
+        await this.safeEmit(body.organizationId, () =>
             body.exhausted
                 ? this.notificationService.emit({
                       event: NotificationEvent.CREDITS_EXHAUSTED,
@@ -292,6 +292,7 @@ export class BillingEventsController {
                 message:
                     'API_BILLING_WEBHOOK_SECRET is not configured — refusing billing webhook',
                 context: BillingEventsController.name,
+                metadata: { organizationId: req.body?.organizationId },
             });
             return {
                 status: HttpStatus.INTERNAL_SERVER_ERROR,
@@ -307,8 +308,22 @@ export class BillingEventsController {
             };
         }
 
-        const rawBody =
-            req.rawBody ?? Buffer.from(JSON.stringify(req.body ?? {}));
+        // No re-stringify fallback: a re-serialized body can differ from the
+        // bytes billing signed, so a missing capture must fail loudly.
+        const rawBody = req.rawBody;
+        if (!rawBody) {
+            this.logger.error({
+                message:
+                    'Raw body not captured for a billing callback — check the /billing/events/ parser in apps/api/src/main.ts',
+                context: BillingEventsController.name,
+                metadata: { organizationId: req.body?.organizationId },
+            });
+            return {
+                status: HttpStatus.INTERNAL_SERVER_ERROR,
+                reason: 'Raw body not captured',
+            };
+        }
+
         const expected = createHmac('sha256', secret)
             .update(rawBody)
             .digest('hex');
@@ -330,7 +345,10 @@ export class BillingEventsController {
      * the billing service. If emit throws, we log and return — the
      * caller (Stripe → billing → us) sees a 200 and won't retry.
      */
-    private async safeEmit(fn: () => Promise<void>): Promise<void> {
+    private async safeEmit(
+        organizationId: string,
+        fn: () => Promise<void>,
+    ): Promise<void> {
         try {
             await fn();
         } catch (error) {
@@ -339,6 +357,7 @@ export class BillingEventsController {
                 error:
                     error instanceof Error ? error : new Error(String(error)),
                 context: BillingEventsController.name,
+                metadata: { organizationId },
             });
         }
     }
