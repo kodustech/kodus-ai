@@ -62,6 +62,7 @@ import { HttpServerConfiguration } from '@libs/core/infrastructure/config/types'
 import { ObservabilityService } from '@libs/core/log/observability.service';
 
 import { ApiModule } from './api.module';
+import { BILLING_EVENTS_PATH } from './controllers/billingEvents.controller';
 import { LoggerWrapperService } from '@libs/core/log/loggerWrapper.service';
 import {
     buildDocsConfig,
@@ -184,7 +185,9 @@ async function bootstrap() {
                 // Billing callbacks are HMAC-signed over the exact bytes sent;
                 // keep them only for that route (BillingEventsController).
                 verify: (req: any, _res, buf) => {
-                    if (req.originalUrl?.startsWith('/billing/events/')) {
+                    if (
+                        req.originalUrl?.startsWith(`/${BILLING_EVENTS_PATH}/`)
+                    ) {
                         req.rawBody = buf;
                     }
                 },

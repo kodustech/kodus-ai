@@ -273,7 +273,8 @@ describe('BillingEventsController', () => {
 
         // Cross-service contract: kodus-service-billing sends these exact
         // bytes. The same literal vector is pinned in its
-        // src/services/KodusNotificationClient.spec.ts — change both.
+        // src/services/KodusNotificationClient.spec.ts (added in
+        // kodustech/kodus-service-billing#54) — change both.
         it('accepts the golden vector billing sends', async () => {
             config.get.mockImplementation((key: string) =>
                 key === 'API_BILLING_WEBHOOK_SECRET'
