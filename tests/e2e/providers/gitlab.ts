@@ -17,7 +17,7 @@ import {
     resolveTargetRepo,
 } from "./base.js";
 import { ensureOk, http } from "../lib/http.js";
-import { isKodyReviewOutput } from "../lib/kody-markers.js";
+import { isKodyFinding, isKodyReviewOutput } from "../lib/kody-markers.js";
 import { prepareBranch } from "../lib/git.js";
 
 interface GitLabNote {
@@ -439,7 +439,7 @@ export class GitLabProvider extends BaseProvider {
             .filter(
                 (d) =>
                     !d.individual_note &&
-                    isKodyReviewOutput(d.notes?.[0]?.body ?? ""),
+                    isKodyFinding(d.notes?.[0]?.body ?? ""),
             )
             .map((d) => ({ id: d.id, body: d.notes[0].body }));
     }

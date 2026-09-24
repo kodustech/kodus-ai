@@ -80,7 +80,8 @@ export const conversationImplicitReply: Scenario = {
         await ctx.kodus.finishOnboarding(session, repo);
         await ensureLicenseSeat(ctx.target, session, provider);
 
-        const runTag = ctx.runId.slice(0, 8);
+        // runId ends in a random suffix; its date prefix repeats all month.
+        const runTag = ctx.runId.slice(-6);
         const pr = await provider.openPR({
             branch: `e2e/implicit-reply-${runTag}`,
             title: `[e2e] conversation-implicit-reply ${runTag}`,

@@ -12,3 +12,10 @@ export function isKodyReviewOutput(body: string): boolean {
 export function isKodyConversationAnswer(body: string): boolean {
     return body.includes('<!-- kody-conversation');
 }
+
+// A review finding, not the status/summary comment Kody also marks.
+export function isKodyFinding(body: string): boolean {
+    return (
+        isKodyReviewOutput(body) && !body.includes('kody-codereview-completed')
+    );
+}

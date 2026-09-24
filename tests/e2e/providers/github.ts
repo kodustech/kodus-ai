@@ -19,7 +19,7 @@ import {
     resolveTargetRepo,
 } from './base.js';
 import { ensureOk, http } from '../lib/http.js';
-import { isKodyReviewOutput } from '../lib/kody-markers.js';
+import { isKodyFinding, isKodyReviewOutput } from '../lib/kody-markers.js';
 import { prepareBranch, pushFollowupCommit } from '../lib/git.js';
 import { logger } from '../lib/log.js';
 
@@ -50,8 +50,7 @@ export function classifyKodyComment(
     body: string,
 ): 'started' | 'license-block' | 'review' {
     if (!isKodyReviewOutput(body)) return 'review';
-    if (body.includes('kody-codereview-completed'))
-        return 'review';
+    if (body.includes('kody-codereview-completed')) return 'review';
     // A severity badge means this is a FINDING, whatever words
     // it happens to contain. License notices never carry one.
     //
@@ -274,9 +273,7 @@ export class GitHubProvider extends BaseProvider {
         await this.refreshInstallationTokenIfNeeded();
         const since = encodeURIComponent(opts.sinceIso);
         const [reviewComments, issueComments] = await Promise.all([
-            this.conditionalGet<
-                { id: number; body: string; path?: string }[]
-            >(
+            this.conditionalGet<{ id: number; body: string; path?: string }[]>(
                 `${this.apiBase}/repos/${this.repoFullName}/pulls/${pr.number}/comments?since=${since}`,
             ),
             this.conditionalGet<{ id: number; body: string }[]>(
@@ -513,9 +510,8 @@ export class GitHubProvider extends BaseProvider {
     private async refreshInstallationTokenIfNeeded(): Promise<void> {
         if (!this.token.startsWith('ghs_')) return;
         try {
-            const { githubAppToken } = await import(
-                '../lib/github-app-token.js'
-            );
+            const { githubAppToken } =
+                await import('../lib/github-app-token.js');
             const fresh = await githubAppToken();
             if (fresh) this.token = fresh;
         } catch {
@@ -663,10 +659,16 @@ export class GitHubProvider extends BaseProvider {
                     return { reviews, licenseNotice };
                 };
                 const rcRes = filterNonTrigger(
-                    this.listOrThrow(reviewComments, 'github:pollForReview:reviewComments'),
+                    this.listOrThrow(
+                        reviewComments,
+                        'github:pollForReview:reviewComments',
+                    ),
                 );
                 const icRes = filterNonTrigger(
-                    this.listOrThrow(issueComments, 'github:pollForReview:issueComments'),
+                    this.listOrThrow(
+                        issueComments,
+                        'github:pollForReview:issueComments',
+                    ),
                 );
                 const reviewsList = this.listOrThrow(
                     reviews,
@@ -921,7 +923,7 @@ export class GitHubProvider extends BaseProvider {
     // minus conversation answers. GitHub points every reply at the root.
     async listKodyThreads(prNumber: number): Promise<ReviewThread[]> {
         return (await this.reviewComments(prNumber))
-            .filter((c) => !c.in_reply_to_id && isKodyReviewOutput(c.body ?? ''))
+            .filter((c) => !c.in_reply_to_id && isKodyFinding(c.body ?? ''))
             .map((c) => ({ id: String(c.id), body: c.body ?? '' }));
     }
 
@@ -936,8 +938,8 @@ export class GitHubProvider extends BaseProvider {
             {
                 method: 'POST',
                 headers: {
-                    Authorization: `Bearer ${token}`,
-                    Accept: 'application/vnd.github+json',
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'application/vnd.github+json',
                     'X-GitHub-Api-Version': '2022-11-28',
                 },
                 body: { body },

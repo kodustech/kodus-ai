@@ -17,7 +17,7 @@ import {
     resolveTargetRepo,
 } from "./base.js";
 import { ensureOk, http } from "../lib/http.js";
-import { isKodyReviewOutput } from "../lib/kody-markers.js";
+import { isKodyFinding, isKodyReviewOutput } from "../lib/kody-markers.js";
 import { prepareBranch } from "../lib/git.js";
 
 interface AzureThread {
@@ -587,7 +587,7 @@ export class AzureDevOpsProvider extends BaseProvider {
             .filter(
                 (t) =>
                     !t.isDeleted &&
-                    isKodyReviewOutput(t.comments?.[0]?.content ?? ""),
+                    isKodyFinding(t.comments?.[0]?.content ?? ""),
             )
             .map((t) => ({
                 id: String(t.id),
