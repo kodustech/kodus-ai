@@ -184,7 +184,7 @@ async function bootstrap() {
         // so Express matches it exactly like the router does; the generic
         // parser below skips bodies that were already read.
         app.use(
-            `/${BILLING_EVENTS_PATH}`,
+            BILLING_EVENTS_PATH,
             bodyParser.json({
                 limit: '25mb',
                 verify: (req: any, _res, buf) => {

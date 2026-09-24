@@ -64,9 +64,9 @@ interface CreditsLowBody {
 
 const TOP_UP_URL = 'https://app.kodus.io/byok#kodus';
 
-/** Route prefix billing calls. Shared with the raw-body capture in
- *  `apps/api/src/main.ts`, so the two cannot drift apart. */
-export const BILLING_EVENTS_PATH = 'billing/events';
+/** Route prefix billing calls, in the one form both consumers use verbatim:
+ *  `@Controller` here and the raw-body parser mount in `apps/api/src/main.ts`. */
+export const BILLING_EVENTS_PATH = '/billing/events';
 
 /**
  * Receives outbound notifications from kodus-service-billing.
