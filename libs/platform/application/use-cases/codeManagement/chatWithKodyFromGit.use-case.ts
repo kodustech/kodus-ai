@@ -73,6 +73,9 @@ const ACKNOWLEDGMENT_MESSAGES = {
         'one in the Kodus settings to use this command.',
 } as const;
 
+const KODY_CONVERSATION_MARKER =
+    '<!-- kody-codereview -->\n<!-- kody-conversation -->';
+
 /**
  * Posted instead of running the agent when the org may not use Kodus-funded
  * LLM calls (cloud, past trial, no BYOK). A visible pointer beats silence:
@@ -1864,8 +1867,10 @@ export class ChatWithKodyFromGitUseCase {
     /**
      * Kody's answers carry the same hidden marker as its review comments, so
      * the reply webhook they trigger is recognized as Kody's own without
-     * depending on the bot's login. Bitbucket renders raw HTML as text, so
-     * its answers stay as they are and rely on the login.
+     * depending on the bot's login. The second marker tells an answer apart
+     * from a finding for anything reading the PR (the e2e harness does).
+     * Bitbucket renders raw HTML as text, so its answers stay as they are and
+     * rely on the login.
      */
     private withKodyMarker(body: string, platformType: PlatformType): string {
         if (
@@ -1875,7 +1880,7 @@ export class ChatWithKodyFromGitUseCase {
         ) {
             return body;
         }
-        return `${body}\n\n<!-- kody-codereview -->`;
+        return `${body}\n\n${KODY_CONVERSATION_MARKER}`;
     }
 
     private shouldIgnoreComment(

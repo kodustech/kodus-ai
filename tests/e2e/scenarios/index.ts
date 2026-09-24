@@ -6,6 +6,7 @@ import codeReviewVertexByok from './code-review-vertex-byok.js';
 import crossRepoConfig from './cross-repo-config.js';
 import conversationVertexByok from './conversation-vertex-byok.js';
 import conversationAnthropicByok from './conversation-anthropic-byok.js';
+import conversationImplicitReply from './conversation-implicit-reply.js';
 import commandReview from './command-review.js';
 import commandReviewFocus from './command-review-focus.js';
 import commandReviewWhileBusy from './command-review-while-busy.js';
@@ -44,6 +45,7 @@ export const allScenarios: Record<string, Scenario> = {
     [crossRepoConfig.id]: crossRepoConfig,
     [conversationVertexByok.id]: conversationVertexByok,
     [conversationAnthropicByok.id]: conversationAnthropicByok,
+    [conversationImplicitReply.id]: conversationImplicitReply,
     [centralizedConfigSync.id]: centralizedConfigSync,
     [commandReview.id]: commandReview,
     [commandReviewFocus.id]: commandReviewFocus,

@@ -95,6 +95,11 @@ export interface ReviewSignal {
     };
 }
 
+export interface ReviewThread {
+    id: string;
+    body: string;
+}
+
 export interface WebhookInfo {
     id: string;
     url: string;
@@ -170,6 +175,20 @@ export interface Provider {
         pr: { number: number },
         opts: { sinceIso: string; triggerId?: string; timeoutSec?: number },
     ): Promise<{ id: string; body: string } | null>;
+    // Optional (#1946): the review threads Kody opened on a PR, a reply
+    // inside one as another identity, and the thread read back in order.
+    // Drive conversation-implicit-reply (answers without @kody).
+    listKodyThreads?(prNumber: number): Promise<ReviewThread[]>;
+    replyInThread?(
+        prNumber: number,
+        threadId: string,
+        body: string,
+        token: string,
+    ): Promise<{ id: string }>;
+    threadComments?(
+        prNumber: number,
+        threadId: string,
+    ): Promise<ReviewThread[]>;
     // Optional: merges a PR (falls back to close). Drives the closed/merged-PR
     // webhook that triggers kody-issues generation (v2/BYOK path).
     mergePR?(pr: OpenedPR): Promise<void>;

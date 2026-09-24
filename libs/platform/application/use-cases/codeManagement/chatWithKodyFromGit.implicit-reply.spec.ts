@@ -19,6 +19,7 @@ const classify = classifyReplyAddressedToKody as jest.Mock;
 const ORG = '11111111-1111-4111-8111-111111111111';
 const TEAM = '22222222-2222-4222-8222-222222222222';
 const MARKER = '<!-- kody-codereview -->';
+const ANSWER_MARKER = `${MARKER}\n<!-- kody-conversation -->`;
 
 function setup(comments: any[]) {
     const codeManagementService = {
@@ -157,7 +158,7 @@ describe('ChatWithKodyFromGitUseCase — replies without @kody (#1946)', () => {
             ).toHaveBeenCalledWith(
                 expect.objectContaining({
                     inReplyToId: 900,
-                    body: `an answer\n\n${MARKER}`,
+                    body: `an answer\n\n${ANSWER_MARKER}`,
                 }),
             );
         });
@@ -413,7 +414,7 @@ describe('ChatWithKodyFromGitUseCase — replies without @kody (#1946)', () => {
         expect(
             codeManagementService.createResponseToComment,
         ).toHaveBeenCalledWith(
-            expect.objectContaining({ body: `an answer\n\n${MARKER}` }),
+            expect.objectContaining({ body: `an answer\n\n${ANSWER_MARKER}` }),
         );
     });
 

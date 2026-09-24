@@ -6,6 +6,7 @@ import type {
     ProviderName,
     ProviderRepoRef,
     ReviewSignal,
+    ReviewThread,
     WebhookInfo,
 } from '../lib/types.js';
 import { randomUUID } from 'node:crypto';
@@ -18,6 +19,7 @@ import {
     resolveTargetRepo,
 } from './base.js';
 import { ensureOk, http } from '../lib/http.js';
+import { isKodyReviewOutput } from '../lib/kody-markers.js';
 import { prepareBranch, pushFollowupCommit } from '../lib/git.js';
 import { logger } from '../lib/log.js';
 
@@ -47,7 +49,7 @@ function classifyLicenseNotice(
 export function classifyKodyComment(
     body: string,
 ): 'started' | 'license-block' | 'review' {
-    if (!body.includes('<!-- kody-codereview')) return 'review';
+    if (!isKodyReviewOutput(body)) return 'review';
     if (body.includes('kody-codereview-completed'))
         return 'review';
     // A severity badge means this is a FINDING, whatever words
@@ -905,7 +907,7 @@ export class GitHubProvider extends BaseProvider {
                     if (body.toLowerCase().startsWith('@kody')) continue;
                     // Skip code-review status/findings — conversation replies
                     // don't carry the review discriminator.
-                    if (body.includes('<!-- kody-codereview')) continue;
+                    if (isKodyReviewOutput(body)) continue;
                     if (!body.trim()) continue;
                     return { id: String(c.id), body: body.slice(0, 600) };
                 }
@@ -913,6 +915,66 @@ export class GitHubProvider extends BaseProvider {
             },
             { timeoutSec: opts.timeoutSec ?? 300, intervalSec: 10 },
         );
+    }
+
+    // Review threads Kody opened: root review comments carrying its marker,
+    // minus conversation answers. GitHub points every reply at the root.
+    async listKodyThreads(prNumber: number): Promise<ReviewThread[]> {
+        return (await this.reviewComments(prNumber))
+            .filter((c) => !c.in_reply_to_id && isKodyReviewOutput(c.body ?? ''))
+            .map((c) => ({ id: String(c.id), body: c.body ?? '' }));
+    }
+
+    async replyInThread(
+        prNumber: number,
+        threadId: string,
+        body: string,
+        token: string,
+    ): Promise<{ id: string }> {
+        const resp = await http<{ id: number }>(
+            `${this.apiBase}/repos/${this.repoFullName}/pulls/${prNumber}/comments/${threadId}/replies`,
+            {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: 'application/vnd.github+json',
+                    'X-GitHub-Api-Version': '2022-11-28',
+                },
+                body: { body },
+            },
+        );
+        ensureOk(resp, 'github:replyInThread');
+        return { id: String(resp.body.id) };
+    }
+
+    async threadComments(
+        prNumber: number,
+        threadId: string,
+    ): Promise<ReviewThread[]> {
+        return (await this.reviewComments(prNumber))
+            .filter(
+                (c) =>
+                    String(c.id) === threadId ||
+                    String(c.in_reply_to_id) === threadId,
+            )
+            .sort((a, b) => a.created_at.localeCompare(b.created_at))
+            .map((c) => ({ id: String(c.id), body: c.body ?? '' }));
+    }
+
+    private async reviewComments(prNumber: number) {
+        const resp = await http<
+            {
+                id: number;
+                in_reply_to_id?: number;
+                body: string;
+                created_at: string;
+            }[]
+        >(
+            `${this.apiBase}/repos/${this.repoFullName}/pulls/${prNumber}/comments?per_page=100`,
+            { headers: this.headers() },
+        );
+        ensureOk(resp, 'github:reviewComments');
+        return resp.body ?? [];
     }
 
     // Merges a PR (kody-issues generation and rule-file sync fire off the

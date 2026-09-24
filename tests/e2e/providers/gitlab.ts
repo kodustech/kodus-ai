@@ -5,6 +5,7 @@ import type {
     ProviderName,
     ProviderRepoRef,
     ReviewSignal,
+    ReviewThread,
     WebhookInfo,
 } from "../lib/types.js";
 import { randomUUID } from "node:crypto";
@@ -16,6 +17,7 @@ import {
     resolveTargetRepo,
 } from "./base.js";
 import { ensureOk, http } from "../lib/http.js";
+import { isKodyReviewOutput } from "../lib/kody-markers.js";
 import { prepareBranch } from "../lib/git.js";
 
 interface GitLabNote {
@@ -419,7 +421,7 @@ export class GitLabProvider extends BaseProvider {
                         continue;
                     const body = n.body ?? "";
                     if (body.toLowerCase().startsWith("@kody")) continue;
-                    if (body.includes("<!-- kody-codereview")) continue;
+                    if (isKodyReviewOutput(body)) continue;
                     if (!body.trim()) continue;
                     return { id: String(n.id), body: body.slice(0, 600) };
                 }
@@ -427,6 +429,66 @@ export class GitLabProvider extends BaseProvider {
             },
             { timeoutSec: opts.timeoutSec ?? 300, intervalSec: 10 },
         );
+    }
+
+    // Discussions Kody opened: the first note carries its marker and is not a
+    // conversation answer. Kody may post as the same account the harness
+    // drives, so the marker is the only reliable tell.
+    async listKodyThreads(prNumber: number): Promise<ReviewThread[]> {
+        return (await this.discussions(prNumber))
+            .filter(
+                (d) =>
+                    !d.individual_note &&
+                    isKodyReviewOutput(d.notes?.[0]?.body ?? ""),
+            )
+            .map((d) => ({ id: d.id, body: d.notes[0].body }));
+    }
+
+    async replyInThread(
+        prNumber: number,
+        threadId: string,
+        body: string,
+        token: string,
+    ): Promise<{ id: string }> {
+        const projectId = await this.resolveProjectId();
+        const resp = await http<{ id: number }>(
+            `${this.apiBase}/projects/${projectId}/merge_requests/${prNumber}/discussions/${threadId}/notes`,
+            {
+                method: "POST",
+                headers: { "PRIVATE-TOKEN": token },
+                body: { body },
+            },
+        );
+        ensureOk(resp, "gitlab:replyInThread");
+        return { id: String(resp.body.id) };
+    }
+
+    async threadComments(
+        prNumber: number,
+        threadId: string,
+    ): Promise<ReviewThread[]> {
+        const discussion = (await this.discussions(prNumber)).find(
+            (d) => d.id === threadId,
+        );
+        return (discussion?.notes ?? [])
+            .filter((n) => !n.system)
+            .map((n) => ({ id: String(n.id), body: n.body ?? "" }));
+    }
+
+    private async discussions(prNumber: number) {
+        const projectId = await this.resolveProjectId();
+        const resp = await http<
+            {
+                id: string;
+                individual_note: boolean;
+                notes: { id: number; body: string; system?: boolean }[];
+            }[]
+        >(
+            `${this.apiBase}/projects/${projectId}/merge_requests/${prNumber}/discussions?per_page=100`,
+            { headers: this.headers() },
+        );
+        ensureOk(resp, "gitlab:discussions");
+        return resp.body ?? [];
     }
 
     authMode(): "token" {
