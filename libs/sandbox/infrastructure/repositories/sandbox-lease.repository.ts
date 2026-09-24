@@ -207,6 +207,7 @@ export class SandboxLeaseRepository {
     ): Promise<void> {
         const detached = await this.leaseModel
             .findOneAndDelete({ _id: prKey, sandboxId })
+            .select('leaseCount')
             .lean();
         const otherHolders =
             (detached?.leaseCount ?? 0) - (opts.ownHolds ?? 0);
