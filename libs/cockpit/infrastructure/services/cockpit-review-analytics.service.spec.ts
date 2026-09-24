@@ -88,6 +88,34 @@ describe('CockpitReviewAnalyticsService (deterministic logic)', () => {
         });
     });
 
+    describe('operationalRepositoryFilter', () => {
+        it('uses indexed exact matching for a bare repository', () => {
+            const params: unknown[] = [];
+
+            const filter = (service as any).operationalRepositoryFilter(
+                'repo',
+                params,
+            );
+
+            expect(filter).toContain('= $1');
+            expect(filter).not.toContain('LIKE');
+            expect(params).toEqual(['repo']);
+        });
+
+        it('matches both project-qualified and bare identities for a full repository', () => {
+            const params: unknown[] = [];
+
+            const filter = (service as any).operationalRepositoryFilter(
+                'project/repo',
+                params,
+            );
+
+            expect(filter).toContain('= $1');
+            expect(filter).toContain('= $2');
+            expect(params).toEqual(['project/repo', 'repo']);
+        });
+    });
+
     describe('getImplementationRateWeekly (row reshaping)', () => {
         it('groups by week, sums totals, keys bySeverity, and derives rates', async () => {
             ds.query.mockResolvedValueOnce([

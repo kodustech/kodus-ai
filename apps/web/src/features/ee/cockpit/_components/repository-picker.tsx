@@ -236,9 +236,7 @@ export const RepositoryPicker = ({ cookieValue, teamId }: Props) => {
 
                                     {displayedRepositories.map((r) => {
                                         const fullName =
-                                            r.full_name ||
-                                            `${r.organizationName}/${r.name}` ||
-                                            r.name;
+                                            r.full_name || r.name;
                                         const displayName =
                                             fullName || "Unknown";
 

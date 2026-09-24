@@ -72,6 +72,29 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
     }
 
     /**
+     * Azure repositories have existed in the warehouse as both `repo` and
+     * `project/repo`. Keep old cockpit links and the canonical picker value
+     * working while preserving exact matching for full repository names.
+     */
+    private operationalRepositoryFilter(
+        repository: string | undefined,
+        params: unknown[],
+    ): string {
+        if (!repository) return '';
+
+        params.push(repository);
+        const repositoryParam = `$${params.length}`;
+
+        if (repository.includes('/')) {
+            params.push(repository.split('/').pop());
+            const repositoryNameParam = `$${params.length}`;
+            return `AND (roe."repo_full_name" = ${repositoryParam} OR roe."repo_full_name" = ${repositoryNameParam})`;
+        }
+
+        return `AND roe."repo_full_name" = ${repositoryParam}`;
+    }
+
+    /**
      * Shared WHERE for closed-PR-scoped aggregations (aliases `s` for the
      * suggestion and `pr` for the PR). Pushes params and returns the SQL
      * fragment with the right placeholders.
@@ -574,10 +597,10 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
         q: CockpitRangeQuery,
     ): Promise<ReviewOperationalMetricsWeeklyRow[]> {
         const params: unknown[] = [q.organizationId, q.startDate, q.endDate];
-        const repositoryFilter = q.repository
-            ? (params.push(q.repository),
-              `AND roe."repo_full_name" = $${params.length}`)
-            : '';
+        const repositoryFilter = this.operationalRepositoryFilter(
+            q.repository,
+            params,
+        );
 
         const rows = (await this.ds.query(
             // Same HashAggregate-over-PR-key rewrite as the period query: group
@@ -650,10 +673,10 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
         q: CockpitRangeQuery,
     ): Promise<ReviewOperationalMetricsPeriod> {
         const params: unknown[] = [q.organizationId, q.startDate, q.endDate];
-        const repositoryFilter = q.repository
-            ? (params.push(q.repository),
-              `AND roe."repo_full_name" = $${params.length}`)
-            : '';
+        const repositoryFilter = this.operationalRepositoryFilter(
+            q.repository,
+            params,
+        );
 
         const rows = (await this.ds.query(
             // processed_prs is a distinct (repo, PR) count. Grouping by the
