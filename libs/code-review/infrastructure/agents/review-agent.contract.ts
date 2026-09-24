@@ -262,6 +262,11 @@ export interface ReviewAgentInput
     /** Gated A/B knob (default off): forwarded to AgentLoopInput.outlineFirst.
      *  The pipeline/experiment sets it; everything below threads it down. */
     outlineFirst?: boolean;
+    /** Forwarded to AgentLoopInput.requireFindingReason. O reducer pontua pelo
+     *  percurso, entao o pipeline liga isto; um chamador que nao ligar recebe o
+     *  campo opcional e o filtro de contrato cai para a checagem de severidade
+     *  sozinha. */
+    requireFindingReason?: boolean;
     /**
      * Commits that make up this PR (SHA + subject line), oldest→newest. Threaded
      * so commit-hygiene rules ("don't mix mechanical and behavioral changes")
@@ -348,6 +353,15 @@ export interface AgentLoopInput {
      *  files must be covered; warm/optional count toward the 70% total
      *  floor. When absent, coverage stays flat (legacy 100%-all-files). */
     fileTiers?: Map<string, CoverageTier>;
+    /** Regua de tier sobre o diff que entra no prompt: acima de
+     *  `thresholdChars` de diff total, os tiers listados em `summarize` entram
+     *  como nome + cabecalhos de hunk + um aviso de que o corpo foi omitido e
+     *  de que `readFile` o traz. Sem o campo, nada muda. Ver rawDiffPrompt em
+     *  core-agent-loop.adapter.ts para os numeros que motivaram. */
+    diffTierBudget?: {
+        thresholdChars: number;
+        summarize: CoverageTier[];
+    };
     /** Review mode: 'fast' skips heavy passes and caps steps; 'normal' skips verify only for very-high-confidence findings; 'deep' verifies everything. */
     reviewMode?: 'fast' | 'normal' | 'deep';
     /** Model context window in tokens. Used to trigger context compression when the message history grows too large. */
@@ -603,6 +617,24 @@ export interface AgentLoopInput {
      *  (see core/micro-agents.ts). Pair with skipBasePass + skipSynthesisRescue
      *  for a micro-agents-only run. */
     microAgents?: boolean;
+    /** One pass that walks concrete states through the change instead of
+     *  matching defect classes. Mutually exclusive with microAgents: when set,
+     *  it replaces them. See core/simulation-agent.ts. */
+    simulationAgent?: boolean;
+    /** Manda o blob <CallGraph> para os microagentes E para a simulacao, logo
+     *  abaixo do diff. Hoje esse blob so existe no prompt do generalista, que a
+     *  configuracao campeao nao roda — entao o grafo que construimos so serve
+     *  para marcar tier no cabecalho dos arquivos. Opt-in porque o efeito em
+     *  recall e precisao nunca foi medido em nenhuma rodada, com nenhum modelo. */
+    microAgentCallGraph?: boolean;
+    /** Exige que cada achado traga o percurso que o produziu (`reason`). O
+     *  `reasoning` de hoje e por PASSADA, entao todo filtro a jusante julga a
+     *  conclusao sem o caminho. Opt-in para poder reverter: um campo
+     *  obrigatorio a mais pode custar recall. */
+    requireFindingReason?: boolean;
+    /** Findings a previous pass already posted on this PR, handed to the
+     *  simulation pass so it does not spend its walks on covered ground. */
+    priorFindings?: Array<{ file?: string; line?: number; summary?: string }>;
     /** Run a routing pass first: read the diff, pick which of the twelve
      *  classes it could contain, and run only those. */
     microPlanner?: boolean;

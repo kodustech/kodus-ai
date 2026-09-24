@@ -91,6 +91,32 @@ const BUILD_TIME_FAILURE = `- Build-time failure: the change does not compile, t
 
 const FRAMEWORK_CONTRACT = `- Framework or platform contract violated: the code is legal on its own but breaks a rule of the framework, runtime or platform it runs under — a hook called conditionally, a lifecycle method that must be idempotent and is not, a handler that must return before a timeout, a migration that is not reversible, an API called outside the context it requires, an ORM relation loaded outside its session. Name the specific rule of the framework and the line that breaks it.`;
 
+/**
+ * The fifteenth class, and the only one whose subject is the test file itself.
+ *
+ * Written from measurement, and from a wrong assumption corrected: test files
+ * are NOT excluded from the corpus. 20% of the full diff is test code (148 of
+ * 757 files) and it has been in the prompt since the full-diff fix. What was
+ * missing is an item: none of the 34 in v2Defaults describes a defect in a
+ * test, so an agent reading test_consumer.py has nothing to match against and
+ * moves on. Seven goldens in the light set are about test code and six were
+ * missed by the fourteen agents, including a sleep that cannot wait because
+ * time.sleep was monkeypatched three lines above it.
+ *
+ * The whole class reduces to one falsification question, which is why the item
+ * leads with it: if the bug this test is named after came back, would this test
+ * fail? Everything else is a way the answer turns out to be no. The narrow
+ * framing is deliberate — "is this test good" has no end, "would it fail" has
+ * an answer.
+ */
+const TEST_DOES_NOT_VERIFY = `- Test that does not verify what it claims: a test whose body would still pass if the behaviour it names were broken. Ask the falsification question on every test file this PR touches — if the defect this test exists to catch were reintroduced, would this test fail? Report it when the answer is no. The ways that answer turns out to be no:
+  - It exercises the wrong target: a different HTTP verb, route, method or overload than the code under test handles; an argument order, fixture or payload that never reaches the branch the test is named after.
+  - The assertion is too loose to fail: catching a base exception where the code raises a specific subclass, asserting truthiness or non-null on something that is always set, comparing a value against itself, or an assertion placed after an early return.
+  - A mock, patch or fixture neutralises the thing under test: time.sleep patched out and then relied on to wait, the function under test stubbed by an autouse fixture, a spy asserted against instead of the real effect.
+  - It synchronises on time instead of on a condition: a fixed sleep, a deadline, or an assertion that fires before the thread, process or async task it is about has finished. It passes on a fast machine and races on a slow one.
+  - The name or docstring disagrees with the body: a case called empty_array that passes an empty dict, a typo in the test name that hides it from a name-filtered run, a docstring describing an assertion the body does not make.
+  Read the test against the implementation it covers, never on its own — the defect is almost always the disagreement between the two.`;
+
 const I18N_LOCALE = `- Localisation and user-facing content: a string shown to a user that bypasses the translation mechanism the surrounding code uses, an interpolation whose placeholders do not match the keys the translators receive, a locale file changed on one side only, a format (date, number, currency, pluralisation) hard-coded to one locale, or content that stops being escaped on its way to the user. Compare against how the neighbouring strings in the same file are handled.`;
 
 /** The five extensions below widen an item that ALREADY exists in v2Defaults
@@ -107,7 +133,7 @@ const EXECUTION_BREAKS_EXT = `- Execution breaks (extended): the SERIALISATION B
 const STATE_CORRUPTION_EXT = `- State corruption (extended): a CACHE is state, and it corrupts the same way — an error result, an empty fallback or a partially built object written into the cache under the key of the real answer, so every later reader is served the failure. Check what gets stored on the failure path, not only on the success path.`;
 
 
-export const MICRO_AGENTS: MicroAgentGroup[] = [
+const MICRO_AGENTS_TODOS: MicroAgentGroup[] = [
     {
         id: 'untrusted-input-sink',
         label: 'security',
@@ -290,7 +316,147 @@ export const MICRO_AGENTS: MicroAgentGroup[] = [
         reasoningExample:
             "The flag added at config.ts:12 is named disableRetry but the branch at client.ts:88 enables retries when it is true. Read both: the name states the opposite of the behaviour. Reported.",
     },
+    {
+        id: 'test-does-not-verify',
+        label: 'bug',
+        assignment:
+            'tests changed by this PR that would still pass if the behaviour they cover were broken',
+        items: [],
+        extraItems: [TEST_DOES_NOT_VERIFY],
+        reasoningExample:
+            "test_consumer.py waits with time.sleep(1) at line 88, but time.sleep is patched to a no-op by the autouse fixture at line 31. Read both: the wait returns immediately, so the assertion at line 90 runs before the flusher has processed anything and would pass with the flusher removed entirely. Reported.",
+    },
 ];
+
+/**
+ * VARIANTE FUNDIDA (opt-in, A/B) — 8 agentes no lugar de 12.
+ *
+ * A medida que motiva: contando golden EXCLUSIVO (aquele que nenhum outro
+ * agente alcanca), seis agentes valem 1 ou 0 nos dois modelos. O
+ * `contract-with-the-platform` nao forma par: 83% do que ele alcanca no GPT
+ * (82% no DeepSeek) ja e alcancado pelo `invalid-state-and-concurrency`, entao
+ * ele sai sem substituto.
+ *
+ * Os quatro de seguranca viram DOIS, nao um. Juntar os quatro num so misturava
+ * "o dado" com "o sujeito", que sao perguntas independentes, e deixava o
+ * DetectionFocus com 11 itens — o dobro de qualquer agente atual. A particao
+ * saiu da sobreposicao medida de goldens (Jaccard, 30 PRs): no DeepSeek
+ * `untrusted-input-sink` e `data-exposure` compartilham 38% e
+ * `secret-and-identity` e `authorization` 18%, contra 0% nos cruzamentos; e a
+ * particao com mais goldens em comum dentro dos pares (5 contra 2 da
+ * alternativa). No GPT a amostra e pequena, mas o unico par com sinal e
+ * `secret-and-identity` + `authorization`, com 25%.
+ *
+ * O que esta em jogo: os quatro de seguranca somam 74 candidatos nos dois
+ * modelos para 5 goldens exclusivos, e 40 falsos positivos.
+ *
+ * REVERSIVEL POR CONSTRUCAO: `MICRO_AGENTS` continua sendo os 12. Esta lista so
+ * e usada quando `RECALL_MICRO_FUNDIDOS=1`, e nada em producao a alcanca.
+ */
+const MICRO_AGENTS_FUNDIDOS: MicroAgentGroup[] = [
+    {
+        id: 'untrusted-data-path',
+        label: 'security',
+        assignment:
+            'the path of an untrusted value: what enters without validation, and what leaves in the response, the log and the error message',
+        items: [
+            'Injection vulnerabilities',
+            'SSRF (Server-Side Request Forgery)',
+            'Input validation gaps',
+            'Input validation bypass',
+            'Data exposure',
+        ],
+        reasoningExample:
+            "Traced the `sort` query param into the ORDER BY built at repo.ts:88. Grepped for other callers of buildOrderBy(, found one at list.ts:31 passing a validated enum. The new path concatenates the raw value. Reported.",
+    },
+    {
+        id: 'identity-and-access',
+        label: 'security',
+        assignment:
+            'who can reach a changed entrypoint, with what credential and for how long, and how secrets or identity are compared, normalised and derived',
+        items: [
+            'AuthZ/AuthN flaws',
+            'Session management',
+            'Timing attacks',
+            'Case-sensitivity bypass',
+            'Crypto issues',
+            'Insecure fallback values',
+        ],
+        extraItems: [
+            '- Missing defensive measures: a changed or newly added entrypoint that lacks the protection its siblings have — CSRF token check, rate limit, or an authorization guard. Compare against how the neighbouring routes or handlers in the same file are protected.',
+        ],
+        reasoningExample:
+            "The new DELETE route at router.ts:22 has no guard. Read the two neighbouring routes: both call requireOwner() before the handler. Nothing in the diff adds one. Reported.",
+    },
+    {
+        id: 'value-in-motion',
+        label: 'bug',
+        assignment:
+            'what a value is at the moment it is used: when it was evaluated, what it became on the way, and what the code assumes about it at its boundaries and positions',
+        items: [
+            'Mutable default arguments',
+            'Closure capturing mutable references',
+            'Async timing bugs',
+            'Conditional validation errors',
+            'Floating-point equality in critical operations',
+        ],
+        extraItems: [
+            '- Index, slice and ordering assumptions: Boundary arithmetic on substrings, slices, ranges and pagination whose indices do not match the layout the code describes; comparisons whose extracted segment is off by one or inverted; code that assumes an iteration, lookup or zip preserves input order when the structure gives no such guarantee (dict/map values, concurrent results, unordered collections). Verify the arithmetic against a concrete example and check whether the ordering is actually guaranteed.',
+        ],
+        reasoningExample:
+            "The prefix check at token.ts:61 reads substring(4,6), but the comment and the writer at token.ts:20 place the shortcut at indices 5-6. Worked through a concrete token: the check reads one char short. Reported.",
+    },
+];
+
+/** Ids que a fusao absorve. Saem da lista quando a variante esta ligada. */
+const ABSORVIDOS_PELA_FUSAO = new Set([
+    'untrusted-input-sink',
+    'secret-and-identity',
+    'authorization',
+    'data-exposure',
+    'capture-and-evaluation',
+    'value-boundary-and-position',
+    // sem par: ja coberto em 82-83% pelo invalid-state-and-concurrency
+    'contract-with-the-platform',
+]);
+
+/**
+ * Tres agentes nao rodam mais. Nao e economia de prompt: sobre os 29 PRs do
+ * conjunto, nenhum dos tres produziu um unico achado que o reducer mantivesse —
+ * tudo que eles geraram ou foi agrupado em cima de um achado de outro agente,
+ * ou ficou abaixo da cota. Rodar os tres e pagar geracao para jogar fora.
+ *
+ * `RECALL_SKIP_AGENTS` acrescenta outros ids a lista (e so acrescenta): serve
+ * para varrer qual agente paga, sem recompilar.
+ */
+const DESLIGADOS_POR_PADRAO = [
+    'scale-and-blocking',
+    'repeated-work',
+    'resource-and-growth',
+];
+
+const DESLIGADOS = new Set([
+    ...DESLIGADOS_POR_PADRAO,
+    ...String(process.env.RECALL_SKIP_AGENTS || '')
+        .split(',')
+        .map((x) => x.trim().replace(/^micro-/, ''))
+        .filter(Boolean),
+]);
+
+const BASE: MicroAgentGroup[] = MICRO_AGENTS_TODOS.filter(
+    (g) => !DESLIGADOS.has(g.id),
+);
+
+/** RECALL_MICRO_FUNDIDOS=1 troca os sete redundantes pelos dois fundidos: 12
+ *  agentes viram 8. Desligado por padrao — os 12 continuam sendo o que roda. */
+export const MICRO_AGENTS: MicroAgentGroup[] =
+    process.env.RECALL_MICRO_FUNDIDOS === '1'
+        ? [
+              ...BASE.filter((g) => !ABSORVIDOS_PELA_FUSAO.has(g.id)),
+              ...MICRO_AGENTS_FUNDIDOS,
+          ]
+        : BASE;
+
 
 /** Pulls an item out of the shared category text by its prefix, so the wording
  *  stays in one place. A prefix that stops matching is a loud failure rather
@@ -332,6 +498,7 @@ export function focusBlockFor(group: MicroAgentGroup): string {
 export function buildMicroAgentPrompt(
     group: MicroAgentGroup,
     diffText: string,
+    callGraph?: string,
 ): string {
     // <Diffs> FIRST, and the assignment after it. The twelve agents run under
     // one Promise.all against the same pull request, so the diff is the only
@@ -347,10 +514,24 @@ export function buildMicroAgentPrompt(
     // assignment is a real change to what the model reads first, and recency
     // cuts both ways; this needs an A/B on the 30-PR set before it counts as
     // an improvement rather than just a cheaper run.
+    // <CallGraph> DEPOIS do diff e ANTES do <Role>: e a segunda coisa que os
+    // doze agentes mandam identica, entao fica dentro do prefixo compartilhado
+    // e cacheia junto. Posto abaixo do <Role> ele cairia atras do byte em que
+    // os prompts divergem e seria pago doze vezes por inteiro.
+    //
+    // OPT-IN. O blob nunca esteve em nenhuma medicao que temos — nem com o
+    // generalista, onde a secao existe mas os datasets nunca definiram o campo.
+    // Custo estimado no conjunto de 30 PRs: ~9k chars por PR, +7.7% de input,
+    // +5% de conta com o cache funcionando. Efeito em recall e precisao:
+    // desconhecido, que e a razao de existir o teste.
+    const graphBlock = callGraph?.trim()
+        ? `\n${callGraph.trim()}\n`
+        : '';
+
     return `<Diffs>
 ${diffText}
 </Diffs>
-
+${graphBlock}
 <Role>
   You are a code reviewer with ONE assignment on this pull request: ${group.assignment}.
   You are not reviewing it broadly — other reviewers cover the rest. Look for the
@@ -391,6 +572,7 @@ ${focusBlockFor(group)}
       "existingCode": "problematic code snippet from the diff",
       "improvedCode": "fixed code snippet (only if fix is clear from context)",
       "oneSentenceSummary": "Brief summary",
+      "reason": "REQUIRED when the schema asks for it — the walk that produced THIS finding, not a restatement of it: the concrete input or state you started from, the lines it passes through in order with file:line, and what the caller ends up with. A reason with no file:line is not one. If you cannot write the walk, you have not established the finding and should not submit it.",
       "relevantLinesStart": 10,
       "relevantLinesEnd": 15,
       "severity": "critical|high|medium|low",
@@ -425,6 +607,13 @@ ${focusBlockFor(group)}
   Most pull requests contain no defect of any single class. If this one contains
   none of yours, submit an empty suggestions array — that is a valid answer, and
   a forced finding costs more than a silent pass.
+
+  AT MOST TWO. Submit no more than two suggestions, and only the ones you are
+  surest of. This is a ceiling, never a quota: zero is the ordinary answer and
+  one is common. Do not add a second finding to fill the space — a weak second
+  buries the strong first, because the developer reads the list, not the
+  ranking. If you found more than two that you are equally sure of, keep the two
+  whose failure is most concrete and drop the rest.
 </OutputFormat>`;
 }
 

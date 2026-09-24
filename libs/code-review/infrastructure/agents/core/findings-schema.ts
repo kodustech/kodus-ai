@@ -23,6 +23,12 @@ const suggestionSchema = z.object({
     severity: z.enum(['critical', 'high', 'medium', 'low']).optional(), // V2 compat
     confidence: z.number().min(1).max(10).optional(), // 1-10: how confident the agent is in this finding
     ruleUuid: z.string().optional(), // Kody Rules: UUID of the violated rule
+    // O percurso que produziu ESTE achado, quando `requireFindingReason` esta
+    // ligado. Precisa estar aqui: o zod descarta campo desconhecido, entao sem
+    // a linha o modelo devolve o campo e o sanitizador o joga fora em silencio
+    // — foi o que aconteceu no primeiro run com a flag ligada, 0 de 21
+    // candidatos chegaram com reason.
+    reason: z.string().optional(),
 });
 
 const _findingsSchema = z.object({

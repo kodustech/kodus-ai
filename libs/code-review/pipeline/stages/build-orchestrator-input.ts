@@ -110,6 +110,11 @@ export function buildOrchestratorInput(
         // Experimental A/B knob (config-driven, default off): outline-first
         // readFile. Flows down to the finder's tool registry.
         outlineFirst: context.codeReviewConfig?.outlineFirst,
+        // O reducer pontua o achado pelo PERCURSO que o produziu, nao pela
+        // prosa — e o filtro de contrato derruba quem nao traz percurso. Sem
+        // isto o campo e opcional no schema do finder e sai preenchido so as
+        // vezes, o que faria o filtro cortar por sorte.
+        requireFindingReason: true,
         parentSignal: context.parentSignal,
     };
 }

@@ -118,7 +118,37 @@ export function buildVerifierAgentSpec(
 export function verifierPromptFor(
     finding: FinderSuggestion,
     feasibilityMode = false,
+    /** Inclui no bundle o percurso que PRODUZIU o achado (`reason`). Opt-in.
+     *
+     *  Sem ele o verificador recebe cinco campos — arquivo, linhas, severidade,
+     *  alegacao e trecho — e quatro passos de ferramenta para refutar. O
+     *  percurso, que ja cita as linhas de escrita e de leitura que o finder
+     *  seguiu, fica de fora, e o verificador gasta os quatro passos
+     *  redescobrindo o que ja estava escrito. Medido no DeepSeek sem ele: 120
+     *  de 125 grupos mantidos (96%).
+     *
+     *  Desligado por padrao — isto muda o prompt de producao, e o efeito em
+     *  recall e precisao nao esta medido. */
+    includeReason = false,
+    /** Os OUTROS achados que o atribuidor juntou neste grupo, quando ha. Opt-in.
+     *
+     *  Hoje o grupo chega ao verificador como o representante mais uma lista de
+     *  `file:line` — ele ve que o defeito aparece em tres lugares mas so le uma
+     *  redacao. As outras podem descrever melhor, ou citar a linha que refuta.
+     *  O bloco vai DEPOIS do achado principal e rotulado como evidencia extra,
+     *  nao como alegacoes a julgar: o veredito continua sendo sobre um defeito
+     *  so, senao o verificador passa a responder duas perguntas ao mesmo tempo. */
+    outrosDoGrupo?: Array<{
+        relevantFile?: string;
+        relevantLinesStart?: number;
+        relevantLinesEnd?: number;
+        suggestionContent?: string;
+        reason?: string;
+    }>,
 ): string {
+    const walk = includeReason
+        ? (finding as { reason?: string }).reason
+        : undefined;
     const bundle = [
         `File: ${finding.relevantFile}`,
         finding.relevantLinesStart != null
@@ -126,7 +156,28 @@ export function verifierPromptFor(
             : '',
         `Severity: ${finding.severity ?? 'unknown'}`,
         `Claim: ${finding.suggestionContent}`,
+        walk ? `Walk that produced it (the finder's own trace — verify it, do not assume it is right):\n${walk}` : '',
         finding.existingCode ? `Code:\n${finding.existingCode}` : '',
+        outrosDoGrupo?.length
+            ? [
+                  `<OtherReportsOfTheSameDefect count="${outrosDoGrupo.length}">`,
+                  '  Other reviewers reported what looks like the SAME defect as the claim above.',
+                  '  These are NOT separate claims for you to judge — your verdict is about the one',
+                  '  claim above, and nothing else. Use them only as extra evidence: one of them may',
+                  '  name the line that settles it, or may be wrong in a way that exposes the claim.',
+                  ...outrosDoGrupo.map((o, i) => {
+                      const loc = `${o.relevantFile ?? '?'}${o.relevantLinesStart != null ? `:${o.relevantLinesStart}-${o.relevantLinesEnd ?? o.relevantLinesStart}` : ''}`;
+                      return [
+                          `  [${i + 1}] ${loc}`,
+                          `      claim: ${String(o.suggestionContent ?? '').slice(0, 600)}`,
+                          o.reason ? `      walk:  ${String(o.reason).slice(0, 600)}` : '',
+                      ]
+                          .filter(Boolean)
+                          .join('\n');
+                  }),
+                  '</OtherReportsOfTheSameDefect>',
+              ].join('\n')
+            : '',
     ]
         .filter(Boolean)
         .join('\n');
@@ -220,6 +271,13 @@ export interface LlmVerifierParams {
     usageRunName?: string;
     /** Path-feasibility mode (A/B knob) — see buildFeasibilityVerifierPrompt. */
     feasibilityMode?: boolean;
+    /** A/B: manda o `reason` do achado junto no bundle. Ver verifierPromptFor. */
+    includeReason?: boolean;
+    /** A/B: resolve os outros membros do grupo para o bundle. Recebe o candidato
+     *  e devolve as outras redacoes do MESMO defeito. Ver verifierPromptFor. */
+    resolveGroupMembers?: (
+        candidate: FinderSuggestion,
+    ) => Parameters<typeof verifierPromptFor>[3];
 }
 
 /** The LLM-judge Verifier (HV2): runs a verifier AgentSpec once per finding on
@@ -298,6 +356,8 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
                 prompt: verifierPromptFor(
                     candidate,
                     this.params.feasibilityMode,
+                    this.params.includeReason,
+                    this.params.resolveGroupMembers?.(candidate),
                 ),
                 ...toAiSdkTelemetryArgs(
                     buildLangfuseTelemetry(

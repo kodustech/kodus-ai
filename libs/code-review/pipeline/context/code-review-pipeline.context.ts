@@ -11,6 +11,7 @@ import { CollectCrossFileContextsResult } from '@libs/code-review/infrastructure
 import type { TraceContextDecision } from '@libs/cli-review/domain/types/trace-context.types';
 import { LlmErrorCategory } from '@libs/llm/error-classifier';
 import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
+import type { ReducerTrace } from '@libs/code-review/infrastructure/agents/engine/finding-reducer';
 import type { LinkedRepositoriesReviewMetadata } from '@libs/ee/linked-repositories';
 import { PlatformType } from '@libs/core/domain/enums';
 import {
@@ -298,6 +299,8 @@ export interface DedupTraceSummary {
     errorMessage?: string;
     groups?: DedupTraceGroupSummary[];
     unique?: DedupTraceSuggestionSummary[];
+    /** Presente quando o reducer rodou no lugar do dedup. */
+    reducer?: ReducerTrace;
 }
 
 export interface FileContextAgentResult {

@@ -589,6 +589,7 @@ export abstract class BaseCodeReviewAgentProvider {
                     // so without this line the resample passes never run.
                     heavy: input.heavy,
                     outlineFirst: input.outlineFirst,
+                    requireFindingReason: input.requireFindingReason,
                     // Context window is sized against the resolved model.
                     contextWindowTokens: contextWindow,
                     reasoningEffort: modelParams.reasoningEffort,

@@ -18,6 +18,22 @@
  * investigators are the map step; this is the missing reduce step.
  *
  * Cost note: N verify calls + 1 dedup call become 1 call total.
+ *
+ * MEASURED FAILURE that shaped the DROP rule's current wording: across 29 PRs
+ * the reducer discards 45% of all candidates (136 of 301), and judging those
+ * discards against the goldens found FOUR that the agents had correctly found
+ * and it deleted. Two were name/docstring defects — a component whose name
+ * contradicts its behaviour, a docstring stating a return type the method no
+ * longer has — dropped because the rule said "pure style, naming, formatting"
+ * without separating a naming PREFERENCE from a name that is false about the
+ * code. The system was working against itself: one agent exists to find
+ * exactly those, and this prompt told the reducer to delete them.
+ *
+ * The other rule that cost findings was relative: "a minor nitpick that would
+ * be noise next to the real problems in this set" makes a correct low-severity
+ * finding's survival depend on what else happens to share its PR. Recall counts
+ * it the same either way, and so does the reader. Importance now decides order
+ * only.
  */
 
 /** JSON schema for the reducer output. `keep` carries the final, ordered set. */
@@ -76,6 +92,7 @@ export const REDUCER_SCHEMA = {
 } as const;
 
 type ReducerCandidate = {
+    reason?: string;
     relevantFile?: string;
     relevantLinesStart?: number | string;
     relevantLinesEnd?: number | string;
@@ -107,7 +124,12 @@ export function buildReducerCandidates(
             const fix = c.improvedCode
                 ? `\n    fix: ${c.improvedCode.slice(0, 200)}`
                 : '';
-            return `${head}${summary}${body}${fix}`;
+            // O percurso que produziu o achado, quando o gerador foi obrigado a
+            // registra-lo. Sem isto o reducer julga a CONCLUSAO sem o caminho
+            // — que e como todos os filtros desta investigacao operaram, tendo
+            // menos material do que o agente que gerou.
+            const why = c.reason ? `\n    walk: ${c.reason.slice(0, 700)}` : '';
+            return `${head}${summary}${body}${fix}${why}`;
         })
         .join('\n\n');
 }
@@ -126,6 +148,12 @@ export function buildReducerPrompt(
      *  counterweight below ("do NOT drop a genuine defect…") appears to swamp
      *  it. This variant states the expectation as a rate instead. */
     strict: boolean = false,
+    /** The reducer has grep/readFile and is expected to use them. Without
+     *  tools it can only rate plausibility, and plausibility does not separate
+     *  a true claim from a false one: measured over 30 PRs the false positives
+     *  carry the same phrasing, the same confidence and the same severity as
+     *  the true ones (39 of 118 at High). Verification does. */
+    investigate: boolean = false,
 ): string {
     const list = buildReducerCandidates(candidates, normalizeSeverity);
     const strictClause = strict
@@ -137,6 +165,30 @@ speculative claims, style dressed as defects, and nitpicks are the normal output
 of investigators working blind to each other. Go through them one at a time and
 put each in drop or keep on its own merits. If you genuinely cannot fault a
 candidate, keep it; do not manufacture a drop to hit a number.`
+        : '';
+    const investigateClause = investigate
+        ? `
+
+You have grep and readFile over the repository at the commit under review, and
+you are expected to use them. Most of these candidates are wrong, and what makes
+one wrong is almost never visible in how it is written — the claims that fail
+read exactly like the claims that hold. Do not decide by how plausible or
+confident a candidate sounds. Check it.
+
+Before you keep or drop a candidate, turn it into a question the code answers,
+and answer it:
+  - it says a caller breaks       -> read the caller
+  - it says a value can be null   -> read what produces it
+  - it says a guard is missing    -> grep for the guard elsewhere in the file
+  - it says work repeats          -> read whether something already caches it
+  - it says a symbol is absent    -> grep for it before believing that
+
+DROP the ones the code contradicts, and the ones asking for a defence nobody has
+shown is needed: a bound, a limit, a validation or a rate limit is a hardening
+suggestion, not a defect, unless you found a caller that actually violates it.
+
+KEEP what you confirmed, and KEEP what you could not check — an unverified claim
+is not a refuted one. Say in its reason which of the two it is.`
         : '';
     return `You are the final reviewer for ONE pull request. Several independent
 investigators each looked at a different part of this PR and produced the
@@ -155,19 +207,30 @@ Decide with the whole set in view:
    others in mergedFrom.
 2. DROP — a candidate that is not worth a reviewer's comment:
    - the claim does not hold up (speculative, or contradicted by the code shown);
-   - pure style, naming, formatting, or a generic "missing X" with no concrete
-     failure;
-   - a minor nitpick that would be noise next to the real problems in this set.
+   - a preference with no defect behind it: how something is spelled, formatted
+     or arranged, a rename that changes nothing a reader or caller can observe,
+     a generic "missing X" with no concrete failure named.
+
+   A name, comment, docstring or message that is FALSE about the code is NOT a
+   preference — it is a defect in what the next reader is told, and it stays.
+   "This should be called X" is a preference; "this says it returns a list and
+   it returns a dict" is a defect. Judge the claim, not the wording the
+   investigator chose: one phrased as a remedy ("rename this", "update the
+   docs") still has to be read for the defect behind it.
 3. KEEP — everything else, ordered most important first. Importance = how much
    the defect would actually hurt (correctness/security impact, blast radius),
    not how confident the investigator sounded.
+
+   Importance decides ORDER, never whether something is reported. A correct
+   finding does not become noise because a worse one shares the set with it;
+   drop only on a candidate's own merits, never by comparison.
 
 Be decisive: a review with 3 real problems is more useful than one with 12
 where the real ones are buried. But do NOT drop a genuine defect just to make
 the list shorter — a real bug at low severity still belongs in KEEP.
 
 Every candidate index must appear exactly once, in keep (as index or inside a
-mergedFrom) or in drop.${strictClause}
+mergedFrom) or in drop.${investigateClause}${strictClause}
 
 CANDIDATES:
 ${list}`;

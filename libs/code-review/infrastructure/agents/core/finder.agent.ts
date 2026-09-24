@@ -108,53 +108,74 @@ export interface FinderSuggestion {
     severity?: 'critical' | 'high' | 'medium' | 'low';
     confidence?: number;
     ruleUuid?: string;
+    /** O percurso que produziu ESTE achado, quando `requireFindingReason` esta
+     *  ligado. Distinto do `reasoning` do topo, que e da passada inteira: com
+     *  um so por passada, todo filtro a jusante julga a conclusao sem o
+     *  caminho que a produziu. */
+    reason?: string;
 }
 
-/** JSON schema for submitResult — mirrors the legacy _findingsSchema. */
-const SUBMIT_RESULT_SCHEMA: JSONSchema = {
-    type: 'object',
-    // additionalProperties:false on every object is required by provider strict
-    // tool use / structured output modes. Harmless in best-effort mode; optional
-    // properties are still allowed.
-    additionalProperties: false,
-    properties: {
-        reasoning: { type: 'string' },
-        suggestions: {
-            type: 'array',
-            items: {
-                type: 'object',
-                additionalProperties: false,
-                properties: {
-                    relevantFile: { type: 'string' },
-                    language: { type: 'string' },
-                    label: {
-                        type: 'string',
-                        enum: ['bug', 'security', 'performance'],
+/** JSON schema for submitResult — mirrors the legacy _findingsSchema.
+ *
+ * `reason` por achado e OPT-IN (`requireFindingReason`) de proposito: torna-lo
+ * obrigatorio de saida mudaria o que todo agente do produto precisa devolver, e
+ * um campo obrigatorio a mais pode custar recall — um agente que nao consegue
+ * articular o percurso pode simplesmente deixar de reportar. Com o interruptor,
+ * reverter e desligar, e da para medir os dois lados no mesmo corpus. */
+function buildSubmitResultSchema(requireFindingReason = false): JSONSchema {
+    return {
+        type: 'object',
+        // additionalProperties:false on every object is required by provider strict
+        // tool use / structured output modes. Harmless in best-effort mode; optional
+        // properties are still allowed.
+        additionalProperties: false,
+        properties: {
+            reasoning: { type: 'string' },
+            suggestions: {
+                type: 'array',
+                items: {
+                    type: 'object',
+                    additionalProperties: false,
+                    properties: {
+                        relevantFile: { type: 'string' },
+                        language: { type: 'string' },
+                        label: {
+                            type: 'string',
+                            enum: ['bug', 'security', 'performance'],
+                        },
+                        suggestionContent: { type: 'string' },
+                        existingCode: { type: 'string' },
+                        improvedCode: { type: 'string' },
+                        oneSentenceSummary: { type: 'string' },
+                        relevantLinesStart: { type: 'number' },
+                        relevantLinesEnd: { type: 'number' },
+                        severity: {
+                            type: 'string',
+                            enum: ['critical', 'high', 'medium', 'low'],
+                        },
+                        confidence: { type: 'number' },
+                        ruleUuid: { type: 'string' },
+                        reason: {
+                            type: 'string',
+                            description:
+                                'The walk that produced THIS finding: the concrete input or state you started from, the lines it passes through in order, and what the caller ends up with. Cite file:line.',
+                        },
                     },
-                    suggestionContent: { type: 'string' },
-                    existingCode: { type: 'string' },
-                    improvedCode: { type: 'string' },
-                    oneSentenceSummary: { type: 'string' },
-                    relevantLinesStart: { type: 'number' },
-                    relevantLinesEnd: { type: 'number' },
-                    severity: {
-                        type: 'string',
-                        enum: ['critical', 'high', 'medium', 'low'],
-                    },
-                    confidence: { type: 'number' },
-                    ruleUuid: { type: 'string' },
+                    required: [
+                        'relevantFile',
+                        'suggestionContent',
+                        'existingCode',
+                        'improvedCode',
+                        ...(requireFindingReason ? ['reason'] : []),
+                    ],
                 },
-                required: [
-                    'relevantFile',
-                    'suggestionContent',
-                    'existingCode',
-                    'improvedCode',
-                ],
             },
         },
-    },
-    required: ['reasoning', 'suggestions'],
-};
+        required: ['reasoning', 'suggestions'],
+    };
+}
+
+const SUBMIT_RESULT_SCHEMA: JSONSchema = buildSubmitResultSchema(false);
 
 /** The done tool. No-op execute: it is a finalize SIGNAL the CompletionGatePolicy
  *  detects by name; its input (the findings) is captured in the RunState.
@@ -169,6 +190,19 @@ export const submitResultTool: AgentTool = {
     execute: async () => ({ output: 'submitted' }),
 };
 
+/** Variante com `reason` obrigatorio por achado. Mesma tool, mesmo nome — o
+ *  CompletionGatePolicy detecta pelo nome, entao trocar o schema nao muda o
+ *  fluxo. */
+export function buildSubmitResultTool(requireFindingReason = false): AgentTool {
+    return {
+        ...submitResultTool,
+        inputSchema: buildSubmitResultSchema(requireFindingReason),
+        description: requireFindingReason
+            ? 'Submit your final findings and end the review. Every finding must carry a `reason`: the walk that produced it, with file:line. A finding you cannot walk is one you should not submit.'
+            : submitResultTool.description,
+    };
+}
+
 export interface BuildFinderSpecParams {
     systemPrompt: string;
     modelId: string;
@@ -177,6 +211,9 @@ export interface BuildFinderSpecParams {
      *  a strict tool built for the primary but swapped onto a non-strict fallback
      *  (e.g. Gemini → OpenAI) is rejected by the fallback's Structured Outputs. */
     fallbackModelId?: string;
+    /** Exige `reason` por achado no submitResult. Desligado por padrao: ver a
+     *  nota em buildSubmitResultSchema. */
+    requireFindingReason?: boolean;
     /** Investigation tools (grep/readFile/...) from buildFinderToolRegistry. */
     tools: ToolRegistry;
     coverageLedger: ProgressLedger;
@@ -204,7 +241,7 @@ export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
         // Considers the failover target too: a strict tool built for a Gemini
         // primary must NOT be sent to an OpenAI fallback (it rejects the schema).
         {
-            ...submitResultTool,
+            ...buildSubmitResultTool(params.requireFindingReason),
             strict: supportsStrictToolsForRun(
                 params.modelId,
                 params.fallbackModelId,
@@ -691,8 +728,14 @@ export interface RunFinderWithVerifyParams {
      *  Built by the adapter from core/micro-agents.ts. */
     microAgentPasses?: Array<{
         label: string;
-        prompt: string;
+        /** Uma funcao quando a passada precisa ver o que as anteriores acharam:
+         *  recebe os achados acumulados ate o fim da fase anterior. String
+         *  quando o prompt e fixo. */
+        prompt: string | ((prior: FinderSuggestion[]) => string);
         spec: AgentSpec;
+        /** Fases rodam em ordem; dentro de uma fase, tudo em paralelo. Sem
+         *  valor, a passada vai para a fase 0 e o comportamento e o de antes. */
+        phase?: number;
     }>;
     /** Total shard sites per PR, and how many share one worker. Defaults to
      *  MAX_SELECTORS / SITES_PER_WORKER. */
@@ -1224,8 +1267,14 @@ interface RecallPassesParams {
      *  Built by the adapter from core/micro-agents.ts. */
     microAgentPasses?: Array<{
         label: string;
-        prompt: string;
+        /** Uma funcao quando a passada precisa ver o que as anteriores acharam:
+         *  recebe os achados acumulados ate o fim da fase anterior. String
+         *  quando o prompt e fixo. */
+        prompt: string | ((prior: FinderSuggestion[]) => string);
         spec: AgentSpec;
+        /** Fases rodam em ordem; dentro de uma fase, tudo em paralelo. Sem
+         *  valor, a passada vai para a fase 0 e o comportamento e o de antes. */
+        phase?: number;
     }>;
     /** See RunFinderWithVerifyParams.shardCap. */
     shardCap?: number;
@@ -1291,6 +1340,9 @@ export interface RecallPassStat {
     steps: number;
     /** Tool calls the pass made. Zero means it answered without investigating. */
     toolCalls: number;
+    /** Relogio de parede da passada. Ausente nas passadas de papel de expert,
+     *  que nao passam pelo runPass. */
+    ms?: number;
     /** Range-less readFile calls — the whole-file reads. The critical-file pass
      *  is defined by reading the file end to end; if this stays 0 the pass ran
      *  but did not do the thing it exists to do, and its result says nothing
@@ -1361,6 +1413,10 @@ export async function runRecallPasses(
         added: number;
         passToolCalls: Array<{ tool: string; args: unknown }>;
     }> => {
+        // Relogio de parede por passada. Tokens nao respondem "por que esta
+        // review demorou": uma passada barata que espera 90s no provedor custa
+        // o mesmo em token que uma de 9s, e so uma delas e o gargalo.
+        const t0 = Date.now();
         const state = await params.runner.run(
             spec,
             {
@@ -1374,6 +1430,7 @@ export async function runRecallPasses(
             },
             ctx,
         );
+        const elapsedMs = Date.now() - t0;
         // Extract BEFORE touching the shared accumulators: passes may run
         // concurrently (heavy resample), and `mergeSuggestions(findings, await …)`
         // would snapshot `findings` before the await — last writer would win and
@@ -1402,6 +1459,7 @@ export async function runRecallPasses(
         passStats.push({
             label,
             added,
+            ms: elapsedMs,
             // Steps, not tool calls: a step can fire several tool calls at
             // once, so toolCalls alone can't confirm a maxSteps cap held —
             // this is the number ForceFinalizePolicy/maxSteps actually bounds.
@@ -1615,11 +1673,35 @@ export async function runRecallPasses(
     // directly instead of diluting attention further.
     // PLAN → SHARD: the only pass that reads code the diff does not contain.
     if (params.microAgentPasses?.length && !scoutChainOnly) {
-        await Promise.all(
-            params.microAgentPasses.map((m) =>
-                runPass(m.prompt, m.label, m.spec),
-            ),
-        );
+        // Em fases. Tudo numa `Promise.all` so significa que nenhuma passada
+        // pode ver o que outra achou — cada uma parte do zero sobre o mesmo
+        // diff. Para a simulacao isso foi medido e custa caro: das 21 goldens
+        // que ela encontrou, 19 ja tinham sido encontradas pelos agentes de
+        // classe, ou seja, 90% dos seus verdadeiros positivos era redescoberta.
+        // Com fase, ela roda depois e recebe a lista, entao gasta o orcamento
+        // em terreno que ninguem cobriu.
+        const porFase = new Map<number, typeof params.microAgentPasses>();
+        for (const m of params.microAgentPasses) {
+            const f = m.phase ?? 0;
+            const lista = porFase.get(f);
+            if (lista) lista.push(m);
+            else porFase.set(f, [m]);
+        }
+        for (const fase of [...porFase.keys()].sort((a, b) => a - b)) {
+            // `findings.suggestions` e lido AQUI, depois do await da fase
+            // anterior — dentro da fase todas as passadas veem a mesma lista,
+            // que e o que "rodar em paralelo" quer dizer.
+            const prior = findings.suggestions ?? [];
+            await Promise.all(
+                (porFase.get(fase) ?? []).map((m) =>
+                    runPass(
+                        typeof m.prompt === 'function' ? m.prompt(prior) : m.prompt,
+                        m.label,
+                        m.spec,
+                    ),
+                ),
+            );
+        }
     }
 
     // Both draws run concurrently — the second is an independent branch, not a

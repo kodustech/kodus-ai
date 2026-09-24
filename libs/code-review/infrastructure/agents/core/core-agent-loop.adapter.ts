@@ -34,6 +34,7 @@ import {
     runFinderWithVerify,
     recoverFindingsFromProse,
     submitResultTool,
+    type FinderSuggestion,
 } from '@libs/code-review/infrastructure/agents/core/finder.agent';
 import {
     buildFindingsFromVerify,
@@ -48,7 +49,12 @@ import {
 } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import { createAgentRunContext } from '@libs/llm/agent-run-context';
 import { buildProviderOptions } from '@libs/llm/reasoning-options';
-import { splitDiffIntoHunks } from '@libs/code-review/infrastructure/agents/collaborators/context-fit-planner';
+import {
+    splitDiffIntoHunks,
+    extractHunkHeaders,
+    normalizeFilenameForTier,
+} from '@libs/code-review/infrastructure/agents/collaborators/context-fit-planner';
+import { CoverageTier } from '@libs/code-review/infrastructure/agents/engine/coverage-ledger';
 import {
     buildExpertRoles,
     RECOGNITION_PANEL_ROLES,
@@ -72,6 +78,10 @@ import {
     buildMicroAgentPrompt,
     runMicroPlanner,
 } from '@libs/code-review/infrastructure/agents/core/micro-agents';
+import {
+    SIMULATION_SYSTEM_PROMPT,
+    buildSimulationPrompt,
+} from '@libs/code-review/infrastructure/agents/core/simulation-agent';
 
 const funnelLogger = createLogger('review-funnel');
 
@@ -125,11 +135,69 @@ function criticalFilesFrom(
  * than that number implied — and scoutDedicatedPrompt still cost real
  * recall/precision despite it, meaning the boilerplate being cut was doing
  * real calibration work for the scout, not free-riding noise. */
-function rawDiffPrompt(changedFiles: AgentLoopInput['changedFiles']): string {
-    return (changedFiles ?? [])
+/**
+ * Regua de tier sobre o diff que vai no prompt.
+ *
+ * O diff e a parte FIXA: ele entra inteiro no prompt de cada passada e e
+ * reenviado a cada step do loop, entao encolhe-lo encolhe tudo
+ * proporcionalmente. Medido no conjunto de 30 PRs: nos quatro com diff acima
+ * de 200k, resumir `warm` e `optional` corta 14% dos tokens do benchmark
+ * inteiro e custa 2 goldens; resumir so `optional` corta 2% e nao custa
+ * nenhum. O `optional` e pequeno (9% do volume) — quase toda a economia esta
+ * no `warm` (33%).
+ *
+ * O limiar existe porque a composicao de tiers varia muito: o maior PR do
+ * conjunto encolhe 15% com a regra e outro encolhe 66%. Aplicar em todo PR
+ * custaria 12 goldens; aplicar so nos grandes custa 2.
+ *
+ * O ROTULO e parte do mecanismo, nao enfeite. Um arquivo truncado em silencio
+ * some; um arquivo que se anuncia como resumido, diz o tier e diz qual
+ * ferramenta traz o corpo, deixa a decisao de buscar com o agente — que e a
+ * unica forma de o corte ser recuperavel. Os cabecalhos de hunk custam ~70
+ * caracteres por arquivo, 3% do diff no pior caso aqui.
+ */
+export type DiffTierBudget = {
+    /** Acima de quantos caracteres de diff a regua liga. */
+    thresholdChars: number;
+    /** Tiers que entram resumidos. Vazio desliga. */
+    summarize: CoverageTier[];
+};
+
+export function rawDiffPrompt(
+    changedFiles: AgentLoopInput['changedFiles'],
+    fileTiers?: AgentLoopInput['fileTiers'],
+    budget?: DiffTierBudget,
+): string {
+    const files = changedFiles ?? [];
+    const diffDe = (f: (typeof files)[number]) =>
+        (f?.patchWithLinesStr ?? f?.patch ?? '').trim();
+
+    const total = files.reduce((n, f) => n + diffDe(f).length, 0);
+    const resumir = new Set(budget?.summarize ?? []);
+    const ligado =
+        !!budget &&
+        resumir.size > 0 &&
+        !!fileTiers?.size &&
+        total >= budget.thresholdChars;
+
+    return files
         .map((f) => {
-            const diff = (f?.patchWithLinesStr ?? f?.patch ?? '').trim();
-            return diff ? `--- ${f?.filename} (${f?.status}) ---\n${diff}` : '';
+            const diff = diffDe(f);
+            if (!diff) return '';
+            const tier = fileTiers?.get(
+                normalizeFilenameForTier(String(f?.filename ?? '')),
+            );
+            const marca = tier === 'critical' ? ' [CRITICAL]' : tier ? ` [${tier}]` : '';
+            if (!ligado || !tier || !resumir.has(tier)) {
+                return `--- ${f?.filename} (${f?.status})${marca} ---\n${diff}`;
+            }
+            const headers = extractHunkHeaders(diff);
+            const linhas = diff.split('\n').length;
+            return [
+                `--- ${f?.filename} (${f?.status}) [${tier}, SUMMARISED] ---`,
+                headers.length ? headers.join('\n') : '(no hunk headers)',
+                `(body withheld: ${linhas} diff lines. This file is ${tier}, not critical, so only its hunk ranges are shown. Call readFile on this path to read any range you need.)`,
+            ].join('\n');
         })
         .filter(Boolean)
         .join('\n\n');
@@ -405,6 +473,7 @@ export async function runAgentLoopViaCore(
     ) =>
         buildFinderAgentSpec({
             systemPrompt: systemPromptOverride ?? input.systemPrompt,
+            requireFindingReason: input.requireFindingReason,
             modelId: specModelId,
             fallbackModelId,
             usageRunName: input.usageRunName,
@@ -430,7 +499,7 @@ export async function runAgentLoopViaCore(
     const microPlan =
         input.microAgents && input.microPlanner
             ? await runMicroPlanner(
-                  rawDiffPrompt(input.changedFiles),
+                  rawDiffPrompt(input.changedFiles, input.fileTiers, input.diffTierBudget),
                   secrets.byokConfig,
                   input.telemetryMetadata?.organizationId,
                   input.usageRunName,
@@ -449,7 +518,7 @@ export async function runAgentLoopViaCore(
     // diff-only base — the generalist's rules block would re-impose the
     // reviewer framing this knob exists to replace.
     let finderPrompt = input.adversarial
-        ? buildAdversarialPrompt(rawDiffPrompt(input.changedFiles), true)
+        ? buildAdversarialPrompt(rawDiffPrompt(input.changedFiles, input.fileTiers, input.diffTierBudget), true)
         : input.userPrompt;
     if (input.scoutVerdict) {
         try {
@@ -630,23 +699,82 @@ export async function runAgentLoopViaCore(
             // re-review the diff instead of doing their assignment, and the
             // whole point here is that the agent carries one class and nothing
             // else.
-            microAgentPasses: input.microAgents
-                ? microGroups.map((group) => ({
-                      label: `micro-${group.id}`,
-                      prompt: buildMicroAgentPrompt(
-                          group,
-                          rawDiffPrompt(input.changedFiles),
-                      ),
-                      spec: buildSpecWithLedger(
-                          new DiffCoverageLedger({
-                              changedFiles: input.changedFiles,
-                              fileTiers: input.fileTiers,
-                          }),
-                          input.maxSteps ?? 12,
-                          MICRO_AGENT_SYSTEM_PROMPT,
-                      ),
-                  }))
-                : undefined,
+            // `simulationAgent` is a DIFFERENT procedure, not another class: no
+            // category list at all, a walk through concrete states instead. It
+            // rides the same plumbing because it is still one narrow pass with
+            // its own prompt and system prompt — see core/simulation-agent.ts.
+            // Os dois juntos quando ambos vem ligados: a simulacao e um
+            // procedimento diferente, nao uma decima sexta classe, entao medir
+            // o conjunto exige que ela rode AO LADO dos quinze, nao no lugar.
+            microAgentPasses: (() => {
+                // Undefined quando a flag esta desligada: os dois builders
+                // omitem o bloco inteiro nesse caso. Vale para TODAS as
+                // passadas — as doze de classe e a simulacao.
+                const grafoParaOsAgentes = input.microAgentCallGraph
+                    ? input.callGraph
+                    : undefined;
+                const ledger = () =>
+                    new DiffCoverageLedger({
+                        changedFiles: input.changedFiles,
+                        fileTiers: input.fileTiers,
+                    });
+                const passes = [
+                    ...(input.microAgents
+                        ? microGroups.map((group) => ({
+                              label: `micro-${group.id}`,
+                              phase: 0,
+                              prompt: buildMicroAgentPrompt(
+                                  group,
+                                  rawDiffPrompt(input.changedFiles, input.fileTiers, input.diffTierBudget),
+                                  grafoParaOsAgentes,
+                              ),
+                              spec: buildSpecWithLedger(
+                                  ledger(),
+                                  input.maxSteps ?? 12,
+                                  MICRO_AGENT_SYSTEM_PROMPT,
+                              ),
+                          }))
+                        : []),
+                    // FASE 1: depois dos agentes de classe, e vendo o que eles
+                    // levantaram. Antes esta passada ia junto na fase 0 e o
+                    // bloco <AlreadyRaised> so podia ser preenchido por fora
+                    // (o eval injetava a saida de OUTRA rodada no dataset) —
+                    // um estado que producao nunca tem, porque em producao nao
+                    // existe rodada anterior. Rodando em fase ela recebe os
+                    // candidatos desta mesma review, que e a unica forma de
+                    // esse contexto existir de verdade.
+                    ...(input.simulationAgent
+                        ? [
+                              {
+                                  label: 'micro-simulate-the-change',
+                                  phase: 1,
+                                  prompt: (prior: FinderSuggestion[]) =>
+                                      buildSimulationPrompt(
+                                          rawDiffPrompt(input.changedFiles, input.fileTiers, input.diffTierBudget),
+                                          prior.length
+                                              ? prior.map((p) => ({
+                                                    file: p.relevantFile,
+                                                    line: p.relevantLinesStart,
+                                                    summary: p.oneSentenceSummary,
+                                                }))
+                                              : // Sem fase 0 (simulacao rodando
+                                                // sozinha) nao ha o que passar;
+                                                // o campo do dataset cobre o
+                                                // caso experimental.
+                                                input.priorFindings,
+                                          grafoParaOsAgentes,
+                                      ),
+                                  spec: buildSpecWithLedger(
+                                      ledger(),
+                                      input.maxSteps ?? 12,
+                                      SIMULATION_SYSTEM_PROMPT,
+                                  ),
+                              },
+                          ]
+                        : []),
+                ];
+                return passes.length ? passes : undefined;
+            })(),
             shardCap: input.shardCap,
             shardPerWorker: input.shardPerWorker,
             changedFilePaths: (input.changedFiles ?? [])
@@ -677,10 +805,10 @@ export async function runAgentLoopViaCore(
                 : undefined,
             freeformPass: input.freeformPass,
             freeformBasePrompt: input.freeformDedicatedPrompt
-                ? rawDiffPrompt(input.changedFiles)
+                ? rawDiffPrompt(input.changedFiles, input.fileTiers, input.diffTierBudget)
                 : undefined,
             scoutBasePrompt: input.scoutDedicatedPrompt
-                ? rawDiffPrompt(input.changedFiles)
+                ? rawDiffPrompt(input.changedFiles, input.fileTiers, input.diffTierBudget)
                 : input.scoutCalibratedPrompt
                   ? calibratedDiffPrompt(input.changedFiles)
                   : undefined,
