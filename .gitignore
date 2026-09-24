@@ -291,3 +291,8 @@ reports/mutation/
 # it is the template and IS tracked; this one holds real vendor keys and must
 # never be committed — it exists so the JSON can be validated locally before it
 # is pasted into the GitHub secret.
+
+# Pacotes locais linkados via yalc e credenciais de dev (packages/test.json).
+# Nao versionar: kodus-common/kodus-flow vem do registry, e test.json carrega
+# credencial de producao.
+packages/
