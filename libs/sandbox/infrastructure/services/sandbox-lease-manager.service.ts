@@ -48,6 +48,9 @@ const IDLE_TIMEOUT_MS = 300_000; // 5 minutes — default for conversation flow
  */
 const DEFAULT_LEASE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
+// Grace window for in-flight tool calls before a detached sandbox is killed.
+const INVALIDATE_DRAIN_MS = 60_000;
+
 /**
  * How often to poll when waiting for a concurrent creator to finish.
  */
@@ -507,7 +510,13 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             if (apiKey) {
                 try {
                     // Give in-flight tool calls 60 seconds to finish before the sandbox dies
-                    await Sandbox.setTimeout(doc.sandboxId, 60_000, { apiKey });
+                    await Sandbox.setTimeout(
+                        doc.sandboxId,
+                        INVALIDATE_DRAIN_MS,
+                        {
+                            apiKey,
+                        },
+                    );
                     this.logger.log({
                         message: `SandboxLeaseManager: soft-drain 60s applied sandboxId="${doc.sandboxId}" prKey="${prKey}"`,
                         context: SandboxLeaseManager.name,
@@ -523,9 +532,19 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             }
         }
 
-        await this.leaseRepo.delete(prKey);
+        // The 60s timeout above only PAUSES the sandbox (onTimeout: 'pause').
+        // Retire instead of delete so the idle-kill cron still kills it.
+        if (doc.sandboxId) {
+            await this.leaseRepo.retire(
+                prKey,
+                doc.sandboxId,
+                new Date(Date.now() + INVALIDATE_DRAIN_MS),
+            );
+        } else {
+            await this.leaseRepo.delete(prKey);
+        }
         this.logger.log({
-            message: `SandboxLeaseManager: lease deleted after invalidation prKey="${prKey}"`,
+            message: `SandboxLeaseManager: lease retired after invalidation prKey="${prKey}"`,
             context: SandboxLeaseManager.name,
             metadata: { prKey },
         });
@@ -534,6 +553,31 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
     // ---------------------------------------------------------------------------
     // Private helpers
     // ---------------------------------------------------------------------------
+
+    /**
+     * Kill a sandbox we are about to drop the lease for. If the kill fails,
+     * retire the lease so the idle-kill cron retries it — otherwise the
+     * paused sandbox has no lease left and nothing will ever kill it.
+     */
+    private async killOrRetire(
+        prKey: string,
+        sandboxId: string,
+        apiKey: string,
+    ): Promise<void> {
+        try {
+            await Sandbox.kill(sandboxId, { apiKey });
+        } catch (err) {
+            this.logger.warn({
+                message: `SandboxLeaseManager: kill failed, retiring lease for cron retry sandboxId="${sandboxId}" prKey="${prKey}"`,
+                context: SandboxLeaseManager.name,
+                error: err,
+                metadata: { prKey, sandboxId },
+            });
+            await this.leaseRepo
+                .retire(prKey, sandboxId, new Date())
+                .catch(() => {});
+        }
+    }
 
     private async handleCreatorPath(
         prKey: string,
@@ -594,9 +638,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                         const apiKey =
                             this.configService.get<string>('API_E2B_KEY');
                         if (apiKey) {
-                            await Sandbox.kill(sandboxId, {
-                                apiKey,
-                            }).catch(() => {});
+                            await this.killOrRetire(prKey, sandboxId, apiKey);
                         }
                     }
                 }
@@ -660,7 +702,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                         context: SandboxLeaseManager.name,
                         metadata: { prKey, sandboxId },
                     });
-                    await Sandbox.kill(sandboxId, { apiKey }).catch(() => {});
+                    await this.killOrRetire(prKey, sandboxId, apiKey);
                 }
             }
             // Remove lease doc only if local cleanup succeeded or E2B/null path
@@ -807,7 +849,17 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             // Drop the in-memory lease tracking before delete (release()
             // would no-op without it; we want a clean slate)
             this.leaseIdToPrKey.delete(leaseId);
-            await this.leaseRepo.delete(prKey).catch(() => {});
+            // Retire, not delete: connect can fail transiently while the
+            // sandbox still exists (paused), and a dropped lease is the
+            // last trace the kill crons had of it. If it really is gone,
+            // the cron's kill 404s and it just removes the retired doc.
+            await this.leaseRepo
+                .retire(
+                    prKey,
+                    sandboxId,
+                    new Date(Date.now() + INVALIDATE_DRAIN_MS),
+                )
+                .catch(() => {});
             // Re-acquire from scratch. With doc deleted, upsertAcquire
             // will hit creator path and cold-create. cloneParams must be
             // passed by the original caller for cold-create to clone repo;

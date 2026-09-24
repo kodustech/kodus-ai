@@ -181,6 +181,57 @@ export class SandboxLeaseRepository {
     }
 
     /**
+     * Detach a sandbox from its prKey without losing track of it.
+     *
+     * Sandboxes are created with `onTimeout: 'pause'`, so an E2B timeout only
+     * pauses them — the only thing that ever kills one is the reaper crons,
+     * and they only see sandboxes that still have a lease doc. Deleting the
+     * lease outright therefore leaves a paused orphan forever.
+     *
+     * This writes a retired doc (`<org>:retired:<sandboxId>`, never matched
+     * by acquire) carrying `killAt`, then deletes the prKey lease so the next
+     * acquire cold-creates. `killIdleSandboxes` kills the sandbox at `killAt`
+     * and removes the retired doc, retrying on real failures; the TTL reaper
+     * backs it up via `expiresAt`.
+     */
+    async retire(
+        prKey: string,
+        sandboxId: string,
+        killAt: Date,
+    ): Promise<void> {
+        const orgSegment = prKey.split(':')[0];
+        await this.leaseModel.updateOne(
+            { _id: `${orgSegment}:retired:${sandboxId}` },
+            {
+                $setOnInsert: {
+                    sandboxId,
+                    state: 'READY',
+                    leaseCount: 0,
+                    createdAt: new Date(),
+                    expiresAt: killAt,
+                    killAt,
+                    organizationId: orgSegment,
+                },
+            },
+            { upsert: true },
+        );
+        await this.leaseModel.deleteOne({ _id: prKey, sandboxId });
+    }
+
+    /**
+     * Which of these sandbox ids still have a lease doc (active or retired).
+     * The orphan sweep kills only the ids NOT in this set.
+     */
+    async findSandboxIdsWithLease(sandboxIds: string[]): Promise<Set<string>> {
+        if (sandboxIds.length === 0) return new Set();
+        const docs = await this.leaseModel
+            .find({ sandboxId: { $in: sandboxIds } })
+            .select('sandboxId')
+            .lean();
+        return new Set(docs.map((d) => d.sandboxId));
+    }
+
+    /**
      * Atomically set the `killAt` timestamp on a lease document. Used by
      * release() to schedule an idle-kill that any worker (in a multi-worker
      * deployment) can pick up via findReadyToKill().

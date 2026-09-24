@@ -32,6 +32,15 @@ const MAX_KILL_RETRIES = 3;
 // guaranteed-bounded retry window.
 const HARD_KILL_RETRY_LIMIT = 20;
 
+// Orphan sweep: a PAUSED sandbox with no lease doc is unreachable — only
+// acquire() ever resumes a sandbox, and it only knows ids from leases — so it
+// sits paused forever. Sandboxes are created with onTimeout: 'pause', so
+// every path that drops a lease without a successful kill leaks one (21k had
+// piled up by 2026-09-24). The age floor keeps the sweep clear of a sandbox
+// whose lease is still being written; the per-run cap bounds a backlog.
+const ORPHAN_MIN_AGE_MS = 60 * 60 * 1000;
+const ORPHAN_SWEEP_MAX_PER_RUN = 2000;
+
 const E2B_ALREADY_GONE_RE =
     /not found|does not exist|404|already (been )?(deleted|killed|terminated)/i;
 
@@ -364,6 +373,93 @@ export class SandboxLeaseReaperService {
             await this.releaseCronLock(
                 lock,
                 'Failed to release sandbox idle-kill lock',
+            );
+        }
+    }
+
+    /**
+     * Hourly safety net for every lease-drop path, known or not: kills PAUSED
+     * sandboxes created by us (they carry `metadata.stage`) that are older
+     * than ORPHAN_MIN_AGE_MS and have no lease doc left.
+     */
+    @Cron(CronExpression.EVERY_HOUR)
+    async sweepOrphanedSandboxes(): Promise<void> {
+        const apiKey = this.configService.get<string>('API_E2B_KEY');
+        if (!apiKey) return;
+
+        const lock = await this.acquireCronLock(
+            'CRON:SANDBOX:ORPHAN_SWEEP',
+            55 * 60 * 1000,
+        );
+        if (!lock) return;
+
+        try {
+            const cutoff = Date.now() - ORPHAN_MIN_AGE_MS;
+            const candidates: string[] = [];
+            const paginator = Sandbox.list({
+                apiKey,
+                query: { state: ['paused'] },
+            });
+            while (
+                paginator.hasNext &&
+                candidates.length < ORPHAN_SWEEP_MAX_PER_RUN
+            ) {
+                for (const info of await paginator.nextItems()) {
+                    if (
+                        info.metadata?.stage &&
+                        new Date(info.startedAt).getTime() < cutoff
+                    ) {
+                        candidates.push(info.sandboxId);
+                    }
+                }
+            }
+            const batch = candidates.slice(0, ORPHAN_SWEEP_MAX_PER_RUN);
+            if (batch.length === 0) return;
+
+            const leased =
+                await this.leaseRepository.findSandboxIdsWithLease(batch);
+            const orphans = batch.filter((id) => !leased.has(id));
+
+            let killed = 0;
+            let failed = 0;
+            await mapWithConcurrency(
+                orphans,
+                CLEANUP_CONCURRENCY,
+                async (sandboxId) => {
+                    try {
+                        await Sandbox.kill(sandboxId, { apiKey });
+                        killed++;
+                    } catch (err) {
+                        if (!isE2BAlreadyGoneError(err)) failed++;
+                    }
+                },
+            );
+
+            if (orphans.length > 0) {
+                // warn, not log: every orphan is a lease-drop path that
+                // skipped the kill — a steady non-zero count is a bug to find.
+                this.logger.warn({
+                    message:
+                        '[SANDBOX-ORPHAN-SWEEP] Killed paused sandboxes with no lease',
+                    context: SandboxLeaseReaperService.name,
+                    metadata: {
+                        candidates: batch.length,
+                        orphans: orphans.length,
+                        killed,
+                        failed,
+                    },
+                });
+            }
+        } catch (error) {
+            this.logger.error({
+                message: '[SANDBOX-ORPHAN-SWEEP] Sweep failed',
+                context: SandboxLeaseReaperService.name,
+                error: error instanceof Error ? error : undefined,
+            });
+        } finally {
+            await this.releaseCronLock(
+                lock,
+                'Failed to release sandbox orphan-sweep lock',
             );
         }
     }

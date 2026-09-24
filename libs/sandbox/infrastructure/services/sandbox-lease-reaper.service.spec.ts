@@ -1,5 +1,5 @@
 jest.mock('e2b', () => ({
-    Sandbox: { kill: jest.fn() },
+    Sandbox: { kill: jest.fn(), list: jest.fn() },
 }));
 
 jest.mock('@libs/core/log/logger', () => ({
@@ -16,6 +16,17 @@ import { Sandbox } from 'e2b';
 import { SandboxLeaseReaperService } from './sandbox-lease-reaper.service';
 
 const mockKill = Sandbox.kill as jest.Mock;
+const mockList = (Sandbox as any).list as jest.Mock;
+
+function paginatorOf(...pages: any[][]) {
+    const remaining = [...pages];
+    return {
+        get hasNext() {
+            return remaining.length > 0;
+        },
+        nextItems: jest.fn(async () => remaining.shift() ?? []),
+    };
+}
 
 describe('SandboxLeaseReaperService', () => {
     let service: SandboxLeaseReaperService;
@@ -30,6 +41,7 @@ describe('SandboxLeaseReaperService', () => {
         completeCleanup: jest.fn(),
         failCleanup: jest.fn(),
         bumpKillRetry: jest.fn().mockResolvedValue(undefined),
+        findSandboxIdsWithLease: jest.fn().mockResolvedValue(new Set()),
     };
 
     const distributedLockService = {
@@ -289,6 +301,104 @@ describe('SandboxLeaseReaperService', () => {
             await service.killIdleSandboxes();
 
             expect(leaseRepository.delete).toHaveBeenCalledWith('org:repo:1');
+        });
+    });
+    describe('sweepOrphanedSandboxes', () => {
+        const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000);
+
+        it('kills paused sandboxes that are old, ours, and have no lease', async () => {
+            mockList.mockReturnValue(
+                paginatorOf(
+                    [
+                        {
+                            sandboxId: 'orphan-1',
+                            startedAt: hoursAgo(5),
+                            metadata: { stage: 'review' },
+                        },
+                        {
+                            sandboxId: 'leased',
+                            startedAt: hoursAgo(5),
+                            metadata: { stage: 'review' },
+                        },
+                    ],
+                    [
+                        {
+                            sandboxId: 'too-young',
+                            startedAt: hoursAgo(0.2),
+                            metadata: { stage: 'review' },
+                        },
+                        {
+                            sandboxId: 'not-ours',
+                            startedAt: hoursAgo(5),
+                            metadata: {},
+                        },
+                        {
+                            sandboxId: 'orphan-2',
+                            startedAt: hoursAgo(48),
+                            metadata: { stage: 'conversation' },
+                        },
+                    ],
+                ),
+            );
+            leaseRepository.findSandboxIdsWithLease.mockResolvedValue(
+                new Set(['leased']),
+            );
+            mockKill.mockResolvedValue(true);
+
+            await service.sweepOrphanedSandboxes();
+
+            expect(mockList).toHaveBeenCalledWith({
+                apiKey: 'fake-api-key',
+                query: { state: ['paused'] },
+            });
+            expect(
+                leaseRepository.findSandboxIdsWithLease,
+            ).toHaveBeenCalledWith(['orphan-1', 'leased', 'orphan-2']);
+            expect(mockKill.mock.calls.map((c) => c[0]).sort()).toEqual([
+                'orphan-1',
+                'orphan-2',
+            ]);
+        });
+
+        it('keeps sweeping when one kill fails', async () => {
+            mockList.mockReturnValue(
+                paginatorOf([
+                    {
+                        sandboxId: 'a',
+                        startedAt: hoursAgo(5),
+                        metadata: { stage: 'review' },
+                    },
+                    {
+                        sandboxId: 'b',
+                        startedAt: hoursAgo(5),
+                        metadata: { stage: 'review' },
+                    },
+                ]),
+            );
+            mockKill
+                .mockRejectedValueOnce(new Error('503'))
+                .mockResolvedValueOnce(true);
+
+            await expect(
+                service.sweepOrphanedSandboxes(),
+            ).resolves.toBeUndefined();
+            expect(mockKill).toHaveBeenCalledTimes(2);
+        });
+
+        it('does nothing without an E2B key (self-hosted / local sandboxes)', async () => {
+            configService.get.mockReturnValue(undefined);
+
+            await service.sweepOrphanedSandboxes();
+
+            expect(mockList).not.toHaveBeenCalled();
+        });
+
+        it('does nothing when another worker holds the sweep lock', async () => {
+            distributedLockService.acquire.mockResolvedValue(null);
+
+            await service.sweepOrphanedSandboxes();
+
+            expect(mockList).not.toHaveBeenCalled();
         });
     });
 });

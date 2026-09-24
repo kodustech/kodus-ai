@@ -47,6 +47,7 @@ function makeMockLeaseRepo(): jest.Mocked<SandboxLeaseRepository> {
         findByPrKey: jest.fn().mockResolvedValue(null),
         findExpired: jest.fn().mockResolvedValue([]),
         delete: jest.fn().mockResolvedValue(undefined),
+        retire: jest.fn().mockResolvedValue(undefined),
         setKillAt: jest.fn().mockResolvedValue(undefined),
         clearKillAt: jest.fn().mockResolvedValue(undefined),
         findReadyToKill: jest.fn().mockResolvedValue([]),
@@ -274,8 +275,8 @@ describe('SandboxLeaseManager', () => {
 
     // ─── Test 3: invalidate via PR-close (soft-drain + delete) ───────────
 
-    it('invalidate: sets Sandbox.setTimeout(60s) then deletes Mongo doc', async () => {
-        const prKey = 'org:repo:77';
+    it('invalidate: soft-drains 60s and retires the lease so the idle-kill cron kills the sandbox', async () => {
+        const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:77';
 
         leaseRepo.findByPrKey.mockResolvedValue({
             _id: prKey,
@@ -286,20 +287,56 @@ describe('SandboxLeaseManager', () => {
             expiresAt: new Date(Date.now() + 30 * 60 * 1000),
         } as any);
 
+        const before = Date.now();
         await manager.invalidate(prKey);
 
-        // Soft-drain: 60s timeout applied (not IDLE_TIMEOUT_MS which is for release)
         expect(Sandbox.setTimeout).toHaveBeenCalledWith(
             'e2b-to-invalidate',
             60_000,
             { apiKey: 'test-e2b-key' },
         );
 
-        // Mongo doc deleted after soft-drain
-        expect(leaseRepo.delete).toHaveBeenCalledWith(prKey);
+        // Sandboxes are created with onTimeout: 'pause', so the 60s timeout
+        // above only PAUSES the sandbox. Deleting the lease outright would
+        // leave nothing for the kill crons to find — a paused orphan forever.
+        expect(leaseRepo.delete).not.toHaveBeenCalled();
+        expect(leaseRepo.retire).toHaveBeenCalledWith(
+            prKey,
+            'e2b-to-invalidate',
+            expect.any(Date),
+        );
+        const killAt = leaseRepo.retire.mock.calls[0][2] as Date;
+        expect(killAt.getTime()).toBeGreaterThanOrEqual(before + 60_000);
+    });
 
-        // kill is NOT called synchronously (soft-drain, not immediate kill)
-        expect(Sandbox.kill).not.toHaveBeenCalled();
+    it('creator failure whose Sandbox.kill also fails retires the lease instead of dropping it', async () => {
+        const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:78';
+        leaseRepo.upsertAcquire.mockResolvedValueOnce({
+            _id: prKey,
+            leaseCount: 1,
+            state: 'CREATING',
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        } as any);
+        leaseRepo.updateReady.mockRejectedValueOnce(new Error('mongo down'));
+        (Sandbox.kill as jest.Mock).mockRejectedValueOnce(
+            new Error('TimeoutError'),
+        );
+
+        await expect(
+            manager.acquire(prKey, 'review', undefined, {
+                cloneUrl: 'https://github.com/org/repo.git',
+                branch: 'feature',
+                prNumber: 78,
+                platform: 'GITHUB' as any,
+            }),
+        ).rejects.toThrow('mongo down');
+
+        expect(leaseRepo.retire).toHaveBeenCalledWith(
+            prKey,
+            'mock-sandbox-id',
+            expect.any(Date),
+        );
     });
 
     // ─── Test 4: NullSandbox fallback when provider unavailable ──────────
@@ -690,8 +727,15 @@ describe('SandboxLeaseManager', () => {
             cloneParams,
         );
 
-        // Stale lease was deleted before cold-start
-        expect(leaseRepo.delete).toHaveBeenCalledWith(prKey);
+        // Stale lease was retired (not dropped) before cold-start, so the
+        // idle-kill cron still owns the old sandbox — if it is gone the
+        // kill 404s and the retired doc is removed.
+        expect(leaseRepo.delete).not.toHaveBeenCalled();
+        expect(leaseRepo.retire).toHaveBeenCalledWith(
+            prKey,
+            'dead-sandbox-id',
+            expect.any(Date),
+        );
         // Cold-start succeeded — fresh sandbox created
         expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledWith(
             cloneParams,
