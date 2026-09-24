@@ -399,6 +399,15 @@ describe('ImplementationVerificationProcessor', () => {
                 expect(
                     mockPullRequestManagerService.getChangedFiles,
                 ).not.toHaveBeenCalled();
+                // the skipped check stays traceable per org/PR
+                expect((processor as any).logger.warn).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        metadata: expect.objectContaining({
+                            prNumber: expect.anything(),
+                            repositoryId: expect.anything(),
+                        }),
+                    }),
+                );
             });
 
             it('should complete with NO_PATCH when changed files have no patch content', async () => {

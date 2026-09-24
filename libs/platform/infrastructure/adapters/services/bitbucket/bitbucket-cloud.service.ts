@@ -2494,7 +2494,14 @@ export class BitbucketCloudService implements Omit<
                     serviceName:
                         'BitbucketCloudService getRepositoryContentFile',
                     metadata: {
-                        params,
+                        organizationAndTeamData:
+                            params?.organizationAndTeamData,
+                        repositoryId: params?.repository?.id,
+                        repositoryName: params?.repository?.name,
+                        filePath: params?.file?.filename,
+                        ref:
+                            params?.pullRequest?.head?.ref ||
+                            params?.pullRequest?.base?.ref,
                     },
                 });
                 return null;

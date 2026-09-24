@@ -3919,6 +3919,9 @@ export class GitlabService implements Omit<
                     context: GitlabService.name,
                     serviceName: 'GitlabService getUserByEmailOrNameWithRetry',
                     error: cacheError,
+                    metadata: {
+                        organizationAndTeamData: params.organizationAndTeamData,
+                    },
                 });
             }
         };
@@ -3948,7 +3951,7 @@ export class GitlabService implements Omit<
                     );
                 });
 
-                const userPromise = this.getUserByEmailOrName({
+                const userPromise = this.findUserByEmailOrName({
                     organizationAndTeamData: params.organizationAndTeamData,
                     email: params.email || '',
                     userName: params.userName,
@@ -4000,43 +4003,7 @@ export class GitlabService implements Omit<
         userName: string;
     }): Promise<any | null> {
         try {
-            const { userName, email, organizationAndTeamData } = params;
-
-            if (!email && !userName) {
-                return null;
-            }
-
-            const gitlabAuthDetail = await this.getAuthDetails(
-                organizationAndTeamData,
-            );
-
-            if (!gitlabAuthDetail) {
-                return null;
-            }
-
-            const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
-
-            if (email) {
-                const usersByEmail = await gitlabAPI.Users.all({
-                    search: email,
-                });
-                const exactMatchUserByEmail = usersByEmail.find(
-                    (user) => user.email === email,
-                );
-                if (exactMatchUserByEmail) {
-                    return exactMatchUserByEmail;
-                }
-            }
-
-            if (userName) {
-                const users = await gitlabAPI.Users.all({ search: userName });
-
-                const exactMatchUser = users.find(
-                    (user) => user.name === userName,
-                );
-
-                return exactMatchUser || null;
-            }
+            return await this.findUserByEmailOrName(params);
         } catch (error) {
             this.logger.error({
                 message: `Error retrieving user by email or name: ${params.email || params.userName}`,
@@ -4047,6 +4014,54 @@ export class GitlabService implements Omit<
             });
             return null;
         }
+    }
+
+    /**
+     * null only means "no such user"; a failed search throws, so a caller that
+     * caches the answer can tell the two apart.
+     */
+    private async findUserByEmailOrName(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        email: string;
+        userName: string;
+    }): Promise<any | null> {
+        const { userName, email, organizationAndTeamData } = params;
+
+        if (!email && !userName) {
+            return null;
+        }
+
+        const gitlabAuthDetail = await this.getAuthDetails(
+            organizationAndTeamData,
+        );
+
+        if (!gitlabAuthDetail) {
+            return null;
+        }
+
+        const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
+
+        if (email) {
+            const usersByEmail = await gitlabAPI.Users.all({
+                search: email,
+            });
+            const exactMatchUserByEmail = usersByEmail.find(
+                (user) => user.email === email,
+            );
+            if (exactMatchUserByEmail) {
+                return exactMatchUserByEmail;
+            }
+        }
+
+        if (userName) {
+            const users = await gitlabAPI.Users.all({ search: userName });
+
+            const exactMatchUser = users.find((user) => user.name === userName);
+
+            return exactMatchUser || null;
+        }
+
+        return null;
     }
 
     async getUserByUsername(params: {

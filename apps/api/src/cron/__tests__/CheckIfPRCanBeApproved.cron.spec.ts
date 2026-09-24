@@ -391,4 +391,31 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             });
         }
     });
+    it("approves none of a repository's PRs when its config turns approval off", async () => {
+        const { cron, deps } = makeCron();
+
+        deps.codeBaseConfigService.getConfig.mockResolvedValue({
+            pullRequestApprovalActive: false,
+        });
+        deps.automationExecutionService.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId.mockResolvedValue(
+            [
+                { repositoryId: 'repo-a', pullRequestNumber: 1 },
+                { repositoryId: 'repo-a', pullRequestNumber: 2 },
+            ],
+        );
+        deps.pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+            [makeOpenPr(1, 'repo-a'), makeOpenPr(2, 'repo-a')],
+        );
+        const shouldApproveSpy = jest
+            .spyOn(cron as any, 'shouldApprovePR')
+            .mockResolvedValue(false);
+
+        await cron.handleCron();
+
+        expect(deps.codeBaseConfigService.getConfig).toHaveBeenCalledTimes(1);
+        expect(shouldApproveSpy).not.toHaveBeenCalled();
+        expect(
+            deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+        ).not.toHaveBeenCalled();
+    });
 });

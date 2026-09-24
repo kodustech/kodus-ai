@@ -556,6 +556,8 @@ describe('GitlabService', () => {
     // organization in it — an org could be served another org's GitLab user.
     describe('getUserByEmailOrNameWithRetry cache', () => {
         const store = new Map<string, string>();
+        const ttls = new Map<string, number>();
+        let usersAll: jest.Mock;
         const lookup = (orgId: string) =>
             (service as any).getUserByEmailOrNameWithRetry(
                 {
@@ -569,48 +571,75 @@ describe('GitlabService', () => {
                 1,
                 50,
             );
+        const gitlabUser = (id: number, username: string) => ({
+            id,
+            username,
+            email: 'dev@acme.io',
+            name: 'Dev',
+        });
 
         beforeEach(() => {
             store.clear();
+            ttls.clear();
             cacheService.getFromCache.mockImplementation(async (k: string) =>
                 store.has(k) ? JSON.parse(store.get(k)!) : null,
             );
             cacheService.addToCache.mockImplementation(
-                async (k: string, v: unknown) => {
+                async (k: string, v: unknown, ttl: number) => {
                     store.set(k, JSON.stringify(v));
+                    ttls.set(k, ttl);
                 },
             );
+            Object.defineProperty(service, 'getAuthDetails', {
+                value: jest.fn().mockResolvedValue({
+                    accessToken: 'oauth-token',
+                    authMode: AuthMode.OAUTH,
+                }),
+            });
+            usersAll = jest.fn();
+            mockedGitlab.mockReturnValue({ Users: { all: usersAll } });
         });
 
         it('does not serve one organization the user found for another', async () => {
-            const byEmail = jest
-                .spyOn(service, 'getUserByEmailOrName')
-                .mockResolvedValueOnce({ id: 1, username: 'org-a-user' })
-                .mockResolvedValueOnce({ id: 2, username: 'org-b-user' });
+            usersAll
+                .mockResolvedValueOnce([gitlabUser(1, 'org-a-user')])
+                .mockResolvedValueOnce([gitlabUser(2, 'org-b-user')]);
 
             expect((await lookup('org-a')).username).toBe('org-a-user');
             expect((await lookup('org-b')).username).toBe('org-b-user');
-            expect(byEmail).toHaveBeenCalledTimes(2);
+            expect(usersAll).toHaveBeenCalledTimes(2);
         });
 
         it('remembers a user that does not exist instead of searching again', async () => {
-            const byEmail = jest
-                .spyOn(service, 'getUserByEmailOrName')
-                .mockResolvedValue(null);
+            usersAll.mockResolvedValue([]);
 
             expect(await lookup('org-a')).toBeNull();
             expect(await lookup('org-a')).toBeNull();
-            expect(byEmail).toHaveBeenCalledTimes(1);
+            // one lookup = the email search + the name search
+            expect(usersAll).toHaveBeenCalledTimes(2);
+            expect([...ttls.values()]).toEqual([1800000]);
         });
 
         it('remembers a lookup that timed out instead of paying the timeout again', async () => {
-            const byEmail = jest
-                .spyOn(service, 'getUserByEmailOrName')
-                .mockImplementation(() => new Promise(() => undefined));
+            usersAll.mockImplementation(() => new Promise(() => undefined));
 
             expect(await lookup('org-a')).toBeNull();
             expect(await lookup('org-a')).toBeNull();
-            expect(byEmail).toHaveBeenCalledTimes(1);
+            expect(usersAll).toHaveBeenCalledTimes(1);
+            expect([...ttls.values()]).toEqual([600000]);
+        });
+
+        // A failed search is not an answer: caching it as "not found" for the
+        // full 30 minutes left an existing author unresolved after one blip.
+        it('keeps a failed search only briefly, not as a 30-minute "not found"', async () => {
+            usersAll.mockRejectedValue(
+                Object.assign(new Error('502 Bad Gateway'), {
+                    cause: { response: { status: 502 } },
+                }),
+            );
+
+            expect(await lookup('org-a')).toBeNull();
+            expect([...ttls.values()]).toEqual([600000]);
         });
     });
 });
