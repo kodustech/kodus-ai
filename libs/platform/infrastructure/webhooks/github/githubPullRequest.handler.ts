@@ -9,6 +9,7 @@ import {
     parseReviewDirective,
     isHeavyReviewCommand
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
+import { isNewThreadReply } from '@libs/common/utils/codeManagement/threadReply';
 import { getMappedPlatform } from '@libs/common/utils/webhooks';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { PullRequestClosedEvent } from '@libs/core/domain/events/pull-request-closed.event';
@@ -616,7 +617,8 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                     event === 'issue_comment') &&
                 !hasMarker &&
                 !isStartCommand &&
-                isKodyMentionNonReview(comment.body)
+                (isKodyMentionNonReview(comment.body) ||
+                    isNewThreadReply(PlatformType.GITHUB, event, payload))
             ) {
                 this.chatWithKodyFromGitUseCase.execute(params);
                 return;
