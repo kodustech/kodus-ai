@@ -1,0 +1,90 @@
+Issue #1826 — what step 3 (contextNeed + deterministic retrieval) actually buys
+═══════════════════════════════════════════════════════════════════════════════
+
+Ran 2026-09-08. Corpus: cases-1826-need.json — 5 cases, 5 replicates, paired.
+
+WHY THIS CORPUS EXISTS
+──────────────────────
+cases-1826.json is 100% negative: every correct answer is 0. It proved step 2
+(the claim checker), which can only DROP a finding. It cannot prove step 3 —
+and in fact never exercised it: no case there declares a contextNeed, so
+needOf() falls through to 'diff-only' and retrieveForShard never runs. The
+whole-file content of step 1 is never passed to the judge by that harness
+either. So the headline 15/20 -> 0/20 is attributable to step 2 ALONE.
+
+This corpus is the other direction. Two rules the issue names by hand ("every
+new endpoint has a test", "do not reimplement an existing helper"), each run
+TWICE: once with the need declared, once byte-identical without it. The gap
+between the arms is the value of step 3. Plus one guard where the sibling
+really exists and the correct answer is 0.
+
+MODELS
+──────
+API_OPEN_AI_API_KEY, API_ANTHROPIC_API_KEY and API_GOOGLE_AI_API_KEY all
+answered 401 on this date, so gpt-5.4* and claude-sonnet-4-6 could not run.
+The harness refused to score the dead runs rather than reporting them as zero
+findings, which is the behaviour that guard exists for.
+
+    kimi-k2.7-code@fireworks   -> NEED-1826-kimi.txt
+    deepseek-v4-flash          -> NEED-1826-deepseek.txt
+
+RESULT 1 — DOES THE RULE FIRE AT ALL (recall, 5 replicates per arm)
+───────────────────────────────────────────────────────────────────
+                                        need declared   diff-only CONTROL
+  endpoint with no test anywhere
+    kimi                                     5/5               5/5
+    deepseek                                 5/5               5/5
+  helper that really is duplicated
+    kimi                                     5/5               5/5
+    deepseek                                 5/5               3/5   <-- gap
+  guard: sibling already in the repo (correct answer is 0)
+    kimi                                     0 fired           —
+    deepseek                                 0 fired           —
+
+The recall gap is REAL but MODEL-DEPENDENT. kimi fires the rule with or
+without retrieval; deepseek misses the duplicate rule 2 times in 5 without it.
+This is the same shape #1449 reported for structural coverage: weak models gain
+most. It is exactly why the issue says "per model, never averaged" — a fleet
+average here would report ~10% and hide a 40% miss rate on one model.
+
+Note also what this says about the issue's premise. #1826 states these rules
+"cannot fire correctly". They mostly DO fire. The failure mode is not silence,
+it is unfounded confidence: the model asserts about the repository from an
+empty window and is often right by luck. #1724 is the same assertion when the
+luck runs out.
+
+RESULT 2 — IS THE EVIDENCE REAL (the duplicate rule, path named in the comment)
+───────────────────────────────────────────────────────────────────────────────
+  need declared    8 of 10 name src/shared/strings.ts, the real file, which
+                   reached the prompt through the retrieval grep.
+                   2 of 10 say "src/shared" without the file.
+  diff-only        0 of 8 name the file. 7 say "src/shared" (not actionable —
+                   the developer does not know where to look). 1 fabricated
+                   "src/shared/slugify.ts", a path that does not exist.
+
+This is where step 3 pays, and it is not visible in any count-based metric. A
+comment that names the wrong file is worse than a vague one, and a vague one
+costs the developer the lookup the rule existed to save.
+
+GAP FOUND IN STEP 2 WHILE MEASURING THIS
+────────────────────────────────────────
+claim-checker.ts refute() verifies claimPath only when claimKind === 'missing'.
+The wire schema asks for claimPath on EVERY claim and the model fills it in, so
+an 'unused' or 'duplicate' finding can name a file that does not exist and ship:
+the symbol check passes (the symbol is real), and nothing looks at the path.
+That is the hole the fabricated src/shared/slugify.ts walked through.
+Deterministic to close, costs no tokens.
+
+HARNESS CHANGES MADE FOR THIS RUN
+─────────────────────────────────
+context-fp-repro.js scored only false positives. A positive corpus is failed
+the other way too, so it now counts misses as well. It also mirrors the
+pipeline's dedupKodyRulesByRuleUuid: without it, one true violation reported
+per line scores as eight false positives (kimi did exactly that twice).
+
+LIMITS OF THIS MEASUREMENT
+──────────────────────────
+Five synthetic cases, two models, five replicates. It establishes that the
+recall gap exists on at least one model and that the evidence gap is
+consistent; it does not size either on real customer rules. The fleet models
+named in the issue (gpt-5.4, gpt-5.4-mini) still need a working key.

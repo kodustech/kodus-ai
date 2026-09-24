@@ -44,9 +44,9 @@ export interface SuggestionCountsBySeverity {
     bySeverity: SuggestionSeverityBreakdown;
     // Distinct labels (categories) among the delivered suggestions, lowercased.
     categories: string[];
-    // First DELIVERED (sent) suggestion — deep-link target when the PR list
-    // count is clicked (?file=...&suggestion=... on the review screen). null
-    // when the PR has no delivered suggestion to land on.
+    // Deep-link target when the PR-list count is clicked (?file=...&
+    // suggestion=... on the review screen): the delivered finding that most
+    // wants attention — see deep-link-rank.ts. null when there is none.
     firstSentSuggestion?: { id: string; filePath: string } | null;
 }
 
@@ -193,6 +193,13 @@ export interface IFile {
         generateSuggestions: string;
         safeguard: string;
     };
+    // Unified diff persisted for review context. Written at save-time and
+    // consume a shared aggregate budget so the PR document stays under
+    // MongoDB's 16 MB BSON ceiling; `patchTruncated` marks a diff that was
+    // capped (the patch carries a trailing marker) rather than persisted whole
+    // (#1841).
+    patch?: string;
+    patchTruncated?: boolean;
 }
 
 export interface IPullRequestUser {

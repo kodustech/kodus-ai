@@ -23,7 +23,9 @@ describe("canonicalModelId", () => {
     });
 
     it("strips a provider prefix (last segment after ':')", () => {
-        // Real G1b value: the LangChain path writes `provider:model`.
+        // Real G1b value: BYOK model names are written as `provider:model`
+        // (getModelName, libs/llm/managed-slot.ts) — current format, not a
+        // legacy-engine artifact.
         expect(canonicalModelId("openai_compatible:kimi-k2.7-code")).toBe(
             "kimi-k2.7-code",
         );

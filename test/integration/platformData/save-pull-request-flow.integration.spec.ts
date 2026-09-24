@@ -29,9 +29,9 @@ import {
     PullRequestsSchema,
 } from '@libs/platformData/infrastructure/adapters/repositories/schemas/pullRequests.model';
 import { PullRequestsRepository } from '@libs/platformData/infrastructure/adapters/repositories/pullRequests.repository';
+import { resolveMongoTestGate } from '../mongo-test-uri';
 
-const MONGODB_URI = process.env.TEST_MONGODB_URI || process.env.API_MG_DB_HOST;
-const shouldSkip = !MONGODB_URI;
+const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test');
 
 (shouldSkip ? describe.skip : describe)(
     'SavePullRequestUseCase - Full flow integration (DB cache vs API)',
@@ -112,10 +112,6 @@ const shouldSkip = !MONGODB_URI;
         });
 
         beforeAll(async () => {
-            const mongoUri = MONGODB_URI?.includes('://')
-                ? MONGODB_URI
-                : `mongodb://${MONGODB_URI}:27017/kodus_test`;
-
             mockCodeManagementService = {
                 getFilesByPullRequestId: jest.fn().mockResolvedValue(API_FILES),
                 getCommitsForPullRequestForCodeReview: jest

@@ -394,6 +394,7 @@ jobs:
         # narrower permissions.
         permissions:
             contents: write
+            id-token: write # called workflow reports a quality signal (WIF)
         uses: ./.github/workflows/e2e-cloud.yml
         with:
             image_tag: ${{ github.event.inputs.image_tag || github.sha }}
@@ -438,15 +439,16 @@ jobs:
     benchmark-engine:
         name: Tier-0 model benchmark
         needs: [ build_push_and_open_pr, detect-engine-change ]
-        # DISABLED: superseded by the replay eval suite (code-review-evals.yml),
-        # which runs the same engine + tier-0 models via deterministic tool replay
-        # without a deploy. The live benchmark stays callable via workflow_dispatch
+        # DISABLED: superseded by the replay evals (code-review-evals-nightly.yml
+        # for quality, code-review-evals-tier0.yml per model), which run the same
+        # engine via deterministic tool replay without a deploy. The live benchmark stays callable via workflow_dispatch
         # as a fallback; this auto-trigger is gated off (set back to the condition
         # below to re-enable).
         # if: needs.build_push_and_open_pr.result == 'success' && needs.detect-engine-change.outputs.engine == 'true'
         if: false
         permissions:
             contents: read
+            id-token: write # called workflow reports a quality signal (WIF)
         uses: ./.github/workflows/code-review-model-benchmark.yml
         secrets: inherit
 

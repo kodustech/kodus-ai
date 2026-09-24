@@ -47,6 +47,20 @@ const SEVERITY_SCALE: Record<string, number> = {
  */
 export const REDUCER_ENABLED = true;
 
+/** Sobrescreve `REDUCER_ENABLED` — existe SO para teste.
+ *
+ *  O dedup nao virou codigo morto quando o reducer entrou: ele e o caminho de
+ *  fallback se a flag cair, e foi um bug nele que o #1786 registrou. Sem um
+ *  jeito de forca-lo, aquela rede de seguranca passaria a testar um estagio que
+ *  nao roda mais, e ninguem perceberia que ela parou de proteger alguma coisa. */
+let reducerEnabledOverride: boolean | undefined;
+export function setReducerEnabledForTests(v: boolean | undefined): void {
+    reducerEnabledOverride = v;
+}
+export function isReducerEnabled(): boolean {
+    return reducerEnabledOverride ?? REDUCER_ENABLED;
+}
+
 /** Quantos comentarios, no maximo, por PR. */
 export const REDUCER_QUOTA = 7;
 

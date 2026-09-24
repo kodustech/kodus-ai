@@ -1,0 +1,33 @@
+{
+    "__doc": [
+        "POSITIVE CONTROL for issue #1831. The fix is only worth anything if the",
+        "judge rejects false positives WITHOUT also rejecting true ones — a",
+        "pipeline that publishes nothing would score perfectly on the repro and",
+        "be useless in production.",
+        "",
+        "So: a rule that is genuinely mechanical and genuinely violated. Run it",
+        "against github-cases (real merged PRs into TS/TSX repos, where these",
+        "console calls really were added):",
+        "",
+        "  node evals/kody-rules/detector-fp-repro.js \\",
+        "    --rules=detectors-positive-control --corpus=github-cases --judge",
+        "",
+        "Expected: candidates ≈ published. A large drop here is the fix",
+        "over-correcting, and is a regression."
+    ],
+    "detectors": [
+        {
+            "uuid": "no-console",
+            "title": "No console.* in application code",
+            "rule": "Never use console.log/console.error/console.warn/console.debug in application code. Use the structured logger so output is levelled, searchable and redactable.",
+            "path": "",
+            "language": "typescript",
+            "expectedExtensions": [".ts", ".tsx", ".js", ".jsx", ".mjs"],
+            "detector": {
+                "type": "regex",
+                "pattern": "\\bconsole\\.(log|warn|error|debug)\\s*\\(",
+                "compiledBy": "byok"
+            }
+        }
+    ]
+}

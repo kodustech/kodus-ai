@@ -78,6 +78,15 @@ export class DocumentationSearchExaService {
         this.exaClient = apiKey ? new Exa(apiKey) : null;
     }
 
+    /**
+     * The search backend is usable only when an Exa API key is configured.
+     * Exposed so the agent-facing tool can say "search is unavailable" instead
+     * of "no documentation found" when it never ran (#1762).
+     */
+    isSearchAvailable(): boolean {
+        return this.exaClient !== null;
+    }
+
     async searchByFilePlan(
         planByFile: Record<string, DocumentationQueryPlanByFile>,
         options?: {

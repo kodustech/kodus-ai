@@ -1,6 +1,17 @@
 import type { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import type { OrchestratorInput } from '@libs/code-review/infrastructure/agents/review-orchestrator.service';
+import { buildRepoLookup } from '@libs/code-review/infrastructure/agents/collaborators/repo-lookup';
+import { createLogger } from '@libs/core/log/logger';
 import { trialDefaultModel } from '@libs/llm/byok-to-vercel';
+
+/**
+ * Module-scoped logger. Used by `buildRepoLookup` (the lookup disables itself
+ * mid-review when it catches an empty read under reported availability —
+ * KRC-22 — and without a logger here that flip would happen in silence, the
+ * same failure mode the lookup exists to expose) and by this function's own
+ * commit-threading log line below.
+ */
+const moduleLogger = createLogger('build-orchestrator-input');
 
 /**
  * The stage-computed locals that the orchestrator input needs on top of the
@@ -43,6 +54,36 @@ export function buildOrchestratorInput(
     context: CodeReviewPipelineContext,
     computed: OrchestratorInputComputed,
 ): OrchestratorInput {
+    // Commit list (oldest→newest) so commit-hygiene rules can be judged
+    // against real commit boundaries, and so the finder/verifier can
+    // correlate a PreviousReviewDecision's DecidedAt against what has
+    // actually landed since (issue #1313 follow-up). prAllCommits covers
+    // the whole PR; fall back to prCommits (new-since-last) when absent.
+    //
+    // Reads BOTH the nested `commit.message`/`commit.author.date` shape the
+    // `Commit` type declares AND a flat `message`/`created_at` shape — a live
+    // e2e run surfaced that GitHub's own
+    // `getCommitsForPullRequestForCodeReview` returns the latter (confirmed:
+    // `c.commit` is undefined there), so reading only the nested path
+    // silently produced an empty commit message for every entry. Fixing that
+    // provider method touches a shared, differently-shaped call site
+    // (platformData PR persistence) — out of scope here; this fallback makes
+    // the two callers of `commits` below correct regardless of which shape a
+    // given platform's implementation happens to return.
+    const commits = (context.prAllCommits ?? context.prCommits)?.map(
+        (c: any) => ({
+            sha: c.sha,
+            message: c.commit?.message ?? c.message ?? '',
+            date: c.commit?.author?.date ?? c.created_at,
+        }),
+    );
+    if (commits?.length) {
+        moduleLogger.log({
+            message: `Threaded ${commits.length} commit(s) into the orchestrator input for PR#${computed.prNumber}`,
+            context: 'buildOrchestratorInput',
+        });
+    }
+
     return {
         organizationAndTeamData: context.organizationAndTeamData,
         changedFiles: computed.changedFiles,
@@ -50,6 +91,13 @@ export function buildOrchestratorInput(
         // mode). The agent loop detects the empty-tools case and switches to a
         // self-contained analysis variant.
         remoteCommands: context.sandboxHandle?.remoteCommands as any,
+        // The SAME sandbox handle, read for its capability instead of its
+        // commands (issue #1826). remoteCommands cannot say "there is no repo
+        // to look at" — the null sandbox implements it and answers '' with
+        // success — so a consumer that needs to distinguish "found nothing"
+        // from "could not look" reads this instead. Always built, so a
+        // consumer never has to guess what an absent field meant.
+        repoLookup: buildRepoLookup(context.sandboxHandle, moduleLogger),
         prNumber: computed.prNumber,
         repositoryId: computed.repositoryId,
         repositoryFullName:
@@ -60,18 +108,13 @@ export function buildOrchestratorInput(
             context.codeReviewConfig?.languageResultPrompt || 'en-US',
         memoryRules: context.codeReviewConfig?.kodyMemoryRules,
         traceDecisions: context.traceDecisions,
+        previousDecisions: context.previousDecisions,
         v2PromptOverrides: context.codeReviewConfig?.v2PromptOverrides,
         generationMain:
             context.codeReviewConfig?.v2PromptOverrides?.generation?.main,
         prTitle: context.pullRequest?.title,
         prBody: context.pullRequest?.body,
-        // Commit list (oldest→newest) so commit-hygiene rules can be judged
-        // against real commit boundaries. prAllCommits covers the whole PR; fall
-        // back to prCommits (new-since-last) when absent.
-        commits: (context.prAllCommits ?? context.prCommits)?.map((c) => ({
-            sha: c.sha,
-            message: c.commit?.message ?? '',
-        })),
+        commits,
         // Free-text steering directive from `@kody review <directive>`.
         reviewDirective: context.reviewDirective,
         kodyRules: computed.kodyRules ?? context.codeReviewConfig?.kodyRules,

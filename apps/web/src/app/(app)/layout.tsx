@@ -114,6 +114,11 @@ export default async function Layout({ children }: React.PropsWithChildren) {
     // Surface it from the LLM config so the trial UI (badge/banner/card)
     // reflects "unlimited with your key".
     const hasByokKey = Boolean(llmConfigStatus?.byok?.configured);
+    // A configured model on the Kodus provider makes the prepaid balance
+    // load-bearing (gate + banner). Local config decides, never billing.
+    const usesKodusProvider = Boolean(
+        llmConfigStatus?.models?.some((m) => m.providerId === "kodus"),
+    );
     const isTrial = organizationLicense?.subscriptionStatus === "trial";
     const isEnterprise = organizationLicense
         ? isEnterprisePlan(organizationLicense)
@@ -160,7 +165,8 @@ export default async function Layout({ children }: React.PropsWithChildren) {
                               numberOfLicenses: 0,
                           }
                 }
-                usersWithAssignedLicense={usersWithAssignedLicense}>
+                usersWithAssignedLicense={usersWithAssignedLicense}
+                usesKodusProvider={usesKodusProvider}>
                 <NavMenu />
                 <FinishedTrialModal />
                 <CriticalNotificationBanner />

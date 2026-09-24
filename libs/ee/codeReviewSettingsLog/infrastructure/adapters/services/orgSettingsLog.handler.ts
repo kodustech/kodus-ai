@@ -207,11 +207,87 @@ export class OrgSettingsLogHandler {
         return changes;
     }
 
+    /**
+     * Project a BYOK config onto the `{main, fallback}` slots this audit diff
+     * is written against.
+     *
+     * v2 stores credentials and models in flat arrays joined by id, with
+     * `routing` naming which model is which. The two slots are therefore a
+     * derived view, not a stored one — and they are derived from ROUTING, never
+     * from array position: an organization can carry a second model with no
+     * fallback selected, and that is not a fallback.
+     *
+     * A pre-v2 blob is already in this shape and passes through untouched, so
+     * historical rows (anything saved before 2026-07-29) still diff correctly.
+     */
+    private projectByokSlots(config: any): {
+        main?: Record<string, unknown>;
+        fallback?: Record<string, unknown>;
+    } {
+        if (!config || typeof config !== 'object') {
+            return {};
+        }
+
+        if (config.version !== 2) {
+            return config;
+        }
+
+        const credentials = new Map<string, any>(
+            (config.credentials ?? [])
+                .filter((c: any) => c?.id)
+                .map((c: any) => [c.id, c]),
+        );
+        const models = new Map<string, any>(
+            (config.models ?? [])
+                .filter((m: any) => m?.id)
+                .map((m: any) => [m.id, m]),
+        );
+
+        const slot = (modelId?: string) => {
+            const model = modelId ? models.get(modelId) : undefined;
+            if (!model) {
+                return undefined;
+            }
+            const credential = credentials.get(model.credentialId);
+            const settings = credential?.settings ?? {};
+
+            return {
+                provider: credential?.provider,
+                // Ciphertext, carried only so the diff can notice a rotation.
+                // The field list below never logs it, and the key comparison
+                // reports THAT it changed, never what it changed to.
+                apiKey: credential?.apiKey,
+                model: model.model,
+                baseURL: settings.baseURL,
+                reasoningEffort: model.reasoningEffort,
+                temperature: model.temperature,
+                maxInputTokens: model.maxInputTokens,
+                maxOutputTokens: model.maxOutputTokens,
+                maxConcurrentRequests: model.maxConcurrentRequests,
+                rpm: model.rpm,
+                tpm: model.tpm,
+                cooldownMs: model.cooldownMs,
+            };
+        };
+
+        return {
+            main: slot(config.routing?.defaultModelId),
+            fallback: slot(config.routing?.fallbackModelId),
+        };
+    }
+
     private generateByokChanges(
-        previous: any,
-        current: any,
+        rawPrevious: any,
+        rawCurrent: any,
         userEmail: string,
     ): ChangedDataToExport[] {
+        // The stored config moved to v2 on 2026-07-29 and this diff still read
+        // `{main, fallback}`, so both sides resolved to undefined and every BYOK
+        // change went unrecorded -- the audit trail simply stopped, which reads
+        // exactly like nobody touching anything.
+        const previous = this.projectByokSlots(rawPrevious);
+        const current = this.projectByokSlots(rawCurrent);
+
         const changes: ChangedDataToExport[] = [];
         const slots: Array<{ key: string; label: string }> = [
             { key: 'main', label: 'Main' },
@@ -223,6 +299,13 @@ export class OrgSettingsLogHandler {
             { key: 'model', label: 'Model' },
             { key: 'baseURL', label: 'Base URL' },
             { key: 'disableReasoning', label: 'Disable Reasoning' },
+            // v2-only knobs. They decide how hard a key is driven and how much
+            // it can spend, so a change to one belongs in the same trail as a
+            // change of provider.
+            { key: 'reasoningEffort', label: 'Reasoning Effort' },
+            { key: 'rpm', label: 'Requests Per Minute' },
+            { key: 'tpm', label: 'Tokens Per Minute' },
+            { key: 'cooldownMs', label: 'Rate-Limit Cooldown' },
             { key: 'temperature', label: 'Temperature' },
             { key: 'maxInputTokens', label: 'Max Input Tokens' },
             { key: 'maxConcurrentRequests', label: 'Max Concurrent Requests' },

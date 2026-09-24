@@ -102,6 +102,14 @@ interface PullRequestFinishSummaryMarkdown {
      * en-US when missing.
      */
     partialErrorsNotice?: string;
+    /**
+     * Collapsible notice appended to the end-review comment when Kody Rules
+     * were not judged because the repository context they declared they need
+     * could not be retrieved (issue #1826). Must include the `{{count}}` and
+     * `{{ruleTitles}}` placeholders. Optional; the resolver falls back to
+     * en-US when missing.
+     */
+    skippedRulesNotice?: string;
 }
 
 interface PullRequestSummaryMarkdown {

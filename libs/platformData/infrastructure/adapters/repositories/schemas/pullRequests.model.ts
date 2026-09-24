@@ -72,6 +72,7 @@ export class PullRequestsModel extends CoreDocument {
         added?: number;
         deleted?: number;
         changes?: number;
+        patchTruncated?: boolean;
         reviewMode: ReviewModeResponse;
         codeReviewModelUsed: {
             generateSuggestions: string;
@@ -199,6 +200,17 @@ PullRequestsSchema.index(
 PullRequestsSchema.index(
     { 'number': 1, 'repository.name': 1, 'organizationId': 1 },
     { name: 'idx_number_repo_name_org' },
+);
+
+// PR Decision Memory (issue #1313): findSuggestionsByPRAndFilenames and
+// findPrLevelSuggestionsByPR run on EVERY review round of EVERY PR, matching
+// on repository.fullName (not .name/.id) because that's the only stable repo
+// identifier the review pipeline context carries at that stage. Without this
+// index those two aggregations fall back to a collection scan. Create with
+// `{ background: true }` on large prod collections.
+PullRequestsSchema.index(
+    { 'number': 1, 'repository.fullName': 1, 'organizationId': 1 },
+    { name: 'idx_number_repo_fullname_org' },
 );
 
 // Watermark da ingestão analítica varre por `(updatedAt, _id)` ASC como

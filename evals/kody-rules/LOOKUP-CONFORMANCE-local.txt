@@ -1,0 +1,32 @@
+provider: local   repo: https://github.com/octocat/Hello-World.git#master
+
+sandbox.type = local
+lookup.available = true
+
+THE CONTRACT: exists() must return false for a real absence and THROW
+when it could not look. A parent directory that does not exist is a
+real absence, not a failure — it is the ordinary case for a sibling
+candidate like <dir>/__tests__/<name>.
+
+  exists("README")            [file that exists]       -> true
+  exists("nope.txt")          [absent, parent EXISTS]  -> false
+  exists("__tests__/x.ts")    [absent, parent MISSING] -> false
+  exists("a/b/c/d.ts")        [absent, deep missing]   -> false
+
+  grep("Hello")               [expect matches]         -> "./README:1:Hello World!\n"
+  grep("zzz-no-such-symbol")  [expect no matches]      -> ""
+
+  read("README", 1, 3)                                 -> "Hello World!\n"
+  read("nope.txt", 1, 3)      [absent file]            -> THREW ENOENT: no such file or directory, lstat '/var/folders/32/4gr5mjmn7m11dbz4k8nsfgvr0000gn/T/kodus-sandbox-eNv4i
+
+CONTRACT CHECKS
+  PASS  exists() is true for a file that is there
+  PASS  exists() is false when the parent lists and the file is absent
+  PASS  exists() is false when the parent directory is missing
+  PASS  exists() is false for a deeply absent path
+  PASS  grep() returns repo-relative paths, never absolute
+  PASS  grep() empty answer is recognised by grepIsEmpty
+  PASS  grep() non-empty answer is NOT recognised as empty
+  PASS  read() of an absent file raises rather than answering empty
+
+RESULT: contract honoured on provider "local"

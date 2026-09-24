@@ -372,6 +372,44 @@ describe('ImplementationVerificationProcessor', () => {
                 );
             });
 
+            // getPullRequestDetails returns null when the provider can't serve
+            // the PR (deleted, dead credentials); `platformPr.number = …` then
+            // threw "Cannot set properties of null" and the job failed.
+            it('should complete with PLATFORM_PR_NOT_FOUND when the provider returns no PR', async () => {
+                const job = createMockJob();
+                const pr = createMockPR();
+
+                mockJobRepository.findOne.mockResolvedValue(job);
+                mockPullRequestsService.findOne.mockResolvedValue(pr);
+                mockTeamAutomationService.find.mockResolvedValue([]);
+                mockPullRequestManagerService.getPullRequestDetails.mockResolvedValue(
+                    null,
+                );
+
+                await processor.process('job-123');
+
+                expect(mockJobRepository.update).toHaveBeenCalledWith(
+                    'job-123',
+                    {
+                        status: JobStatus.COMPLETED,
+                        completedAt: expect.any(Date),
+                        result: { reason: 'PLATFORM_PR_NOT_FOUND' },
+                    },
+                );
+                expect(
+                    mockPullRequestManagerService.getChangedFiles,
+                ).not.toHaveBeenCalled();
+                // the skipped check stays traceable per org/PR
+                expect((processor as any).logger.warn).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        metadata: expect.objectContaining({
+                            prNumber: expect.anything(),
+                            repositoryId: expect.anything(),
+                        }),
+                    }),
+                );
+            });
+
             it('should complete with NO_PATCH when changed files have no patch content', async () => {
                 const job = createMockJob();
                 const pr = createMockPR();

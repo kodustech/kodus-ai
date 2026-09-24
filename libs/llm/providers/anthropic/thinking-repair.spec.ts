@@ -12,6 +12,15 @@ const jsonResponse = (body: unknown) =>
         headers: { 'content-type': 'application/json; charset=utf-8' },
     });
 
+/**
+ * What these tests read off the repaired body. `Response.json()` is typed
+ * `Promise<unknown>`, so the shape has to be stated rather than assumed —
+ * naming it here keeps that statement in one place instead of three casts.
+ */
+interface AnthropicBody {
+    content: Array<Record<string, unknown>>;
+}
+
 describe('withThinkingSignatureRepair', () => {
     it('injects an empty signature into an unsigned thinking block', async () => {
         const upstream = {
@@ -26,7 +35,7 @@ describe('withThinkingSignatureRepair', () => {
         );
 
         const res = await wrapped('https://api.moonshot.ai/anthropic/v1/messages');
-        const parsed = await res.json();
+        const parsed = (await res.json()) as AnthropicBody;
 
         expect(parsed.content[0]).toEqual({
             type: 'thinking',
@@ -48,9 +57,9 @@ describe('withThinkingSignatureRepair', () => {
             jsonResponse(upstream),
         );
 
-        const parsed = await (
+        const parsed = (await (
             await wrapped('https://api.anthropic.com/v1/messages')
-        ).json();
+        ).json()) as AnthropicBody;
 
         expect(parsed.content[0].signature).toBe('real-sig');
     });
@@ -75,9 +84,9 @@ describe('withThinkingSignatureRepair', () => {
             jsonResponse(upstream),
         );
 
-        const parsed = await (
+        const parsed = (await (
             await wrapped('https://api.moonshot.ai/anthropic/v1/messages')
-        ).json();
+        ).json()) as AnthropicBody;
 
         expect(parsed).toEqual(upstream);
     });

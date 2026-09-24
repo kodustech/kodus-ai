@@ -97,6 +97,99 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
             lineComments,
         );
     });
+
+    // KRC-16 (#1826): a Kody Rule skipped for unsatisfied context is reported to
+    // the PR through context.reviewWarnings. Verifier round 2 severed all three
+    // passes of that argument and the whole suite stayed green — the wiring
+    // existed and nothing held it, and the parameter is optional so the compiler
+    // could not see it either. This pins the seam.
+    it('forwards context.reviewWarnings to updateOverallComment (KRC-16)', async () => {
+        const { stage, commentManagerService } = makeStage();
+        const reviewWarnings = [
+            {
+                kind: 'RULE_CONTEXT_UNAVAILABLE',
+                reason: 'lookup_unavailable',
+                contextWindowTokens: 0,
+                modelName: 'test-model',
+                detail: '1 rule not evaluated: No unused imports',
+            },
+        ];
+        const context = baseContext({ reviewWarnings });
+
+        await (stage as any).executeStage(context);
+
+        expect(
+            commentManagerService.updateOverallComment,
+        ).toHaveBeenCalledTimes(1);
+        const args = commentManagerService.updateOverallComment.mock.calls[0];
+        expect(args[args.length - 1]).toEqual(reviewWarnings);
+    });
+
+    // The stage forwards the warnings from THREE call sites, one per message
+    // configuration. Severing all three left the suite green in Verifier round
+    // 2, so each branch gets its own guard: covering one would leave the other
+    // two free to drop the argument silently.
+    it('forwards context.reviewWarnings when no end-review message is configured (KRC-16)', async () => {
+        const { stage, commentManagerService } = makeStage();
+        const reviewWarnings = [
+            {
+                kind: 'RULE_CONTEXT_UNAVAILABLE',
+                reason: 'lookup_unavailable',
+                contextWindowTokens: 0,
+                modelName: 'test-model',
+                detail: '1 rule not evaluated: No unused imports',
+            },
+        ];
+        const context = baseContext({
+            reviewWarnings,
+            pullRequestMessagesConfig: {
+                startReviewMessage: {
+                    status: PullRequestMessageStatus.ACTIVE,
+                    content: 'Review started',
+                },
+                endReviewMessage: undefined,
+            },
+        });
+
+        await (stage as any).executeStage(context);
+
+        const args = commentManagerService.updateOverallComment.mock.calls[0];
+        expect(args[args.length - 1]).toEqual(reviewWarnings);
+    });
+
+    it('forwards context.reviewWarnings on the createComment branch (KRC-16)', async () => {
+        const { stage, commentManagerService } = makeStage();
+        const reviewWarnings = [
+            {
+                kind: 'RULE_CONTEXT_UNAVAILABLE',
+                reason: 'lookup_unavailable',
+                contextWindowTokens: 0,
+                modelName: 'test-model',
+                detail: '2 rules not evaluated',
+            },
+        ];
+        // end ACTIVE + start OFF is the configuration that posts a fresh
+        // comment instead of updating the sticky one.
+        const context = baseContext({
+            reviewWarnings,
+            pullRequestMessagesConfig: {
+                startReviewMessage: {
+                    status: PullRequestMessageStatus.OFF,
+                    content: 'Review started',
+                },
+                endReviewMessage: {
+                    status: PullRequestMessageStatus.ACTIVE,
+                    content: 'Done!',
+                },
+            },
+        });
+
+        await (stage as any).executeStage(context);
+
+        expect(commentManagerService.createComment).toHaveBeenCalledTimes(1);
+        const args = commentManagerService.createComment.mock.calls[0];
+        expect(args[args.length - 1]).toEqual(reviewWarnings);
+    });
 });
 
 describe('UpdateCommentsAndGenerateSummaryStage - Trace pack forwarding', () => {
@@ -239,11 +332,14 @@ describe('UpdateCommentsAndGenerateSummaryStage - frozen-context error recording
         );
     });
 
-    // The recorded error has to reach BOTH downstream readers, or a failed
-    // summary is indistinguishable from a clean review: the approve gate
-    // (which reads errors[].severity) and the end-review comment (which is
-    // rendered by this same stage, AFTER the summary attempt).
-    it('marks the summary failure as partial so the approve gate holds back', async () => {
+    // The recorded error still has severity 'partial' — a summary failure is
+    // never 'critical' — but as of #1844 this alone no longer holds back the
+    // approve gate (RequestChangesOrApproveStage excludes
+    // SUMMARY_GENERATION_FAILED_REASON specifically); severity stays 'partial'
+    // so a summary failure co-occurring with something else still counts
+    // there. See finish-process-review.stage.spec.ts for the approve-gate
+    // behavior itself.
+    it('marks the summary failure as partial (not critical)', async () => {
         const { stage } = makeStage();
 
         const result = await (stage as any).executeStage(summaryFailContext());
@@ -265,18 +361,49 @@ describe('UpdateCommentsAndGenerateSummaryStage - frozen-context error recording
         expect(result.lastReviewError?.friendlyMessage).toBeTruthy();
     });
 
-    it('tells the end-review comment about a failure recorded by its own summary attempt', async () => {
+    it('does NOT flag reviewHasPartialErrors for a summary-only failure (#1844)', async () => {
         const { stage, commentManagerService } = makeStage();
 
         await (stage as any).executeStage(summaryFailContext());
 
         // updateOverallComment(..., reviewFailed, reviewErrorMessage,
-        // reviewHasPartialErrors, reviewErrorCustomMessage). These flags used
-        // to be read once at stage entry — before the summary ran — so a failed
-        // summary still rendered "review completed" (#1568).
-        // Index shifted by -1 after the dry-run parameter (formerly arg 10)
-        // was removed together with the dry-run feature; reviewHasPartialErrors
-        // is now the 13th arg (0-indexed 12) instead of the 14th.
+        // reviewHasPartialErrors, reviewErrorCustomMessage). Index shifted by
+        // -1 after the dry-run parameter (formerly arg 10) was removed
+        // together with the dry-run feature; reviewHasPartialErrors is now
+        // the 13th arg (0-indexed 12) instead of the 14th.
+        //
+        // Was `true` before #1844: RequestChangesOrApproveStage no longer
+        // blocks auto-approve on a summary-only failure (the real review
+        // output already posted several stages earlier), so the
+        // "...so auto-approval was skipped" notice would be false for this
+        // case if it fired — an approved PR would ship a comment claiming
+        // approval was skipped. See the next test for the case where a
+        // summary failure co-occurs with a REAL partial error.
+        const args = commentManagerService.updateOverallComment.mock.calls[0];
+        expect(args[12]).toBe(false); // reviewHasPartialErrors
+    });
+
+    it('still flags reviewHasPartialErrors when a summary failure co-occurs with an unrelated partial error (#1568 regression guard)', async () => {
+        const { stage, commentManagerService } = makeStage();
+        const priorError = {
+            stage: 'earlier-stage',
+            error: new Error('earlier'),
+            severity: 'partial' as const,
+            metadata: { reason: 'earlier_failure' },
+        };
+        const ctx = frozenContext({
+            ...summaryFailContext(),
+            errors: [priorError],
+        } as any);
+
+        // Proves the closure still re-reads fresh errors at render time
+        // (#1568) — the summary's OWN error is excluded from the flag, but
+        // the pre-existing, unrelated partial error is not, so the notice
+        // still fires. Reading `errors` once at stage entry (the #1568 bug)
+        // would have missed this too, since summaryFailContext's own error is
+        // added AFTER entry.
+        await (stage as any).executeStage(ctx);
+
         const args = commentManagerService.updateOverallComment.mock.calls[0];
         expect(args[12]).toBe(true); // reviewHasPartialErrors
     });

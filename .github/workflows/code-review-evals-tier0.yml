@@ -1,0 +1,184 @@
+name: "Evals: tier-0 smoke (Friday release)"
+
+# Does every tier-0 model still run a review? Asked Friday with the release
+# train, so the answer is in Discord before the 10h release meeting.
+#
+# One replayed PR per model, no judge: the real finder must finish, use its
+# tools and return findings, and the PR summary must generate, post and route.
+# Quality is the nightly's job (one model, thirty PRs); what differs per model
+# is whether the agent loop still works on it — tool calling, structured output,
+# reasoning params — which the contract tests' single-step calls do not reach.
+#
+# A red model is a per-model decision (hold it, fall back, tell the customers on
+# it), not a reason to stop the whole release.
+#
+# Models: tier0() in evals/shared/tier0-models.js.
+# Secrets (repo-level): BYOK_OPENAI_API_KEY, BYOK_ANTHROPIC_API_KEY,
+# BYOK_GOOGLE_API_KEY, BYOK_MOONSHOT_API_KEY, BYOK_ZHIPU_API_KEY,
+# DISCORD_WEBHOOK_TESTS (falls back to DISCORD_WEBHOOK_INTERNAL / DISCORD_WEBHOOK).
+# BYOK_ANTHROPIC_API_KEY answered 401 until it was rotated on 2026-09-17; the
+# smoke reported claude-sonnet-4-6 as infra the whole time, which is it working.
+
+permissions:
+    contents: read
+    actions: read
+    id-token: write # quality signal (report-signal action, WIF)
+
+on:
+    schedule:
+        # Friday 03:00 UTC = 00:00 BRT — same slot as the release train
+        # (selfhosted-build-push.yml).
+        - cron: "0 3 * * 5"
+    workflow_dispatch:
+        inputs:
+            only_model:
+                description: "One tier-0 model id (e.g. gpt-5.4); empty = all tier-0"
+                required: false
+                default: ""
+                type: string
+
+concurrency:
+    group: code-review-evals-tier0
+    cancel-in-progress: false
+
+jobs:
+    prepare:
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        outputs:
+            models: ${{ steps.pick.outputs.models }}
+        steps:
+            - uses: actions/checkout@v6.0.2
+            - id: pick
+              env:
+                  ONLY_MODEL: ${{ inputs.only_model }}
+              # tier0-models.js is dependency-free CJS, so no install is needed.
+              run: |
+                  if [ -n "$ONLY_MODEL" ]; then
+                      models=$(node -e 'console.log(JSON.stringify([process.env.ONLY_MODEL]))')
+                  else
+                      models=$(node -e 'console.log(JSON.stringify(require("./evals/shared/tier0-models").tier0()))')
+                  fi
+                  test "$models" != "[]" || { echo "::error::no model is marked tier0 in evals/shared/tier0-models.js"; exit 1; }
+                  echo "models=$models" >> "$GITHUB_OUTPUT"
+                  echo "models: $models"
+
+    smoke:
+        needs: prepare
+        name: "smoke · ${{ matrix.model }}"
+        runs-on: ubuntu-latest
+        # Kimi and GLM throttle long tool loops (~15 min for one case).
+        timeout-minutes: 45
+        strategy:
+            fail-fast: false
+            matrix:
+                model: ${{ fromJSON(needs.prepare.outputs.models) }}
+        steps:
+            - uses: actions/checkout@v6.0.2
+            - uses: pnpm/action-setup@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+                  cache: "pnpm"
+            - name: Install deps
+              run: pnpm install --frozen-lockfile
+            - name: Create environment.ts (gitignored EE config)
+              run: |
+                  cat <<'EOF' > libs/ee/configs/environment/environment.ts
+                  import { environment as devEnvironment } from './environment.dev';
+
+                  export const environment = devEnvironment;
+                  EOF
+            - name: Review + PR summary on ${{ matrix.model }}
+              env:
+                  BYOK_OPENAI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+                  BYOK_ANTHROPIC_API_KEY: ${{ secrets.BYOK_ANTHROPIC_API_KEY }}
+                  BYOK_GOOGLE_API_KEY: ${{ secrets.BYOK_GOOGLE_API_KEY }}
+                  BYOK_MOONSHOT_API_KEY: ${{ secrets.BYOK_MOONSHOT_API_KEY }}
+                  BYOK_ZHIPU_API_KEY: ${{ secrets.BYOK_ZHIPU_API_KEY }}
+              run: node evals/tier0-smoke.js --model="${{ matrix.model }}"
+            - name: Tier-0 result (for the quality signal)
+              id: t0
+              if: always()
+              run: |
+                  node -e "
+                    const fs = require(\"fs\"); const dir = \"evals/investigation/results\";
+                    const out = (k, v) => fs.appendFileSync(process.env.GITHUB_OUTPUT, k + \"=\" + v + \"\\n\");
+                    const file = fs.existsSync(dir) ? fs.readdirSync(dir).find((n) => n.startsWith(\"tier0-smoke-\") && n.endsWith(\".json\")) : null;
+                    if (!file) { out(\"status\", \"infra\"); out(\"value\", \"\"); out(\"meta\", JSON.stringify({ note: \"no tier0 result file\" })); process.exit(0); }
+                    const r = JSON.parse(fs.readFileSync(dir + \"/\" + file, \"utf8\"));
+                    const map = { pass: \"green\", infra: \"infra\", broken: \"red\" };
+                    const summary = (r.prSummary && r.prSummary.status) || \"skipped\";
+                    const status = r.status === \"pass\" && summary === \"broken\" ? \"red\" : map[r.status] || \"infra\";
+                    out(\"status\", status); out(\"value\", r.seconds == null ? \"\" : String(Math.round(r.seconds * 1000)));
+                    out(\"meta\", JSON.stringify({ review: r.status, pr_summary: summary, reason: r.reason || null, findings: r.findings, tool_calls: r.toolCalls, retried: !!r.retried }));
+                  "
+
+            - name: Report quality signal
+              if: always()
+              uses: ./.github/actions/report-signal
+              with:
+                  name: evals.tier0.${{ matrix.model }}
+                  status: ${{ steps.t0.outputs.status || 'infra' }}
+                  value: ${{ steps.t0.outputs.value }}
+                  unit: ms
+                  meta: ${{ steps.t0.outputs.meta }}
+                  gcp_wif_provider: ${{ vars.GCP_WIF_PROVIDER }}
+                  gcp_sa_email: ${{ vars.GCP_SA_EMAIL }}
+                  gcp_project: ${{ vars.GCP_PROJECT }}
+
+            - name: Upload result
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: tier0-smoke-${{ strategy.job-index }}
+                  path: evals/investigation/results/tier0-smoke-*.json
+                  if-no-files-found: ignore
+                  retention-days: 30
+
+    report:
+        needs: [prepare, smoke]
+        if: always() && needs.prepare.result == 'success'
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        steps:
+            - uses: actions/checkout@v6.0.2
+            # Every leg dying before its upload (a broken lockfile takes all
+            # five at once) is the week that most needs the message, and
+            # download-artifact fails the step when nothing matches. ci-report
+            # reads a missing directory as "no result" per model.
+            - uses: actions/download-artifact@v4
+              continue-on-error: true
+              with:
+                  pattern: tier0-smoke-*
+                  merge-multiple: true
+                  path: tier0-results
+            # Last run's results, so a failure that hasn't changed since last week
+            # reads as "same as last week" instead of looking new.
+            - name: Previous run
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  mkdir -p previous
+                  prev=$(gh run list -R "$GITHUB_REPOSITORY" --workflow code-review-evals-tier0.yml --branch main \
+                      --status completed --limit 10 --json databaseId --jq '.[].databaseId' | grep -v "^${GITHUB_RUN_ID}$" | head -1 || true)
+                  if [ -n "$prev" ]; then
+                      gh run download "$prev" -R "$GITHUB_REPOSITORY" -p 'tier0-smoke-*' -D previous-raw || true
+                      find previous-raw -name 'tier0-smoke-*.json' -exec cp {} previous/ \; 2>/dev/null || true
+                  fi
+            - name: Report
+              id: report
+              env:
+                  EVAL_MODELS: ${{ needs.prepare.outputs.models }}
+              run: node evals/ci-report.js tier0 tier0-results --previous=previous
+            - name: Notify Discord
+              uses: ./.github/actions/discord-notify
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  status: ${{ steps.report.outputs.status }}
+                  title: ${{ steps.report.outputs.title }}
+                  description: ${{ steps.report.outputs.description }}
+                  nodetail: "true"
+            - name: Fail when a model is red
+              if: steps.report.outputs.status != 'success'
+              run: exit 1

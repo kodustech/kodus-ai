@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Alert, AlertDescription } from "@components/ui/alert";
@@ -20,8 +20,10 @@ import {
     type TestBYOKResult,
 } from "@services/organizationParameters/fetch";
 import { OrganizationParametersConfigKey } from "@services/parameters/types";
+import { formatUsd } from "@services/usage/format";
 import { QueryErrorResetBoundary } from "@tanstack/react-query";
 import {
+    AlertTriangleIcon,
     ArrowLeftIcon,
     CheckCircle2Icon,
     InfoIcon,
@@ -31,6 +33,7 @@ import {
 } from "lucide-react";
 import { ErrorBoundary } from "react-error-boundary";
 import { FormProvider, useForm } from "react-hook-form";
+import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
 import { ConfirmModal } from "src/core/components/ui/confirm-modal";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 
@@ -51,14 +54,24 @@ import {
 import {
     providerHasCredentials,
     providerOwnsField,
+    providerSettingDefaults,
+    seedFieldsForPick,
+    unownedStoredSettings,
 } from "../_components/_modals/edit-key/credential-config";
 import {
     buildByokBlob,
     credentialSettingsFromConfig,
     modelFieldsFromConfig,
 } from "../_components/byok-write";
+import { credentialSettingsOverride } from "../_components/credential-settings-override";
+import { SuccessClaim } from "../_components/success-claim";
 import { formatModelLabel } from "../_data/model-label";
+import { isPlatformFundedProvider } from "../_data/platform-funded";
 import { PROVIDER_LABELS } from "../_data/provider-labels";
+import {
+    KODUS_CREDITS_PATH,
+    useKodusCreditBalance,
+} from "../_hooks/use-kodus-credit-balance";
 import type { BYOKConfig, BYOKConnectInput } from "../_types";
 import { maskKey } from "../_utils";
 import { planAccountChanged } from "./plan-account";
@@ -107,6 +120,10 @@ export function ByokManualPageClient({
         ? existing?.credentials.find((c) => c.id === editModel.credentialId)
         : undefined;
     const isEditing = !!editModel && !!editCredential;
+    // Kodus provider: the balance the model will draw from (shown in the
+    // Billing card in place of a key field).
+    const kodusCredits = useKodusCreditBalance();
+    const { kodusProvider: kodusProviderFlag } = useFeatureFlags();
     const editSettings = (editCredential?.settings ?? {}) as Record<
         string,
         unknown
@@ -177,6 +194,24 @@ export function ByokManualPageClient({
                   typeof editSettings.awsRegion === "string"
                       ? editSettings.awsRegion
                       : undefined,
+              // OpenRouter pinning is stored under credential settings like the
+              // three above, and was the only pair this lift forgot. The form
+              // default reads `existingConfig?.openrouterProviderOrder ?? null`,
+              // so omitting it here did two things: Edit always opened with an
+              // empty field however many times the user saved, and — because
+              // the backend REPLACES credential settings with what the form
+              // sends (only the aws* secrets are carried over) — the next save
+              // wrote settings without the key and ERASED the stored pin. The
+              // value could never survive its own edit dialog.
+              openrouterProviderOrder: Array.isArray(
+                  editSettings.openrouterProviderOrder,
+              )
+                  ? (editSettings.openrouterProviderOrder as string[])
+                  : undefined,
+              openrouterAllowFallbacks:
+                  typeof editSettings.openrouterAllowFallbacks === "boolean"
+                      ? editSettings.openrouterAllowFallbacks
+                      : undefined,
           }
         : null;
 
@@ -186,6 +221,19 @@ export function ByokManualPageClient({
     // (so pre-filling the stored URL never reads as a change and wrongly forces
     // the re-auth probe).
     const currentBaseURL = existingConfig?.baseURL ?? storedBaseURL;
+
+    // The provider-scoped settings the CREDENTIAL actually holds, seeded off the
+    // registry rather than hand-listed here.
+    //
+    // Both flows through this screen write back to the same credential: editing a
+    // model, and adding a model to an already-connected provider. So both have to
+    // OPEN with what that credential holds — the save re-sends the form, and the
+    // server replaces `settings` with what it receives, so a field that opens
+    // blank is a field the save deletes.
+    const currentSettings = providerSettingDefaults(
+        lockedProvider,
+        isEditing ? editSettings : storedSettings,
+    ) as Record<string, unknown>;
 
     // Models already enabled on this provider — hidden from the "Add model"
     // dropdown so it never offers a duplicate. The currently-edited model stays
@@ -207,7 +255,12 @@ export function ByokManualPageClient({
     const [testState, setTestState] = useState<
         | { status: "idle" }
         | { status: "testing" }
-        | { status: "success"; latencyMs: number }
+        | {
+              status: "success";
+              latencyMs: number;
+              warning?: string;
+              verifiedBy?: "catalog" | "probe";
+          }
         | { status: "error"; result: TestBYOKResult }
     >({ status: "idle" });
     const [isSaving, setIsSaving] = useState(false);
@@ -238,10 +291,10 @@ export function ByokManualPageClient({
             reasoningConfigOverride:
                 existingConfig?.reasoningConfigOverride ?? null,
             openrouterProviderOrder:
-                existingConfig?.openrouterProviderOrder ?? null,
+                (currentSettings.openrouterProviderOrder as string[]) ?? null,
             openrouterAllowFallbacks:
-                existingConfig?.openrouterAllowFallbacks ?? null,
-            vertexLocation: existingConfig?.vertexLocation ?? null,
+                (currentSettings.openrouterAllowFallbacks as boolean) ?? null,
+            vertexLocation: (currentSettings.vertexLocation as string) ?? null,
             // Sensitive Bedrock creds are stored encrypted server-side and
             // returned masked, so we can't populate the inputs from
             // existingConfig — that would re-submit the masked value and
@@ -251,14 +304,85 @@ export function ByokManualPageClient({
             awsBearerToken: null,
             awsAccessKeyId: null,
             awsSecretAccessKey: null,
-            awsRegion: existingConfig?.awsRegion ?? null,
+            awsRegion: (currentSettings.awsRegion as string) ?? null,
             awsSessionToken: null,
         },
     });
 
     const { isValid } = form.formState;
     const provider = form.watch("provider");
+
+    // Fill the credential's settings into the form when the user picks its
+    // provider, so every flow reaches the save knowing the same things.
+    //
+    // Hung off the SELECTION, not off the value changing. Picking a provider
+    // runs `form.reset` in ByokProviderSelect, which blanks `baseURL` every
+    // time — including when the same provider is chosen again, where the value
+    // does not change and an effect keyed on it would never re-run. That gap
+    // erased a stored base URL on the next save: the field read as deliberately
+    // cleared because the form had been made authoritative over it.
+    //
+    // Seeding here means the reset and the refill are the same event.
+    //
+    // Three earlier revisions of this branch each tried to answer "what does an
+    // empty settings field mean?" — and sending it erased the credential,
+    // staying silent discarded what the user typed, and layering could not tell
+    // a cleared field from an unshown one. The question only exists while the
+    // fields are blank against a credential that holds values, so it is filling
+    // them, not ruling on them, that settles it.
+    // A SET, not the last pick: the rule is "filled once per provider", and a
+    // single slot only says "same as last time". Pick OpenRouter, type a pin,
+    // mis-click Bedrock, come back — the slot has forgotten OpenRouter was ever
+    // seeded, so it refills from storage and the typed pin is gone. Correcting a
+    // mis-click is the most likely way anyone reaches that sequence, which makes
+    // it exactly the wrong moment to throw an edit away.
+    const seededProvidersRef = useRef<Set<string>>(new Set());
+    const seedProviderSettings = (pickedProvider?: string) => {
+        // The picked value comes from the select itself. Reading it back out of
+        // the form would make the seed depend on the reset having already
+        // landed in RHF's store — a coupling with nothing holding it in place.
+        const picked = pickedProvider ?? form.getValues("provider");
+        if (!picked) return;
+
+        const cred = (existing?.credentials ?? []).find(
+            (c) => !c.managed && c.provider === picked,
+        );
+        const stored = (cred?.settings ?? {}) as Record<string, unknown>;
+
+        // Which fields a pick refills is a rule of its own, and asymmetric —
+        // see `seedFieldsForPick`. Keeping it out of the component is what lets
+        // it be tested; both halves of it have already been a bug here.
+        for (const [key, value] of Object.entries(
+            seedFieldsForPick(
+                picked,
+                stored,
+                seededProvidersRef.current.has(picked),
+            ),
+        )) {
+            form.setValue(key as keyof EditKeyForm, value as never);
+        }
+
+        seededProvidersRef.current.add(picked);
+    };
     const model = form.watch("model");
+    // Private alpha: the Kodus form is reachable only for an org on the flag
+    // (or one that already routes through Kodus) — whether Kodus came from
+    // the URL (?provider=) or was picked in the form. Anyone else bounces to
+    // the providers page: the API would refuse the save anyway, but the form
+    // must not advertise what the org cannot use.
+    const selectedProvider = form.watch("provider");
+    // The provider the form will actually save: the selection, else the URL
+    // preset. A non-entitled org never sees Kodus in the dropdown (the API
+    // hides it), so this only bites a direct ?provider=kodus URL — and
+    // switching that form to another provider lifts the bounce.
+    const effectiveProvider = selectedProvider || presetProvider;
+    const kodusFormAllowed =
+        !isPlatformFundedProvider(effectiveProvider) ||
+        kodusProviderFlag === true ||
+        kodusCredits.usesKodusProvider;
+    useEffect(() => {
+        if (!kodusFormAllowed) router.replace("/byok");
+    }, [kodusFormAllowed, router]);
     const apiKey = form.watch("apiKey");
     const watchedBaseURL = form.watch("baseURL");
     // Title label: derive from the id — so the header reads "Edit Kimi K2.6" /
@@ -344,7 +468,12 @@ export function ByokManualPageClient({
                     });
                     setTestState(
                         result.ok
-                            ? { status: "success", latencyMs: result.latencyMs }
+                            ? {
+                                  status: "success",
+                                  latencyMs: result.latencyMs,
+                                  warning: result.warning,
+                                  verifiedBy: result.verifiedBy,
+                              }
                             : { status: "error", result },
                     );
                     return result;
@@ -379,6 +508,22 @@ export function ByokManualPageClient({
                     data.reasoningEffort === "custom" || !data.reasoningEffort
                         ? undefined
                         : data.reasoningEffort,
+                // Everything else the save will persist, so the probe runs the
+                // slot being saved rather than a subset of it.
+                reasoningConfigOverride:
+                    data.reasoningEffort === "custom"
+                        ? (data.reasoningConfigOverride ?? undefined)
+                        : undefined,
+                maxOutputTokens: data.maxOutputTokens ?? undefined,
+                openrouterProviderOrder:
+                    data.openrouterProviderOrder &&
+                    data.openrouterProviderOrder.length > 0
+                        ? data.openrouterProviderOrder
+                        : undefined,
+                openrouterAllowFallbacks:
+                    typeof data.openrouterAllowFallbacks === "boolean"
+                        ? data.openrouterAllowFallbacks
+                        : undefined,
                 vertexLocation: data.vertexLocation ?? undefined,
                 awsBearerToken: data.awsBearerToken ?? undefined,
                 awsAccessKeyId: data.awsAccessKeyId ?? undefined,
@@ -390,6 +535,8 @@ export function ByokManualPageClient({
                 setTestState({
                     status: "success",
                     latencyMs: result.latencyMs,
+                    warning: result.warning,
+                    verifiedBy: result.verifiedBy,
                 });
             } else {
                 setTestState({ status: "error", result });
@@ -489,18 +636,47 @@ export function ByokManualPageClient({
         const existingCred = (existing?.credentials ?? []).find(
             (c) => !c.managed && c.provider === newConfig.provider,
         );
+        // The credential this save actually writes to, resolved HERE rather than
+        // at mount: in the unlocked flow the provider is chosen inside the form,
+        // so mount-time state knows nothing about it.
+        const targetSettings = (
+            isEditing ? editSettings : (existingCred?.settings ?? {})
+        ) as Record<string, unknown>;
+        // Provider-scoped settings the form is speaking for. Keys no form owns
+        // ride along, because the server replaces this object wholesale rather
+        // than merging it.
+        const nextCredentialSettings: Record<string, unknown> = {
+            ...unownedStoredSettings(targetSettings),
+            ...(credentialSettingsFromConfig(newConfig) ?? {}),
+        };
+        const credentialSettings = credentialSettingsOverride({
+            // Authoritative exactly when the fields were filled from the
+            // credential: at mount for a known provider, or by
+            // `seedProviderSettings` when the user picked one. Every path that
+            // can reach this save does one of those — a provider can only be
+            // set by the select, and the select seeds — so the additive branch
+            // below is a floor, not a flow.
+            seeded:
+                isEditing ||
+                !!lockedProvider ||
+                seededProvidersRef.current.has(newConfig.provider),
+            storedSettings: targetSettings,
+            formSettings: nextCredentialSettings,
+        });
         const blob: BYOKConfig =
             isEditing && editModel
                 ? buildByokBlob(existing, {
                       kind: "edit-model",
                       modelId: editModel.id,
                       model: modelFields,
+                      credentialSettings,
                   })
                 : existingCred
                   ? buildByokBlob(existing, {
                         kind: "add-existing-provider",
                         credentialId: existingCred.id,
                         model: modelFields,
+                        credentialSettings,
                     })
                   : buildByokBlob(existing, {
                         kind: "add-new-provider",
@@ -525,7 +701,13 @@ export function ByokManualPageClient({
                 title: `${newConfig.model} ${isEditing ? "updated" : "saved"}`,
             });
             await revalidateServerSidePath("/byok");
-            router.push("/byok");
+            // A Kodus model lands on its card: the wallet strip is where the
+            // org funds it (an unfunded balance blocks the first review).
+            router.push(
+                isPlatformFundedProvider(newConfig.provider)
+                    ? "/byok#kodus"
+                    : "/byok",
+            );
         } catch {
             toast({
                 variant: "danger",
@@ -539,6 +721,8 @@ export function ByokManualPageClient({
     });
 
     const testing = testState.status === "testing";
+
+    if (!kodusFormAllowed) return null;
 
     return (
         <Page.Root>
@@ -564,9 +748,11 @@ export function ByokManualPageClient({
                     <Page.Description className="text-pretty">
                         {isEditing
                             ? "Update this model's endpoint or tuning. Leave the key blank to keep the stored one."
-                            : lockedProviderLabel
-                              ? `Type the model ID to enable${keyIsStored ? " — your key is already stored." : "."}`
-                              : "Pick any provider and model. Use this if your model isn't in the recommended list, or if you need a custom endpoint."}
+                            : isPlatformFundedProvider(lockedProvider)
+                              ? "Pick a model. Usage is billed to your Kodus credits at the provider's list price — no API key needed."
+                              : lockedProviderLabel
+                                ? `Type the model ID to enable${keyIsStored ? " — your key is already stored." : "."}`
+                                : "Pick any provider and model. Use this if your model isn't in the recommended list, or if you need a custom endpoint."}
                     </Page.Description>
                 </Page.TitleContainer>
             </Page.Header>
@@ -586,64 +772,109 @@ export function ByokManualPageClient({
                     {/* API key FIRST — the provider (in the title) is fixed, and a
                         provider's model list can only be fetched with the key, so
                         credentials lead, then the model. */}
-                    {provider?.trim().length > 0 && (
-                        <Card color="lv1">
-                            <CardHeader>
-                                <h3 className="text-text-primary text-sm font-semibold text-balance">
-                                    API key
-                                </h3>
-                            </CardHeader>
-                            <CardContent className="flex flex-col gap-4">
-                                {/* Show the key field when the user opened it OR the
+                    {provider?.trim().length > 0 &&
+                        (isPlatformFundedProvider(provider) ? (
+                            // Kodus as the provider: nothing to paste. Kodus
+                            // routes the model over its own upstream accounts
+                            // and bills the org's credits at the catalog's
+                            // list price — say so where the key field would be.
+                            <Card color="lv1">
+                                <CardHeader>
+                                    <h3 className="text-text-primary text-sm font-semibold text-balance">
+                                        Billing
+                                    </h3>
+                                </CardHeader>
+                                <CardContent className="flex flex-col gap-2">
+                                    <p className="text-text-secondary text-sm text-pretty">
+                                        No API key needed. Kodus runs this model
+                                        on its own provider accounts and bills
+                                        your Kodus credits at the list price
+                                        shown next to each model.
+                                    </p>
+                                    <p className="text-text-primary text-sm tabular-nums">
+                                        Balance:{" "}
+                                        {typeof kodusCredits.balanceUsd ===
+                                        "number"
+                                            ? formatUsd(kodusCredits.balanceUsd)
+                                            : "—"}
+                                        {kodusCredits.exhausted && " · used up"}
+                                        {" · "}
+                                        <Link
+                                            href={KODUS_CREDITS_PATH}
+                                            className="text-primary-light font-medium">
+                                            {kodusCredits.exhausted ||
+                                            kodusCredits.low
+                                                ? "Top up"
+                                                : "Manage credits"}
+                                        </Link>
+                                    </p>
+                                    <p className="text-text-tertiary text-xs text-pretty">
+                                        Prompt caching, retries and routing are
+                                        handled natively per provider — the same
+                                        transport as using your own key.
+                                    </p>
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            <Card color="lv1">
+                                <CardHeader>
+                                    <h3 className="text-text-primary text-sm font-semibold text-balance">
+                                        API key
+                                    </h3>
+                                </CardHeader>
+                                <CardContent className="flex flex-col gap-4">
+                                    {/* Show the key field when the user opened it OR the
                                     plan moved to a different account. Derived (not
                                     sticky state) so switching back to the stored
                                     account restores the "using stored key" view. */}
-                                {showKeyInput || planNeedsNewKey ? (
-                                    <ErrorBoundary
-                                        resetKeys={[provider, model]}
-                                        fallbackRender={() => null}>
-                                        {planNeedsNewKey && (
-                                            <p className="text-warning border-warning/30 bg-warning/10 mb-1 rounded-md border px-3 py-2 text-xs">
-                                                This plan runs on a different
-                                                account than your stored key —
-                                                paste the key for this plan.
-                                            </p>
-                                        )}
-                                        <Suspense fallback={null}>
-                                            <ByokCredentialsInput />
-                                        </Suspense>
-                                    </ErrorBoundary>
-                                ) : (
-                                    <FormControl.Root>
-                                        <FormControl.Label>
-                                            Key
-                                        </FormControl.Label>
-                                        <span className="text-text-secondary font-mono text-sm">
-                                            {maskKey(
-                                                editCredential?.apiKey ??
-                                                    storedCred?.apiKey,
+                                    {showKeyInput || planNeedsNewKey ? (
+                                        <ErrorBoundary
+                                            resetKeys={[provider, model]}
+                                            fallbackRender={() => null}>
+                                            {planNeedsNewKey && (
+                                                <p className="text-warning border-warning/30 bg-warning/10 mb-1 rounded-md border px-3 py-2 text-xs">
+                                                    This plan runs on a
+                                                    different account than your
+                                                    stored key — paste the key
+                                                    for this plan.
+                                                </p>
                                             )}
-                                        </span>
-                                        {/* The key is provider-level — changing it
+                                            <Suspense fallback={null}>
+                                                <ByokCredentialsInput />
+                                            </Suspense>
+                                        </ErrorBoundary>
+                                    ) : (
+                                        <FormControl.Root>
+                                            <FormControl.Label>
+                                                Key
+                                            </FormControl.Label>
+                                            <span className="text-text-secondary font-mono text-sm">
+                                                {maskKey(
+                                                    editCredential?.apiKey ??
+                                                        storedCred?.apiKey,
+                                                )}
+                                            </span>
+                                            {/* The key is provider-level — changing it
                                             belongs to "Edit provider", not to
                                             adding/editing a model that reuses it. */}
-                                        <FormControl.Helper>
-                                            Using your stored key. Change it in{" "}
-                                            <strong>Edit provider</strong>.
-                                        </FormControl.Helper>
-                                        {/* Provider-owned docs link (grab a key /
+                                            <FormControl.Helper>
+                                                Using your stored key. Change it
+                                                in{" "}
+                                                <strong>Edit provider</strong>.
+                                            </FormControl.Helper>
+                                            {/* Provider-owned docs link (grab a key /
                                             find model ids) — present here too, not
                                             only on the key-entry path. */}
-                                        <Suspense fallback={null}>
-                                            <ProviderDocLink
-                                                provider={lockedProvider}
-                                            />
-                                        </Suspense>
-                                    </FormControl.Root>
-                                )}
-                            </CardContent>
-                        </Card>
-                    )}
+                                            <Suspense fallback={null}>
+                                                <ProviderDocLink
+                                                    provider={lockedProvider}
+                                                />
+                                            </Suspense>
+                                        </FormControl.Root>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        ))}
 
                     <QueryErrorResetBoundary>
                         {({ reset }) => (
@@ -691,9 +922,18 @@ export function ByokManualPageClient({
                                                     </FormControl.Root>
                                                 }>
                                                 <ByokProviderSelect
-                                                    onProviderChange={() =>
-                                                        setShowKeyInput(true)
-                                                    }
+                                                    onProviderChange={(
+                                                        picked,
+                                                    ) => {
+                                                        setShowKeyInput(true);
+                                                        // Runs after the
+                                                        // select's reset, so
+                                                        // the refill is the
+                                                        // last word.
+                                                        seedProviderSettings(
+                                                            picked,
+                                                        );
+                                                    }}
                                                 />
                                             </Suspense>
                                         </ErrorBoundary>
@@ -833,18 +1073,45 @@ function TestResultBanner({
     state:
         | { status: "idle" }
         | { status: "testing" }
-        | { status: "success"; latencyMs: number }
+        | {
+              status: "success";
+              latencyMs: number;
+              warning?: string;
+              verifiedBy?: "catalog" | "probe";
+          }
         | { status: "error"; result: TestBYOKResult };
 }) {
     if (state.status === "idle" || state.status === "testing") return null;
 
     if (state.status === "success") {
+        // A pass with a warning is still a pass — the credential and the model
+        // work, and the config must stay savable. What it is NOT is silent: the
+        // provider ignored part of what the user pasted, and this banner used to
+        // say "Connection OK" and nothing else while that happened.
+        if (state.warning) {
+            return (
+                <Alert variant="warning">
+                    <AlertTriangleIcon />
+                    <AlertDescription className="flex flex-col gap-1 text-pretty">
+                        <span>
+                            <SuccessClaim
+                                latencyMs={state.latencyMs}
+                                verifiedBy={state.verifiedBy}
+                            />
+                        </span>
+                        <span>{state.warning}</span>
+                    </AlertDescription>
+                </Alert>
+            );
+        }
         return (
             <Alert variant="success">
                 <CheckCircle2Icon />
                 <AlertDescription className="text-pretty">
-                    Connection OK — provider responded in{" "}
-                    <span className="tabular-nums">{state.latencyMs}ms</span>.
+                    <SuccessClaim
+                        latencyMs={state.latencyMs}
+                        verifiedBy={state.verifiedBy}
+                    />
                 </AlertDescription>
             </Alert>
         );

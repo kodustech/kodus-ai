@@ -1,4 +1,9 @@
-import type { ContextEvidence, ContextLayer, ContextPack } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
+import { readAttemptedSlot } from '@libs/llm/model-failover';
+import type {
+    ContextEvidence,
+    ContextLayer,
+    ContextPack,
+} from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import { IExternalPromptContext } from '@libs/ai-engine/domain/prompt/interfaces/promptExternalReference.interface';
 import { ContextAugmentationsMap } from '@libs/ai-engine/infrastructure/adapters/services/context/interfaces/code-review-context-pack.interface';
 import { AutomationExecutionEntity } from '@libs/automation/domain/automationExecution/entities/automation-execution.entity';
@@ -9,6 +14,7 @@ import {
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { CollectCrossFileContextsResult } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import type { TraceContextDecision } from '@libs/cli-review/domain/types/trace-context.types';
+import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 import { LlmErrorCategory } from '@libs/llm/error-classifier';
 import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import type { ReducerTrace } from '@libs/code-review/infrastructure/agents/engine/finding-reducer';
@@ -182,9 +188,18 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     };
 
     /**
-     * SHA-256 hash of the PR body at the time of the last successful business logic
-     * validation. Written by ProcessFilesPrLevelReviewStage and persisted to
-     * dataExecution.businessLogicHash to enable dedup on subsequent runs.
+     * Set by BusinessLogicValidationStage when a business-logic message was
+     * actually delivered to the PR author. Persisted to
+     * dataExecution.businessLogicValidatedAt and carried across executions, so
+     * the automatic validation runs once per PR instead of once per push.
+     */
+    businessLogicValidatedAt?: string;
+
+    /**
+     * SHA-256 hash of the PR body at the time of the last successful business
+     * logic validation. Written by ProcessFilesPrLevelReviewStage (legacy EE
+     * path); superseded by businessLogicValidatedAt on the agent pipeline,
+     * which does not key the gate on a body Kody's own summary may rewrite.
      */
     businessLogicPrBodyHash?: string;
 
@@ -200,6 +215,9 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     externalPromptContext?: IExternalPromptContext;
     /** Decisions recorded by Kodus Trace, scoped to the changed files. */
     traceDecisions?: TraceContextDecision[];
+    /** Suggestions already posted on THIS PR in a previous review round,
+     *  scoped to the changed files (issue #1313). */
+    previousDecisions?: PrDecisionRecord[];
     /** Camadas já formatadas para incluir no ContextPack (ex.: arquivos, instruções). */
     externalPromptLayers?: ContextLayer[];
 
@@ -250,6 +268,13 @@ export interface CodeReviewPipelineContext extends PipelineContext {
         friendlyMessage: string;
         agentName?: string;
         occurredAt: Date;
+        /** Status the provider answered with, when it answered at all. */
+        httpStatus?: number;
+        /** The provider's own sentence, redacted and capped by the classifier. */
+        providerMessage?: string;
+        /** Model id the review actually ran on — the resolved slot's, not the
+         *  configured default, so a routed override is reported as what ran. */
+        model?: string;
     };
 
     /**
@@ -331,3 +356,48 @@ export interface DocumentationItem {
     snippet: string;
     source: 'exa-search';
 }
+
+/**
+ * The model the review ACTUALLY ran on.
+ *
+ * Read from the resolved slot rather than the configured default, so a routed
+ * or per-task override is reported as what ran instead of what was configured.
+ * Both failure paths that record `lastReviewError` already read `provider` off
+ * this same slot; taking the model from anywhere else would let a report name a
+ * provider and a model that never met.
+ */
+export const resolvedModel = (
+    context: Pick<CodeReviewPipelineContext, 'codeReviewConfig'>,
+    err?: unknown,
+): string | undefined => {
+    // The cascade is primary → fallback, so an error that survived both belongs
+    // to the fallback. Reporting the resolved slot there names a model that did
+    // not produce this failure — worse than saying nothing, because it reads as
+    // fact. `runWithModelFailover` stamps the attempt it actually ran.
+    const attempted = readAttemptedSlot(err)?.model;
+    if (typeof attempted === 'string' && attempted.length > 0) return attempted;
+
+    const model = context.codeReviewConfig?.resolvedModelSlot?.model;
+    return typeof model === 'string' && model.length > 0 ? model : undefined;
+};
+
+/**
+ * The provider that answered the failing attempt.
+ *
+ * Kept beside {@link resolvedModel} so the two are always read from the SAME
+ * attempt: a fallback model reported next to the primary's provider is a pair
+ * that never existed, which is the failure mode this helper prevents rather than
+ * a detail it improves.
+ */
+export const resolvedProvider = (
+    context: Pick<CodeReviewPipelineContext, 'codeReviewConfig'>,
+    err?: unknown,
+): string | undefined => {
+    const attempted = readAttemptedSlot(err)?.provider;
+    if (typeof attempted === 'string' && attempted.length > 0) return attempted;
+
+    const provider = context.codeReviewConfig?.resolvedModelSlot?.provider;
+    return typeof provider === 'string' && provider.length > 0
+        ? provider
+        : undefined;
+};

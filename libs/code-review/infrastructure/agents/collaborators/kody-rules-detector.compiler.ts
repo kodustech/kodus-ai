@@ -27,9 +27,11 @@ import { z } from 'zod';
 import {
     IKodyRule,
     IKodyRuleDetector,
+    KodyRuleContextNeed,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { ruleAppliesToFile } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge';
+import { extensionScopeAppliesToFile } from '@libs/common/utils/kody-rules/file-patterns';
 
 // ── the LLM side of the compiler (runs once at authoring) ────────────────────
 
@@ -53,14 +55,68 @@ INPUT CONTRACT (critical): your regex is applied by the engine to the raw CONTEN
 If mechanical, emit a JavaScript-compatible regex (source only, no slashes) that matches a violating line of code CONTENT.
 If not mechanical, decline — a wrong regex silently hides violations, which is worse than routing the rule to the LLM reviewer. When unsure, decline.
 
-Return ONLY JSON: {"mechanical": true, "pattern": "<regex source>", "flags": "<optional>", "reason": "<one sentence>"} or {"mechanical": false, "reason": "<one sentence>"}`;
+LANGUAGE SCOPE (answer this every time, mechanical or not). If the rule's text is specific to a language, an ecosystem, or a file kind — "Ruby does not require semicolons", "in React components", "in our migrations", "our Terraform modules" — list the file extensions it applies to in "extensions", lowercase and dot-prefixed, e.g. [".rb", ".rake", ".erb"]. Two things this list must get right: include EVERY extension that ecosystem really uses, templates and config included, because a missing one means real violations go unchecked; and write compound suffixes whole when the rule is about that file kind specifically (".blade.php", ".spec.ts", ".module.css", ".tf.json"). Omit "extensions" ONLY when the rule is genuinely language-agnostic (e.g. "no TODO comments", "no hardcoded credentials") — an unscoped rule is checked everywhere, which is the safe direction.
+
+DECLINE COSMETIC RULES. Formatting and style that a linter or formatter owns — semicolons, quote style, blank lines, trailing whitespace, indentation, line length, brace placement, statements per line — must be declined even when a regex could match them perfectly. They are mechanically detectable and still not worth a review comment: the reviewer's linter already enforces them, so a hit is at best noise and at worst wrong. Set {"mechanical": false, "cosmetic": true}.
+
+CONTEXT NEED (answer this every time, mechanical or not). The reviewer sees ONLY the changed lines — a few lines of context around each hunk, nothing else. Say in "contextNeed" what this rule must ALSO see to be judged at all:
+THE TEST, applied before anything else: can you point at ONE changed line and say "this line breaks the rule"? If yes, the answer is "diff-only", whatever the rule is about. Only when the verdict depends on something the line cannot carry — a count, a comparison with another part of the file, the ABSENCE of something — does it need more.
+- "diff-only" — one line carries the verdict. This is the answer for the great majority of rules: a forbidden API or import, a required argument or option, a wrong call, a naming convention, a magic number, a missing await, a secret in the wrong place, "use X instead of Y". Seeing more of the file would not change the answer, so asking for it buys nothing and costs the whole file on every shard.
+- "full-file" — the verdict needs the rest of THIS file because it is a COUNT, a COMPARISON or an ABSENCE. Count: "a function must not exceed N lines", "no more than N parameters". Comparison: "do not repeat a block inside a file". Absence: "no unused imports" (the symbol appears nowhere else), "every exported class has a docstring" (the line above is missing). If you cannot name which of those three it is, it is not "full-file".
+  NOT full-file, however file-ish it sounds: "use next/image instead of <img>", "never expose secrets to the client", "validate input with zod", "prefer Server Components". Each is decided by looking at the offending line. A rule naming a framework, a directory or a file kind is still diff-only — that tells you WHERE it applies, not what you must see to judge it.
+- "symbol-references" — you must see where the changed symbols are used ELSEWHERE in the repository (e.g. "do not duplicate an existing helper", "an exported symbol nobody imports").
+- "sibling-file" — you must know whether a related file exists (e.g. "every new endpoint has a test").
+- "cited-file" — the rule points at another file whose content IS the convention.
+A PR-SCOPE rule (one judged against the pull request as a whole, not a file) is always "diff-only": the whole-PR pass is not served by per-file retrieval, so any other answer silently buys it nothing.
+Answer "diff-only" unless the rule plainly cannot be judged without more. Over-declaring is the expensive mistake, twice over: a rule asking for context the reviewer cannot fetch is not judged at all, and "full-file" makes every shard carrying that rule haul the whole file — which measurably costs recall as well as tokens. When unsure, answer "diff-only".
+
+Return ONLY JSON: {"mechanical": true, "pattern": "<regex source>", "flags": "<optional>", "extensions": ["<.ext>", …], "contextNeed": "<diff-only|full-file|symbol-references|sibling-file|cited-file>", "reason": "<one sentence>"} or {"mechanical": false, "cosmetic": <true|false>, "extensions": ["<.ext>", …], "contextNeed": "<diff-only|full-file|symbol-references|sibling-file|cited-file>", "reason": "<one sentence>"}`;
 
 export const compilerOutputSchema = z.object({
     mechanical: z.boolean(),
     pattern: z.string().optional(),
     flags: z.string().optional(),
+    /** file extensions the rule's text scopes it to (issue #1831). */
+    extensions: z.array(z.string()).optional(),
+    /** the rule is linter-owned formatting; decline it (issue #1831). */
+    cosmetic: z.boolean().optional(),
+    /**
+     * What the rule must see beyond the diff (issue #1826). Kept a loose
+     * string, NOT an enum: an off-vocabulary answer must degrade to
+     * `diff-only` via normalizeContextNeed, never fail the parse and take the
+     * detector decision down with it.
+     */
+    contextNeed: z.string().optional(),
     reason: z.string().optional(),
 });
+
+/**
+ * The compiler's context-need answer, normalized (issue #1826). Anything the
+ * model invented, omitted, or mangled becomes `diff-only` — today's behavior,
+ * and the safe direction: an over-declared need means the customer's rule
+ * stops being judged whenever the retrieval cannot be satisfied.
+ */
+export function normalizeContextNeed(raw: unknown): KodyRuleContextNeed {
+    if (typeof raw !== 'string') return 'diff-only';
+    const need = raw.trim().toLowerCase();
+    return (CONTEXT_NEEDS as readonly string[]).includes(need)
+        ? (need as KodyRuleContextNeed)
+        : 'diff-only';
+}
+
+/**
+ * Exported so a spec can assert the classifier PROMPT offers every need the
+ * domain accepts. A value added here and forgotten in the prompt can never be
+ * produced: the feature would be unreachable and every rule would quietly fall
+ * back to diff-only.
+ */
+export const CONTEXT_NEEDS: readonly KodyRuleContextNeed[] = [
+    'diff-only',
+    'full-file',
+    'symbol-references',
+    'sibling-file',
+    'cited-file',
+];
 
 export function buildCompilerUserPrompt(rule: Partial<IKodyRule>): string {
     const parts = [
@@ -111,6 +167,10 @@ export interface CompilerOutput {
     mechanical: boolean;
     pattern?: string;
     flags?: string;
+    extensions?: string[];
+    cosmetic?: boolean;
+    /** raw, un-normalized context need — run it through normalizeContextNeed. */
+    contextNeed?: string;
     reason?: string;
 }
 
@@ -143,7 +203,87 @@ export interface CompileResult {
         | 'missed-incorrect-example'
         | 'flagged-correct-example'
         | 'over-matches-corpus'
-        | 'no-usable-examples';
+        | 'no-usable-examples'
+        | 'cosmetic';
+}
+
+/**
+ * Formatting rules a linter/formatter owns. Compiling these into a detector is
+ * a bad trade even when the regex is perfect: the hit is cosmetic, so its value
+ * is near zero, while its cost — a review comment on someone's PR — is the
+ * same as any other comment. Issue #1831 measured one such rule ("Ruby does not
+ * require semicolons") producing 614 comments over 40 real PRs with not one
+ * true violation among them.
+ *
+ * The compiler prompt asks the model to decline these itself; this list is the
+ * deterministic backstop, because "is this cosmetic?" is exactly the kind of
+ * judgment a weak BYOK model gets wrong, and the whole T0 safety argument rests
+ * on the gate not trusting the model.
+ */
+const COSMETIC_RULE_PATTERNS: RegExp[] = [
+    /\bsemi-?colons?\b/i,
+    /\b(single|double)[- ]quot/i,
+    /\bquote (style|marks)\b/i,
+    /\bblank lines?\b/i,
+    /\bempty lines?\b/i,
+    /\btrailing (whitespace|space|comma)\b/i,
+    /\bindent(ation|ing)?\b/i,
+    /\bline length\b/i,
+    /\bmax(imum)?[- ]len\b/i,
+    /\bbrace (style|placement)\b/i,
+    /\bstatements? per line\b/i,
+    /\btabs? (vs\.?|or) spaces?\b/i,
+];
+
+/**
+ * True when the rule is linter-owned formatting. Reads title + body: the title
+ * alone is often too terse ("Semicolons"), the body alone too discursive.
+ */
+export function isCosmeticRule(rule: Partial<IKodyRule>): boolean {
+    const text = `${rule.title ?? ''}\n${rule.rule ?? ''}`;
+    return COSMETIC_RULE_PATTERNS.some((rx) => rx.test(text));
+}
+
+/**
+ * Normalize the compiler's `extensions` into lowercase dot-prefixed entries,
+ * dropping anything that isn't a plausible extension. Returns undefined for an
+ * empty/absent list so "no scope" stays distinguishable from "scoped to
+ * nothing" — the latter would silently disable the rule.
+ */
+export function normalizeDetectorExtensions(
+    extensions?: string[],
+): string[] | undefined {
+    if (!Array.isArray(extensions)) return undefined;
+    const out = new Set<string>();
+    for (const raw of extensions) {
+        if (typeof raw !== 'string') continue;
+        // The prompt's own JSON template writes the placeholder as `<.ext>`,
+        // and models copy the angle brackets into the answer. Measured on real
+        // rules: "Avoid N+1 SQL Queries Inside Loops" came back as
+        // ["<.sql>","<.rb>",…] — the languages were right and every entry was
+        // then rejected, shipping the rule unscoped. The brackets are the
+        // template's punctuation and can never be part of an extension, so
+        // stripping them recovers a correct answer without loosening what
+        // counts as one: the pattern below still rejects globs and paths.
+        const e = raw.trim().toLowerCase().replace(/^<+|>+$/g, '').trim();
+        if (!e) continue;
+        const dotted = e.startsWith('.') ? e : `.${e}`;
+        // A real extension: one or more dot-prefixed alphanumeric segments.
+        // Compound suffixes are first-class because whole ecosystems name files
+        // that way — `.blade.php`, `.spec.ts`, `.d.ts`, `.module.css`,
+        // `.stories.tsx`, `.tar.gz` — and a single-segment pattern threw the
+        // second half away. Measured on real rules: one answered
+        // [".php", ".blade.php"] and lost the compound half.
+        //
+        // NOTHING here names a language. The shape is the only thing checked,
+        // so an ecosystem nobody thought of works the day a rule mentions it —
+        // which is the requirement, since a customer's rules can target any
+        // technology. Globs ("*.rb"), paths ("app/models/") and prose still
+        // fail, because `*` and `/` are outside the segment alphabet.
+        if (!/^(?:\.[a-z0-9_+-]{1,12}){1,3}$/.test(dotted)) continue;
+        out.add(dotted);
+    }
+    return out.size ? [...out] : undefined;
 }
 
 /** Longest detector pattern we persist. A compiled rule is a simple line
@@ -193,7 +333,22 @@ export async function compileRuleDetector(
     runCompiler: RunCompiler,
     opts: CompileOptions = {},
 ): Promise<CompileResult> {
+    // NOTE (#1786): deliberately NOT normalized. Unlike the finder/rules/verdict
+    // boundaries, this compiler ships a REGEX detector — recovering an off-schema
+    // model output and promoting a wrong regex would SILENTLY HIDE violations,
+    // which is worse than declining (see the prompt: "when unsure, decline"). So
+    // any off-schema shape correctly falls through to decline → semantic judge.
+    // Cosmetic rules never get a detector (issue #1831) — checked BEFORE the
+    // LLM call so a linter-owned rule costs nothing to reject, and independently
+    // of whether the model remembered to set `cosmetic`.
+    if (isCosmeticRule(rule)) {
+        return { detector: null, declineReason: 'cosmetic' };
+    }
+
     const out = await runCompiler(rule);
+    if (out?.cosmetic === true) {
+        return { detector: null, declineReason: 'cosmetic' };
+    }
     if (!out || out.mechanical !== true || !out.pattern) {
         return { detector: null, declineReason: 'not-mechanical' };
     }
@@ -267,6 +422,7 @@ export async function compileRuleDetector(
             flags: out.flags,
             compiledBy: opts.modelName,
             reason: out.reason,
+            extensions: normalizeDetectorExtensions(out.extensions),
         },
     };
 }
@@ -322,46 +478,86 @@ export function runDetector(
     return hits;
 }
 
-/** A detector-produced finding, shaped like the judge's ShardViolation so the
- *  provider can merge both streams into one mapAgentFindings call. */
-export interface DetectorViolation {
-    ruleUuid: string;
-    relevantFile: string;
-    relevantLinesStart: number;
-    relevantLinesEnd: number;
-    existingCode: string;
-    suggestionContent: string;
-    oneSentenceSummary: string;
+/**
+ * Where a compiled detector fired: ruleUuid → filename → ascending line numbers.
+ * This is the whole T0 review-time output now (issue #1831). It answers both
+ * questions the judge needs: which files a mechanical rule must be judged on
+ * (only the ones its regex fired in — everything else stays free), and which
+ * lines to put in front of the model as candidates.
+ */
+export type DetectorHitIndex = Map<string, Map<string, number[]>>;
+
+/**
+ * Does this file fall inside the detector's compiled language scope?
+ *
+ * A detector with no `extensions` is unscoped and applies everywhere — the
+ * pre-#1831 behavior, kept because a genuinely language-agnostic rule ("no
+ * hardcoded credentials") must not be silently narrowed, and because the 424
+ * detectors already in the fleet carry no scope until they are recompiled.
+ * Their false positives are now caught by the judge instead.
+ */
+export function detectorAppliesToFile(
+    filename: string,
+    detector: DetectorPlan,
+): boolean {
+    // Suffix matching, extensionless files abstaining — see
+    // `extensionScopeAppliesToFile`. The semantic judge narrows by the
+    // rule-level `fileScope` through that same predicate, so a detector and a
+    // semantic rule carrying the same extensions can never disagree about
+    // which files they cover.
+    return extensionScopeAppliesToFile(filename, detector.extensions);
 }
 
 /**
- * T0 review-time: for every rule that carries a compiled detector, run it over
- * the ADDED lines of the path-applicable changed files and emit one finding per
- * hit. Pure code — no LLM. (A confirm-on-hits LLM pass to filter residual false
- * positives + polish the comment is a later refinement; the compile-time gate
- * already bounds precision.)
+ * T0 REVIEW-TIME: run every compiled detector over the added lines of the
+ * path-applicable, extension-applicable changed files and return WHERE each one
+ * fired.
+ *
+ * This used to be `buildDetectorViolations`, and it published a PR comment per
+ * hit with no LLM anywhere in the path. Issue #1831 measured what that costs:
+ * one Ruby-scoped rule, run over 40 real polyglot PRs, published 614 comments —
+ * 93.6% of them on files of another language entirely (.tsx, .scss, .jsx), and
+ * of the remainder, the `.rb` hits were SQL inside heredocs and the `.erb` hits
+ * were JavaScript embedded in a template. Not one true violation. In production
+ * the same path rejected at 44.6% thumbs-down against 6.2% for the LLM judge.
+ *
+ * A regex cannot see the things that make those hits wrong — the file's
+ * language, a heredoc, a comment, an embedded second language — so the regex no
+ * longer gets to decide. It is now a ROUTER: cheap, deterministic, and its only
+ * job is to say which (rule, file) pairs are worth an LLM's attention. The
+ * judge that already handles semantic rules confirms or rejects each candidate
+ * with the whole file diff in front of it.
+ *
+ * The cost argument survives: a file where nothing matched never reaches a
+ * model, so a precise detector still costs ~nothing, and a noisy one costs in
+ * proportion to its noise — which is the right incentive.
  */
-export function buildDetectorViolations(
+export function buildDetectorCandidates(
     rules: Array<Partial<IKodyRule>>,
     changedFiles: FileChange[],
-): DetectorViolation[] {
-    const out: DetectorViolation[] = [];
+): DetectorHitIndex {
+    const index: DetectorHitIndex = new Map();
     for (const rule of rules) {
         if (!rule.detector || !rule.uuid) continue;
-        const files = changedFiles.filter((f) =>
-            ruleAppliesToFile(f.filename, rule.path),
+        const files = changedFiles.filter(
+            (f) =>
+                ruleAppliesToFile(f.filename, rule.path) &&
+                detectorAppliesToFile(f.filename, rule.detector!),
         );
         for (const h of runDetector(rule.detector, files)) {
-            out.push({
-                ruleUuid: rule.uuid,
-                relevantFile: h.filename,
-                relevantLinesStart: h.line,
-                relevantLinesEnd: h.line,
-                existingCode: h.code,
-                suggestionContent: `Violates team rule '${rule.title}': ${rule.rule}`,
-                oneSentenceSummary: `Violates '${rule.title}'`,
-            });
+            let perFile = index.get(rule.uuid);
+            if (!perFile) index.set(rule.uuid, (perFile = new Map()));
+            const lines = perFile.get(h.filename);
+            if (lines) lines.push(h.line);
+            else perFile.set(h.filename, [h.line]);
         }
     }
-    return out;
+    // Ascending, de-duplicated: the same line can match once per detector run
+    // and the prompt should list each candidate once, in file order.
+    for (const perFile of index.values()) {
+        for (const [filename, lines] of perFile) {
+            perFile.set(filename, [...new Set(lines)].sort((a, b) => a - b));
+        }
+    }
+    return index;
 }

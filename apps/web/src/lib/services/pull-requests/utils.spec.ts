@@ -24,17 +24,29 @@ describe("buildReviewDeepLinkUrl", () => {
         );
     });
 
-    it("falls back to the plain review URL without a delivered suggestion", () => {
-        expect(
-            buildReviewDeepLinkUrl("repo-1", 42, null),
-        ).toBe("/pull-requests/repo-1/42");
+    it("falls back to the plain review URL with no target at all", () => {
+        expect(buildReviewDeepLinkUrl("repo-1", 42, null)).toBe(
+            "/pull-requests/repo-1/42",
+        );
 
-        expect(
-            buildReviewDeepLinkUrl("repo-1", 42, undefined),
-        ).toBe("/pull-requests/repo-1/42");
+        expect(buildReviewDeepLinkUrl("repo-1", 42, undefined)).toBe(
+            "/pull-requests/repo-1/42",
+        );
 
+        expect(buildReviewDeepLinkUrl("repo-1", 42, {})).toBe(
+            "/pull-requests/repo-1/42",
+        );
+    });
+
+    // The review screen honours `file` and `suggestion` independently, so a
+    // half-known target still beats landing on the top of the diff.
+    it("emits whichever half of the target is known", () => {
         expect(
             buildReviewDeepLinkUrl("repo-1", 42, { id: "", filePath: "x.ts" }),
-        ).toBe("/pull-requests/repo-1/42");
+        ).toBe("/pull-requests/repo-1/42?file=x.ts");
+
+        expect(buildReviewDeepLinkUrl("repo-1", 42, { id: "sugg-1" })).toBe(
+            "/pull-requests/repo-1/42?suggestion=sugg-1",
+        );
     });
 });

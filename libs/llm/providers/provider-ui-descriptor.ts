@@ -35,8 +35,12 @@ export const isCustomEndpoint = (id: string): boolean =>
     id.endsWith('_compatible');
 
 const labelForId = (module: ProviderModule, id: string): string => {
-    if (id === module.id) return module.label;
-    if (isCustomEndpoint(id)) return `${module.label} Compatible`;
+    if (id === module.id) {
+        return module.label;
+    }
+    if (isCustomEndpoint(id)) {
+        return `${module.label} Compatible`;
+    }
     return module.label;
 };
 
@@ -47,13 +51,18 @@ const listingRequiresUserBaseUrl = (listing: ModelListing | null): boolean =>
     !listing.defaultBaseURL;
 
 const listingIsAutoListable = (listing: ModelListing | null): boolean => {
-    if (!listing) return false;
-    if (listing.kind === 'static') return true;
+    if (!listing) {
+        return false;
+    }
+    if (listing.kind === 'static') {
+        return true;
+    }
     // An HTTP listing is enumerable when its base URL resolves without the user
     // (a default, or none required); a curated default like a proxy fallback
     // does not count for custom endpoints (handled by the caller).
-    if (listing.kind === 'http')
+    if (listing.kind === 'http') {
         return !listing.requiresBaseURL || !!listing.defaultBaseURL;
+    }
     return false; // 'manual'
 };
 

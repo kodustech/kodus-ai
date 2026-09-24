@@ -75,6 +75,9 @@ import {
     runWithBYOKLimiter,
     getLimiterForSlot,
     __limiterCacheInternals,
+    isJsonSchemaUnsupportedError,
+    mayUseJsonSchema,
+    markJsonSchemaUnsupported,
 } from './byok-to-vercel';
 
 const createVertexMock = createVertex as unknown as jest.Mock;
@@ -974,5 +977,77 @@ describe('buildModelFromSlot — secret hygiene (no plaintext key logged)', () =
         } finally {
             spies.forEach((s) => s.mockRestore());
         }
+    });
+});
+
+/**
+ * The json_schema fallback machinery — untested until now (the file's big spec
+ * covers buildModelFromSlot but not this second responsibility). It decides,
+ * from a provider's raw error text, whether to stop sending
+ * `response_format: json_schema` and drop to json_object. A false negative
+ * silently breaks structured output on providers that reject json_schema; a
+ * false positive wastes the fast path forever. Both signals are required.
+ */
+describe('isJsonSchemaUnsupportedError — provider error classification', () => {
+    it('is false for non-Error inputs, even when the text contains the keywords', () => {
+        expect(isJsonSchemaUnsupportedError('json_schema is not supported')).toBe(false);
+        expect(isJsonSchemaUnsupportedError(null)).toBe(false);
+        expect(isJsonSchemaUnsupportedError(undefined)).toBe(false);
+    });
+
+    it('is false when the error never mentions structured output', () => {
+        expect(isJsonSchemaUnsupportedError(new Error('rate limit exceeded'))).toBe(false);
+        expect(isJsonSchemaUnsupportedError(new Error('the model is not supported'))).toBe(false); // unsupported, but no schema term
+    });
+
+    it('is false when a schema term appears with no "unsupported" signal', () => {
+        // Otherwise any unrelated 4xx that echoes "json_schema" would force a needless retry.
+        expect(isJsonSchemaUnsupportedError(new Error('json_schema accepted; upstream busy'))).toBe(false);
+    });
+
+    it('requires BOTH a schema term AND an unsupported signal', () => {
+        expect(isJsonSchemaUnsupportedError(new Error('response_format json_schema is not supported'))).toBe(true);
+    });
+
+    it.each([
+        'json_schema is unsupported',
+        'response_format is invalid',
+        'structured output not supported',
+        'structured_output must be one of the allowed values',
+        'structured-output: supported values are json_object',
+    ])('recognizes the phrasing "%s"', (msg) => {
+        expect(isJsonSchemaUnsupportedError(new Error(msg))).toBe(true);
+    });
+
+    it('inspects a non-standard `responseBody` field, not only the message', () => {
+        const err = Object.assign(new Error('Bad Request'), {
+            responseBody: 'json_schema is not supported by this model',
+        });
+        expect(isJsonSchemaUnsupportedError(err)).toBe(true);
+    });
+});
+
+describe('json_schema fallback cache (mayUseJsonSchema / markJsonSchemaUnsupported)', () => {
+    it('permits json_schema for a fresh slot, then skips it once the provider rejects it', () => {
+        const slot = { provider: 'test-prov-a', model: 'model-a' } as any;
+        expect(mayUseJsonSchema(slot)).toBe(true);
+        markJsonSchemaUnsupported(slot);
+        expect(mayUseJsonSchema(slot)).toBe(false);
+    });
+
+    it('is keyed per provider+model — marking one model does not disable a sibling', () => {
+        const bad = { provider: 'test-prov-b', model: 'model-bad' } as any;
+        const good = { provider: 'test-prov-b', model: 'model-good' } as any;
+        markJsonSchemaUnsupported(bad);
+        expect(mayUseJsonSchema(bad)).toBe(false);
+        expect(mayUseJsonSchema(good)).toBe(true);
+    });
+
+    it('distinguishes the same model behind different base URLs', () => {
+        const a = { provider: 'p', model: 'm', baseURL: 'https://a/v1' } as any;
+        const b = { provider: 'p', model: 'm', baseURL: 'https://b/v1' } as any;
+        markJsonSchemaUnsupported(a);
+        expect(mayUseJsonSchema(a)).toBe(false);
+        expect(mayUseJsonSchema(b)).toBe(true);
     });
 });

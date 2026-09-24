@@ -57,7 +57,7 @@ const ALLOWLIST: Array<{ pattern: RegExp; reason: string }> = [
     {
         // Generic names captured by the grep that are almost certainly
         // DI tokens or test identifiers, not env vars.
-        pattern: /^(API_KEY|API_KEY_SECRET|API_KEY_SECRET_PEPPER|API_SECRET_KEY|RUN_NAME)$/,
+        pattern: /^(API_KEY|API_KEY_SECRET|API_KEY_SECRET_PEPPER|API_SECRET_KEY|RUN_NAME|RUN_ID)$/,
         reason: 'generic name — likely DI token or test fixture (false positive)',
     },
     {
@@ -72,7 +72,7 @@ const ALLOWLIST: Array<{ pattern: RegExp; reason: string }> = [
         // scripts in .github/workflows/*.yml (the scan includes *.yml).
         // Injected by the Actions runner — CI plumbing, never Kodus
         // runtime config, so they don't belong in .env.schema.
-        pattern: /^(GITHUB_OUTPUT|GITHUB_ENV|GITHUB_STATE|GITHUB_STEP_SUMMARY|GITHUB_PATH|RUNNER_TEMP)$/,
+        pattern: /^(GITHUB_OUTPUT|GITHUB_ENV|GITHUB_STATE|GITHUB_STEP_SUMMARY|GITHUB_PATH|GITHUB_WORKSPACE|RUNNER_TEMP)$/,
         reason: 'GitHub Actions workflow plumbing (inline node in *.yml), not a Kodus env var',
     },
 ];

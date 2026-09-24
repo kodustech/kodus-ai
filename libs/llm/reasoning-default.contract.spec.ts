@@ -88,16 +88,40 @@ describe('defaultReasoningEffortFor — BYOK matrix contract', () => {
     // own `reasoningTraits.thinksByDefault`: 'medium' iff the model reasons by
     // default, else undefined. So a new model is a data change in ONE place (the
     // traits) and this default follows automatically — never a second edit here.
-    it('INVARIANT: default === (thinksByDefault ? medium : undefined) for every row', () => {
+    it('INVARIANT: a family default is imposed ONLY where omitting would disable', () => {
+        // This used to assert `default === (thinksByDefault ? medium : undefined)`
+        // — which encoded the CONFLATION as the invariant. `thinksByDefault` is a
+        // fact about the model; imposing a default is a policy, and they are not
+        // the same question. Gemini reasons by default AND carries its own
+        // documented level, so imposing 'medium' would replace a better default
+        // with ours; OpenRouter passes omission straight through to the upstream.
+        //
+        // The policy hangs on ONE declared fact: would omitting turn reasoning
+        // off? Undeclared stays on the safe side (impose — costs tokens, never
+        // disables), because OpenAI defaults gpt-5.1's effort to `none` and there
+        // omission really does disable.
         for (const [provider, model] of MATRIX) {
             const mod = REGISTRY.get(provider);
             const traits =
                 mod.reasoningTraits?.(slot(provider, model)) ??
                 NON_REASONING_TRAITS;
-            const expected = traits.thinksByDefault ? 'medium' : undefined;
+            const expected =
+                traits.thinksByDefault &&
+                traits.omittingDisablesReasoning !== false
+                    ? 'medium'
+                    : undefined;
             expect(defaultReasoningEffortFor(slot(provider, model))).toBe(
                 expected,
             );
         }
+    });
+
+    it('a model that reasons by default can still decline the imposed effort', () => {
+        // The regression guard for the decoupling itself: if these two ever
+        // collapse back into one boolean, Gemini loses its own thinking level.
+        const gemini = slot('google_gemini', 'gemini-3-pro-preview');
+        const traits = REGISTRY.get('google_gemini').reasoningTraits!(gemini);
+        expect(traits.thinksByDefault).toBe(true);
+        expect(defaultReasoningEffortFor(gemini)).toBeUndefined();
     });
 });

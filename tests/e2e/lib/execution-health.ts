@@ -340,3 +340,50 @@ export function countExecutions(node: unknown, prNumber: number): number {
     walk(node);
     return count;
 }
+
+const TERMINAL_STATUSES = new Set([
+    'success',
+    'error',
+    'partial_error',
+    'skipped',
+]);
+
+/**
+ * Waits for a PR's Nth automation execution row to both EXIST and have
+ * reached a terminal status. `countExecutions` counts a row the instant it
+ * exists — including `pending`/`in_progress` — so `count >= n` alone goes
+ * green while the Nth review is still mid-run and every read taken right
+ * after (comments, contradiction checks) would race a still-in-flight
+ * execution. The API returns newest-first, so the first entry is always the
+ * most recent row. Shared by every multi-round decision-memory scenario
+ * (review-decision-memory-revert.ts, review-decision-memory-kody-rules.ts) —
+ * extracted here once three call sites needed the identical wait.
+ */
+export async function waitForNthTerminalExecution(
+    ctx: RunContext,
+    session: KodusSession,
+    prNumber: number,
+    n: number,
+    timeoutSec: number,
+): Promise<number | null> {
+    return pollUntil<number>(
+        async () => {
+            const resp = await http<any>(
+                `${ctx.target.apiBaseUrl}/pull-requests/executions?pullRequestNumber=${prNumber}&teamId=${encodeURIComponent(session.teamId)}&limit=10`,
+                {
+                    headers: { Authorization: `Bearer ${session.accessToken}` },
+                    timeoutMs: 30_000,
+                },
+            );
+            ensureOk(resp, `executions:list:round${n}`);
+            const count = countExecutions(resp.body, prNumber);
+            if (count < n) return null;
+            const entries: Array<{ automationExecution?: { status?: string } }> =
+                resp.body?.data?.data ?? [];
+            const latestStatus = entries[0]?.automationExecution?.status;
+            if (!latestStatus || !TERMINAL_STATUSES.has(latestStatus)) return null;
+            return count;
+        },
+        { intervalSec: 10, timeoutSec },
+    );
+}

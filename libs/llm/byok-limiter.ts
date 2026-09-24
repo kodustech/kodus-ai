@@ -9,6 +9,8 @@
  */
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { createLogger } from '@libs/core/log/logger';
+import { isPlatformFundedProvider } from './platform-funded-provider';
+import { splitKodusModelId } from './providers/kodus/model-id';
 
 type QueuedTask<T> = {
     id: number;
@@ -556,6 +558,89 @@ export function getLimiterForSlot(params: {
  * role switch. Calls hitting the same provider account share a limiter because
  * upstream concurrency limits are account-wide rather than call-type-specific.
  */
+// ─── Kodus platform limiter ──────────────────────────────────────────
+// Every org that picks the Kodus provider shares ONE upstream account per
+// vendor (Kodus's own Anthropic / OpenAI / Google keys). The per-slot limiter
+// above is scoped per ORG (its cache key carries the organizationId), so N
+// orgs each at their own cap can still saturate the shared account and turn
+// one tenant's burst into everyone's 429. This second gate is keyed per
+// UPSTREAM only — process-wide, org-blind — and sits INSIDE the org limiter,
+// so an org's queued call never holds a platform slot while it waits.
+//
+// Env-configured because the right number is the account's tier, which is an
+// ops fact, not a code fact. Unset/0 = no platform gate.
+
+const KODUS_PLATFORM_ENV = {
+    concurrency: 'API_KODUS_PROVIDER_MAX_CONCURRENT',
+    rpm: 'API_KODUS_PROVIDER_RPM',
+} as const;
+
+const kodusPlatformLimiters = new Map<string, BYOKConcurrencyLimiter>();
+
+function envPositiveInt(name: string): number | undefined {
+    const raw = process.env[name];
+    if (raw === undefined || raw === '') return undefined;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined;
+}
+
+/** Per-upstream override (`API_KODUS_PROVIDER_MAX_CONCURRENT_ANTHROPIC`)
+ *  wins over the shared value; both unset ⇒ undefined. */
+function kodusPlatformCap(
+    kind: keyof typeof KODUS_PLATFORM_ENV,
+    upstream: string,
+): number | undefined {
+    return (
+        envPositiveInt(
+            `${KODUS_PLATFORM_ENV[kind]}_${upstream.toUpperCase()}`,
+        ) ?? envPositiveInt(KODUS_PLATFORM_ENV[kind])
+    );
+}
+
+function runWithKodusPlatformLimiter<T>(
+    params: {
+        slot?: NormalizedModel;
+        queueTimeoutMs?: number;
+        abortSignal?: AbortSignal;
+    },
+    fn: () => Promise<T>,
+    label: string,
+): Promise<T> {
+    const ref = splitKodusModelId(params.slot?.model);
+    if (!ref) return fn();
+
+    const concurrency = kodusPlatformCap('concurrency', ref.upstream);
+    const rpm = kodusPlatformCap('rpm', ref.upstream);
+    if (!concurrency && !rpm) return fn();
+
+    const key = `kodus::${ref.upstream}`;
+    let limiter = kodusPlatformLimiters.get(key);
+    if (!limiter) {
+        limiter = new BYOKConcurrencyLimiter(
+            concurrency ?? Infinity,
+            rpm,
+            undefined,
+            'kodus',
+            ref.upstream,
+        );
+        kodusPlatformLimiters.set(key, limiter);
+    } else {
+        limiter.configure({ concurrency: concurrency ?? Infinity, rpm });
+    }
+
+    return limiter.run(
+        `${label}:kodus-platform`,
+        fn,
+        params.abortSignal,
+        params.queueTimeoutMs ?? DEFAULT_LIMITER_QUEUE_TIMEOUT_MS,
+    );
+}
+
+export const __kodusPlatformLimiterInternals = {
+    cache: kodusPlatformLimiters,
+    reset: () => kodusPlatformLimiters.clear(),
+};
+
 export function runWithBYOKLimiter<T>(
     params: {
         slot?: NormalizedModel;
@@ -574,6 +659,13 @@ export function runWithBYOKLimiter<T>(
     fn: () => Promise<T>,
     label = 'llm-call',
 ): Promise<T> {
+    // A Kodus-routed slot ALSO passes the shared platform gate (inner), so
+    // the org limiter below composes over it.
+    if (isPlatformFundedProvider(params.slot?.provider)) {
+        const inner = fn;
+        fn = () => runWithKodusPlatformLimiter(params, inner, label);
+    }
+
     const maxConcurrent = params.slot?.maxConcurrentRequests;
     const rpm = params.slot?.rpm;
     const tpm = params.slot?.tpm;

@@ -15,7 +15,7 @@ BYOK (Bring Your Own Key) is the **default way Kodus uses LLMs across every plan
 
 ## How BYOK works
 
-BYOK is **provider-first**: you connect a provider once, add the models you want to it, and then route those models to Kody's tasks. The `/organization/byok` screen has three tabs:
+BYOK is **provider-first**: you connect a provider once, add the models you want to it, and then route those models to Kody's tasks. The `/byok` screen has three tabs:
 
 <CardGroup cols={3}>
   <Card title="Providers" icon="box">
@@ -30,14 +30,14 @@ BYOK is **provider-first**: you connect a provider once, add the models you want
 </CardGroup>
 
 <Info>
-  **Who can edit this.** The BYOK page is **Owner-only** — connecting, testing, and deleting keys requires the **Owner** role. Other roles (Billing Manager, Repo Admin, Contributor) can't access `/organization/byok`. See [Workspace Roles](/how_to_use/en/workspace_roles).
+  **Who can edit this.** The BYOK page is **Owner-only** — connecting, testing, and deleting keys requires the **Owner** role. Other roles (Billing Manager, Repo Admin, Contributor) can't access `/byok`. See [Workspace Roles](/how_to_use/en/workspace_roles).
 </Info>
 
 ## Connect a provider
 
 <Steps>
   <Step title="Open BYOK settings">
-    Go to [app.kodus.io/organization/byok](https://app.kodus.io/organization/byok). On a fresh workspace you'll see **Connect your first provider**.
+    Go to [app.kodus.io/byok](https://app.kodus.io/byok). On a fresh workspace you'll see **Connect your first provider**.
   </Step>
 
   <Step title="Pick a provider">
@@ -428,7 +428,7 @@ Use this when:
 
 #### Going manual with namespaces (power users)
 
-If your JSON already contains a known namespace key at the top level (`anthropic`, `google`, `openai`, `openrouter`, `openaiCompatible`), Kodus leaves it untouched. Useful if you want to mix multiple provider namespaces or be explicit:
+If your JSON already starts with a known namespace key at the top level — any key from the mapping table below — Kodus leaves it untouched. Useful if you want to mix multiple provider namespaces or be explicit:
 
 ```json
 {
@@ -444,10 +444,14 @@ Under the hood, these are the namespace mappings Kodus uses:
 | BYOK provider | Namespace key |
 | --- | --- |
 | `anthropic` / `anthropic_compatible` | `anthropic` |
-| `google_gemini` / `google_vertex` | `google` |
+| `google_gemini` | `google` |
+| `google_vertex` | `google` for Gemini, `anthropic` for Claude on Vertex |
 | `openai` | `openai` |
+| `openai_compatible` | `openaiCompatible` |
+| `azure` | `azure` |
+| `amazon_bedrock` | `amazonBedrock` (also accepts `bedrock`) |
+| `novita` | `novita` |
 | `open_router` | `openrouter` |
-| `openai_compatible` / `novita` | `openaiCompatible` |
 
 #### Gotchas
 

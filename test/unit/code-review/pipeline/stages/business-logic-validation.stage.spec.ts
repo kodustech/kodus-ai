@@ -234,11 +234,210 @@ describe('BusinessLogicValidationStage', () => {
         });
     });
 
-    describe('computePrBodyHash', () => {
-        it('only depends on the PR body — title-only edits should not re-trigger reviews', () => {
-            const hash1 = (stage as any).computePrBodyHash('same body');
-            const hash2 = (stage as any).computePrBodyHash('same body');
-            expect(hash1).toBe(hash2);
+    describe('one-shot gate', () => {
+        const withTicket = (overrides: Record<string, unknown> = {}) =>
+            buildContext({
+                pullRequest: {
+                    number: 42,
+                    body: 'Implements DL-2773',
+                    title: '',
+                    head: { ref: '' },
+                    base: { ref: 'main' },
+                },
+                ...overrides,
+            });
+
+        it('runs when the PR has never been validated', async () => {
+            const decision = await (stage as any).evaluateSkip(withTicket());
+            expect(decision).toBeNull();
+        });
+
+        it('skips once the PR has already been validated', async () => {
+            const decision = await (stage as any).evaluateSkip(
+                withTicket({
+                    pipelineMetadata: {
+                        lastExecution: {
+                            businessLogicValidatedAt: '2026-09-02T17:23:23.000Z',
+                        },
+                    },
+                }),
+            );
+
+            expect(decision).toEqual(
+                expect.objectContaining({ reason: 'already_validated' }),
+            );
+        });
+
+        it('still skips when the PR body changed after the first validation', async () => {
+            const decision = await (stage as any).evaluateSkip(
+                withTicket({
+                    pullRequest: {
+                        number: 42,
+                        body: 'Implements DL-2773 — description rewritten since',
+                        title: '',
+                        head: { ref: '' },
+                        base: { ref: 'main' },
+                    },
+                    pipelineMetadata: {
+                        lastExecution: {
+                            businessLogicValidatedAt: '2026-09-02T17:23:23.000Z',
+                        },
+                    },
+                }),
+            );
+
+            expect(decision).toEqual(
+                expect.objectContaining({ reason: 'already_validated' }),
+            );
+        });
+
+        it('re-runs for @kody review --force even when already validated', async () => {
+            const decision = await (stage as any).evaluateSkip(
+                withTicket({
+                    origin: 'command-force',
+                    pipelineMetadata: {
+                        lastExecution: {
+                            businessLogicValidatedAt: '2026-09-02T17:23:23.000Z',
+                        },
+                    },
+                }),
+            );
+
+            expect(decision).toBeNull();
+        });
+
+        it('does not re-run on a force-push, which sets forceFullRerun without a user asking', async () => {
+            const decision = await (stage as any).evaluateSkip(
+                withTicket({
+                    origin: 'automation',
+                    pipelineMetadata: {
+                        forceFullRerun: true,
+                        lastExecution: {
+                            businessLogicValidatedAt: '2026-09-02T17:23:23.000Z',
+                        },
+                    },
+                }),
+            );
+
+            expect(decision).toEqual(
+                expect.objectContaining({ reason: 'already_validated' }),
+            );
+        });
+
+        it('honours the legacy body-hash marker left by earlier releases', async () => {
+            const decision = await (stage as any).evaluateSkip(
+                withTicket({
+                    pipelineMetadata: {
+                        lastExecution: { businessLogicHash: 'a-stored-hash' },
+                    },
+                }),
+            );
+
+            expect(decision).toEqual(
+                expect.objectContaining({ reason: 'already_validated' }),
+            );
+        });
+    });
+
+    describe('validation marker', () => {
+        const ticketContext = () =>
+            buildContext({
+                pullRequest: {
+                    number: 42,
+                    body: 'Implements DL-2773',
+                    title: '',
+                    head: { ref: '' },
+                    base: { ref: 'main' },
+                },
+            });
+
+        it('marks the PR as validated when a gap is reported', async () => {
+            agentProvider.execute.mockResolvedValue('Business logic gap found');
+
+            const result = await stage.execute(ticketContext() as any);
+
+            expect(result.businessLogicValidatedAt).toEqual(expect.any(String));
+        });
+
+        it('marks the PR as validated when the PR is aligned', async () => {
+            agentProvider.execute.mockResolvedValue('No gaps found');
+
+            const result = await stage.execute(ticketContext() as any);
+
+            expect(result.businessLogicValidatedAt).toEqual(expect.any(String));
+        });
+
+        it('marks the PR as validated when weak task context is reported to the author', async () => {
+            agentProvider.execute.mockResolvedValue(
+                `${BusinessRulesValidationAgentProvider.WEAK_TASK_CONTEXT_MARKER}\n## Need Task Information`,
+            );
+
+            const result = await stage.execute(ticketContext() as any);
+
+            expect(result.businessLogicResults).toHaveLength(1);
+            expect(result.businessLogicValidatedAt).toEqual(expect.any(String));
+        });
+
+        it('leaves the PR unmarked when the agent fails, so a transient error stays retryable', async () => {
+            agentProvider.execute.mockRejectedValue(new Error('boom'));
+
+            const result = await stage.execute(ticketContext() as any);
+
+            expect(result.businessLogicValidatedAt).toBeUndefined();
+        });
+
+        it('leaves the PR unmarked when nothing was posted to the author', async () => {
+            agentProvider.execute.mockResolvedValue(
+                'MCP connection failed while reading the task',
+            );
+
+            const result = await stage.execute(ticketContext() as any);
+
+            expect(result.businessLogicResults).toEqual([]);
+            expect(result.businessLogicValidatedAt).toBeUndefined();
+        });
+    });
+
+    describe('automatic-run footer', () => {
+        it('tells the author how to re-run the validation on demand', async () => {
+            agentProvider.execute.mockResolvedValue('Business logic gap found');
+
+            const result = await stage.execute(
+                buildContext({
+                    pullRequest: {
+                        number: 42,
+                        body: 'Implements DL-2773',
+                        title: '',
+                        head: { ref: '' },
+                        base: { ref: 'main' },
+                    },
+                }) as any,
+            );
+
+            expect(result.businessLogicResults?.[0].suggestionContent).toContain(
+                '@kody -v business-logic',
+            );
+        });
+
+        it('omits the footer when the user asked for this run explicitly', async () => {
+            agentProvider.execute.mockResolvedValue('Business logic gap found');
+
+            const result = await stage.execute(
+                buildContext({
+                    origin: 'command-force',
+                    pullRequest: {
+                        number: 42,
+                        body: 'Implements DL-2773',
+                        title: '',
+                        head: { ref: '' },
+                        base: { ref: 'main' },
+                    },
+                }) as any,
+            );
+
+            expect(
+                result.businessLogicResults?.[0].suggestionContent,
+            ).not.toContain('@kody -v business-logic');
         });
     });
 
@@ -283,6 +482,119 @@ describe('BusinessLogicValidationStage', () => {
                 ['atlassianrovo'],
             );
             expect(result).toBe(true);
+        });
+
+        it('does NOT count a git-issue ref when only a Jira-style MCP (Rovo) is connected (#1908)', () => {
+            // Core bug: a bare `#N` on the linked issue is resolvable only by
+            // a git-issues MCP. With Atlassian Rovo connected but no
+            // git-issues MCP, the gate used to pass and the agent flailed into
+            // "Insufficient Task Context".
+            const result = (stage as any).hasRelevantBusinessSignals(
+                'Closes #1825\n\nImplements the fix for the linked issue.',
+                ['atlassianrovo'],
+            );
+            expect(result).toBe(false);
+        });
+
+        it('does NOT count a full issue URL when only a Jira-style MCP is connected (#1908)', () => {
+            const result = (stage as any).hasRelevantBusinessSignals(
+                'Fixes https://github.com/acme/proj/issues/1825',
+                ['jira'],
+            );
+            expect(result).toBe(false);
+        });
+
+        it('counts a git-issue ref when a git-issues MCP is connected (#1908)', () => {
+            const result = (stage as any).hasRelevantBusinessSignals(
+                'Closes #1825\n\nBody.',
+                ['gitissues'],
+            );
+            expect(result).toBe(true);
+        });
+
+        it('counts a full issue URL when a git-issues MCP is connected (#1908)', () => {
+            const result = (stage as any).hasRelevantBusinessSignals(
+                'Fixes https://github.com/acme/proj/issues/1825',
+                ['githubissues'],
+            );
+            expect(result).toBe(true);
+        });
+
+        it('does NOT count a bare /issues/N substring when a git-issues MCP is connected (#1908 review)', () => {
+            // The git-issue URL detector must be anchored to a real URL: a
+            // bare `/issues/\d+` also matches fixture paths, branch names and
+            // prose, none of which is a resolvable issue link.
+            expect(
+                (stage as any).hasRelevantBusinessSignals(
+                    'see issues/2024 for the plan',
+                    ['gitissues'],
+                ),
+            ).toBe(false);
+            expect(
+                (stage as any).hasRelevantBusinessSignals(
+                    'path: test/fixtures/issues/123.json',
+                    ['githubissues'],
+                ),
+            ).toBe(false);
+        });
+
+        it('counts a full issue URL whatever the scheme casing (#1908 review)', () => {
+            // detectTicketKeys matches the scheme case-insensitively (/gi), so
+            // a `HTTPS://...` reference is a resolvable issue link and must not
+            // be skipped: with a git-issues-only MCP setup, `#`-prefixed keys
+            // are discarded and detectTaskLinks is case-sensitive too.
+            expect(
+                (stage as any).hasRelevantBusinessSignals(
+                    'Fixes HTTPS://github.com/acme/proj/issues/1825',
+                    ['gitissues'],
+                ),
+            ).toBe(true);
+            expect(
+                (stage as any).hasRelevantBusinessSignals(
+                    'See Https://gitlab.com/acme/proj/issues/77',
+                    ['githubissues'],
+                ),
+            ).toBe(true);
+        });
+
+        it('still counts a Jira key alongside a git-issue ref when a Jira-style MCP is connected (#1908)', () => {
+            const result = (stage as any).hasRelevantBusinessSignals(
+                'LKDB-286 Closes #1825',
+                ['atlassianrovo'],
+            );
+            expect(result).toBe(true);
+        });
+
+        it('counts a case-mixed issue URL and extracts its number when a git-issues MCP is connected (#1908 review)', () => {
+            // The gate URL matcher and the ticket-key extractor both use a
+            // case-insensitive flag (/i and /gi). A URL like
+            // `HTTPS://.../ISSUES/1825` must therefore pass the gate AND
+            // still yield the issue number — otherwise the agent receives
+            // empty signals and reproducers claim #1908.
+            expect(
+                (stage as any).hasRelevantBusinessSignals(
+                    'Fixes HTTPS://github.com/acme/proj/ISSUES/1825',
+                    ['gitissues'],
+                ),
+            ).toBe(true);
+            expect(
+                (stage as any).hasRelevantBusinessSignals(
+                    'See Https://gitlab.com/acme/proj/Issues/1825',
+                    ['githubissues'],
+                ),
+            ).toBe(true);
+            // The extractor must pull the number out of the case-mixed URL so
+            // the agent gets `#1825`, not nothing (#1908).
+            expect(
+                (stage as any).detectTicketKeys(
+                    'Fixes HTTPS://github.com/acme/proj/ISSUES/1825',
+                ),
+            ).toEqual(['#1825']);
+            expect(
+                (stage as any).detectTicketKeys(
+                    'See Https://gitlab.com/acme/proj/Issues/1825',
+                ),
+            ).toEqual(['#1825']);
         });
     });
 
@@ -392,6 +704,66 @@ describe('BusinessLogicValidationStage', () => {
                     reason: 'no_task_mcp',
                 }),
             );
+        });
+    });
+
+    describe('evaluateSkip — git-issue ref vs connected MCP kind (#1908)', () => {
+        it('skips when the only reference is a git issue and only a Jira-style MCP (Rovo) is connected', async () => {
+            // The real-world case from the issue: org tracks work in GitHub
+            // issues, connected task MCP is Atlassian Rovo only, PR body says
+            // "Closes #1868". Pre-fix the gate passed, the agent flailed
+            // through the Jira tools and posted "Insufficient Task Context".
+            mcpManagerService.getConnections.mockResolvedValue([
+                {
+                    appName: 'Atlassian Rovo',
+                    provider: 'atlassianrovo',
+                    organizationId: 'org-1',
+                },
+            ]);
+            mcpManagerService.getIntegrations.mockResolvedValue([]);
+
+            const context = buildContext({
+                pullRequest: {
+                    number: 42,
+                    body: 'Closes #1868\n\nImplements the linked issue.',
+                    title: '',
+                    head: { ref: 'fix/1868' },
+                    base: { ref: 'main' },
+                },
+            });
+
+            const decision = await (stage as any).evaluateSkip(context);
+
+            expect(decision).toEqual(
+                expect.objectContaining({ reason: 'no_signals' }),
+            );
+        });
+
+        it('does not skip a git-issue ref when a git-issues MCP IS connected', async () => {
+            mcpManagerService.getConnections.mockResolvedValue([
+                {
+                    appName: 'Git Issues',
+                    provider: 'kodus',
+                    integrationId: 'kodus-issues-default',
+                    category: 'task-management',
+                    organizationId: 'org-1',
+                },
+            ]);
+            mcpManagerService.getIntegrations.mockResolvedValue([]);
+
+            const context = buildContext({
+                pullRequest: {
+                    number: 42,
+                    body: 'Closes #1825',
+                    title: '',
+                    head: { ref: 'fix/1825' },
+                    base: { ref: 'main' },
+                },
+            });
+
+            const decision = await (stage as any).evaluateSkip(context);
+
+            expect(decision).toBeNull();
         });
     });
 });

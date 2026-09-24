@@ -4,6 +4,7 @@ import { createLogger } from '@libs/core/log/logger';
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import type { LinkedRepoAccess } from '@libs/ee/linked-repositories';
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
+import { createSubmoduleProbe } from '@libs/code-review/infrastructure/agents/engine/uninitialized-submodules';
 
 const logger = createLogger('AgentTools');
 
@@ -47,6 +48,13 @@ export interface DocumentationSearchAdapter {
             }>
         >
     >;
+    /**
+     * True when the search backend is actually usable (e.g. an Exa API key is
+     * configured). Lets the agent-visible tool distinguish "no docs exist"
+     * from "search is not available right now" instead of silently reporting
+     * the former for the latter (#1762).
+     */
+    isSearchAvailable?: () => boolean;
 }
 
 /**
@@ -141,6 +149,30 @@ function filterDiagnosticsToTarget(
  * (lazy clone on first access). Path traversal outside the linked root is
  * rejected.
  */
+/**
+ * Does this tool answer say "there is nothing here"?
+ *
+ * Shared by every caller that decides whether to attach the
+ * uninitialized-submodule note, so a new call site cannot cover a subset and
+ * silently reproduce #1939 on the shapes it missed. `remoteCommands.grep`
+ * RETURNS `Error: <stderr>` for a missing path rather than throwing
+ * (`e2b-sandbox.service.ts`), which is how a `node_modules` lookup fails, so
+ * that shape counts as nothing found too.
+ *
+ * Narrow on purpose: grepping for "No such file or directory" while reviewing
+ * error handling must get its real matches back, not a note telling the agent
+ * the result is not evidence.
+ */
+function answersNothing(result: string): boolean {
+    return (
+        !result.trim() ||
+        result === 'No matches found.' ||
+        result.startsWith('No files matching') ||
+        (result.startsWith('Error') &&
+            /no such file or directory|os error 2/i.test(result))
+    );
+}
+
 export function buildAgentTools(
     remoteCommands: RemoteCommands | undefined,
     gitHubToken?: string,
@@ -153,6 +185,53 @@ export function buildAgentTools(
     if (!remoteCommands) {
         return {};
     }
+
+    // The sandbox checkout never runs `git submodule update`, so every path a
+    // repository declares in `.gitmodules` is an EMPTY directory here. Without
+    // this probe, grep/listDir/findFile answer "nothing here" and the agent
+    // reads that as "this code does not exist" (#1939). The probe only runs on
+    // an already-empty result, and a repo with no `.gitmodules` pays a single
+    // failed read for the whole review.
+    const submoduleProbe = createSubmoduleProbe(remoteCommands);
+
+    /**
+     * Attach the "this was never fetched / never installed" note to a tool
+     * answer that found nothing, and ONLY to one that found nothing — a plain
+     * empty directory that no `.gitmodules` declares keeps answering plainly
+     * empty, and a search that did return results is left untouched.
+     *
+     * "Found nothing" covers a not-found ERROR as well as an empty answer: an
+     * uninitialized submodule directory exists and lists empty, but a
+     * `node_modules` path does not exist at all, so the providers answer it
+     * with `Error: … No such file or directory`. That is the exact string the
+     * reported trace got back before concluding the export was undefined.
+     *
+     * Never throws: a probe failure must not turn a working tool into an error.
+     */
+    const withSubmoduleNote = async (
+        result: string,
+        searchedPath: string,
+    ): Promise<string> => {
+        // Only the tool's OWN absence answers count. Matching the not-found
+        // phrases anywhere in the output would annotate real results: an agent
+        // grepping for "No such file or directory" while reviewing error
+        // handling would get its matches back with "this empty result is NOT
+        // evidence" appended, contradicting the matches it can see.
+        if (!answersNothing(result)) return result;
+        try {
+            const note = await submoduleProbe.explainEmptyResult(searchedPath);
+            if (!note) return result;
+            return result.trim() ? `${result}\n\n${note}` : note;
+        } catch (err) {
+            logger.warn({
+                message: `Submodule probe failed for "${searchedPath}": ${err instanceof Error ? err.message : String(err)}`,
+                context: 'agent-tools.submoduleProbe',
+                error: err,
+                metadata: { searchedPath },
+            });
+            return result;
+        }
+    };
 
     const linkedReposHint = linkedRepoAccess?.list()?.length
         ? ` Optional repo="<fullName>" searches a linked repository (${linkedRepoAccess
@@ -383,7 +462,10 @@ export function buildAgentTools(
                         }
                         // exit code 1 = no matches (not an error)
                         if (exitCode === 1 || !stdout.trim()) {
-                            return 'No matches found.';
+                            return withSubmoduleNote(
+                                'No matches found.',
+                                searchPath,
+                            );
                         }
                         if (exitCode === 0) {
                             const raw = stdout.trim();
@@ -422,9 +504,31 @@ export function buildAgentTools(
                         glob,
                     );
                 } catch (err) {
-                    return `Error searching for "${pattern}": ${err instanceof Error ? err.message : String(err)}`;
+                    // A "no such file" here is how a `node_modules` lookup
+                    // fails, so it goes through the note too (#1939).
+                    return withSubmoduleNote(
+                        `Error searching for "${pattern}": ${err instanceof Error ? err.message : String(err)}`,
+                        searchPath,
+                    );
                 }
                 if (namesOnly) {
+                    // The note has to come BEFORE the file-name mapping, and
+                    // on the SAME predicate the note itself uses. An empty
+                    // answer maps to an empty answer; worse, `Error: ... No
+                    // such file or directory` — what a missing `node_modules`
+                    // returns — maps to the bare literal `Error`, losing both
+                    // the marker and the message.
+                    if (answersNothing(result)) {
+                        return withSubmoduleNote(result, searchPath);
+                    }
+                    // A provider error answer is not a list of file names.
+                    // `remoteCommands.grep` returns `Error: <stderr>` for
+                    // every ripgrep exit >= 2 — an invalid regex, a
+                    // permission failure — and the mapping below would
+                    // reduce it to the bare literal `Error`, destroying the
+                    // message the agent needs to fix its own call. The `: `
+                    // keeps real match lines like `ErrorBoundary.tsx:12:`.
+                    if (result.startsWith('Error: ')) return result;
                     const files = [
                         ...new Set(
                             result
@@ -441,7 +545,7 @@ export function buildAgentTools(
                         lines.slice(0, MAX_GREP_MATCHES).join('\n') +
                         `\n... (${lines.length - MAX_GREP_MATCHES} more matches hidden — narrow with a more specific regex, glob='*.ts', path=<subdir>, or excludeTests=true)`;
                 }
-                return result;
+                return withSubmoduleNote(result, searchPath);
             },
         ),
 
@@ -708,7 +812,19 @@ export function buildAgentTools(
                     }
                 }
 
-                let result = await remoteCommands.listDir(dirPath, depth);
+                let result: string;
+                try {
+                    result = await remoteCommands.listDir(dirPath, depth);
+                } catch (err) {
+                    // Same contract as grep/readFile above: a failed listing is
+                    // reported to the model as a tool error, never thrown past
+                    // the tool boundary. Reachable since the null sandbox stopped
+                    // answering '' for a repository it cannot see (#1826).
+                    return withSubmoduleNote(
+                        `Error listing ${dirPath}: ${err instanceof Error ? err.message : String(err)}`,
+                        dirPath,
+                    );
+                }
                 // Filter out common noise directories
                 const IGNORE_DIRS = [
                     'node_modules',
@@ -734,7 +850,7 @@ export function buildAgentTools(
                         result.substring(0, MAX_LIST_LENGTH) +
                         `\n... (truncated — pass a more specific path or a lower maxDepth to narrow the listing)`;
                 }
-                return result;
+                return withSubmoduleNote(result, dirPath);
             },
         ),
 
@@ -825,10 +941,17 @@ export function buildAgentTools(
                     }
 
                     // Fallback: listDir + filter (slower, no .gitignore)
-                    const allFiles = await remoteCommands.listDir(
-                        searchPath,
-                        4,
-                    );
+                    let allFiles: string;
+                    try {
+                        allFiles = await remoteCommands.listDir(searchPath, 4);
+                    } catch (err) {
+                        // See the listDir tool above: tool errors are reported,
+                        // not thrown past the boundary (#1826).
+                        return withSubmoduleNote(
+                            `Error searching for files under ${searchPath}: ${err instanceof Error ? err.message : String(err)}`,
+                            searchPath,
+                        );
+                    }
                     const matching = allFiles
                         .split('\n')
                         .filter(
@@ -840,7 +963,10 @@ export function buildAgentTools(
                                 (!ext || f.endsWith(`.${ext}`)),
                         );
                     if (matching.length === 0) {
-                        return `No files matching "${pattern}" in ${searchPath}`;
+                        return withSubmoduleNote(
+                            `No files matching "${pattern}" in ${searchPath}`,
+                            searchPath,
+                        );
                     }
 
                     if (matching.length > 30) {
@@ -1479,6 +1605,18 @@ fi
                 }
 
                 try {
+                    // Distinguish "search cannot run" from "no docs exist".
+                    // Previously an unconfigured/broken backend produced the
+                    // same "No documentation found" as a genuine empty result,
+                    // so the agent could not tell "tool unavailable" from "the
+                    // library has no docs" and fell back to its prior (#1762).
+                    const available =
+                        documentationSearchService.isSearchAvailable?.() ??
+                        true;
+                    if (!available) {
+                        return `Documentation search is not available right now (no configured search backend). Do NOT conclude the package has no documentation: this means the tool did not run. If the finding depends on framework documentation, state that verification is unavailable.`;
+                    }
+
                     const planByFile = {
                         agent: { queryTasks: [{ packageName, query }] },
                     };
@@ -1490,7 +1628,13 @@ fi
 
                     const docs = results['agent'] || [];
                     if (docs.length === 0) {
-                        return `No documentation found for "${packageName}" with query "${query}".`;
+                        // A successful Exa search always returns a doc item
+                        // (even a 0-result query yields url:"unknown" + a
+                        // fallback snippet), so empty docs with a configured
+                        // backend means every query failed at runtime (#1762
+                        // cause b) — NOT "the library has no docs". Say so,
+                        // matching the unconfigured-backend branch above.
+                        return `Documentation search ran but returned no documentation for "${packageName}" with query "${query}" (the search backend answered nothing). Do NOT conclude the package has no documentation: this usually means the backend is failing at runtime. If the finding depends on framework documentation, state that verification is unavailable.`;
                     }
 
                     const formatted = docs

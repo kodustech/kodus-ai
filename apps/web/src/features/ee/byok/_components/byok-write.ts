@@ -60,6 +60,9 @@ export type BuildV2Edit =
           kind: "add-existing-provider";
           credentialId: string;
           model: BYOKModelFields;
+          /** Provider-scoped settings for the REUSED credential. Omit to keep
+           *  the stored ones; pass an object (possibly empty) to REPLACE them. */
+          credentialSettings?: Record<string, unknown>;
       }
     | {
           kind: "rotate";
@@ -68,7 +71,14 @@ export type BuildV2Edit =
           apiKey: string;
           settings?: Record<string, unknown>;
       }
-    | { kind: "edit-model"; modelId: string; model: BYOKModelFields }
+    | {
+          kind: "edit-model";
+          modelId: string;
+          model: BYOKModelFields;
+          /** Provider-scoped settings for the edited model's credential. Omit to
+           *  keep the stored ones; pass an object (possibly empty) to REPLACE. */
+          credentialSettings?: Record<string, unknown>;
+      }
     | { kind: "routing"; routing: BYOKRouting };
 
 /**
@@ -216,7 +226,9 @@ export const buildByokBlob = (
 
         case "add-existing-provider": {
             const credentials = (existing?.credentials ?? []).map((c) =>
-                keepCredential(c),
+                c.id === edit.credentialId
+                    ? keepCredential(c, undefined, edit.credentialSettings)
+                    : keepCredential(c),
             );
             const models = [...(existing?.models ?? [])];
 
@@ -239,8 +251,20 @@ export const buildByokBlob = (
         }
 
         case "edit-model": {
+            // Provider-scoped settings (baseURL, openrouter*, …) live on the
+            // CREDENTIAL, but the form that edits them is this model's form. So
+            // an edit-model save has to be able to write them through to the
+            // model's credential — without that, the fields render, validate and
+            // report success while the value is dropped client-side, which is
+            // exactly how a pinned OpenRouter provider order could never be
+            // changed once its credential existed.
+            const edited = (existing?.models ?? []).find(
+                (m) => m.id === edit.modelId,
+            );
             const credentials = (existing?.credentials ?? []).map((c) =>
-                keepCredential(c),
+                edited && c.id === edited.credentialId
+                    ? keepCredential(c, undefined, edit.credentialSettings)
+                    : keepCredential(c),
             );
             const models = (existing?.models ?? []).map((m) =>
                 m.id === edit.modelId

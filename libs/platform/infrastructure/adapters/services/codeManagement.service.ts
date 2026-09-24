@@ -37,6 +37,10 @@ import {
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { Repositories } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositories.type';
 import { RepositoryFile } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryFile.type';
+import {
+    RepositoryAccessDiagnosis,
+    UNKNOWN_REPOSITORY_ACCESS,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryAccessDiagnosis.type';
 import { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { PlatformIntegrationFactory } from './platformIntegration.factory';
 
@@ -1390,6 +1394,28 @@ export class CodeManagementService implements ICodeManagementService {
             this.platformIntegrationFactory.getCodeManagementService(type);
 
         return codeManagementService.isWebhookActive(params);
+    }
+
+    async diagnoseRepositoryAccess(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; fullName?: string };
+    }): Promise<RepositoryAccessDiagnosis> {
+        const type = await this.getTypeIntegration(
+            params.organizationAndTeamData,
+        );
+
+        if (!type) {
+            return { ...UNKNOWN_REPOSITORY_ACCESS };
+        }
+
+        const codeManagementService =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+
+        if (!codeManagementService.diagnoseRepositoryAccess) {
+            return { ...UNKNOWN_REPOSITORY_ACCESS };
+        }
+
+        return codeManagementService.diagnoseRepositoryAccess(params);
     }
 
     async formatReviewCommentBody(

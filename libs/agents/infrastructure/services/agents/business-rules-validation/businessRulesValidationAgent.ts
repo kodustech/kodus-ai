@@ -38,6 +38,7 @@ import {
     RequiredMcpPreflightError,
 } from '../../../../skills/skill.errors';
 import { createBusinessRulesBlueprint } from './blueprint';
+import { NO_TASK_MCP_SENTINEL as NO_TASK_MCP_SENTINEL_CONST } from './no-task-mcp-sentinel';
 import {
     buildMcpConnectionFailureFeedback,
 } from './required-mcp-feedback';
@@ -96,8 +97,12 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
     BusinessRulesPrepareContext
 > {
     /** Returned when no task-management MCP is connected so the pipeline
-     *  stage can silently skip without posting any PR comment. */
-    static readonly NO_TASK_MCP_SENTINEL = '__NO_TASK_MCP__';
+     *  stage can silently skip without posting any PR comment.
+     *  @deprecated import NO_TASK_MCP_SENTINEL from './no-task-mcp-sentinel'
+     *  directly — reaching through this class just to read a static string
+     *  couples callers to a Nest-injectable provider they don't otherwise
+     *  depend on. Kept for existing callers/tests. */
+    static readonly NO_TASK_MCP_SENTINEL = NO_TASK_MCP_SENTINEL_CONST;
 
     private readonly logger = createLogger(
         BusinessRulesValidationAgentProvider.name,

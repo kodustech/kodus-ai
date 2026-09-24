@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { estimateTokens } from '@libs/code-review/infrastructure/adapters/services/utils/token-estimator';
 import { ValidateSuggestionsStage } from '@libs/code-review/pipeline/stages/validate-suggestions.stage';
 import { SandboxSyntaxValidator } from '@libs/code-review/infrastructure/adapters/services/sandboxSyntaxValidator.service';
 import { SuggestionLLMValidator } from '@libs/code-review/infrastructure/adapters/services/suggestionLLMValidator.service';
@@ -38,18 +39,21 @@ import { applyEdit } from '@morphllm/morphsdk';
 
 /** Generate content of approximately `tokenCount` tokens (1 token ≈ 3.5 chars). */
 function generateContent(tokenCount: number, seed = 'file'): string {
-    const charCount = Math.floor(tokenCount * 3.5);
+    // Grows until the estimator AGREES it holds `tokenCount` tokens, rather than
+    // deriving a char count from a ratio the estimator no longer uses. The old
+    // form padded each line with `'x'.repeat(...)`, and BPE folds a run of
+    // identical characters — so content labelled 10_000 tokens measured a small
+    // fraction of that, and the budget cases below stopped exercising a budget.
     const lines: string[] = [];
-    let total = 0;
     let lineNum = 0;
-    while (total < charCount) {
-        const prefix = `${seed}_L${lineNum++}_`;
-        const padding = 'x'.repeat(Math.max(0, 70 - prefix.length));
-        const line = prefix + padding;
-        lines.push(line);
-        total += line.length + 1;
+    let content = '';
+    while (estimateTokens(content) < tokenCount) {
+        lines.push(
+            `${seed}_L${lineNum++} const value = compute(input, index); // pad`,
+        );
+        content = lines.join('\n');
     }
-    return lines.join('\n').slice(0, charCount);
+    return content;
 }
 
 function makeFile(filename: string, fileContent: string): FileChange {
@@ -304,10 +308,8 @@ describe('ValidateSuggestionsStage – maxInputTokens file skip', () => {
                 10000,
             );
 
-            // estimateTokens(content) = ceil(chars / 3.5)
-            // generateContent(9000) produces floor(9000*3.5) = 31500 chars
-            // estimateTokens(31500 chars) = ceil(31500/3.5) = 9000
-            // 9000 <= 9000 → should process (not strictly greater)
+            // The content measures ~9000 tokens against a 9000 budget:
+            // equal is not "exceeds", so the file must still be processed.
             expect(applyEdit).toHaveBeenCalledTimes(1);
         });
 

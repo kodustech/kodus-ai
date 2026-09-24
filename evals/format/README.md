@@ -1,5 +1,11 @@
 # Format eval
 
+> - **Answers:** Does the formatter keep code identifiers and drop the WHAT/WHY/HOW scaffolding?
+> - **Runs:** every engine PR, with the formatter mocked (`--mock=perfect`, `evals/wiring-smoke.js`).
+> - **Run it:** `node evals/format/run.js --mock=perfect --gate` · `node evals/format/run.js --model=gpt-5.4-mini --gate`
+> - **Gate:** `--gate` thresholds in `evals/format/run.js`.
+> - **Cost:** mock: none. Live: one formatter call per finding.
+
 Measures the review pipeline's **suggestion content formatter**
 (`format-suggestion-content.ts` / `format-prompt.ts`) — the secondary pass that
 turns WHAT/WHY/HOW scaffolding into natural prose.

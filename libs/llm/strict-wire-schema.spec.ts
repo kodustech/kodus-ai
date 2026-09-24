@@ -16,7 +16,6 @@ import { LLMDecisionExtractionSchema as llmDecisionExtractionSchemaCapture } fro
 import { LLMDecisionExtractionSchema as llmDecisionExtractionSchemaSession } from '@libs/cli-review/application/use-cases/classify-session.use-case';
 import { repeatedClusteringSchema } from '@libs/code-review/infrastructure/adapters/services/commentManager.service';
 import {
-    codeReviewAnalysisSchema,
     severityAnalysisSchema,
     validateImplementedSchema,
 } from '@libs/code-review/infrastructure/adapters/services/llmAnalysis.service';
@@ -30,14 +29,6 @@ import {
     kodyIssuesMergeSchema,
     kodyIssuesResolveSchema,
 } from '@libs/ee/codeBase/kodyIssuesAnalysis.service';
-import {
-    kodyRulesExtractIdSchema,
-    kodyRulesUpdateSchema,
-} from '@libs/ee/codeBase/kodyRulesAnalysis.service';
-import {
-    prLevelAnalyzerSchema,
-    prLevelGroupSchema,
-} from '@libs/ee/codeBase/kodyRulesPrLevelAnalysis.service';
 
 // Phase 3 call sites that reuse schemas already exported from prompt files —
 // they still flow through the strict-wire path, so assert them here too.
@@ -124,7 +115,6 @@ describe('zodToStrictWireSchema', () => {
             'repeatedClusteringSchema (comment clustering)',
             repeatedClusteringSchema,
         ],
-        ['codeReviewAnalysisSchema (llmAnalysis)', codeReviewAnalysisSchema],
         ['severityAnalysisSchema (llmAnalysis)', severityAnalysisSchema],
         ['validateImplementedSchema (llmAnalysis)', validateImplementedSchema],
         [
@@ -145,16 +135,6 @@ describe('zodToStrictWireSchema', () => {
             'kodyIssuesResolveSchema (kody issues resolve)',
             kodyIssuesResolveSchema,
         ],
-        [
-            'kodyRulesExtractIdSchema (rule id extraction)',
-            kodyRulesExtractIdSchema,
-        ],
-        [
-            'kodyRulesUpdateSchema (update std suggestions)',
-            kodyRulesUpdateSchema,
-        ],
-        ['prLevelAnalyzerSchema (pr-level analyzer)', prLevelAnalyzerSchema],
-        ['prLevelGroupSchema (pr-level grouping)', prLevelGroupSchema],
         // commentAnalysis migration → its schemas now flow through strict-wire.
         [
             'commentCategorizerSchema (comment categorizer)',
@@ -330,13 +310,11 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
         'libs/code-review/infrastructure/adapters/services/commentAnalysis.service.ts', // commentCategorizerSchema, commentIrrelevanceFilterSchema, kodyRulesGenerator{,DuplicateFilter,QualityFilter}Schema
         'libs/code-review/infrastructure/adapters/services/documentation-llm-planner.service.ts', // DocumentationPlannerSchema
         'libs/code-review/infrastructure/adapters/services/documentation-search-exa.service.ts', // documentationSearchExaFormatSchema
-        'libs/code-review/infrastructure/adapters/services/llmAnalysis.service.ts', // codeReviewAnalysisSchema, severityAnalysisSchema, validateImplementedSchema
+        'libs/code-review/infrastructure/adapters/services/llmAnalysis.service.ts', // severityAnalysisSchema, validateImplementedSchema
         'libs/code-review/infrastructure/adapters/services/safeguardPipeline.service.ts', // safeguardFeatureExtractionSchema, safeguardVerificationSchema, agentTurnSchema
         'libs/code-review/infrastructure/adapters/services/suggestionLLMValidator.service.ts', // validateCodeSemanticsSchema, checkSuggestionSimplicitySchema
         'libs/ee/analytics-warehouse/classification/pull-request-classifier.service.ts', // classificationBatchSchema
         'libs/ee/codeBase/kodyIssuesAnalysis.service.ts', // kodyIssuesMergeSchema, kodyIssuesResolveSchema
-        'libs/ee/codeBase/kodyRulesAnalysis.service.ts', // kodyRulesExtractIdSchema, kodyRulesUpdateSchema, kodyRulesClassifierSchema, kodyRulesGeneratorSchema
-        'libs/ee/codeBase/kodyRulesPrLevelAnalysis.service.ts', // prLevelAnalyzerSchema, prLevelGroupSchema
         // Phase 3b: withStructuredOutputFallback → LLM.run migrations.
         'libs/code-review/infrastructure/agents/core/finder.agent.ts', // RECOVERY_SCHEMA (zod)
         'libs/code-review/pipeline/stages/agent-review.stage.ts', // DEDUP_SCHEMA, DEDUP_TIEBREAK_SCHEMA via jsonSchema() — AI-SDK Schema, passes through untouched (exempt from strict-wire conversion)
@@ -354,7 +332,17 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
                 if (entry.isDirectory()) {
                     if (
                         entry.name === 'node_modules' ||
-                        entry.name === 'dist'
+                        entry.name === 'dist' ||
+                        // Test SUPPORT, not a production call site. `.spec.ts`
+                        // is already excluded below; a harness that lives beside
+                        // the specs is the same thing without the suffix. The
+                        // BYOK wire harness drives `LLM.run` in LOOP mode and
+                        // never passes a schema — it only mentions the word in a
+                        // comment explaining why — so the heuristic below reads
+                        // it as a structured call site and demands registration
+                        // for a schema that does not exist.
+                        entry.name === 'testing' ||
+                        entry.name === '__fixtures__'
                     ) {
                         continue;
                     }

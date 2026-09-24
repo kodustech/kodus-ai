@@ -52,4 +52,52 @@ describe('extractTaskContextFromToolResult (characterization)', () => {
     it('returns undefined when nothing has core content', () => {
         expect(extractTaskContextFromToolResult({ foo: 'bar' })).toBeUndefined();
     });
+
+    // An MCP tool that fails answers with a normal response carrying
+    // isError/structuredContent rather than throwing, so the envelope has to be
+    // recognized or its fields get mined as if they were task content.
+    it('drops an MCP error envelope even when it carries a title-ish field', () => {
+        const payload = {
+            isError: true,
+            content: [{ type: 'text', text: 'upstream exploded' }],
+            structuredContent: {
+                success: false,
+                data: null,
+                title: 'KODUS_GET_ISSUE',
+            },
+        };
+
+        expect(extractTaskContextFromToolResult(payload)).toBeUndefined();
+    });
+
+    it('drops a structuredContent failure envelope', () => {
+        const payload = {
+            structuredContent: {
+                success: false,
+                count: 0,
+                data: [],
+                title: 'Issues',
+                description: 'could not be listed',
+            },
+        };
+
+        expect(extractTaskContextFromToolResult(payload)).toBeUndefined();
+    });
+
+    it('still reads task content out of a successful structuredContent result', () => {
+        const payload = {
+            structuredContent: {
+                success: true,
+                data: {
+                    number: 993,
+                    title: 'Rate-limit the sender',
+                    body: 'Cap outbound notifications at ten per second.',
+                },
+            },
+        };
+
+        const out = extractTaskContextFromToolResult(payload);
+        expect(out?.title).toBe('Rate-limit the sender');
+        expect(out?.description).toContain('ten per second');
+    });
 });

@@ -149,10 +149,19 @@ function CustomPromptsContent() {
         [promptFieldConfigs],
     );
     const {
-        isValid: formIsValid,
         isSubmitting: formIsSubmitting,
         defaultValues: formDefaultValues,
+        errors: formErrors,
     } = useFormState({ control: form.control });
+    // `formState.isValid` is unreliable here: react-hook-form only resolves
+    // it once every currently-registered field has completed a native HTML
+    // constraint-validation pass, but these Controller-driven rich-text
+    // fields have no underlying `<input>` for that check to run against. It
+    // gets stuck at its initial `false` — with an empty `errors` object —
+    // forever, so the Save button never enables no matter what the user
+    // types. None of these fields declare validation rules, so "no entries
+    // in errors" is the correct signal.
+    const formIsValid = Object.keys(formErrors).length === 0;
 
     const watchedPromptValues = useWatch({
         control: form.control,

@@ -7,12 +7,17 @@ import {
 
 describe('llm-call timeout primitives', () => {
     describe('AGENT_TIMEOUT_MS contract', () => {
-        it('caps a single agent at exactly 30 minutes', () => {
-            expect(AGENT_TIMEOUT_MS).toBe(30 * 60 * 1000);
+        it('caps a single agent at exactly 80 minutes', () => {
+            // Sized off 14 days of production AgentReviewStage durations (n=94):
+            // p99 29.5 min, max 32.2, and 1.1% already past the old 30-minute
+            // value — which means enforcing that one would have killed real
+            // reviews of large PRs. See the hierarchy note in llm-call.ts.
+            expect(AGENT_TIMEOUT_MS).toBe(80 * 60 * 1000);
         });
 
-        it('caps a single LLM call at exactly 10 minutes', () => {
-            expect(LLM_CALL_TIMEOUT_MS).toBe(10 * 60 * 1000);
+        it('caps a single LLM call at exactly 20 minutes', () => {
+            // Lockstep with the undici headersTimeout in fetch-timeouts.ts.
+            expect(LLM_CALL_TIMEOUT_MS).toBe(20 * 60 * 1000);
         });
     });
 
@@ -113,7 +118,7 @@ describe('llm-call timeout primitives', () => {
             await expect(wrapped).rejects.toThrow('inner-fail');
         });
 
-        it('uses AGENT_TIMEOUT_MS as the contract for a 30-minute agent run', async () => {
+        it('uses AGENT_TIMEOUT_MS as the contract for an 80-minute agent run', async () => {
             // End-to-end: a 30-min budget + 5s grace ⇒ rejects at 30:05.
             const inner = new Promise<never>(() => {});
             const wrapped = hardTimeout(
@@ -128,8 +133,8 @@ describe('llm-call timeout primitives', () => {
             const err = await result;
             expect((err as Error).message).toContain('[HARD-TIMEOUT]');
             expect((err as Error).message).toContain('agent-loop');
-            // 30 minutes = 1800 seconds
-            expect((err as Error).message).toContain('1800s');
+            // 80 minutes = 4800 seconds
+            expect((err as Error).message).toContain('4800s');
         });
     });
 });

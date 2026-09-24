@@ -250,13 +250,15 @@ export class OrganizationParametersController {
                 provider: { type: 'string' },
                 apiKey: { type: 'string' },
                 baseURL: { type: 'string' },
+                awsBearerToken: { type: 'string' },
+                awsRegion: { type: 'string' },
             },
         },
     })
     @ApiOperation({
         summary: 'List models with a candidate key',
         description:
-            "Live-list a provider's models using a just-typed (unsaved) API key + base URL — for the connect form, before the credential is saved. The key travels in the body (never a query string). Falls back to the org's saved credential when no key is supplied. Strict: an http provider with a candidate key does a live `/models` call and surfaces the error instead of a curated placeholder.",
+            "Live-list a provider's models using a just-typed (unsaved) credential — for the connect form, before it's saved. The credential travels in the body (never a query string): `apiKey`(+`baseURL`) for most providers, `awsBearerToken`(+`awsRegion`) for Amazon Bedrock, which never authenticates with an apiKey. Falls back to the org's saved credential when none is supplied. Strict: an http provider with a candidate credential does a live `/models` call and surfaces the error instead of a curated placeholder.",
     })
     @ApiOkResponse({ type: OrganizationProviderModelsResponseDto })
     public async listModelsWithKey(
@@ -265,13 +267,20 @@ export class OrganizationParametersController {
             provider: string;
             apiKey?: string;
             baseURL?: string;
+            awsBearerToken?: string;
+            awsRegion?: string;
         },
     ): Promise<ModelResponse> {
         const organizationId = this.request?.user?.organization?.uuid;
         return await this.getModelsByProviderUseCase.execute(
             body.provider,
             organizationId ? { organizationId } : undefined,
-            { apiKey: body.apiKey, baseURL: body.baseURL },
+            {
+                apiKey: body.apiKey,
+                baseURL: body.baseURL,
+                awsBearerToken: body.awsBearerToken,
+                awsRegion: body.awsRegion,
+            },
         );
     }
 
@@ -353,6 +362,13 @@ export class OrganizationParametersController {
                 model: { type: 'string' },
                 temperature: { type: 'number' },
                 reasoningEffort: { type: 'string' },
+                reasoningConfigOverride: { type: 'string' },
+                maxOutputTokens: { type: 'number' },
+                openrouterProviderOrder: {
+                    type: 'array',
+                    items: { type: 'string' },
+                },
+                openrouterAllowFallbacks: { type: 'boolean' },
                 vertexLocation: { type: 'string' },
                 awsBearerToken: { type: 'string' },
                 awsAccessKeyId: { type: 'string' },
@@ -365,7 +381,7 @@ export class OrganizationParametersController {
     @ApiOperation({
         summary: 'Test BYOK connection',
         description:
-            'Probe the provider with the supplied credentials to verify they work. Uses cheap metadata / identity calls (list-models for most providers, GoogleAuth token exchange for Vertex, STS GetCallerIdentity for Bedrock) — no LLM inference is performed.',
+            'Probe the provider with the supplied credentials to verify they work. Issues the same minimal call a review would make, through the same model resolver, so the configured model, temperature and reasoning are all exercised — a config that would fail at review time fails here instead. Vertex and Bedrock validate their auth material first (GoogleAuth token exchange / STS GetCallerIdentity).',
     })
     public async testByokConnection(
         @Body()
@@ -376,6 +392,10 @@ export class OrganizationParametersController {
             model?: string;
             temperature?: number;
             reasoningEffort?: 'none' | 'low' | 'medium' | 'high';
+            reasoningConfigOverride?: string;
+            maxOutputTokens?: number;
+            openrouterProviderOrder?: string[];
+            openrouterAllowFallbacks?: boolean;
             vertexLocation?: string;
             awsBearerToken?: string;
             awsAccessKeyId?: string;
@@ -384,7 +404,10 @@ export class OrganizationParametersController {
             awsSessionToken?: string;
         },
     ): Promise<TestByokResult> {
-        return await this.testByokConnectionUseCase.execute(body);
+        return await this.testByokConnectionUseCase.execute(
+            body,
+            this.request?.user?.organization?.uuid,
+        );
     }
 
     @Post('/test-byok-model')
@@ -578,7 +601,9 @@ export class OrganizationParametersController {
             'Return the registry-driven list of connectable BYOK providers (id, label, aliases). Static and non-sensitive — never returns any credential.',
     })
     public async getByokProviders(): Promise<ByokProvidersResult> {
-        return await this.getByokProvidersUseCase.execute();
+        return await this.getByokProvidersUseCase.execute(
+            this.request?.user?.organization?.uuid,
+        );
     }
 
 

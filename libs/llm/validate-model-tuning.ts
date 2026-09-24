@@ -13,6 +13,7 @@
  * the value won't be used BEFORE saving a config that quietly disagrees with it.
  */
 import { REGISTRY } from './providers';
+import { resolveTemperaturePolicy } from './providers/kernel/temperature';
 import { NON_REASONING_TRAITS } from './providers/kernel/reasoning-traits';
 import type { NormalizedModel } from './byok-config';
 
@@ -51,9 +52,7 @@ export function validateModelTuning(
 
     // Temperature vs the model's policy — only meaningful when the user set one.
     if (input.temperature != null) {
-        const policy = module.temperaturePolicy?.(cfg) ?? {
-            kind: 'adjustable' as const,
-        };
+        const policy = resolveTemperaturePolicy(module, cfg);
         if (policy.kind === 'unsupported') {
             issues.push({
                 field: 'temperature',

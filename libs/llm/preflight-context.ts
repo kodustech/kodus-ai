@@ -7,12 +7,12 @@
  * context — burning the whole timeout budget while each attempt fails the same.
  */
 import { AgentPromptTooLargeError } from './errors';
+import { estimateTextTokens } from './token-estimate';
 
-/**
- * Rough char-per-token ratio used by the preflight estimator. Matches
- * the same constant used by the base agent provider's prompt sizing.
- */
-const PREFLIGHT_CHARS_PER_TOKEN = 4;
+// The preflight used a flat chars/4 ratio while holding the full prompt TEXT in
+// its hands — it counted `.length` and threw the strings away. The real
+// tokenizer is right here in the same lib, so the guard that decides whether a
+// run is even attempted now measures instead of approximating.
 /**
  * Fraction of the context window held back for the model's reasoning
  * + tool-call output. The agent emits structured findings JSON and may
@@ -37,9 +37,9 @@ export function assertPromptFitsInContext(params: {
     if (!params.contextWindowTokens || params.contextWindowTokens <= 0) {
         return;
     }
-    const promptChars =
-        (params.systemPrompt?.length ?? 0) + (params.userPrompt?.length ?? 0);
-    const estimatedTokens = Math.ceil(promptChars / PREFLIGHT_CHARS_PER_TOKEN);
+    const estimatedTokens =
+        estimateTextTokens(params.systemPrompt ?? '') +
+        estimateTextTokens(params.userPrompt ?? '');
     const outputReserve = Math.max(
         PREFLIGHT_MIN_OUTPUT_RESERVE_TOKENS,
         Math.floor(params.contextWindowTokens * PREFLIGHT_OUTPUT_RESERVE_RATIO),

@@ -355,4 +355,67 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             deps.codeManagementService.checkIfPullRequestShouldBeApproved,
         ).not.toHaveBeenCalled();
     });
+    // getConfig depends only on the repository here, yet ran once per open PR —
+    // every 2 minutes, each call re-reading kodus-config.yml from the provider
+    // (10k Bitbucket 404s + 429s/day from one org with 3 repos).
+    it('resolves the repository config once per repository, not once per PR', async () => {
+        const { cron, deps } = makeCron();
+
+        deps.automationExecutionService.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId.mockResolvedValue(
+            [
+                { repositoryId: 'repo-a', pullRequestNumber: 1 },
+                { repositoryId: 'repo-a', pullRequestNumber: 2 },
+                { repositoryId: 'repo-a', pullRequestNumber: 3 },
+                { repositoryId: 'repo-b', pullRequestNumber: 4 },
+            ],
+        );
+        deps.pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+            [
+                makeOpenPr(1, 'repo-a'),
+                makeOpenPr(2, 'repo-a'),
+                makeOpenPr(3, 'repo-a'),
+                makeOpenPr(4, 'repo-b'),
+            ],
+        );
+        const shouldApproveSpy = jest
+            .spyOn(cron as any, 'shouldApprovePR')
+            .mockResolvedValue(false);
+
+        await cron.handleCron();
+
+        expect(deps.codeBaseConfigService.getConfig).toHaveBeenCalledTimes(2);
+        expect(shouldApproveSpy).toHaveBeenCalledTimes(4);
+        for (const [args] of shouldApproveSpy.mock.calls as any[]) {
+            expect(args.codeReviewConfig).toEqual({
+                pullRequestApprovalActive: true,
+            });
+        }
+    });
+    it("approves none of a repository's PRs when its config turns approval off", async () => {
+        const { cron, deps } = makeCron();
+
+        deps.codeBaseConfigService.getConfig.mockResolvedValue({
+            pullRequestApprovalActive: false,
+        });
+        deps.automationExecutionService.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId.mockResolvedValue(
+            [
+                { repositoryId: 'repo-a', pullRequestNumber: 1 },
+                { repositoryId: 'repo-a', pullRequestNumber: 2 },
+            ],
+        );
+        deps.pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+            [makeOpenPr(1, 'repo-a'), makeOpenPr(2, 'repo-a')],
+        );
+        const shouldApproveSpy = jest
+            .spyOn(cron as any, 'shouldApprovePR')
+            .mockResolvedValue(false);
+
+        await cron.handleCron();
+
+        expect(deps.codeBaseConfigService.getConfig).toHaveBeenCalledTimes(1);
+        expect(shouldApproveSpy).not.toHaveBeenCalled();
+        expect(
+            deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+        ).not.toHaveBeenCalled();
+    });
 });

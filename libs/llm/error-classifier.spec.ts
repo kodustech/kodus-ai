@@ -90,6 +90,20 @@ describe('classifyLLMError', () => {
             );
         });
 
+        // Read off production: Z.AI/GLM returns this exact prose with a 429.
+        // "balance" matched none of the quota vocabulary, so it landed on
+        // RATE_LIMIT -- retry-worthy -- and we kept retrying accounts that
+        // could only be fixed by paying. Four GLM scopes were stuck this way.
+        it.each([
+            'Insufficient balance or no resource package. Please recharge.',
+            'insufficient balance',
+            'Please recharge your account',
+        ])('reads a spent balance as quota, not rate limit: %s', (msg) => {
+            expect(classifyLLMError(errorWithStatus(msg, 429)).category).toBe(
+                LlmErrorCategory.QUOTA_EXCEEDED,
+            );
+        });
+
         it('treats plain 429 → RATE_LIMIT', () => {
             const err = errorWithStatus('too many requests', 429);
             expect(classifyLLMError(err).category).toBe(

@@ -1,0 +1,126 @@
+{
+    "note": "Verifier FINAL-TEXT payloads, one per row. Each reproduces a delivery SHAPE seen in production (issue #1937); the scenarios and wording are invented and map to no customer review. kodus-ai is public, so no path, identifier or phrasing from a real review appears here. `expect` is what the verify gate MUST do with that payload. Capture a live corpus with capture.js when you need volume; this set is the CI floor.",
+    "rows": [
+        {
+            "id": "text-refutation-with-index-field",
+            "model": "claude-sonnet-4-6",
+            "source": "shape: reasoning, a blank line, then the verdict object carrying the \"index\" field the prompt template hands the model. The SHAPE is from the production traces in issue #1937; the scenario and wording are invented, and map to no single customer review.",
+            "finishReason": "stop",
+            "calledVerdictTool": false,
+            "text": "The retry ceiling is read from the queue config, not hardcoded, and the loop breaks on the first success. The finding assumes a fixed ceiling that the code does not have.\n\n{\n  \"index\": 0,\n  \"keep\": false,\n  \"rationale\": \"the ceiling is configuration-driven and the loop exits on success; the premise does not hold\",\n  \"confidence\": \"high\"\n}",
+            "expect": {
+                "keep": false,
+                "parseMode": "text"
+            }
+        },
+        {
+            "id": "text-refutation-after-quoted-code",
+            "model": "zai/glm-5.3",
+            "source": "shape: verifier quotes the cited code before its verdict",
+            "finishReason": "stop",
+            "calledVerdictTool": false,
+            "text": "The claim is that these selectors do not exist. The cited file reads:\n\n```ts\nconst opts = { keep: true, retries: 3 };\nif (opts.keep) { flush({ keep: true }); }\n```\n\nBoth attributes are present, so the premise is false.\n\n```json\n{\"keep\": false, \"rationale\": \"both attributes exist in the cited file; the premise is demonstrably false\", \"confidence\": \"high\"}\n```",
+            "expect": {
+                "keep": false,
+                "parseMode": "text"
+            }
+        },
+        {
+            "id": "text-confirmation",
+            "model": "deepseek-v4.1-flash",
+            "source": "shape: text verdict that CONFIRMS — fail-open already agreed, must stay kept",
+            "finishReason": "stop",
+            "calledVerdictTool": false,
+            "text": "Read the handler and the guard is genuinely missing on the early-return path.\n\n{\"keep\": true, \"rationale\": \"the null guard is absent on the early-return branch\", \"confidence\": \"medium\"}",
+            "expect": {
+                "keep": true,
+                "parseMode": "text"
+            }
+        },
+        {
+            "id": "text-refutation-renamed-key",
+            "model": "GLM-5.3-FLASH",
+            "source": "shape: #1786 envelope — verdict under a renamed key, written as text",
+            "finishReason": "stop",
+            "calledVerdictTool": false,
+            "text": "Checked every caller. The claim does not hold.\n\n{\"result\": {\"shouldKeep\": false, \"rationale\": \"all three callers pass the argument\"}}",
+            "expect": {
+                "keep": false,
+                "parseMode": "text"
+            }
+        },
+        {
+            "id": "text-example-then-verdict",
+            "model": "MiniMax-M3",
+            "source": "shape: an example object quoted before the real verdict — the LAST one wins",
+            "finishReason": "stop",
+            "calledVerdictTool": false,
+            "text": "The expected response format is {\"keep\": true, \"rationale\": \"...\"}. My verdict:\n\n{\"keep\": false, \"rationale\": \"the branch is unreachable, the finding is moot\"}",
+            "expect": {
+                "keep": false,
+                "parseMode": "text"
+            }
+        },
+        {
+            "id": "tool-verdict",
+            "model": "claude-sonnet-4-6",
+            "source": "shape: the tool path, which works — the counter-example in issue #1937. Wording neutral.",
+            "finishReason": "stop",
+            "calledVerdictTool": true,
+            "toolPayload": {
+                "keep": false,
+                "rationale": "the finding reports no defect: its own text confirms the wiring is correct",
+                "confidence": "high"
+            },
+            "text": "",
+            "expect": {
+                "keep": false,
+                "parseMode": "tool"
+            }
+        },
+        {
+            "id": "budget-exhausted-no-verdict",
+            "model": "accounts/fireworks/models/deepseek-v4-flash-0731",
+            "source": "shape: the largest bucket in observed.json — cut off mid-investigation, last message is tool_call only, no text. Nothing to parse; fail-open is correct.",
+            "finishReason": "tool_call",
+            "calledVerdictTool": false,
+            "text": "",
+            "expect": {
+                "keep": true,
+                "parseMode": "default-keep"
+            }
+        },
+        {
+            "id": "prose-only-no-json",
+            "model": "gpt-5.4-2026-03-05",
+            "source": "shape: reasoned in prose, never emitted a verdict object",
+            "finishReason": "stop",
+            "calledVerdictTool": false,
+            "text": "I could not reach a conclusion: the file the finding points at is not in the diff and I could not read it.",
+            "expect": {
+                "keep": true,
+                "parseMode": "default-keep"
+            }
+        },
+        {
+            "id": "derived-tool-refutation",
+            "model": "(derived expectation)",
+            "source": "no `expect`: exercises the path a captured corpus row takes. A healthy tool refutation — payload keep:false, no verdict in the text — must not be scored from the text (PR #1976 review).",
+            "finishReason": "stop",
+            "calledVerdictTool": true,
+            "toolPayload": {
+                "keep": false,
+                "rationale": "refuted through the verdict tool"
+            },
+            "text": ""
+        },
+        {
+            "id": "derived-text-quoted-boolean",
+            "model": "(derived expectation)",
+            "source": "no `expect`: a quoted boolean is a shape the parser does not read by design (see verifier.agent.contract.spec.ts row21..row23, it.failing). Must be reported, never gated as a loss.",
+            "finishReason": "stop",
+            "calledVerdictTool": false,
+            "text": "Refuted.\n{\"keep\": \"false\", \"rationale\": \"quoted boolean\"}"
+        }
+    ]
+}

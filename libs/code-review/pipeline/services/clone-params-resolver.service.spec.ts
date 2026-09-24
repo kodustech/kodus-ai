@@ -249,3 +249,108 @@ describe('CloneParamsResolverService (platform coverage)', () => {
         },
     );
 });
+
+/**
+ * Regression coverage for the trial-mode "invalid input syntax for type
+ * uuid" prod incident (2026-09-14). Trial/anonymous CLI reviews
+ * (public-pr-review.use-case.ts) run with the placeholder
+ * `organizationAndTeamData: {organizationId: 'trial', teamId: 'trial'}` —
+ * there is no real integration row behind it. Without this fix, a trial
+ * review with no PAT still called `getCloneParams` with that placeholder,
+ * which Postgres rejected outright on the UUID-typed organization_id column.
+ */
+describe('CloneParamsResolverService (trial mode, no PAT)', () => {
+    const REMOTE = 'https://github.com/octocat/hello-world.git';
+
+    const trialPipelineContext = () =>
+        ({
+            origin: 'cli',
+            organizationAndTeamData: { organizationId: 'trial', teamId: 'trial' },
+        }) as any;
+
+    const trialCliContext = (over: Record<string, unknown> = {}) =>
+        ({
+            isTrialMode: true,
+            gitContext: {
+                remote: REMOTE,
+                branch: 'main',
+                inferredPlatform: PlatformType.GITHUB,
+            },
+            ...over,
+        }) as any;
+
+    it('never calls getCloneParams with the trial placeholder org', async () => {
+        const getCloneParams = jest.fn();
+        const service = new CloneParamsResolverService({
+            getCloneParams,
+        } as any);
+
+        await service.resolve(trialPipelineContext(), trialCliContext());
+
+        expect(getCloneParams).not.toHaveBeenCalled();
+    });
+
+    it('clones anonymously (no token) using the inferred platform', async () => {
+        const getCloneParams = jest.fn();
+        const service = new CloneParamsResolverService({
+            getCloneParams,
+        } as any);
+
+        const result = await service.resolve(
+            trialPipelineContext(),
+            trialCliContext(),
+        );
+
+        expect(result?.authToken).toBe('');
+        expect(result?.platform).toBe(PlatformType.GITHUB);
+        expect(result?.url).toBe(REMOTE);
+    });
+
+    it('still uses the PAT path when the trial user supplies one, without calling getCloneParams either', async () => {
+        const getCloneParams = jest.fn();
+        const service = new CloneParamsResolverService({
+            getCloneParams,
+        } as any);
+
+        const result = await service.resolve(
+            trialPipelineContext(),
+            trialCliContext({
+                gitContext: {
+                    remote: REMOTE,
+                    branch: 'main',
+                    inferredPlatform: PlatformType.GITHUB,
+                    githubPat: 'ghp-user-supplied',
+                },
+            }),
+        );
+
+        expect(getCloneParams).not.toHaveBeenCalled();
+        expect(result?.authToken).toBe('ghp-user-supplied');
+    });
+
+    // Regression (caught in review, PR #1954): a self-managed host (GitLab
+    // CE/EE, GHES, Gitea) the CLI could not infer a platform for must skip
+    // the sandbox via the existing `!platform` guard, not get force-assumed
+    // as GitHub — that would attempt an anonymous GitHub-shaped clone and
+    // fetch the wrong repository entirely (#1541, "Do NOT guess GitHub").
+    it('skips the sandbox (does not force GitHub) for a self-managed host trial-mode could not infer', async () => {
+        const getCloneParams = jest.fn();
+        const service = new CloneParamsResolverService({
+            getCloneParams,
+        } as any);
+
+        const result = await service.resolve(
+            trialPipelineContext(),
+            trialCliContext({
+                gitContext: {
+                    remote: 'https://git.acme-corp.internal/group/repo.git',
+                    branch: 'main',
+                    inferredPlatform: undefined,
+                },
+            }),
+        );
+
+        expect(getCloneParams).not.toHaveBeenCalled();
+        expect(result).toBeNull();
+    });
+});

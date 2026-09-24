@@ -1,0 +1,85 @@
+# Overlay for runo preview environments (one VM per PR).
+#
+# Layered on top of docker-compose.dev.yml — a preview runs the SAME stack the
+# team runs locally, so a reviewer sees what a developer sees. Only two things
+# genuinely differ:
+#
+#   1. the app is reached through a public tunnel hostname, not localhost, and
+#      it has to know that hostname to emit correct absolute URLs;
+#   2. the box is a 16GB VM, not a laptop that also runs a browser and an IDE —
+#      the two containers that OOM at the dev limits get room here.
+#
+# This file is what BOTH shapes of the product share. The shape itself is one
+# more overlay on top: docker-compose.preview.cloud.yml (billing, cloud mode)
+# or docker-compose.preview.selfhosted.yml (self-hosted mode, no billing).
+# The recipes in .kodus/ pick the stack; the preview workflow decides per pull
+# request which shapes it needs (labels or scripts/preview/decide-profiles.cjs).
+#
+# runo substitutes ${RUNO_PUBLIC_URL} / ${RUNO_PUBLIC_HOST} at up time, after
+# the tunnel exists and before the stack boots.
+services:
+    worker:
+        environment:
+            - API_MCP_SERVER_ENABLED=true
+
+    mcp-manager:
+        environment:
+            - API_MCP_MANAGER_REDIRECT_URI=${RUNO_PUBLIC_URL}/setup/mcp/oauth
+            - API_MCP_MANAGER_BACKEND_URL=http://kodus-api:3001
+        deploy:
+            resources:
+                limits:
+                    # its dev entrypoint runs the seeds under ts-node before
+                    # listening; at the 1G dev limit pnpm gets SIGKILLed on a
+                    # cold preview and the container crash-loops (16 restarts
+                    # seen on 2026-09-22), which is also what the readiness
+                    # probe on :3101 was waiting for.
+                    memory: 2G
+
+    web:
+        environment:
+            # .env ships NEXTAUTH_URL=http://localhost:3000, so without this
+            # every visitor of the preview gets redirected to their own machine.
+            - NEXTAUTH_URL=${RUNO_PUBLIC_URL}
+            - AUTH_URL=${RUNO_PUBLIC_URL}
+            # Next 16 answers 403 on /_next/* for dev requests coming from an
+            # origin it was not told about — the tunnel hostname is one.
+            - ALLOWED_DEV_ORIGINS=${RUNO_PUBLIC_HOST}
+        deploy:
+            resources:
+                limits:
+                    # Turbopack dev compiling ~10 route slots at once gets
+                    # OOM-killed at the dev limit of 4G on a cold preview.
+                    memory: 8G
+
+    kodus-api:
+        environment:
+            - API_MCP_SERVER_ENABLED=true
+            # .env ships these pointing at localhost:3001, which the API then
+            # hands to the git provider when a repository is registered.
+            # GitHub rejects a localhost hook outright ("isn't reachable over
+            # the public Internet"), and that rejection fails the whole save
+            # AFTER the repositories were already persisted — onboarding is
+            # left half-done. runo exposes `webhooks` publicly (see
+            # workspace.preview.yaml) and hands its URL over as
+            # RUNO_URL_WEBHOOKS.
+            #
+            # `:?` guards the one case Compose would otherwise paper over: the
+            # recipe no longer declaring the variable at all, which would
+            # interpolate to an empty string and boot the API with a relative
+            # hook path. It does NOT catch `webhooks` being dropped from
+            # `public:` — runo still exports the name, unsubstituted — but that
+            # case fails loudly at the provider, the same way it does today.
+            - API_GITHUB_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS:?webhooks must be listed under services.compose.public in .kodus/workspace.preview.yaml}/github/webhook
+            - API_GITLAB_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS:?webhooks must be listed under services.compose.public in .kodus/workspace.preview.yaml}/gitlab/webhook
+            - GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS:?webhooks must be listed under services.compose.public in .kodus/workspace.preview.yaml}/bitbucket/webhook
+            - GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS:?webhooks must be listed under services.compose.public in .kodus/workspace.preview.yaml}/azure-repos/webhook
+            - API_FORGEJO_CODE_MANAGEMENT_WEBHOOK=${RUNO_URL_WEBHOOKS:?webhooks must be listed under services.compose.public in .kodus/workspace.preview.yaml}/forgejo/webhook
+
+    webhooks:
+        deploy:
+            resources:
+                limits:
+                    # ts-node boot + migrations + seeds exceeds the 1G dev
+                    # limit on a cold VM and the container crash-loops.
+                    memory: 2G

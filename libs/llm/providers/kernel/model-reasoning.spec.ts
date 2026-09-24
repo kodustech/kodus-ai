@@ -54,7 +54,13 @@ describe('reasoningConfigForModel — single family source', () => {
             ['o4-mini-deep-research', 'level:low/medium/high'],
             ['gpt-4o', 'none'],
             ['gpt-3.5-turbo', 'none'],
-            ['deepseek-chat', 'none'],
+            // NOT 'none' any more, and it never should have been: the traits
+            // table already answered `thinksByDefault: true` for every DeepSeek
+            // id, so the openai_compatible module reported this model as a
+            // reasoner while this dispatcher reported it as not one. The two now
+            // read the same family list. (The chat-vs-reasoner split INSIDE
+            // DeepSeek is modelled by neither, and was not before.)
+            ['deepseek-chat', 'level:low/medium/high'],
         ])('%s → %s', (model, expected) => {
             expect(shape(model)).toBe(expected);
         });

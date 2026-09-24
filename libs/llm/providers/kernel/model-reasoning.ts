@@ -11,9 +11,11 @@
  * table itself was stale for `claude-opus-4-8`).
  */
 import type { ReasoningConfig } from './model-types';
+import { detectModelFamily } from './model-family';
 import { anthropicReasoningConfig } from '../anthropic/traits';
 import { geminiReasoningConfig } from '../google-gemini/reasoning';
 import { openaiReasoningConfig } from '../openai/reasoning';
+import { compatibleReasoningConfig } from './reasoning-traits';
 
 /**
  * Thin family dispatcher: detect the model FAMILY and defer to that family's
@@ -25,13 +27,30 @@ import { openaiReasoningConfig } from '../openai/reasoning';
 export function reasoningConfigForModel(
     model?: string,
 ): ReasoningConfig | undefined {
-    if (!model) return undefined;
-    const m = model.toLowerCase();
+    if (!model) {
+        return undefined;
+    }
 
-    // Claude — native, Bedrock `anthropic.` prefix, or Vertex `@`-versioned.
-    if (m.includes('claude')) return anthropicReasoningConfig(model);
-    if (m.includes('gemini')) return geminiReasoningConfig(model);
-    // Everything else: OpenAI reasoners (o-series / gpt-5); the owner returns
-    // undefined for non-reasoning ids (gpt-4o, deepseek, …).
-    return openaiReasoningConfig(model);
+    // ONE family list, shared with the traits resolver (kernel/model-family.ts).
+    // It used to be a private if-chain that knew only claude / gemini / openai,
+    // so every Kimi, GLM, DeepSeek and MiniMax fell through to "no reasoning" —
+    // including the ones a HOST module asks about, which is how a live Kimi and
+    // a live MiniMax on Bedrock were advertised as non-reasoning models.
+    switch (detectModelFamily(model)) {
+        // Claude — native, Bedrock `anthropic.` prefix, or Vertex `@`-versioned.
+        case 'anthropic':
+            return anthropicReasoningConfig(model);
+        case 'gemini':
+            return geminiReasoningConfig(model);
+        case 'openai':
+            // The owner returns undefined for the non-reasoning OpenAI ids.
+            return openaiReasoningConfig(model);
+        case 'glm':
+        case 'kimi':
+        case 'deepseek':
+        case 'minimax':
+            return compatibleReasoningConfig(model);
+        default:
+            return undefined;
+    }
 }

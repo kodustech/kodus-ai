@@ -1,3 +1,4 @@
+import { buildGitAuthHeader } from './git-auth-header';
 import { createLogger } from '@libs/core/log/logger';
 import { PlatformType } from '@libs/core/domain/enums';
 import { Injectable } from '@nestjs/common';
@@ -26,10 +27,18 @@ import {
     SandboxRunResult,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
+import {
+    fetchSubmodules,
+    isContainedRelativePath,
+    SubmoduleGitHost,
+} from '@libs/sandbox/infrastructure/providers/submodule-fetch';
 
 const execFileAsync = promisify(execFile);
 
 const CLONE_TIMEOUT_MS = 120_000;
+// Submodule fetch is best-effort and must never hold a review hostage — see
+// `fetchSubmodules` below.
+const SUBMODULES_TIMEOUT_MS = 120_000;
 const CMD_TIMEOUT_MS = 30_000;
 const MAX_BUFFER = 5 * 1024 * 1024; // 5 MB — cap output to prevent memory issues
 
@@ -65,6 +74,7 @@ export class LocalSandboxService implements ISandboxProvider {
             platform,
             checkoutSha,
             unifiedDiff,
+            baseBranch,
         } = params;
 
         const tempDir = await mkdtemp(join(tmpdir(), 'kodus-sandbox-'));
@@ -130,6 +140,58 @@ export class LocalSandboxService implements ISandboxProvider {
             await execFileAsync('git', ['-C', tempDir, 'checkout', localRef], {
                 timeout: CLONE_TIMEOUT_MS,
             });
+
+            // Only a submodule declared identically on the BASE branch is
+            // fetched, so the base has to be in the checkout first. The token
+            // here is the self-hosted customer's own OAuth token or PAT and
+            // reaches every project they can see, so failing to fetch the
+            // base means fetching no submodule at all — see
+            // `baseDeclaredDumpArgs`.
+            let baseRef: string | undefined;
+            if (baseBranch) {
+                const localBaseRef = `refs/remotes/origin/${baseBranch}`;
+                try {
+                    await execFileAsync(
+                        'git',
+                        [
+                            '-C',
+                            tempDir,
+                            'fetch',
+                            '--depth=1',
+                            cloneUrl,
+                            `refs/heads/${baseBranch}:${localBaseRef}`,
+                        ],
+                        {
+                            timeout: CLONE_TIMEOUT_MS,
+                            env: fetchEnv,
+                        } as ExecFileOptions,
+                    );
+                    baseRef = localBaseRef;
+                } catch (error) {
+                    this.logger.warn({
+                        message: `[SUBMODULES] Could not fetch base branch ${baseBranch}; no submodule will be fetched`,
+                        context: LocalSandboxService.name,
+                        error:
+                            error instanceof Error
+                                ? error
+                                : new Error(String(error)),
+                        metadata: { prNumber, baseBranch },
+                    });
+                }
+            }
+
+            // The checkout above has no submodule handling, so every path the
+            // repository declares in `.gitmodules` would otherwise be an empty
+            // directory the agent reads as "this code does not exist" (#1939).
+            await this.fetchSubmodules(
+                tempDir,
+                cloneUrl,
+                authHeader,
+                {
+                    prNumber,
+                },
+                baseRef,
+            );
 
             // CLI mode: replay the user's local diff on top of the
             // merge-base SHA, so the agent reviews the same code the user
@@ -239,6 +301,68 @@ export class LocalSandboxService implements ISandboxProvider {
         }
     }
 
+    /**
+     * Populate the submodules a repository declares, after the checkout.
+     *
+     * A thin adapter: the ORDER, the retries, the time budget and the logging
+     * live in `fetchSubmodules`, shared with the E2B provider so the two
+     * cannot drift. That matters more here than there — this provider runs
+     * directly on the self-hosted customer's own machine, with no proxy in
+     * between.
+     */
+    private async fetchSubmodules(
+        repoDir: string,
+        cloneUrl: string,
+        authHeader: string,
+        logMetadata: Record<string, unknown> = {},
+        /** Base-branch ref; without it nothing is fetched. */
+        baseRef?: string,
+    ): Promise<void> {
+        const host: SubmoduleGitHost = {
+            readGitmodules: () =>
+                readFile(join(repoDir, '.gitmodules'), 'utf8').catch(
+                    () => null,
+                ),
+            git: (args, opts) =>
+                execFileAsync('git', ['-C', repoDir, ...args], {
+                    timeout: opts?.timeoutMs ?? CMD_TIMEOUT_MS,
+                    // process.env first so the scoped header wins, and note the
+                    // header travels as GIT_CONFIG_VALUE_0 — never as a process
+                    // argument, same as the clone above.
+                    ...(opts?.env
+                        ? { env: { ...process.env, ...opts.env } }
+                        : {}),
+                } as ExecFileOptions) as Promise<{ stdout: string }>,
+            removeDir: async (relative) => {
+                // Built from the submodule NAME in `.gitmodules`, written by
+                // the pull request author, and this runs on the self-hosted
+                // customer's own machine. The shared module rejects a name
+                // with a `..` segment; the guard is repeated at the one place
+                // that deletes recursively.
+                if (!isContainedRelativePath(relative)) {
+                    throw new Error(
+                        `refusing to remove a path outside the checkout: ${relative}`,
+                    );
+                }
+                await rm(join(repoDir, relative), {
+                    recursive: true,
+                    force: true,
+                });
+            },
+        };
+
+        await fetchSubmodules(host, {
+            repoCloneUrl: cloneUrl,
+            baseRef,
+            authHeader: authHeader || undefined,
+            totalBudgetMs: SUBMODULES_TIMEOUT_MS,
+            stepTimeoutMs: CMD_TIMEOUT_MS,
+            logger: this.logger,
+            logContext: LocalSandboxService.name,
+            logMetadata,
+        });
+    }
+
     private buildRemoteCommands(repoDir: string): RemoteCommands {
         return {
             grep: async (
@@ -302,28 +426,58 @@ export class LocalSandboxService implements ISandboxProvider {
                 path: string,
                 maxDepth: number,
             ): Promise<string> => {
-                await this.resolveSafePath(repoDir, path);
+                // A path that does not exist is a REAL ABSENCE, not a failure to
+                // look, and it is the ordinary case for this command's main
+                // caller: `RepoLookup.exists` lists the PARENT of a candidate,
+                // and a candidate like "<dir>/__tests__/<name>" usually has no
+                // parent directory at all. resolveSafePath lstat()s the path, so
+                // it raised ENOENT and the whole retrieval was abandoned — the
+                // customer's rule was then reported unmet and never judged
+                // (issue #1826).
+                //
+                // ENOENT is swallowed only AFTER resolveSafePath's validatePath
+                // has run, so the traversal guard still applies; the symlink and
+                // repo-boundary errors it raises are re-thrown untouched. This
+                // mirrors resolveSafeWritePath, which already separates "not
+                // there yet" from "not allowed".
+                try {
+                    await this.resolveSafePath(repoDir, path);
+                } catch (error: any) {
+                    if (error?.code === 'ENOENT') {
+                        return '';
+                    }
+                    throw error;
+                }
                 // Use relative path with cwd so output paths are relative (consistent with grep)
                 // -not -type l excludes symlinks from results
-                const { stdout } = await execFileAsync(
-                    'find',
-                    [
-                        path,
-                        '-maxdepth',
-                        String(maxDepth),
-                        '-type',
-                        'f',
-                        '-not',
-                        '-type',
-                        'l',
-                    ],
-                    {
-                        cwd: repoDir,
-                        timeout: CMD_TIMEOUT_MS,
-                        maxBuffer: MAX_BUFFER,
-                    },
-                );
-                return stdout;
+                try {
+                    const { stdout } = await execFileAsync(
+                        'find',
+                        [
+                            path,
+                            '-maxdepth',
+                            String(maxDepth),
+                            '-type',
+                            'f',
+                            '-not',
+                            '-type',
+                            'l',
+                        ],
+                        {
+                            cwd: repoDir,
+                            timeout: CMD_TIMEOUT_MS,
+                            maxBuffer: MAX_BUFFER,
+                        },
+                    );
+                    return stdout;
+                } catch (error: any) {
+                    // Absence was already answered above, by the ENOENT branch
+                    // of resolveSafePath. Reaching here means the path IS there
+                    // and `find` still failed — unreadable, timed out, buffer
+                    // exceeded. That is a broken lookup, and returning an empty
+                    // listing would let a caller read it as "not there".
+                    throw error;
+                }
             },
 
             exec: async (
@@ -600,7 +754,10 @@ export class LocalSandboxService implements ISandboxProvider {
                 // component (not just the final one). On Linux this fully
                 // closes the parent-dir-swap TOCTOU (#1532); elsewhere it is a
                 // best-effort O_NOFOLLOW on the final component (see helper).
-                const fd = await this.openRepoWriteHandle(repoReal, safePathReal);
+                const fd = await this.openRepoWriteHandle(
+                    repoReal,
+                    safePathReal,
+                );
                 try {
                     await fd.writeFile(content, 'utf-8');
                 } finally {
@@ -942,33 +1099,7 @@ export class LocalSandboxService implements ISandboxProvider {
         token: string,
         username?: string,
     ): string {
-        switch (platform) {
-            case PlatformType.GITHUB:
-                return `Authorization: Basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`;
-            case PlatformType.BITBUCKET: {
-                // Bitbucket git-over-HTTPS auth differs from the REST API.
-                // Atlassian API tokens (ATATT…, the scheme that replaces app
-                // passwords) authenticate to git ONLY with the literal
-                // username `x-bitbucket-api-token-auth` — the REST API accepts
-                // <email>:<token>, but git rejects that pair (→ "could not
-                // read Username"). Classic app passwords keep using the
-                // Bitbucket account username. See #1168.
-                const gitUsername = token.startsWith('ATATT')
-                    ? 'x-bitbucket-api-token-auth'
-                    : username;
-                if (!gitUsername) {
-                    throw new Error(
-                        'Bitbucket authentication requires a username (app password) or an Atlassian API token, but neither was provided.',
-                    );
-                }
-                return `Authorization: Basic ${Buffer.from(`${gitUsername}:${token}`).toString('base64')}`;
-            }
-            case PlatformType.GITLAB:
-            case PlatformType.AZURE_REPOS:
-                return `Authorization: Basic ${Buffer.from(`oauth2:${token}`).toString('base64')}`;
-            default:
-                return `Authorization: Basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`;
-        }
+        return buildGitAuthHeader(platform, token, username);
     }
 
     private getPrRefspec(

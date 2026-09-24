@@ -121,10 +121,22 @@ function preflight({ strictCoverage }) {
 
     const requiredFiles = [
         'evals/run-suite.js',
+        'evals/wiring-smoke.js',
+        'evals/tier0-smoke.js',
+        'evals/ci-report.js',
+        'evals/shared/fake-llm-server.js',
+        'evals/shared/trace-loaded.js',
+        'evals/shared/engine-files.js',
+        'evals/investigation/gate.js',
+        'evals/investigation/confirm-gate.js',
+        'evals/investigation/rejudge.js',
+        'evals/investigation/nightly-compare.js',
+        'evals/investigation/investigate-facts.js',
+        'evals/investigation/investigate-prompt.md',
+        'evals/investigation/extract-investigation.js',
         'evals/shared/tier0-models.js',
         'evals/investigation/run-eval.js',
         'evals/investigation/run-recall.js',
-        'evals/investigation/compare-recall.js',
         'evals/investigation/agent-provider.js',
         'evals/promotion/run-eval.js',
         'evals/kody-rules/real-agent.js',
@@ -146,6 +158,33 @@ function preflight({ strictCoverage }) {
         if (fs.existsSync(absolute)) ok.push(file);
         else fatal.push(`missing required file: ${file}`);
     }
+
+    // The eval docs point at files instead of copying facts; a stale pointer or a
+    // README without the standard header fails here, on the PR that caused it.
+    const { findBrokenReferences, missingHeaderFields, evalDocs } = require('./shared/doc-references');
+    const scripts = readJson(path.join(ROOT, 'package.json')).scripts || {};
+    const { entryPoints, readmes } = evalDocs(ROOT);
+    let docProblems = 0;
+    for (const doc of [...entryPoints, ...readmes]) {
+        if (!fs.existsSync(path.join(ROOT, doc))) {
+            fatal.push(`missing eval doc: ${doc}`);
+            docProblems += 1;
+            continue;
+        }
+        const markdown = fs.readFileSync(path.join(ROOT, doc), 'utf8');
+        for (const broken of findBrokenReferences(markdown, { docPath: doc, root: ROOT, scripts })) {
+            fatal.push(`${doc}: stale ${broken.kind} reference ${broken.ref}`);
+            docProblems += 1;
+        }
+        if (readmes.includes(doc)) {
+            const missing = missingHeaderFields(markdown);
+            if (missing.length) {
+                fatal.push(`${doc}: standard header is missing ${missing.join(', ')}`);
+                docProblems += 1;
+            }
+        }
+    }
+    if (!docProblems) ok.push(`eval docs: ${entryPoints.length + readmes.length} checked, every pointer resolves`);
 
     const investigationCases = countJsonFiles(path.join(ROOT, 'evals/investigation/datasets'));
     const promotionCases = countJsonFiles(path.join(ROOT, 'evals/promotion/datasets'));

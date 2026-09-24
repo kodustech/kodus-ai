@@ -840,6 +840,7 @@ export async function runAgentLoopViaCore(
                           input.scoutThinking ? 'medium' : undefined,
                       )
                 : undefined,
+            previousDecisions: input.previousDecisions,
             telemetryMetadata: input.telemetryMetadata,
             agentName: input.agentName,
             usageRunName: input.usageRunName,
@@ -928,7 +929,7 @@ export async function runAgentLoopViaCore(
                           index: i,
                           relevantFile: f.relevantFile,
                           action: 'keep' as const,
-                          parseMode: 'direct' as const,
+                          parseMode: r.keptParseMode[i] ?? 'default-keep',
                           rationale: '',
                           verifierEvidence: r.keptEvidence[i] ?? {
                               strongFiles: [],
@@ -939,7 +940,7 @@ export async function runAgentLoopViaCore(
                           index: r.kept.length + i,
                           relevantFile: d.finding.relevantFile,
                           action: 'drop' as const,
-                          parseMode: 'direct' as const,
+                          parseMode: d.parseMode,
                           rationale: d.evidence ?? '',
                           verifierEvidence: d.verifierEvidence,
                       })),

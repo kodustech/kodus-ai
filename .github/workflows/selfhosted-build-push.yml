@@ -86,6 +86,7 @@ jobs:
         # `cloud-matrix` job remains explicitly pinned to `contents: read`.
         permissions:
             contents: write
+            id-token: write # called workflow reports a quality signal (WIF)
         uses: ./.github/workflows/e2e-cloud.yml
         with:
             matrix_file: matrix/fast.yml
@@ -473,12 +474,10 @@ jobs:
         # e2e-history branch and requests `contents: write`. GitHub validates
         # that permission against this caller before creating any jobs. The
         # matrix job inside the reusable workflow remains pinned to read-only.
-        # `issues: write` is for the investigate job's one-issue-per-failure
-        # upsert; without it that step degrades to a warning.
         permissions:
             contents: write
+            id-token: write # called workflow reports a quality signal (WIF)
             packages: read
-            issues: write
         uses: ./.github/workflows/e2e-self-hosted-matrix.yml
         with:
             # rc_version (the DOCKER tag, e.g. 2.1.16-rc.68) — NOT rc_tag
@@ -798,6 +797,11 @@ jobs:
     notify-discord-failure:
         name: Notify Discord (failure only)
         needs:
+            # cloud-gate included because a red gate leaves every job below
+            # `skipped`, so without it a stopped Friday train never reached
+            # this channel — the matrix's own alert (when it fires at all)
+            # goes to the tests channel.
+            - cloud-gate
             # freeze-main included so a pre-release freeze failure (the
             # 2026-06-05 403) triggers the alert DIRECTLY and names its
             # phase — without it the alert only fired by accident and
@@ -838,7 +842,8 @@ jobs:
                   # something downstream broke" — those are urgent in a
                   # different way (customer pulled :latest but the CLI /
                   # changelog / installer never updated).
-                  if   [ "${{ needs.freeze-main.result }}"         = "failure" ]; then echo "phase=Freeze main (pre-release)" >> $GITHUB_OUTPUT; echo "color=0xff0000" >> $GITHUB_OUTPUT
+                  if   [ "${{ needs.cloud-gate.result }}"          = "failure" ]; then echo "phase=Cloud gate (pre-release — train stopped; see the cloud-gate job in this run)" >> $GITHUB_OUTPUT; echo "color=0xff8800" >> $GITHUB_OUTPUT
+                  elif [ "${{ needs.freeze-main.result }}"         = "failure" ]; then echo "phase=Freeze main (pre-release)" >> $GITHUB_OUTPUT; echo "color=0xff0000" >> $GITHUB_OUTPUT
                   elif [ "${{ needs.plan-release.result }}"        = "failure" ]; then echo "phase=Plan release"        >> $GITHUB_OUTPUT; echo "color=0xff0000" >> $GITHUB_OUTPUT
                   elif [ "${{ needs.create-rc-tag.result }}"       = "failure" ]; then echo "phase=Create RC tag"       >> $GITHUB_OUTPUT; echo "color=0xff0000" >> $GITHUB_OUTPUT
                   elif [ "${{ needs.build-and-push.result }}"      = "failure" ]; then echo "phase=Build"               >> $GITHUB_OUTPUT; echo "color=0xff0000" >> $GITHUB_OUTPUT

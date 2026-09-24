@@ -21,8 +21,10 @@ import {
     FileChange,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
+import type { RepoLookup } from '@libs/code-review/infrastructure/agents/collaborators/repo-lookup';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import type { TraceContextDecision } from '@libs/cli-review/domain/types/trace-context.types';
+import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 
 import { BYOKProvider } from '@libs/llm/model-providers';
 import type { NormalizedModel } from '@libs/llm/byok-config';
@@ -35,6 +37,7 @@ import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engi
 import type { DocumentationSearchAdapter } from '@libs/code-review/infrastructure/agents/engine/agent-tools.factory';
 import type { FindingsOutput } from '@libs/code-review/infrastructure/agents/core/findings-schema';
 import type { LinkedRepoAccess } from '@libs/ee/linked-repositories';
+import type { VerdictParseMode } from '@libs/agent-harness/domain/contracts/verifier.contract';
 
 export type { FindingsOutput } from '@libs/code-review/infrastructure/agents/core/findings-schema';
 
@@ -125,6 +128,20 @@ export interface ToolingContext {
      * is no sandbox available.
      */
     remoteCommands: RemoteCommands | undefined;
+    /**
+     * Repository lookup WITH an explicit capability signal (issue #1826).
+     *
+     * `remoteCommands` cannot answer "can I look?": the null sandbox implements
+     * it and returns '' successfully, so a consumer reads silence as evidence.
+     * `repoLookup.available` is that missing signal, derived from the sandbox
+     * handle's own `type`, and every accessor throws rather than answering
+     * empty when it is false.
+     *
+     * Absent means the same thing as unavailable — a consumer must fail closed,
+     * never assume a lookup it was not given. `buildOrchestratorInput` always
+     * populates it, including for a null sandbox.
+     */
+    repoLookup?: RepoLookup;
     gitHubToken?: string;
     /** Pre-computed call graph for changed functions. Generated once, shared across agents. */
     callGraph?: string;
@@ -151,6 +168,10 @@ export interface ReviewRuleConfig {
      * current implementation is correct.
      */
     traceDecisions?: TraceContextDecision[];
+    /** Suggestions already posted on THIS PR in a previous review round, scoped
+     *  to the changed files (issue #1313). Historical evidence, never proof the
+     *  current code is correct — same discipline as `traceDecisions`. */
+    previousDecisions?: PrDecisionRecord[];
     /** Kody rules passed through so findings tagged with ruleUuid can be cross-referenced. */
     kodyRules?: Partial<IKodyRule>[];
     v2PromptOverrides?: CodeReviewConfig['v2PromptOverrides'];
@@ -268,12 +289,15 @@ export interface ReviewAgentInput
      *  sozinha. */
     requireFindingReason?: boolean;
     /**
-     * Commits that make up this PR (SHA + subject line), oldest→newest. Threaded
-     * so commit-hygiene rules ("don't mix mechanical and behavioral changes")
-     * are judged against real commit boundaries instead of the aggregated diff.
-     * (PR #1412.)
+     * Commits that make up this PR (SHA + subject line + author date),
+     * oldest→newest. Threaded so commit-hygiene rules ("don't mix mechanical
+     * and behavioral changes") are judged against real commit boundaries
+     * instead of the aggregated diff (PR #1412), and so the finder/verifier
+     * can correlate a `<PreviousReviewDecision>`'s `DecidedAt` against what
+     * actually landed since (issue #1313 follow-up: a decision has no
+     * anchor to which round/commit produced it, only a timestamp).
      */
-    commits?: Array<{ sha: string; message: string }>;
+    commits?: Array<{ sha: string; message: string; date?: string }>;
     /**
      * Optional per-review steering directive supplied by the user at trigger
      * time (e.g. `@kody review focus on the auth logic`). Free text. When set,
@@ -729,6 +753,13 @@ export interface AgentLoopInput {
      *  have nothing to reuse in this mode. See
      *  finder.agent.ts:RunFinderWithVerifyParams.skipBasePass. */
     skipBasePass?: boolean;
+    /** Suggestions already posted on THIS PR in a previous review round
+     *  (issue #1313). Threaded down to the verifier so it can refute a
+     *  finding that contradicts a decision already applied — the finder's
+     *  own system/user prompts already have their copy baked into
+     *  `systemPrompt`/`userPrompt` above (see `formatPreviousDecisions` in
+     *  prompt-builder.ts), so this field exists ONLY for the verifier hop. */
+    previousDecisions?: PrDecisionRecord[];
     /** Reasoning effort level from BYOK config. Mapped to provider-specific
      *  providerOptions (anthropic.thinking, google.thinkingConfig, etc). */
     reasoningEffort?: ReasoningEffort;
@@ -909,7 +940,10 @@ export interface VerificationDecisionTrace {
     index: number;
     relevantFile: string;
     action: 'keep' | 'drop' | 'refine';
-    parseMode: 'direct' | 'fallback-llm' | 'default-keep';
+    /** How the verifier's verdict was read: `tool` = it called submitVerdict,
+     *  `text` = it answered in prose and the deterministic parser recovered the
+     *  verdict, `default-keep` = nothing parseable, fail-open (issue #1937). */
+    parseMode: VerdictParseMode;
     rationale: string;
     confidence?: 'high' | 'medium' | 'low';
     verifierEvidence: ToolEvidenceSummary;

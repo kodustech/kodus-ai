@@ -1,0 +1,376 @@
+import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
+import { AgentReviewStage } from './agent-review.stage';
+import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
+import { LLM } from '@libs/llm/llm';
+import { hasManagedModelKey } from '@libs/llm/managed-slot';
+
+jest.mock(
+    '@libs/code-review/infrastructure/agents/engine/classify-severity',
+    () => ({ classifySeverity: jest.fn().mockResolvedValue(new Map()) }),
+);
+jest.mock(
+    '@libs/code-review/infrastructure/agents/engine/format-suggestion-content',
+    () => ({ formatSuggestionContent: jest.fn().mockResolvedValue(new Map()) }),
+);
+jest.mock('@libs/llm/managed-slot', () => {
+    const actual = jest.requireActual('@libs/llm/managed-slot');
+    return { ...actual, hasManagedModelKey: jest.fn(() => false) };
+});
+
+/**
+ * #1826 P3 — a finding that does not fit on a line is delivered as a PR comment.
+ *
+ * `snapLinesToDiff` returns null for a finding whose cited lines overlap no
+ * changed hunk, and the caller drops it. That is right for almost everything,
+ * and wrong for the one case a rule has declared in advance: a rule that said
+ * it needs context beyond the diff is the only thing in the pipeline entitled
+ * to point outside it. Derived from spec.md:
+ *   KRC-32  a context-needing rule's out-of-hunk finding is marked file-anchored
+ *   KRC-19  a file-anchored finding becomes a PR-level comment citing file:line
+ *   KRC-20  a file-anchored finding naming a file outside the PR is discarded
+ *   KRC-33  a diff-only rule's out-of-hunk finding is still discarded
+ */
+
+const CONTEXT_RULE = 'rule-needs-context';
+const DIFF_ONLY_RULE = 'rule-diff-only';
+
+// One hunk covering lines 10-12 of the new file. Anything cited outside that
+// range overlaps no hunk.
+const PATCH = ['@@ -10,2 +10,3 @@', ' const a = 1;', '+const b = 2;'].join(
+    '\n',
+);
+
+const ruleFinding = (over: Record<string, unknown> = {}) => ({
+    relevantFile: 'src/user.ts',
+    relevantLinesStart: 120,
+    relevantLinesEnd: 180,
+    label: 'kody_rules',
+    severity: 'high',
+    oneSentenceSummary: 'this function is far too long',
+    suggestionContent: 'this function is far too long',
+    improvedCode: '',
+    brokenKodyRulesIds: [CONTEXT_RULE],
+    ...over,
+});
+
+const makeStage = () => {
+    const reviewOrchestrator = { execute: jest.fn() };
+    const stage = new AgentReviewStage(
+        {
+            findLatestStageLog: jest.fn(),
+            updateCodeReview: jest.fn(),
+            updateStageLog: jest.fn(),
+        } as any,
+        { findByExternalId: jest.fn().mockResolvedValue(null) } as any,
+        reviewOrchestrator as any,
+        {
+            runLLMInSpan: jest.fn(async ({ runFn }: any) => runFn?.()),
+        } as any,
+        {
+            generateContext: jest.fn(),
+            generateContextLegacy: jest.fn(),
+        } as any,
+        { isEnabled: jest.fn().mockResolvedValue(false) } as any,
+        { getReleaseTrack: jest.fn().mockResolvedValue('stable') } as any,
+        {
+            getRepositories: jest.fn().mockResolvedValue([]),
+            getCloneParams: jest.fn().mockResolvedValue(null),
+        } as any,
+    );
+    return { stage, reviewOrchestrator };
+};
+
+const makeContext = (over: Record<string, unknown> = {}) =>
+    frozenContext({
+        organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
+        repository: { id: 'repo-1', name: 'repo-1' },
+        pullRequest: { number: 7 },
+        platformType: 'GITHUB',
+        changedFiles: [{ filename: 'src/user.ts', patch: PATCH }],
+        codeReviewConfig: {
+            reviewOptions: {},
+            heavy: false,
+            resolvedModelSlot: { provider: 'openai', model: 'gpt-4o-mini' },
+            kodyRules: [
+                {
+                    uuid: CONTEXT_RULE,
+                    title: 'functions stay under 50 lines',
+                    rule: 'A function must not exceed 50 lines.',
+                    severity: 'high',
+                    contextNeed: {
+                        need: 'enclosing-scope',
+                        sourceHash: 'h',
+                        source: 'compiler',
+                        inferredAt: new Date(0),
+                    },
+                },
+                {
+                    uuid: DIFF_ONLY_RULE,
+                    title: 'no console.log',
+                    rule: 'Do not use console.log.',
+                    severity: 'high',
+                    contextNeed: {
+                        need: 'diff-only',
+                        sourceHash: 'h',
+                        source: 'compiler',
+                        inferredAt: new Date(0),
+                    },
+                },
+            ],
+        },
+        heavy: false,
+        validSuggestions: [],
+        discardedSuggestions: [],
+        errors: [],
+        ...over,
+    }) as any as CodeReviewPipelineContext;
+
+const run = async (suggestions: any[], ctxOver: Record<string, unknown> = {}) => {
+    const { stage, reviewOrchestrator } = makeStage();
+    reviewOrchestrator.execute.mockResolvedValue({
+        suggestions,
+        agentResults: [],
+        failures: [],
+        incomplete: [],
+        warnings: [],
+    });
+    return (stage as any).executeStage(makeContext(ctxOver)) as Promise<any>;
+};
+
+const inlineSuggestionsOf = (result: any): any[] =>
+    (result.fileAnalysisResults ?? []).flatMap(
+        (f: any) => f.codeReviewModelUsed?.suggestions ?? f.suggestions ?? [],
+    );
+
+let runSpy: jest.SpyInstance;
+beforeEach(() => {
+    runSpy = jest
+        .spyOn(LLM, 'run')
+        .mockResolvedValue({ groups: [], unique: [0, 1, 2, 3] } as any);
+});
+afterEach(() => {
+    runSpy?.mockRestore();
+    jest.clearAllMocks();
+    (hasManagedModelKey as jest.Mock).mockReturnValue(false);
+});
+
+describe('#1826 — a whole-file finding is delivered as a PR comment', () => {
+    it('marks an out-of-hunk finding from a context-needing rule file-anchored (KRC-32)', async () => {
+        const result = await run([ruleFinding()]);
+
+        // the cited lines are kept as the model gave them, NOT snapped onto
+        // the hunk — the whole point is that they are outside it
+        expect(result.validSuggestionsByPR).toHaveLength(1);
+        expect(result.validSuggestionsByPR[0].suggestionContent).toContain(
+            '`src/user.ts:120`',
+        );
+    });
+
+    // CreateFileCommentsStage posts every entry of `validSuggestions` as a line
+    // comment. A PR-level finding left there was posted twice: once PR-level,
+    // once inline at out-of-hunk lines (GitHub: "line could not be resolved")
+    // or with no path at all ("path, line weren't supplied").
+    it('does not leave a PR-level finding in validSuggestions for the inline stage', async () => {
+        const result = await run([
+            ruleFinding(),
+            ruleFinding({ relevantFile: undefined, relevantLinesStart: 120 }),
+        ]);
+
+        expect(result.validSuggestionsByPR.length).toBeGreaterThan(0);
+        expect(result.validSuggestions ?? []).toEqual([]);
+    });
+
+    it('delivers it as one PR-level comment citing file:line (KRC-19)', async () => {
+        const result = await run([ruleFinding()]);
+
+        expect(result.validSuggestionsByPR).toHaveLength(1);
+        expect(result.validSuggestionsByPR[0].suggestionContent).toContain(
+            '`src/user.ts:120`',
+        );
+        expect(result.validSuggestionsByPR[0].suggestionContent).toContain(
+            'this function is far too long',
+        );
+        // and NOT as an inline comment
+        expect(inlineSuggestionsOf(result)).toEqual([]);
+    });
+
+    it('still discards an out-of-hunk finding from a diff-only rule (KRC-33)', async () => {
+        const result = await run([
+            ruleFinding({ brokenKodyRulesIds: [DIFF_ONLY_RULE] }),
+        ]);
+
+        expect(result.validSuggestionsByPR ?? []).toEqual([]);
+        expect(result.validSuggestions ?? []).toEqual([]);
+        expect(
+            (result.discardedSuggestions ?? []).some(
+                (s: any) => s.brokenKodyRulesIds?.[0] === DIFF_ONLY_RULE,
+            ),
+        ).toBe(true);
+    });
+
+    it('still discards an out-of-hunk finding from a rule with no declared need', async () => {
+        const result = await run([
+            ruleFinding({ brokenKodyRulesIds: ['rule-never-inferred'] }),
+        ]);
+
+        expect(result.validSuggestionsByPR ?? []).toEqual([]);
+        expect(result.validSuggestions ?? []).toEqual([]);
+    });
+
+    it('discards a file-anchored finding naming a file outside the PR (KRC-20)', async () => {
+        const result = await run([
+            ruleFinding({ relevantFile: 'src/not-in-this-pr.ts' }),
+        ]);
+
+        expect(result.validSuggestionsByPR ?? []).toEqual([]);
+        expect(
+            (result.discardedSuggestions ?? []).some(
+                (s: any) => s.relevantFile === 'src/not-in-this-pr.ts',
+            ),
+        ).toBe(true);
+    });
+
+    it('leaves an in-hunk finding from the same rule inline, exactly as before', async () => {
+        const result = await run([
+            // the single hunk covers new-file lines 10-11
+            ruleFinding({ relevantLinesStart: 10, relevantLinesEnd: 11 }),
+        ]);
+
+        expect(result.validSuggestionsByPR ?? []).toEqual([]);
+        const inline = (result.validSuggestions ?? [])[0];
+        expect(inline).toBeDefined();
+        expect(inline.fileAnchored).toBeUndefined();
+        expect(inline.relevantLinesStart).toBe(10);
+        expect(inline.relevantLinesEnd).toBe(11);
+    });
+
+    it('leaves a non-kody-rules out-of-hunk finding discarded, exactly as before', async () => {
+        const result = await run([
+            ruleFinding({ label: 'bug', brokenKodyRulesIds: [CONTEXT_RULE] }),
+        ]);
+
+        expect(result.validSuggestionsByPR ?? []).toEqual([]);
+        expect(result.validSuggestions ?? []).toEqual([]);
+    });
+});
+
+/**
+ * A kody_rules finding with a line but no file used to fall through to
+ * file-level grouping keyed on the empty string, which never matches a
+ * real changed file and silently discarded the finding as
+ * DISCARDED_BY_CODE_DIFF. `isPrLevelSuggestion` originally required BOTH
+ * fields missing (`&&`); a missing file alone already means the finding
+ * cannot be anchored to a diff position, so it must route to
+ * validSuggestionsByPR instead.
+ */
+describe('a kody_rules finding with a line but no file goes PR-level, not discarded', () => {
+    it('is delivered as a PR-level comment instead of DISCARDED_BY_CODE_DIFF', async () => {
+        const result = await run([
+            ruleFinding({ relevantFile: undefined, relevantLinesStart: 120 }),
+        ]);
+
+        expect(result.validSuggestionsByPR).toHaveLength(1);
+        expect(
+            (result.discardedSuggestions ?? []).some(
+                (s: any) => s.brokenKodyRulesIds?.[0] === CONTEXT_RULE,
+            ),
+        ).toBe(false);
+    });
+
+    // Kody's own review on this PR caught this: checking relevantLinesStart
+    // too (not just relevantFile) let a finding naming an out-of-PR file
+    // with no line citation bypass the changedFiles discard guard (KRC-20)
+    // and leak out as an unanchored PR-level comment.
+    it('still discards a finding naming a file outside the PR even with no line citation', async () => {
+        const result = await run([
+            ruleFinding({
+                relevantFile: 'src/not-in-this-pr.ts',
+                relevantLinesStart: undefined,
+                relevantLinesEnd: undefined,
+            }),
+        ]);
+
+        expect(result.validSuggestionsByPR ?? []).toEqual([]);
+        expect(
+            (result.discardedSuggestions ?? []).some(
+                (s: any) => s.relevantFile === 'src/not-in-this-pr.ts',
+            ),
+        ).toBe(true);
+    });
+
+    // Kody's review on this PR's second commit caught this too: a
+    // relevantFile that IS in the PR but whose patch has no valid diff
+    // ranges (extractValidDiffLines returns []) makes snapLinesToDiff
+    // return the finding unchanged (agent-review.stage.ts:178) — the line
+    // stays missing. Falling into the file-level branch then produced a
+    // broken inline comment (calculateCommentStartLine returns undefined
+    // for a missing relevantLinesStart, and create-file-comments.stage.ts
+    // posts it anyway with start_line/line both undefined).
+    it('routes a finding naming an in-PR file with an unparseable patch to PR-level instead of a line-less inline comment', async () => {
+        const result = await run(
+            [
+                ruleFinding({
+                    relevantFile: 'src/empty-patch.ts',
+                    relevantLinesStart: undefined,
+                    relevantLinesEnd: undefined,
+                    brokenKodyRulesIds: ['rule-unrelated'],
+                }),
+            ],
+            {
+                changedFiles: [
+                    { filename: 'src/user.ts', patch: PATCH },
+                    { filename: 'src/empty-patch.ts', patch: '' },
+                ],
+            },
+        );
+
+        expect(result.validSuggestionsByPR).toHaveLength(1);
+        // No line: cite the file alone, not a fabricated `:1` that need not
+        // exist in this file's diff (Kody's own review on this PR's third
+        // commit caught the earlier `?? 1` version doing exactly that).
+        expect(result.validSuggestionsByPR[0].suggestionContent).toContain(
+            '`src/empty-patch.ts`',
+        );
+        expect(result.validSuggestionsByPR[0].suggestionContent).not.toContain(
+            'src/empty-patch.ts:',
+        );
+        const emptyPatchFile = (result.fileAnalysisResults ?? []).find(
+            (f: any) => f.file?.filename === 'src/empty-patch.ts',
+        );
+        expect(emptyPatchFile?.validSuggestionsToAnalyze ?? []).toEqual([]);
+    });
+
+    // `??` only catches null/undefined, not 0 — a bare `relevantLinesStart
+    // ?? 1` would have let `0` slip through as a fabricated `:0` anchor. The
+    // fix instead branches on the same falsy check (`!relevantLinesStart`)
+    // isPrLevelSuggestion already uses, so 0 is treated as "no real line"
+    // too. relevantFile must resolve to a file with no valid diff ranges —
+    // otherwise snapLinesToDiff's own `!start` check (0 is falsy) would
+    // overwrite the 0 with a real snapped line before this code ever runs.
+    it('treats relevantLinesStart 0 as no real line, not a fabricated `:0` anchor', async () => {
+        const result = await run(
+            [
+                ruleFinding({
+                    relevantFile: 'src/empty-patch.ts',
+                    relevantLinesStart: 0,
+                    relevantLinesEnd: 0,
+                    brokenKodyRulesIds: ['rule-unrelated'],
+                }),
+            ],
+            {
+                changedFiles: [
+                    { filename: 'src/user.ts', patch: PATCH },
+                    { filename: 'src/empty-patch.ts', patch: '' },
+                ],
+            },
+        );
+
+        expect(result.validSuggestionsByPR).toHaveLength(1);
+        expect(result.validSuggestionsByPR[0].suggestionContent).toContain(
+            '`src/empty-patch.ts`',
+        );
+        expect(result.validSuggestionsByPR[0].suggestionContent).not.toMatch(
+            /:0/,
+        );
+    });
+});

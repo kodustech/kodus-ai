@@ -275,12 +275,12 @@ services:
                 ]
             interval: 5s
             timeout: 3s
-            retries: 20
-            start_period: 10s
+            retries: 5
+            start_period: 30s
         logging: *bench-logging
 
     db_mongodb:
-        image: docker.io/mongo:8
+        image: docker.io/mongo:8.2.11
         container_name: kodus_mongodb_bench
         environment:
             MONGO_INITDB_ROOT_USERNAME: ${API_MG_DB_USERNAME}
@@ -297,10 +297,10 @@ services:
                     'CMD-SHELL',
                     "echo 'db.runCommand({ ping: 1 }).ok' | mongosh --quiet mongodb://$${MONGO_INITDB_ROOT_USERNAME}:$${MONGO_INITDB_ROOT_PASSWORD}@localhost:27017/admin | grep -q 1",
                 ]
-            interval: 10s
+            interval: 5s
             timeout: 5s
-            retries: 20
-            start_period: 20s
+            retries: 5
+            start_period: 40s
         logging: *bench-logging
 
 volumes:

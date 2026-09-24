@@ -65,9 +65,8 @@ GitHub Actions e, apos aprovacao do spike, Nx.
 - `libs/` possui 28 dominios de primeiro nivel e nenhum `package.json`.
 - `pnpm-workspace.yaml` contem configuracoes do pnpm, mas nao contem `packages:`.
 - `pnpm list -r --depth -1` retorna apenas `kodus-orchestrator`.
-- `apps/web`, `apps/cli`, `apps/mcp-manager` e `packages/kodus-common` mantem
-  lockfiles proprios. Nao absorver esses projetos acidentalmente no workspace
-  raiz durante o spike Nx.
+- `apps/web`, `apps/cli` e `apps/mcp-manager` mantem lockfiles proprios. Nao
+  absorver esses projetos acidentalmente no workspace raiz durante o spike Nx.
 - `nodeLinker: hoisted` esta habilitado para manter dependencias fantasmas do
   legado Yarn resolvendo. Package manifests "explicitos" ainda nao seriam uma
   fronteira real enquanto essa divida existir.
@@ -114,9 +113,8 @@ Extrair contratos ajuda, mas nao basta. A maior alavanca inicial e retirar de
 - Portanto, o diagnostico correto e "sem task cache/affected", nao "sem cache".
 - O workflow self-hosted executa o grupo default completo para `amd64` e
   `arm64`, com QEMU para a arquitetura nao nativa.
-- O Dockerfile executa installs em `deps` e `prod-deps`, compila
-  `packages/kodus-common` nas duas trilhas e executa seis builds Nest no estagio
-  `build`.
+- O Dockerfile executa installs em `deps` e `prod-deps` e executa seis builds
+  Nest no estagio `build`.
 - O projeto declara pnpm `11.9.0`, enquanto Docker de producao/Railway instala
   `10.34.1` e o Docker de desenvolvimento instala `11.7.0`.
 
@@ -320,14 +318,12 @@ de automatizar a matriz.
 
 ### Otimizacoes a testar, uma por vez
 
-1. Copiar o `dist` ja gerado de `kodus-common` para `prod-deps`, evitando
-   recompilar o pacote pela segunda vez.
-2. Comparar `pnpm fetch` + install offline com o fluxo atual.
-3. Limitar paralelismo do BuildKit antes de reduzir paralelismo dos seis apps.
-4. Dividir `amd64` e `arm64` em jobs separados e criar o manifest depois.
-5. Separar web do bake backend se ele competir por memoria sem compartilhar
+1. Comparar `pnpm fetch` + install offline com o fluxo atual.
+2. Limitar paralelismo do BuildKit antes de reduzir paralelismo dos seis apps.
+3. Dividir `amd64` e `arm64` em jobs separados e criar o manifest depois.
+4. Separar web do bake backend se ele competir por memoria sem compartilhar
    camadas relevantes.
-6. Avaliar se `analytics-cli` e `ast-cli` precisam estar em todo artefato ou se
+5. Avaliar se `analytics-cli` e `ast-cli` precisam estar em todo artefato ou se
    podem ser um target de ferramentas separado.
 
 Cada experimento gera uma linha comparavel no baseline. Nao combinar mudancas

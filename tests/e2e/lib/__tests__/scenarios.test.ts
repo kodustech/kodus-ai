@@ -16,6 +16,8 @@ test("allScenarios: includes the registered release-gate scenarios", () => {
         "conversation-vertex-byok",
         "cross-repo-config",
         "finish-onboarding-slo",
+        "kodus-credits-gate",
+        "kodus-credits-review",
         "kody-rules-coverage",
         "kody-rules-create-and-apply",
         "kody-rules-file-sync",
@@ -28,6 +30,9 @@ test("allScenarios: includes the registered release-gate scenarios", () => {
         "rbac-authorization",
         "rbac-frontend-routes",
         "rbac-ui-render",
+        "review-decision-memory",
+        "review-decision-memory-kody-rules",
+        "review-decision-memory-revert",
         "rule-file-detection",
         "sso-cookie-domain",
         "sso-multi-user",
@@ -206,6 +211,42 @@ test("trial-managed-review: single-cell cloud × github × trial (the only manag
 test("upgrade-n-1-to-n only applies to self-hosted", () => {
     const s = allScenarios["upgrade-n-1-to-n"];
     assert.deepEqual(s.appliesTo.target, ["self-hosted"]);
+});
+
+test("review-decision-memory: github-only (needs pushFollowupCommit + listReviewCommentBodies, GitHub-only so far)", () => {
+    const s = allScenarios["review-decision-memory"];
+    assert.deepEqual(s.appliesTo.target, ["cloud", "self-hosted"]);
+    assert.deepEqual(s.appliesTo.provider, ["github"]);
+    assert.deepEqual(s.appliesTo.license, ["paid", "license-paid"]);
+    // github-app must NOT be in scope: it reuses the base GitHubProvider
+    // class today, but this scenario was only validated against the plain
+    // github provider — widen deliberately, not by accident.
+    assert.ok(
+        !s.appliesTo.provider.includes("github-app"),
+        "review-decision-memory must stay github-only until github-app is validated too",
+    );
+});
+
+test("review-decision-memory-revert: github-only, same appliesTo shape as review-decision-memory", () => {
+    const s = allScenarios["review-decision-memory-revert"];
+    assert.deepEqual(s.appliesTo.target, ["cloud", "self-hosted"]);
+    assert.deepEqual(s.appliesTo.provider, ["github"]);
+    assert.deepEqual(s.appliesTo.license, ["paid", "license-paid"]);
+    assert.ok(
+        !s.appliesTo.provider.includes("github-app"),
+        "review-decision-memory-revert must stay github-only until github-app is validated too",
+    );
+});
+
+test("review-decision-memory-kody-rules: github-only, same appliesTo shape as review-decision-memory", () => {
+    const s = allScenarios["review-decision-memory-kody-rules"];
+    assert.deepEqual(s.appliesTo.target, ["cloud", "self-hosted"]);
+    assert.deepEqual(s.appliesTo.provider, ["github"]);
+    assert.deepEqual(s.appliesTo.license, ["paid", "license-paid"]);
+    assert.ok(
+        !s.appliesTo.provider.includes("github-app"),
+        "review-decision-memory-kody-rules must stay github-only until github-app is validated too",
+    );
 });
 
 test("onboarding-webhook-registration applies to 4 platform providers (NOT github-app)", () => {

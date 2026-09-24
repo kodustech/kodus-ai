@@ -1,0 +1,163 @@
+reproduce: node evals/kody-rules/context-fp-repro.js --model=claude-sonnet-4-6 --reps=5 --out=AFTER-1826.txt
+corpus: cases-1826.json — 4 case(s), 5 replicate(s)
+model:  claude-sonnet-4-6
+Every case's CORRECT published count is 0. A non-zero count is a rule
+firing on a claim the diff window cannot support.
+
+══ 1724-scss-import-used-below-the-hunk  [claim: unused]
+   rule: No unused imports
+   file: app/assets/stylesheets/components/_card.scss
+   why 0 is correct: The `@use '../variables' as v` the PR adds IS used, at line 23 (`v.$text-muted`). The hunk stops at line 7, so the only evidence of the usage sits outside everything the shard can see. Removing the import as suggested breaks the build.
+   rep 1: published 0 (expected 0)  judged 0, claim-check dropped 0  shards 1 run / 0 errored
+   rep 2: published 0 (expected 0)  judged 0, claim-check dropped 0  shards 1 run / 0 errored
+   rep 3: published 0 (expected 0)  judged 0, claim-check dropped 0  shards 1 run / 0 errored
+   rep 4: published 0 (expected 0)  judged 0, claim-check dropped 0  shards 1 run / 0 errored
+   rep 5: published 0 (expected 0)  judged 0, claim-check dropped 0  shards 1 run / 0 errored
+   → per-replicate published: [0, 0, 0, 0, 0]
+
+══ unused-symbol-used-in-a-later-method  [claim: unused]
+   rule: No unused imports
+   file: src/orders/order-mapper.ts
+   why 0 is correct: `formatDate` is imported in the hunk and called at line 41, in a method the diff never shows. This is the RULE_OVERAPPLIED shape in TypeScript: same blindness, different language, so a fix that only special-cases SCSS does not cover it.
+   rep 1: published 0 (expected 0)  judged 0, claim-check dropped 0  shards 1 run / 0 errored
+   rep 2: published 0 (expected 0)  judged 0, claim-check dropped 0  shards 1 run / 0 errored
+   rep 3: published 0 (expected 0)  judged 0, claim-check dropped 0  shards 1 run / 0 errored
+   rep 4: published 0 (expected 0)  judged 0, claim-check dropped 0  shards 1 run / 0 errored
+   rep 5: published 0 (expected 0)  judged 0, claim-check dropped 0  shards 1 run / 0 errored
+   → per-replicate published: [0, 0, 0, 0, 0]
+
+══ missing-test-that-this-pr-adds  [claim: missing]
+   rule: Every new HTTP route handler ships with a test
+   file: src/routes/orders.controller.ts, src/routes/orders.controller.spec.ts
+   why 0 is correct: The rule's sibling test DOES exist: this same PR adds `orders.controller.spec.ts`. The shard judging the controller is never told the other file, so 'no test was added' is asserted from an empty window.
+   rep 1: published 0 (expected 0)  judged 1, claim-check dropped 1  shards 2 run / 0 errored
+      dropped: claimed "src/routes/orders.controller.spec.ts" is missing, but this PR changes it
+   rep 2: published 0 (expected 0)  judged 1, claim-check dropped 1  shards 2 run / 0 errored
+      dropped: claimed "src/routes/orders.controller.spec.ts" is missing, but this PR changes it
+   rep 3: published 0 (expected 0)  judged 1, claim-check dropped 1  shards 2 run / 0 errored
+      dropped: claimed "src/routes/orders.controller.spec.ts" is missing, but this PR changes it
+   rep 4: published 0 (expected 0)  judged 1, claim-check dropped 1  shards 2 run / 0 errored
+      dropped: claimed "src/routes/orders.controller.spec.ts" is missing, but this PR changes it
+   rep 5: published 0 (expected 0)  judged 1, claim-check dropped 1  shards 2 run / 0 errored
+      dropped: claimed "src/routes/orders.controller.spec.ts" is missing, but this PR changes it
+   → per-replicate published: [0, 0, 0, 0, 0]
+
+══ duplicate-helper-that-does-not-exist  [claim: duplicate]
+   rule: Do not reimplement a helper that already exists
+   file: src/blog/slug.ts
+   why 0 is correct: There is no `slugify` anywhere in `src/shared` — the only helpers there are `titleCase` and `truncate`. 'this already exists in shared' is an invention the shard cannot check, and applying it points the author at a symbol that is not there.
+   rep 1: published 0 (expected 0)  judged 1, claim-check dropped 1  shards 1 run / 0 errored
+      dropped: claimed "slugify" already exists, but it exists nowhere else in the repository
+   rep 2: published 0 (expected 0)  judged 1, claim-check dropped 1  shards 1 run / 0 errored
+      dropped: claimed "slugify" already exists, but it exists nowhere else in the repository
+   rep 3: published 0 (expected 0)  judged 1, claim-check dropped 1  shards 1 run / 0 errored
+      dropped: claimed "slugify" already exists, but it exists nowhere else in the repository
+   rep 4: published 0 (expected 0)  judged 1, claim-check dropped 1  shards 1 run / 0 errored
+      dropped: claimed "slugify" already exists, but it exists nowhere else in the repository
+   rep 5: published 0 (expected 0)  judged 1, claim-check dropped 1  shards 1 run / 0 errored
+      dropped: claimed "slugify" already exists, but it exists nowhere else in the repository
+   → per-replicate published: [0, 0, 0, 0, 0]
+
+TOTAL: 0 of 20 case-runs published a comment that should not exist.
+
+════════════════════════════════════════════════════════════════════════════
+READING THIS FILE
+════════════════════════════════════════════════════════════════════════════
+
+Undue firing, claude-sonnet-4-6, 4 cases x 5 replicates:
+
+    BASELINE-1826.txt   15 of 20 case-runs published a comment that should not exist
+    AFTER-1826.txt       0 of 20
+
+Per case (published, per replicate):
+
+    case                                    before             after
+    1724-scss-import-used-below-the-hunk    [1, 0, 1, 1, 1]    [0, 0, 0, 0, 0]
+    unused-symbol-used-in-a-later-method    [0, 1, 0, 0, 0]    [0, 0, 0, 0, 0]
+    missing-test-that-this-pr-adds          [1, 1, 1, 1, 1]    [0, 0, 0, 0, 0]
+    duplicate-helper-that-does-not-exist    [1, 1, 1, 1, 1]    [0, 0, 0, 0, 0]
+
+The #1724 case produces no comment, in every replicate.
+
+TWO DIFFERENT MECHANISMS DID THE WORK, and the run separates them:
+
+  * The two `unused` cases now come back `judged 0` — the judge never emits the
+    finding. Those cases got the PR's intent (T6) and the instruction to declare
+    what a finding asserts (T7); nothing was retrieved and nothing was refuted.
+  * `missing` and `duplicate` still come back `judged 1`. The model still asserts
+    it, and the claim checker refutes it against the repository and drops it
+    (T8/T9). The drop reason is printed on each replicate.
+
+That split matters: the prompt half is a behavioral change and could move back
+on another model or another day; the checker half is deterministic and will not.
+
+HARNESS
+    The runner now mirrors the provider's sequence — retrieve declared context,
+    judge, then refute each claim — instead of calling the judge alone. Measuring
+    only the judge would have measured the prompt and none of the checks this
+    issue added. The lookup is built over each case's own `repoFiles`, with the
+    same contract as `buildRepoLookup`: it answers `path:line:content` or the
+    literal "No matches found.", and never with silence.
+
+    Retrieval (T15) is wired but inert on this corpus: none of the four rules
+    carries a `contextNeed`, so every one resolves to `diff-only`. Retrieval
+    fixes false NEGATIVES, which a negative corpus cannot show by construction.
+
+INPUT SIZE, BEFORE AND AFTER (deterministic, no model call)
+    Total shard-prompt characters across the 4 cases (6 shards), built at
+    f508c839e and at this commit:
+
+        before  6,787 chars
+        after  11,167 chars     (+4,380 total, ~+730 per shard, ~+180 tokens)
+
+    The growth is the intent block (PR title + up to 1,000 chars of body) plus
+    the claim instruction and template — both fixed-size per shard. These cases
+    carry tiny diffs, so the relative growth here (+65%) is the worst case; on a
+    real PR the diff dominates the prompt and the same absolute addition is a
+    few percent. No `<Context>` block was emitted on this corpus (see above), so
+    the 6,000-character retrieval budget is not represented in these numbers.
+
+════════════════════════════════════════════════════════════════════════════
+STILL OUTSTANDING — this measurement is NOT the fleet measurement
+════════════════════════════════════════════════════════════════════════════
+
+claude-sonnet-4-6 is NOT in the production fleet. It was used because it is the
+only model this environment can reach, and because BASELINE-1826.txt ran on it,
+so before and after are at least comparable to each other.
+
+Verified in this environment on 2026-09-07, not assumed:
+
+    API_OPEN_AI_API_KEY      AUTH_INVALID ("Incorrect API key provided: sk-lC7Sa...")
+                             -> gpt-5.4 and gpt-5.4-mini cannot run
+    API_NOVITA_AI_API_KEY    AUTH_INVALID ("Unauthorized")
+                             -> kimi-k2.7-code@novita cannot run
+
+So the following are NOT delivered and need valid fleet keys:
+
+ 1. Undue firing per fleet model. Baseline AND after, same corpus, on gpt-5.4,
+    gpt-5.4-mini and kimi. Reported per model, never averaged — added context is
+    measured to help strong models and hurt weak ones, so a fleet average would
+    hide exactly the effect worth knowing.
+
+        # after (this tree)
+        node evals/kody-rules/context-fp-repro.js --model=gpt-5.4 --reps=5 --out=AFTER-1826-gpt54.txt
+        # baseline (pre-change engine), from a worktree at f508c839e
+        git worktree add /tmp/base1826 f508c839e
+        ln -s "$PWD/node_modules" /tmp/base1826/node_modules && ln -s "$PWD/.env" /tmp/base1826/.env
+        (cd /tmp/base1826 && node evals/kody-rules/context-fp-repro.js --model=gpt-5.4 --reps=5 --out=BASELINE-1826-gpt54.txt)
+
+ 2. Occurrence-recall on the frozen github-cases set, per model, to confirm the
+    negative-corpus win did not cost recall:
+
+        node evals/kody-rules/detector-fp-repro.js --rules=detectors-positive-control --corpus=github-cases --judge
+
+ 3. Token cost per REVIEW, before and after. The number above is prompt input
+    size, which is a bound on the input half only. Neither harness records
+    per-review usage, and BASELINE-1826.txt never captured one, so there is no
+    "before" to compare a real review against. Measured properly this comes off
+    the observability usage span (`LLM.run` -> `runAiSdkLLMInSpan`), not off this
+    harness.
+
+ 4. The per-shard retrieval budget (6,000 chars) is still the provisional number
+    from Design. Calibrating it needs a corpus whose rules actually declare a
+    context need; this one has none.

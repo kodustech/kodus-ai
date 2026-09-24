@@ -67,10 +67,7 @@ export type KodyRule = {
           }
     >;
     referenceProcessingStatus?:
-        | 'completed'
-        | 'processing'
-        | 'failed'
-        | 'pending';
+        'completed' | 'processing' | 'failed' | 'pending';
 };
 
 export type KodyRuleWithInheritanceDetails = KodyRule & {
@@ -188,8 +185,7 @@ export type KodyRulesCentralizedPrMetadata = {
 };
 
 export type KodyRulesMutationResponse =
-    | KodyRule[]
-    | KodyRulesCentralizedPrMetadata;
+    KodyRule[] | KodyRulesCentralizedPrMetadata;
 
 export type KodyRuleSuggestion = {
     id: string;

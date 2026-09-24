@@ -20,10 +20,27 @@ import {
 } from '@libs/llm/error-classifier';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
-import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
+import {
+    CodeReviewPipelineContext,
+    resolvedModel,
+    resolvedProvider,
+} from '../context/code-review-pipeline.context';
+import { buildReviewErrorMessage } from '@libs/llm/review-error-diagnostics';
 import { PipelineError } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-context.interface';
 import { formatLinkedReposSummaryLine } from '@libs/ee/linked-repositories';
 import { PostTracePrCommentUseCase } from '@libs/cli-review/application/use-cases/post-trace-pr-comment.use-case';
+
+/**
+ * `metadata.reason` tag on the `PipelineError` pushed below when
+ * `generateSummaryPR` fails. Shared with `RequestChangesOrApproveStage`
+ * (finish-process-review.stage.ts), which excludes it from the auto-approve
+ * gate: by the time this stage runs, the real review output (PR-level + line
+ * comments) has already posted (pipeline order: createPrLevelComments ->
+ * createFileComments -> aggregateResults -> HERE -> requestChangesOrApprove),
+ * so a summary-only failure has nothing to do with whether the review itself
+ * is trustworthy. #1844.
+ */
+export const SUMMARY_GENERATION_FAILED_REASON = 'summary_generation_failed';
 
 @Injectable()
 export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -105,8 +122,19 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
         // add an error of its own, and the end-review comment must reflect it.
         // Reading these once at stage entry meant a failed summary still
         // rendered "review completed" (#1568).
+        //
+        // A SUMMARY_GENERATION_FAILED_REASON error is excluded here too
+        // (#1844): RequestChangesOrApproveStage no longer blocks auto-approve
+        // on it alone, so the "...so auto-approval was skipped" notice would
+        // be false for that case — an approved PR would ship a comment
+        // claiming approval was skipped. Still counts toward `reviewFailed`/
+        // `reviewHasPartialErrors` if it co-occurs with any OTHER error
+        // (unfiltered elsewhere in `errors`), since that other failure is
+        // real and does block approval.
         const classifyErrors = (ctx: CodeReviewPipelineContext) => {
-            const errors = ctx.errors ?? [];
+            const errors = (ctx.errors ?? []).filter(
+                (e) => e?.metadata?.reason !== SUMMARY_GENERATION_FAILED_REASON,
+            );
             const reviewFailed = errors.some(
                 (e) => (e?.severity ?? 'critical') === 'critical',
             );
@@ -208,6 +236,8 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                         false,
                         context.externalPromptContext,
                         platformType,
+                        lineComments,
+                        context.prLevelCommentResults,
                     );
 
                 await this.commentManagerService.updateSummarizationInPR(
@@ -230,16 +260,20 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
 
                 // 'partial', not the 'critical' default: the review itself
                 // still ran and its comments are on the PR — only the summary
-                // is missing. Partial is enough to block auto-approve and to
-                // land the check on NEUTRAL, which is the honest signal for
-                // "degraded, not absent".
+                // is missing. Tagged with SUMMARY_GENERATION_FAILED_REASON so
+                // RequestChangesOrApproveStage can tell this apart from a
+                // partial failure that actually bears on the review's
+                // trustworthiness (#1844) — it does NOT block auto-approve or
+                // land the check on NEUTRAL by itself; it still counts as
+                // 'partial' for anything else that reads severity (e.g. a
+                // future partial failure alongside it keeps blocking).
                 const pipelineError: PipelineError = {
                     stage: this.stageName,
                     error: summaryError,
                     severity: 'partial',
                     metadata: {
                         message: 'Failed to generate summary',
-                        reason: 'summary_generation_failed',
+                        reason: SUMMARY_GENERATION_FAILED_REASON,
                     },
                 };
 
@@ -251,10 +285,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     getClassification(summaryError) ??
                     classifyLLMError(
                         summaryError,
-                        typeof codeReviewConfig?.resolvedModelSlot?.provider ===
-                            'string'
-                            ? codeReviewConfig.resolvedModelSlot.provider
-                            : undefined,
+                        resolvedProvider(context, summaryError),
                     );
 
                 // The pipeline context is Immer-frozen once an earlier stage
@@ -274,8 +305,13 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     if (!draft.lastReviewError) {
                         draft.lastReviewError = {
                             category: classification.category,
-                            provider: classification.provider,
+                            provider:
+                                classification.provider ??
+                                resolvedProvider(context, summaryError),
                             friendlyMessage: classification.friendlyMessage,
+                            httpStatus: classification.httpStatus,
+                            providerMessage: classification.providerMessage,
+                            model: resolvedModel(context, summaryError),
                             occurredAt: new Date(),
                         };
                     }
@@ -287,7 +323,14 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
 
         const { reviewFailed, reviewHasPartialErrors } =
             classifyErrors(context);
-        const reviewErrorMessage = context.lastReviewError?.friendlyMessage;
+        // Everything the classifier learned, not just its sentence. This line
+        // used to read `?.friendlyMessage` and drop the rest, which is how a
+        // failed review reported "Unexpected error while running the code
+        // review (open_router)" while the status, the model and the provider's
+        // own explanation sat on the same object (#1871).
+        const reviewErrorMessage = context.lastReviewError
+            ? buildReviewErrorMessage(context.lastReviewError)
+            : undefined;
         const reviewErrorCustomMessage = customMessageFor(reviewFailed);
 
         const startReviewMessage =
@@ -312,6 +355,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 reviewHasPartialErrors,
                 reviewErrorCustomMessage,
                 context.linkedRepositoriesMetadata,
+                context.reviewWarnings,
             );
             return context;
         }
@@ -382,6 +426,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 reviewHasPartialErrors,
                 reviewErrorCustomMessage,
                 context.linkedRepositoriesMetadata,
+                context.reviewWarnings,
             );
             return context;
         }
@@ -419,6 +464,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 reviewErrorMessage,
                 reviewHasPartialErrors,
                 reviewErrorCustomMessage,
+                context.reviewWarnings,
             );
         }
 

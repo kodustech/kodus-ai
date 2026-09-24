@@ -14,6 +14,7 @@ import { BYOKProvider } from '@libs/llm/model-providers';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { DEFAULT_MODEL } from './byok-defaults';
 import { vertexModelFromAdc } from './model-builders';
+import { isOpenCodeGoBaseUrl, openCodeSessionId } from './opencode-go';
 
 // Model-name protocol patterns, used by the self-hosted / trial default-model
 // resolution below (the BYOK provider builders moved to the provider modules
@@ -42,6 +43,13 @@ const GEMINI_MODEL_PATTERN = /^gemini[-_]/i;
  */
 export type ByokModelOptions = {
     structuredOutputs?: boolean;
+    /**
+     * Replacement transport for the built client, forwarded to the provider
+     * module's `build`. The connection probe passes a redirect-refusing fetch so
+     * a user-supplied endpoint can't 30x the request past the SSRF gate. Unset
+     * everywhere else — reviews use the default transport.
+     */
+    fetch?: typeof fetch;
 };
 
 /**
@@ -342,6 +350,11 @@ export function resolveManagedSlot(
                 // 'self-hosted', default baseURL api.openai.com, raw
                 // structuredOutputs opt-in — the openai_compatible provider
                 // module can't reproduce this without changing its BYOK behavior.
+                // This is also the ONE config shape with no BYOK ids at all
+                // (no byokModelId, no credentialId), so a self-hosted install
+                // pointed at OpenCode Go (issue #1880) needs the same
+                // x-opencode-session header attached here — the provider
+                // module's build() never runs on this inline path.
                 return {
                     kind: 'inline',
                     model: createOpenAICompatible({
@@ -350,6 +363,16 @@ export function resolveManagedSlot(
                         baseURL: env.baseURL,
                         supportsStructuredOutputs:
                             options.structuredOutputs === true,
+                        ...(isOpenCodeGoBaseUrl(env.baseURL)
+                            ? {
+                                  headers: {
+                                      'x-opencode-session': openCodeSessionId({
+                                          model: envMode,
+                                          baseURL: env.baseURL,
+                                      }),
+                                  },
+                              }
+                            : {}),
                     })(envMode),
                 };
             case 'vertex_adc': {

@@ -1,4 +1,5 @@
 import { REGISTRY } from '@libs/llm/providers';
+import { resolveTemperaturePolicy } from '@libs/llm/providers/kernel/temperature';
 import type { ProviderBuildConfig } from '@libs/llm/providers/kernel/types';
 import type { TemperaturePolicy } from '@libs/llm/providers/kernel/model-types';
 import { ProviderService } from '@libs/core/infrastructure/services/providers/provider.service';
@@ -18,6 +19,23 @@ export interface ModelUiCapabilities {
      *  4.7+), or `fixed` (locked to the one sound value — always-thinking
      *  Anthropic-protocol models pin it to 1). One shape, read straight by the form. */
     temperature: TemperaturePolicy;
+    /**
+     * The temperature policy that applies ONLY when reasoning is turned off, and
+     * ONLY when it differs from `temperature` above. Present for the handful of
+     * models whose vendor scopes the constraint to thinking MODE rather than to
+     * the model — DeepSeek documents "Thinking mode does not support the
+     * temperature, top_p, presence_penalty, or frequency_penalty parameters",
+     * so the same model accepts one with reasoning off.
+     *
+     * It travels in the SAME response instead of being a second request with an
+     * effort argument: that keeps this endpoint a pure function of
+     * (provider, model), so it stays cacheable and flipping the reasoning toggle
+     * costs nothing. The client picks between the two; the RULE — which models,
+     * in which direction — is still computed here, from the provider module.
+     *
+     * Absent ⇒ `temperature` applies in both states, which is every other model.
+     */
+    temperatureWhenReasoningOff?: TemperaturePolicy;
     /** The model can run with a reasoning/thinking budget. */
     supportsReasoning: boolean;
     /** The valid canonical reasoning levels for this model (from the module's
@@ -59,16 +77,28 @@ export class GetModelCapabilitiesUseCase {
         // 400s, is pinned, or is free — e.g. Anthropic 4.7+ = unsupported, Kimi
         // k2.7-code = fixed at 1). Otherwise derive it from the static capability
         // flag (every provider but Anthropic).
-        const cfg = {
-            provider,
-            model: modelId,
-            apiKey: '',
-        } as ProviderBuildConfig;
-        const temperature: TemperaturePolicy =
-            providerModule.temperaturePolicy?.(cfg) ??
-            ((caps.supportsTemperature ?? true)
-                ? { kind: 'adjustable' }
-                : { kind: 'unsupported' });
+        const policyFor = (reasoningEffort?: string): TemperaturePolicy => {
+            const cfg = {
+                provider,
+                model: modelId,
+                apiKey: '',
+                ...(reasoningEffort ? { reasoningEffort } : {}),
+            } as ProviderBuildConfig;
+            return resolveTemperaturePolicy(providerModule, cfg);
+        };
+
+        // Asked TWICE, on purpose, and answered in one response. Some constraints
+        // are scoped to thinking being ON rather than to the model, so the honest
+        // answer differs by reasoning state — but making the caller send the state
+        // would turn this into an impure, per-toggle request and throw away the
+        // cacheability that makes a capabilities endpoint worth having. Computing
+        // both here costs one extra pure function call.
+        const temperature = policyFor();
+        const whenReasoningOff = policyFor('none');
+        const temperatureWhenReasoningOff =
+            JSON.stringify(whenReasoningOff) === JSON.stringify(temperature)
+                ? undefined
+                : whenReasoningOff;
 
         const reasoningOptions =
             caps.reasoningConfig &&
@@ -79,10 +109,15 @@ export class GetModelCapabilitiesUseCase {
 
         return {
             temperature,
+            ...(temperatureWhenReasoningOff
+                ? { temperatureWhenReasoningOff }
+                : {}),
             supportsReasoning: caps.supportsReasoning ?? false,
             reasoningOptions,
-            reasoningOverrideExample:
-                providerModule.reasoningOverrideExample?.(provider),
+            reasoningOverrideExample: providerModule.reasoningOverrideExample?.(
+                provider,
+                modelId,
+            ),
         };
     }
 }

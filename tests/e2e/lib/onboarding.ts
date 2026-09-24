@@ -830,7 +830,26 @@ export async function resetCodeReviewConfig(
                 headers: { Authorization: `Bearer ${session.accessToken}` },
                 body: {
                     organizationAndTeamData: { teamId: session.teamId },
-                    configValue: { automatedReviewActive: true },
+                    configValue: {
+                        automatedReviewActive: true,
+                        // Scenarios open PRs against `main`, while the fixture
+                        // repos deliberately keep a non-main default branch
+                        // (tiny-url's default is the review-bait bug branch —
+                        // see the note in lib/git.ts on why the PR base and the
+                        // repo default are intentionally different).
+                        //
+                        // An EMPTY `baseBranches` used to mean "review every
+                        // base branch". Since e941be123 it means "review only
+                        // the repository default branch", so an unset list
+                        // silently skips every PR these scenarios open, with
+                        // `Branch Mismatch` and a 👎 reaction rather than an
+                        // error — which reads downstream as "no review
+                        // activity within timeout".
+                        //
+                        // State the scope the fixtures actually use instead of
+                        // depending on what an absent list happens to mean.
+                        baseBranches: ["main"],
+                    },
                 },
                 timeoutMs: 20_000,
             },

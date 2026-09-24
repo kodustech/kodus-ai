@@ -164,9 +164,9 @@ O loop, planner, BYOK, observability, sandbox management — tudo vem do framewo
 
 Os agentes novos **devem** respeitar tudo que o pipeline atual já respeita:
 
-- **BYOK**: usar `BYOKPromptRunnerService` como hoje. Cliente com chave própria usa o provider dele, senão usa o default. `BaseAgentProvider` já faz isso via `fetchBYOKConfig()`. O campo `executeMode` (`'byok'` | `'system'`) vai nos metadata dos spans pra saber se usou chave do cliente.
+- **BYOK**: resolver o modelo como o resto do sistema — `resolveTaskSlot(task)` → um slot `NormalizedModel` → `LLM.run` (ver `libs/llm/README.md`; `BYOKPromptRunnerService`/`createLLMAdapter` foram removidos na migração flow→AI SDK). Cliente com chave própria usa o provider dele; sem BYOK (slot `undefined`) cai no managed/default. O campo `executeMode` (`'byok'` | `'system'`) continua indo nos metadata dos spans pra saber se usou chave do cliente.
 - **Self-hosted**: funcionar sem depender de serviços externos que não existem em self-hosted (ex: se E2B não disponível, fallback sem sandbox).
-- **Token tracking**: todas as LLM calls dos agentes devem passar pelo `observabilityService.runLLMInSpan()`. Ele captura por span: `gen_ai.usage.total_tokens`, `input_tokens`, `output_tokens`, `reasoning_tokens`, `response.model`, `run.id`, `run.name`. Gravado em MongoDB com batch flush (75 items / 3s). O `BaseAgentProvider.createLLMAdapter()` já faz isso.
+- **Token tracking**: toda LLM call dos agentes é envolvida por um span de billing — hoje via `runAiSdkLLMInSpan` (`LLM.run` já é dono do span). Captura por span: `gen_ai.usage.total_tokens`, `input_tokens`, `output_tokens`, `reasoning_tokens`, `response.model`, `run.id`, `run.name`. Gravado em MongoDB com batch flush (75 items / 3s).
 - **Logs estruturados**: usar `createLogger` do `@libs/core/log/logger`. Pattern obrigatório: `{ message, context: ClassName.name, metadata: { correlationId, organizationId, teamId, prNumber, ... } }`.
 - **Logs de pipeline**: o `PipelineExecutor` já loga início/fim de cada stage com duração em ms e grava métricas via `metricsCollector.recordHistogram('pipeline_stage_duration_ms', ...)`. O `AgentReviewStage` novo deve funcionar igual.
 - **Logs de agent**: seguir o pattern de tags do safeguard pra facilitar filtro:

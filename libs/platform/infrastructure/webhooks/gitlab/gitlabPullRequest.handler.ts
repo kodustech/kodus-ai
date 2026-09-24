@@ -526,6 +526,31 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
             { host: extractGitlabHost(payload) },
         );
 
+        // `getContext` returns null for a project with no active automation --
+        // the merge-request path above has guarded this since it was written,
+        // and this path did not. A comment from an unintegrated project then
+        // threw `Cannot read properties of null (reading 'botUsername')` on
+        // the line below, which the consumer turned into a FAILED job: one
+        // TypeError, four error lines (handler, processor, router, consumer),
+        // and a comment webhook dropped. Production logged 11 of these in 40
+        // minutes.
+        //
+        // Nothing here is actionable without the context -- every branch below
+        // needs the bot username to even recognise a command -- so return the
+        // same way the sibling path does.
+        if (!context?.organizationAndTeamData) {
+            this.logger.warn({
+                message:
+                    'No active automation found for repository, skipping GitLab comment.',
+                context: GitLabMergeRequestHandler.name,
+                metadata: {
+                    mrNumber,
+                    projectId: payload?.project?.id,
+                },
+            });
+            return;
+        }
+
         try {
             // Note Hook fires only on new comments. GitLab 13.x omits
             // the action field, so treat missing action as 'create'.

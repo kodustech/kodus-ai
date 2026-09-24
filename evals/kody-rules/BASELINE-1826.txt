@@ -1,0 +1,66 @@
+reproduce: node evals/kody-rules/context-fp-repro.js --model=claude-sonnet-4-6 --reps=5 --out=BASELINE-1826.txt
+corpus: cases-1826.json — 4 case(s), 5 replicate(s)
+model:  claude-sonnet-4-6
+Every case's CORRECT published count is 0. A non-zero count is a rule
+firing on a claim the diff window cannot support.
+
+══ 1724-scss-import-used-below-the-hunk  [claim: unused]
+   rule: No unused imports
+   file: app/assets/stylesheets/components/_card.scss
+   why 0 is correct: The `@use '../variables' as v` the PR adds IS used, at line 23 (`v.$text-muted`). The hunk stops at line 7, so the only evidence of the usage sits outside everything the shard can see. Removing the import as suggested breaks the build.
+   rep 1: published 1 (expected 0)  shards 1 run / 0 errored
+      app/assets/stylesheets/components/_card.scss:2  The `../variables` module is imported as `v` but never used; remove the unused `@use` statement.
+   rep 2: published 0 (expected 0)  shards 1 run / 0 errored
+   rep 3: published 1 (expected 0)  shards 1 run / 0 errored
+      app/assets/stylesheets/components/_card.scss:2  Unused `@use '../variables' as v` import should be removed.
+   rep 4: published 1 (expected 0)  shards 1 run / 0 errored
+      app/assets/stylesheets/components/_card.scss:2  The `@use '../variables' as v` import is unused — no `v.*` references appear in the file.
+   rep 5: published 1 (expected 0)  shards 1 run / 0 errored
+      app/assets/stylesheets/components/_card.scss:2  Newly added `@use '../variables' as v` is never referenced in the file and should be removed.
+   → per-replicate published: [1, 0, 1, 1, 1]
+
+══ unused-symbol-used-in-a-later-method  [claim: unused]
+   rule: No unused imports
+   file: src/orders/order-mapper.ts
+   why 0 is correct: `formatDate` is imported in the hunk and called at line 41, in a method the diff never shows. This is the RULE_OVERAPPLIED shape in TypeScript: same blindness, different language, so a fix that only special-cases SCSS does not cover it.
+   rep 1: published 0 (expected 0)  shards 1 run / 0 errored
+   rep 2: published 1 (expected 0)  shards 1 run / 0 errored
+      src/orders/order-mapper.ts:3  Remove the unused `formatDate` import from `../shared/date`.
+   rep 3: published 0 (expected 0)  shards 1 run / 0 errored
+   rep 4: published 0 (expected 0)  shards 1 run / 0 errored
+   rep 5: published 0 (expected 0)  shards 1 run / 0 errored
+   → per-replicate published: [0, 1, 0, 0, 0]
+
+══ missing-test-that-this-pr-adds  [claim: missing]
+   rule: Every new HTTP route handler ships with a test
+   file: src/routes/orders.controller.ts, src/routes/orders.controller.spec.ts
+   why 0 is correct: The rule's sibling test DOES exist: this same PR adds `orders.controller.spec.ts`. The shard judging the controller is never told the other file, so 'no test was added' is asserted from an empty window.
+   rep 1: published 1 (expected 0)  shards 2 run / 0 errored
+      src/routes/orders.controller.ts:7  New `GET /orders/:id` handler is missing a corresponding `orders.controller.spec.ts` test file.
+   rep 2: published 1 (expected 0)  shards 2 run / 0 errored
+      src/routes/orders.controller.ts:7  New GET ':id' route handler is missing a required accompanying test file (orders.controller.spec.ts).
+   rep 3: published 1 (expected 0)  shards 2 run / 0 errored
+      src/routes/orders.controller.ts:7  New GET ':id' route handler is missing an accompanying `orders.controller.spec.ts` test file.
+   rep 4: published 1 (expected 0)  shards 2 run / 0 errored
+      src/routes/orders.controller.ts:7  New GET /orders/:id route handler is missing a companion test file (orders.controller.spec.ts).
+   rep 5: published 1 (expected 0)  shards 2 run / 0 errored
+      src/routes/orders.controller.ts:7  New `GET /orders/:id` route handler is missing a corresponding `orders.controller.spec.ts` test file.
+   → per-replicate published: [1, 1, 1, 1, 1]
+
+══ duplicate-helper-that-does-not-exist  [claim: duplicate]
+   rule: Do not reimplement a helper that already exists
+   file: src/blog/slug.ts
+   why 0 is correct: There is no `slugify` anywhere in `src/shared` — the only helpers there are `titleCase` and `truncate`. 'this already exists in shared' is an invention the shard cannot check, and applying it points the author at a symbol that is not there.
+   rep 1: published 1 (expected 0)  shards 1 run / 0 errored
+      src/blog/slug.ts:1  Remove the duplicate `slugify` implementation and import it from `src/shared` instead.
+   rep 2: published 1 (expected 0)  shards 1 run / 0 errored
+      src/blog/slug.ts:1  Remove duplicate `slugify` implementation and import it from `src/shared` instead.
+   rep 3: published 1 (expected 0)  shards 1 run / 0 errored
+      src/blog/slug.ts:1  This duplicates a slugify helper that should live in src/shared; import and re-export it instead.
+   rep 4: published 1 (expected 0)  shards 1 run / 0 errored
+      src/blog/slug.ts:1  Remove the duplicate `slugify` implementation and import the one from `src/shared` instead.
+   rep 5: published 1 (expected 0)  shards 1 run / 0 errored
+      src/blog/slug.ts:1  Remove the duplicate `slugify` implementation and import the one from `src/shared` instead.
+   → per-replicate published: [1, 1, 1, 1, 1]
+
+TOTAL: 15 of 20 case-runs published a comment that should not exist.

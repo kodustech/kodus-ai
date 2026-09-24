@@ -1,0 +1,108 @@
+Issue #1826 — the repository lookup does not honour its contract on EITHER provider
+══════════════════════════════════════════════════════════════════════════════════
+
+Ran 2026-09-09 against a real public repo (octocat/Hello-World), with the
+production providers and the production buildRepoLookup. No in-memory fake.
+
+    node evals/kody-rules/lookup-conformance.js --provider=local
+    node evals/kody-rules/lookup-conformance.js --provider=e2b
+
+THE CONTRACT (repo-lookup.ts:47-56)
+───────────────────────────────────
+  exists() returns false ONLY when the parent directory listed successfully and
+  the path was not in it. Any transport failure PROPAGATES, because "I could
+  not check" must never be reported as "it is not there".
+
+WHAT THE PROVIDERS ACTUALLY ANSWER
+──────────────────────────────────
+                                        local (self-hosted)   e2b (production)
+  exists("README")     file EXISTS            true                FALSE  <-- wrong
+  exists("nope.txt")   absent, parent exists  false               false
+  exists("__tests__/x") parent MISSING        THROWS  <-- wrong   false
+  exists("a/b/c/d.ts") deep missing           THROWS  <-- wrong   false
+
+  grep(), no matches                          ""                  "No matches found."
+  read() of an absent file                    THROWS              THROWS
+
+ROOT CAUSE, E2B — exists() ALWAYS RETURNS FALSE
+───────────────────────────────────────────────
+  exists(p) asks listDir(parentDirOf(p), 1) and looks for `p` in the listing.
+  E2B's listDir runs `find '<abs path>' -maxdepth 1 -type f` and returns stdout
+  verbatim, so the listing is ABSOLUTE:
+
+      RAW listDir(".",1) = "/home/user/repo/./README\n"
+
+  and the comparison is against the RELATIVE "README". It never matches. Local
+  passes a relative path with cwd=repoDir, so its listing is relative and the
+  comparison works — which is why this was invisible until both were asked the
+  same question.
+
+ROOT CAUSE, LOCAL — exists() THROWS ON A MISSING PARENT
+──────────────────────────────────────────────────────
+  LocalSandbox's listDir calls resolveSafePath, which lstats the path. A parent
+  directory that does not exist is an ENOENT, so the accessor throws. But a
+  missing parent is a REAL ABSENCE, not a failure to look: `<dir>/__tests__/`
+  not existing is the ordinary case for a sibling candidate, not an error.
+
+PROOF ON PRODUCTION CODE, ON THIS REPOSITORY
+────────────────────────────────────────────
+  sibling-file-proof.js clones the real public kodustech/kodus-ai into a real
+  sandbox from the production provider and calls the production functions in
+  the production order. The target pair is committed on main:
+
+      libs/code-review/infrastructure/agents/collaborators/call-graph.helper.ts
+      libs/code-review/infrastructure/agents/collaborators/call-graph.helper.spec.ts
+
+  e2b  (SIBLING-PROOF-e2b.txt, sandboxId ip6mqc95v09m00q1bq1ar)
+      read(...spec.ts, 1, 2)  -> "import * as fs from 'fs';"      <- it is THERE
+      lookup.exists(...spec.ts) -> false                          <- same sandbox
+      retrieveForShard(...)   -> 1 slice, 0 unmet, and the slice handed to the
+                                 judge reads:
+                                   "...call-graph.helper.spec.ts: does not exist"
+      A false statement about the repository is delivered to the model AS
+      RETRIEVED EVIDENCE. The rule then fires for a test that exists.
+
+  local (SIBLING-PROOF-local.txt)
+      read(...spec.ts, 1, 2)  -> same content, it is there
+      lookup.exists(...spec.ts) -> true                           <- correct
+      retrieveForShard(...)   -> 0 slices, 1 UNMET
+                                 ENOENT on the "__tests__/" candidate, whose
+                                 parent directory does not exist. The rule is
+                                 skipped and never judged.
+
+  Two different failures, one primitive, both on real code: production
+  manufactures the false positive, self-hosted silently drops the rule.
+
+WHAT THIS BREAKS
+────────────────
+  1. sibling-file retrieval — the need behind the issue's own flagship example
+     ("every new endpoint has a test"):
+       * on e2b every candidate is reported "does not exist", so the judge is
+         told the test is missing EVEN WHEN IT IS THERE. That manufactures the
+         exact false positive this issue exists to remove.
+       * on local the first missing-parent candidate throws, retrieval reports
+         the need UNMET, and the rule is skipped entirely.
+     Verified end to end in SANDBOX-1826.txt: 0 slices, 1 unmet, on both
+     sibling-file cases.
+
+  2. The claim checker's `missing` refutation via exists() is DEAD on e2b
+     (claim-checker.ts:196). The other branch — "this PR changes the file" —
+     does not use the sandbox, which is why AFTER-1826 still showed missing
+     claims being dropped and this stayed hidden.
+
+  3. grep's empty answer differs in shape, and the retriever tests it with
+     `found || '(no occurrence ...)'` (rule-context.retriever.ts:187). On e2b
+     the string "No matches found." is truthy, so the model is shown that
+     literal instead of the sentence the code intended.
+
+WHY EVERY EARLIER #1826 MEASUREMENT MISSED THIS
+──────────────────────────────────────────────
+  BASELINE-1826, AFTER-1826 and NEED-1826 all substituted an in-memory lookup:
+  grep was `line.includes(pattern)` and exists was `hasOwnProperty`. That fake
+  honours the contract perfectly and never throws, so it measured a lookup
+  strictly better than either shipped provider. The logic those runs proved is
+  still proven; the integration under it was never exercised.
+
+  The lesson is mechanical, not moral: an eval that stubs the boundary cannot
+  see a bug at the boundary. lookup-conformance.js exists so that this class of
+  divergence is a test, and sandbox-lookup-repro.js drives the real provider.

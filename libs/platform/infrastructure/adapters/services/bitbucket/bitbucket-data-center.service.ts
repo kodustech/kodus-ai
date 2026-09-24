@@ -44,6 +44,12 @@ import {
 import { Repository } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { RepositoryFile } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryFile.type';
 import {
+    isDeniedStatus,
+    RepositoryAccessDiagnosis,
+    summarizeProviderError,
+    UNKNOWN_REPOSITORY_ACCESS,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryAccessDiagnosis.type';
+import {
     EMPTY_REPO_SEED_COMMIT_MESSAGE,
     EMPTY_REPO_SEED_CONTENT,
     EMPTY_REPO_SEED_PATH,
@@ -991,6 +997,86 @@ export class BitbucketDataCenterService implements Omit<
             });
             return false;
         }
+    }
+
+    async diagnoseRepositoryAccess(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; fullName?: string };
+    }): Promise<RepositoryAccessDiagnosis> {
+        // `write` stays unknown: Data Center reports repository permissions
+        // only through admin listings, not for the authenticated user.
+        const result: RepositoryAccessDiagnosis = {
+            ...UNKNOWN_REPOSITORY_ACCESS,
+        };
+
+        try {
+            const authDetails = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetails) {
+                result.error = 'Bitbucket credential not found';
+                return result;
+            }
+
+            const repositories = <Repositories[]>(
+                    await this.integrationConfigService.findOne({
+                        team: { uuid: params.organizationAndTeamData.teamId },
+                        configKey: IntegrationConfigKey.REPOSITORIES,
+                    })
+                )?.configValue || [];
+
+            const targetRepo = repositories.find(
+                (r) => r.id === params.repository.id,
+            );
+            if (!targetRepo) {
+                result.error = 'Repository not found in the configured list';
+                return result;
+            }
+
+            const axiosClient = this.getAxiosInstance(authDetails);
+            const repoPath = `/projects/${targetRepo.workspaceId}/repos/${targetRepo.name}`;
+
+            try {
+                await axiosClient.get(`${repoPath}/commits`, {
+                    params: { limit: 1 },
+                });
+                result.read = 'ok';
+            } catch (error) {
+                result.read = isDeniedStatus(error) ? 'denied' : 'unknown';
+                result.error = summarizeProviderError(error);
+            }
+
+            const webhookUrl =
+                this.configService.get<string>(
+                    'GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK',
+                ) ?? process.env.GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK;
+
+            if (webhookUrl) {
+                try {
+                    const response = await axiosClient.get(
+                        `${repoPath}/webhooks`,
+                    );
+                    result.hook = response.data?.values?.some(
+                        (hook: any) => hook?.url === webhookUrl && hook?.active,
+                    )
+                        ? 'present'
+                        : 'missing';
+                } catch (error) {
+                    // Listing hooks needs repository admin; without it we
+                    // cannot tell whether the hook exists.
+                    result.error ??= summarizeProviderError(error);
+                }
+            }
+        } catch (error) {
+            // A 401/403/404 before any repository call (resolving the owner,
+            // building the client) still means the token cannot read.
+            if (isDeniedStatus(error)) {
+                result.read = 'denied';
+            }
+            result.error = summarizeProviderError(error);
+        }
+
+        return result;
     }
 
     async createCommentInPullRequest(params: {
@@ -2780,6 +2866,12 @@ export class BitbucketDataCenterService implements Omit<
         configKey: IntegrationConfigKey;
         configValue: any;
         type?: 'replace' | 'append';
+        /**
+         * Set by the chunked repository save on every request but the last, so
+         * webhooks are reconciled once against the complete selection instead
+         * of against each partially-persisted chunk.
+         */
+        deferWebhooks?: boolean;
     }): Promise<void> {
         try {
             const integration = await this.integrationService.findOne({
@@ -2800,8 +2892,15 @@ export class BitbucketDataCenterService implements Omit<
                 params.type,
             );
 
-            // If repositories are updated, ensure webhooks are generated for them
-            if (params.configKey === IntegrationConfigKey.REPOSITORIES) {
+            // If repositories are updated, ensure webhooks are generated for
+            // them — except for an intermediate chunk of a chunked save, whose
+            // persisted selection is still partial. Reconciling against a
+            // partial selection removes the hooks of everything not in it; the
+            // last chunk arrives complete and runs this once.
+            if (
+                params.configKey === IntegrationConfigKey.REPOSITORIES &&
+                !params.deferWebhooks
+            ) {
                 this.createWebhook(params.organizationAndTeamData).catch(
                     (err) => {
                         this.logger.warn({

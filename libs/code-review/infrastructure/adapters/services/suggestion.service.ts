@@ -1,7 +1,7 @@
 import { createLogger } from '@libs/core/log/logger';
-import { LLMModelProvider } from '@libs/llm/model-providers';
-import type { NormalizedModel } from '@libs/llm/byok-config';
+import { LLM_TASK, type NormalizedModel } from '@libs/llm/byok-config';
 import { Inject, Injectable } from '@nestjs/common';
+import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 
 import { IAIAnalysisService } from '@libs/code-review/domain/contracts/AIAnalysisService.contract';
 import {
@@ -65,40 +65,8 @@ export class SuggestionService implements ISuggestionService {
         private readonly commentManagerService: ICommentManagerService,
         private readonly codeManagementService: CodeManagementService,
         private readonly cacheService: CacheService,
+        private readonly permissionValidationService: PermissionValidationService,
     ) {}
-
-    /**
-     * Removes suggestions related to files that already have saved suggestions
-     */
-    public async removeSuggestionsRelatedToSavedFiles(
-        organizationAndTeamData: OrganizationAndTeamData,
-        prNumber: string,
-        savedSuggestions: any[],
-        newSuggestions: any[],
-    ): Promise<any> {
-        try {
-            const filesWithSavedSuggestions = new Set(
-                savedSuggestions.map((s) => s.relevantFile),
-            );
-
-            return newSuggestions.filter(
-                (suggestion) =>
-                    !filesWithSavedSuggestions.has(suggestion.relevantFile),
-            );
-        } catch (error) {
-            this.logger.log({
-                message: `Error when trying to remove repeated suggestions for PR#${prNumber}`,
-                error: error,
-                context: SuggestionService.name,
-                metadata: {
-                    organizationAndTeamData,
-                    prNumber: prNumber,
-                },
-            });
-
-            return newSuggestions;
-        }
-    }
 
     /**
      * Prepares suggestion properties for validation
@@ -128,11 +96,20 @@ export class SuggestionService implements ISuggestionService {
             const filteredSuggestions =
                 this.filterSuggestionProperties(savedSuggestions);
 
+            // Routed through the org's own BYOK slot (falls back to the managed
+            // default when the org has none configured for this task) — this used
+            // BYOK, a leftover of the REQ-NOLC-01 migration off LangChain.
+            const byokConfig =
+                await this.permissionValidationService.resolveTaskSlot(
+                    organizationAndTeamData,
+                    LLM_TASK.codeReview,
+                );
+
             const implementedSuggestions =
                 await this.aiAnalysisService.validateImplementedSuggestions(
                     organizationAndTeamData,
                     prNumber,
-                    LLMModelProvider.NOVITA_DEEPSEEK_V3_0324,
+                    byokConfig,
                     codePatch,
                     filteredSuggestions,
                 );
@@ -1595,7 +1572,6 @@ export class SuggestionService implements ISuggestionService {
                 await this.aiAnalysisService.severityAnalysisAssignment(
                     organizationAndTeamData,
                     prNumber,
-                    LLMModelProvider.NOVITA_DEEPSEEK_V3_0324,
                     codeSuggestions,
                     byokConfig,
                 );
@@ -1759,14 +1735,18 @@ export class SuggestionService implements ISuggestionService {
                             commentResult?.codeReviewFeedbackData
                                 ?.pullRequestReviewId;
 
-                        if (!commentId || !pullRequestReviewId) {
+                        // Same split as in CommentManagerService: only a missing
+                        // commentId breaks enrichment. `pullRequestReviewId`
+                        // describes the review object that Bitbucket does not
+                        // have, so demanding it reported an error on every
+                        // healthy Bitbucket suggestion.
+                        if (!commentId) {
                             this.logger.error({
-                                message: `Suggestion enrichment missing comment IDs for PR#${pullRequest.number}`,
+                                message: `Suggestion enrichment has no comment id for PR#${pullRequest.number}`,
                                 context: SuggestionService.name,
                                 metadata: {
                                     prNumber: pullRequest.number,
                                     suggestionId: suggestion?.id,
-                                    commentId,
                                     pullRequestReviewId,
                                     deliveryStatus:
                                         commentResult?.deliveryStatus,
@@ -1927,13 +1907,15 @@ export class SuggestionService implements ISuggestionService {
                                       result.codeReviewFeedbackData
                                           .pullRequestReviewId;
 
-                                  if (!prLevelCommentId || !prLevelReviewId) {
+                                  // Third copy of the same over-strict guard; a
+                                  // PR-level comment on Bitbucket has an id and
+                                  // no review id, and that is not a failure.
+                                  if (!prLevelCommentId) {
                                       this.logger.error({
-                                          message: `PR-level suggestion missing comment IDs`,
+                                          message: `PR-level suggestion has no comment id`,
                                           context: SuggestionService.name,
                                           metadata: {
                                               suggestionId: suggestion.id,
-                                              commentId: prLevelCommentId,
                                               pullRequestReviewId:
                                                   prLevelReviewId,
                                               deliveryStatus:

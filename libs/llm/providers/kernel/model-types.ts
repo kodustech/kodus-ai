@@ -42,7 +42,12 @@ export type TemperaturePolicy =
     | { kind: 'fixed'; value: number };
 
 export interface ModelCapabilities {
-    supportsTemperature: boolean;
+    /** NOTE: temperature is NOT here. It used to be — a `supportsTemperature`
+     *  boolean alongside `temperaturePolicy`, i.e. the same rule stated twice,
+     *  which is how a module came to answer `true` for a Claude that rejects the
+     *  parameter with a 400. `ProviderModule.temperaturePolicy` is now the only
+     *  place that answers, and `kernel/temperature.ts` is the only place that
+     *  reads it. */
     supportsReasoning: boolean;
     reasoningConfig?: ReasoningConfig;
     defaultMaxTokens?: number;

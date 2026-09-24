@@ -1,0 +1,945 @@
+import { PlatformType } from '@libs/core/domain/enums';
+
+// The real `e2b` SDK does not resolve to a usable class under jest (its ESM
+// export leaves CommandExitError undefined), which breaks the `instanceof`
+// check in runCmd. Provide a real class shared by BOTH the source-under-test
+// and this spec so the normalization branch can be exercised.
+jest.mock('e2b', () => {
+    class CommandExitError extends Error {
+        stdout: string;
+        stderr: string;
+        exitCode: number;
+        constructor(o: {
+            stdout: string;
+            stderr: string;
+            exitCode: number;
+            error?: string;
+        }) {
+            super(o.error ?? 'command exited non-zero');
+            this.stdout = o.stdout;
+            this.stderr = o.stderr;
+            this.exitCode = o.exitCode;
+        }
+    }
+    return { CommandExitError, Sandbox: class {} };
+});
+
+import { CommandExitError } from 'e2b';
+
+import {
+    E2BSandboxService,
+    buildE2BRemoteCommands,
+    syncE2BSandboxRepo,
+} from './e2b-sandbox.service';
+import type { CreateSandboxParams } from '@libs/sandbox/domain/contracts/sandbox.provider';
+
+const REPO_DIR = '/home/user/repo';
+
+/**
+ * Mutation-killing tests for the deterministic logic in e2b-sandbox.service:
+ *   - buildAuthHeader   (private git-over-HTTPS Authorization builder)
+ *   - buildRemoteCommands / buildE2BRemoteCommands (read-only sandbox tools)
+ *
+ * These assert exact command strings, exact return literals, branch boundaries,
+ * and error/fallback behaviour so a plausible regression makes a test fail.
+ */
+
+// ---------------------------------------------------------------------------
+// buildAuthHeader
+// ---------------------------------------------------------------------------
+describe('E2BSandboxService.buildAuthHeader', () => {
+    const service = new E2BSandboxService({} as any);
+    const build = (platform: PlatformType, token: string, username?: string) =>
+        (service as any).buildAuthHeader(platform, token, username) as string;
+
+    // Decode the base64 payload back to the `user:secret` pair.
+    const decode = (header: string) => {
+        expect(header.startsWith('Authorization: Basic ')).toBe(true);
+        return Buffer.from(
+            header.replace('Authorization: Basic ', ''),
+            'base64',
+        ).toString('utf8');
+    };
+
+    it('emits the exact header for GitHub (x-access-token user)', () => {
+        const header = build(PlatformType.GITHUB, 'ghtok');
+        expect(header).toBe(
+            `Authorization: Basic ${Buffer.from('x-access-token:ghtok').toString('base64')}`,
+        );
+        expect(decode(header)).toBe('x-access-token:ghtok');
+    });
+
+    it('uses oauth2 for GitLab', () => {
+        expect(decode(build(PlatformType.GITLAB, 'gltok'))).toBe(
+            'oauth2:gltok',
+        );
+    });
+
+    it('uses oauth2 for Azure Repos', () => {
+        expect(decode(build(PlatformType.AZURE_REPOS, 'aztok'))).toBe(
+            'oauth2:aztok',
+        );
+    });
+
+    it('falls back to x-access-token for any unlisted platform (default branch)', () => {
+        // FORGEJO hits the default case — proves the default is x-access-token,
+        // not oauth2 and not a throw.
+        expect(decode(build(PlatformType.FORGEJO, 'fjtok'))).toBe(
+            'x-access-token:fjtok',
+        );
+        expect(decode(build(PlatformType.INTERNAL, 'intok'))).toBe(
+            'x-access-token:intok',
+        );
+    });
+
+    describe('Bitbucket', () => {
+        it('uses the literal x-bitbucket-api-token-auth for ATATT tokens, ignoring the username', () => {
+            expect(
+                decode(
+                    build(PlatformType.BITBUCKET, 'ATATTsecret', 'ignored@me'),
+                ),
+            ).toBe('x-bitbucket-api-token-auth:ATATTsecret');
+        });
+
+        it('does not throw for an ATATT token even without a username', () => {
+            expect(decode(build(PlatformType.BITBUCKET, 'ATATTsecret'))).toBe(
+                'x-bitbucket-api-token-auth:ATATTsecret',
+            );
+        });
+
+        it('uses the account username for classic app passwords (non-ATATT)', () => {
+            expect(
+                decode(build(PlatformType.BITBUCKET, 'apppass', 'alice')),
+            ).toBe('alice:apppass');
+        });
+
+        it('treats a near-miss prefix (ATAT, one T short) as a classic token requiring a username', () => {
+            // Boundary for startsWith('ATATT'): 'ATAT' must NOT be the API-token path.
+            expect(
+                decode(build(PlatformType.BITBUCKET, 'ATATshort', 'bob')),
+            ).toBe('bob:ATATshort');
+        });
+
+        it('throws when a non-ATATT token has no username', () => {
+            expect(() => build(PlatformType.BITBUCKET, 'apppass')).toThrow(
+                'Bitbucket authentication requires a username (app password) or an Atlassian API token, but neither was provided.',
+            );
+        });
+
+        it('throws for a near-miss ATAT prefix with no username', () => {
+            expect(() => build(PlatformType.BITBUCKET, 'ATATshort')).toThrow(
+                /requires a username/,
+            );
+        });
+    });
+});
+
+// ---------------------------------------------------------------------------
+// buildE2BRemoteCommands (also reached via buildRemoteCommands)
+// ---------------------------------------------------------------------------
+describe('buildE2BRemoteCommands', () => {
+    // A fake E2B sandbox whose commands.run we drive per-test.
+    const makeSandbox = (run: jest.Mock) => ({ commands: { run } }) as any;
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    const exitError = (
+        stdout: string,
+        stderr: string,
+        exitCode: number,
+    ): CommandExitError =>
+        new CommandExitError({
+            stdout,
+            stderr,
+            exitCode,
+            error: '',
+        } as any);
+
+    describe('runCmd normalization', () => {
+        it('returns the CommandExitError fields as a plain result instead of throwing (via exec)', async () => {
+            const run = jest
+                .fn()
+                .mockRejectedValue(exitError('out', 'boom', 3));
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            const res = await rc.exec('do-thing');
+            expect(res).toEqual({ stdout: 'out', stderr: 'boom', exitCode: 3 });
+        });
+
+        it('re-throws a non-CommandExitError error (via exec)', async () => {
+            const run = jest.fn().mockRejectedValue(new Error('network down'));
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            await expect(rc.exec('do-thing')).rejects.toThrow('network down');
+        });
+    });
+
+    describe('resolveRepoPath guards (via read)', () => {
+        it('rejects absolute paths', async () => {
+            const rc = buildE2BRemoteCommands(makeSandbox(jest.fn()));
+            await expect(rc.read('/etc/passwd', 0, 0)).rejects.toThrow(
+                'Absolute paths are not allowed',
+            );
+        });
+
+        it('rejects ".." traversal', async () => {
+            const rc = buildE2BRemoteCommands(makeSandbox(jest.fn()));
+            await expect(rc.read('../secret', 0, 0)).rejects.toThrow(
+                'Path traversal using ".." is not allowed',
+            );
+        });
+
+        it('accepts a plain relative path (no throw)', async () => {
+            const run = jest
+                .fn()
+                .mockResolvedValue({ stdout: 'x', stderr: '', exitCode: 0 });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            await expect(rc.read('src/a.ts', 0, 0)).resolves.toBe('x');
+        });
+    });
+
+    describe('grep', () => {
+        it('builds the rg command against REPO_DIR and returns stdout when present', async () => {
+            const run = jest.fn().mockResolvedValue({
+                stdout: 'a.ts:1:hit',
+                stderr: '',
+                exitCode: 0,
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            const out = await rc.grep('needle', 'src');
+            expect(out).toBe('a.ts:1:hit');
+            expect(run).toHaveBeenCalledWith(
+                `cd ${REPO_DIR} && rg --no-heading -n 'needle' 'src'`,
+                { timeoutMs: 30_000 },
+            );
+        });
+
+        it('appends the --glob argument when a glob is given', async () => {
+            const run = jest.fn().mockResolvedValue({
+                stdout: 'x',
+                stderr: '',
+                exitCode: 0,
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            await rc.grep('needle', 'src', '*.ts');
+            expect(run).toHaveBeenCalledWith(
+                `cd ${REPO_DIR} && rg --no-heading -n 'needle' 'src' --glob '*.ts'`,
+                { timeoutMs: 30_000 },
+            );
+        });
+
+        it('escapes single quotes in pattern, path and glob', async () => {
+            const run = jest.fn().mockResolvedValue({
+                stdout: 'x',
+                stderr: '',
+                exitCode: 0,
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            await rc.grep("a'b", "d'ir", "*'.ts");
+            expect(run).toHaveBeenCalledWith(
+                `cd ${REPO_DIR} && rg --no-heading -n 'a'\\''b' 'd'\\''ir' --glob '*'\\''.ts'`,
+                { timeoutMs: 30_000 },
+            );
+        });
+
+        it("returns 'No matches found.' on rg exit 1 with empty stdout", async () => {
+            const run = jest.fn().mockResolvedValue({
+                stdout: '',
+                stderr: '',
+                exitCode: 1,
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            expect(await rc.grep('x', 'src')).toBe('No matches found.');
+        });
+
+        it("returns 'No matches found.' at the boundary exit 1 even with stderr (>=2 is false)", async () => {
+            const run = jest.fn().mockResolvedValue({
+                stdout: '',
+                stderr: 'some warning',
+                exitCode: 1,
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            expect(await rc.grep('x', 'src')).toBe('No matches found.');
+        });
+
+        it('returns the error string at the boundary exit 2 with stderr and empty stdout', async () => {
+            const run = jest.fn().mockResolvedValue({
+                stdout: '',
+                stderr: 'regex parse error',
+                exitCode: 2,
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            expect(await rc.grep('x', 'src')).toBe('Error: regex parse error');
+        });
+
+        it("returns 'No matches found.' when exit >=2 but stderr is empty", async () => {
+            const run = jest.fn().mockResolvedValue({
+                stdout: '',
+                stderr: '',
+                exitCode: 2,
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            expect(await rc.grep('x', 'src')).toBe('No matches found.');
+        });
+
+        it('returns stdout even when exitCode >=2 and stderr is set (stdout wins)', async () => {
+            const run = jest.fn().mockResolvedValue({
+                stdout: 'partial hit',
+                stderr: 'noise',
+                exitCode: 2,
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            expect(await rc.grep('x', 'src')).toBe('partial hit');
+        });
+    });
+
+    describe('read', () => {
+        it('uses cat when start and end are both 0 (whole file)', async () => {
+            const run = jest.fn().mockResolvedValue({
+                stdout: 'file body',
+                stderr: '',
+                exitCode: 0,
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            const out = await rc.read('src/a.ts', 0, 0);
+            expect(out).toBe('file body');
+            expect(run).toHaveBeenCalledWith(`cat '${REPO_DIR}/src/a.ts'`, {
+                timeoutMs: 10_000,
+            });
+        });
+
+        it('uses sed with the exact line range for a normal window', async () => {
+            const run = jest.fn().mockResolvedValue({
+                stdout: 'lines',
+                stderr: '',
+                exitCode: 0,
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            await rc.read('src/a.ts', 2, 10);
+            expect(run).toHaveBeenCalledWith(
+                `sed -n '2,10p' '${REPO_DIR}/src/a.ts'`,
+                { timeoutMs: 10_000 },
+            );
+        });
+
+        it('clamps start below 1 up to 1 (start=0 with non-zero end)', async () => {
+            const run = jest.fn().mockResolvedValue({
+                stdout: 'lines',
+                stderr: '',
+                exitCode: 0,
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            await rc.read('src/a.ts', 0, 5);
+            expect(run).toHaveBeenCalledWith(
+                `sed -n '1,5p' '${REPO_DIR}/src/a.ts'`,
+                { timeoutMs: 10_000 },
+            );
+        });
+
+        it('keeps start=1 unchanged (boundary of the clamp)', async () => {
+            const run = jest.fn().mockResolvedValue({
+                stdout: 'lines',
+                stderr: '',
+                exitCode: 0,
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            await rc.read('src/a.ts', 1, 5);
+            expect(run).toHaveBeenCalledWith(
+                `sed -n '1,5p' '${REPO_DIR}/src/a.ts'`,
+                { timeoutMs: 10_000 },
+            );
+        });
+
+        it('clamps a negative start up to 1', async () => {
+            const run = jest.fn().mockResolvedValue({
+                stdout: 'lines',
+                stderr: '',
+                exitCode: 0,
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            await rc.read('src/a.ts', -4, 3);
+            expect(run).toHaveBeenCalledWith(
+                `sed -n '1,3p' '${REPO_DIR}/src/a.ts'`,
+                { timeoutMs: 10_000 },
+            );
+        });
+
+        it('escapes single quotes in the resolved path', async () => {
+            const run = jest.fn().mockResolvedValue({
+                stdout: 'x',
+                stderr: '',
+                exitCode: 0,
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            await rc.read("src/o'brien.ts", 0, 0);
+            expect(run).toHaveBeenCalledWith(
+                `cat '${REPO_DIR}/src/o'\\''brien.ts'`,
+                { timeoutMs: 10_000 },
+            );
+        });
+
+        it('throws the trimmed stderr when stdout is empty and stderr is set', async () => {
+            const run = jest.fn().mockResolvedValue({
+                stdout: '',
+                stderr: '  sed: No such file or directory\n',
+                exitCode: 2,
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            await expect(rc.read('missing.ts', 0, 0)).rejects.toThrow(
+                'sed: No such file or directory',
+            );
+        });
+
+        it('returns empty string (no throw) when stdout and stderr are both empty', async () => {
+            const run = jest.fn().mockResolvedValue({
+                stdout: '',
+                stderr: '',
+                exitCode: 0,
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            await expect(rc.read('empty.ts', 0, 0)).resolves.toBe('');
+        });
+
+        it('warns via the logger on an empty read, with the untrusted path in the message', async () => {
+            const warn = jest.fn();
+            const run = jest.fn().mockResolvedValue({
+                stdout: '',
+                stderr: '',
+                exitCode: 0,
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run), {
+                logger: { warn } as any,
+                logContext: 'TestCtx',
+                logMetadata: { prKey: 'PR-1' },
+            });
+            await rc.read('empty.ts', 0, 0);
+            expect(warn).toHaveBeenCalledTimes(1);
+            const arg = warn.mock.calls[0][0];
+            expect(arg.context).toBe('TestCtx');
+            expect(arg.metadata).toMatchObject({
+                prKey: 'PR-1',
+                path: 'empty.ts',
+                exitCode: 0,
+            });
+        });
+
+        it('does NOT warn when stdout is non-empty', async () => {
+            const warn = jest.fn();
+            const run = jest.fn().mockResolvedValue({
+                stdout: 'has content',
+                stderr: '',
+                exitCode: 0,
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run), {
+                logger: { warn } as any,
+            });
+            await rc.read('a.ts', 0, 0);
+            expect(warn).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('listDir', () => {
+        // These two used to pin the opposite of each behaviour below, which is
+        // why the divergence survived: the listing was asserted ABSOLUTE while
+        // every caller compares repo-relative paths, and a permission error was
+        // asserted to come back as an empty listing. `RepoLookup.exists` reads
+        // an empty listing as "the file is not there", so both were bugs with a
+        // test holding them in place (issue #1826).
+        it('cds into the repo and lists RELATIVE paths, like grep does', async () => {
+            const run = jest.fn().mockResolvedValue({
+                stdout: 'src/a.ts\nsrc/b.ts',
+                stderr: '',
+                exitCode: 0,
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            const out = await rc.listDir('src', 3);
+            expect(out).toBe('src/a.ts\nsrc/b.ts');
+            expect(run).toHaveBeenCalledWith(
+                `cd ${REPO_DIR} && [ -e 'src' ] && find 'src' -maxdepth 3 -type f`,
+                { timeoutMs: 30_000 },
+            );
+        });
+
+        it('answers an empty listing for a path that is simply not there', async () => {
+            // The `[ -e ]` guard short-circuits: exit 1, and NO stderr.
+            const run = jest.fn().mockResolvedValue({
+                stdout: '',
+                stderr: '',
+                exitCode: 1,
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            expect(await rc.listDir('nope', 1)).toBe('');
+        });
+
+        it('reports a failure as an error instead of an empty listing', async () => {
+            const run = jest.fn().mockResolvedValue({
+                stdout: '',
+                stderr: 'find: permission denied',
+                exitCode: 1,
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            expect(await rc.listDir('src', 1)).toBe(
+                'Error: find: permission denied',
+            );
+        });
+    });
+
+    describe('exec', () => {
+        it('prefixes the command with cd REPO_DIR and returns separated streams', async () => {
+            const run = jest.fn().mockResolvedValue({
+                stdout: 'ok',
+                stderr: 'warn',
+                exitCode: 0,
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            const res = await rc.exec('git status');
+            expect(res).toEqual({ stdout: 'ok', stderr: 'warn', exitCode: 0 });
+            expect(run).toHaveBeenCalledWith(`cd ${REPO_DIR} && git status`, {
+                timeoutMs: 30_000,
+            });
+        });
+
+        it('defaults a falsy stderr to an empty string', async () => {
+            const run = jest.fn().mockResolvedValue({
+                stdout: 'ok',
+                stderr: undefined,
+                exitCode: 5,
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            const res = await rc.exec('cmd');
+            expect(res).toEqual({ stdout: 'ok', stderr: '', exitCode: 5 });
+        });
+    });
+});
+
+// ---------------------------------------------------------------------------
+// buildRemoteCommands (private, delegates to buildE2BRemoteCommands)
+// ---------------------------------------------------------------------------
+describe('E2BSandboxService.buildRemoteCommands', () => {
+    it('returns a RemoteCommands object wired to the given sandbox', async () => {
+        const service = new E2BSandboxService({} as any);
+        const run = jest
+            .fn()
+            .mockResolvedValue({ stdout: 'body', stderr: '', exitCode: 0 });
+        const sandbox = { commands: { run } } as any;
+
+        const rc = (service as any).buildRemoteCommands(sandbox);
+        expect(typeof rc.grep).toBe('function');
+        expect(typeof rc.read).toBe('function');
+        expect(typeof rc.listDir).toBe('function');
+        expect(typeof rc.exec).toBe('function');
+
+        // Prove the delegate actually drives THIS sandbox and resolves paths
+        // against REPO_DIR, not the sandbox CWD.
+        await rc.read('src/a.ts', 0, 0);
+        expect(run).toHaveBeenCalledWith(`cat '${REPO_DIR}/src/a.ts'`, {
+            timeoutMs: 10_000,
+        });
+    });
+});
+
+// ---------------------------------------------------------------------------
+// E2BSandboxService.getPrRefspec (private, exercised via the instance so the
+// delegation to the standalone resolvePrRefspec is proven, not assumed)
+// ---------------------------------------------------------------------------
+describe('E2BSandboxService.getPrRefspec', () => {
+    const service = new E2BSandboxService({} as any);
+    const refspec = (
+        platform: PlatformType,
+        prNumber: number,
+        cloneUrl: string,
+        branch: string,
+    ) =>
+        (service as any).getPrRefspec(
+            platform,
+            prNumber,
+            cloneUrl,
+            branch,
+        ) as string;
+
+    it('GitHub: refs/pull/<n>/head', () => {
+        expect(
+            refspec(PlatformType.GITHUB, 42, 'https://github.com/a/b', 'main'),
+        ).toBe('refs/pull/42/head');
+    });
+
+    it('GitLab: refs/merge-requests/<n>/head', () => {
+        expect(
+            refspec(PlatformType.GITLAB, 7, 'https://gitlab.com/a/b', 'main'),
+        ).toBe('refs/merge-requests/7/head');
+    });
+
+    it('Bitbucket Cloud: falls back to refs/heads/<branch> (no PR refspec on cloud)', () => {
+        expect(
+            refspec(
+                PlatformType.BITBUCKET,
+                3,
+                'https://bitbucket.org/a/b',
+                'feat/x',
+            ),
+        ).toBe('refs/heads/feat/x');
+    });
+
+    it('Bitbucket Server (self-hosted, non-bitbucket.org host): refs/pull-requests/<n>/from', () => {
+        expect(
+            refspec(
+                PlatformType.BITBUCKET,
+                3,
+                'https://bitbucket.internal.corp/a/b',
+                'feat/x',
+            ),
+        ).toBe('refs/pull-requests/3/from');
+    });
+
+    it('Azure Repos: refs/pull/<n>/merge', () => {
+        expect(
+            refspec(
+                PlatformType.AZURE_REPOS,
+                5,
+                'https://dev.azure.com/a/b',
+                'main',
+            ),
+        ).toBe('refs/pull/5/merge');
+    });
+
+    it('falls back to refs/pull/<n>/head for any unlisted platform', () => {
+        expect(
+            refspec(
+                PlatformType.FORGEJO,
+                9,
+                'https://forgejo.example/a/b',
+                'main',
+            ),
+        ).toBe('refs/pull/9/head');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// syncE2BSandboxRepo — the reconnect-path fix (#1313 e2e validation):
+// bring a REUSED sandbox's checkout up to date with the current commit.
+// ---------------------------------------------------------------------------
+describe('syncE2BSandboxRepo', () => {
+    const makeSandbox = (run: jest.Mock) => ({ commands: { run } }) as any;
+    const baseParams: CreateSandboxParams = {
+        cloneUrl: 'https://github.com/kodustech/kodus-ai',
+        authToken: 'tok123',
+        branch: 'feature/x',
+        baseBranch: 'main',
+        prNumber: 44,
+        platform: PlatformType.GITHUB,
+    };
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    it('fetches the PR refspec and force-checks-out FETCH_HEAD, with the auth header', async () => {
+        const run = jest
+            .fn()
+            .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+        await syncE2BSandboxRepo(makeSandbox(run), baseParams);
+
+        // The sync itself is ONE command. More follow it — the `.gitmodules`
+        // probe that decides whether any submodule has to be repopulated for
+        // this round (#1939) — so assert the sync command itself rather than
+        // the total number of commands.
+        expect(run.mock.calls[0][0]).toContain('git checkout -f FETCH_HEAD');
+        const [command, opts] = run.mock.calls[0];
+        expect(command).toBe(
+            `cd ${REPO_DIR} && git -c http.extraHeader="$GIT_AUTH_HEADER" fetch --depth=1 'https://github.com/kodustech/kodus-ai' 'refs/pull/44/head' && git checkout -f FETCH_HEAD && git clean -fd`,
+        );
+        expect(opts.envs.GIT_AUTH_HEADER).toBe(
+            `Authorization: Basic ${Buffer.from('x-access-token:tok123').toString('base64')}`,
+        );
+    });
+
+    it('omits the auth header entirely for an anonymous (public repo) sync', async () => {
+        const run = jest
+            .fn()
+            .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+        await syncE2BSandboxRepo(makeSandbox(run), {
+            ...baseParams,
+            authToken: '',
+        });
+
+        const [command, opts] = run.mock.calls[0];
+        expect(command).toBe(
+            `cd ${REPO_DIR} && git fetch --depth=1 'https://github.com/kodustech/kodus-ai' 'refs/pull/44/head' && git checkout -f FETCH_HEAD && git clean -fd`,
+        );
+        expect(opts.envs).toBeUndefined();
+    });
+
+    it('falls back to refs/heads/<branch> when there is no prNumber (branch-based review)', async () => {
+        const run = jest
+            .fn()
+            .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+        await syncE2BSandboxRepo(makeSandbox(run), {
+            ...baseParams,
+            prNumber: undefined,
+        });
+
+        const [command] = run.mock.calls[0];
+        expect(command).toContain(`'refs/heads/feature/x'`);
+    });
+
+    it('is non-fatal on a failed fetch — logs a warning instead of throwing, leaving the stale checkout in place', async () => {
+        // sandbox.commands.run THROWS CommandExitError on a non-zero exit
+        // (it never resolves with one) — mocking a resolve here would
+        // exercise dead code and hide the very bug this normalizes.
+        const run = jest.fn().mockRejectedValue(
+            new CommandExitError({
+                stdout: '',
+                stderr: 'fatal: could not read from remote',
+                exitCode: 128,
+                error: '',
+            } as any),
+        );
+        const warn = jest.fn();
+
+        await expect(
+            syncE2BSandboxRepo(makeSandbox(run), baseParams, {
+                logger: { warn, log: jest.fn() } as any,
+            }),
+        ).resolves.toBeUndefined();
+
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0][0].message).toContain('git sync failed');
+    });
+
+    it('is non-fatal on a non-CommandExitError rejection too (e.g. a timeout)', async () => {
+        const run = jest.fn().mockRejectedValue(new Error('sandbox timed out'));
+        const warn = jest.fn();
+
+        await expect(
+            syncE2BSandboxRepo(makeSandbox(run), baseParams, {
+                logger: { warn, log: jest.fn() } as any,
+            }),
+        ).resolves.toBeUndefined();
+
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0][0].metadata.stderr).toBe('sandbox timed out');
+    });
+
+    it('prefers checkoutSha over prNumber/branch (CLI merge-base sync)', async () => {
+        const run = jest
+            .fn()
+            .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+        await syncE2BSandboxRepo(makeSandbox(run), {
+            ...baseParams,
+            checkoutSha: 'abc123deadbeef',
+        });
+
+        const [command] = run.mock.calls[0];
+        expect(command).toContain(`'abc123deadbeef'`);
+        expect(command).not.toContain('refs/pull');
+    });
+
+    it('logs success (not warn) when the sync succeeds', async () => {
+        const run = jest
+            .fn()
+            .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+        const warn = jest.fn();
+        const log = jest.fn();
+
+        await syncE2BSandboxRepo(makeSandbox(run), baseParams, {
+            logger: { warn, log } as any,
+        });
+
+        expect(warn).not.toHaveBeenCalled();
+        expect(log).toHaveBeenCalledTimes(1);
+        expect(log.mock.calls[0][0].message).toContain('synced reused sandbox');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// syncE2BSandboxRepo — round N must repopulate submodules too (#1939).
+// `git clean -fd` does not descend into submodule directories, so a reused
+// sandbox otherwise keeps round 1's submodule contents (or none) while the
+// diff describes round N — the stale-checkout bug (#1313) in another costume.
+// ---------------------------------------------------------------------------
+describe('syncE2BSandboxRepo — submodules on the reconnect path', () => {
+    const GITMODULES =
+        '[submodule "commons-mod"]\n\tpath = packages/commons\n\turl = https://github.com/kodustech/commons.git\n';
+    /** What `git config -f .gitmodules --get-regexp` prints for it. */
+    const DECLARED =
+        'submodule.commons-mod.path packages/commons\n' +
+        'submodule.commons-mod.url https://github.com/kodustech/commons.git\n';
+    /** What `git config --get-regexp` prints after `submodule init`. */
+    const RESOLVED =
+        'submodule.commons-mod.url https://github.com/kodustech/commons.git\n';
+
+    const params: CreateSandboxParams = {
+        cloneUrl: 'https://github.com/kodustech/kodus-ai',
+        authToken: 'tok123',
+        branch: 'feature/x',
+        // Round N reuses the sandbox, so the base ref is whatever the
+        // previous round fetched; without one nothing is fetched.
+        baseBranch: 'main',
+        prNumber: 44,
+        platform: PlatformType.GITHUB,
+    };
+
+    const runFor = (gitmodules: string | null) =>
+        jest.fn(async (cmd: string) => {
+            if (cmd.includes('cat ') && cmd.includes('.gitmodules')) {
+                if (gitmodules === null) throw new Error('No such file');
+                return { stdout: gitmodules, stderr: '', exitCode: 0 };
+            }
+            if (cmd.includes("'rev-parse'")) {
+                // Only `refs/remotes/origin/<base>` exists in a reused
+                // sandbox, so the probe must ask for `origin/main` — asking
+                // for `main` finds nothing and silently stops repopulating
+                // submodules on every reconnect round.
+                if (!cmd.includes("'origin/main^{commit}'")) {
+                    throw new Error(`unexpected ref probe: ${cmd}`);
+                }
+                return { stdout: 'abc123', stderr: '', exitCode: 0 };
+            }
+            if (cmd.includes("'--get-regexp'")) {
+                // The base declares the same thing — the merged case, which
+                // is the only one that fetches.
+                if (cmd.includes("'--blob'")) {
+                    // Same reason: the blob is read off the base REF.
+                    expect(cmd).toContain("'origin/main:.gitmodules'");
+                }
+                const declared =
+                    cmd.includes("'-f' '.gitmodules'") ||
+                    cmd.includes("'--blob'");
+                return {
+                    stdout: declared ? DECLARED : RESOLVED,
+                    stderr: '',
+                    exitCode: 0,
+                };
+            }
+            return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+    it('repopulates the submodule after syncing to the new commit', async () => {
+        const run = runFor(GITMODULES);
+        await syncE2BSandboxRepo({ commands: { run } } as any, params);
+        const update = run.mock.calls
+            .map(([cmd]) => cmd as string)
+            .filter((cmd) => cmd.includes("'submodule' 'update'"));
+        expect(update).toHaveLength(1);
+        expect(update[0]).toContain("'packages/commons'");
+    });
+
+    it('runs the submodule step AFTER the checkout, never before', async () => {
+        const run = runFor(GITMODULES);
+        await syncE2BSandboxRepo({ commands: { run } } as any, params);
+        const cmds = run.mock.calls.map(([cmd]) => cmd as string);
+        const checkoutAt = cmds.findIndex((c) =>
+            c.includes('git checkout -f FETCH_HEAD'),
+        );
+        const updateAt = cmds.findIndex((c) =>
+            c.includes("'submodule' 'update'"),
+        );
+        expect(checkoutAt).toBeGreaterThanOrEqual(0);
+        expect(updateAt).toBeGreaterThan(checkoutAt);
+    });
+
+    it('reads the base declaration off origin/<base>, not <base>', async () => {
+        const run = runFor(GITMODULES);
+        await syncE2BSandboxRepo({ commands: { run } } as any, params);
+        const cmds = run.mock.calls.map(([cmd]) => cmd as string);
+        expect(cmds.some((c) => c.includes("'origin/main^{commit}'"))).toBe(
+            true,
+        );
+        expect(cmds.some((c) => c.includes("'origin/main:.gitmodules'"))).toBe(
+            true,
+        );
+    });
+
+    it('repopulates NOTHING when the base ref is not in the reused sandbox', async () => {
+        // A sandbox from an earlier round may not carry the base ref. Failing
+        // open here would fetch whatever the pull request declares.
+        const run = jest.fn(async (cmd: string) => {
+            if (cmd.includes('cat ') && cmd.includes('.gitmodules')) {
+                return { stdout: GITMODULES, stderr: '', exitCode: 0 };
+            }
+            if (cmd.includes("'rev-parse'"))
+                throw new Error('unknown revision');
+            if (cmd.includes("'--blob'")) {
+                // git fails the blob read when the ref is absent, and the
+                // probe above already refused — this rejects so the fixture
+                // cannot quietly hand back a declaration that does not exist.
+                // `CommandExitError`, not a bare Error: that is what
+                // `sandbox.commands.run` throws for a non-zero git exit, and
+                // a bare one carries no stdout/stderr/exitCode to normalize.
+                throw new CommandExitError({
+                    stdout: '',
+                    stderr: "fatal: invalid object name 'origin/main'",
+                    exitCode: 128,
+                    error: '',
+                } as any);
+            }
+            if (cmd.includes("'--get-regexp'")) {
+                return {
+                    stdout: cmd.includes("'-f' '.gitmodules'")
+                        ? DECLARED
+                        : RESOLVED,
+                    stderr: '',
+                    exitCode: 0,
+                };
+            }
+            return { stdout: '', stderr: '', exitCode: 0 };
+        });
+        await syncE2BSandboxRepo({ commands: { run } } as any, params, {
+            logger: { warn: jest.fn(), log: jest.fn() } as any,
+        });
+        expect(
+            run.mock.calls.filter(([cmd]) =>
+                (cmd as string).includes("'submodule' 'update'"),
+            ),
+        ).toHaveLength(0);
+    });
+
+    it('does nothing extra for a repository with no .gitmodules', async () => {
+        const run = runFor(null);
+        await syncE2BSandboxRepo({ commands: { run } } as any, params);
+        expect(
+            run.mock.calls.filter(([cmd]) =>
+                (cmd as string).includes("'submodule'"),
+            ),
+        ).toHaveLength(0);
+    });
+
+    it('a failed sync skips the submodule step — nothing to repopulate', async () => {
+        // The sync must REJECT, not resolve with a non-zero exit code:
+        // `sandbox.commands.run` throws `CommandExitError` and never resolves
+        // one (see 'is non-fatal on a failed fetch' above). And `.gitmodules`
+        // has to be answered, or the assertion below holds for the wrong
+        // reason — with no submodule declared there is nothing to fetch and
+        // the test stays green even if the guard is deleted.
+        const run = jest.fn(async (cmd: string) => {
+            if (cmd.includes('git checkout -f FETCH_HEAD')) {
+                throw new CommandExitError({
+                    stdout: '',
+                    stderr: 'boom',
+                    exitCode: 1,
+                    error: '',
+                } as any);
+            }
+            if (cmd.includes('cat ') && cmd.includes('.gitmodules')) {
+                return { stdout: GITMODULES, stderr: '', exitCode: 0 };
+            }
+            if (cmd.includes("'--get-regexp'")) {
+                const declared = cmd.includes("'-f' '.gitmodules'");
+                return {
+                    stdout: declared ? DECLARED : RESOLVED,
+                    stderr: '',
+                    exitCode: 0,
+                };
+            }
+            return { stdout: '', stderr: '', exitCode: 0 };
+        });
+        await syncE2BSandboxRepo({ commands: { run } } as any, params, {
+            logger: { warn: jest.fn(), log: jest.fn() } as any,
+        });
+        expect(
+            run.mock.calls.filter(([cmd]) =>
+                (cmd as string).includes("'submodule'"),
+            ),
+        ).toHaveLength(0);
+    });
+});

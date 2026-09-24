@@ -5,6 +5,14 @@ import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import type { BYOKConfig } from '@libs/llm/byok-config';
 import { CreateOrUpdateOrganizationParametersUseCase } from './create-or-update.use-case';
 
+// The `kodus` (platform-funded) credential is cloud-only; the gate reads the
+// compiled-in EE environment, mocked here so the save path can be exercised
+// in both deployment modes.
+jest.mock('@libs/ee/configs/environment', () => ({
+    environment: { API_CLOUD_MODE: true },
+}));
+import { environment } from '@libs/ee/configs/environment';
+
 const orgAndTeam = { organizationId: 'org-1', teamId: 'team-1' } as any;
 
 /**
@@ -12,7 +20,12 @@ const orgAndTeam = { organizationId: 'org-1', teamId: 'team-1' } as any;
  * findByKey returns as the stored configValue (undefined → no row). The
  * captured `persisted` holds whatever createOrUpdateConfig was asked to write.
  */
-function buildUseCase(existing?: unknown) {
+function buildUseCase(
+    existing?: unknown,
+    options: {
+        kodusGate?: { isEnabledFor: (org?: string) => Promise<boolean> };
+    } = {},
+) {
     const persisted: { value?: any } = {};
     const createOrUpdateConfig = jest.fn(async (_k, value: any) => {
         persisted.value = value;
@@ -30,17 +43,31 @@ function buildUseCase(existing?: unknown) {
     const eventEmitter = { emit: jest.fn() } as any;
     const telemetry = { byokConfigured: jest.fn() } as any;
 
+    // The Kodus provider is a private alpha; specs act as an allow-listed org
+    // unless they pass their own gate.
+    const kodusGate = options.kodusGate ?? {
+        isEnabledFor: jest.fn(async () => true),
+    };
     const useCase = new CreateOrUpdateOrganizationParametersUseCase(
         organizationParametersService as any,
         request,
         eventEmitter,
         telemetry,
+        kodusGate as any,
     );
 
-    return { useCase, persisted, createOrUpdateConfig, organizationParametersService };
+    return {
+        useCase,
+        persisted,
+        createOrUpdateConfig,
+        organizationParametersService,
+    };
 }
 
-const saveByok = (useCase: CreateOrUpdateOrganizationParametersUseCase, configValue: unknown) =>
+const saveByok = (
+    useCase: CreateOrUpdateOrganizationParametersUseCase,
+    configValue: unknown,
+) =>
     useCase.execute(
         OrganizationParametersKey.BYOK_CONFIG,
         configValue as any,
@@ -63,7 +90,11 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
             const priorCipher = encrypt('sk-real-openai-key');
             const existing = v2({
                 credentials: [
-                    { id: 'cred-openai', provider: 'openai', apiKey: priorCipher },
+                    {
+                        id: 'cred-openai',
+                        provider: 'openai',
+                        apiKey: priorCipher,
+                    },
                 ],
             });
             const incoming = v2({
@@ -85,12 +116,20 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
         it('encrypts a real non-empty apiKey (decrypts back to the submitted key)', async () => {
             const existing = v2({
                 credentials: [
-                    { id: 'cred-openai', provider: 'openai', apiKey: encrypt('old') },
+                    {
+                        id: 'cred-openai',
+                        provider: 'openai',
+                        apiKey: encrypt('old'),
+                    },
                 ],
             });
             const incoming = v2({
                 credentials: [
-                    { id: 'cred-openai', provider: 'openai', apiKey: 'sk-brand-new' },
+                    {
+                        id: 'cred-openai',
+                        provider: 'openai',
+                        apiKey: 'sk-brand-new',
+                    },
                 ],
             });
 
@@ -106,12 +145,20 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
             const priorCipher = encrypt('sk-real-openai-key');
             const existing = v2({
                 credentials: [
-                    { id: 'cred-openai', provider: 'openai', apiKey: priorCipher },
+                    {
+                        id: 'cred-openai',
+                        provider: 'openai',
+                        apiKey: priorCipher,
+                    },
                 ],
             });
             const incoming = v2({
                 credentials: [
-                    { id: 'cred-openai', provider: 'openai', apiKey: 'sk01••••ab89' },
+                    {
+                        id: 'cred-openai',
+                        provider: 'openai',
+                        apiKey: 'sk01••••ab89',
+                    },
                 ],
             });
 
@@ -127,7 +174,11 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
             const priorCipher = encrypt('sk-real-openai-key');
             const existing = v2({
                 credentials: [
-                    { id: 'cred-old-id', provider: 'openai', apiKey: priorCipher },
+                    {
+                        id: 'cred-old-id',
+                        provider: 'openai',
+                        apiKey: priorCipher,
+                    },
                 ],
             });
             const incoming = v2({
@@ -135,7 +186,11 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
                     { id: 'cred-new-id', provider: 'openai', apiKey: '' },
                 ],
                 models: [
-                    { id: 'model-a', credentialId: 'cred-new-id', model: 'gpt-5' },
+                    {
+                        id: 'model-a',
+                        credentialId: 'cred-new-id',
+                        model: 'gpt-5',
+                    },
                 ],
             });
 
@@ -159,7 +214,11 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
                     },
                 ],
                 models: [
-                    { id: 'model-b', credentialId: 'cred-bedrock', model: 'claude' },
+                    {
+                        id: 'model-b',
+                        credentialId: 'cred-bedrock',
+                        model: 'claude',
+                    },
                 ],
             });
             const incoming = v2({
@@ -167,11 +226,18 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
                     {
                         id: 'cred-bedrock',
                         provider: BYOKProvider.AMAZON_BEDROCK,
-                        settings: { awsBearerToken: '', awsRegion: 'us-east-1' },
+                        settings: {
+                            awsBearerToken: '',
+                            awsRegion: 'us-east-1',
+                        },
                     },
                 ],
                 models: [
-                    { id: 'model-b', credentialId: 'cred-bedrock', model: 'claude' },
+                    {
+                        id: 'model-b',
+                        credentialId: 'cred-bedrock',
+                        model: 'claude',
+                    },
                 ],
             });
 
@@ -210,7 +276,11 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
                     { id: 'cred-openai', provider: 'openai', apiKey: 'sk-x' },
                 ],
                 models: [
-                    { id: 'model-a', credentialId: 'cred-openai', model: 'gpt-5' },
+                    {
+                        id: 'model-a',
+                        credentialId: 'cred-openai',
+                        model: 'gpt-5',
+                    },
                 ],
                 routing: { mode: 'manual', defaultModelId: 'model-a' },
             });
@@ -258,7 +328,11 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
                     { id: 'cred-openai', provider: 'openai', apiKey: 'sk-x' },
                 ],
                 models: [
-                    { id: 'model-a', credentialId: 'cred-ghost', model: 'gpt-5' },
+                    {
+                        id: 'model-a',
+                        credentialId: 'cred-ghost',
+                        model: 'gpt-5',
+                    },
                 ],
             });
             const { useCase, createOrUpdateConfig } = buildUseCase(undefined);
@@ -287,7 +361,11 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
                     { id: 'cred-openai', provider: 'openai', apiKey: 'sk-x' },
                 ],
                 models: [
-                    { id: 'model-a', credentialId: 'cred-openai', model: 'gpt-5' },
+                    {
+                        id: 'model-a',
+                        credentialId: 'cred-openai',
+                        model: 'gpt-5',
+                    },
                 ],
                 routing: { defaultModelId: 'model-a' },
             });
@@ -354,11 +432,60 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
             expect(createOrUpdateConfig).not.toHaveBeenCalled();
         });
 
+        it('lets a legacy, UNCHANGED baseURL through so the org is not locked out', async () => {
+            // A real production org still points at http://localhost:11434 — a
+            // value saved before this rule existed. Validating every stored
+            // credential on every write meant that org could no longer save ANY
+            // BYOK change, not even switching model, because an untouched field
+            // failed a rule it predates. An unchanged value is already-persisted
+            // state, not a new outbound target.
+            const legacy = withBaseURL('http://localhost:11434/v1');
+            const { useCase, createOrUpdateConfig } = buildUseCase(legacy);
+
+            await expect(saveByok(useCase, legacy)).resolves.toBe(true);
+            expect(createOrUpdateConfig).toHaveBeenCalled();
+        });
+
+        it('STILL rejects when that same org edits the unsafe baseURL', async () => {
+            // The escape hatch is "unchanged", not "was ever stored" — a write
+            // that touches the value is validated in full.
+            const { useCase, createOrUpdateConfig } = buildUseCase(
+                withBaseURL('http://localhost:11434/v1'),
+            );
+
+            await expect(
+                saveByok(useCase, withBaseURL('http://localhost:9999/v1')),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
+        });
+
+        it('rejects a baseURL that already contains the provider endpoint path', async () => {
+            // Stored by a live org on both slots: the OpenAI-protocol SDK appends
+            // /chat/completions itself, so the request 404s forever. The key is
+            // valid, the model is valid, the host resolves — nothing downstream
+            // can recover, and it is only visible in the request URL.
+            const { useCase, createOrUpdateConfig } = buildUseCase(undefined);
+
+            await expect(
+                saveByok(
+                    useCase,
+                    withBaseURL(
+                        'https://api.groq.com/openai/v1/chat/completions',
+                    ),
+                ),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
+        });
+
         it('allows a credential with no baseURL (key-only connect resolves the brand default)', async () => {
             const { useCase, createOrUpdateConfig } = buildUseCase(undefined);
             const noBaseURL = v2({
                 credentials: [
-                    { id: 'cred-oc', provider: 'openai_compatible', apiKey: 'sk-x' },
+                    {
+                        id: 'cred-oc',
+                        provider: 'openai_compatible',
+                        apiKey: 'sk-x',
+                    },
                 ],
                 models: [
                     { id: 'model-a', credentialId: 'cred-oc', model: 'gpt-5' },
@@ -367,6 +494,79 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
             });
 
             await expect(saveByok(useCase, noBaseURL)).resolves.toBe(true);
+            expect(createOrUpdateConfig).toHaveBeenCalled();
+        });
+    });
+
+    describe('reasoning override must parse at SAVE time', () => {
+        const withOverride = (reasoningConfigOverride: string): BYOKConfig =>
+            v2({
+                credentials: [
+                    {
+                        id: 'cred-oc',
+                        provider: 'openai_compatible',
+                        apiKey: 'sk-x',
+                        settings: { baseURL: 'https://api.deepseek.com' },
+                    },
+                ],
+                models: [
+                    {
+                        id: 'model-a',
+                        credentialId: 'cred-oc',
+                        model: 'deepseek-v4-pro',
+                        reasoningConfigOverride,
+                    },
+                ],
+                routing: { defaultModelId: 'model-a' },
+            });
+
+        it('rejects unparsable JSON instead of silently ignoring it', async () => {
+            // buildProviderOptions parses this inside a try/catch and falls back
+            // to the effort preset — the right RUNTIME posture (a typo must not
+            // break every review) but it makes the typo invisible. Two production
+            // orgs run with a trailing comma here, convinced they enabled
+            // `reasoning_effort: max`, and have never been told. Save time is
+            // where the user is looking.
+            const { useCase, createOrUpdateConfig } = buildUseCase(undefined);
+
+            await expect(
+                saveByok(
+                    useCase,
+                    withOverride(
+                        '{\n  "thinking": {"type": "enabled"},\n  "reasoning_effort": "max",\n}',
+                    ),
+                ),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
+        });
+
+        it('rejects valid JSON that is not an object (a bare string/array cannot be provider options)', async () => {
+            const { useCase, createOrUpdateConfig } = buildUseCase(undefined);
+
+            await expect(
+                saveByok(useCase, withOverride('["high"]')),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
+        });
+
+        it('accepts a well-formed override', async () => {
+            const { useCase, createOrUpdateConfig } = buildUseCase(undefined);
+
+            await expect(
+                saveByok(
+                    useCase,
+                    withOverride('{"thinking": {"type": "enabled"}}'),
+                ),
+            ).resolves.toBe(true);
+            expect(createOrUpdateConfig).toHaveBeenCalled();
+        });
+
+        it('ignores an empty override (the field is optional)', async () => {
+            const { useCase, createOrUpdateConfig } = buildUseCase(undefined);
+
+            await expect(saveByok(useCase, withOverride('   '))).resolves.toBe(
+                true,
+            );
             expect(createOrUpdateConfig).toHaveBeenCalled();
         });
     });
@@ -383,13 +583,21 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
             const priorCipher = encrypt('sk-real-openai-key-abcdef');
             const existing = v2({
                 credentials: [
-                    { id: 'cred-openai', provider: 'openai', apiKey: priorCipher },
+                    {
+                        id: 'cred-openai',
+                        provider: 'openai',
+                        apiKey: priorCipher,
+                    },
                 ],
             });
             // Shape emitted by find-by-key maskApiKey: first2 + '...' + last3.
             const incoming = v2({
                 credentials: [
-                    { id: 'cred-openai', provider: 'openai', apiKey: 'sk...def' },
+                    {
+                        id: 'cred-openai',
+                        provider: 'openai',
+                        apiKey: 'sk...def',
+                    },
                 ],
             });
 
@@ -408,11 +616,18 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
                     {
                         id: 'cred-bedrock',
                         provider: BYOKProvider.AMAZON_BEDROCK,
-                        settings: { awsBearerToken: bearerCipher, awsRegion: 'us-east-1' },
+                        settings: {
+                            awsBearerToken: bearerCipher,
+                            awsRegion: 'us-east-1',
+                        },
                     },
                 ],
                 models: [
-                    { id: 'model-b', credentialId: 'cred-bedrock', model: 'claude' },
+                    {
+                        id: 'model-b',
+                        credentialId: 'cred-bedrock',
+                        model: 'claude',
+                    },
                 ],
             });
             const incoming = v2({
@@ -420,11 +635,18 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
                     {
                         id: 'cred-bedrock',
                         provider: BYOKProvider.AMAZON_BEDROCK,
-                        settings: { awsBearerToken: 'AB...xyz', awsRegion: 'us-east-1' },
+                        settings: {
+                            awsBearerToken: 'AB...xyz',
+                            awsRegion: 'us-east-1',
+                        },
                     },
                 ],
                 models: [
-                    { id: 'model-b', credentialId: 'cred-bedrock', model: 'claude' },
+                    {
+                        id: 'model-b',
+                        credentialId: 'cred-bedrock',
+                        model: 'claude',
+                    },
                 ],
             });
 
@@ -444,8 +666,9 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
     // ─────────────────────────────────────────────────────────────────────
     describe('error logging never carries the raw configValue (S1b)', () => {
         it('logs only the key + org/team data, NOT configValue, when persist fails', async () => {
-            const { useCase, organizationParametersService } =
-                buildUseCase({ some: 'existing' });
+            const { useCase, organizationParametersService } = buildUseCase({
+                some: 'existing',
+            });
             // Force the generic (non-BYOK) persist path to throw a plain Error.
             organizationParametersService.createOrUpdateConfig.mockRejectedValueOnce(
                 new Error('db exploded'),
@@ -476,5 +699,75 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
                 'sk-should-never-be-logged',
             );
         });
+    });
+});
+
+describe('platform-funded (`kodus`) credential — keyless by design, cloud-only', () => {
+    afterEach(() => {
+        (environment as { API_CLOUD_MODE: boolean }).API_CLOUD_MODE = true;
+    });
+
+    const kodusConfig = (): BYOKConfig => ({
+        version: 2,
+        credentials: [{ id: 'cred-kodus', provider: BYOKProvider.KODUS }],
+        models: [
+            {
+                id: 'model-k',
+                credentialId: 'cred-kodus',
+                model: 'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731',
+            },
+        ],
+        routing: { defaultModelId: 'model-k' },
+    });
+
+    it('saves without an apiKey and persists NO secret on the credential', async () => {
+        const { useCase, persisted, createOrUpdateConfig } = buildUseCase();
+        await saveByok(useCase, kodusConfig());
+
+        expect(createOrUpdateConfig).toHaveBeenCalled();
+        const cred = persisted.value.credentials[0];
+        expect(cred.provider).toBe('kodus');
+        expect(cred.apiKey).toBeUndefined();
+        expect(cred.managed).toBeUndefined();
+    });
+
+    it('is refused for an org outside the private alpha (gate off), naming the alpha', async () => {
+        const gate = { isEnabledFor: jest.fn(async () => false) };
+        const { useCase, createOrUpdateConfig } = buildUseCase(undefined, {
+            kodusGate: gate,
+        });
+        await expect(saveByok(useCase, kodusConfig())).rejects.toThrow(
+            /private alpha/,
+        );
+        expect(createOrUpdateConfig).not.toHaveBeenCalled();
+    });
+
+    it('keeps saving for an org that ALREADY has the credential even if the gate is off (edits stay possible)', async () => {
+        const gate = { isEnabledFor: jest.fn(async () => false) };
+        const { useCase, createOrUpdateConfig } = buildUseCase(kodusConfig(), {
+            kodusGate: gate,
+        });
+        await saveByok(useCase, kodusConfig());
+        expect(createOrUpdateConfig).toHaveBeenCalled();
+        expect(gate.isEnabledFor).not.toHaveBeenCalled();
+    });
+
+    it('is refused on a self-hosted install (no platform accounts, no ledger)', async () => {
+        (environment as { API_CLOUD_MODE: boolean }).API_CLOUD_MODE = false;
+        const { useCase, createOrUpdateConfig } = buildUseCase();
+        await expect(saveByok(useCase, kodusConfig())).rejects.toThrow(
+            /only available on Kodus Cloud/,
+        );
+        expect(createOrUpdateConfig).not.toHaveBeenCalled();
+    });
+
+    it('a keyless credential on any OTHER provider is still rejected', async () => {
+        const { useCase } = buildUseCase();
+        await expect(
+            saveByok(
+                useCase,
+                v2({ credentials: [{ id: 'cred-openai', provider: 'openai' }] }),
+            ),
+        ).rejects.toThrow(BadRequestException);
     });
 });

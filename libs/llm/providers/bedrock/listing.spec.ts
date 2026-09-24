@@ -12,13 +12,13 @@ describe('bedrockModelListing', () => {
         expect(bedrockModelListing('openai')).toBeNull();
     });
 
-    it('builds the ListInferenceProfiles URL scoped to the user region', () => {
+    it('builds the ListFoundationModels URL scoped to the user region', () => {
         const url = listing().url({
             awsBearerToken: 'ABSK-x',
             awsRegion: 'us-east-1',
         });
         expect(url).toBe(
-            'https://bedrock.us-east-1.amazonaws.com/inference-profiles?maxResults=1000&typeEquals=SYSTEM_DEFINED',
+            'https://bedrock.us-east-1.amazonaws.com/foundation-models',
         );
     });
 
@@ -37,24 +37,147 @@ describe('bedrockModelListing', () => {
         expect(() => listing().url({ awsBearerToken: 'x' })).toThrow(/region/i);
     });
 
-    it('parses inferenceProfileSummaries → {id,name}, dropping non-ACTIVE', () => {
+    it('parses modelSummaries → {id,name}, dropping non-ACTIVE (LEGACY)', () => {
         const models = listing().parse({
-            inferenceProfileSummaries: [
+            modelSummaries: [
                 {
-                    inferenceProfileId: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
-                    inferenceProfileName: 'US Claude Sonnet 4.5',
-                    status: 'ACTIVE',
+                    modelId: 'anthropic.claude-sonnet-4-5-20250929-v1:0',
+                    modelName: 'Claude Sonnet 4.5',
+                    modelLifecycle: { status: 'ACTIVE' },
                 },
                 {
-                    inferenceProfileId: 'us.anthropic.dead-model-v1:0',
-                    inferenceProfileName: 'Dead',
-                    status: 'INACTIVE',
+                    modelId: 'anthropic.dead-model-v1:0',
+                    modelName: 'Dead',
+                    modelLifecycle: { status: 'LEGACY' },
                 },
             ],
         });
         expect(models.map((m) => m.id)).toEqual([
-            'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
+            'anthropic.claude-sonnet-4-5-20250929-v1:0',
         ]);
+    });
+
+    // Regression: ListInferenceProfiles only ever returned Anthropic (AWS built
+    // it for Claude's cross-region routing), so a third-party marketplace model
+    // like Kimi — invoked directly by its bare id, never registered as a
+    // profile — could never appear in the picker. ListFoundationModels is the
+    // base catalog: every family lives here.
+    it('includes non-Anthropic marketplace models (e.g. Kimi) — the whole point of switching off ListInferenceProfiles', () => {
+        const models = listing().parse({
+            modelSummaries: [
+                {
+                    modelId: 'moonshotai.kimi-k2.5',
+                    modelName: 'Kimi K2.5',
+                    modelLifecycle: { status: 'ACTIVE' },
+                },
+                {
+                    modelId: 'anthropic.claude-sonnet-4-5-20250929-v1:0',
+                    modelName: 'Claude Sonnet 4.5',
+                    modelLifecycle: { status: 'ACTIVE' },
+                },
+            ],
+        });
+        expect(models.map((m) => m.id)).toEqual(
+            expect.arrayContaining([
+                'moonshotai.kimi-k2.5',
+                'anthropic.claude-sonnet-4-5-20250929-v1:0',
+            ]),
+        );
+    });
+
+    // Regression: reasoningKeyOf's regex required a geography prefix
+    // (`us.anthropic....`), which ListInferenceProfiles always sent.
+    // ListFoundationModels returns the BARE id (`anthropic....`, no prefix) —
+    // without widening the regex, a live-listed Claude model would silently
+    // lose its reasoning-capability badge even though the prefixed profile the
+    // runtime actually calls has one.
+    it('resolves reasoning caps for a BARE Claude id, same as the geography-prefixed one', () => {
+        const [bare] = listing().parse({
+            modelSummaries: [
+                {
+                    modelId: 'anthropic.claude-opus-4-1-20250805-v1:0',
+                    modelName: 'Claude Opus 4.1',
+                    modelLifecycle: { status: 'ACTIVE' },
+                },
+            ],
+        });
+        const [prefixed] = (listing().fallbackModels ?? []).filter(
+            (m) => m.id === 'us.anthropic.claude-opus-4-1-20250805-v1:0',
+        );
+        expect(bare.supportsReasoning).toBe(true);
+        expect(bare.supportsReasoning).toBe(prefixed?.supportsReasoning);
+    });
+
+    it('is permissive when modelLifecycle is absent (treats as ACTIVE)', () => {
+        const models = listing().parse({
+            modelSummaries: [
+                { modelId: 'moonshotai.kimi-k2.5', modelName: 'Kimi K2.5' },
+            ],
+        });
+        expect(models.map((m) => m.id)).toEqual(['moonshotai.kimi-k2.5']);
+    });
+
+    // ListFoundationModels — unlike ListInferenceProfiles, which only ever
+    // returned Anthropic chat models — also lists embedding and image
+    // foundation models. None of them can serve a code review; nothing
+    // downstream filters by modality, so picking one from the dropdown would
+    // only fail once a review tries to invoke it.
+    it('excludes embedding and image models (non-TEXT outputModalities)', () => {
+        const models = listing().parse({
+            modelSummaries: [
+                {
+                    modelId: 'anthropic.claude-sonnet-4-5-20250929-v1:0',
+                    modelName: 'Claude Sonnet 4.5',
+                    modelLifecycle: { status: 'ACTIVE' },
+                    outputModalities: ['TEXT'],
+                },
+                {
+                    modelId: 'amazon.titan-embed-text-v2:0',
+                    modelName: 'Titan Embed Text v2',
+                    modelLifecycle: { status: 'ACTIVE' },
+                    outputModalities: ['EMBEDDING'],
+                },
+                {
+                    modelId: 'amazon.nova-canvas-v1:0',
+                    modelName: 'Nova Canvas',
+                    modelLifecycle: { status: 'ACTIVE' },
+                    outputModalities: ['IMAGE'],
+                },
+            ],
+        });
+        expect(models.map((m) => m.id)).toEqual([
+            'anthropic.claude-sonnet-4-5-20250929-v1:0',
+        ]);
+    });
+
+    it('is permissive when outputModalities is absent (does not drop the model)', () => {
+        const models = listing().parse({
+            modelSummaries: [
+                {
+                    modelId: 'moonshotai.kimi-k2.5',
+                    modelName: 'Kimi K2.5',
+                    modelLifecycle: { status: 'ACTIVE' },
+                },
+            ],
+        });
+        expect(models.map((m) => m.id)).toEqual(['moonshotai.kimi-k2.5']);
+    });
+
+    // Regression: an EMPTY outputModalities array declares no modality at all —
+    // it must be treated the same as an absent field (keep the model), not as
+    // "does not support TEXT" (drop it).
+    it('is permissive when outputModalities is an EMPTY array (does not drop the model)', () => {
+        const models = listing().parse({
+            modelSummaries: [
+                {
+                    modelId: 'moonshotai.kimi-k2.5',
+                    modelName: 'Kimi K2.5',
+                    modelLifecycle: { status: 'ACTIVE' },
+                    outputModalities: [],
+                },
+            ],
+        });
+        expect(models.map((m) => m.id)).toEqual(['moonshotai.kimi-k2.5']);
     });
 
     it('parse tolerates a malformed body', () => {

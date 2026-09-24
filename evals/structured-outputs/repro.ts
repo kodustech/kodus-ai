@@ -456,15 +456,30 @@ function printResult(r: ScenarioResult): void {
  * the SCENARIOS matrix above still probes each provider’s response_format.
  */
 async function probeRetryFallback(): Promise<{ ok: boolean; summary: string }> {
-    return { ok: true, summary: "(moved into the executor — see structured-review-call.spec.ts)" };
+    return {
+        ok: true,
+        summary:
+            '(moved into the executor — see structured-review-call.spec.ts)',
+    };
 }
 
 async function probeNoFutileRetry(): Promise<{ ok: boolean; summary: string }> {
-    return { ok: true, summary: "(moved into the executor — see structured-review-call.spec.ts)" };
+    return {
+        ok: true,
+        summary:
+            '(moved into the executor — see structured-review-call.spec.ts)',
+    };
 }
 
-async function probeCacheIsolation(): Promise<{ ok: boolean; summary: string }> {
-    return { ok: true, summary: "(moved into the executor — see structured-review-call.spec.ts)" };
+async function probeCacheIsolation(): Promise<{
+    ok: boolean;
+    summary: string;
+}> {
+    return {
+        ok: true,
+        summary:
+            '(moved into the executor — see structured-review-call.spec.ts)',
+    };
 }
 
 async function main(): Promise<void> {

@@ -4,6 +4,7 @@
  * it. Provider-specific knowledge lives in the module; this stays provider-agnostic.
  */
 import { REGISTRY } from './providers';
+import { resolveTemperaturePolicy } from './providers/kernel/temperature';
 import { BYOKProvider } from '@libs/llm/model-providers';
 import type { NormalizedModel } from './byok-config';
 
@@ -25,14 +26,19 @@ export function resolveByokTemperature(slot?: {
     provider?: BYOKProvider | string;
     model?: string;
     temperature?: number;
+    /** Read by the resolved policy: DeepSeek withholds temperature only WHILE
+     *  thinking, and an always-thinking GLM pins it. Omitting it from the
+     *  signature made the parameter invisible to callers of a function that
+     *  reads it. */
+    reasoningEffort?: string;
 }): number | undefined {
     const provider = slot?.provider as string | undefined;
     const module =
         provider && REGISTRY.has(provider) ? REGISTRY.get(provider) : undefined;
 
-    const policy = module?.temperaturePolicy?.(slot as NormalizedModel) ?? {
-        kind: 'adjustable' as const,
-    };
+    // ONE resolution, shared with the connect form and the tuning validator —
+    // see kernel/temperature.ts for why this is not inlined here any more.
+    const policy = resolveTemperaturePolicy(module, slot as NormalizedModel);
 
     if (policy.kind === 'unsupported') return undefined;
     if (policy.kind === 'fixed') return policy.value;

@@ -15,7 +15,7 @@ BYOK (Bring Your Own Key) es la **forma predeterminada en que Kodus usa LLMs en 
 
 ## Cómo funciona BYOK
 
-BYOK es **primero el proveedor**: conectas un proveedor una vez, le agregas los modelos que quieres y luego enrutas esos modelos a las tareas de Kody. La pantalla `/organization/byok` tiene tres pestañas:
+BYOK es **primero el proveedor**: conectas un proveedor una vez, le agregas los modelos que quieres y luego enrutas esos modelos a las tareas de Kody. La pantalla `/byok` tiene tres pestañas:
 
 <CardGroup cols={3}>
   <Card title="Providers" icon="box">
@@ -30,14 +30,14 @@ BYOK es **primero el proveedor**: conectas un proveedor una vez, le agregas los 
 </CardGroup>
 
 <Info>
-  **Quién puede editar esto.** La página de BYOK es **solo para Owner** — conectar, probar y eliminar claves requiere el rol **Owner**. Los demás roles (Billing Manager, Repo Admin, Contributor) no pueden acceder a `/organization/byok`. Consulta [Roles del workspace](/how_to_use/es/workspace_roles).
+  **Quién puede editar esto.** La página de BYOK es **solo para Owner** — conectar, probar y eliminar claves requiere el rol **Owner**. Los demás roles (Billing Manager, Repo Admin, Contributor) no pueden acceder a `/byok`. Consulta [Roles del workspace](/how_to_use/es/workspace_roles).
 </Info>
 
 ## Conectar un proveedor
 
 <Steps>
   <Step title="Abrir la configuración de BYOK">
-    Ve a [app.kodus.io/organization/byok](https://app.kodus.io/organization/byok). En un workspace nuevo verás **Connect your first provider**.
+    Ve a [app.kodus.io/byok](https://app.kodus.io/byok). En un workspace nuevo verás **Connect your first provider**.
   </Step>
 
   <Step title="Elegir un proveedor">
@@ -417,7 +417,7 @@ Elegir **Custom** en el interruptor de Thinking revela un área de texto JSON. P
 
 #### Modo manual con namespaces (usuarios avanzados)
 
-Si tu JSON ya contiene una clave de namespace conocida en el nivel superior (`anthropic`, `google`, `openai`, `openrouter`, `openaiCompatible`), Kodus lo deja intacto. Útil si quieres mezclar múltiples namespaces de proveedores o ser explícito:
+Si tu JSON ya empieza con una clave de namespace conocida en el nivel superior — cualquier clave de la tabla de mapeo de abajo — Kodus lo deja intacto. Útil si quieres mezclar múltiples namespaces de proveedores o ser explícito:
 
 ```json
 {
@@ -433,10 +433,14 @@ Internamente, estos son los mapeos de namespace que Kodus usa:
 | Proveedor BYOK | Clave de namespace |
 | --- | --- |
 | `anthropic` / `anthropic_compatible` | `anthropic` |
-| `google_gemini` / `google_vertex` | `google` |
+| `google_gemini` | `google` |
+| `google_vertex` | `google` para Gemini, `anthropic` para Claude en Vertex |
 | `openai` | `openai` |
+| `openai_compatible` | `openaiCompatible` |
+| `azure` | `azure` |
+| `amazon_bedrock` | `amazonBedrock` (también acepta `bedrock`) |
+| `novita` | `novita` |
 | `open_router` | `openrouter` |
-| `openai_compatible` / `novita` | `openaiCompatible` |
 
 #### Detalles a tener en cuenta
 

@@ -112,6 +112,18 @@ export function anthropicBrandModule(spec: AnthropicBrandSpec): ProviderModule {
         systemCacheControl(): Record<string, unknown> | undefined {
             return undefined;
         },
+        // Intrinsic to the protocol → one source, the anthropic module: these
+        // brands speak the Anthropic wire, which has no response_format — the
+        // schema rides the protocol's own channel ('none').
+        structuredOutputPolicy(
+            cfg: ProviderBuildConfig,
+            opts?: ProviderBuildOptions,
+        ) {
+            return anthropicModule.structuredOutputPolicy(
+                asCompatible(cfg),
+                opts,
+            );
+        },
         // The temperature policy is intrinsic to the protocol → one source, the
         // anthropic module (which knows the always-thinking brand ids pin it to 1).
         temperaturePolicy(cfg: ProviderBuildConfig) {
@@ -121,6 +133,14 @@ export function anthropicBrandModule(spec: AnthropicBrandSpec): ProviderModule {
         normalize: anthropicModule.normalize,
         normalizeUsage: anthropicModule.normalizeUsage,
         providerOptionsNamespace: () => 'anthropic',
+
+        // A Kimi/GLM brand reasons through the anthropic module as a COMPATIBLE
+        // endpoint (see `reasoning()` above), which is the legacy thinking shape
+        // (type:enabled + a token budget) under the `anthropic` namespace — never
+        // the native adaptive+effort. Without this the picker fell back to a
+        // budget-less `{thinking:{type:enabled}}` that 400s on these upstreams.
+        reasoningOverrideExample: () =>
+            '{\n  "thinking": { "type": "enabled", "budgetTokens": 20000 }\n}',
 
         uiFields: spec.uiFields,
         // No `/models` listing (that is the OpenAI protocol's shape, not this one's)

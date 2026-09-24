@@ -175,14 +175,31 @@ module.exports = async (output, context) => {
         pass: recall >= RECALL_THRESHOLD,
         score: recall,
         reason,
-        // recallPasses rides along so the run artifact keeps per-pass attribution.
-        // Without it only the LAST case survives (last-output.json), and a
-        // multi-case run can't tell which pass paid for itself.
-        metadata: { recall, precision, f1, fairRecall, hitRate, totalCalls, unserved, matched, goldens: goldens.length, tp: matched, fp, fn, findings: candidates.length, realMiss, artifact, untestable, recallPasses: parsed.trace && parsed.trace.recallPasses,
+        // Os dois lados acrescentaram campos ao mesmo objeto, com esquemas de
+        // nome diferentes para as mesmas contas. Mantidos os dois: cada campo
+        // tem consumidor (findingHit -> typesafe-filter e build-pr-debugger,
+        // goldenResults -> rejudge, tpFindings/fpFindings -> confirm-gate), e
+        // derrubar um quebra um script em silencio.
+        metadata: {
+            recall, precision, f1, fairRecall, hitRate, totalCalls, unserved,
+            matched, goldens: goldens.length, tp: matched, fp, fn,
+            findings: candidates.length, realMiss, artifact, untestable,
+            // `matched` conta GOLDEN coberto (a regra da Martian); `tpFindings`
+            // conta ACHADO que casou. Os dois diferem quando dois achados
+            // cobrem o mesmo golden, e cada consumidor quer um deles.
+            tpFindings: candidateMatched.filter(Boolean).length,
+            fpFindings: fp,
             // Per-finding verdict, in findings order. Findings are appended
             // main-pass-first then one slice per extra pass (see recallPasses),
             // so this is what lets TP/FP be attributed to the pass that produced
             // them — the counts alone can't say whether an extra pass paid off.
-            findingHit },
+            findingHit,
+            // Which known bugs were found, by text: lets the nightly name the bugs
+            // it found last green night and missed tonight, not just a number.
+            goldenResults: goldens.map((g, gi) => ({
+                golden: String(typeof g === 'string' ? g : g.comment),
+                found: goldenMatched[gi],
+            })),
+        },
     };
 };

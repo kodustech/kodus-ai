@@ -28,7 +28,7 @@ import type { EditKeyForm } from "../_types";
 export const ByokProviderSelect = ({
     onProviderChange,
 }: {
-    onProviderChange?: () => void;
+    onProviderChange?: (provider: string) => void;
 }) => {
     const form = useFormContext<EditKeyForm>();
     const [open, setOpen] = useState(false);
@@ -71,7 +71,9 @@ export const ByokProviderSelect = ({
                                         return (
                                             <span className="flex items-center gap-2">
                                                 {selected.name}
-                                                {isBetaProvider(selected.id) && (
+                                                {isBetaProvider(
+                                                    selected.id,
+                                                ) && (
                                                     <Badge
                                                         variant="helper"
                                                         size="xs">
@@ -134,16 +136,14 @@ export const ByokProviderSelect = ({
                                             form.trigger("baseURL");
                                         }
 
-                                        onProviderChange?.();
+                                        onProviderChange?.(v);
                                         resetErrorBoundary();
                                         setOpen(false);
                                     }}>
                                     <span className="flex items-center gap-2">
                                         {r.name}
                                         {isBetaProvider(r.id) && (
-                                            <Badge
-                                                variant="helper"
-                                                size="xs">
+                                            <Badge variant="helper" size="xs">
                                                 Beta
                                             </Badge>
                                         )}

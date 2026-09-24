@@ -1,0 +1,65 @@
+# Preview environment, CLOUD shape: one VM per pull request, driven by CI.
+#
+# Separate from workspace.yaml on purpose — a developer box and a PR preview
+# are not the same machine. The dev recipe is optimized for someone SSH-ing in
+# and port-forwarding to localhost; this one is optimized for a link a reviewer
+# clicks.
+#
+# A pull request may need the product in its cloud shape (this recipe), its
+# self-hosted shape (workspace.preview.selfhosted.yaml) or both — each is a
+# separate runo env of the same branch, told apart by --profile:
+#   runo up --here --branch B --profile cloud --recipe .kodus/workspace.preview.yaml
+version: 1
+setup:
+  - docker network create kodus-backend-services 2>/dev/null || true
+  - docker network create shared-network 2>/dev/null || true
+  # sequential build of the shared image (api/worker/webhooks share the SAME
+  # tag; a parallel compose build races on export — same as the repo scripts)
+  - docker compose -f docker-compose.dev.yml build kodus-api
+  - pnpm install
+files:
+  copy: [.env, .env.billing]
+services:
+  compose:
+    # the overlay adds what a public, non-laptop environment needs: the app's
+    # own public URL in its env, and memory limits sized for a 16GB VM
+    files: [docker-compose.dev.yml, docker-compose.preview.yml, docker-compose.preview.cloud.yml]
+    # MCP is intentionally opt-in for laptops, but a preview must represent the
+    # complete product rather than the lightweight default developer stack.
+    profiles: [mcp]
+    # the web app is what a reviewer opens; it proxies to the API over the
+    # compose network, so the API needs no public address of its own.
+    # `webhooks` is public for a different reason: the git provider calls it
+    # from outside, so registering a repository needs a URL that resolves on
+    # the public internet — localhost, which .env ships, is rejected by
+    # GitHub at webhook-creation time and fails the whole save.
+    # web stays first, so it remains the primary (RUNO_PUBLIC_URL).
+    public: [web, webhooks]
+    health_timeout: 1800
+    env:
+      RUNO_PUBLIC_URL: "${RUNO_PUBLIC_URL}"
+      RUNO_PUBLIC_HOST: "${RUNO_PUBLIC_HOST}"
+      # the webhooks service's own public URL, so the API can hand a
+      # reachable hook address to the git provider
+      RUNO_URL_WEBHOOKS: "${RUNO_URL_WEBHOOKS}"
+data:
+  migrate: pnpm run migration:run
+  # seed:preview adds an onboarded organization + a login, so the link opens on
+  # something usable instead of an empty signup screen
+  seed: pnpm run seed && pnpm run seed:preview
+expose:
+  # Zero-setup HTTPS on the VM's sslip.io name. TODO: switch to
+  #   mode: tunnel
+  #   domain: preview.kodus.io
+  # once CLOUDFLARE_API_TOKEN is in the repo secrets — a named tunnel keeps ONE
+  # hostname across suspend/resume, which is what a link in a PR comment needs.
+  mode: https
+limits:
+  instance: t3.xlarge  # 16 GiB, permitted by the isolated Ohio identity
+  disk: 100gb
+  # Off 2h after the last deploy, whatever the traffic: a public URL draws
+  # bots and the stack's own outbound calls, so "no traffic" never happened
+  # and previews stayed up for days. A push or a `/preview` comment on the PR
+  # brings it back (the link changes: the hostname carries the IP).
+  idle_suspend: 2h
+  idle_activity: [ssh, agent]

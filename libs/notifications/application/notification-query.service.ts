@@ -30,7 +30,13 @@ export class NotificationQueryService {
 
     async list(
         userId: string,
-        options: { page: number; limit: number; unreadOnly?: boolean },
+        options: {
+            page: number;
+            limit: number;
+            unreadOnly?: boolean;
+            /** Active organization — the feed is per tenant, not per person. */
+            organizationId?: string;
+        },
     ): Promise<{
         data: UserNotificationWithDelivery[];
         total: number;
@@ -42,6 +48,7 @@ export class NotificationQueryService {
             limit: options.limit,
             offset,
             unreadOnly: options.unreadOnly,
+            organizationId: options.organizationId,
         });
 
         return {
@@ -51,16 +58,27 @@ export class NotificationQueryService {
         };
     }
 
-    async unreadCount(userId: string): Promise<number> {
-        return this.userNotificationRepo.countUnread(userId);
+    async unreadCount(userId: string, organizationId?: string): Promise<number> {
+        return this.userNotificationRepo.countUnread(userId, organizationId);
     }
 
-    async markAsRead(notificationId: string, userId: string): Promise<void> {
-        return this.userNotificationRepo.markAsRead(notificationId, userId);
+    async markAsRead(
+        notificationId: string,
+        userId: string,
+        organizationId?: string,
+    ): Promise<void> {
+        return this.userNotificationRepo.markAsRead(
+            notificationId,
+            userId,
+            organizationId,
+        );
     }
 
-    async markAllAsRead(userId: string): Promise<number> {
-        return this.userNotificationRepo.markAllAsRead(userId);
+    async markAllAsRead(
+        userId: string,
+        organizationId?: string,
+    ): Promise<number> {
+        return this.userNotificationRepo.markAllAsRead(userId, organizationId);
     }
 
     /**

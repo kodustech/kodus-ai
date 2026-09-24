@@ -75,5 +75,5 @@ Never silently treat a weak model as if it were platform `gpt-5.4-mini`.
 
 `resolveSecondaryPassModel` + dedup path:
 
-1. If `byokConfig.main` (else fallback) → **client BYOK** (default)  
-2. Else trial/demo / no BYOK → platform `gpt-5.4-mini`
+1. If a BYOK slot resolves for the task (`resolveTaskSlot` → `NormalizedModel`) → **client BYOK** (default)  
+2. Else trial/demo / no BYOK (slot `undefined`) → platform `gpt-5.4-mini`

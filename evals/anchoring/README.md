@@ -1,5 +1,11 @@
 # Anchoring eval
 
+> - **Answers:** How many real findings are dropped because the lines they cite don't land on the diff?
+> - **Runs:** every engine PR, against the scripted model (`evals/wiring-smoke.js`). Not gated in CI.
+> - **Run it:** `pnpm eval:anchoring` · `pnpm eval:anchoring:gate`
+> - **Gate:** `--gate` fails on any near-miss drop or a drop-rate above `--drop-max` (defined in `evals/anchoring/anchor-eval.js`).
+> - **Cost:** real finder model calls; none under the scripted model.
+
 How much real-finder recall is lost at the **line-anchoring** stage — and is the
 anchor-fix still holding?
 

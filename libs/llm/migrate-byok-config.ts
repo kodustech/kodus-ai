@@ -262,6 +262,8 @@ export function migrateLegacyToV2(blob: unknown): BYOKConfig {
         blob && typeof blob === 'object' ? (blob as LegacyConfig) : {};
     const main = legacy.main;
     const fallback = legacy.fallback;
+    /** Set only when a usable fallback slot actually produced a model. */
+    let fallbackModelId: string | undefined;
     const mainUsable = isUsableSlot(main);
     const fallbackUsable = isUsableSlot(fallback);
 
@@ -300,6 +302,7 @@ export function migrateLegacyToV2(blob: unknown): BYOKConfig {
             credentials.push(credentialFromSlot(fallbackCredId, secondary));
         }
         models.push(modelFromSlot('model-fallback', fallbackCredId, secondary));
+        fallbackModelId = 'model-fallback';
     }
 
     return {
@@ -307,6 +310,18 @@ export function migrateLegacyToV2(blob: unknown): BYOKConfig {
         credentials,
         models,
         // First model = migrated main → resolver picks the same main.
-        routing: { defaultModelId: mainModelId },
+        //
+        // The fallback has to be REFERENCED, not merely present. Emitting the
+        // model without `routing.fallbackModelId` left it orphaned in
+        // `models[]`: visible in the picker, pointed at by nothing, and
+        // skipped at runtime because `resolveTaskSlot` returns early on a
+        // missing `fallbackModelId`. Production carried 83 organizations in
+        // exactly that state -- a fallback they had configured, that silently
+        // never fired when their main model ran out of credit or was
+        // suspended.
+        routing: {
+            defaultModelId: mainModelId,
+            ...(fallbackModelId ? { fallbackModelId } : {}),
+        },
     };
 }

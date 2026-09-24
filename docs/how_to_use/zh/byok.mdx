@@ -15,7 +15,7 @@ BYOK(自带密钥)是 **Kodus 在所有套餐中使用 LLM 的默认方式** —
 
 ## BYOK 如何工作
 
-BYOK 是**提供商优先**的:您连接一次提供商,把想要的模型添加到该提供商上,然后将这些模型路由到 Kody 的各个任务。`/organization/byok` 界面有三个标签页:
+BYOK 是**提供商优先**的:您连接一次提供商,把想要的模型添加到该提供商上,然后将这些模型路由到 Kody 的各个任务。`/byok` 界面有三个标签页:
 
 <CardGroup cols={3}>
   <Card title="提供商" icon="box">
@@ -30,14 +30,14 @@ BYOK 是**提供商优先**的:您连接一次提供商,把想要的模型添加
 </CardGroup>
 
 <Info>
-  **谁可以编辑此项。** BYOK 页面**仅限 Owner** — 连接、测试和删除密钥需要 **Owner** 角色。其他角色(Billing Manager、Repo Admin、Contributor)无法访问 `/organization/byok`。参见[工作区角色](/how_to_use/zh/workspace_roles)。
+  **谁可以编辑此项。** BYOK 页面**仅限 Owner** — 连接、测试和删除密钥需要 **Owner** 角色。其他角色(Billing Manager、Repo Admin、Contributor)无法访问 `/byok`。参见[工作区角色](/how_to_use/zh/workspace_roles)。
 </Info>
 
 ## 连接提供商
 
 <Steps>
   <Step title="打开 BYOK 设置">
-    访问 [app.kodus.io/organization/byok](https://app.kodus.io/organization/byok)。在全新的工作区中,您会看到**连接您的第一个提供商**。
+    访问 [app.kodus.io/byok](https://app.kodus.io/byok)。在全新的工作区中,您会看到**连接您的第一个提供商**。
   </Step>
 
   <Step title="选择一个提供商">
@@ -417,7 +417,7 @@ Moonshot 和 Z.ai 都在按 token 付费的开发者 API 之外,各自提供一�
 
 #### 手动指定命名空间(进阶用户)
 
-如果您的 JSON 顶层已经包含一个已知的命名空间键(`anthropic`、`google`、`openai`、`openrouter`、`openaiCompatible`),Kodus 会保持原样不动。当您想混合多个提供商命名空间或希望显式书写时很有用:
+如果您的 JSON 顶层已经以一个已知的命名空间键开头(即下方映射表中的任意键),Kodus 会保持原样不动。当您想混合多个提供商命名空间或希望显式书写时很有用:
 
 ```json
 {
@@ -433,10 +433,14 @@ Moonshot 和 Z.ai 都在按 token 付费的开发者 API 之外,各自提供一�
 | BYOK 提供商 | 命名空间键 |
 | --- | --- |
 | `anthropic` / `anthropic_compatible` | `anthropic` |
-| `google_gemini` / `google_vertex` | `google` |
+| `google_gemini` | `google` |
+| `google_vertex` | Gemini 用 `google`，Vertex 上的 Claude 用 `anthropic` |
 | `openai` | `openai` |
+| `openai_compatible` | `openaiCompatible` |
+| `azure` | `azure` |
+| `amazon_bedrock` | `amazonBedrock`（也接受 `bedrock`） |
+| `novita` | `novita` |
 | `open_router` | `openrouter` |
-| `openai_compatible` / `novita` | `openaiCompatible` |
 
 #### 注意事项
 

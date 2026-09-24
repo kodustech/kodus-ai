@@ -80,6 +80,12 @@ import {
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/issues.type';
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
 import {
+    isDeniedStatus,
+    RepositoryAccessDiagnosis,
+    summarizeProviderError,
+    UNKNOWN_REPOSITORY_ACCESS,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryAccessDiagnosis.type';
+import {
     CodeManagementConnectionStatus,
     ICodeManagementService,
     PullRequestFileChange,
@@ -421,9 +427,19 @@ export class GithubService
                 params.organizationAndTeamData,
             );
 
+            // `deferWebhooks` marks an intermediate chunk of a chunked save,
+            // whose persisted selection is still partial. Reconciling here
+            // would read that partial selection as the desired state and
+            // delete the webhooks of every repository outside it — with 200
+            // repositories saved in chunks of 50, the first chunk removes the
+            // other 150, and the later chunks recreate them. In between, those
+            // repositories silently stop delivering PR events, and the hooks
+            // never come back if the process dies mid-save. The last chunk
+            // arrives with the complete selection and reconciles once.
             const shouldRefreshTokenWebhooks =
                 githubAuthDetail?.authMode === AuthMode.TOKEN &&
-                params.configKey === IntegrationConfigKey.REPOSITORIES;
+                params.configKey === IntegrationConfigKey.REPOSITORIES &&
+                !params.deferWebhooks;
 
             const previousRepositories = shouldRefreshTokenWebhooks
                 ? ((await this.findOneByOrganizationAndTeamDataAndConfigKey(
@@ -1424,7 +1440,7 @@ export class GithubService
                     this.suspendedAtUnsupportedByBaseUrl.set(baseUrl, true);
                     this.logger.warn({
                         message:
-                            "GraphQL schema has no User.suspendedAt (github.com) — treating all members as active and skipping future suspended-status batches for this API base URL",
+                            'GraphQL schema has no User.suspendedAt (github.com) — treating all members as active and skipping future suspended-status batches for this API base URL',
                         context: GithubService.name,
                         metadata: { baseUrl },
                     });
@@ -2686,9 +2702,7 @@ export class GithubService
         return this.instanceOctokit(organizationAndTeamData);
     }
 
-    async listIssues(
-        params: ListIssuesParams,
-    ): Promise<CodeManagementIssue[]> {
+    async listIssues(params: ListIssuesParams): Promise<CodeManagementIssue[]> {
         const { organizationAndTeamData, repository, filters = {} } = params;
 
         const page = Math.max(1, filters.page ?? 1);
@@ -3215,7 +3229,10 @@ export class GithubService
                 // Integrations created before `accountType` was recorded have
                 // no way to tell an org from a personal account, and personal
                 // accounts 404 here. Anything else is a real failure.
-                if (githubAuthDetail.accountType || this.statusOf(err) !== 404) {
+                if (
+                    githubAuthDetail.accountType ||
+                    this.statusOf(err) !== 404
+                ) {
                     throw err;
                 }
 
@@ -4063,7 +4080,12 @@ This is an experimental feature that generates committable changes. Review the d
                 error.message.includes('line must be part of the diff') ||
                 error.message.includes(
                     'start_line must be part of the same hunk as the line',
-                );
+                ) ||
+                // Same failure class, third message shape GitHub uses for it
+                // (prod: 81 occurrences / 25 orgs) — without this, the
+                // retry-with-adjusted-line recovery in
+                // createReviewCommentWithRetry never ran for this shape.
+                error.message.includes('pull_request_review_thread.line');
 
             const errorType = isLineMismatch
                 ? 'failed_lines_mismatch'
@@ -4723,6 +4745,11 @@ This is an experimental feature that generates committable changes. Review the d
                     });
                 }
 
+                // Same branch: the base read would repeat the identical call.
+                if (pullRequest.base?.ref === pullRequest.head?.ref) {
+                    throw error;
+                }
+
                 // If it fails, try to fetch from the base branch
                 const lines = (await octokit.repos.getContent({
                     owner: githubAuthDetail?.org,
@@ -4736,7 +4763,16 @@ This is an experimental feature that generates committable changes. Review the d
         } catch (error) {
             const status =
                 (error as any)?.status ?? (error as any)?.response?.status;
-            if (!(params.suppressNotFoundLogs && status === 404)) {
+            if (status === 404) {
+                // Missing on both refs: a normal answer, not a failure.
+                if (!params.suppressNotFoundLogs) {
+                    this.logger.warn({
+                        message: 'File not found on PR head or base branch',
+                        context: GithubService.name,
+                        metadata: { ...params },
+                    });
+                }
+            } else {
                 this.logger.error({
                     message: 'Error getting file content to branch base',
                     context: GithubService.name,
@@ -6289,9 +6325,18 @@ This is an experimental feature that generates committable changes. Review the d
         const criticalIssuesSummaryArray: OneSentenceSummaryItem[] =
             criticalComments.map((comment) => {
                 return {
-                    id: comment.codeReviewFeedbackData.commentId,
+                    // Both `codeReviewFeedbackData` and `suggestion` are
+                    // declared optional on their own types (a comment whose
+                    // GitHub post failed has no feedback data yet), and
+                    // OneSentenceSummaryItem.id is itself optional — the
+                    // caller (getListOfCriticalIssues) already renders a
+                    // linkless bullet when id is missing. Accessing these
+                    // without `?.` crashed the whole "request changes"
+                    // stage instead of degrading to that existing fallback
+                    // (prod, 2026-09-17: 10 occurrences).
+                    id: comment.codeReviewFeedbackData?.commentId,
                     oneSentenceSummary:
-                        comment.comment.suggestion.oneSentenceSummary ?? '',
+                        comment.comment.suggestion?.oneSentenceSummary ?? '',
                 };
             });
 
@@ -6729,7 +6774,9 @@ This is an experimental feature that generates committable changes. Review the d
 
             // Shared across both listings: the two endpoints feed one sample,
             // so they must not each spend the full budget.
-            const collectPage = <T extends { created_at: string; body?: string }>(
+            const collectPage = <
+                T extends { created_at: string; body?: string },
+            >(
                 page: T[],
                 done: () => void,
             ): T[] => {
@@ -7024,6 +7071,125 @@ This is an experimental feature that generates committable changes. Review the d
 
             return false;
         }
+    }
+
+    async diagnoseRepositoryAccess(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; fullName?: string };
+    }): Promise<RepositoryAccessDiagnosis> {
+        const result: RepositoryAccessDiagnosis = {
+            ...UNKNOWN_REPOSITORY_ACCESS,
+        };
+
+        try {
+            const githubAuthDetail = await this.getGithubAuthDetails(
+                params.organizationAndTeamData,
+            );
+            const octokit = await this.instanceOctokit(
+                params.organizationAndTeamData,
+                githubAuthDetail,
+            );
+            // The repo's own owner, not the integration account's:
+            // getCorrectOwner resolves a personal PAT to the token user's
+            // login, which 404s on every repo the account only collaborates
+            // on (same reason as createPullRequestWebhook). That 404 would
+            // read as "cannot read" and a false NOT RUNNING.
+            const owner =
+                params.repository.fullName?.split('/')[0] ||
+                (await this.getCorrectOwner(githubAuthDetail, octokit));
+            const repo = params.repository.name;
+            const isApp = githubAuthDetail.authMode === AuthMode.OAUTH;
+
+            try {
+                await octokit.rest.repos.listCommits({
+                    owner,
+                    repo,
+                    per_page: 1,
+                });
+                result.read = 'ok';
+            } catch (error) {
+                result.read = isDeniedStatus(error) ? 'denied' : 'unknown';
+                result.error = summarizeProviderError(error);
+            }
+
+            try {
+                const { data, headers } = await octokit.rest.repos.get({
+                    owner,
+                    repo,
+                });
+                // Anyone who can read a repository can comment on its PRs,
+                // so the role says nothing; the token's scopes do. Only a
+                // classic PAT reports them (`x-oauth-scopes`). Fine-grained
+                // PATs and App installs stay `unknown` rather than guessed.
+                const scopesHeader = headers?.['x-oauth-scopes'];
+                if (typeof scopesHeader === 'string') {
+                    const scopes = scopesHeader
+                        .split(',')
+                        .map((scope) => scope.trim());
+                    result.write =
+                        scopes.includes('repo') ||
+                        (scopes.includes('public_repo') && !data?.private)
+                            ? 'ok'
+                            : 'denied';
+                }
+            } catch (error) {
+                result.error ??= summarizeProviderError(error);
+            }
+
+            // An App install's token carries the permissions the org granted.
+            if (isApp && 'installationId' in githubAuthDetail) {
+                try {
+                    const installation =
+                        await this.getInstallationAuthentication(
+                            githubAuthDetail.installationId,
+                        );
+                    const pullRequests =
+                        installation?.permissions?.pull_requests;
+                    if (pullRequests === 'write') {
+                        result.write = 'ok';
+                    } else if (pullRequests) {
+                        result.write = 'denied';
+                    }
+                } catch (error) {
+                    result.error ??= summarizeProviderError(error);
+                }
+            }
+
+            const webhookUrl = this.configService.get<string>(
+                'API_GITHUB_CODE_MANAGEMENT_WEBHOOK',
+            );
+            if (isApp) {
+                result.hook = 'app-level';
+            } else if (webhookUrl) {
+                // Unset URL: nothing to match, so the hook stays unknown
+                // (the doctor reports the missing URL itself).
+                try {
+                    const { data: hooks } = await octokit.repos.listWebhooks({
+                        owner,
+                        repo,
+                    });
+                    result.hook = hooks.some(
+                        (hook) =>
+                            hook?.config?.url === webhookUrl && hook?.active,
+                    )
+                        ? 'present'
+                        : 'missing';
+                } catch (error) {
+                    // Listing hooks needs admin on the repo; without it we
+                    // cannot tell whether the hook exists.
+                    result.error ??= summarizeProviderError(error);
+                }
+            }
+        } catch (error) {
+            // A 401/403/404 before any repository call (resolving the owner,
+            // building the client) still means the token cannot read.
+            if (isDeniedStatus(error)) {
+                result.read = 'denied';
+            }
+            result.error = summarizeProviderError(error);
+        }
+
+        return result;
     }
 
     async deleteWebhook(params: {

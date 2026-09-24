@@ -21,19 +21,31 @@ import type {
     Verifier,
 } from '@libs/agent-harness/domain/contracts/verifier.contract';
 import { BudgetPolicy } from '@libs/agent-harness/infrastructure/policies/budget.policy';
+import { ForceTextFinalizePolicy } from '@libs/agent-harness/infrastructure/policies/force-text-finalize.policy';
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
 
 import {
     buildVerifierPrompt,
     buildFeasibilityVerifierPrompt,
 } from '@libs/code-review/infrastructure/agents/prompts/verifier-prompt';
+import { formatPreviousDecisions } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
+import { LLM_ENVELOPE_TAG } from '@libs/llm/structured-output-repair';
+import {
+    recoverVerdictObject,
+    verdictFromText,
+} from '@libs/agent-harness/infrastructure/verify/llm-verdict';
+import { createLogger } from '@libs/core/log/logger';
 import type { FinderSuggestion } from '@libs/code-review/infrastructure/agents/core/finder.agent';
+import { normalizePath } from '@libs/code-review/infrastructure/agents/core/finder.agent';
 import { supportsStrictToolsForRun } from '@libs/code-review/infrastructure/agents/core/model-strictness';
+import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 import {
     buildLangfuseTelemetry,
     toAiSdkTelemetryArgs,
     type LangfuseTelemetryMetadata,
 } from '@libs/core/log/langfuse';
+
+const logger = createLogger('VerifierAgent');
 
 export const VERIFY_DONE_TOOL = 'submitVerdict' as const;
 
@@ -105,7 +117,18 @@ export function buildVerifierAgentSpec(
         phase: 'verify',
         systemPrompt: system,
         tools,
-        policies: [new BudgetPolicy()],
+        policies: [
+            new BudgetPolicy(),
+            // Without this the verify run can spend every step investigating and
+            // be cut off with NO verdict — 20% of production runs (154 sampled,
+            // 2026-09-19), which fails open and keeps the candidate unverified.
+            // Force TEXT, not the tool: this prompt asks for a JSON verdict in
+            // the reply and never mentions submitVerdict, and constraining the
+            // output is measured harm (see model-strictness.ts).
+            new ForceTextFinalizePolicy({
+                answerDescription: 'your final JSON verdict',
+            }),
+        ],
         maxSteps: params.maxSteps ?? 6,
         // CAPTURE: the runner materializes submitVerdict's payload into
         // RunState.artifacts — extractVerdict reads that, never re-scans steps.
@@ -117,6 +140,13 @@ export function buildVerifierAgentSpec(
 /** Format a finding into the verifier's per-run task prompt. */
 export function verifierPromptFor(
     finding: FinderSuggestion,
+    /** Suggestions already posted on THIS PR in a previous review round
+     *  (issue #1313). Filtrado para o arquivo do candidato pelo chamador —
+     *  ver LlmVerifier.verify(). Fica na posicao 2 porque e o contrato de
+     *  producao, coberto por verifier.agent.contract.spec.ts; os knobs de A/B
+     *  abaixo vieram depois e ficam no fim para nao deslocar ninguem. */
+    previousDecisions?: readonly PrDecisionRecord[],
+    /** Path-feasibility mode (A/B knob) — see buildFeasibilityVerifierPrompt. */
     feasibilityMode = false,
     /** Inclui no bundle o percurso que PRODUZIU o achado (`reason`). Opt-in.
      *
@@ -178,6 +208,7 @@ export function verifierPromptFor(
                   '</OtherReportsOfTheSameDefect>',
               ].join('\n')
             : '',
+        formatPreviousDecisions(previousDecisions),
     ]
         .filter(Boolean)
         .join('\n');
@@ -186,37 +217,65 @@ export function verifierPromptFor(
         : buildVerifierPrompt(bundle, 0).prompt;
 }
 
-/** Extract the verdict from a verifier run by reading the run's materialized
- *  artifacts (the "result tool" convention — same as the finder). Default KEEP
- *  (refute-to-drop): only an explicit keep:false drops the finding. */
-export function extractVerdict(state: RunState): Verdict {
+/** Extract the verdict from a verifier run: the run's materialized artifacts
+ *  (the "result tool" convention — same as the finder) first, then the final
+ *  step's TEXT. Default KEEP (refute-to-drop): only an explicit keep:false drops
+ *  the finding.
+ *
+ *  The text path exists because the verifier prompt asks for JSON ("Return JSON
+ *  only at the end") while the tool list offers submitVerdict, and models that
+ *  are not under strict tool use pick the text form — Anthropic and the
+ *  OpenAI-compatible providers, per model-strictness.ts. Reading only the tool
+ *  form published every refutation those models wrote (issue #1937). */
+export function extractVerdict(
+    state: RunState,
+    /** Caller's telemetry (org/team/PR/repo). Optional so the eval and the unit
+     *  tests can call this with a RunState alone, but ALWAYS threaded in
+     *  production by LlmVerifier.verify: without it a recovered verdict is a log
+     *  line nobody can trace back to the organization that produced it. */
+    telemetry?: LangfuseTelemetryMetadata,
+): Verdict {
     // The verifier's investigation tools for THIS finding — carried on the
     // verdict so the domain can attribute per-finding verifier evidence (which
     // files it read/grepped) to the observability trace. submitVerdict itself
     // is excluded (it's the result tool, not investigation).
     const toolCalls = collectVerifierToolCalls(state);
+    // SHAPE recovery (#1786): a non-strict model may wrap ({result:{keep}}),
+    // rename (decision/verdict/shouldKeep), stringify, or bare-array the
+    // verdict — readVerdictObject recovers the scalar `keep` before the boolean
+    // check so a real keep:false is not lost to the fail-open default below.
+    const onRecover = (reason: string) =>
+        logger.warn({
+            message: `${LLM_ENVELOPE_TAG} recovered off-schema verifier verdict (${reason})`,
+            context: 'VerifierAgent',
+            metadata: { reason, ...telemetry },
+        });
     for (let i = state.artifacts.length - 1; i >= 0; i--) {
         const artifact = state.artifacts[i];
         if (artifact.type !== VERIFY_DONE_TOOL) continue;
-        const parsed = artifact.payload;
-        if (
-            parsed &&
-            typeof parsed === 'object' &&
-            typeof (parsed as Record<string, any>).keep === 'boolean'
-        ) {
-            const obj = parsed as Record<string, any>;
-            return {
-                keep: obj.keep,
-                rationale: obj.rationale,
-                confidence: obj.confidence,
-                toolCalls,
-            };
+        const fromTool = recoverVerdictObject(artifact.payload, onRecover);
+        if (fromTool) {
+            return { ...fromTool, toolCalls, parseMode: 'tool' };
         }
+    }
+    const fromText = verdictFromText(state, onRecover);
+    if (fromText) {
+        logger.log({
+            message: `verifier verdict recovered from text (keep=${fromText.keep})`,
+            context: 'VerifierAgent',
+            metadata: {
+                parseMode: 'text',
+                keep: fromText.keep,
+                ...telemetry,
+            },
+        });
+        return { ...fromText, toolCalls, parseMode: 'text' };
     }
     return {
         keep: true,
         rationale: 'no parseable verdict — kept by default',
         toolCalls,
+        parseMode: 'default-keep',
     };
 }
 
@@ -277,7 +336,13 @@ export interface LlmVerifierParams {
      *  e devolve as outras redacoes do MESMO defeito. Ver verifierPromptFor. */
     resolveGroupMembers?: (
         candidate: FinderSuggestion,
-    ) => Parameters<typeof verifierPromptFor>[3];
+    ) => Parameters<typeof verifierPromptFor>[4];
+    /** Suggestions already posted on THIS PR in a previous review round
+     *  (issue #1313). `verify()` filters this down to the candidate's own file
+     *  before rendering it as evidence — matching by line range is deliberately
+     *  NOT done here (line numbers shift across commits); the model judges
+     *  whether a same-file record is "the same issue" semantically. */
+    previousDecisions?: PrDecisionRecord[];
 }
 
 /** The LLM-judge Verifier (HV2): runs a verifier AgentSpec once per finding on
@@ -296,7 +361,12 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
         outputTokens: number;
         reasoningTokens: number;
         cacheReadTokens: number;
-    } = { inputTokens: 0, outputTokens: 0, reasoningTokens: 0, cacheReadTokens: 0 };
+    } = {
+        inputTokens: 0,
+        outputTokens: 0,
+        reasoningTokens: 0,
+        cacheReadTokens: 0,
+    };
 
     private readonly lightSpec: AgentSpec;
     private readonly fullSpec: AgentSpec;
@@ -350,20 +420,32 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
             ? `#${candidate.relevantLinesStart}`
             : '';
         const fnId = `${this.params.agentName ?? 'agent'}/verify:${candidate.relevantFile}${loc}`;
+        // Scoped to the candidate's own file (issue #1313) — matching by line
+        // range is deliberately NOT done here (line numbers shift across
+        // review rounds); the model judges same-file semantic overlap itself.
+        // `relevantFile` on both sides is LLM-produced free text (z.string()),
+        // not a validated path, so compare through the same normalizePath()
+        // used elsewhere for this exact class of drift (slashes, leading
+        // './', case) instead of strict equality — a normalization mismatch
+        // here would silently drop the evidence and reopen the #1313 symptom.
+        const candidateFile = normalizePath(candidate.relevantFile ?? '');
+        const matchingDecisions = this.params.previousDecisions?.filter(
+            (decision) =>
+                !!decision.relevantFile &&
+                normalizePath(decision.relevantFile) === candidateFile,
+        );
         const state = await this.runner.run(
             spec,
             {
                 prompt: verifierPromptFor(
                     candidate,
+                    matchingDecisions,
                     this.params.feasibilityMode,
                     this.params.includeReason,
                     this.params.resolveGroupMembers?.(candidate),
                 ),
                 ...toAiSdkTelemetryArgs(
-                    buildLangfuseTelemetry(
-                        fnId,
-                        this.params.telemetryMetadata,
-                    ),
+                    buildLangfuseTelemetry(fnId, this.params.telemetryMetadata),
                 ),
             },
             ctx,
@@ -373,6 +455,6 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
         this.accUsage.outputTokens += u.outputTokens ?? 0;
         this.accUsage.reasoningTokens += u.reasoningTokens ?? 0;
         this.accUsage.cacheReadTokens += u.cacheReadTokens ?? 0;
-        return extractVerdict(state);
+        return extractVerdict(state, this.params.telemetryMetadata);
     }
 }

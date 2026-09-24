@@ -1,5 +1,11 @@
 # Dedup eval
 
+> - **Answers:** Does dedup merge findings that are different bugs, so one of them is lost?
+> - **Runs:** every engine PR, mocked (`--mock=identity`) and through the engine on the scripted model (`--model=eval-fake`), both in `evals/wiring-smoke.js`.
+> - **Run it:** `pnpm eval:dedup:mock` · `pnpm eval:dedup`
+> - **Gate:** goldens lost must be 0 (`evals/dedup/run.js`).
+> - **Cost:** mock: none. Live: the dedup model plus the judge.
+
 Measures the review pipeline's **deduplication** step (`agent-review.stage.ts#deduplicateSuggestions`) — the LLM pass (`gpt-5.4-mini`) that groups "same bug" suggestions and keeps one representative per group. The `evals/investigation` recall eval explicitly does **not** cover this downstream step; this fills that gap.
 
 ## What it answers
@@ -15,7 +21,7 @@ Headline metric: **goldens lost** = goldens covered by some finding *before* ded
 ## Files
 
 - `build-dataset.js` — extract `{prId, findings, goldenComments}` per PR from a finder-recall result JSON (default `/tmp/recall-new-g3.json`) → `datasets/`. Reuses real finder output, no finder re-run.
-- `dedup-runner.js` — invokes the **real** dedup decision. Loads the live prompt+schema+model from `libs/code-review/infrastructure/agents/engine/dedup-prompt.ts` (extracted from the stage so production and this eval share one prompt — no drift). Derives `kept`/`dropped` from the model's `groups`/`unique`.
+- `dedup-runner.js` — invokes the **real** dedup decision: the live prompt+schema from `libs/code-review/infrastructure/agents/engine/dedup-prompt.ts` through `LLM.run`, the same entry point the stage calls, so the executor's structured-output recovery is measured too. The model routes through `evals/shared/tier0-models.js`. Derives `kept`/`dropped` from the model's `groups`/`unique`.
 - `dedup-eval.js` — `matchFindingsToGoldens` (the Sonnet labeling) + `computeMetrics` (over/under-merge, goldens lost).
 - `run.js` — driver: label (cached) → dedup → score → aggregate.
 
@@ -39,7 +45,7 @@ Golden labels are cached in `.cache-goldenlabels/` (judging is dedup-independent
 - Metric logic unit-verified (over-merge, under-merge, good-merge scenarios).
 - Golden-match + driver validated live on real PRs with the identity mock.
 - Seed dataset: 50 PRs / 159 findings (39 with ≥2 findings = dedup-relevant), from the gemini-3-flash NEW-engine recall run.
-- **CI**: `--mock=identity --gate` falls back to `evals/secondary/datasets/` smoke set (committed) when `evals/dedup/datasets/` is empty. Full live matrix: `node evals/dedup/run-matrix.js`.
+- **CI**: `--mock=identity --gate` falls back to `evals/secondary/datasets/` smoke set (committed) when the dedup datasets directory (`build-dataset.js` output, not committed) is empty. Full live matrix: `node evals/dedup/run-matrix.js`.
 - BYOK migration readiness: see `evals/secondary/BYOK-READINESS.md`.
 
 ## Caveats
