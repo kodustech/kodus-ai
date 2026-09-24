@@ -1525,6 +1525,16 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                     throw error2;
                 }
 
+                // A single-line suggestion has no start_line: attempt 3 would
+                // send a comment with no line, which the provider rejects as a
+                // malformed request instead of a line mismatch.
+                if (
+                    lineComment.start_line == null ||
+                    lineComment.start_line === lineComment.line
+                ) {
+                    throw error2;
+                }
+
                 this.logger.warn({
                     message: `Line mismatch error on attempt 2, trying with line = start_line`,
                     context: CommentManagerService.name,

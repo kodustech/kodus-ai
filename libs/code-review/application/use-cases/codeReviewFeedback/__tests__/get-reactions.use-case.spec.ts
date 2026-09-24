@@ -121,6 +121,24 @@ describe('GetReactionsUseCase', () => {
         });
     });
 
+    // Providers return null when the comment listing fails (they log it);
+    // `comments.filter` then threw and a second, misleading error was logged.
+    it('treats a null comment listing as no comments', async () => {
+        const pr = createSamplePullRequestWithSuggestions();
+        pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+            [pr],
+        );
+        codeManagementService.getPullRequestReviewComment.mockResolvedValue(
+            null,
+        );
+
+        const result = await useCase.execute(orgAndTeam, [42]);
+
+        expect(result).toEqual([]);
+        expect(codeManagementService.countReactions).not.toHaveBeenCalled();
+        expect((useCase as any).logger.error).not.toHaveBeenCalled();
+    });
+
     it('should match comments by threadId (GitLab/Azure pattern)', async () => {
         const pr = createSamplePullRequestWithSuggestions({
             suggestions: [

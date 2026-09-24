@@ -352,6 +352,14 @@ function sanitizeString(value: string): string {
     return redactEmbeddedSecrets(redactUrlUserinfo(value));
 }
 
+function stringifyUnknownError(value: unknown): string {
+    try {
+        return JSON.stringify(value) ?? String(value);
+    } catch {
+        return String(value);
+    }
+}
+
 // Cheap pre-check so ordinary strings (stacks, messages) skip the regexes.
 // Loose on purpose: a false hit only costs the scans below. The gate is
 // fail-open, so every name in SENSITIVE_KEYS must match one of these stems —
@@ -654,8 +662,10 @@ export class SimpleLogger {
                     };
                     if (error) {
                         fallbackPayload.errorName = (error as Error)?.name;
-                        fallbackPayload.errorMessage = (error as Error)
-                            ?.message;
+                        fallbackPayload.errorMessage =
+                            typeof error === 'string'
+                                ? error
+                                : (error as Error)?.message;
                     }
                     const loggerErrAsError = loggerErr as Error | undefined;
                     fallbackPayload.loggerErrorName = loggerErrAsError?.name;
@@ -747,9 +757,21 @@ export class SimpleLogger {
         };
 
         if (error) {
+            // Callers pass `error: err.message` too; a string has no .message,
+            // and sanitizeString(undefined) used to throw and drop the cause.
+            const raw = error as unknown;
+            const message =
+                typeof raw === 'string'
+                    ? raw
+                    : typeof error.message === 'string'
+                      ? error.message
+                      : stringifyUnknownError(raw);
             logObject.error = {
-                message: sanitizeString(error.message),
-                stack: error.stack ? sanitizeString(error.stack) : undefined,
+                message: sanitizeString(message),
+                stack:
+                    typeof raw !== 'string' && typeof error.stack === 'string'
+                        ? sanitizeString(error.stack)
+                        : undefined,
             };
         }
 

@@ -665,7 +665,14 @@ export class BitbucketPullRequestHandler implements IWebhookEventHandler {
                     return true;
                 }
 
-                if (storedPR && pullrequest.state === 'OPEN') {
+                // null when Bitbucket rejected the call (already logged by the
+                // service); without commits there is nothing to compare, so the
+                // open PR falls through to a review like any other update.
+                if (
+                    storedPR &&
+                    pullrequest.state === 'OPEN' &&
+                    pullRequestCommits?.length
+                ) {
                     const prCommit =
                         pullRequestCommits[pullRequestCommits.length - 1];
                     const storedPRCommitHashes = storedPR?.commits?.map(

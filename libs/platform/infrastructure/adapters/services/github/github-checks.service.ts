@@ -156,11 +156,17 @@ export class GithubChecksService implements IChecksAdapter {
 
             return response.data.id;
         } catch (error) {
-            this.logger.error({
-                message: `Failed to create GitHub Check Run`,
+            // 403 "Resource not accessible by integration": the installation
+            // has not granted `checks:write` yet — customer-side, not ours.
+            const missingPermission = error?.status === 403;
+            this.logger[missingPermission ? 'warn' : 'error']({
+                message: missingPermission
+                    ? `Skipping GitHub Check Run - installation lacks checks permission`
+                    : `Failed to create GitHub Check Run`,
                 context: GithubChecksService.name,
                 error,
                 metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
                     repository: repository.name,
                     headSha,
                 },

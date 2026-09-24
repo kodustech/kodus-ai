@@ -2485,6 +2485,28 @@ export class BitbucketCloudService implements Omit<
                 },
             };
         } catch (error) {
+            // A missing file (no kodus-config.yml, a stale reference) is a
+            // normal answer, not a failure.
+            if (error?.status === 404) {
+                this.logger.warn({
+                    message: 'Repository content file not found',
+                    context: BitbucketCloudService.name,
+                    serviceName:
+                        'BitbucketCloudService getRepositoryContentFile',
+                    metadata: {
+                        organizationAndTeamData:
+                            params?.organizationAndTeamData,
+                        repositoryId: params?.repository?.id,
+                        repositoryName: params?.repository?.name,
+                        filePath: params?.file?.filename,
+                        ref:
+                            params?.pullRequest?.head?.ref ||
+                            params?.pullRequest?.base?.ref,
+                    },
+                });
+                return null;
+            }
+
             this.logger.error({
                 message: 'Error to get repository content file',
                 context: BitbucketCloudService.name,

@@ -2525,8 +2525,7 @@ export class GitlabService implements Omit<
                         },
                     };
                 } catch (attemptError: any) {
-                    const status = attemptError?.response?.status;
-                    const isNotFound = status === 404;
+                    const isNotFound = this.isGitlabNotFoundError(attemptError);
 
                     const logPayload = {
                         message: isNotFound
@@ -2577,9 +2576,8 @@ export class GitlabService implements Omit<
                                 },
                             };
                         } catch (defaultAttemptError: any) {
-                            const status =
-                                defaultAttemptError?.response?.status;
-                            const isNotFound = status === 404;
+                            const isNotFound =
+                                this.isGitlabNotFoundError(defaultAttemptError);
 
                             const logPayload = {
                                 message: isNotFound
@@ -3908,13 +3906,32 @@ export class GitlabService implements Omit<
     ): Promise<any | null> {
         const { userName, email } = params;
 
-        // Chave de cache única para este usuário
-        const cacheKey = `gitlab-user-${email || 'no-email'}-${userName}`;
+        // Scoped by organization: each org resolves against its own GitLab
+        // (and credentials), so a user found for one must never answer another.
+        // The entry wraps the result so "not found" is cacheable too.
+        const cacheKey = `gitlab-user-${params.organizationAndTeamData?.organizationId}-${email || 'no-email'}-${userName}`;
+        const remember = async (user: any, ttl: number) => {
+            try {
+                await this.cacheService.addToCache(cacheKey, { user }, ttl);
+            } catch (cacheError) {
+                this.logger.warn({
+                    message: 'Error saving to cache',
+                    context: GitlabService.name,
+                    serviceName: 'GitlabService getUserByEmailOrNameWithRetry',
+                    error: cacheError,
+                    metadata: {
+                        organizationAndTeamData: params.organizationAndTeamData,
+                    },
+                });
+            }
+        };
 
         try {
-            const cachedUser = await this.cacheService.getFromCache(cacheKey);
-            if (cachedUser) {
-                return cachedUser;
+            const cached = await this.cacheService.getFromCache<{
+                user: any;
+            }>(cacheKey);
+            if (cached) {
+                return cached.user ?? null;
             }
         } catch (cacheError) {
             this.logger.warn({
@@ -3934,7 +3951,7 @@ export class GitlabService implements Omit<
                     );
                 });
 
-                const userPromise = this.getUserByEmailOrName({
+                const userPromise = this.findUserByEmailOrName({
                     organizationAndTeamData: params.organizationAndTeamData,
                     email: params.email || '',
                     userName: params.userName,
@@ -3942,23 +3959,9 @@ export class GitlabService implements Omit<
 
                 const user = await Promise.race([userPromise, timeoutPromise]);
 
-                if (user) {
-                    try {
-                        await this.cacheService.addToCache(
-                            cacheKey,
-                            user,
-                            1800000,
-                        ); // 30 minutos
-                    } catch (cacheError) {
-                        this.logger.warn({
-                            message: 'Error saving to cache',
-                            context: GitlabService.name,
-                            serviceName:
-                                'GitlabService getUserByEmailOrNameWithRetry',
-                            error: cacheError,
-                        });
-                    }
-                }
+                // 30 min either way: an author missing from GitLab stays
+                // missing for the next review of the same PR.
+                await remember(user ?? null, 1800000);
 
                 return user;
             } catch (error) {
@@ -3979,6 +3982,9 @@ export class GitlabService implements Omit<
                         error: error,
                         metadata: params,
                     });
+                    // Shorter than a hit: the flow tolerates a null author, and
+                    // re-paying every timeout on each review is what it cost.
+                    await remember(null, 600000);
                     return null;
                 }
 
@@ -3997,43 +4003,7 @@ export class GitlabService implements Omit<
         userName: string;
     }): Promise<any | null> {
         try {
-            const { userName, email, organizationAndTeamData } = params;
-
-            if (!email && !userName) {
-                return null;
-            }
-
-            const gitlabAuthDetail = await this.getAuthDetails(
-                organizationAndTeamData,
-            );
-
-            if (!gitlabAuthDetail) {
-                return null;
-            }
-
-            const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
-
-            if (email) {
-                const usersByEmail = await gitlabAPI.Users.all({
-                    search: email,
-                });
-                const exactMatchUserByEmail = usersByEmail.find(
-                    (user) => user.email === email,
-                );
-                if (exactMatchUserByEmail) {
-                    return exactMatchUserByEmail;
-                }
-            }
-
-            if (userName) {
-                const users = await gitlabAPI.Users.all({ search: userName });
-
-                const exactMatchUser = users.find(
-                    (user) => user.name === userName,
-                );
-
-                return exactMatchUser || null;
-            }
+            return await this.findUserByEmailOrName(params);
         } catch (error) {
             this.logger.error({
                 message: `Error retrieving user by email or name: ${params.email || params.userName}`,
@@ -4044,6 +4014,54 @@ export class GitlabService implements Omit<
             });
             return null;
         }
+    }
+
+    /**
+     * null only means "no such user"; a failed search throws, so a caller that
+     * caches the answer can tell the two apart.
+     */
+    private async findUserByEmailOrName(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        email: string;
+        userName: string;
+    }): Promise<any | null> {
+        const { userName, email, organizationAndTeamData } = params;
+
+        if (!email && !userName) {
+            return null;
+        }
+
+        const gitlabAuthDetail = await this.getAuthDetails(
+            organizationAndTeamData,
+        );
+
+        if (!gitlabAuthDetail) {
+            return null;
+        }
+
+        const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
+
+        if (email) {
+            const usersByEmail = await gitlabAPI.Users.all({
+                search: email,
+            });
+            const exactMatchUserByEmail = usersByEmail.find(
+                (user) => user.email === email,
+            );
+            if (exactMatchUserByEmail) {
+                return exactMatchUserByEmail;
+            }
+        }
+
+        if (userName) {
+            const users = await gitlabAPI.Users.all({ search: userName });
+
+            const exactMatchUser = users.find((user) => user.name === userName);
+
+            return exactMatchUser || null;
+        }
+
+        return null;
     }
 
     async getUserByUsername(params: {
@@ -4074,7 +4092,7 @@ export class GitlabService implements Omit<
 
             return exactMatchUser || null;
         } catch (error) {
-            if (error?.response?.status === 404) {
+            if (this.isGitlabNotFoundError(error)) {
                 this.logger.warn({
                     message: `Gitlab user not found: ${username}`,
                     context: GitlabService.name,
@@ -4119,6 +4137,16 @@ export class GitlabService implements Omit<
 
             return user || null;
         } catch (error) {
+            // A deleted/blocked author is a normal answer, not a failure.
+            if (this.isGitlabNotFoundError(error)) {
+                this.logger.warn({
+                    message: `Gitlab user not found by ID: ${params.userId}`,
+                    context: GitlabService.name,
+                    metadata: params,
+                });
+                return null;
+            }
+
             this.logger.error({
                 message: `Error retrieving user by ID: ${params.userId}`,
                 context: GitlabService.name,

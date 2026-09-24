@@ -145,6 +145,26 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
                     payload.pullRequestNumber,
                 ));
 
+            // null when the provider can't serve the PR (deleted, revoked
+            // access) — nothing to verify against.
+            if (!platformPr) {
+                this.logger.warn({
+                    message: `PR#${payload.pullRequestNumber} not available on the platform; implementation check did not run`,
+                    context: ImplementationVerificationProcessor.name,
+                    metadata: {
+                        organizationAndTeamData:
+                            payload.organizationAndTeamData,
+                        prNumber: payload.pullRequestNumber,
+                        repositoryId: payload.repository.id,
+                        jobId,
+                    },
+                });
+                await this.markCompleted(jobId, {
+                    reason: 'PLATFORM_PR_NOT_FOUND',
+                });
+                return;
+            }
+
             const teamAutomations = await this.teamAutomationService.find({
                 team: { uuid: payload.organizationAndTeamData.teamId },
                 status: true,

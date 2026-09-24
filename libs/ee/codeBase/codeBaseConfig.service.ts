@@ -429,16 +429,20 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
             overrideConfig: this.getFileOverridePreference(repoConfig),
         });
 
-        const directoryFileDelta = await this.getKodusConfigFile({
-            organizationAndTeamData,
-            repository,
-            directoryId: directoryConfig?.id,
-            defaultBranch,
-            overrideConfig: this.getFileOverridePreference(
-                repoConfig,
-                directoryConfig,
-            ),
-        });
+        // Without a directory config this read has no directory to resolve and
+        // would fetch the root file a second time (and label it DIRECTORY).
+        const directoryFileDelta = directoryConfig
+            ? await this.getKodusConfigFile({
+                  organizationAndTeamData,
+                  repository,
+                  directoryId: directoryConfig.id,
+                  defaultBranch,
+                  overrideConfig: this.getFileOverridePreference(
+                      repoConfig,
+                      directoryConfig,
+                  ),
+              })
+            : undefined;
 
         const merged = deepMerge(
             this.DEFAULT_CONFIG,

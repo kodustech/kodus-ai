@@ -549,12 +549,34 @@ async function runReviewCall<T>(
     // call after a parse failure (the same prompt formats differently on a
     // non-zero temperature), but it is a retry, not a recovery: the SCHEMA-
     // rejection branch below no longer routes here for them.
-    const reissueDowngraded = (reason: string): Promise<T> => {
+    const reissueDowngraded = async (reason: string): Promise<T> => {
         const downgraded = buildInvocation(false);
         const downgradedSystem = withJsonContract(system, mode.schemaForPrompt);
-        return call(downgraded.model, downgraded.modelName, downgradedSystem, {
-            structuredRecovery: reason,
-        });
+        try {
+            return await call(
+                downgraded.model,
+                downgraded.modelName,
+                downgradedSystem,
+                { structuredRecovery: reason },
+            );
+        } catch (err) {
+            // The re-ask gets the same free repair as the first attempt: a
+            // conforming object inside a markdown fence is an answer, not a
+            // failure. A shape mismatch still propagates (bounded: no 3rd call).
+            const repaired = await salvageStructuredError<T>(
+                err,
+                mode.validatingSchema,
+            );
+            if (repaired !== undefined) {
+                logger.warn({
+                    message: `[structured-output] recovered ${runName} re-ask via deterministic JSON repair`,
+                    context: 'runReviewCall',
+                    metadata: { runName, organizationId, reason },
+                });
+                return repaired;
+            }
+            throw err;
+        }
     };
 
     // reroute-json: the model is always-thinking + forced-tool_choice (Kimi
