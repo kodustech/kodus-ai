@@ -404,30 +404,49 @@ export class SandboxLeaseReaperService {
         try {
             const cutoff = Date.now() - ORPHAN_MIN_AGE_MS;
             const candidates: string[] = [];
-            const paginator = Sandbox.list({
-                apiKey,
-                query: {
-                    state: ['paused'],
-                    metadata: {
-                        [E2B_DEPLOYMENT_METADATA_KEY]: e2bDeploymentTag(
-                            this.configService.get<string>('API_NODE_ENV'),
-                        ),
-                    },
-                },
-            });
-            while (
-                paginator.hasNext &&
-                candidates.length < ORPHAN_SWEEP_MAX_PER_RUN
-            ) {
-                for (const info of await paginator.nextItems()) {
-                    if (
-                        info.metadata?.stage &&
-                        new Date(info.startedAt).getTime() < cutoff
-                    ) {
-                        candidates.push(info.sandboxId);
+            const collect = async (
+                metadata: Record<string, string> | undefined,
+                keep: (meta: Record<string, string>) => boolean,
+            ) => {
+                const paginator = Sandbox.list({
+                    apiKey,
+                    query: metadata
+                        ? { state: ['paused'], metadata }
+                        : { state: ['paused'] },
+                });
+                while (
+                    paginator.hasNext &&
+                    candidates.length < ORPHAN_SWEEP_MAX_PER_RUN
+                ) {
+                    for (const info of await paginator.nextItems()) {
+                        if (
+                            info.metadata?.stage &&
+                            keep(info.metadata) &&
+                            new Date(info.startedAt).getTime() < cutoff
+                        ) {
+                            candidates.push(info.sandboxId);
+                        }
                     }
                 }
-            }
+            };
+
+            // This deployment's sandboxes.
+            await collect(
+                {
+                    [E2B_DEPLOYMENT_METADATA_KEY]: e2bDeploymentTag(
+                        this.configService.get<string>('API_NODE_ENV'),
+                    ),
+                },
+                () => true,
+            );
+            // Legacy: created before the deployment tag existed (the existing
+            // backlog, and old-code replicas during a rolling deploy). No
+            // deployment keeps a paused sandbox past the age floor, so an
+            // untagged one that old is an orphan wherever it came from.
+            await collect(
+                undefined,
+                (meta) => !meta[E2B_DEPLOYMENT_METADATA_KEY],
+            );
             const batch = candidates.slice(0, ORPHAN_SWEEP_MAX_PER_RUN);
             if (batch.length === 0) return;
 

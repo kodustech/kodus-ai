@@ -310,42 +310,45 @@ describe('SandboxLeaseReaperService', () => {
             configService.get.mockImplementation((key: string) =>
                 key === 'API_NODE_ENV' ? 'production' : 'fake-api-key',
             );
+            mockList.mockReset();
+            mockList.mockImplementation(() => paginatorOf());
         });
 
         it('kills paused sandboxes that are old, ours, and have no lease', async () => {
-            mockList.mockReturnValue(
-                paginatorOf(
-                    [
-                        {
-                            sandboxId: 'orphan-1',
-                            startedAt: hoursAgo(5),
-                            metadata: { stage: 'review' },
-                        },
-                        {
-                            sandboxId: 'leased',
-                            startedAt: hoursAgo(5),
-                            metadata: { stage: 'review' },
-                        },
-                    ],
-                    [
-                        {
-                            sandboxId: 'too-young',
-                            startedAt: hoursAgo(0.2),
-                            metadata: { stage: 'review' },
-                        },
-                        {
-                            sandboxId: 'not-ours',
-                            startedAt: hoursAgo(5),
-                            metadata: {},
-                        },
-                        {
-                            sandboxId: 'orphan-2',
-                            startedAt: hoursAgo(48),
-                            metadata: { stage: 'conversation' },
-                        },
-                    ],
-                ),
-            );
+            const ours = (stage = 'review') => ({
+                stage,
+                deployment: 'production',
+            });
+            mockList
+                .mockReturnValueOnce(
+                    paginatorOf(
+                        [
+                            {
+                                sandboxId: 'orphan-1',
+                                startedAt: hoursAgo(5),
+                                metadata: ours(),
+                            },
+                            {
+                                sandboxId: 'leased',
+                                startedAt: hoursAgo(5),
+                                metadata: ours(),
+                            },
+                        ],
+                        [
+                            {
+                                sandboxId: 'too-young',
+                                startedAt: hoursAgo(0.2),
+                                metadata: ours(),
+                            },
+                            {
+                                sandboxId: 'orphan-2',
+                                startedAt: hoursAgo(48),
+                                metadata: ours('conversation'),
+                            },
+                        ],
+                    ),
+                )
+                .mockReturnValueOnce(paginatorOf([]));
             leaseRepository.findSandboxIdsWithLease.mockResolvedValue(
                 new Set(['leased']),
             );
@@ -355,7 +358,7 @@ describe('SandboxLeaseReaperService', () => {
 
             // Only this deployment's sandboxes: another environment sharing
             // the E2B key keeps its leases in a Mongo we cannot see.
-            expect(mockList).toHaveBeenCalledWith({
+            expect(mockList).toHaveBeenNthCalledWith(1, {
                 apiKey: 'fake-api-key',
                 query: {
                     state: ['paused'],
@@ -371,8 +374,46 @@ describe('SandboxLeaseReaperService', () => {
             ]);
         });
 
+        it('also reaps legacy untagged sandboxes, never another deployment tagged ones', async () => {
+            mockList.mockReturnValueOnce(paginatorOf([])).mockReturnValueOnce(
+                paginatorOf([
+                    {
+                        sandboxId: 'legacy-orphan',
+                        startedAt: hoursAgo(5),
+                        metadata: { stage: 'review' },
+                    },
+                    {
+                        sandboxId: 'other-deployment',
+                        startedAt: hoursAgo(5),
+                        metadata: { stage: 'review', deployment: 'homolog' },
+                    },
+                    {
+                        sandboxId: 'not-ours',
+                        startedAt: hoursAgo(5),
+                        metadata: {},
+                    },
+                    {
+                        sandboxId: 'legacy-young',
+                        startedAt: hoursAgo(0.5),
+                        metadata: { stage: 'review' },
+                    },
+                ]),
+            );
+            mockKill.mockResolvedValue(true);
+
+            await service.sweepOrphanedSandboxes();
+
+            expect(mockList).toHaveBeenNthCalledWith(2, {
+                apiKey: 'fake-api-key',
+                query: { state: ['paused'] },
+            });
+            expect(mockKill.mock.calls.map((c) => c[0])).toEqual([
+                'legacy-orphan',
+            ]);
+        });
+
         it('keeps sweeping when one kill fails', async () => {
-            mockList.mockReturnValue(
+            mockList.mockReturnValueOnce(
                 paginatorOf([
                     {
                         sandboxId: 'a',
