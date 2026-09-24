@@ -173,8 +173,6 @@ KEYS=(
 
     "/prod/kodus-orchestrator/API_EXA_KEY"
 
-    "/prod/kodus-orchestrator/WEB_HOSTNAME_HELPDESK"
-    "/prod/kodus-orchestrator/WEB_PORT_HELPDESK"
     "/prod/kodus-orchestrator/API_JWT_PRIVATE_KEY"
 
     "/prod/kodus-orchestrator/API_BILLING_WEBHOOK_SECRET"

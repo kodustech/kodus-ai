@@ -14,16 +14,13 @@ import { toast } from "@components/ui/toaster/use-toast";
 import { KodyLearningStatus } from "@services/parameters/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
-import { SaveIcon } from "lucide-react";
 import { Path, useFormContext, useFormState, useWatch } from "react-hook-form";
 import { useUnsavedChangesGuard } from "src/core/hooks/use-unsaved-changes-guard";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { unformatConfig } from "src/core/utils/helpers";
 
-import { CodeReviewPagesBreadcrumb } from "../../_components/breadcrumb";
 import { CentralizedConfigReadOnlyAlert } from "../../_components/centralized-config-readonly-alert";
 import GeneratingConfig from "../../_components/generating-config";
-import { CodeReviewSaveButton } from "../../_components/save-button";
 import { useCodeReviewSettingsMutation } from "../../_hooks/use-code-review-settings-mutation";
 import { type CodeReviewFormType } from "../../_types";
 import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
@@ -136,8 +133,14 @@ function CustomPromptsContent() {
         repositoryId,
     );
 
+    // The per-category prompts live on "What to review", next to the
+    // category toggles; this page keeps only the voice.
     const promptSections = useMemo(
-        () => (defaults ? buildPromptSections(defaults) : []),
+        () =>
+            (defaults ? buildPromptSections(defaults) : []).filter(
+                (section) =>
+                    section.fieldName !== "v2PromptOverrides.categories",
+            ),
         [defaults],
     );
     const promptFieldConfigs = useMemo(
@@ -307,24 +310,20 @@ function CustomPromptsContent() {
 
     return (
         <Page.Root>
-            <Page.Header>
-                <CodeReviewPagesBreadcrumb pageName="Custom Prompts" />
-            </Page.Header>
-
-            <Page.Header>
+            <Page.Header sticky>
                 <Page.Title>Custom Prompts</Page.Title>
 
-                <Page.HeaderActions>
-                    <CodeReviewSaveButton
-                        size="md"
-                        variant="primary"
-                        leftIcon={<SaveIcon />}
-                        onClick={handleSubmit}
-                        disabled={!canEdit || !isPromptsDirty || !formIsValid}
-                        loading={formIsSubmitting}>
-                        Save settings
-                    </CodeReviewSaveButton>
-                </Page.HeaderActions>
+                <Page.SaveActions
+                    isDirty={isPromptsDirty}
+                    isSaving={formIsSubmitting}
+                    canSave={canEdit && formIsValid}
+                    onReset={() =>
+                        promptFields.forEach((field) =>
+                            form.resetField(field as any),
+                        )
+                    }
+                    onSave={handleSubmit}
+                />
             </Page.Header>
 
             <Page.Content className="gap-8">

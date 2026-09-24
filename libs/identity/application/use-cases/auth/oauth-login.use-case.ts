@@ -9,6 +9,7 @@ import {
     IAuthService,
 } from '@libs/identity/domain/auth/contracts/auth.service.contracts';
 import { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 import { SignUpUseCase } from './signup.use-case';
 
@@ -18,6 +19,7 @@ export class OAuthLoginUseCase implements IUseCase {
         @Inject(AUTH_SERVICE_TOKEN)
         private readonly authService: IAuthService,
         private readonly signUpUseCase: SignUpUseCase,
+        private readonly telemetry: TelemetryService,
     ) {}
 
     async execute(
@@ -46,6 +48,13 @@ export class OAuthLoginUseCase implements IUseCase {
                     refreshToken: providerRefreshToken,
                 },
             );
+
+            void this.telemetry.userLoggedIn({
+                userId: user.uuid,
+                organizationId: user.organization?.uuid,
+                method: 'oauth',
+                provider: authProvider,
+            });
 
             return { accessToken, refreshToken };
         } catch (error) {

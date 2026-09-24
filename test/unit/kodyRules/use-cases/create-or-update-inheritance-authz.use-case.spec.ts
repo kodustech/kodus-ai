@@ -24,6 +24,7 @@ import {
     KodyRulesStatus,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -123,6 +124,13 @@ describe('CreateOrUpdateKodyRulesUseCase — inheritance toggle authz', () => {
     const buildUseCase = async (user: Record<string, unknown>) => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
+                {
+                    provide: TelemetryService,
+                    useValue: {
+                        kodyRuleChanged: jest.fn(),
+                        kodyRulesImported: jest.fn(),
+                    },
+                },
                 CreateOrUpdateKodyRulesUseCase,
                 AuthorizationService,
                 PermissionsAbilityFactory,

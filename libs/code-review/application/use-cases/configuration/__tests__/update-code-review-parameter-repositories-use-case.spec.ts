@@ -40,6 +40,7 @@ describe('UpdateCodeReviewParameterRepositoriesUseCase', () => {
                 registerRepositoriesLog: jest.fn(),
             } as any,
             {} as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
         const loggerErrorSpy = jest.spyOn(useCase['logger'], 'error');
 
@@ -109,6 +110,7 @@ describe('UpdateCodeReviewParameterRepositoriesUseCase', () => {
             } as any,
             { emit: jest.fn() } as any,
             {} as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         const result = await useCase.execute({
@@ -194,6 +196,7 @@ describe('UpdateCodeReviewParameterRepositoriesUseCase', () => {
             } as any,
             eventEmitter as any,
             undefined as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await expect(

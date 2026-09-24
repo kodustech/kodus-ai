@@ -17,6 +17,7 @@ function makeUseCase(): CreateOrUpdateKodyRulesUseCase {
         {} as any, // centralizedConfigPrService
         {} as any, // permissionValidationService
         {} as any, // detectorCompiler
+        {} as any, // telemetry
     );
 }
 

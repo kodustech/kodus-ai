@@ -12,7 +12,9 @@ describe('settings shell source', () => {
         );
 
         expect(source).not.toContain('Loading settings...');
-        expect(source).toContain('SettingsShellContentSkeleton');
+        // Falls back to the page-shaped skeleton of the target route (the
+        // same chooser the section loading boundaries use).
+        expect(source).toContain('RouteSkeleton');
     });
 
     it('does not branch the shell through hydrated or mounted flags', () => {

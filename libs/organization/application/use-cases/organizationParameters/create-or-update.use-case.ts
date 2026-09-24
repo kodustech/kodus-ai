@@ -229,6 +229,18 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
             currentValue: mergedConfigValue,
         });
 
+        if (result) {
+            // Every org setting, named by its key. BYOK gets the richer
+            // event below; this is what makes a new toggle visible in
+            // analytics without another method here.
+            void this.telemetry.organizationSettingsUpdated({
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+                actorUserId: this.request.user?.uuid,
+                settingKey: organizationParametersKey,
+            });
+        }
+
         if (result && this.request.user?.uuid) {
             const telemetryMeta =
                 this.describeByokForTelemetry(mergedConfigValue);

@@ -108,51 +108,39 @@ for (const { role, email } of ROLES) {
         await ctx.addCookies(cookies);
         const page = await ctx.newPage();
 
-        // ---- 1) Menu render: open the user-nav, check the Token Usage item ----
+        // ---- 1) Nav render: the Token usage entry in the sidebar ----
+        // It lives in the sidebar's Organization group, folded by default,
+        // so unfold it before looking.
         await page.goto(`${WEB}/settings`, { waitUntil: "domcontentloaded", timeout: 30_000 });
-        const trigger = page.locator('[data-testid="user-nav-trigger"]');
-        // Wait for the navbar to hydrate (trigger present + interactive). The
-        // app polls (issues count, notifications) so "networkidle" never fires.
-        await trigger.waitFor({ state: "visible", timeout: 20_000 }).catch(() => {});
+        const nav = page.locator('nav[aria-label="Main"]');
+        // The app polls (issues count, notifications) so "networkidle" never
+        // fires; wait for the sidebar to hydrate instead.
+        const navReady = await nav
+            .waitFor({ state: "visible", timeout: 20_000 })
+            .then(() => true)
+            .catch(() => false);
         await page.waitForTimeout(2000);
-        // Radix opens on pointerdown; a couple of attempts + keyboard fallback
-        // make the headless open reliable.
-        let opened = false;
-        for (let attempt = 0; attempt < 3 && !opened; attempt++) {
-            await trigger.click({ timeout: 10_000 }).catch(() => {});
-            opened = await page
-                .getByRole("menu")
-                .first()
-                .waitFor({ state: "visible", timeout: 3_000 })
-                .then(() => true)
-                .catch(() => false);
-            if (!opened) {
-                await trigger.focus().catch(() => {});
-                await page.keyboard.press("Enter").catch(() => {});
-                opened = await page
-                    .getByRole("menu")
-                    .first()
-                    .waitFor({ state: "visible", timeout: 2_000 })
-                    .then(() => true)
-                    .catch(() => false);
-            }
+        const orgToggle = nav.getByRole("button", { name: /^Organization$/ });
+        if (
+            (await orgToggle.count()) > 0 &&
+            (await orgToggle.getAttribute("aria-expanded")) === "false"
+        ) {
+            await orgToggle.click().catch(() => {});
         }
         await page.screenshot({ path: `${OUT_DIR}/${role}-menu.png`, fullPage: true });
         const wantItem = tokenUsageEntry ? isAllowed(tokenUsageEntry, role) : false;
-        if (opened && tokenUsageEntry) {
+        if (navReady && tokenUsageEntry) {
             const itemVisible =
-                (await page.getByRole("menuitem", { name: /Token Usage/i }).count()) > 0;
+                (await nav.getByRole("link", { name: /Token usage/i }).count()) > 0;
             if (itemVisible !== wantItem) {
                 failures.push(
-                    `${role}: Token Usage menu item visible=${itemVisible}, expected ${wantItem}`,
+                    `${role}: Token usage nav entry visible=${itemVisible}, expected ${wantItem}`,
                 );
             } else {
-                log(`OK  ${role} menu: Token Usage item ${itemVisible ? "shown" : "hidden"}`);
+                log(`OK  ${role} nav: Token usage entry ${itemVisible ? "shown" : "hidden"}`);
             }
         } else {
-            // Headless/docker-mac flake opening the radix dropdown — don't fail
-            // the run on it; the route-render assertion below is the hard proof.
-            log(`WARN ${role}: user menu did not open (headless) — menu-item check skipped`);
+            log(`WARN ${role}: sidebar did not render — nav-entry check skipped`);
         }
 
         // ---- 2) Route render: open each route, assert render vs /forbidden ----

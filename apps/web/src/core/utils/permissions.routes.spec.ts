@@ -30,15 +30,6 @@ describe("canAccessRoute", () => {
     });
 
     describe("previously-orphaned routes are now reachable", () => {
-        it("every non-owner role reaches /helpdesk (support)", () => {
-            for (const role of [
-                UserRole.REPO_ADMIN,
-                UserRole.BILLING_MANAGER,
-                UserRole.CONTRIBUTOR,
-            ]) {
-                expect(access(role, "/helpdesk")).toBe(true);
-            }
-        });
         it("every non-owner role reaches /cli/authorize", () => {
             for (const role of [
                 UserRole.REPO_ADMIN,
@@ -50,9 +41,9 @@ describe("canAccessRoute", () => {
         });
         it("git settings covers /settings/integrations", () => {
             // repo_admin has GitSettings read in ROLE_POLICIES
-            expect(
-                access(UserRole.REPO_ADMIN, "/settings/integrations"),
-            ).toBe(true);
+            expect(access(UserRole.REPO_ADMIN, "/settings/integrations")).toBe(
+                true,
+            );
         });
     });
 
@@ -61,9 +52,9 @@ describe("canAccessRoute", () => {
             expect(access(UserRole.CONTRIBUTOR, "/cockpit")).toBe(false);
         });
         it("contributor cannot reach /settings/subscription (Billing)", () => {
-            expect(
-                access(UserRole.CONTRIBUTOR, "/settings/subscription"),
-            ).toBe(false);
+            expect(access(UserRole.CONTRIBUTOR, "/settings/subscription")).toBe(
+                false,
+            );
         });
     });
 
@@ -81,10 +72,14 @@ describe("canAccessRoute", () => {
         // A naive startsWith would grant `/cli-reviews` to anyone via `/cli`.
         // billing_manager has NO CliReview grant, so it must be denied.
         it("billing_manager (no CliReview) cannot reach /cli-reviews via the /cli prefix", () => {
-            expect(access(UserRole.BILLING_MANAGER, "/cli-reviews")).toBe(false);
+            expect(access(UserRole.BILLING_MANAGER, "/cli-reviews")).toBe(
+                false,
+            );
         });
         it("the public /cli/* still grants the actual /cli sub-path", () => {
-            expect(access(UserRole.BILLING_MANAGER, "/cli/authorize")).toBe(true);
+            expect(access(UserRole.BILLING_MANAGER, "/cli/authorize")).toBe(
+                true,
+            );
         });
     });
 });

@@ -135,7 +135,7 @@ export const TokenPricingModal = ({
                 <DialogFooter>
                     <Button
                         size="md"
-                        variant="secondary"
+                        variant="cancel"
                         onClick={() => magicModal.hide()}>
                         Cancel
                     </Button>

@@ -41,6 +41,18 @@ compose="docker compose -f docker-compose.dev.yml -f docker-compose.preview.yml 
     # --branch: the checkout is a detached HEAD, so runo cannot read the
     # branch from git itself. --profile makes this env distinct from the
     # other shape of the same branch (see runo's README, "Profiles").
+    # A VM holding an unparseable compose file wedges: `up` validates the
+    # compose files that are ON the machine, and only a later `push` syncs
+    # this commit onto it, so every deploy dies in that validation and the
+    # commit that repairs the file never lands. `push` alone cannot break the
+    # cycle either — it resolves the env through runo's registry, which lives
+    # in RUNO_HOME and is empty on a fresh runner. Only `up` adopts a running
+    # instance by its AWS tags, and it registers the adoption BEFORE
+    # reconciling, so even a failed `up` leaves an entry `push` can resolve.
+    # Both repairs are best-effort: a first deploy has nothing to adopt.
+    runo up --here --recipe "$RECIPE" || true
+    runo push --recipe "$RECIPE" || true
+
     runo up --here --recipe "$RECIPE"
     if [ "$PROFILE" = cloud ]; then
         # The billing context tracks its own repository. Rebuild its pinned
@@ -58,6 +70,14 @@ compose="docker compose -f docker-compose.dev.yml -f docker-compose.preview.yml 
     # container logs for 15min. A cold MCP manager runs its seeds under
     # ts-node before it listens, which takes longer than the old 5min.
     runo exec -- "timeout 900 bash -c 'until $READY; do sleep 5; done'"
+    # The recipe seeds as part of `up`'s data step, which runs BEFORE `push`
+    # syncs this commit — and on an environment that already exists `up`
+    # skips setup entirely, so the seed never sees the code being previewed.
+    # Re-run it once here, after the sync and the health wait, so a change to
+    # the seed takes effect on the deploy that introduces it. Non-fatal: a
+    # preview that fails to re-seed still deploys with the previous data.
+    runo exec -- pnpm run seed:preview ||
+        echo "::warning::[$PROFILE] post-sync seed:preview failed — the preview may be carrying the previous commit's seed"
     echo "::endgroup::"
 } >&2
 

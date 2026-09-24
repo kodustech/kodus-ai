@@ -59,6 +59,7 @@ describe('TeamCliKeyController', () => {
             teamCliKeyService as any,
             request as any,
             eventEmitter as any,
+            { cliKeyChanged: jest.fn() } as any,
         );
     });
 

@@ -7,6 +7,7 @@ import { Request, Response } from 'express';
 
 import { Public } from '@libs/identity/infrastructure/adapters/services/auth/public.decorator';
 import { NotificationService } from '@libs/notifications/application/notification.service';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
 import {
     IKodyRulesService,
@@ -87,6 +88,7 @@ export class BillingController {
     constructor(
         private readonly notificationService: NotificationService,
         private readonly configService: ConfigService,
+        private readonly telemetry: TelemetryService,
         @Inject(KODY_RULES_SERVICE_TOKEN)
         private readonly kodyRulesService: IKodyRulesService,
     ) {}
@@ -123,6 +125,13 @@ export class BillingController {
             }),
         );
 
+        void this.telemetry.paymentFailed({
+            organizationId: body.organizationId,
+            amount: body.amount,
+            currency: body.currency,
+            failureReason: body.failureReason,
+        });
+
         return res.status(HttpStatus.OK).send('ok');
     }
 
@@ -154,6 +163,12 @@ export class BillingController {
                 organizationId: body.organizationId,
             }),
         );
+
+        void this.telemetry.trialExpiring({
+            organizationId: body.organizationId,
+            daysRemaining: body.daysRemaining,
+            trialEndsAt: body.trialEndsAt,
+        });
 
         return res.status(HttpStatus.OK).send('ok');
     }
@@ -194,6 +209,16 @@ export class BillingController {
             });
         }
 
+        // The closing step of the paywall funnel. Emitted even when the rule
+        // sync above failed: the plan really did change, and losing the
+        // conversion event because an unrelated sync threw would be worse.
+        void this.telemetry.planChanged({
+            organizationId: body.organizationId,
+            teamId: body.teamId,
+            planType: body.planType,
+            subscriptionStatus: body.subscriptionStatus,
+        });
+
         return res.status(HttpStatus.OK).send('ok');
     }
 
@@ -231,6 +256,13 @@ export class BillingController {
                 organizationId: body.organizationId,
             }),
         );
+
+        void this.telemetry.creditsPurchased({
+            organizationId: body.organizationId,
+            teamId: body.teamId,
+            creditUsd: Number(body.creditUsd ?? 0),
+            balanceUsd: Number(body.balanceUsd ?? 0),
+        });
 
         return res.status(HttpStatus.OK).send('ok');
     }
@@ -273,6 +305,14 @@ export class BillingController {
                       organizationId: body.organizationId!,
                   }),
         );
+
+        void this.telemetry.creditsLow({
+            organizationId: body.organizationId,
+            teamId: body.teamId,
+            balanceUsd,
+            thresholdUsd: Number(body.thresholdUsd ?? 0),
+            exhausted: !!body.exhausted,
+        });
 
         return res.status(HttpStatus.OK).send('ok');
     }

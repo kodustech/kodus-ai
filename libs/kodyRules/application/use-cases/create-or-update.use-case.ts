@@ -40,6 +40,7 @@ import {
     KodyRulesStatus,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 @Injectable()
 export class CreateOrUpdateKodyRulesUseCase {
@@ -56,6 +57,7 @@ export class CreateOrUpdateKodyRulesUseCase {
         private readonly permissionValidationService: PermissionValidationService,
         @Inject(KODY_RULE_DETECTOR_COMPILER_TOKEN)
         private readonly detectorCompiler: IKodyRuleDetectorCompiler,
+        private readonly telemetry: TelemetryService,
     ) {}
 
     async execute(
@@ -147,6 +149,21 @@ export class CreateOrUpdateKodyRulesUseCase {
                     'Failed to create or update kody rule',
                 );
             }
+
+            void this.telemetry.kodyRuleChanged({
+                organizationId,
+                teamId: organizationAndTeamData.teamId,
+                actorUserId: userInfoData.userId,
+                action: kodyRule.uuid ? 'updated' : 'created',
+                origin: kodyRule.origin,
+                scope:
+                    kodyRule.repositoryId === 'global'
+                        ? 'global'
+                        : kodyRule.directoryId
+                          ? 'directory'
+                          : 'repository',
+                repositoryId: kodyRule.repositoryId,
+            });
 
             if (result.uuid && kodyRule.repositoryId && kodyRule.rule) {
                 this.logger.log({

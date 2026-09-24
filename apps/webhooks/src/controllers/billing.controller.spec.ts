@@ -7,6 +7,7 @@ import { Response } from 'express';
 import { NotificationService } from '@libs/notifications/application/notification.service';
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
 import { KODY_RULES_SERVICE_TOKEN } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 import { BillingController } from './billing.controller';
 
@@ -49,11 +50,29 @@ const makeRes = (): jest.Mocked<Pick<Response, 'status' | 'send' | 'json'>> => {
 
 describe('BillingController', () => {
     let controller: BillingController;
+    let module: TestingModule;
     let notify: jest.Mocked<Pick<NotificationService, 'emit'>>;
     let config: jest.Mocked<Pick<ConfigService, 'get'>>;
+    let telemetry: jest.Mocked<
+        Pick<
+            TelemetryService,
+            | 'paymentFailed'
+            | 'trialExpiring'
+            | 'planChanged'
+            | 'creditsPurchased'
+            | 'creditsLow'
+        >
+    >;
 
     beforeEach(async () => {
         notify = { emit: jest.fn().mockResolvedValue(undefined) };
+        telemetry = {
+            paymentFailed: jest.fn().mockResolvedValue(undefined),
+            trialExpiring: jest.fn().mockResolvedValue(undefined),
+            planChanged: jest.fn().mockResolvedValue(undefined),
+            creditsPurchased: jest.fn().mockResolvedValue(undefined),
+            creditsLow: jest.fn().mockResolvedValue(undefined),
+        };
         config = {
             get: jest
                 .fn()
@@ -62,10 +81,11 @@ describe('BillingController', () => {
                 ),
         };
 
-        const module: TestingModule = await Test.createTestingModule({
+        module = await Test.createTestingModule({
             controllers: [BillingController],
             providers: [
                 { provide: NotificationService, useValue: notify },
+                { provide: TelemetryService, useValue: telemetry },
                 { provide: ConfigService, useValue: config },
                 {
                     provide: KODY_RULES_SERVICE_TOKEN,
@@ -310,6 +330,78 @@ describe('BillingController', () => {
             );
             expect(res2.status).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
             expect(notify.emit).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('product telemetry', () => {
+        it('plan-changed emits plan_changed even when the Kody Rules sync throws', async () => {
+            const rules = module.get(KODY_RULES_SERVICE_TOKEN) as {
+                syncRulesWithPlanLimit: jest.Mock;
+            };
+            rules.syncRulesWithPlanLimit.mockRejectedValueOnce(
+                new Error('mongo down'),
+            );
+
+            const body = {
+                organizationId: 'org-9',
+                teamId: 'team-9',
+                planType: 'teams_byok',
+                subscriptionStatus: 'active',
+            };
+            const { rawBody, signature } = sign(body);
+            const res = makeRes();
+
+            await controller.planChanged(
+                makeReq(body, signature, rawBody),
+                res as unknown as Response,
+            );
+
+            // The plan really did change; an unrelated sync failure must not
+            // cost us the conversion event.
+            expect(telemetry.planChanged).toHaveBeenCalledWith({
+                organizationId: 'org-9',
+                teamId: 'team-9',
+                planType: 'teams_byok',
+                subscriptionStatus: 'active',
+            });
+            expect(res.status).toHaveBeenCalledWith(HttpStatus.OK);
+        });
+
+        it('credits-low forwards the exhausted flag so the two events can be told apart', async () => {
+            const body = {
+                organizationId: 'org-9',
+                balanceUsd: 0,
+                thresholdUsd: 5,
+                exhausted: true,
+            };
+            const { rawBody, signature } = sign(body);
+            const res = makeRes();
+
+            await controller.creditsLow(
+                makeReq(body, signature, rawBody),
+                res as unknown as Response,
+            );
+
+            expect(telemetry.creditsLow).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    organizationId: 'org-9',
+                    balanceUsd: 0,
+                    thresholdUsd: 5,
+                    exhausted: true,
+                }),
+            );
+        });
+
+        it('does not emit telemetry for an unsigned webhook', async () => {
+            const res = makeRes();
+
+            await controller.paymentFailed(
+                makeReq({ organizationId: 'org-9' }, undefined),
+                res as unknown as Response,
+            );
+
+            expect(telemetry.paymentFailed).not.toHaveBeenCalled();
+            expect(res.status).toHaveBeenCalledWith(HttpStatus.UNAUTHORIZED);
         });
     });
 });

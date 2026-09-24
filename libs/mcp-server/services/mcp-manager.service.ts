@@ -7,6 +7,7 @@ import { JwtService } from '@nestjs/jwt';
 import { AxiosMCPManagerService } from '@libs/core/infrastructure/config/axios/microservices/mcpManager.axios';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 type MCPConnection = {
     id: string;
@@ -141,6 +142,7 @@ export class MCPManagerService {
     constructor(
         private readonly jwt: JwtService,
         private readonly permissionValidationService: PermissionValidationService,
+        private readonly telemetry: TelemetryService,
     ) {
         this.axiosMCPManagerService = new AxiosMCPManagerService();
     }
@@ -296,6 +298,13 @@ export class MCPManagerService {
                     headers: this.getAuthHeaders(organizationAndTeamData),
                 },
             );
+
+            void this.telemetry.pluginChanged({
+                organizationId,
+                pluginId: KODUS_MCP_INTEGRATION_ID,
+                pluginName: 'kodusmcp',
+                installed: true,
+            });
         } catch (error) {
             this.logger.error({
                 message: 'Error creating Kodus MCP integration',
@@ -335,6 +344,16 @@ export class MCPManagerService {
                     headers: this.getAuthHeaders(organizationAndTeamData),
                 },
             );
+
+            void this.telemetry.pluginChanged({
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+                pluginId: integrationId,
+                pluginName: connection.appName,
+                provider: connection.provider,
+                installed: false,
+                toolCount: connection.allowedTools?.length,
+            });
 
             return true;
         } catch (error) {

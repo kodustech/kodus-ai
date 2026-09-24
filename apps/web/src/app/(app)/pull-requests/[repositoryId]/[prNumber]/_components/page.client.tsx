@@ -240,7 +240,7 @@ export function ReviewPageClient({
 // Mirrors ReviewLayout's shell (max-w-[1600px] + file-tree / diff / sidebar
 // grid) so the page paints its structure immediately instead of a centered
 // spinner while suggestions load.
-function ReviewPageSkeleton() {
+export function ReviewPageSkeleton() {
     return (
         <div className="kodus-scroll h-full overflow-y-auto bg-[var(--bg)]">
             <section className="px-6 py-6">
@@ -364,9 +364,7 @@ function ReviewLayout({
     const bugCount = useMemo(
         () =>
             treeIssues.filter((i) =>
-                ["critical", "high"].includes(
-                    (i.severity ?? "").toLowerCase(),
-                ),
+                ["critical", "high"].includes((i.severity ?? "").toLowerCase()),
             ).length,
         [treeIssues],
     );
@@ -633,7 +631,7 @@ function FileTreeRail({
                 </svg>
             </span>
             <span
-                className="font-mono text-3xs tracking-[0.16em] text-[var(--text-dim)] uppercase transition-colors group-hover:text-[var(--text-muted)]"
+                className="text-3xs font-mono tracking-[0.16em] text-[var(--text-dim)] uppercase transition-colors group-hover:text-[var(--text-muted)]"
                 style={{
                     writingMode: "vertical-rl",
                     transform: "rotate(180deg)",

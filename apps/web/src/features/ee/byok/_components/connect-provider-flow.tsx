@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@components/ui/button";
 import { Card, CardContent } from "@components/ui/card";
+import { Skeleton } from "@components/ui/skeleton";
 import {
     listByokProviders,
     type ByokProviderDescriptor,
@@ -104,11 +105,11 @@ function ProviderGridCard({
         <button
             type="button"
             onClick={() => onPick(provider)}
-            className="border-card-lv2 bg-card-lv2 hover:border-primary-light/60 hover:bg-card-lv3 flex min-h-[4.25rem] items-center gap-3 rounded-lg border p-3 text-left transition-colors">
+            className="border-card-lv2 bg-card-lv2 hover:border-primary-light/60 hover:bg-card-lv3 flex min-h-[4.25rem] min-w-0 items-center gap-2.5 rounded-lg border p-3 text-left transition-colors sm:gap-3">
             <ProviderLogo
                 provider={provider.id}
                 label={provider.label}
-                className="size-8 shrink-0"
+                className="size-7 shrink-0 sm:size-8"
             />
             <span className="flex min-w-0 flex-col gap-0.5">
                 <span className="text-text-primary line-clamp-2 text-sm leading-tight font-semibold">
@@ -179,7 +180,10 @@ export function ConnectProviderFlow({
     connectedModelCountByProvider?: Partial<Record<string, number>>;
     lockedProvider?: string;
     onCancel?: () => void;
-    hero?: React.ReactNode;
+    /** Rendered above the grid. Receives whether the Kodus (no-key) tile is
+     *  actually in the grid, so the copy can only promise what is on screen —
+     *  the registry gates `kodus` server-side, independently of the web flag. */
+    hero?: React.ReactNode | ((ctx: { kodusAvailable: boolean }) => React.ReactNode);
     footer?: React.ReactNode;
 }) {
     const router = useRouter();
@@ -225,14 +229,14 @@ export function ConnectProviderFlow({
             <Card color="lv1">
                 <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
                     <p className="text-text-secondary text-sm text-balance">
-                        No providers available. Use “Configure manually” to add
-                        a model.
+                        No providers available for this installation. Check
+                        your Kodus configuration, or reach out to support.
                     </p>
                     {onCancel && (
                         <Button
                             type="button"
                             size="sm"
-                            variant="secondary"
+                            variant="cancel"
                             onClick={onCancel}>
                             Cancel
                         </Button>
@@ -302,15 +306,38 @@ export function ConnectProviderFlow({
                         </Button>
                     </div>
                 )}
-                {hero}
+                {typeof hero === "function"
+                    ? hero({
+                          kodusAvailable: providers.some((p) =>
+                              isPlatformFundedProvider(p.id),
+                          ),
+                      })
+                    : hero}
 
                 <div className="flex w-full flex-col gap-6 text-left">
+                    {/* The registry is fetched client-side, so without this the
+                        card rendered its hero over an empty hole until the
+                        response landed. */}
+                    {registry === null && (
+                        <div className="flex flex-col gap-2.5">
+                            <Skeleton className="h-3 w-20" />
+                            <div className="grid grid-cols-1 gap-2.5 min-[420px]:grid-cols-2 sm:grid-cols-3">
+                                {Array.from({ length: 6 }).map((_, i) => (
+                                    <Skeleton
+                                        key={i}
+                                        className="h-[4.25rem] rounded-lg"
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {mainProviders.length > 0 && (
                         <div className="flex flex-col gap-2.5">
                             <p className="text-text-tertiary text-xs font-semibold tracking-wide uppercase">
                                 Providers
                             </p>
-                            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                            <div className="grid grid-cols-1 gap-2.5 min-[420px]:grid-cols-2 sm:grid-cols-3">
                                 {mainProviders.map((p) => (
                                     <ProviderGridCard
                                         key={p.id}
@@ -329,7 +356,7 @@ export function ConnectProviderFlow({
                             <p className="text-text-tertiary text-xs font-semibold tracking-wide uppercase">
                                 Custom
                             </p>
-                            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                            <div className="grid grid-cols-1 gap-2.5 min-[420px]:grid-cols-2 sm:grid-cols-3">
                                 {customProviders.map((p) => (
                                     <ProviderGridCard
                                         key={p.id}

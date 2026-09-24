@@ -2,58 +2,65 @@
 
 import { useRouter } from "next/navigation";
 import { Button } from "@components/ui/button";
-import { Card, CardHeader, CardTitle } from "@components/ui/card";
+import { Link } from "@components/ui/link";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
-import type { TeamMembersResponse } from "@services/setup/types";
-import { ArrowUpCircle } from "lucide-react";
-import { pluralize } from "src/core/utils/string";
+import { ArrowUpCircle, KeyRoundIcon } from "lucide-react";
 
+import { PlanSheet } from "../../_components/plan-sheet";
+import { useHasAiKey } from "../../_hooks/use-has-ai-key";
 import { useSubscriptionStatus } from "../../_hooks/use-subscription-status";
 
-export const FreeByok = ({
-    members,
-}: {
-    members: TeamMembersResponse["members"];
-}) => {
+export const FreeByok = () => {
     const subscription = useSubscriptionStatus();
     const router = useRouter();
+    const canEdit = usePermission(Action.Update, ResourceType.Billing);
+    const hasKey = useHasAiKey();
+
     if (subscription.status !== "free") return null;
 
-    const organizationAdminsCount = members.length;
+    const upgrade = (primary: boolean) => (
+        <Button
+            size="md"
+            variant={primary ? "primary" : "helper"}
+            disabled={!canEdit}
+            leftIcon={<ArrowUpCircle />}
+            onClick={() => router.push("/choose-plan")}>
+            Upgrade
+        </Button>
+    );
 
-    const canEdit = usePermission(Action.Update, ResourceType.Billing);
-
+    // Free reviews only on a key of the org's own: without one, nothing
+    // runs, and connecting it is the step before any plan question.
     return (
-        <Card className="w-full">
-            <CardHeader className="flex flex-row justify-between gap-2">
-                <div className="flex flex-col gap-2">
-                    <p className="text-text-secondary text-sm">Free (BYOK)</p>
-                    <CardTitle className="text-2xl">
-                        Community version
-                    </CardTitle>
-
-                    <div className="mt-4 flex gap-6">
-                        <p className="text-text-secondary text-sm">
-                            <strong>{organizationAdminsCount}</strong> workspace{" "}
-                            {pluralize(organizationAdminsCount, {
-                                singular: "member",
-                                plural: "members",
-                            })}
-                        </p>
-                    </div>
-                </div>
-
-                <Button
-                    size="lg"
-                    variant="primary"
-                    className="h-fit"
-                    disabled={!canEdit}
-                    leftIcon={<ArrowUpCircle />}
-                    onClick={() => router.push("/choose-plan")}>
-                    Upgrade
-                </Button>
-            </CardHeader>
-        </Card>
+        <PlanSheet
+            tone="neutral"
+            chip="Free"
+            title="Free"
+            summary={
+                hasKey
+                    ? "Reviews run on your own AI key, with no review limit. Upgrade for the Team features."
+                    : "Free reviews run on your own AI key, and none is connected yet — connect one and Kody starts reviewing."
+            }
+            summaryClassName={hasKey ? undefined : "text-alert"}
+            actions={
+                hasKey ? (
+                    upgrade(true)
+                ) : (
+                    <>
+                        <Link href="/byok" noHoverUnderline>
+                            <Button
+                                decorative
+                                size="md"
+                                variant="primary"
+                                leftIcon={<KeyRoundIcon />}>
+                                Connect your AI key
+                            </Button>
+                        </Link>
+                        {upgrade(false)}
+                    </>
+                )
+            }
+        />
     );
 };

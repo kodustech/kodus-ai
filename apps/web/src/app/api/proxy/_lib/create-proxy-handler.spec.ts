@@ -144,6 +144,50 @@ describe("createProxyHandler", () => {
         });
     });
 
+    describe("unreachable upstream", () => {
+        it("answers 502, not 500, when the upstream cannot be reached", async () => {
+            // "Nothing is deployed there" and "it answered an error" are
+            // different facts. A self-hosted install that skipped an optional
+            // service needs to tell them apart to hide its entry instead of
+            // offering a screen that always fails.
+            fetchMock.mockRejectedValueOnce(
+                Object.assign(new TypeError("fetch failed"), {
+                    cause: { code: "ECONNREFUSED" },
+                }),
+            );
+
+            const handler = createProxyHandler({
+                resolveUpstream: (p) => `http://upstream${p}`,
+                proxyMountPath: "/api/proxy/test",
+            });
+
+            const res = await handler.GET(mockReq("GET"), ctx(["plugins"]));
+
+            expect(res.status).toBe(502);
+            await expect(res.json()).resolves.toMatchObject({
+                error: "Bad Gateway",
+            });
+        });
+
+        it("rethrows when the BROWSER aborted, inventing no gateway error", async () => {
+            const req = mockReq("GET");
+            Object.defineProperty(req, "signal", {
+                value: { aborted: true },
+                configurable: true,
+            });
+            fetchMock.mockRejectedValueOnce(new Error("The operation was aborted"));
+
+            const handler = createProxyHandler({
+                resolveUpstream: (p) => `http://upstream${p}`,
+                proxyMountPath: "/api/proxy/test",
+            });
+
+            await expect(handler.GET(req, ctx(["plugins"]))).rejects.toThrow(
+                /aborted/i,
+            );
+        });
+    });
+
     describe("rate limiting", () => {
         it("returns 429 when the same session exceeds the window budget", async () => {
             const handler = createProxyHandler({

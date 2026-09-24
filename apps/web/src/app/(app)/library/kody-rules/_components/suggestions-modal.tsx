@@ -25,6 +25,7 @@ import type { KodyRuleSuggestion } from "@services/kodyRules/types";
 import { useQuery } from "@tanstack/react-query";
 import {
     AlertCircle,
+    ArrowRightIcon,
     ExternalLink,
     GitPullRequest,
     Maximize2,
@@ -38,7 +39,7 @@ import { safeArray } from "src/core/utils/safe-array";
 type SuggestionsModalProps = {
     ruleId: string;
     ruleTitle: string;
-    variant?: "default" | "icon";
+    variant?: "default" | "icon" | "link";
 };
 
 const buildExternalPullRequestUrl = ({
@@ -196,17 +197,25 @@ export const SuggestionsModal = ({
             <Tooltip delayDuration={300}>
                 <TooltipTrigger asChild>
                     <DialogTrigger asChild>
-                        {variant === "icon" ? (
+                        {variant === "link" ? (
+                            <Button
+                                size="xs"
+                                variant="cancel"
+                                className="h-auto min-h-0 px-0 py-0"
+                                rightIcon={<ArrowRightIcon />}>
+                                See all
+                            </Button>
+                        ) : variant === "icon" ? (
                             <Button
                                 size="icon-md"
-                                variant="secondary"
+                                variant="helper"
                                 className="size-9">
                                 <MessageSquare />
                             </Button>
                         ) : (
                             <Button
                                 size="sm"
-                                variant="secondary"
+                                variant="helper"
                                 className="gap-2"
                                 leftIcon={<MessageSquare className="size-3" />}>
                                 View Suggestions
@@ -274,7 +283,7 @@ export const SuggestionsModal = ({
                             </p>
                             <Button
                                 size="sm"
-                                variant="secondary"
+                                variant="primary-dark"
                                 leftIcon={<RefreshCw className="size-3" />}
                                 onClick={() => refetch()}>
                                 Try again

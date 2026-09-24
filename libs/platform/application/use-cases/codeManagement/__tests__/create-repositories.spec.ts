@@ -44,7 +44,10 @@ describe('CreateRepositoriesUseCase', () => {
                     }),
             } as any,
             {} as any,
-            { repositoryConnected: jest.fn() } as any,
+            {
+                repositoryConnected: jest.fn(),
+                repositoriesSelected: jest.fn(),
+            } as any,
         );
 
         await useCase.execute({
@@ -113,7 +116,10 @@ describe('CreateRepositoriesUseCase', () => {
             } as any,
             { findOrCreate: jest.fn() } as any,
             undefined as any,
-            { repositoryConnected: jest.fn() } as any,
+            {
+                repositoryConnected: jest.fn(),
+                repositoriesSelected: jest.fn(),
+            } as any,
         );
 
         await expect(
@@ -154,7 +160,10 @@ describe('CreateRepositoriesUseCase', () => {
             } as any,
             { findOrCreate: jest.fn() } as any,
             undefined as any,
-            { repositoryConnected: jest.fn() } as any,
+            {
+                repositoryConnected: jest.fn(),
+                repositoriesSelected: jest.fn(),
+            } as any,
         );
 
         await expect(
@@ -219,7 +228,10 @@ describe('CreateRepositoriesUseCase', () => {
                 }),
             } as any,
             undefined as any,
-            { repositoryConnected: jest.fn() } as any,
+            {
+                repositoryConnected: jest.fn(),
+                repositoriesSelected: jest.fn(),
+            } as any,
         );
     };
 

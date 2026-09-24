@@ -3,18 +3,16 @@
 import { Card, CardHeader } from "@components/ui/card";
 import { Page } from "@components/ui/page";
 import { toast } from "@components/ui/toaster/use-toast";
-import { AlertTriangleIcon, SaveIcon } from "lucide-react";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
+import { AlertTriangleIcon } from "lucide-react";
 import { useFormContext, useFormState } from "react-hook-form";
-import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { useUnsavedChangesGuard } from "src/core/hooks/use-unsaved-changes-guard";
+import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { unformatConfig } from "src/core/utils/helpers";
 import { LinkedRepositories } from "src/features/ee/linked-repositories";
 
-import { CodeReviewPagesBreadcrumb } from "../../_components/breadcrumb";
 import { CentralizedConfigReadOnlyAlert } from "../../_components/centralized-config-readonly-alert";
-import { CodeReviewSaveButton } from "../../_components/save-button";
 import { useCodeReviewSettingsMutation } from "../../_hooks/use-code-review-settings-mutation";
 import { type CodeReviewFormType } from "../../_types";
 import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
@@ -67,8 +65,7 @@ export default function LinkedRepositoriesPage() {
                     return {
                         savedFormData: data,
                         codeReviewConfig: {
-                            linkedRepositories:
-                                unformatted.linkedRepositories,
+                            linkedRepositories: unformatted.linkedRepositories,
                         },
                     };
                 },
@@ -103,10 +100,13 @@ export default function LinkedRepositoriesPage() {
         return (
             <Page.Root>
                 <Page.Header>
-                    <CodeReviewPagesBreadcrumb pageName="Linked Repositories" />
-                </Page.Header>
-                <Page.Header>
-                    <Page.Title>Linked Repositories</Page.Title>
+                    <Page.TitleContainer>
+                        <Page.Title>Linked Repositories</Page.Title>
+                        <Page.Description>
+                            Sibling repositories Kody reads as context when
+                            reviewing this one.
+                        </Page.Description>
+                    </Page.TitleContainer>
                 </Page.Header>
                 <Page.Content>
                     <Card className="bg-warning/10 text-sm">
@@ -115,8 +115,8 @@ export default function LinkedRepositoriesPage() {
                             <span>
                                 Linked repositories are configured per
                                 repository — relationships are directional, so
-                                there is no global default. Pick a repository
-                                in the sidebar to configure its links.
+                                there is no global default. Pick a repository in
+                                the sidebar to configure its links.
                             </span>
                         </CardHeader>
                     </Card>
@@ -127,24 +127,22 @@ export default function LinkedRepositoriesPage() {
 
     return (
         <Page.Root>
-            <Page.Header>
-                <CodeReviewPagesBreadcrumb pageName="Linked Repositories" />
-            </Page.Header>
+            <Page.Header sticky>
+                <Page.TitleContainer>
+                    <Page.Title>Linked Repositories</Page.Title>
+                    <Page.Description>
+                        Sibling repositories Kody reads as context when
+                        reviewing this one.
+                    </Page.Description>
+                </Page.TitleContainer>
 
-            <Page.Header>
-                <Page.Title>Linked Repositories</Page.Title>
-
-                <Page.HeaderActions>
-                    <CodeReviewSaveButton
-                        size="md"
-                        variant="primary"
-                        leftIcon={<SaveIcon />}
-                        onClick={handleSubmit}
-                        disabled={!canEdit || !isDirty || !formIsValid}
-                        loading={formIsSubmitting}>
-                        Save settings
-                    </CodeReviewSaveButton>
-                </Page.HeaderActions>
+                <Page.SaveActions
+                    isDirty={isDirty}
+                    isSaving={formIsSubmitting}
+                    canSave={canEdit && formIsValid}
+                    onReset={() => form.resetField("linkedRepositories")}
+                    onSave={handleSubmit}
+                />
             </Page.Header>
 
             <Page.Content className="gap-8">

@@ -2,6 +2,7 @@
 
 import { canAccess } from "@services/permissions/fetch";
 import { Action, ResourceType } from "@services/permissions/types";
+import { captureCheckoutStarted } from "src/core/utils/gate-hit";
 
 import {
     createCreditCheckout,
@@ -94,6 +95,13 @@ export const createCreditCheckoutAction = async ({
     try {
         const result = await createCreditCheckout({ teamId, creditUsd });
         if (!result?.url) throw new Error("no checkout url");
+
+        captureCheckoutStarted({
+            planId: "credits",
+            kind: "credits",
+            amountUsd: creditUsd,
+        });
+
         return result;
     } catch (error) {
         console.error("Failed to create credit checkout:", error);

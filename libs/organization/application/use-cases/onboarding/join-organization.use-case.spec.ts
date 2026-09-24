@@ -103,6 +103,7 @@ describe('JoinOrganizationUseCase', () => {
             deps.authService as any,
             deps.parametersService as any,
             deps.notificationService as any,
+            { organizationJoined: jest.fn() } as any,
         );
         jest.spyOn(useCase, 'cleanUp').mockResolvedValue(undefined);
 
@@ -144,6 +145,7 @@ describe('JoinOrganizationUseCase', () => {
             deps.authService as any,
             deps.parametersService as any,
             deps.notificationService as any,
+            { organizationJoined: jest.fn() } as any,
         );
         jest.spyOn(useCase, 'cleanUp').mockResolvedValue(undefined);
 

@@ -1,171 +1,112 @@
 "use client";
 
+import NextLink from "next/link";
+import { SvgDiscord } from "@components/ui/icons/SvgDiscord";
+import { SvgFounder } from "@components/ui/icons/SvgFounder";
 import { Link } from "@components/ui/link";
-import { toast } from "@components/ui/toaster/use-toast";
-import { usePermission } from "@services/permissions/hooks";
-import { Action, ResourceType } from "@services/permissions/types";
-import { formatUsd } from "@services/usage/format";
+import { useConfig } from "@providers/ConfigProvider";
 import {
-    ActivityIcon,
-    ChartColumn,
-    KeyRoundIcon,
+    ChevronsUpDownIcon,
+    FileTextIcon,
     LogOutIcon,
-    SettingsIcon,
     UserIcon,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "src/core/components/ui/avatar";
-import { Button } from "src/core/components/ui/button";
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuLabel,
-    DropdownMenuRadioGroup,
-    DropdownMenuRadioItem,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "src/core/components/ui/dropdown-menu";
-import { useAllTeams } from "src/core/providers/all-teams-context";
 import { useAuth } from "src/core/providers/auth.provider";
-import { useSubscriptionStatus } from "src/core/providers/byok.provider";
-import { useSelectedTeamId } from "src/core/providers/selected-team-context";
-import { TEAM_STATUS } from "src/core/types";
 import { isSelfHosted } from "src/core/utils/self-hosted";
-import { useKodusCreditBalance } from "src/features/ee/byok/_hooks/use-kodus-credit-balance";
 
 import { VersionInfo } from "./version-info";
 
-export function UserNav() {
+/**
+ * The account row at the foot of the sidebar. The workspace switcher and
+ * every settings page live in the sidebar itself, so the menu keeps only the
+ * account, help and sign-out.
+ */
+export function UserNav({
+    variant = "sidebar",
+}: {
+    /** "rail": the same menu behind a bare avatar, for the collapsed sidebar. */
+    variant?: "sidebar" | "rail";
+}) {
     const { email } = useAuth();
-    const { teams } = useAllTeams();
-    const { teamId, setTeamId } = useSelectedTeamId();
-    const canEditOrg = usePermission(
-        Action.Update,
-        ResourceType.OrganizationSettings,
-    );
-    const canReadLogs = usePermission(Action.Read, ResourceType.Logs);
-    const canReadTokenUsage = usePermission(
-        Action.Read,
-        ResourceType.TokenUsage,
-    );
-    const { isBYOK, isTrial, isEnterprise } = useSubscriptionStatus();
-    // Orgs on the Kodus provider see their prepaid balance next to the BYOK
-    // entry — a quiet hint, not a navbar element; the wallet is the card.
-    const credits = useKodusCreditBalance();
-    const creditsHint = credits.usesKodusProvider ? (
-        <span
-            data-testid="user-nav-credits"
-            className={`ml-auto text-xs tabular-nums ${
-                credits.exhausted
-                    ? "text-danger"
-                    : credits.low
-                      ? "text-warning"
-                      : "text-text-tertiary"
-            }`}>
-            {credits.exhausted
-                ? "Top up"
-                : typeof credits.balanceUsd === "number"
-                  ? formatUsd(credits.balanceUsd)
-                  : ""}
-        </span>
-    ) : undefined;
-
-    const handleChangeWorkspace = (teamId: string) => {
-        setTeamId(teamId);
-
-        const team = teams.find((team) => team.uuid === teamId);
-
-        toast({
-            variant: "info",
-            description: (
-                <span>
-                    Workspace changed to{" "}
-                    <span className="text-primary-light font-bold">
-                        {team?.name}
-                    </span>
-                </span>
-            ),
-        });
-    };
+    const cfg = useConfig();
 
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button
-                    data-testid="user-nav-trigger"
-                    size="icon-md"
-                    variant="cancel"
-                    className="rounded-full">
-                    <Avatar className="size-full">
-                        {/* TODO: call user's avatar */}
-                        {/* <AvatarImage src="" alt="username" /> */}
-                        {/* TODO: call user's name and get initials */}
-                        <AvatarFallback>
-                            <UserIcon />
-                        </AvatarFallback>
-                    </Avatar>
-                </Button>
+                {variant === "rail" ? (
+                    <button
+                        type="button"
+                        data-testid="user-nav-trigger"
+                        aria-label={`Account: ${email}`}
+                        className="hover:bg-card-lv2 focus-visible:ring-ring flex size-9 items-center justify-center rounded-lg transition-colors focus:outline-none focus-visible:ring-2">
+                        <Avatar className="size-7">
+                            <AvatarFallback>
+                                <UserIcon className="size-4" />
+                            </AvatarFallback>
+                        </Avatar>
+                    </button>
+                ) : (
+                    <button
+                        type="button"
+                        data-testid="user-nav-trigger"
+                        className="hover:bg-card-lv2 focus-visible:ring-ring flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors focus:outline-none focus-visible:ring-2">
+                        <Avatar className="size-7">
+                            <AvatarFallback>
+                                <UserIcon className="size-4" />
+                            </AvatarFallback>
+                        </Avatar>
+                        <span className="text-text-secondary min-w-0 flex-1 truncate text-xs">
+                            {email}
+                        </span>
+                        <ChevronsUpDownIcon className="text-text-tertiary size-3.5 shrink-0" />
+                    </button>
+                )}
             </DropdownMenuTrigger>
 
-            <DropdownMenuContent className="w-60" align="end">
+            <DropdownMenuContent
+                className="w-60"
+                align="start"
+                side={variant === "rail" ? "right" : "top"}>
                 <DropdownMenuLabel className="text-text-primary text-sm font-normal">
                     {email}
                 </DropdownMenuLabel>
 
                 <DropdownMenuSeparator />
 
-                <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
+                <DropdownMenuLabel>Help</DropdownMenuLabel>
 
-                <DropdownMenuRadioGroup
-                    value={teamId}
-                    onValueChange={handleChangeWorkspace}>
-                    {teams.map((team) => (
-                        <DropdownMenuRadioItem
-                            key={team.uuid}
-                            value={team.uuid}
-                            disabled={team.status !== TEAM_STATUS.ACTIVE}>
-                            {team.name}
-                        </DropdownMenuRadioItem>
-                    ))}
-                </DropdownMenuRadioGroup>
+                <NextLink target="_blank" href={cfg.supportDocsUrl || ""}>
+                    <DropdownMenuItem leftIcon={<FileTextIcon />}>
+                        View docs
+                    </DropdownMenuItem>
+                </NextLink>
+
+                <NextLink
+                    target="_blank"
+                    href={cfg.supportDiscordInviteUrl || ""}>
+                    <DropdownMenuItem leftIcon={<SvgDiscord />}>
+                        Our Discord
+                    </DropdownMenuItem>
+                </NextLink>
+
+                <NextLink
+                    target="_blank"
+                    href={cfg.supportTalkToFounderUrl || ""}>
+                    <DropdownMenuItem leftIcon={<SvgFounder />}>
+                        Talk to a Founder
+                    </DropdownMenuItem>
+                </NextLink>
 
                 <DropdownMenuSeparator />
-
-                {canEditOrg && (
-                    <Link href="/organization/general">
-                        <DropdownMenuItem leftIcon={<SettingsIcon />}>
-                            Settings
-                        </DropdownMenuItem>
-                    </Link>
-                )}
-
-                {canEditOrg && (
-                    <Link href={creditsHint ? "/byok#kodus" : "/byok"}>
-                        <DropdownMenuItem
-                            leftIcon={<KeyRoundIcon />}
-                            rightIcon={creditsHint}>
-                            BYOK
-                        </DropdownMenuItem>
-                    </Link>
-                )}
-
-                {(isEnterprise || isTrial) && canReadLogs && (
-                    <Link href="/user-logs">
-                        <DropdownMenuItem leftIcon={<ActivityIcon />}>
-                            Activity Logs
-                        </DropdownMenuItem>
-                    </Link>
-                )}
-
-                {canReadTokenUsage && (
-                    <Link href="/token-usage">
-                        <DropdownMenuItem
-                            data-testid="nav-token-usage"
-                            leftIcon={<ChartColumn />}>
-                            Token Usage
-                        </DropdownMenuItem>
-                    </Link>
-                )}
 
                 <Link href="/sign-out" replace>
                     <DropdownMenuItem leftIcon={<LogOutIcon />}>

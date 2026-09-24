@@ -12,8 +12,8 @@ import { ArrowLeft, LockIcon } from "lucide-react";
 // Friendly names for the gated URL prefixes in permissions.routes.ts.
 const AREA_LABELS: Array<{ prefix: string; label: string }> = [
     { prefix: "/settings/subscription", label: "Billing & Subscription" },
-    { prefix: "/settings/git", label: "Git settings" },
-    { prefix: "/settings/integrations", label: "Git settings" },
+    { prefix: "/settings/git", label: "Repositories" },
+    { prefix: "/settings/integrations", label: "Repositories" },
     { prefix: "/settings/plugins", label: "Plugins" },
     { prefix: "/settings/code-review", label: "Code Review settings" },
     { prefix: "/choose-plan", label: "Billing & Subscription" },

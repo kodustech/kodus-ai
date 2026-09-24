@@ -110,8 +110,7 @@ export class ValidateRuleFileReferencesUseCase {
 
             const repoFiles =
                 (await this.codeManagementService.getRepositoryAllFiles({
-                    organizationAndTeamData:
-                        params.organizationAndTeamData,
+                    organizationAndTeamData: params.organizationAndTeamData,
                     repository: params.repository,
                 })) ?? [];
             const existingPaths = new Set(
@@ -154,6 +153,7 @@ export class ValidateRuleFileReferencesUseCase {
                 payload: {
                     source: params.source,
                     repoName: params.repository.name,
+                    repositoryId: params.repository.id,
                     invalidCount: issues.length,
                     issues,
                 },

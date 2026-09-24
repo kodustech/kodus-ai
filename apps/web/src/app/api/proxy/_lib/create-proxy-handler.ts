@@ -170,6 +170,42 @@ function rewriteLocation(
     }
 }
 
+/** Body marker on a 502 this proxy generated itself. */
+export const UPSTREAM_UNREACHABLE = "UPSTREAM_UNREACHABLE";
+
+/**
+ * Did `fetch` fail because it could not open the connection at all?
+ *
+ * undici reports these on `cause` rather than the TypeError it throws, so the
+ * message alone is not enough to tell a dead upstream from a bug in the
+ * request we built.
+ */
+const CONNECTION_ERROR_CODES = new Set([
+    "ECONNREFUSED",
+    "ENOTFOUND",
+    "EAI_AGAIN",
+    "ECONNRESET",
+    "EHOSTUNREACH",
+    "ENETUNREACH",
+    "ETIMEDOUT",
+    "UND_ERR_CONNECT_TIMEOUT",
+    "UND_ERR_SOCKET",
+]);
+
+function isConnectionError(error: unknown): boolean {
+    const seen = new Set<unknown>();
+    let current: unknown = error;
+    while (current && typeof current === "object" && !seen.has(current)) {
+        seen.add(current);
+        const code = (current as { code?: unknown }).code;
+        if (typeof code === "string" && CONNECTION_ERROR_CODES.has(code)) {
+            return true;
+        }
+        current = (current as { cause?: unknown }).cause;
+    }
+    return false;
+}
+
 async function forward(
     req: NextRequest,
     pathSegments: string[],
@@ -244,7 +280,48 @@ async function forward(
         (init as RequestInit & { duplex?: string }).duplex = "half";
     }
 
-    const upstream = await fetch(url, init);
+    let upstream: Response;
+    try {
+        upstream = await fetch(url, init);
+    } catch (error) {
+        // The browser aborted: nothing is listening for this response, and
+        // turning it into a gateway error would invent a failure that never
+        // reached anyone.
+        if (req.signal?.aborted) throw error;
+
+        // Only a genuine CONNECTION failure becomes a 502. Everything else a
+        // fetch can throw — an invalid header or init value, a bad URL out of
+        // resolveUpstream, a body-stream or TLS fault — is a bug on THIS side,
+        // and answering "the upstream is unreachable" would bury it behind a
+        // status that callers read as "that service is not deployed". The
+        // comment above records exactly such a proxy-side undici throw taking
+        // out every /api/proxy/* call; it must stay loud.
+        if (!isConnectionError(error)) throw error;
+
+        // The upstream is not answering — wrong host, nothing listening, DNS
+        // miss. That is a DIFFERENT fact from "the upstream returned an
+        // error", and callers need to tell them apart: a self-hosted install
+        // that simply did not deploy an optional service should be able to
+        // hide its entry instead of offering a screen that always fails.
+        return NextResponse.json(
+            {
+                error: "Bad Gateway",
+                // Machine-readable marker: TypedFetchError carries the body
+                // but not the headers, so callers key on this rather than on
+                // the status, which an upstream can also produce.
+                code: UPSTREAM_UNREACHABLE,
+                message: "The upstream service is not reachable.",
+            },
+            {
+                status: 502,
+                // Marks the 502 as OURS. A 502/503/504 relayed from the
+                // upstream (an ingress mid-rolling-restart, say) carries no
+                // such header, so callers can tell "never deployed" from
+                // "briefly unhealthy" instead of guessing from the status.
+                headers: { "x-kodus-proxy": "upstream-unreachable" },
+            },
+        );
+    }
 
     // undici transparently decompresses — strip encoding-related
     // headers or the browser tries to decode plaintext and fails.
