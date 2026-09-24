@@ -330,6 +330,8 @@
 | `WEB_ANALYTICS_SECRET` | – | secret | 🏢 ☁️ Cloud |  |
 | `WEB_PORT_ANALYTICS` | – | port | 🏢 ☁️ Cloud |  |
 | `API_MCP_SERVER_ENABLED` | – | boolean | ⚙️ Both | Enables the MCP integration in kodus-ai (calls into the MCP Manager service). When false, MCP-related code paths are skipped entirely. |
+| `API_DOCTOR_ENABLED` | – | boolean | 🏠 Self-hosted | Self-hosted doctor (#1987): a listener on 127.0.0.1 inside the api container that scripts/doctor/doctor-client.mjs (called by the installer's doctor.sh / doctor-k8s.sh) asks for the review checks. Never started in cloud mode. |
+| `API_DOCTOR_PORT` | – | port | 🏠 Self-hosted | Loopback port of the self-hosted doctor listener. |
 | `API_KODUS_SERVICE_MCP_MANAGER` | – | url | ⚙️ Both | Address of the kodus-mcp-manager service (sibling container). kodus-ai calls this URL to provision MCP servers per organization. In docker-compose self-hosted installs, the worker and mcp-manager run in sibling containers — `localhost` inside the worker resolves to the worker itself, not to the mcp-manager, and pipeline stages that call `MCPManagerService.getConnections()` 400 with ECONNREFUSED. Always use the compose service name (`kodus-mcp-manager`) so the request reaches the right container. |
 | `API_KODUS_MCP_SERVER_URL` | – | url | ⚙️ Both | Public URL where MCP clients (e.g. Cursor/Claude Desktop) connect to consume MCP tools exposed by kodus-ai itself. |
 | `API_MCP_MANAGER_LOG_LEVEL` | – | enum(error,warn,info,debug) | 🏠 Self-hosted | Log verbosity for the MCP Manager container. |

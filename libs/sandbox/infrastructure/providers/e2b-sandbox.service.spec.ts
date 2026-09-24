@@ -558,38 +558,58 @@ describe('E2BSandboxService.getPrRefspec', () => {
         ) as string;
 
     it('GitHub: refs/pull/<n>/head', () => {
-        expect(refspec(PlatformType.GITHUB, 42, 'https://github.com/a/b', 'main')).toBe(
-            'refs/pull/42/head',
-        );
+        expect(
+            refspec(PlatformType.GITHUB, 42, 'https://github.com/a/b', 'main'),
+        ).toBe('refs/pull/42/head');
     });
 
     it('GitLab: refs/merge-requests/<n>/head', () => {
-        expect(refspec(PlatformType.GITLAB, 7, 'https://gitlab.com/a/b', 'main')).toBe(
-            'refs/merge-requests/7/head',
-        );
+        expect(
+            refspec(PlatformType.GITLAB, 7, 'https://gitlab.com/a/b', 'main'),
+        ).toBe('refs/merge-requests/7/head');
     });
 
     it('Bitbucket Cloud: falls back to refs/heads/<branch> (no PR refspec on cloud)', () => {
         expect(
-            refspec(PlatformType.BITBUCKET, 3, 'https://bitbucket.org/a/b', 'feat/x'),
+            refspec(
+                PlatformType.BITBUCKET,
+                3,
+                'https://bitbucket.org/a/b',
+                'feat/x',
+            ),
         ).toBe('refs/heads/feat/x');
     });
 
     it('Bitbucket Server (self-hosted, non-bitbucket.org host): refs/pull-requests/<n>/from', () => {
         expect(
-            refspec(PlatformType.BITBUCKET, 3, 'https://bitbucket.internal.corp/a/b', 'feat/x'),
+            refspec(
+                PlatformType.BITBUCKET,
+                3,
+                'https://bitbucket.internal.corp/a/b',
+                'feat/x',
+            ),
         ).toBe('refs/pull-requests/3/from');
     });
 
     it('Azure Repos: refs/pull/<n>/merge', () => {
         expect(
-            refspec(PlatformType.AZURE_REPOS, 5, 'https://dev.azure.com/a/b', 'main'),
+            refspec(
+                PlatformType.AZURE_REPOS,
+                5,
+                'https://dev.azure.com/a/b',
+                'main',
+            ),
         ).toBe('refs/pull/5/merge');
     });
 
     it('falls back to refs/pull/<n>/head for any unlisted platform', () => {
         expect(
-            refspec(PlatformType.FORGEJO, 9, 'https://forgejo.example/a/b', 'main'),
+            refspec(
+                PlatformType.FORGEJO,
+                9,
+                'https://forgejo.example/a/b',
+                'main',
+            ),
         ).toBe('refs/pull/9/head');
     });
 });
@@ -604,6 +624,7 @@ describe('syncE2BSandboxRepo', () => {
         cloneUrl: 'https://github.com/kodustech/kodus-ai',
         authToken: 'tok123',
         branch: 'feature/x',
+        baseBranch: 'main',
         prNumber: 44,
         platform: PlatformType.GITHUB,
     };
@@ -618,7 +639,11 @@ describe('syncE2BSandboxRepo', () => {
             .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
         await syncE2BSandboxRepo(makeSandbox(run), baseParams);
 
-        expect(run).toHaveBeenCalledTimes(1);
+        // The sync itself is ONE command. More follow it — the `.gitmodules`
+        // probe that decides whether any submodule has to be repopulated for
+        // this round (#1939) — so assert the sync command itself rather than
+        // the total number of commands.
+        expect(run.mock.calls[0][0]).toContain('git checkout -f FETCH_HEAD');
         const [command, opts] = run.mock.calls[0];
         expect(command).toBe(
             `cd ${REPO_DIR} && git -c http.extraHeader="$GIT_AUTH_HEADER" fetch --depth=1 'https://github.com/kodustech/kodus-ai' 'refs/pull/44/head' && git checkout -f FETCH_HEAD && git clean -fd`,
@@ -632,10 +657,10 @@ describe('syncE2BSandboxRepo', () => {
         const run = jest
             .fn()
             .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
-        await syncE2BSandboxRepo(
-            makeSandbox(run),
-            { ...baseParams, authToken: '' },
-        );
+        await syncE2BSandboxRepo(makeSandbox(run), {
+            ...baseParams,
+            authToken: '',
+        });
 
         const [command, opts] = run.mock.calls[0];
         expect(command).toBe(
@@ -723,5 +748,198 @@ describe('syncE2BSandboxRepo', () => {
         expect(warn).not.toHaveBeenCalled();
         expect(log).toHaveBeenCalledTimes(1);
         expect(log.mock.calls[0][0].message).toContain('synced reused sandbox');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// syncE2BSandboxRepo — round N must repopulate submodules too (#1939).
+// `git clean -fd` does not descend into submodule directories, so a reused
+// sandbox otherwise keeps round 1's submodule contents (or none) while the
+// diff describes round N — the stale-checkout bug (#1313) in another costume.
+// ---------------------------------------------------------------------------
+describe('syncE2BSandboxRepo — submodules on the reconnect path', () => {
+    const GITMODULES =
+        '[submodule "commons-mod"]\n\tpath = packages/commons\n\turl = https://github.com/kodustech/commons.git\n';
+    /** What `git config -f .gitmodules --get-regexp` prints for it. */
+    const DECLARED =
+        'submodule.commons-mod.path packages/commons\n' +
+        'submodule.commons-mod.url https://github.com/kodustech/commons.git\n';
+    /** What `git config --get-regexp` prints after `submodule init`. */
+    const RESOLVED =
+        'submodule.commons-mod.url https://github.com/kodustech/commons.git\n';
+
+    const params: CreateSandboxParams = {
+        cloneUrl: 'https://github.com/kodustech/kodus-ai',
+        authToken: 'tok123',
+        branch: 'feature/x',
+        // Round N reuses the sandbox, so the base ref is whatever the
+        // previous round fetched; without one nothing is fetched.
+        baseBranch: 'main',
+        prNumber: 44,
+        platform: PlatformType.GITHUB,
+    };
+
+    const runFor = (gitmodules: string | null) =>
+        jest.fn(async (cmd: string) => {
+            if (cmd.includes('cat ') && cmd.includes('.gitmodules')) {
+                if (gitmodules === null) throw new Error('No such file');
+                return { stdout: gitmodules, stderr: '', exitCode: 0 };
+            }
+            if (cmd.includes("'rev-parse'")) {
+                // Only `refs/remotes/origin/<base>` exists in a reused
+                // sandbox, so the probe must ask for `origin/main` — asking
+                // for `main` finds nothing and silently stops repopulating
+                // submodules on every reconnect round.
+                if (!cmd.includes("'origin/main^{commit}'")) {
+                    throw new Error(`unexpected ref probe: ${cmd}`);
+                }
+                return { stdout: 'abc123', stderr: '', exitCode: 0 };
+            }
+            if (cmd.includes("'--get-regexp'")) {
+                // The base declares the same thing — the merged case, which
+                // is the only one that fetches.
+                if (cmd.includes("'--blob'")) {
+                    // Same reason: the blob is read off the base REF.
+                    expect(cmd).toContain("'origin/main:.gitmodules'");
+                }
+                const declared =
+                    cmd.includes("'-f' '.gitmodules'") ||
+                    cmd.includes("'--blob'");
+                return {
+                    stdout: declared ? DECLARED : RESOLVED,
+                    stderr: '',
+                    exitCode: 0,
+                };
+            }
+            return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+    it('repopulates the submodule after syncing to the new commit', async () => {
+        const run = runFor(GITMODULES);
+        await syncE2BSandboxRepo({ commands: { run } } as any, params);
+        const update = run.mock.calls
+            .map(([cmd]) => cmd as string)
+            .filter((cmd) => cmd.includes("'submodule' 'update'"));
+        expect(update).toHaveLength(1);
+        expect(update[0]).toContain("'packages/commons'");
+    });
+
+    it('runs the submodule step AFTER the checkout, never before', async () => {
+        const run = runFor(GITMODULES);
+        await syncE2BSandboxRepo({ commands: { run } } as any, params);
+        const cmds = run.mock.calls.map(([cmd]) => cmd as string);
+        const checkoutAt = cmds.findIndex((c) =>
+            c.includes('git checkout -f FETCH_HEAD'),
+        );
+        const updateAt = cmds.findIndex((c) =>
+            c.includes("'submodule' 'update'"),
+        );
+        expect(checkoutAt).toBeGreaterThanOrEqual(0);
+        expect(updateAt).toBeGreaterThan(checkoutAt);
+    });
+
+    it('reads the base declaration off origin/<base>, not <base>', async () => {
+        const run = runFor(GITMODULES);
+        await syncE2BSandboxRepo({ commands: { run } } as any, params);
+        const cmds = run.mock.calls.map(([cmd]) => cmd as string);
+        expect(cmds.some((c) => c.includes("'origin/main^{commit}'"))).toBe(
+            true,
+        );
+        expect(cmds.some((c) => c.includes("'origin/main:.gitmodules'"))).toBe(
+            true,
+        );
+    });
+
+    it('repopulates NOTHING when the base ref is not in the reused sandbox', async () => {
+        // A sandbox from an earlier round may not carry the base ref. Failing
+        // open here would fetch whatever the pull request declares.
+        const run = jest.fn(async (cmd: string) => {
+            if (cmd.includes('cat ') && cmd.includes('.gitmodules')) {
+                return { stdout: GITMODULES, stderr: '', exitCode: 0 };
+            }
+            if (cmd.includes("'rev-parse'"))
+                throw new Error('unknown revision');
+            if (cmd.includes("'--blob'")) {
+                // git fails the blob read when the ref is absent, and the
+                // probe above already refused — this rejects so the fixture
+                // cannot quietly hand back a declaration that does not exist.
+                // `CommandExitError`, not a bare Error: that is what
+                // `sandbox.commands.run` throws for a non-zero git exit, and
+                // a bare one carries no stdout/stderr/exitCode to normalize.
+                throw new CommandExitError({
+                    stdout: '',
+                    stderr: "fatal: invalid object name 'origin/main'",
+                    exitCode: 128,
+                    error: '',
+                } as any);
+            }
+            if (cmd.includes("'--get-regexp'")) {
+                return {
+                    stdout: cmd.includes("'-f' '.gitmodules'")
+                        ? DECLARED
+                        : RESOLVED,
+                    stderr: '',
+                    exitCode: 0,
+                };
+            }
+            return { stdout: '', stderr: '', exitCode: 0 };
+        });
+        await syncE2BSandboxRepo({ commands: { run } } as any, params, {
+            logger: { warn: jest.fn(), log: jest.fn() } as any,
+        });
+        expect(
+            run.mock.calls.filter(([cmd]) =>
+                (cmd as string).includes("'submodule' 'update'"),
+            ),
+        ).toHaveLength(0);
+    });
+
+    it('does nothing extra for a repository with no .gitmodules', async () => {
+        const run = runFor(null);
+        await syncE2BSandboxRepo({ commands: { run } } as any, params);
+        expect(
+            run.mock.calls.filter(([cmd]) =>
+                (cmd as string).includes("'submodule'"),
+            ),
+        ).toHaveLength(0);
+    });
+
+    it('a failed sync skips the submodule step — nothing to repopulate', async () => {
+        // The sync must REJECT, not resolve with a non-zero exit code:
+        // `sandbox.commands.run` throws `CommandExitError` and never resolves
+        // one (see 'is non-fatal on a failed fetch' above). And `.gitmodules`
+        // has to be answered, or the assertion below holds for the wrong
+        // reason — with no submodule declared there is nothing to fetch and
+        // the test stays green even if the guard is deleted.
+        const run = jest.fn(async (cmd: string) => {
+            if (cmd.includes('git checkout -f FETCH_HEAD')) {
+                throw new CommandExitError({
+                    stdout: '',
+                    stderr: 'boom',
+                    exitCode: 1,
+                    error: '',
+                } as any);
+            }
+            if (cmd.includes('cat ') && cmd.includes('.gitmodules')) {
+                return { stdout: GITMODULES, stderr: '', exitCode: 0 };
+            }
+            if (cmd.includes("'--get-regexp'")) {
+                const declared = cmd.includes("'-f' '.gitmodules'");
+                return {
+                    stdout: declared ? DECLARED : RESOLVED,
+                    stderr: '',
+                    exitCode: 0,
+                };
+            }
+            return { stdout: '', stderr: '', exitCode: 0 };
+        });
+        await syncE2BSandboxRepo({ commands: { run } } as any, params, {
+            logger: { warn: jest.fn(), log: jest.fn() } as any,
+        });
+        expect(
+            run.mock.calls.filter(([cmd]) =>
+                (cmd as string).includes("'submodule'"),
+            ),
+        ).toHaveLength(0);
     });
 });

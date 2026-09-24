@@ -1,9 +1,14 @@
-# Preview environment: one VM per pull request, driven by CI.
+# Preview environment, CLOUD shape: one VM per pull request, driven by CI.
 #
 # Separate from workspace.yaml on purpose — a developer box and a PR preview
 # are not the same machine. The dev recipe is optimized for someone SSH-ing in
 # and port-forwarding to localhost; this one is optimized for a link a reviewer
-# clicks. Select it with: runo up --here --recipe .kodus/workspace.preview.yaml
+# clicks.
+#
+# A pull request may need the product in its cloud shape (this recipe), its
+# self-hosted shape (workspace.preview.selfhosted.yaml) or both — each is a
+# separate runo env of the same branch, told apart by --profile:
+#   runo up --here --branch B --profile cloud --recipe .kodus/workspace.preview.yaml
 version: 1
 setup:
   - docker network create kodus-backend-services 2>/dev/null || true
@@ -18,7 +23,7 @@ services:
   compose:
     # the overlay adds what a public, non-laptop environment needs: the app's
     # own public URL in its env, and memory limits sized for a 16GB VM
-    files: [docker-compose.dev.yml, docker-compose.preview.yml]
+    files: [docker-compose.dev.yml, docker-compose.preview.yml, docker-compose.preview.cloud.yml]
     # MCP is intentionally opt-in for laptops, but a preview must represent the
     # complete product rather than the lightweight default developer stack.
     profiles: [mcp]
@@ -52,7 +57,9 @@ expose:
 limits:
   instance: t3.xlarge  # 16 GiB, permitted by the isolated Ohio identity
   disk: 100gb
-  # a reviewer comes back to the link minutes or hours later; while the
-  # hostname still carries the IP, a resume invalidates the posted link, so
-  # previews idle longer than a dev box does
-  idle_suspend: 60m
+  # Off 2h after the last deploy, whatever the traffic: a public URL draws
+  # bots and the stack's own outbound calls, so "no traffic" never happened
+  # and previews stayed up for days. A push or a `/preview` comment on the PR
+  # brings it back (the link changes: the hostname carries the IP).
+  idle_suspend: 2h
+  idle_activity: [ssh, agent]

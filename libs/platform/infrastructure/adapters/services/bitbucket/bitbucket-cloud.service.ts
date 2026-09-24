@@ -74,6 +74,12 @@ import {
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { Repositories } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositories.type';
 import { RepositoryFile } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryFile.type';
+import {
+    isDeniedStatus,
+    RepositoryAccessDiagnosis,
+    summarizeProviderError,
+    UNKNOWN_REPOSITORY_ACCESS,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryAccessDiagnosis.type';
 import { AuthorContribution } from '@libs/platformData/domain/pullRequests/interfaces/authorContributor.interface';
 import { IRepository } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
@@ -155,10 +161,7 @@ export class BitbucketCloudService implements Omit<
     private recallHeadCommit(key: string): string | undefined {
         const hit = this.headCommitMemo.get(key);
         if (!hit) return undefined;
-        if (
-            Date.now() - hit.at >
-            BitbucketCloudService.HEAD_COMMIT_TTL_MS
-        ) {
+        if (Date.now() - hit.at > BitbucketCloudService.HEAD_COMMIT_TTL_MS) {
             this.headCommitMemo.delete(key);
             return undefined;
         }
@@ -3288,9 +3291,9 @@ export class BitbucketCloudService implements Omit<
             // in it. The last chunk arrives with the complete selection and
             // runs this once.
             if (!params.deferWebhooks) {
-                void this.createWebhook(
-                    params.organizationAndTeamData,
-                ).catch(() => undefined);
+                void this.createWebhook(params.organizationAndTeamData).catch(
+                    () => undefined,
+                );
             }
         } catch (error) {
             this.logger.error({
@@ -3392,9 +3395,7 @@ export class BitbucketCloudService implements Omit<
         }
     }
 
-    async listIssues(
-        params: ListIssuesParams,
-    ): Promise<CodeManagementIssue[]> {
+    async listIssues(params: ListIssuesParams): Promise<CodeManagementIssue[]> {
         const { organizationAndTeamData, repository, filters = {} } = params;
 
         const authDetail = await this.getAuthDetails(organizationAndTeamData);
@@ -4756,17 +4757,10 @@ export class BitbucketCloudService implements Omit<
                 return false;
             }
 
-            const existingHooks = await bitbucketAPI.webhooks
-                .listForRepo({
-                    repo_slug: `{${this.sanitizeUUID(targetRepo.id)}}`,
-                    workspace: `{${this.sanitizeUUID(targetRepo.workspaceId)}}`,
-                    pagelen: 50,
-                })
-                .then((res) => this.getPaginatedResults(bitbucketAPI, res));
-
-            return existingHooks.some(
-                (hook: any) =>
-                    hook?.url === webhookUrl && hook?.active !== false,
+            return await this.hasActiveWebhook(
+                bitbucketAPI,
+                targetRepo,
+                webhookUrl,
             );
         } catch (error) {
             this.logger.error({
@@ -4782,6 +4776,134 @@ export class BitbucketCloudService implements Omit<
 
             return false;
         }
+    }
+
+    private async hasActiveWebhook(
+        bitbucketAPI: InstanceType<typeof Bitbucket>,
+        targetRepo: Repositories,
+        webhookUrl: string,
+    ): Promise<boolean> {
+        const existingHooks = await bitbucketAPI.webhooks
+            .listForRepo({
+                repo_slug: `{${this.sanitizeUUID(targetRepo.id)}}`,
+                workspace: `{${this.sanitizeUUID(targetRepo.workspaceId)}}`,
+                pagelen: 50,
+            })
+            .then((res) => this.getPaginatedResults(bitbucketAPI, res));
+
+        return existingHooks.some(
+            (hook: any) => hook?.url === webhookUrl && hook?.active !== false,
+        );
+    }
+
+    async diagnoseRepositoryAccess(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; fullName?: string };
+    }): Promise<RepositoryAccessDiagnosis> {
+        const result: RepositoryAccessDiagnosis = {
+            ...UNKNOWN_REPOSITORY_ACCESS,
+        };
+
+        try {
+            const authDetails = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+
+            if (!authDetails) {
+                result.error = 'Bitbucket credential not found';
+                return result;
+            }
+
+            const repositories = <Repositories[]>(
+                await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                    params.organizationAndTeamData,
+                    IntegrationConfigKey.REPOSITORIES,
+                )
+            );
+
+            const targetRepo = repositories?.find(
+                (repo) =>
+                    this.sanitizeUUID(repo.id) ===
+                    this.sanitizeUUID(params.repository.id),
+            );
+
+            if (!targetRepo?.workspaceId) {
+                result.error = 'Repository not found in the configured list';
+                return result;
+            }
+
+            const bitbucketAPI = this.instanceBitbucketApi(authDetails);
+            const repoSlug = `{${this.sanitizeUUID(targetRepo.id)}}`;
+            const workspace = `{${this.sanitizeUUID(targetRepo.workspaceId)}}`;
+
+            try {
+                await bitbucketAPI.commits.list({
+                    repo_slug: repoSlug,
+                    workspace,
+                    pagelen: 1,
+                });
+                result.read = 'ok';
+            } catch (error) {
+                result.read = isDeniedStatus(error) ? 'denied' : 'unknown';
+                result.error = summarizeProviderError(error);
+            }
+
+            try {
+                // Permission the provider reports for the authenticated user.
+                // A credential that is not a user (or lacks the account
+                // scope) cannot call this, so failure leaves `write` unknown.
+                const fullName =
+                    params.repository.fullName ?? targetRepo.full_name;
+                const q = fullName
+                    ? `repository.full_name="${fullName}"`
+                    : `repository.uuid="{${this.sanitizeUUID(targetRepo.id)}}"`;
+                const { data } =
+                    await bitbucketAPI.user.listPermissionsForRepos({
+                        q,
+                        pagelen: 1,
+                    });
+                const permission = data?.values?.[0]?.permission;
+                // `read` can still comment on pull requests, so only `none`
+                // is a definite no.
+                if (permission === 'write' || permission === 'admin') {
+                    result.write = 'ok';
+                } else if (permission === 'none') {
+                    result.write = 'denied';
+                }
+            } catch (error) {
+                result.error ??= summarizeProviderError(error);
+            }
+
+            const webhookUrl =
+                this.configService.get<string>(
+                    'GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK',
+                ) ?? process.env.GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK;
+
+            if (webhookUrl) {
+                try {
+                    result.hook = (await this.hasActiveWebhook(
+                        bitbucketAPI,
+                        targetRepo,
+                        webhookUrl,
+                    ))
+                        ? 'present'
+                        : 'missing';
+                } catch (error) {
+                    // Listing hooks needs admin on the repo; without it we
+                    // cannot tell whether the hook exists.
+                    result.error ??= summarizeProviderError(error);
+                }
+            }
+        } catch (error) {
+            // A 401/403/404 before any repository call (resolving the owner,
+            // building the client) still means the token cannot read.
+            if (isDeniedStatus(error)) {
+                result.read = 'denied';
+            }
+            result.error = summarizeProviderError(error);
+        }
+
+        return result;
     }
 
     async deleteWebhook(params: {
@@ -5783,9 +5905,7 @@ export class BitbucketCloudService implements Omit<
         return null;
     }
 
-    async getUsersByUsername(
-        _params: any,
-    ): Promise<Map<string, any> | null> {
+    async getUsersByUsername(_params: any): Promise<Map<string, any> | null> {
         // Not implemented for Bitbucket Cloud — callers fall back to
         // per-user `getUserByUsername`.
         return null;

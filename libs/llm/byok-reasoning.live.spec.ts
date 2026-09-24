@@ -26,7 +26,8 @@
  * blob: a brand reads the secret `REPO_SECRET` names for it, or derives
  * `BYOK_<BRAND>_API_KEY`, and a brand that borrows reads the lender's.
  *
- *     BYOK_ANTHROPIC_API_KEY   -> anthropic, -modern, -opus-5, openai_compatible_claude
+ *     BYOK_ANTHROPIC_API_KEY   -> anthropic, -modern, -opus-5, -opus-5-5,
+ *                                 openai_compatible_claude
  *     BYOK_OPENAI_API_KEY      -> openai, openai_compatible_gpt5, openai_gpt56,
  *                                 openai_compatible_gpt56, openai_gpt6_astra
  *     BYOK_ZHIPU_API_KEY       -> zai, zai_glm53 (Zhipu is Z.ai, the GLM vendor)
@@ -155,6 +156,7 @@ function kodusCatalogRows() {
 const BORROWS_FROM: Record<string, string> = {
     'anthropic-modern': 'anthropic',
     'anthropic-opus-5': 'anthropic',
+    'anthropic-opus-5-5': 'anthropic',
     moonshot_code: 'moonshot',
     zai_glm53: 'zai',
     bedrock_opus47: 'amazon_bedrock',
@@ -467,6 +469,20 @@ const LIVE = [
     // effort currently buys nothing. The day it starts buying something — or the
     // day a 5.6 model begins reasoning on its own — these rows go red and
     // somebody gets to find out on purpose.
+    //
+    // ── RE-MEASURED 2026-09-23: the NATIVE half closed ───────────────────────
+    // `gpt-5.6-terra` on the Responses API, same `medium` effort, same request
+    // shape, no change on our side:
+    //
+    //   gpt-5.6-terra  native   medium -> 29 reasoning tokens (was 0)
+    //   gpt-5.6-sol    compat   HIGH   ->  0                  (unchanged)
+    //
+    // The row went red for the reason it was written to go red, so the native
+    // one now asserts the behaviour instead of the gap. The compat row keeps
+    // `reasons: false`: the same family, the same key, still zero. That the two
+    // moved apart is itself the finding — whatever changed is in the Responses
+    // API, not in the model, because the OpenAI-protocol transport hitting the
+    // vendor's own endpoint still gets nothing for an effort it sends.
     {
         brand: 'openai_gpt56',
         why: 'the 5.6 line is 18 production slots and had NO row — the biggest uncovered family in the corpus. terra is its largest native group (5 slots, 3 at medium), and the id is a generation newer than every OpenAI row here',
@@ -475,15 +491,12 @@ const LIVE = [
             model: 'gpt-5.6-terra',
             reasoningEffort: 'medium', // prod: 3 de 5 slots do terra usam medium; 1 high, 1 ausente
         },
-        // A KNOWN GAP, not a satisfied expectation. `reasons: false` is the
-        // right assertion — it is what was measured — but it makes the row
-        // green in exactly the degraded state it exists to document, and the
-        // coverage log cannot tell "verified reasoning" from "verified absence
-        // of it". `knownGap` is printed on its own line so a green weekly run
-        // never reads as "this brand is fine".
-        knownGap: true,
-        // Measured 0 — see the block above. Asserting the gap, not the wish.
-        reasons: false,
+        // Was a known gap; closed on its own between 2026-09-18 and 2026-09-23
+        // with no change on our side (29 reasoning tokens at the same `medium`).
+        // `knownGap` is gone with it — this row now verifies reasoning rather
+        // than documenting its absence, which is the whole point of having
+        // written the gap down as an assertion instead of a comment.
+        reasons: true,
     },
     {
         brand: 'openai_compatible_gpt56',
@@ -600,12 +613,34 @@ const LIVE = [
             // prices for reviews that may carry no reasoning at all.
             reasoningEffort: 'high',
         },
-        // NO reasoning assertion — deliberately, and this is the only row in the
-        // table without one.
+        // NO reasoning assertion — deliberately.
         //
-        // Opus 4.7 is adaptive, and adaptive means the MODEL decides per
-        // request. Asked directly with the shape below at effort `high`, the
-        // level AWS documents as "Claude always thinks", it answered:
+        // The reason recorded here first was that "adaptive means the MODEL
+        // decides per request". That reading is wrong, and the correction is
+        // worth keeping because the same symptom is now on the Bedrock row
+        // below: `thinking.display` defaults to `omitted` from Opus 4.7
+        // (@ai-sdk/anthropic schema, "default for Opus 4.7+"), where 4.6 and
+        // earlier default to `summarized`. The model reasons and is billed for
+        // it either way — Anthropic's pricing table states the billed count is
+        // identical — the response just carries empty thinking blocks unless
+        // `display: 'summarized'` is asked for.
+        //
+        // A claim recorded here on 2026-09-23 and withdrawn the same day: that
+        // Anthropic's `output_tokens_details.thinking_tokens` reflects the raw
+        // reasoning rather than the text returned, so the count would survive
+        // `omitted`. The vendor does document that. This run cannot corroborate
+        // it, and nothing here should be read as if it had:
+        //
+        //     anthropic-modern  inputTokens 53  outputTokens 8  text 8  reasoning 0
+        //
+        // `output_tokens` is the billed output and it equals the text exactly,
+        // so there is no room in it for thinking that happened and went
+        // unreported. Nothing was hidden because nothing was generated — which
+        // does confirm the zero is about the request, but leaves the survival
+        // question untested, since a counter with nothing to count proves
+        // neither direction. It stays a vendor statement, not a measurement.
+        //
+        // Asked directly with the shape below at effort `high`, it answered:
         //
         //     content blocks: [text]        (no thinking block)
         //     usage.output_tokens_details.thinking_tokens: 0
@@ -636,6 +671,18 @@ const LIVE = [
             // working perfectly returns ZERO reasoning tokens, and `reasons:
             // true` fails for the documented behaviour instead of a regression.
             // Proven live: bedrock_opus47 came back 200 with reasoningTokens=0.
+            reasoningEffort: 'high',
+        },
+        reasons: true,
+    },
+    {
+        brand: 'anthropic-opus-5-5',
+        why: '#1996: a point release the generation table does not name. It fell to `unknown` and ran with no effort at all; it now resolves as a newer Claude. This row is the proof the fallback reaches the vendor as adaptive + effort and is billed as reasoning — the same thing a Claude released after this file will rely on',
+        slot: {
+            provider: 'anthropic',
+            model: 'claude-opus-5-5',
+            // `high` for the same reason as the Opus 5 row above: at `low` a
+            // one-word prompt legitimately skips thinking.
             reasoningEffort: 'high',
         },
         reasons: true,
@@ -717,7 +764,55 @@ const LIVE = [
             reasoningEffort: 'high',
         },
         credentialField: 'awsBearerToken' as const,
-        reasons: true,
+        // NO reasoning assertion, for a reason this transport cannot work
+        // around: on Bedrock, reasoning TEXT is the only evidence available.
+        // `TokenUsage` in the Converse API carries inputTokens, outputTokens,
+        // totalTokens and the two cache counts — there is no thinking-token
+        // field to fall back on (AWS API reference, TokenUsage), which is why
+        // `@ai-sdk/amazon-bedrock` hardcodes `outputTokens.reasoning = void 0`
+        // and every Bedrock row here reads 0.
+        //
+        // And from Opus 4.7 the text is empty by default: `thinking.display`
+        // flipped from `summarized` to `omitted` with that generation
+        // (@ai-sdk/anthropic schema, "default for Opus 4.7+"). Claude still
+        // reasons and is still billed for it — Anthropic's pricing table says
+        // the billed count is identical under both settings — the response
+        // just carries empty thinking blocks.
+        //
+        // Measured together on 2026-09-23, same effort, prompt and key:
+        //     amazon_bedrock (sonnet-4-6)  tokens=0  textChars=54
+        //     bedrock_opus47 (opus-4-7)    tokens=0  textChars=0
+        //
+        // The raw `usage` from that run settles what those zeros mean, because
+        // `amazon_bedrock` and the native `anthropic` row are the SAME model at
+        // the SAME effort over two transports — `us.anthropic.claude-sonnet-4-6`
+        // and `claude-sonnet-4-6`:
+        //
+        //     native   in 40  out 58  ->  text  8  +  reasoning 50
+        //     bedrock  in 40  out 58  ->  text 58  +  reasoning absent
+        //
+        // Identical totals. Bedrock generated the same ~50 reasoning tokens and
+        // billed them; only the split is missing, and `text 58` is not evidence
+        // of 58 text tokens — `@ai-sdk/amazon-bedrock` copies the output total
+        // into `text` on the same line where it hardcodes `reasoning` away
+        // (dist/index.js:455), so that field carries no information at all.
+        //
+        // So the cost is visible on Bedrock and the composition is not. Every
+        // Bedrock reasoning number this repo reports is a floor of zero over a
+        // real spend, and per-model cost attribution splits it wrong by exactly
+        // the reasoning share. The gap is the transport's, not ours, but the
+        // wrong number is ours to stop publishing.
+        //
+        // So `reasons: true` here asserts something no request we send can
+        // observe. Asking for `display: 'summarized'` would restore it, but
+        // that is a PRODUCTION change — the returned text enters the message
+        // history, `sendReasoning` defaults true, and the compressor only
+        // truncates `tool` turns — so it belongs in its own change with its
+        // own measurement, not smuggled in through a contract row.
+        //
+        // What the row still earns its keep for: 4.7+ REJECTS budgetTokens,
+        // so a regression to the legacy shape is a hard 400 and turns this
+        // red. That is what it guards.
     },
     {
         brand: 'open_router_glm',
@@ -1446,6 +1541,33 @@ describe('BYOK reasoning — LIVE provider contract', () => {
                 }));
 
                 expect(typeof result.text).toBe('string');
+
+                // Raw usage for EVERY row, asserted on or not. It was added to
+                // settle two questions that could not be answered offline, and
+                // the first run it saw answered both:
+                //
+                //   - Converse passes NO thinking count. Not through the
+                //     catchall either: `amazon_bedrock` came back with
+                //     `outputTokenDetails: {textTokens: 58}` and no reasoning
+                //     key, against `text 8 + reasoning 50` from the same model
+                //     at the same effort natively. The count is gone at the
+                //     transport, not dropped by the SDK's `void 0`.
+                //   - Whether Anthropic's `thinking_tokens` survives
+                //     `display: 'omitted'` is still open, and the reason is on
+                //     the `anthropic-modern` row: that request generated no
+                //     reasoning at all, so there was no count to survive.
+                //
+                // It stays because the pair of numbers only means something
+                // side by side: a single row's zero reads as "did not think"
+                // and as "cannot see it" equally well, and the only thing that
+                // told them apart here was another transport's total for the
+                // same model. Keep printing it for every brand, including the
+                // ones that assert nothing.
+                //
+                // eslint-disable-next-line no-console
+                console.log(
+                    `[byok-live-usage] ${c.brand}: ${JSON.stringify(result.usage)}`,
+                );
 
                 if (c.reasons) {
                     // THE drift detector. A vendor that renames or stops
