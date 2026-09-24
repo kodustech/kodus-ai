@@ -78,19 +78,26 @@ describe('classifyReplyAddressedToKody', () => {
 });
 
 describe('reply thread rendering', () => {
-    it('drops nested and unclosed HTML comments from message bodies', async () => {
+    it("drops Kody's marker lines and keeps everything else", async () => {
         run.mockResolvedValue({ addressedToKody: false });
 
         await classifyReplyAddressedToKody({
             thread: [
-                { ...thread[0], body: 'root <!<!---->-- hidden --> tail' },
-                { ...thread[1], body: 'why? <<!--!-- open' },
+                {
+                    ...thread[0],
+                    body: 'Leak here.\n\n<!-- kody-codereview -->&#8203;\n<!-- kody-conversation -->',
+                },
+                { ...thread[1], body: 'why? <!-- my note --> ok' },
             ],
             organizationAndTeamData: { organizationId: 'org', teamId: 'team' },
         });
 
         const user = run.mock.lastCall[0].user as string;
-        expect(user).not.toContain('<!--');
-        expect(user).toContain('root  tail');
+        expect(user).not.toContain('kody-codereview');
+        expect(user).not.toContain('kody-conversation');
+        expect(user).toContain(
+            '<message author="Kody">\nLeak here.\n</message>',
+        );
+        expect(user).toContain('why? <!-- my note --> ok');
     });
 });

@@ -61,24 +61,31 @@ export const prompt_replyAddressedToKody_user = (
     return `Thread, oldest first:\n\n${rendered.join('\n\n')}`;
 };
 
+// Kody's own markers (`<!-- kody-codereview -->`, `<!-- kody-conversation -->`,
+// zero-width padding) are noise to the classifier. They sit at the end of a
+// line or on lines of their own. The body is prompt data, never rendered, so
+// nothing else in it needs stripping.
+const KODY_MARKER = /<!--\s*kody[\w:-]*\s*-->$/;
+
+function withoutTrailingKodyMarkers(line: string): string {
+    let rest = line.replace(/(\s|&#8203;|\u200B)+$/u, '');
+    let match = KODY_MARKER.exec(rest);
+    while (match) {
+        rest = rest
+            .slice(0, match.index)
+            .replace(/(\s|&#8203;|\u200B)+$/u, '');
+        match = KODY_MARKER.exec(rest);
+    }
+    return rest;
+}
+
 function clean(body: string): string {
-    // Repeat until stable: one pass can leave a new `<!--` behind
-    // (`<!<!---->--`, `<<!--!--`). Unclosed openers are dropped too.
-    let text = body ?? '';
-    let previous: string;
-    do {
-        previous = text;
-        // Whole comments first, so a comment that only forms after one pass
-        // is removed with its content rather than split open.
-        let inner: string;
-        do {
-            inner = text;
-            text = text.replace(/<!--[\s\S]*?-->/g, '');
-        } while (text !== inner);
-        text = text.replace(/<!--/g, '');
-    } while (text !== previous);
-    const withoutHtmlComments = text.trim();
-    return withoutHtmlComments.length > MAX_BODY_CHARS
-        ? `${withoutHtmlComments.slice(0, MAX_BODY_CHARS)}…`
-        : withoutHtmlComments;
+    const text = (body ?? '')
+        .split('\n')
+        .map(withoutTrailingKodyMarkers)
+        .join('\n')
+        .trim();
+    return text.length > MAX_BODY_CHARS
+        ? `${text.slice(0, MAX_BODY_CHARS)}…`
+        : text;
 }
