@@ -15,7 +15,8 @@ S = os.environ.get('POOL_ROOT', os.path.join(AQUI, 'pools'))
 CORE = {'bug','security','concurrency','data','api','perf','test_gap','doc_defect'}
 SEV = {'low':0.25,'medium':0.5,'high':0.75,'critical':1.0}
 
-def pool_filtrado(dump='sol-teto2'):
+def pool_filtrado(dump=None):
+    dump = dump or os.environ.get('REP_POOL', 'sol-teto2')
     """indices sobreviventes do filtro de contrato, na ordem de preFilterCandidates."""
     out = {}
     for f in sorted(os.listdir(os.path.join(S, dump))):
@@ -32,7 +33,8 @@ VER = os.environ.get('REP_VERACIDADE', 'score2-sol-teto2.json')
 
 def carregar():
     mat = {}
-    for f in ['matriz-pre-teto2-30.json','matriz-pre-teto2-grandes.json']:
+    mats = os.environ.get('REP_MATRIZ', 'matriz-pre-teto2-30.json,matriz-pre-teto2-grandes.json').split(',')
+    for f in [x.strip() for x in mats if x.strip()]:
         mat.update(json.load(open(os.path.join(R,f))))
     sel = json.load(open(os.path.join(R, SEL)))['saida']
     pool = pool_filtrado()

@@ -119,8 +119,10 @@ for (const file of fs.readdirSync(DATASETS)) {
             'diff',
             '--name-status',
             '--no-renames',
-            refs.base,
-            refs.head,
+            // TRES pontos: so o que o PR mudou desde que divergiu da base. Com
+            // dois pontos entra tudo que foi mergeado na base depois que o PR
+            // abriu, e a revisao passa a ver arquivos que o revisor nunca viu.
+            `${refs.base}...${refs.head}`,
         ])
             .split('\n')
             .filter(Boolean)
@@ -143,7 +145,7 @@ for (const file of fs.readdirSync(DATASETS)) {
         if (f.status === 'D') continue;
         let patch = '';
         try {
-            patch = git(repo, ['diff', refs.base, refs.head, '--', f.filename]);
+            patch = git(repo, ['diff', `${refs.base}...${refs.head}`, '--', f.filename]);
         } catch {
             continue;
         }

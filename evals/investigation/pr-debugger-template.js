@@ -2,6 +2,9 @@
  *  the checks never means touching markup, and vice-versa. */
 
 const CSS = `
+.agg{margin:1.2rem 0;padding:1rem 1.1rem;border:1px solid var(--line);border-radius:10px;background:var(--surface-2,transparent)}
+.agg h3{margin:0 0 .6rem}
+
   :root{
     --paper:#f5f7f6;--card:#fff;--line:#dde4e1;--line-soft:#eef2f0;
     --ink:#131e1b;--ink-soft:#54625d;--ink-mute:#8b9792;
@@ -144,15 +147,77 @@ function render(d) {
               <div><div class="k">arquivos no prompt</div><div class="v">${num(p.filesInPrompt)}${c.git ? ` / ${num(c.git.reviewable)}` : ''}</div></div>
               <div><div class="k">prompt</div><div class="v">${num(Math.round(((p.systemPromptChars || 0) + (p.userPromptChars || 0)) / 1000))}k chars</div></div>
               <div><div class="k">janela</div><div class="v">${p.contextWindowTokens ? num(p.contextWindowTokens) : '—'}</div></div>
-              <div><div class="k">tokens input</div><div class="v">${num(u.inputTokens)}</div></div>
-              <div><div class="k">cache read</div><div class="v">${num(u.cacheReadTokens)}</div></div>
+              <div><div class="k">tokens (total)</div><div class="v">${num(u.totalTokens)}</div></div>
+              <div><div class="k">input</div><div class="v">${num(u.inputTokens)}</div></div>
+              <div><div class="k">cache read</div><div class="v">${num(u.cacheReadTokens)}${u.inputTokens ? ` <span class="why">(${Math.round((100 * (u.cacheReadTokens || 0)) / u.inputTokens)}%)</span>` : ''}</div></div>
+              <div><div class="k">output</div><div class="v">${num(u.outputTokens)}${u.reasoningTokens ? ` <span class="why">(${num(u.reasoningTokens)} reasoning)</span>` : ''}</div></div>
+              <div><div class="k">tempo</div><div class="v">${c.durationMs ? (c.durationMs / 1000).toFixed(0) + 's' : '—'}</div></div>
               <div><div class="k">recall</div><div class="v">${m.tp != null ? `${m.tp}/${(m.tp || 0) + (m.fn || 0)}` : '—'}</div></div>`;
 
+            // FUNIL: quantos entram e quantos deles eram acerto, etapa a etapa.
+            // A queda de `n` e volume; a queda de `tp` e o que custa caro.
+            const funil = (c.funil || []).length
+                ? `<div class="wrap"><table><thead><tr><th>etapa</th><th>achados</th><th>acertos</th><th>falsos positivos</th><th>precisão</th><th>perdeu acerto</th></tr></thead><tbody>${c.funil
+                      .map((e, i) => {
+                          const ant = i > 0 ? c.funil[i - 1] : null;
+                          const fp = e.tp == null ? null : e.n - e.tp;
+                          const perdeu =
+                              ant && ant.tp != null && e.tp != null
+                                  ? ant.tp - e.tp
+                                  : null;
+                          return `<tr><td>${esc(e.nome)}</td><td class="n">${num(e.n)}${ant ? ` <span class="why">(−${num(ant.n - e.n)})</span>` : ''}</td><td class="n">${e.tp == null ? '—' : e.tp}</td><td class="n">${fp == null ? '—' : fp}</td><td class="n">${e.tp == null || !e.n ? '—' : Math.round((100 * e.tp) / e.n) + '%'}</td><td class="n">${perdeu == null ? '—' : perdeu > 0 ? `<span class="pill bad">−${perdeu}</span>` : '0'}</td></tr>`;
+                      })
+                      .join('')}</tbody></table></div>`
+                : '<p class="why">sem funil registrado</p>';
+
+            // Quem produziu o quê, e quanto sobreviveu. Responde "vale a pena
+            // manter este agente?" por PR, em vez de só no agregado.
+            const porAgente = (() => {
+                const m2 = new Map();
+                for (const x of c.candidates || []) {
+                    const k = String(x.producedBy || '?').replace('micro-', '');
+                    m2.set(k, (m2.get(k) || 0) + 1);
+                }
+                const postadoPor = new Map();
+                for (const f of c.findings || []) {
+                    const k = String(f.producedBy || '?').replace('micro-', '');
+                    const cur = postadoPor.get(k) || { n: 0, hit: 0 };
+                    cur.n++;
+                    if (f.hit) cur.hit++;
+                    postadoPor.set(k, cur);
+                }
+                if (!m2.size) return '<p class="why">sem candidatos</p>';
+                const linhas = [...m2.entries()]
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([k, n]) => {
+                        const p2 = postadoPor.get(k) || { n: 0, hit: 0 };
+                        return `<tr><td><code>${esc(k)}</code></td><td class="n">${n}</td><td class="n">${p2.n}</td><td class="n">${p2.hit > 0 ? `<span class="pill ok">${p2.hit}</span>` : '0'}</td></tr>`;
+                    })
+                    .join('');
+                return `<div class="wrap"><table><thead><tr><th>agente</th><th>gerou</th><th>postou</th><th>acertos</th></tr></thead><tbody>${linhas}</tbody></table></div>`;
+            })();
+
+            // Cobertura: arquivo que nenhuma ferramenta abriu. Separa "o
+            // agente olhou e descreveu diferente" de "ninguem olhou o arquivo
+            // onde estava o bug" — sao problemas opostos e o recall sozinho
+            // nao distingue.
+            const cov = (() => {
+                const v = c.coverage;
+                if (!v || v.totalTargets == null) return '<p class="why">sem registro de cobertura</p>';
+                const pend = v.pendingFiles || [];
+                const pct = v.totalTargets ? Math.round((100 * (v.touchedTargets || 0)) / v.totalTargets) : 0;
+                return `<div class="kv">
+                    <div><div class="k">alvos tocados</div><div class="v">${num(v.touchedTargets)} / ${num(v.totalTargets)} <span class="why">(${pct}%)</span></div></div>
+                    <div><div class="k">não tocados</div><div class="v">${num(v.pendingTargets)}</div></div>
+                  </div>
+                  ${pend.length ? `<ul class="list">${pend.slice(0, 12).map((f) => `<li><span class="pill bad">não lido</span><code>${esc(f)}</code></li>`).join('')}</ul>${pend.length > 12 ? `<p class="why">+${pend.length - 12} arquivo(s)</p>` : ''}` : '<p class="why">todos os alvos foram abertos por alguma ferramenta</p>'}`;
+            })();
+
             const passes = (c.passes || []).length
-                ? `<div class="wrap"><table><thead><tr><th>passada</th><th>achados</th><th>steps</th><th>tools</th><th>input</th></tr></thead><tbody>${c.passes
+                ? `<div class="wrap"><table><thead><tr><th>passada</th><th>achados</th><th>tempo</th><th>steps</th><th>tools</th><th>input</th></tr></thead><tbody>${c.passes
                       .map(
                           (x) =>
-                              `<tr><td><code>${esc(x.label)}</code></td><td class="n">${x.added > 0 ? '+' + x.added : '—'}</td><td class="n">${x.steps}</td><td class="n">${x.toolCalls}</td><td class="n">${num(x.inputTokens)}</td></tr>`,
+                              `<tr><td><code>${esc(x.label)}</code></td><td class="n">${x.added > 0 ? '+' + x.added : '—'}</td><td class="n">${x.ms != null ? (x.ms / 1000).toFixed(1) + 's' : '—'}</td><td class="n">${x.steps}</td><td class="n">${x.toolCalls}</td><td class="n">${num(x.inputTokens)}</td></tr>`,
                       )
                       .join('')}</tbody></table></div>`
                 : '<p class="why">nenhuma passada registrada</p>';
@@ -205,7 +270,10 @@ function render(d) {
         ${lf}
         ${c.url ? `<p style="margin:.3rem 0 0"><a class="lf" href="${esc(c.url)}" target="_blank" rel="noreferrer">abrir o PR original ↗</a></p>` : ''}
       </section>
+      <section><h3>Funil: onde os achados são perdidos</h3>${funil}</section>
+      <section><h3>Cobertura do diff</h3>${cov}</section>
       <section><h3>Passadas</h3>${passes}</section>
+      <section><h3>Por agente: gerou, postou, acertou</h3>${porAgente}</section>
       <section><h3>Candidatos antes do reducer</h3>${cands}</section>
       <section><h3>Postado ao final</h3>${finals}</section>
       <section><h3>Golden comments do PR</h3>${golds}</section>
@@ -231,6 +299,67 @@ function render(d) {
     <h1>Debugger de PR</h1>
     <p class="lede">Cada verificação é computada a partir do rastro da execução e do repositório clonado — a contagem de arquivos é conferida contra <code>git diff --name-only</code>, o formato do diff é inspecionado no prompt que foi enviado, e a chamada ao modelo é lida no transporte.</p>
   </header>
+
+  ${(() => {
+      // Agregado das mesmas etapas. O numero por PR diz onde doeu naquele caso;
+      // este diz se dói sempre.
+      const etapas = [];
+      for (const c of cases) {
+          (c.funil || []).forEach((e, i) => {
+              etapas[i] ||= { nome: e.nome, n: 0, tp: 0, semRotulo: false };
+              etapas[i].n += e.n;
+              if (e.tp == null) etapas[i].semRotulo = true;
+              else etapas[i].tp += e.tp;
+          });
+      }
+      const u = cases.reduce(
+          (a, c) => {
+              const x = c.usage || {};
+              a.total += x.totalTokens || 0;
+              a.input += x.inputTokens || 0;
+              a.cache += x.cacheReadTokens || 0;
+              a.output += x.outputTokens || 0;
+              return a;
+          },
+          { total: 0, input: 0, cache: 0, output: 0 },
+      );
+      if (!etapas.length) return '';
+      return `<section class="agg">
+    <h3>Funil do run inteiro</h3>
+    <div class="wrap"><table><thead><tr><th>etapa</th><th>achados</th><th>acertos</th><th>falsos positivos</th><th>precisão</th><th>perdeu acerto</th></tr></thead><tbody>${etapas
+        .map((e, i) => {
+            const ant = i > 0 ? etapas[i - 1] : null;
+            const tp = e.semRotulo ? null : e.tp;
+            const fp = tp == null ? null : e.n - tp;
+            const perdeu =
+                ant && !ant.semRotulo && tp != null ? ant.tp - tp : null;
+            return `<tr><td>${esc(e.nome)}</td><td class="n">${num(e.n)}${ant ? ` <span class="why">(−${num(ant.n - e.n)})</span>` : ''}</td><td class="n">${tp == null ? '—' : tp}</td><td class="n">${fp == null ? '—' : fp}</td><td class="n">${tp == null || !e.n ? '—' : Math.round((100 * tp) / e.n) + '%'}</td><td class="n">${perdeu == null ? '—' : perdeu > 0 ? `<span class="pill bad">−${perdeu}</span>` : '0'}</td></tr>`;
+        })
+        .join('')}</tbody></table></div>
+    <div class="kv" style="margin-top:.8rem">
+      <div><div class="k">tokens (total)</div><div class="v">${num(u.total)}</div></div>
+      <div><div class="k">input</div><div class="v">${num(u.input)}</div></div>
+      <div><div class="k">cache read</div><div class="v">${num(u.cache)}${u.input ? ` <span class="why">(${Math.round((100 * u.cache) / u.input)}%)</span>` : ''}</div></div>
+      <div><div class="k">output</div><div class="v">${num(u.output)}</div></div>
+      <div><div class="k">por PR</div><div class="v">${num(Math.round(u.total / Math.max(cases.length, 1)))}</div></div>
+      ${(() => {
+          // Relogio, nao soma de tokens: a fase sequencial da simulacao nao
+          // muda o custo em token e quase dobra o tempo de parede, entao um
+          // painel que so mostra token nao enxerga o que ela cobra.
+          const ts = cases.map((c) => c.durationMs || 0).filter(Boolean);
+          if (!ts.length) return '';
+          const soma = ts.reduce((a, b) => a + b, 0);
+          const pior = cases
+              .filter((c) => c.durationMs)
+              .sort((a, b) => b.durationMs - a.durationMs)[0];
+          const seg = (ms) => Math.round(ms / 1000) + 's';
+          return `<div><div class="k">tempo somado</div><div class="v">${Math.round(soma / 60000)} min</div></div>
+      <div><div class="k">média por PR</div><div class="v">${seg(soma / ts.length)}</div></div>
+      <div><div class="k">PR mais lento</div><div class="v">${seg(pior.durationMs)} <span class="why">${esc(String(pior.id).slice(0, 28))}</span></div></div>`;
+      })()}
+    </div>
+  </section>`;
+  })()}
 
   <div class="summary">
     <div class="st"><span class="n">${cases.length}</span><span class="k">PRs revisados</span></div>

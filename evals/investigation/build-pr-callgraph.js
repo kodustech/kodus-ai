@@ -20,6 +20,7 @@
 // Postgres baseline production uses becomes, offline, a `parse --all` of a
 // worktree at the PR's base commit.
 const { execFile, execFileSync } = require('child_process');
+const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -162,8 +163,11 @@ async function baselineGraph(repoDir, sha, log) {
 async function writeDiff(repoDir, baseSha, headSha, files, dest) {
     const { stdout } = await git(repoDir, [
         'diff',
-        baseSha,
-        headSha,
+        // TRES pontos, igual materialize-full-diff.js. Com dois, entra tudo que
+        // foi mergeado na base depois que o PR abriu, e as changed_functions do
+        // grafo passam a incluir funcoes que este PR nunca tocou — o <CallGraph>
+        // descreveria um PR diferente do <Diffs> logo acima dele.
+        `${baseSha}...${headSha}`,
         '--',
         ...files,
     ]);
@@ -187,7 +191,36 @@ async function buildPrCallGraph(vars, headDir, caseId, log) {
     const cacheDir = path.join(CACHE_ROOT, String(caseId).slice(0, 80));
     const xmlPath = path.join(cacheDir, 'context.xml');
     const jsonPath = path.join(cacheDir, 'context.json');
-    if (fs.existsSync(xmlPath)) {
+    // Chave do cache: a lista de arquivos que o grafo descreve. Sem ela o cache
+    // so olhava se o arquivo existe, e os grafos gravados antes de
+    // materialize-full-diff.js descreviam a versao truncada em 6 arquivos do
+    // PR — em 24 dos 30 casos do conjunto leve, inclusive um de 104 arquivos
+    // cujo grafo cobria 3. O <CallGraph> descrevia outro pull request que o
+    // <Diffs> logo acima.
+    const keyPath = path.join(cacheDir, 'files.key');
+    const key = crypto
+        .createHash('sha1')
+        .update(
+            [
+                `files:${[...files].sort().join('|')}`,
+                `head:${vars.benchmarkHeadRef || ''}`,
+                `base:${vars.benchmarkBaseRef || ''}`,
+                // Versao da regra de diff. Quando ela muda, todo grafo gravado
+                // sob a regra antiga tem de cair.
+                'diff:three-dot',
+                'baseline:como-producao',
+            ].join('\n'),
+        )
+        .digest('hex');
+    const keyOk =
+        fs.existsSync(keyPath) && fs.readFileSync(keyPath, 'utf8').trim() === key;
+    if (fs.existsSync(xmlPath) && !keyOk) {
+        log?.(`  [callgraph] ${caseId}: cache descreve outra lista de arquivos, reconstruindo`);
+        for (const f of [xmlPath, jsonPath]) {
+            if (fs.existsSync(f)) fs.rmSync(f);
+        }
+    }
+    if (fs.existsSync(xmlPath) && keyOk) {
         return {
             xml: fs.readFileSync(xmlPath, 'utf8'),
             json: fs.existsSync(jsonPath)
@@ -197,13 +230,19 @@ async function buildPrCallGraph(vars, headDir, caseId, log) {
     }
     fs.mkdirSync(cacheDir, { recursive: true });
 
-    let headSha;
-    try {
-        headSha = execFileSync('git', ['-C', headDir, 'rev-parse', 'HEAD'], {
-            encoding: 'utf8',
-        }).trim();
-    } catch {
-        return null;
+    // `benchmarkHeadRef` e a MESMA fonte que materialize-full-diff.js usa para
+    // montar o diff do dataset. Ler o HEAD do worktree dava o mesmo sha hoje
+    // (prepare-repo faz checkout desse ref), mas por caminhos diferentes — e
+    // duas fontes para a mesma verdade e como o grafo e o diff se separam.
+    let headSha = vars.benchmarkHeadRef;
+    if (!headSha) {
+        try {
+            headSha = execFileSync('git', ['-C', headDir, 'rev-parse', 'HEAD'], {
+                encoding: 'utf8',
+            }).trim();
+        } catch {
+            return null;
+        }
     }
 
     // All 6 discourse cases in the light set carry a null `benchmarkBaseRef`.
@@ -222,7 +261,36 @@ async function buildPrCallGraph(vars, headDir, caseId, log) {
         }
     }
 
-    const graphPath = await baselineGraph(repoDir, baseSha, log);
+    const graphCompleto = await baselineGraph(repoDir, baseSha, log);
+    // MESMO baseline que producao passa no --graph. Producao le do Postgres um
+    // subgrafo ja filtrado (arquivos alterados + vizinhos diretos + irmas de
+    // heranca); offline o equivalente e aplicar esse filtro ao parse --all.
+    //
+    // Nao e detalhe: o `kodus-graph context` RANQUEIA o que mostrar usando o
+    // grafo que recebe, entao um baseline maior muda quais funcoes e quais
+    // callers entram no XML. Medido nos 30 PRs do conjunto leve, passar o repo
+    // inteiro trocava 4 funcoes alteradas e 32 callers contra o que producao
+    // renderiza. O <CallGraph> do benchmark tem de ser o <CallGraph> do cliente.
+    let graphPath = graphCompleto;
+    if (graphCompleto) {
+        const filtrado = path.join(cacheDir, 'baseline-como-producao.json');
+        const lista = path.join(cacheDir, 'arquivos.json');
+        fs.writeFileSync(lista, JSON.stringify(files));
+        try {
+            const { stdout } = await execFileAsync(
+                BUN,
+                [path.join(__dirname, 'filtrar-baseline.js'), graphCompleto, filtrado, lista],
+                { maxBuffer: 64 * 1024 * 1024, timeout: PARSE_ALL_TIMEOUT_MS },
+            );
+            log?.(`  ${String(stdout).trim()}`);
+            graphPath = filtrado;
+        } catch (err) {
+            // Sem filtro o XML sai diferente do de producao em silencio, que e
+            // pior do que nao sair. Falha alto.
+            log?.(`[callgraph] filtro do baseline FALHOU: ${String(err.message || err).slice(0, 200)}`);
+            return null;
+        }
+    }
     // No baseline is worse than no call graph: without it every caller lives
     // inside the diff, and the XML says "nothing depends on this" about code
     // the repo calls in twenty places. Reporting that to the model is a lie.
@@ -266,6 +334,7 @@ async function buildPrCallGraph(vars, headDir, caseId, log) {
     }
 
     if (!out.xml) return null;
+    fs.writeFileSync(keyPath, key);
     return { xml: out.xml, json: trimContextFile(jsonPath, files, log) };
 }
 

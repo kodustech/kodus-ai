@@ -38,6 +38,10 @@ const arg = (n, d) => {
 const DUMP = arg('dump');
 const OUT = arg('out', path.join(__dirname, 'results', 'pr-debugger.html'));
 const RESULT_FILES = (arg('results', '') || '').split(',').map((s) => s.trim()).filter(Boolean);
+// Opcionais. Sem eles o funil ainda desenha, com "—" onde falta rotulo: o
+// debugger tem que abrir mesmo numa rodada que nunca passou pelo julgamento.
+const LABELS_FILE = arg('labels', path.join(RESULTS, `labels-${path.basename(String(DUMP || ''))}.json`));
+const GATE_FILE = arg('gate', '');
 if (!DUMP) {
     console.error('need --dump=<dir>');
     process.exit(1);
@@ -260,6 +264,21 @@ function buildChecks(vars, trace, git) {
 
 // ---- assembly ------------------------------------------------------------
 
+/** Rotulo por candidato PRE-reducer: casou com algum golden? Produzido pelo
+ *  label-candidates.js. Sem ele nao ha como dizer TP/FP na entrada do funil —
+ *  `findingHit` so rotula o que o reducer ja deixou passar. */
+const labels = (() => {
+    try { return JSON.parse(fs.readFileSync(LABELS_FILE, 'utf8')); } catch { return null; }
+})();
+/** Conjunto que um gate manteve, por caseId, em indices do pool pre-reducer. */
+const gateKeep = (() => {
+    if (!GATE_FILE) return null;
+    try {
+        const j = JSON.parse(fs.readFileSync(GATE_FILE, 'utf8'));
+        return { nome: j.teste || path.basename(GATE_FILE), keep: j.keep || j };
+    } catch { return null; }
+})();
+
 const ds = datasetsById();
 const rows = rowsById(RESULT_FILES);
 const cases = [];
@@ -300,7 +319,75 @@ for (const file of fs.readdirSync(DUMP)) {
     })();
 
     const hits = row?.metadata?.findingHit || [];
+
+    // FUNIL. Cada etapa com quantos entraram e quantos deles casavam com
+    // golden. E o que responde "onde a gente perde" sem precisar cruzar
+    // planilha depois: se o reducer entrega tudo e o gate derruba acerto, o
+    // problema e o gate; se o pool ja entra pobre, e geracao.
+    const funil = (() => {
+        const cands = trace.preFilterCandidates || [];
+        const lab = labels?.[id] || null;
+        // Formato antigo (booleano por candidato) ainda abre, mas nao consegue
+        // contar golden distinto — nesse caso o funil mostra "—" em vez de um
+        // numero que mistura duplicata com perda.
+        const porGolden = Array.isArray(lab?.[0]);
+        const tpDe = (idxs) => {
+            if (!lab) return null;
+            if (!porGolden) return null;
+            const cobertos = new Set();
+            for (const i of idxs) for (const gi of lab[i] || []) cobertos.add(gi);
+            return cobertos.size;
+        };
+        const etapas = [];
+        const todos = cands.map((_, i) => i);
+        etapas.push({ nome: 'gerados', n: cands.length, tp: tpDe(todos) });
+        const red = trace.dedup;
+        if (red && red.status === 'reducer') {
+            // MESMA REGUA nas tres etapas. Antes esta linha contava acerto por
+            // `findingHit`, que usa a regra da metrica (por golden vence o
+            // candidato de maior confianca; os outros viram FP), enquanto a
+            // etapa anterior contava pelo rotulo do pool, que e frouxo (casa
+            // com qualquer golden acima de 0,5). A coluna "perdeu acerto"
+            // entao somava a troca de regua a perda real e acusava o reducer
+            // de derrubar dezenas de acertos que ele nunca teve. Aqui o
+            // postado e mapeado de volta para o indice do pool e lido com o
+            // mesmo rotulo; `findingHit` fica de fora do funil.
+            const postados = dump.findings || [];
+            const idx = [];
+            if (lab) {
+                const usados = new Set();
+                const chave = (x) =>
+                    `${x.relevantFile}|${x.relevantLinesStart}|${String(x.oneSentenceSummary || '').slice(0, 80)}`;
+                const mapa = new Map();
+                cands.forEach((cnd, i) => {
+                    const k = chave(cnd);
+                    if (!mapa.has(k)) mapa.set(k, []);
+                    mapa.get(k).push(i);
+                });
+                for (const f of postados) {
+                    const cand = (mapa.get(chave(f)) || []).find((i) => !usados.has(i));
+                    if (cand != null) { usados.add(cand); idx.push(cand); }
+                }
+            }
+            etapas.push({
+                nome: 'apos o reducer',
+                n: postados.length,
+                // Sem rotulo, ou com achado reescrito que nao casa de volta no
+                // pool, e melhor admitir do que mostrar um numero parcial.
+                tp: lab && idx.length === postados.length ? tpDe(idx) : null,
+            });
+        }
+        if (gateKeep?.keep?.[id]) {
+            const k = gateKeep.keep[id];
+            etapas.push({ nome: `apos o ${gateKeep.nome}`, n: k.length, tp: tpDe(k) });
+        }
+        return etapas;
+    })();
+
     cases.push({
+        funil,
+        durationMs: row?.durationMs || null,
+        coverage: trace.coverage || null,
         id,
         repo: vars?.repositoryFullName || '?',
         title: vars?.prTitle || id,

@@ -2,3 +2,5 @@
 .promptfoo.generated.tests.json
 results/*
 !results/.gitkeep
+pools/*
+!pools/.gitkeep

@@ -870,6 +870,17 @@ class InvestigationAgentProvider {
                 filesInDataset: datasetFiles,
                 filesInFullDiff: fullFiles,
                 filesInPrompt: (input.changedFiles || []).length,
+                // A regua de tier precisa aparecer no artefato. Sem isso nao ha
+                // como, depois, distinguir "a regra nao mudou o resultado" de
+                // "a regra nunca ligou" — foi exatamente assim que passamos o
+                // dia medindo `low` contra `high` no deepseek sem saber que os
+                // dois produziam o mesmo payload.
+                // Lido da env, nao de `input`: existem DOIS objetos `input`
+                // aqui — o de buildCurrentPrompts (prompt do generalista) e o
+                // do loop adapter (onde o botao de fato entra). Ler o primeiro
+                // registrava null enquanto a regra rodava, que e pior do que
+                // nao registrar nada.
+                diffTierBudget: process.env.RECALL_DIFF_TIER_BUDGET || null,
                 filesWithEmptyPatch: (input.changedFiles || []).filter(
                     (f) => !String(f?.patchWithLinesStr || '').trim(),
                 ).length,
@@ -1092,8 +1103,64 @@ class InvestigationAgentProvider {
                         : {}),
                     // RECALL_MICRO_AGENTS=1: 12 narrow passes, one per class of
                     // defect, instead of the single broad pass.
-                    ...(process.env.RECALL_MICRO_AGENTS === '1'
+                    ...(/^(1|1\+sim)$/.test(process.env.RECALL_MICRO_AGENTS || '')
                         ? { microAgents: true }
+                        : {}),
+                    // RECALL_MICRO_AGENTS=sim: the simulation pass INSTEAD of
+                    // the fifteen class agents — one pass that walks concrete
+                    // states through the change. Same knob on purpose: the two
+                    // are alternatives, never both.
+                    // RECALL_DIFF_TIER_BUDGET=<chars>:<tiers>
+                    // Ex.: "200000:warm,optional" — acima de 200k de diff, os
+                    // arquivos warm e optional entram no prompt como nome +
+                    // cabecalhos de hunk + aviso de que readFile traz o corpo.
+                    // Medido nos 30 PRs: essa regra corta 14% dos tokens do
+                    // conjunto e custa 2 goldens; so com `optional` corta 2% e
+                    // nao custa nenhum.
+                    ...(() => {
+                        const v = process.env.RECALL_DIFF_TIER_BUDGET;
+                        if (!v) return {};
+                        const [lim, tiers] = String(v).split(':');
+                        const summarize = String(tiers || '')
+                            .split(',')
+                            .map((x) => x.trim())
+                            .filter(Boolean);
+                        if (!summarize.length) return {};
+                        return {
+                            diffTierBudget: {
+                                thresholdChars: Number(lim) || 0,
+                                summarize,
+                            },
+                        };
+                    })(),
+                    // RECALL_FINDING_REASON=1: cada achado tem de trazer o
+                    // percurso que o produziu. Knob NOVO — declarado aqui em
+                    // vez de embutido noutro porque e ortogonal a arquitetura:
+                    // vale para generalista, microagentes e simulacao.
+                    ...(process.env.RECALL_FINDING_REASON === '1'
+                        ? { requireFindingReason: true }
+                        : {}),
+                    // 'sim' = so a simulacao; '1+sim' = os quinze E a
+                    // simulacao, que e o conjunto que se quer medir.
+                    // RECALL_MICRO_GRAPH=1: manda o blob <CallGraph> para os
+                    // doze agentes de classe E para a simulacao, logo abaixo
+                    // do diff. Exige RECALL_CALL_GRAPH=1, que e quem constroi o
+                    // blob — sem ele `caseData.callGraph` fica indefinido e a
+                    // flag nao faz nada, em silencio.
+                    ...(process.env.RECALL_MICRO_GRAPH === '1'
+                        ? { microAgentCallGraph: true }
+                        : {}),
+                    ...(/^(sim|1\+sim)$/.test(process.env.RECALL_MICRO_AGENTS || '')
+                        ? {
+                              simulationAgent: true,
+                              // Written into the dataset by
+                              // inject-prior-findings.js; absent unless a
+                              // previous run was injected, so the same knob
+                              // measures both with and without.
+                              priorFindings:
+                                  parseMaybeJson(caseData.priorFindings) ||
+                                  undefined,
+                          }
                         : {}),
                     // RECALL_MICRO_PLANNER=1: route first — only the classes
                     // the diff could contain get a pass.
@@ -1269,7 +1336,87 @@ class InvestigationAgentProvider {
             const preFilterCandidates = (
                 agentResult.findings?.suggestions || []
             ).map((f) => ({ ...f }));
-            if (process.env.RECALL_SKIP_DEDUP !== '1') {
+            // RECALL_REDUCER=v2 — o reducer DE PRODUCAO
+            // (libs/.../engine/finding-reducer.ts): filtro de contrato,
+            // atribuidor, veracidade, formula e cota. Chamar o modulo de
+            // producao em vez de reimplementar aqui e o ponto: o que o
+            // benchmark mede passa a ser o que o cliente recebe. As duas
+            // chamadas rodam no MESMO `model` da revisao, igual ao dedup.
+            //
+            // Cota e limiar saem das constantes do modulo; RECALL_REDUCER_COTA
+            // e RECALL_REDUCER_LIMIAR existem so para varrer a curva sem
+            // recompilar, e nao devem ficar setados numa rodada de referencia.
+            if (process.env.RECALL_REDUCER === 'v2') {
+                const raw = agentResult.findings?.suggestions || [];
+                try {
+                    const { reduceFindings } = require(
+                        path.join(
+                            __dirname,
+                            '../../libs/code-review/infrastructure/agents/engine/finding-reducer.ts',
+                        ),
+                    );
+                    const { generateText, jsonSchema } = require('ai');
+                    const { readAiSdkUsage } = require(
+                        path.join(__dirname, '../../libs/llm/ai-sdk-usage.ts'),
+                    );
+                    const diff = (input.changedFiles || [])
+                        .map((f) => `--- ${f.filename}\n${f.patchWithLinesStr || f.patch || ''}`)
+                        .join('\n\n');
+                    let usadoInput = 0, usadoOutput = 0, usadoTotal = 0;
+                    const r = await reduceFindings({
+                        candidates: raw,
+                        diff,
+                        quota: process.env.RECALL_REDUCER_COTA
+                            ? Number(process.env.RECALL_REDUCER_COTA)
+                            : undefined,
+                        threshold: process.env.RECALL_REDUCER_LIMIAR
+                            ? Number(process.env.RECALL_REDUCER_LIMIAR)
+                            : undefined,
+                        log: (m) => console.log(`    ${caseData.caseId?.slice(0, 40) || ''} ${m}`),
+                        call: async ({ schema, prompt, runName }) => {
+                            const out = await generateText({
+                                model,
+                                prompt,
+                                tools: {
+                                    registrar: {
+                                        description: 'Registra o resultado. Chame exatamente uma vez.',
+                                        inputSchema: jsonSchema(schema),
+                                        execute: async () => ({ output: 'ok' }),
+                                    },
+                                },
+                                toolChoice: { type: 'tool', toolName: 'registrar' },
+                                experimental_telemetry: {
+                                    isEnabled: true,
+                                    functionId: runName,
+                                    metadata: { caseId: caseData.caseId },
+                                },
+                            });
+                            const u = readAiSdkUsage(out.usage) || {};
+                            usadoInput += u.inputTokens || 0;
+                            usadoOutput += u.outputTokens || 0;
+                            usadoTotal += u.totalTokens || 0;
+                            const call = (out.toolCalls || []).find(
+                                (t) => (t.toolName ?? t.name) === 'registrar',
+                            );
+                            return call?.input ?? call?.args ?? {};
+                        },
+                    });
+                    agentResult.findings.suggestions = r.suggestions;
+                    agentResult.usage = {
+                        ...agentResult.usage,
+                        inputTokens: (agentResult.usage.inputTokens || 0) + usadoInput,
+                        outputTokens: (agentResult.usage.outputTokens || 0) + usadoOutput,
+                        totalTokens: (agentResult.usage.totalTokens || 0) + usadoTotal,
+                    };
+                    dedupTrace = { status: r.trace.status, before: raw.length, after: r.suggestions.length, reducer: r.trace };
+                } catch (e) {
+                    dedupTrace = {
+                        status: 'failed-keep-all',
+                        errorMessage: String(e?.message || e).slice(0, 300),
+                    };
+                    console.log(`    REDUCER FALHOU (mantendo tudo): ${dedupTrace.errorMessage}`);
+                }
+            } else if (process.env.RECALL_SKIP_DEDUP !== '1') {
                 const rawFindings = agentResult.findings?.suggestions || [];
                 if (rawFindings.length > 1) {
                     try {
@@ -1393,6 +1540,214 @@ class InvestigationAgentProvider {
                 }
             }
 
+            // ===================== GATE DA PROVA =====================
+            // Estagio do fluxo, depois do reducer. Nao e filtro offline: o que
+            // sai daqui e o que o pipeline entrega.
+            //
+            // A regra inverte o onus da prova. O default de todo filtro que
+            // testamos era "mantem a menos que alguem refute", e refutar se
+            // mostrou o lado fraco — num conjunto de 154 achados, exigir prova
+            // derrubou 29 e refutar derrubou 8. Aqui o achado so passa se
+            // alguem conseguir PROVA-LO, de uma de duas formas: instanciar a
+            // falha (entrada concreta -> saida errada concreta) ou apontar uma
+            // contradicao documentada (o que o codigo promete x o que ele faz,
+            // os dois com file:line). Nao conseguiu nenhuma das duas, cai.
+            //
+            // Sem ferramenta de proposito: o contexto vai PRONTO (o diff do
+            // arquivo e a fatia em volta de cada file:line que o proprio achado
+            // cita). Com DeepSeek, agente com ferramenta sofre "scope drift" e
+            // mata achado bom por argumento de escopo — medido aqui e tambem
+            // no estudo comparativo de filtros de falso positivo.
+            //
+            // Medido sobre 154 achados: precision 37.0% -> 42.2%, recall
+            // 60.0% -> 56.8%, F1 0.458 -> 0.484.
+            stage = 'gate';
+            let gateTrace = null;
+            if (process.env.RECALL_GATE === '1') {
+                const posReducer = agentResult.findings?.suggestions || [];
+                if (posReducer.length) {
+                    try {
+                        const { generateText, tool, jsonSchema } = require('ai');
+                        const diffsPorArquivo = Object.fromEntries(
+                            (input.changedFiles || []).map((f) => [
+                                f.filename,
+                                f.patchWithLinesStr || f.patch || '',
+                            ]),
+                        );
+                        const refs = (txt) => {
+                            const out = [];
+                            const re = /([\w./\-]+\.\w{1,6}):(\d+)/g;
+                            let m;
+                            while ((m = re.exec(String(txt || ''))) && out.length < 8) {
+                                out.push({ file: m[1], line: Number(m[2]) });
+                            }
+                            return out;
+                        };
+                        const fatiar = async (c) => {
+                            const alvos = [
+                                { file: c.relevantFile, line: c.relevantLinesStart },
+                                ...refs(c.reason),
+                                ...refs(c.suggestionContent),
+                            ];
+                            const vistos = new Set();
+                            const partes = [];
+                            for (const a of alvos) {
+                                if (!a.file || !a.line) continue;
+                                const k = `${a.file}:${Math.floor(a.line / 30)}`;
+                                if (vistos.has(k)) continue;
+                                vistos.add(k);
+                                try {
+                                    const t = await remoteCommands.read(
+                                        a.file,
+                                        Math.max(1, a.line - 18),
+                                        a.line + 18,
+                                    );
+                                    if (t)
+                                        partes.push(
+                                            `--- ${a.file}:${Math.max(1, a.line - 18)}-${a.line + 18}\n${String(t).slice(0, 2600)}`,
+                                        );
+                                } catch {}
+                                if (partes.length >= 5) break;
+                            }
+                            return partes.join('\n\n') || '(could not read the code)';
+                        };
+
+                        const provarTool = tool({
+                            description: 'Records the proof. Call exactly once.',
+                            inputSchema: jsonSchema({
+                                type: 'object',
+                                properties: {
+                                    tipo: {
+                                        type: 'string',
+                                        enum: ['falha', 'contradicao', 'nenhuma'],
+                                    },
+                                    entrada: { type: 'string' },
+                                    saida: { type: 'string' },
+                                    promete: { type: 'string' },
+                                    faz: { type: 'string' },
+                                },
+                                required: ['tipo', 'entrada', 'saida', 'promete', 'faz'],
+                                additionalProperties: false,
+                            }),
+                            execute: async () => ({ output: 'ok' }),
+                        });
+
+                        const prompt = (c, fatia) => `<Finding>
+  file: ${c.relevantFile}:${c.relevantLinesStart ?? '?'}-${c.relevantLinesEnd ?? '?'}
+  ${c.oneSentenceSummary || ''}
+  ${String(c.suggestionContent || '').slice(0, 900)}
+</Finding>
+
+<WalkTheReviewerRecorded>
+${String(c.reason || '(none recorded)').slice(0, 1000)}
+</WalkTheReviewerRecorded>
+
+<DiffOfThatFile>
+${String(diffsPorArquivo[c.relevantFile] || '(unavailable)').slice(0, 5000)}
+</DiffOfThatFile>
+
+<CodeAroundEveryLineTheFindingCites>
+${fatia}
+</CodeAroundEveryLineTheFindingCites>
+
+Your job is to prove this finding, using only the code above. There are exactly
+two ways to prove one, and you must pick the one that fits.
+
+WAY 1 — "falha": the code misbehaves at runtime.
+Write the concrete input or program state that drives it into the failure, and
+the concrete wrong thing that comes out. Concrete means values a person could
+type: this field is the empty string, this list has 0 elements, this call
+returns null, two requests arrive in this order. "A large input" is not a value.
+Then say what comes out: the wrong number, the exception and where it is thrown,
+the row that ends up corrupted, the request that gets through the check.
+
+WAY 2 — "contradicao": something in the code states a promise that another part
+of the code breaks, and both are written down. A docstring or comment that
+describes behaviour the function does not have. An exported or declared name
+that does not match what the thing is. A test whose name describes a case its
+body does not exercise. A signature, annotation or type that disagrees with the
+implementation. Quote BOTH sides with file:line — what it promises, and what it
+actually does. Nothing runs wrong here; the mismatch itself is the defect, and
+it is only a defect if you can point at both halves.
+
+If neither fits, answer "nenhuma". That is a normal and correct outcome — use it
+when the finding is a preference about how the code is written, when it asks for
+a defence no caller violates, when the behaviour predates this change and the
+diff did not touch it, or when the path is guarded so the failure cannot occur.
+Do not stretch a style preference into a contradiction, and do not invent a
+scenario to fill the fields.
+
+Call provar exactly once.`;
+
+                        const PAR = Number(process.env.RECALL_GATE_PAR || 4);
+                        const decidido = [];
+                        for (let b = 0; b < posReducer.length; b += PAR) {
+                            const lote = await Promise.all(
+                                posReducer.slice(b, b + PAR).map(async (c) => {
+                                    try {
+                                        const fatia = await fatiar(c);
+                                        const r = await generateText({
+                                            model,
+                                            tools: { provar: provarTool },
+                                            toolChoice: { type: 'tool', toolName: 'provar' },
+                                            prompt: prompt(c, fatia),
+                                        });
+                                        const call = (r.toolCalls || []).find(
+                                            (t) => (t.toolName ?? t.name) === 'provar',
+                                        );
+                                        const a = call?.input ?? call?.args;
+                                        // Chamada que falhou nao pode virar
+                                        // descarte: o portao so fecha com
+                                        // resposta, nunca com ausencia dela.
+                                        return { c, tipo: a?.tipo || 'erro' };
+                                    } catch {
+                                        return { c, tipo: 'erro' };
+                                    }
+                                }),
+                            );
+                            decidido.push(...lote);
+                        }
+                        const mantidos = decidido.filter((d) => d.tipo !== 'nenhuma');
+                        gateTrace = {
+                            status: 'gate',
+                            // O CONJUNTO, nao so a contagem. Sem ele nao da
+                            // para testar offline um filtro que SUBSTITUA o
+                            // gate: a entrada dele e a saida do reducer, e essa
+                            // so existia como numero.
+                            entrada: posReducer.map((c) => ({
+                                relevantFile: c.relevantFile,
+                                relevantLinesStart: c.relevantLinesStart,
+                                relevantLinesEnd: c.relevantLinesEnd,
+                                oneSentenceSummary: c.oneSentenceSummary,
+                                suggestionContent: c.suggestionContent,
+                                existingCode: c.existingCode,
+                                reason: c.reason,
+                                severity: c.severity,
+                                producedBy: c.producedBy,
+                            })),
+                            before: posReducer.length,
+                            after: mantidos.length,
+                            falha: decidido.filter((d) => d.tipo === 'falha').length,
+                            contradicao: decidido.filter((d) => d.tipo === 'contradicao').length,
+                            nenhuma: decidido.filter((d) => d.tipo === 'nenhuma').length,
+                            erro: decidido.filter((d) => d.tipo === 'erro').length,
+                        };
+                        agentResult.findings.suggestions = mantidos.map((d) => d.c);
+                        console.log(
+                            `   [gate] ${gateTrace.before} → ${gateTrace.after} · falha ${gateTrace.falha} · contradicao ${gateTrace.contradicao} · descartados ${gateTrace.nenhuma} · erro ${gateTrace.erro}`,
+                        );
+                    } catch (gateError) {
+                        gateTrace = {
+                            status: 'failed',
+                            reason: String(gateError?.message || gateError).slice(0, 200),
+                        };
+                        console.log(`   [gate] falhou: ${gateTrace.reason}`);
+                    }
+                } else {
+                    gateTrace = { status: 'skipped', reason: 'nada pos-reducer' };
+                }
+            }
+
             stage = 'verify-model-served';
             const evalStats = model && model.__evalStats;
             if (evalStats && evalStats.calls === 0) {
@@ -1411,7 +1766,7 @@ class InvestigationAgentProvider {
                 evalStats && { modelId: evalStats.modelId, calls: evalStats.calls },
                 dedupTrace,
                 preFilterCandidates,
-                pipeline,
+                { ...pipeline, gate: gateTrace },
             );
             writeResultArtifact('last-output.json', output);
 

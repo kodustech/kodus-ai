@@ -40,19 +40,39 @@ async function runReducer(candidates, opts = {}) {
             execute: async () => ({ output: 'recorded' }),
         }),
     };
-    const prompt = buildReducerPrompt(candidates, normSeverity, !!opts.strict);
+    const prompt = buildReducerPrompt(
+        candidates,
+        normSeverity,
+        !!opts.strict,
+        !!opts.investigate,
+    );
+    // opts.investigate: grep/readFile alongside submitReview, so the reducer
+    // can CHECK a claim instead of rating how plausible it sounds. Measured
+    // reason: across 30 PRs the false positives are textually indistinguishable
+    // from the true ones — same phrasing, same confidence, 39 of 118 at High
+    // severity — so no wording rule separates them. What separates them is
+    // whether the claim is true, which needs the code.
+    const allTools = { ...tools, ...(opts.investigate ? opts.readTools || {} : {}) };
     const callArgs = (toolChoice) => ({
         model: opts.model,
-        tools,
+        tools: allTools,
         ...(toolChoice ? { toolChoice } : {}),
+        // A forced tool_choice on the first turn leaves no room to investigate;
+        // with read tools the loop has to run free and stop on submitReview.
+        ...(opts.investigate
+            ? { stopWhen: (x) => (x.steps?.length ?? 0) >= (opts.maxSteps ?? 30) }
+            : {}),
         prompt,
+        ...(opts.telemetry || {}),
         ...(opts.temperature != null ? { temperature: opts.temperature } : {}),
     });
 
     let result;
     try {
         result = await generateText(
-            callArgs({ type: 'tool', toolName: 'submitReview' }),
+            opts.investigate
+                ? callArgs(undefined)
+                : callArgs({ type: 'tool', toolName: 'submitReview' }),
         );
     } catch (err) {
         // Some OpenAI-compatible upstreams (Meta's Muse) reject a named
