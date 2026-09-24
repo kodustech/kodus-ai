@@ -16,6 +16,7 @@ import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import {
     AlertTriangleIcon,
+    BotIcon,
     RefreshCwIcon,
     UserMinusIcon,
     UserPlusIcon,
@@ -65,6 +66,7 @@ export const LicensesPageClient = ({
     );
 
     const [open, setOpen] = useState(false);
+    const [showBotAccounts, setShowBotAccounts] = useState(false);
     const [pendingIgnoredUsers, setPendingIgnoredUsers] = useState<string[]>(
         autoLicenseAssignmentConfig?.ignoredUsers ?? [],
     );
@@ -175,6 +177,10 @@ export const LicensesPageClient = ({
         );
     };
 
+    const visibleData = showBotAccounts
+        ? data
+        : data.filter((row) => !row.isBot);
+
     return (
         <div className="flex flex-col gap-4">
             {canEdit &&
@@ -274,9 +280,17 @@ export const LicensesPageClient = ({
                     onClick={handleRefreshMembers}>
                     Refresh members
                 </Button>
+                <Button
+                    size="sm"
+                    variant={showBotAccounts ? "primary" : "helper"}
+                    leftIcon={<BotIcon />}
+                    aria-pressed={showBotAccounts}
+                    onClick={() => setShowBotAccounts((current) => !current)}>
+                    Show bot accounts
+                </Button>
             </div>
             <DataTable
-                data={data}
+                data={visibleData}
                 columns={columns}
                 state={{ globalFilter: query }}
                 onGlobalFilterChange={setQuery}
