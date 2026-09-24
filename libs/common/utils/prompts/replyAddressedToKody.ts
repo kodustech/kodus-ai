@@ -63,14 +63,14 @@ export const prompt_replyAddressedToKody_user = (
 
 function clean(body: string): string {
     // Repeat until stable: one pass can leave a new `<!--` behind
-    // (`<!<!---->--`). Whatever opener is left unclosed is dropped too.
+    // (`<!<!---->--`, `<<!--!--`). Unclosed openers are dropped too.
     let text = body ?? '';
     let previous: string;
     do {
         previous = text;
-        text = text.replace(/<!--[\s\S]*?-->/g, '');
+        text = text.replace(/<!--[\s\S]*?-->/g, '').replace(/<!--/g, '');
     } while (text !== previous);
-    const withoutHtmlComments = text.replace(/<!--/g, '').trim();
+    const withoutHtmlComments = text.trim();
     return withoutHtmlComments.length > MAX_BODY_CHARS
         ? `${withoutHtmlComments.slice(0, MAX_BODY_CHARS)}…`
         : withoutHtmlComments;

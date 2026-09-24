@@ -84,7 +84,7 @@ describe('reply thread rendering', () => {
         await classifyReplyAddressedToKody({
             thread: [
                 { ...thread[0], body: 'root <!<!---->-- hidden --> tail' },
-                { ...thread[1], body: 'why? <!-- open' },
+                { ...thread[1], body: 'why? <<!--!-- open' },
             ],
             organizationAndTeamData: { organizationId: 'org', teamId: 'team' },
         });
