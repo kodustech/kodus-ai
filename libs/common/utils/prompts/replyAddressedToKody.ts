@@ -62,9 +62,15 @@ export const prompt_replyAddressedToKody_user = (
 };
 
 function clean(body: string): string {
-    const withoutHtmlComments = (body ?? '')
-        .replace(/<!--[\s\S]*?-->/g, '')
-        .trim();
+    // Repeat until stable: one pass can leave a new `<!--` behind
+    // (`<!<!---->--`). Whatever opener is left unclosed is dropped too.
+    let text = body ?? '';
+    let previous: string;
+    do {
+        previous = text;
+        text = text.replace(/<!--[\s\S]*?-->/g, '');
+    } while (text !== previous);
+    const withoutHtmlComments = text.replace(/<!--/g, '').trim();
     return withoutHtmlComments.length > MAX_BODY_CHARS
         ? `${withoutHtmlComments.slice(0, MAX_BODY_CHARS)}…`
         : withoutHtmlComments;
