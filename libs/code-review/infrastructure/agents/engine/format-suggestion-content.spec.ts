@@ -172,8 +172,8 @@ describe('formatSuggestionContent — prompt composition', () => {
 // deepseek / z-ai fall back to json_object mode and emit stringified JSON, bare
 // wrappers, string-typed fields, single objects instead of arrays). The failure
 // we guard against is the method turning that into a WRONG-BUT-NON-EMPTY result,
-// or throwing past its boundary. The documented fallback is an EMPTY map
-// ("comments still ship, minus the prose polish") — never a wrong map.
+// or throwing past its boundary. The documented fallback de-scaffolds WHAT/WHY/HOW locally
+// ("comments still ship, minus the prose polish" and minus the labels) — never a wrong map.
 // ---------------------------------------------------------------------------
 describe('formatSuggestionContent — LLM.run contract (#1786)', () => {
     const suggestion = {
@@ -239,6 +239,10 @@ describe('formatSuggestionContent — LLM.run contract (#1786)', () => {
             expect(arg.organizationId).toBe('org-123');
             expect(arg.runName).toBe('suggestion-formatter');
             expect(arg.timeoutMs).toBe(120_000);
+            // `timeoutMs` only ABORTS a cooperative provider; the hard ceiling
+            // (`__kodusHardTimeoutMs`) is what actually stops one that ignores
+            // the signal, so the formatter feeds it the SAME budget.
+            expect(arg.hardTimeoutMs).toBe(120_000);
             // This pass rewrites prose; it decides nothing, so it reasons about
             // nothing. Left on, the models doing it spent 69-100% of their
             // output tokens reasoning and routinely reached the old ceiling.
@@ -280,7 +284,7 @@ describe('formatSuggestionContent — LLM.run contract (#1786)', () => {
         });
 
         // Shapes that CANNOT be recovered — these MUST degrade to the
-        // documented fallback (an EMPTY map), never a wrong-but-non-empty one.
+        // documented local de-scaffold, never a wrong-but-non-empty map.
         // Each asserts size === 0 exactly, so a silent keep-all/keep-some would
         // fail the test.
         const unrecoverable: Array<[string, unknown]> = [
@@ -310,7 +314,7 @@ describe('formatSuggestionContent — LLM.run contract (#1786)', () => {
         });
 
         it.each(unrecoverable)(
-            'degrades to an EMPTY map (never wrong-but-non-empty) for: %s',
+            'de-scaffolds locally (never wrong-but-non-empty) for: %s',
             async (_label, modelOutput) => {
                 mockRun.mockResolvedValue(modelOutput as any);
 
@@ -320,7 +324,7 @@ describe('formatSuggestionContent — LLM.run contract (#1786)', () => {
             },
         );
 
-        it('never throws past its boundary even when the model returns a non-string ({})', async () => {
+        it('never throws past its boundary even when the model returns a non-string (object {})', async () => {
             mockRun.mockResolvedValue({} as any);
 
             await expect(
@@ -373,7 +377,7 @@ describe('formatSuggestionContent — LLM.run contract (#1786)', () => {
 
     // -- LAYER 3: FAIL-SAFE (provider error / suspended key) ----------------
     describe('fail-safe on LLM.run rejection', () => {
-        it('degrades to an empty map when the provider call rejects, and does NOT throw', async () => {
+        it('de-scaffolds locally when the provider call rejects, and does NOT throw', async () => {
             mockRun.mockRejectedValue(new Error('provider 500 / suspended key'));
 
             const result = await formatSuggestionContent([suggestion], {
@@ -384,7 +388,7 @@ describe('formatSuggestionContent — LLM.run contract (#1786)', () => {
             expectFailSafe(result);
         });
 
-        it('degrades to an empty map on a timeout-shaped rejection', async () => {
+        it('de-scaffolds locally on a timeout-shaped rejection', async () => {
             mockRun.mockRejectedValue(
                 Object.assign(new Error('aborted'), { name: 'AbortError' }),
             );
@@ -427,7 +431,8 @@ describe('formatSuggestionContent — LLM.run contract (#1786)', () => {
 //   1. greedy regex /\[[\s\S]*\]/  (first '[' .. last ']')
 //   2. JSON.parse of that slice
 //   3. keep items where typeof index === 'number' && typeof suggestionContent === 'string'
-// On any failure the method returns an EMPTY Map AND logs logger.warn — this is
+// On any failure the method de-scaffolds WHAT/WHY/HOW locally (returns a
+// non-empty Map where the strip matched) AND logs logger.warn — this is
 // the documented, OBSERVABLE fail-safe ("comments still ship, minus the polish"),
 // i.e. the "fail explicitly" branch of the non-degradation rule. A wrong-but-
 // non-empty map would be the #1786 bug. These blocks close every applicable
@@ -516,13 +521,13 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
         });
 
         // Row 11 — case / convention mismatch: keys renamed by casing/snake_case.
-        // Not recoverable by the strict typeof-keyed parse → fail-safe EMPTY map
+        // Not recoverable by the strict typeof-keyed parse → fail-safe de-scaffold
         // (never a wrong-but-non-empty result).
         it.each([
             ['PascalCase keys', '[{"Index":0,"SuggestionContent":"x"}]'],
             ['snake_case keys', '[{"index":0,"suggestion_content":"x"}]'],
         ])(
-            'row11: degrades to EMPTY map on %s (fail-safe, not wrong-non-empty)',
+            'row11: de-scaffolds locally on %s (fail-safe, not wrong-non-empty)',
             async (_label, out) => {
                 mockRun.mockResolvedValue(out);
 
@@ -546,7 +551,7 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
         });
 
         // Row 15 — empty array.
-        it('row15: an empty array [] yields an empty map (no items to keep)', async () => {
+        it('row15: an empty array [] yields no model entries (de-scaffolded locally)', async () => {
             mockRun.mockResolvedValue('[]');
 
             const result = await formatSuggestionContent([suggestion]);
@@ -555,7 +560,7 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
         });
 
         // Row 16 — whitespace-only (empty string already covered upstream).
-        it('row16: whitespace-only response yields an empty map', async () => {
+        it('row16: whitespace-only response de-scaffolds locally', async () => {
             mockRun.mockResolvedValue('   \n\t  ');
 
             const result = await formatSuggestionContent([suggestion]);
@@ -570,7 +575,7 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
             ['number 42', 42],
             ['string "ok"', 'ok'],
         ])(
-            'row18: primitive return (%s) degrades to an empty map, never throws',
+            'row18: primitive return (%s) de-scaffolds locally, never throws',
             async (_label, out) => {
                 mockRun.mockResolvedValue(out as any);
 
@@ -581,7 +586,7 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
         );
 
         // Row 19 — provider envelope leak.
-        it('row19: OpenAI-style {choices:[{message:{content}}]} envelope degrades to empty map', async () => {
+        it('row19: OpenAI-style {choices:[{message:{content}}]} envelope de-scaffolds locally', async () => {
             mockRun.mockResolvedValue({
                 choices: [{ message: { content: '[{"index":0,"suggestionContent":"x"}]' } }],
             } as any);
@@ -591,7 +596,7 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
             expectFailSafe(result);
         });
 
-        it('row19: tool_call arguments-as-string leak degrades to empty map', async () => {
+        it('row19: tool_call arguments-as-string leak de-scaffolds locally', async () => {
             mockRun.mockResolvedValue(
                 '{"tool_calls":[{"function":{"name":"fmt","arguments":"[{\\"index\\":0,\\"suggestionContent\\":\\"x\\"}]"}}]}',
             );
@@ -617,7 +622,7 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
 
                 // CORRECT: the valid trailing array should be recovered. Today the
                 // greedy first-'[' regex swallows the thinking brackets and JSON
-                // parse fails → silently dropped to an empty map.
+                // parse fails → the batch is silently de-scaffolded locally.
                 expect([...result.entries()]).toEqual([
                     [0, { suggestionContent: 'real', improvedCode: '' }],
                 ]);
@@ -683,7 +688,7 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
     // === C. UNPARSEABLE / TRANSPORT (fail-safe layer) =====================
     describe('C. unparseable / transport fail-safe', () => {
         // Row 28 — truncated JSON (no closing bracket → no regex match).
-        it('row28: truncated JSON (no closing ]) degrades to an empty map', async () => {
+        it('row28: truncated JSON (no closing ]) de-scaffolds locally', async () => {
             mockRun.mockResolvedValue(
                 '[{"index":0,"suggestionContent":"cut off mid str',
             );
@@ -721,14 +726,14 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
         });
 
         // Row 30 — LLM.run throws — asserted upstream; re-pinned here for the row.
-        it('row30: a provider throw fails safe to an empty map (never crosses the boundary)', async () => {
+        it('row30: a provider throw de-scaffolds locally (never crosses the boundary)', async () => {
             mockRun.mockRejectedValue(new Error('ECONNRESET'));
 
             expectFailSafe(await formatSuggestionContent([suggestion]));
         });
 
         // Row 31 — error object RETURNED (not thrown).
-        it('row31: an {error:...} object returned instead of text degrades to empty map', async () => {
+        it('row31: an {error:...} object returned instead of text de-scaffolds locally', async () => {
             mockRun.mockResolvedValue({ error: { code: 'insufficient_quota' } } as any);
 
             const result = await formatSuggestionContent([suggestion]);
@@ -737,7 +742,7 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
         });
 
         // Row 32 — empty success (content: '').
-        it('row32: an empty-success ("") response degrades to an empty map', async () => {
+        it('row32: an empty-success ("") response de-scaffolds locally', async () => {
             mockRun.mockResolvedValue('');
 
             const result = await formatSuggestionContent([suggestion]);
@@ -746,7 +751,7 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
         });
 
         // Row 33 — refusal prose (content_filter / "I cannot help").
-        it('row33: a refusal prose response degrades to an empty map', async () => {
+        it('row33: a refusal prose response de-scaffolds locally', async () => {
             mockRun.mockResolvedValue(
                 "I'm sorry, but I can't help with rewriting that content.",
             );
@@ -757,8 +762,8 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
         });
 
         // Row 34 — abort mid-call. The method does not thread an abortSignal of
-        // its own; an aborted call surfaces as a rejection → fail-safe empty map.
-        it('row34: an AbortError rejection fails safe to an empty map', async () => {
+        // its own; an aborted call surfaces as a rejection → the local de-scaffold floor.
+        it('row34: an AbortError rejection de-scaffolds locally', async () => {
             mockRun.mockRejectedValue(
                 Object.assign(new Error('The operation was aborted'), {
                     name: 'AbortError',
@@ -906,7 +911,7 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
             expect(strict.get(0)?.suggestionContent).toBe('same');
         });
 
-        it('applies the same fail-safe empty map to an unrecoverable shape under both slots', async () => {
+        it('applies the same fail-safe local de-scaffold to an unrecoverable shape under both slots', async () => {
             const out = '[{"idx":0,"content":"wrong keys"}]';
 
             mockRun.mockResolvedValue(out);

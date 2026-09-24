@@ -95,6 +95,13 @@ export interface BaseReviewCallParams {
     /** Per-call hard-timeout budget (ms). Defaults to LLM_CALL_TIMEOUT_MS (10min).
      *  Secondary passes that must not hold a pipeline slot pass a shorter one. */
     timeoutMs?: number;
+    /** HARD wall-clock ceiling for this call, fed to `tracedGenerateText`'s
+     *  `__kodusHardTimeoutMs`. `timeoutMs` only aborts a COOPERATIVE provider;
+     *  a provider that ignores the AbortSignal would otherwise run to the
+     *  20-minute call default no matter how small `timeoutMs` was. A caller that
+     *  caps latence (suggestion formatter, secondary passes) sets this to the
+     *  SAME budget as `timeoutMs` so the ceiling is real. Unset → the default. */
+    hardTimeoutMs?: number;
     /** Force a default model on the env/managed path (no BYOK slot) — the trial
      *  default (e.g. the PR summary's KODUS_TRIAL_MODEL). Ignored when a real slot
      *  resolves. Threaded to both `buildModelFromSlot` and the span's model name. */
@@ -333,6 +340,7 @@ async function runReviewCall<T>(
         organizationId,
         attrs,
         timeoutMs,
+        hardTimeoutMs,
         defaultModelOverride,
         telemetryMetadata,
         spanName,
@@ -497,6 +505,14 @@ async function runReviewCall<T>(
                 // the 30min agent-level fallback; also feeds the BYOK limiter
                 // cancellation. A secondary pass may pass a shorter budget.
                 abortSignal: timeoutSignal(timeoutMs ?? LLM_CALL_TIMEOUT_MS),
+                // HARD ceiling at the same wall clock: abort only helps a provider
+                // that honours it, and the wrapper's default ceiling for an aborted
+                // call is the 20-minute LLM default — a provider that ignores the
+                // signal would hold a 120s-formatter slice for 20 minutes without
+                // this. Only set when the caller opted in (never changes the default).
+                ...(hardTimeoutMs != null
+                    ? { __kodusHardTimeoutMs: hardTimeoutMs }
+                    : {}),
                 ...toAiSdkTelemetryArgs(
                     buildLangfuseTelemetry(
                         runName,

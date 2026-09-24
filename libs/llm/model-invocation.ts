@@ -33,7 +33,10 @@ import {
     type ResolveAgentModelOptions,
 } from '@libs/llm/agent-model';
 import { getModelName, type ByokModelOptions } from '@libs/llm/byok-to-vercel';
-import { envManagedReasoningDescriptor } from '@libs/llm/managed-slot';
+import {
+    envManagedReasoningDescriptor,
+    managedDefaultReasoningDescriptor,
+} from '@libs/llm/managed-slot';
 import {
     resolveSlotCallOptions,
     type SlotCallOptions,
@@ -130,8 +133,20 @@ export function resolveModelConfig(
     // model BUILD still flows through resolveAgentModel above (it reads the env
     // itself); this descriptor only feeds the reasoning-effort default and the
     // provider-options namespace. A real BYOK slot always wins over it.
+    //
+    // CLOUD + SUPPRESSED: with no env config either, a `suppressReasoning` call
+    // (the suggestion formatter, the structured suppress-thinking plan) would get
+    // NO provider here and thus `{}` provider options — and the managed default
+    // (DeepSeek, thinks by default) would reason anyway, defeating the off switch
+    // on the very calls that need it (issue #1851). Assume the MANAGED default
+    // descriptor in exactly that case: it mirrors the model resolveModelConfig's
+    // caller actually runs on the cloud path, so the effort-'none' payload targets
+    // the right wire namespace. Every other no-slot call stays untouched (the
+    // caller's own default decides, as before).
     const reasoningSlot: NormalizedModel | { provider: string; model: string } | undefined =
-        resolvedSlot ?? envDescriptor;
+        resolvedSlot ??
+        envDescriptor ??
+        (suppressReasoning ? managedDefaultReasoningDescriptor() : undefined);
 
     // `suppressReasoning` forces reasoning OFF (effort 'none', override dropped) —
     // the structured executor sets it when its `planStructuredCall` returns

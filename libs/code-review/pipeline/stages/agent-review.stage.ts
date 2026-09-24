@@ -513,7 +513,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             this.logger.log({
                 message: `[AGENT][review-focus] steering PR#${prNumber} by directive: "${context.reviewDirective}"`,
                 context: this.stageName,
-                metadata: {
+metadata: {
                     prNumber,
                     reviewDirective: context.reviewDirective,
                     organizationId:
@@ -1259,6 +1259,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             context.codeReviewConfig?.languageResultPrompt,
                         organizationId:
                             context.organizationAndTeamData?.organizationId,
+                        prNumber: context.pullRequest?.number,
+                        // Degradation hook: fire and forget — formatting must
+                        // never take the review down; the failure itself is
+                        // already an error-level log + degraded report.
+                        onDegraded: () => {},
                     },
                 );
                 for (const [i, fmt] of formatted) {
