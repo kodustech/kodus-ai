@@ -851,13 +851,15 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             this.leaseIdToPrKey.delete(leaseId);
             // Retire, not delete: connect can fail transiently while the
             // sandbox still exists (paused), and a dropped lease is the
-            // last trace the kill crons had of it. If it really is gone,
-            // the cron's kill 404s and it just removes the retired doc.
+            // last trace the kill crons had of it. killAt is the lease TTL,
+            // not the 60s drain: a concurrent holder may still be using the
+            // sandbox, and the TTL reaper would have killed it then anyway.
+            // If it really is gone, the kill 404s and the doc is removed.
             await this.leaseRepo
                 .retire(
                     prKey,
                     sandboxId,
-                    new Date(Date.now() + INVALIDATE_DRAIN_MS),
+                    new Date(Date.now() + DEFAULT_LEASE_TTL_MS),
                 )
                 .catch(() => {});
             // Re-acquire from scratch. With doc deleted, upsertAcquire

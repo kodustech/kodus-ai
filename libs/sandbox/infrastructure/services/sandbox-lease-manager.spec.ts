@@ -736,6 +736,12 @@ describe('SandboxLeaseManager', () => {
             'dead-sandbox-id',
             expect.any(Date),
         );
+        // A concurrent holder may still be using it after a transient
+        // connect error: no earlier kill than the lease TTL reaper's.
+        const killAt = leaseRepo.retire.mock.calls[0][2] as Date;
+        expect(killAt.getTime()).toBeGreaterThanOrEqual(
+            Date.now() + 29 * 60 * 1000,
+        );
         // Cold-start succeeded — fresh sandbox created
         expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledWith(
             cloneParams,
