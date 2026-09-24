@@ -1,368 +1,88 @@
-import { createHmac, timingSafeEqual } from 'crypto';
-
-import { createLogger } from '@libs/core/log/logger';
-import { Controller, HttpStatus, Inject, Post, Req, Res } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { Request, Response } from 'express';
+import {
+    Body,
+    Controller,
+    HttpCode,
+    HttpStatus,
+    Post,
+    UseGuards,
+} from '@nestjs/common';
 
 import { Public } from '@libs/identity/infrastructure/adapters/services/auth/public.decorator';
-import { NotificationService } from '@libs/notifications/application/notification.service';
-import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
 import {
-    IKodyRulesService,
-    KODY_RULES_SERVICE_TOKEN,
-} from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
+    PlanChangedBody,
+    SyncRulesOnPlanChangeUseCase,
+} from '@libs/kodyRules/application/use-cases/sync-rules-on-plan-change.use-case';
+import {
+    BillingNotificationBody,
+    EmitBillingNotificationUseCase,
+} from '@libs/notifications/application/use-cases/emit-billing-notification.use-case';
 
-/**
- * Express request shape with the raw-body capture from
- * `apps/api/src/main.ts` body-parser verify hook. The HMAC must
- * cover the bytes the billing service signed, not a re-stringified
- * copy of the parsed body (which would be subject to key ordering /
- * whitespace differences).
- */
-type WebhookRequest = Request & { rawBody?: Buffer };
-
-const SIGNATURE_HEADER = 'x-kodus-signature';
-
-interface PaymentFailedBody {
-    organizationId?: string;
-    amount?: number;
-    currency?: string;
-    failureReason?: string;
-    nextRetryAt?: string;
-    updatePaymentUrl?: string;
-}
-
-interface TrialExpiringBody {
-    organizationId?: string;
-    trialEndsAt?: string;
-    daysRemaining?: number;
-    upgradeUrl?: string;
-}
-
-interface PlanChangedBody {
-    organizationId?: string;
-    teamId?: string;
-    planType?: string;
-    subscriptionStatus?: string;
-}
-
-interface CreditsPurchasedBody {
-    organizationId?: string;
-    teamId?: string;
-    creditUsd?: number;
-    balanceUsd?: number;
-}
-
-interface CreditsLowBody {
-    organizationId?: string;
-    teamId?: string;
-    balanceUsd?: number;
-    thresholdUsd?: number;
-    exhausted?: boolean;
-}
-
-const TOP_UP_URL = 'https://app.kodus.io/byok#kodus';
+import { BillingSignatureGuard } from '../guards/billing-signature.guard';
 
 /** Route prefix billing calls, in the one form both consumers use verbatim:
  *  `@Controller` here and the raw-body parser mount in `apps/api/src/main.ts`. */
 export const BILLING_EVENTS_PATH = '/billing/events';
 
 /**
- * Receives outbound notifications from kodus-service-billing.
+ * Receives outbound callbacks from kodus-service-billing.
  *
  * Lives in the API, not in `apps/webhooks`: plan-changed needs the Kody
  * Rules graph and Mongo, which the API already boots and the ingestion
  * service must not (#2007). The path must not contain "webhook" — the ALB
  * routes every `*\/webhook*` path to the webhooks service.
  *
- * The billing service signs the raw request body with HMAC-SHA256
- * keyed by `API_BILLING_WEBHOOK_SECRET`. Invalid / missing signatures
- * return 401. Valid requests emit the corresponding notification with
- * `role:OWNER + role:BILLING_MANAGER` as the audience.
- *
- * The endpoint is intentionally tolerant of notification-side failures
- * — when `notificationService.emit` throws (outbox down, etc.) we
- * still return 200 so the billing service doesn't retry forever. The
- * failure is logged for ops; the billing state is already committed
- * upstream regardless.
+ * `BillingSignatureGuard` authenticates every call. Bodies are typed with
+ * interfaces, not DTO classes, so the global whitelisting ValidationPipe does
+ * not 400 a callback when billing adds a field.
  */
 @Public()
+@UseGuards(BillingSignatureGuard)
 @Controller(BILLING_EVENTS_PATH)
 export class BillingEventsController {
-    private readonly logger = createLogger(BillingEventsController.name);
-
     constructor(
-        private readonly notificationService: NotificationService,
-        private readonly configService: ConfigService,
-        @Inject(KODY_RULES_SERVICE_TOKEN)
-        private readonly kodyRulesService: IKodyRulesService,
+        private readonly emitBillingNotificationUseCase: EmitBillingNotificationUseCase,
+        private readonly syncRulesOnPlanChangeUseCase: SyncRulesOnPlanChangeUseCase,
     ) {}
 
     @Post('/payment-failed')
-    async paymentFailed(
-        @Req() req: WebhookRequest,
-        @Res() res: Response,
-    ): Promise<Response> {
-        const verification = this.verifySignature(req);
-        if (verification.status !== 'ok') {
-            return res.status(verification.status).send(verification.reason);
-        }
-
-        const body = req.body as PaymentFailedBody;
-        if (!body?.organizationId) {
-            return res
-                .status(HttpStatus.BAD_REQUEST)
-                .send('Missing organizationId');
-        }
-
-        await this.safeEmit(body.organizationId, () =>
-            this.notificationService.emit({
-                event: NotificationEvent.BILLING_PAYMENT_FAILED,
-                payload: {
-                    amount: body.amount ?? 0,
-                    currency: body.currency ?? '',
-                    failureReason:
-                        body.failureReason ?? 'Unknown payment failure',
-                    nextRetryAt: body.nextRetryAt,
-                    updatePaymentUrl: body.updatePaymentUrl,
-                },
-                organizationId: body.organizationId,
-            }),
-        );
-
-        return res.status(HttpStatus.OK).send('ok');
+    @HttpCode(HttpStatus.OK)
+    async paymentFailed(@Body() body: BillingNotificationBody): Promise<string> {
+        await this.emitBillingNotificationUseCase.execute('payment-failed', body);
+        return 'ok';
     }
 
     @Post('/trial-expiring')
-    async trialExpiring(
-        @Req() req: WebhookRequest,
-        @Res() res: Response,
-    ): Promise<Response> {
-        const verification = this.verifySignature(req);
-        if (verification.status !== 'ok') {
-            return res.status(verification.status).send(verification.reason);
-        }
-
-        const body = req.body as TrialExpiringBody;
-        if (!body?.organizationId) {
-            return res
-                .status(HttpStatus.BAD_REQUEST)
-                .send('Missing organizationId');
-        }
-
-        await this.safeEmit(body.organizationId, () =>
-            this.notificationService.emit({
-                event: NotificationEvent.BILLING_TRIAL_EXPIRING,
-                payload: {
-                    trialEndsAt: body.trialEndsAt ?? '',
-                    daysRemaining: body.daysRemaining ?? 0,
-                    upgradeUrl: body.upgradeUrl,
-                },
-                organizationId: body.organizationId,
-            }),
-        );
-
-        return res.status(HttpStatus.OK).send('ok');
+    @HttpCode(HttpStatus.OK)
+    async trialExpiring(@Body() body: BillingNotificationBody): Promise<string> {
+        await this.emitBillingNotificationUseCase.execute('trial-expiring', body);
+        return 'ok';
     }
 
     @Post('/plan-changed')
-    async planChanged(
-        @Req() req: WebhookRequest,
-        @Res() res: Response,
-    ): Promise<Response> {
-        const verification = this.verifySignature(req);
-        if (verification.status !== 'ok') {
-            return res.status(verification.status).send(verification.reason);
-        }
-
-        const body = req.body as PlanChangedBody;
-        if (!body?.organizationId) {
-            return res
-                .status(HttpStatus.BAD_REQUEST)
-                .send('Missing organizationId');
-        }
-
-        try {
-            await this.kodyRulesService.syncRulesWithPlanLimit({
-                organizationId: body.organizationId,
-                teamId: body.teamId,
-            });
-            this.logger.log({
-                message: 'Kody Rules synced after billing plan-changed webhook',
-                context: BillingEventsController.name,
-                metadata: { organizationId: body.organizationId },
-            });
-        } catch (error) {
-            this.logger.error({
-                message: 'Failed to sync Kody Rules after billing plan-changed webhook',
-                context: BillingEventsController.name,
-                error,
-                metadata: { organizationId: body.organizationId },
-            });
-        }
-
-        return res.status(HttpStatus.OK).send('ok');
+    @HttpCode(HttpStatus.OK)
+    async planChanged(@Body() body: PlanChangedBody): Promise<string> {
+        await this.syncRulesOnPlanChangeUseCase.execute(body);
+        return 'ok';
     }
 
-    /**
-     * Verifies the X-Kodus-Signature header against the raw request
-     * body using HMAC-SHA256 with the shared secret. Constant-time
-     * comparison so timing attacks can't enumerate valid bytes.
-     */
     // ── Prepaid credits ("Kodus as the provider") ────────────────────────
 
     @Post('/credits-purchased')
+    @HttpCode(HttpStatus.OK)
     async creditsPurchased(
-        @Req() req: WebhookRequest,
-        @Res() res: Response,
-    ): Promise<Response> {
-        const verification = this.verifySignature(req);
-        if (verification.status !== 'ok') {
-            return res.status(verification.status).send(verification.reason);
-        }
-
-        const body = req.body as CreditsPurchasedBody;
-        if (!body?.organizationId) {
-            return res
-                .status(HttpStatus.BAD_REQUEST)
-                .send('Missing organizationId');
-        }
-
-        await this.safeEmit(body.organizationId, () =>
-            this.notificationService.emit({
-                event: NotificationEvent.CREDITS_PURCHASED,
-                payload: {
-                    creditUsd: Number(body.creditUsd ?? 0),
-                    balanceUsd: Number(body.balanceUsd ?? 0),
-                },
-                organizationId: body.organizationId,
-            }),
+        @Body() body: BillingNotificationBody,
+    ): Promise<string> {
+        await this.emitBillingNotificationUseCase.execute(
+            'credits-purchased',
+            body,
         );
-
-        return res.status(HttpStatus.OK).send('ok');
+        return 'ok';
     }
 
-    /** One webhook, two events: `exhausted` (balance ≤ 0, critical, sticky
-     *  banner) vs `low` (under the threshold, informational). The billing
-     *  service fires each once per crossing, so no rate limiting here. */
     @Post('/credits-low')
-    async creditsLow(
-        @Req() req: WebhookRequest,
-        @Res() res: Response,
-    ): Promise<Response> {
-        const verification = this.verifySignature(req);
-        if (verification.status !== 'ok') {
-            return res.status(verification.status).send(verification.reason);
-        }
-
-        const body = req.body as CreditsLowBody;
-        if (!body?.organizationId) {
-            return res
-                .status(HttpStatus.BAD_REQUEST)
-                .send('Missing organizationId');
-        }
-
-        const balanceUsd = Number(body.balanceUsd ?? 0);
-        await this.safeEmit(body.organizationId, () =>
-            body.exhausted
-                ? this.notificationService.emit({
-                      event: NotificationEvent.CREDITS_EXHAUSTED,
-                      payload: { balanceUsd, topUpUrl: TOP_UP_URL },
-                      organizationId: body.organizationId!,
-                  })
-                : this.notificationService.emit({
-                      event: NotificationEvent.CREDITS_LOW,
-                      payload: {
-                          balanceUsd,
-                          thresholdUsd: Number(body.thresholdUsd ?? 0),
-                          topUpUrl: TOP_UP_URL,
-                      },
-                      organizationId: body.organizationId!,
-                  }),
-        );
-
-        return res.status(HttpStatus.OK).send('ok');
-    }
-
-    private verifySignature(
-        req: WebhookRequest,
-    ): { status: 'ok' } | { status: HttpStatus; reason: string } {
-        const secret = this.configService.get<string>(
-            'API_BILLING_WEBHOOK_SECRET',
-        );
-        if (!secret) {
-            this.logger.error({
-                message:
-                    'API_BILLING_WEBHOOK_SECRET is not configured — refusing billing webhook',
-                context: BillingEventsController.name,
-                metadata: { organizationId: req.body?.organizationId },
-            });
-            return {
-                status: HttpStatus.INTERNAL_SERVER_ERROR,
-                reason: 'Webhook secret not configured',
-            };
-        }
-
-        const provided = req.headers[SIGNATURE_HEADER] as string | undefined;
-        if (!provided) {
-            return {
-                status: HttpStatus.UNAUTHORIZED,
-                reason: 'Missing signature',
-            };
-        }
-
-        // No re-stringify fallback: a re-serialized body can differ from the
-        // bytes billing signed, so a missing capture must fail loudly.
-        const rawBody = req.rawBody;
-        if (!rawBody) {
-            this.logger.error({
-                message:
-                    'Raw body not captured for a billing callback — check the /billing/events/ parser in apps/api/src/main.ts',
-                context: BillingEventsController.name,
-                metadata: { organizationId: req.body?.organizationId },
-            });
-            return {
-                status: HttpStatus.INTERNAL_SERVER_ERROR,
-                reason: 'Raw body not captured',
-            };
-        }
-
-        const expected = createHmac('sha256', secret)
-            .update(rawBody)
-            .digest('hex');
-
-        const a = Buffer.from(provided);
-        const b = Buffer.from(expected);
-        if (a.length !== b.length || !timingSafeEqual(a, b)) {
-            return {
-                status: HttpStatus.UNAUTHORIZED,
-                reason: 'Invalid signature',
-            };
-        }
-
-        return { status: 'ok' };
-    }
-
-    /**
-     * Wrap the emit so notification-side failures never propagate to
-     * the billing service. If emit throws, we log and return — the
-     * caller (Stripe → billing → us) sees a 200 and won't retry.
-     */
-    private async safeEmit(
-        organizationId: string,
-        fn: () => Promise<void>,
-    ): Promise<void> {
-        try {
-            await fn();
-        } catch (error) {
-            this.logger.error({
-                message: 'Failed to emit billing notification',
-                error:
-                    error instanceof Error ? error : new Error(String(error)),
-                context: BillingEventsController.name,
-                metadata: { organizationId },
-            });
-        }
+    @HttpCode(HttpStatus.OK)
+    async creditsLow(@Body() body: BillingNotificationBody): Promise<string> {
+        await this.emitBillingNotificationUseCase.execute('credits-low', body);
+        return 'ok';
     }
 }
