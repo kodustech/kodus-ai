@@ -27,10 +27,18 @@ import {
     SandboxRunResult,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
+import {
+    fetchSubmodules,
+    isContainedRelativePath,
+    SubmoduleGitHost,
+} from '@libs/sandbox/infrastructure/providers/submodule-fetch';
 
 const execFileAsync = promisify(execFile);
 
 const CLONE_TIMEOUT_MS = 120_000;
+// Submodule fetch is best-effort and must never hold a review hostage — see
+// `fetchSubmodules` below.
+const SUBMODULES_TIMEOUT_MS = 120_000;
 const CMD_TIMEOUT_MS = 30_000;
 const MAX_BUFFER = 5 * 1024 * 1024; // 5 MB — cap output to prevent memory issues
 
@@ -66,6 +74,7 @@ export class LocalSandboxService implements ISandboxProvider {
             platform,
             checkoutSha,
             unifiedDiff,
+            baseBranch,
         } = params;
 
         const tempDir = await mkdtemp(join(tmpdir(), 'kodus-sandbox-'));
@@ -131,6 +140,58 @@ export class LocalSandboxService implements ISandboxProvider {
             await execFileAsync('git', ['-C', tempDir, 'checkout', localRef], {
                 timeout: CLONE_TIMEOUT_MS,
             });
+
+            // Only a submodule declared identically on the BASE branch is
+            // fetched, so the base has to be in the checkout first. The token
+            // here is the self-hosted customer's own OAuth token or PAT and
+            // reaches every project they can see, so failing to fetch the
+            // base means fetching no submodule at all — see
+            // `baseDeclaredDumpArgs`.
+            let baseRef: string | undefined;
+            if (baseBranch) {
+                const localBaseRef = `refs/remotes/origin/${baseBranch}`;
+                try {
+                    await execFileAsync(
+                        'git',
+                        [
+                            '-C',
+                            tempDir,
+                            'fetch',
+                            '--depth=1',
+                            cloneUrl,
+                            `refs/heads/${baseBranch}:${localBaseRef}`,
+                        ],
+                        {
+                            timeout: CLONE_TIMEOUT_MS,
+                            env: fetchEnv,
+                        } as ExecFileOptions,
+                    );
+                    baseRef = localBaseRef;
+                } catch (error) {
+                    this.logger.warn({
+                        message: `[SUBMODULES] Could not fetch base branch ${baseBranch}; no submodule will be fetched`,
+                        context: LocalSandboxService.name,
+                        error:
+                            error instanceof Error
+                                ? error
+                                : new Error(String(error)),
+                        metadata: { prNumber, baseBranch },
+                    });
+                }
+            }
+
+            // The checkout above has no submodule handling, so every path the
+            // repository declares in `.gitmodules` would otherwise be an empty
+            // directory the agent reads as "this code does not exist" (#1939).
+            await this.fetchSubmodules(
+                tempDir,
+                cloneUrl,
+                authHeader,
+                {
+                    prNumber,
+                },
+                baseRef,
+            );
 
             // CLI mode: replay the user's local diff on top of the
             // merge-base SHA, so the agent reviews the same code the user
@@ -238,6 +299,68 @@ export class LocalSandboxService implements ISandboxProvider {
             }
             throw error;
         }
+    }
+
+    /**
+     * Populate the submodules a repository declares, after the checkout.
+     *
+     * A thin adapter: the ORDER, the retries, the time budget and the logging
+     * live in `fetchSubmodules`, shared with the E2B provider so the two
+     * cannot drift. That matters more here than there — this provider runs
+     * directly on the self-hosted customer's own machine, with no proxy in
+     * between.
+     */
+    private async fetchSubmodules(
+        repoDir: string,
+        cloneUrl: string,
+        authHeader: string,
+        logMetadata: Record<string, unknown> = {},
+        /** Base-branch ref; without it nothing is fetched. */
+        baseRef?: string,
+    ): Promise<void> {
+        const host: SubmoduleGitHost = {
+            readGitmodules: () =>
+                readFile(join(repoDir, '.gitmodules'), 'utf8').catch(
+                    () => null,
+                ),
+            git: (args, opts) =>
+                execFileAsync('git', ['-C', repoDir, ...args], {
+                    timeout: opts?.timeoutMs ?? CMD_TIMEOUT_MS,
+                    // process.env first so the scoped header wins, and note the
+                    // header travels as GIT_CONFIG_VALUE_0 — never as a process
+                    // argument, same as the clone above.
+                    ...(opts?.env
+                        ? { env: { ...process.env, ...opts.env } }
+                        : {}),
+                } as ExecFileOptions) as Promise<{ stdout: string }>,
+            removeDir: async (relative) => {
+                // Built from the submodule NAME in `.gitmodules`, written by
+                // the pull request author, and this runs on the self-hosted
+                // customer's own machine. The shared module rejects a name
+                // with a `..` segment; the guard is repeated at the one place
+                // that deletes recursively.
+                if (!isContainedRelativePath(relative)) {
+                    throw new Error(
+                        `refusing to remove a path outside the checkout: ${relative}`,
+                    );
+                }
+                await rm(join(repoDir, relative), {
+                    recursive: true,
+                    force: true,
+                });
+            },
+        };
+
+        await fetchSubmodules(host, {
+            repoCloneUrl: cloneUrl,
+            baseRef,
+            authHeader: authHeader || undefined,
+            totalBudgetMs: SUBMODULES_TIMEOUT_MS,
+            stepTimeoutMs: CMD_TIMEOUT_MS,
+            logger: this.logger,
+            logContext: LocalSandboxService.name,
+            logMetadata,
+        });
     }
 
     private buildRemoteCommands(repoDir: string): RemoteCommands {
@@ -631,7 +754,10 @@ export class LocalSandboxService implements ISandboxProvider {
                 // component (not just the final one). On Linux this fully
                 // closes the parent-dir-swap TOCTOU (#1532); elsewhere it is a
                 // best-effort O_NOFOLLOW on the final component (see helper).
-                const fd = await this.openRepoWriteHandle(repoReal, safePathReal);
+                const fd = await this.openRepoWriteHandle(
+                    repoReal,
+                    safePathReal,
+                );
                 try {
                     await fd.writeFile(content, 'utf-8');
                 } finally {
