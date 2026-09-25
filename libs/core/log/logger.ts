@@ -354,10 +354,9 @@ function describeOmitted(value: any): string {
     //
     // Never throw: deepSanitize is exception-free by design — the WeakSet
     // cycle guard, the depth cap and the typed-array marker all exist to keep
-    // it so — and callers rely on that. mongodb-exporter.ts:1032 calls it
-    // unguarded inside an `async exportLog` fired as `void this.exportLog(...)`
-    // (line 1061), so a throw here becomes an unhandled rejection that can take
-    // the process down. The value is discarded anyway, so a getter that throws
+    // it so — and callers rely on that. The MongoDB exporter's `exportLog`
+    // calls it unguarded and is itself fired without awaiting, so a throw here
+    // becomes an unhandled rejection that can take the process down. The value is discarded anyway, so a getter that throws
     // must cost us a vaguer marker, never an exception.
     try {
         if (typeof value === 'string') {
@@ -586,16 +585,15 @@ const DEEP_SANITIZE_MAX_ARRAY = 50;
  * blow through CloudWatch's 256KB per-event ceiling — the very symptom this
  * guard exists to stop. Nothing caps object key count either.
  *
- * So the recursion carries a running byte total and, once it is spent, every
- * remaining value becomes a marker. 192KB leaves ~64KB of headroom for the
- * JSON structure pino adds around these values.
+ * So the recursion carries a running byte total and, once it is spent, heavy
+ * values become markers. The ceiling itself is derived below from the line
+ * shape, not chosen directly.
  */
 const CLOUDWATCH_MAX_EVENT = 256 * 1024;
 /**
  * The emitted line carries the SAME sanitized object more than once:
- * buildLogObject spreads safeMetadata at the top level (line ~927) and stores
- * it again under `metadata` (line ~930), and handleLog adds `err` (line ~826),
- * which the pino serializer sanitizes with its own independent budget. So a
+ * `buildLogObject` spreads the sanitized metadata at the top level and stores
+ * it again under `metadata`, and `handleLog` adds `err`, which the pino serializer sanitizes with its own independent budget. So a
  * per-call budget of B produces a line of up to 3B, and budgeting 192KB per
  * call yields a ~576KB event — past the ceiling it was meant to defend.
  */
@@ -653,6 +651,37 @@ const PRIMITIVE_BUDGET_COST = 20;
 
 interface SanitizeBudget {
     used: number;
+    /** Bytes spent on the post-exhaustion tail; see TAIL_BYTES_ALLOWANCE. */
+    tailUsed?: number;
+}
+
+/**
+ * Bytes the whole call may spend on trailing keys AFTER the main budget is
+ * exhausted. Shared across the entire call (not per object), so nesting
+ * cannot multiply it, and the line stays bounded by MAX_TOTAL + this.
+ * `createdAt` and `tu` need a few dozen bytes; 4KB is generous.
+ */
+const TAIL_BYTES_ALLOWANCE = 4 * 1024;
+
+/**
+ * Sanitize a value already judged cheap by isCheapValue, WITHOUT recursing.
+ *
+ * The tail path must never emit raw values: an earlier version did, and past
+ * budget exhaustion it leaked connection-string passwords, Authorization
+ * headers and nested `token`/`password` keys that the normal path redacts.
+ * So strings still go through sanitizeString, and a flat object still has its
+ * sensitive and content keys handled exactly as the main loop would.
+ */
+function sanitizeCheap(v: any): any {
+    if (typeof v === 'string') return sanitizeString(v);
+    if (v === null || typeof v !== 'object' || v instanceof Date) return v;
+    const out: Record<string, any> = {};
+    for (const k of Object.keys(v)) {
+        if (isSensitiveKey(k)) out[k] = '[REDACTED]';
+        else if (isContentKey(k)) out[k] = describeOmitted(v[k]);
+        else out[k] = typeof v[k] === 'string' ? sanitizeString(v[k]) : v[k];
+    }
+    return out;
 }
 
 /**
@@ -676,7 +705,7 @@ function deepSanitize(
     obj: any,
     seen?: WeakSet<object>,
     depth = 0,
-    budget: SanitizeBudget = { used: 0 },
+    budget: SanitizeBudget = { used: 0, tailUsed: 0 },
 ): any {
     if (budget.used >= DEEP_SANITIZE_MAX_TOTAL) {
         return BUDGET_SPENT_MARKER;
@@ -835,10 +864,34 @@ function deepSanitize(
                 out[key] = '[unreadable]';
                 continue;
             }
-            if (isSensitiveKey(key)) out[key] = '[REDACTED]';
-            else if (isContentKey(key)) out[key] = describeOmitted(tailRaw);
-            else if (isCheapValue(tailRaw)) out[key] = tailRaw;
-            else out[key] = BUDGET_SPENT_MARKER;
+            let emitted: any;
+            if (isSensitiveKey(key)) emitted = '[REDACTED]';
+            else if (isContentKey(key)) emitted = describeOmitted(tailRaw);
+            else if (isCheapValue(tailRaw)) {
+                try {
+                    emitted = sanitizeCheap(tailRaw);
+                } catch {
+                    emitted = '[unreadable]';
+                }
+            } else emitted = BUDGET_SPENT_MARKER;
+
+            // Charge the tail against its own shared allowance. Without this
+            // the tail was unbounded: 100 keys of flat 12x256-char objects
+            // produced a 1.1MB line.
+            const cost =
+                byteLen(key) +
+                4 +
+                (typeof emitted === 'string'
+                    ? byteLen(emitted)
+                    : emitted instanceof Date
+                      ? 26
+                      : byteLen(JSON.stringify(emitted) ?? ''));
+            if ((budget.tailUsed ?? 0) + cost > TAIL_BYTES_ALLOWANCE) {
+                out['…'] = `[+${keys.length - k} more keys omitted]`;
+                break;
+            }
+            budget.tailUsed = (budget.tailUsed ?? 0) + cost;
+            out[key] = emitted;
             continue;
         }
         // Charge the key in EVERY branch. Charging it only on the ordinary
@@ -855,13 +908,12 @@ function deepSanitize(
         }
 
         // Read the property under guard. A getter can throw — the repo's own
-        // notes record that shape (mongodb-exporter.ts:1450-1454, "getters that
+        // notes record that shape in the MongoDB exporter: "getters that
         // throw") — and the read happens HERE, before any try/catch inside a
         // helper could cover it. deepSanitize is relied on to be exception-free
-        // (mongodb-exporter.ts:1032 calls it unguarded inside an `async
-        // exportLog` fired as `void this.exportLog(...)` at line 1061, so a
-        // throw is an unhandled rejection that ends the process), so a hostile
-        // value must cost us a marker, never an exception.
+        // (the exporter's `exportLog` calls it unguarded and is fired without
+        // awaiting, so a throw is an unhandled rejection that ends the
+        // process), so a hostile value must cost us a marker, never an exception.
         let raw: any;
         try {
             raw = obj[key];

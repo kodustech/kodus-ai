@@ -306,3 +306,87 @@ describe('deepSanitize — an exhausted budget must not evict small trailing key
         expect(JSON.stringify(out)).toContain('more keys omitted');
     });
 });
+
+describe('deepSanitize — redaction survives budget exhaustion', () => {
+    // The gap every earlier test missed: none combined an exhausted budget
+    // with a secret. An earlier version emitted "cheap" tail values raw, and
+    // past exhaustion it leaked everything the normal path redacts.
+    const fat = () => {
+        const m: Record<string, string> = {};
+        for (let i = 0; i < 20; i++) m[`f${i}`] = 'x'.repeat(4000);
+        return m;
+    };
+
+    it('redacts credentials embedded in a trailing string', () => {
+        const out = JSON.stringify(
+            deepSanitize({
+                metadata: fat(),
+                dbUrl: 'mongodb://admin:hunter2@db.internal/app',
+            }),
+        );
+        expect(out).not.toContain('hunter2');
+    });
+
+    it('redacts an Authorization header in a trailing string', () => {
+        const out = JSON.stringify(
+            deepSanitize({
+                metadata: fat(),
+                header: 'Authorization: Bearer sk-live-SECRET123',
+            }),
+        );
+        expect(out).not.toContain('SECRET123');
+    });
+
+    it('redacts sensitive keys nested in a trailing flat object', () => {
+        const out = deepSanitize({
+            metadata: fat(),
+            creds: { token: 'tok-SECRET', password: 'pw-SECRET', user: 'bob' },
+        });
+        expect(JSON.stringify(out)).not.toContain('SECRET');
+        expect(out.creds.user).toBe('bob');
+    });
+
+    it('omits customer code nested in a trailing flat object', () => {
+        const out = deepSanitize({
+            metadata: fat(),
+            s: { improvedCode: 'const k = 1;', id: 'x' },
+        });
+        expect(out.s.improvedCode).toMatch(/^\[content omitted: /);
+        expect(out.s.id).toBe('x');
+    });
+});
+
+describe('deepSanitize — the tail is bounded in bytes, not just in keys', () => {
+    it('cannot blow the line with many cheap flat objects', () => {
+        // 100 trailing keys x flat 12x256-char objects produced a 1.1MB line.
+        const b: Record<string, any> = {};
+        const m: Record<string, string> = {};
+        for (let i = 0; i < 20; i++) m[`f${i}`] = 'x'.repeat(4000);
+        b.metadata = m;
+        for (let i = 0; i < 100; i++) {
+            const o: Record<string, string> = {};
+            for (let j = 0; j < 12; j++) o[`k${j}`] = 'z'.repeat(256);
+            b[`t${i}`] = o;
+        }
+        expect(JSON.stringify(deepSanitize(b)).length * 3).toBeLessThan(262_144);
+    });
+
+    it('shares one tail allowance across nested objects', () => {
+        // `child` MUST come first. An earlier version of this test put it last,
+        // so once the budget was spent the child collapsed to a marker and no
+        // nested tail was ever processed — the test passed against code that
+        // had no byte cap on the tail at all. With child first, every level
+        // returns into its own tail of cheap strings after exhaustion, which is
+        // exactly where a per-object (unshared) allowance would multiply.
+        const nest = (d: number): any => {
+            const o: Record<string, any> = {};
+            if (d > 0) o.child = nest(d - 1);
+            const m: Record<string, string> = {};
+            for (let i = 0; i < 20; i++) m[`f${i}`] = 'x'.repeat(4000);
+            o.fat = m;
+            for (let i = 0; i < 100; i++) o[`s${i}`] = 's'.repeat(256);
+            return o;
+        };
+        expect(JSON.stringify(deepSanitize(nest(20))).length * 3).toBeLessThan(262_144);
+    });
+});
