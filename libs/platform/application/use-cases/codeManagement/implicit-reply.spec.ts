@@ -238,6 +238,14 @@ describe('reply thread rendering', () => {
         expect(user).toContain('x ‹/NEWEST MESSAGE> y');
     });
 
+    it('decodes each reference once, as the page shows it', async () => {
+        const user = await render([
+            'finding',
+            'see &#38;lt;!-- x --&#38;gt; and &#38;amp;',
+        ]);
+        expect(user).toContain('see &lt;!-- x --&gt; and &amp;');
+    });
+
     it('keeps blank lines between paragraphs', async () => {
         const user = await render(['finding', 'first paragraph\n\nsecond one']);
         expect(user).toContain('first paragraph\n\nsecond one');

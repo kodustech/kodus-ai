@@ -104,10 +104,6 @@ function nextHiddenMarkup(text: string): number {
     return Math.min(bang, question);
 }
 
-// Numeric character references in any spelling a browser accepts (leading
-// zeros, hex, missing `;`), decoded so the guards see what is displayed.
-const NUMERIC_REFERENCE = /&#(?:x([0-9a-f]+)|(\d+));?/gi;
-
 // The display name is set by the participant too; it lands inside the
 // envelope's `author="…"`, so nothing in it may end the attribute or the tag.
 function authorName(name: string | undefined): string {
@@ -118,23 +114,23 @@ function authorName(name: string | undefined): string {
     return safe || 'unknown';
 }
 
-// The references that spell markup (`&lt;/NEWEST MESSAGE&gt;`); decoded so the
+// The named references that spell markup (`&lt;/NEWEST MESSAGE&gt;`), so the
 // `<` they stand for is neutralized like any other.
-const MARKUP_REFERENCE = /&(lt|gt|amp);?/gi;
 const MARKUP_CHAR: Record<string, string> = { lt: '<', gt: '>', amp: '&' };
 
+// Numeric references in any spelling a browser accepts (leading zeros, hex,
+// missing `;`) and the markup ones, in one pass: what one decodes to is never
+// decoded again (`&#38;lt;` shows as `&lt;`, not `<`).
+const REFERENCE = /&#(?:x([0-9a-f]+)|(\d+));?|&(lt|gt|amp);?/gi;
+
 function decodeNumericReferences(text: string): string {
-    return text
-        .replace(NUMERIC_REFERENCE, (_, hex, dec) => {
-            const codePoint = hex ? parseInt(hex, 16) : Number(dec);
-            return codePoint > 0 && codePoint <= 0x10ffff
-                ? String.fromCodePoint(codePoint)
-                : '';
-        })
-        .replace(
-            MARKUP_REFERENCE,
-            (_, name: string) => MARKUP_CHAR[name.toLowerCase()],
-        );
+    return text.replace(REFERENCE, (_, hex, dec, name: string | undefined) => {
+        if (name) return MARKUP_CHAR[name.toLowerCase()];
+        const codePoint = hex ? parseInt(hex, 16) : Number(dec);
+        return codePoint > 0 && codePoint <= 0x10ffff
+            ? String.fromCodePoint(codePoint)
+            : '';
+    });
 }
 
 // Every code point Unicode marks as not rendered (zero-width, bidi controls,
