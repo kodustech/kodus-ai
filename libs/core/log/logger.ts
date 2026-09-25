@@ -614,6 +614,15 @@ const PRIMITIVE_BUDGET_COST = 20;
 
 interface SanitizeBudget {
     used: number;
+    /**
+     * Per-sink ceiling. Defaults to the CloudWatch-derived value above, which
+     * is correct for the pino path and WRONG for everything else: the MongoDB
+     * exporter calls deepSanitize for log documents and for span attributes
+     * that carry LLM input/output and MCP tool args, under its own
+     * maxLogDocumentBytes policy of 12MB and with no copy multiplication.
+     * Imposing the line budget there silently drops observability payload.
+     */
+    limit?: number;
 }
 
 /**
@@ -639,7 +648,8 @@ function deepSanitize(
     depth = 0,
     budget: SanitizeBudget = { used: 0 },
 ): any {
-    if (budget.used >= DEEP_SANITIZE_MAX_TOTAL) {
+    const budgetLimit = budget.limit ?? DEEP_SANITIZE_MAX_TOTAL;
+    if (budget.used >= budgetLimit) {
         return BUDGET_SPENT_MARKER;
     }
 
@@ -730,11 +740,11 @@ function deepSanitize(
         // every array, including the short clean ones that structural sharing
         // exists to leave untouched.
         const capped = arrayLength > DEEP_SANITIZE_MAX_ARRAY;
-        const limit = capped ? DEEP_SANITIZE_MAX_ARRAY : arrayLength;
+        const elementLimit = capped ? DEEP_SANITIZE_MAX_ARRAY : arrayLength;
         let changed = capped;
         const out: any[] = [];
-        for (let i = 0; i < limit; i++) {
-            if (budget.used >= DEEP_SANITIZE_MAX_TOTAL) {
+        for (let i = 0; i < elementLimit; i++) {
+            if (budget.used >= budgetLimit) {
                 out.push(`[+${arrayLength - i} more items omitted]`);
                 changed = true;
                 break;
@@ -771,7 +781,7 @@ function deepSanitize(
         // Stop EMITTING, not just stop descending: replacing each value with a
         // marker while still writing every key lets a 50k-key object blow the
         // budget on key names alone.
-        if (budget.used >= DEEP_SANITIZE_MAX_TOTAL) {
+        if (budget.used >= budgetLimit) {
             out['…'] = `[+${keys.length - k} more keys omitted]`;
             changed = true;
             break;
