@@ -59,7 +59,7 @@ describe('BillingEventsController (HTTP)', () => {
         event: string,
         body: object | string,
         signature?: string,
-        timestamp: string | undefined = String(Date.now()),
+        timestamp?: string,
     ) => {
         const raw = typeof body === 'string' ? body : JSON.stringify(body);
         const req = request(app.getHttpServer())
@@ -134,7 +134,12 @@ describe('BillingEventsController (HTTP)', () => {
 
     describe('signature', () => {
         it('401 without a signature, and touches nothing', async () => {
-            await post('plan-changed', { organizationId: 'org-1' }).expect(401);
+            await post(
+                'plan-changed',
+                { organizationId: 'org-1' },
+                undefined,
+                String(Date.now()),
+            ).expect(401);
             expect(kodyRules.syncRulesWithPlanLimit).not.toHaveBeenCalled();
         });
 
@@ -143,6 +148,7 @@ describe('BillingEventsController (HTTP)', () => {
                 'payment-failed',
                 { organizationId: 'org-1' },
                 'deadbeef',
+                String(Date.now()),
             ).expect(401);
             expect(notify.emit).not.toHaveBeenCalled();
         });
@@ -174,7 +180,7 @@ describe('BillingEventsController (HTTP)', () => {
             expect(kodyRules.syncRulesWithPlanLimit).not.toHaveBeenCalled();
         });
 
-        it('401 when the timestamp is missing or outside the 5-minute window', async () => {
+        it('401 when the timestamp is outside the 5-minute window', async () => {
             const body = { organizationId: 'org-1' };
             const stale = String(Date.now() - 6 * 60 * 1000);
             await post(
@@ -183,11 +189,18 @@ describe('BillingEventsController (HTTP)', () => {
                 sign('plan-changed', JSON.stringify(body), stale),
                 stale,
             ).expect(401);
+            expect(kodyRules.syncRulesWithPlanLimit).not.toHaveBeenCalled();
+        });
+
+        it('401 when the timestamp header is absent', async () => {
+            const body = { organizationId: 'org-1' };
+            // No x-kodus-timestamp header, with a signature over an empty
+            // timestamp that would otherwise verify: the 401 comes from the
+            // missing header, not from the HMAC.
             await post(
                 'plan-changed',
                 body,
                 sign('plan-changed', JSON.stringify(body), ''),
-                undefined,
             ).expect(401);
             expect(kodyRules.syncRulesWithPlanLimit).not.toHaveBeenCalled();
         });

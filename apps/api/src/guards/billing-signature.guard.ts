@@ -82,6 +82,21 @@ export class BillingSignatureGuard implements CanActivate {
             !Number.isFinite(timestampMs) ||
             Math.abs(Date.now() - timestampMs) > BILLING_SIGNATURE_MAX_SKEW_MS
         ) {
+            // Billing does not retry a 401, so the reason must be diagnosable
+            // (a dropped header or clock skew between the two deployments).
+            this.logger.warn({
+                message:
+                    'Rejected a billing callback: missing or stale timestamp',
+                context: BillingSignatureGuard.name,
+                metadata: {
+                    organizationId,
+                    method: req.method,
+                    path: req.originalUrl,
+                    skewMs: Number.isFinite(timestampMs)
+                        ? Date.now() - timestampMs
+                        : null,
+                },
+            });
             throw new UnauthorizedException('Missing or stale timestamp');
         }
 
