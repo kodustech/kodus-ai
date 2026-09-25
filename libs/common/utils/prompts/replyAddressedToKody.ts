@@ -152,21 +152,19 @@ const ANGLE_BRACKET = /</g;
 const MAX_RAW_BODY_CHARS = MAX_BODY_CHARS * 4;
 
 function clean(body: string): string {
-    // Each step only shortens the text (a reference is longer than what it
-    // decodes to), so repeating while it shrinks ends, and catches text that
-    // only becomes hidden markup after another step ran.
+    // In the order the browser works: hidden markup is found in the raw body
+    // (repeated while it shrinks, since joining around one can form another);
+    // references are decoded once afterwards and never re-scanned as markup,
+    // as the tokenizer emits them as text; then what is never drawn goes, and
+    // every `<` left is neutralized so nothing decoded can forge the envelope.
     let text = (body ?? '').slice(0, MAX_RAW_BODY_CHARS);
     let previous: string;
     do {
         previous = text;
-        // Markup first, as the browser parses the raw body; then what the
-        // browser decodes or never draws.
-        text = decodeNumericReferences(withoutHiddenMarkup(text)).replace(
-            INVISIBLE,
-            '',
-        );
+        text = withoutHiddenMarkup(text);
     } while (text.length < previous.length);
-    text = text
+    text = decodeNumericReferences(text)
+        .replace(INVISIBLE, '')
         .replace(ANGLE_BRACKET, '‹')
         // Line-end padding only: `\s` would also eat blank lines.
         .replace(/[\t ]+$/gm, '')
