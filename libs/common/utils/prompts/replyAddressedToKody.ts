@@ -138,6 +138,8 @@ function decodeNumericReferences(text: string): string {
 // split a guard token: `<!\u200D--`, `<\u2066/NEWEST MESSAGE>`.
 const INVISIBLE = /\p{Default_Ignorable_Code_Point}/gu;
 
+const SURVIVING_REFERENCE = /&(?=(?:lt|gt|amp|#\d+|#x[0-9a-f]+);?)/gi;
+
 // No `<` from a participant reaches the prompt, so no spelling of a tag can
 // open or close the envelope the thread is rendered in (`</NEWEST MESSAGE>`).
 const ANGLE_BRACKET = /</g;
@@ -162,6 +164,9 @@ function clean(body: string): string {
     text = decodeNumericReferences(text)
         .replace(INVISIBLE, '')
         .replace(ANGLE_BRACKET, '‹')
+        // A reference spelled out on the page (`&#38;lt;` shows as `&lt;`)
+        // stays readable but no longer looks like one to the model.
+        .replace(SURVIVING_REFERENCE, '‹')
         // Line-end padding only: `\s` would also eat blank lines.
         .replace(/[\t ]+$/gm, '')
         .trim();

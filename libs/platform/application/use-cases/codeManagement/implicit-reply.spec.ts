@@ -243,7 +243,13 @@ describe('reply thread rendering', () => {
             'finding',
             'see &#38;lt;!-- x --&#38;gt; and &#38;amp;',
         ]);
-        expect(user).toContain('see &lt;!-- x --&gt; and &amp;');
+        expect(user).toContain('see ‹lt;!-- x --‹gt; and ‹amp;');
+        expect(user).not.toMatch(/&(lt|gt|amp);/);
+    });
+
+    it('leaves ordinary ampersands alone', async () => {
+        const user = await render(['finding', 'R&D and Q&A & more']);
+        expect(user).toContain('R&D and Q&A & more');
     });
 
     it('keeps blank lines between paragraphs', async () => {
