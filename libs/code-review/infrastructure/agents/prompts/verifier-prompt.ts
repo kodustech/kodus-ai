@@ -143,3 +143,192 @@ Output JSON:
 `,
     };
 }
+
+
+/**
+ * VERIFICADOR EM MODO SCORE — a pergunta da veracidade, feita por quem tem
+ * ferramenta.
+ *
+ * Por que existe. O verificador de producao responde keep/drop e mantem 94-96%
+ * do que ve, em dois modelos, com e sem o percurso do finder no bundle: medido,
+ * dar mais contexto mexeu no raciocinio (as 188 racionalizacoes mudaram) e nao
+ * no saldo (11 cortes viraram 10, e os cinco vereditos que viraram eram todos
+ * falso positivo). O gargalo nao e o que ele sabe, e a regra de decisao —
+ * refutar para derrubar, e "na duvida, mantenha". Uma saida binaria que diz
+ * `true` 95% das vezes nao separa nada.
+ *
+ * O prompt de veracidade, por outro lado, separa: devolve 0-100 e alimenta a
+ * formula. Mas ele e CEGO — ve so o diff, e por isso a escala dele tem um 75
+ * para "depende de um arquivo que nao esta aqui" e um 50 para "nao da para
+ * saber daqui". Aqui essas duas notas mudam de sentido: com grep e readFile,
+ * "nao esta no diff" deixa de ser resposta e vira tarefa. As ancoras abaixo
+ * falam do que a INVESTIGACAO achou, nao do que estava visivel.
+ */
+export const VERACITY_SCORE_SCHEMA = {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+        score: {
+            type: 'number',
+            description: '0-100: how likely the claim is TRUE of this code, after investigating.',
+        },
+        confidence: {
+            type: 'string',
+            enum: ['high', 'medium', 'low'],
+            description:
+                'How settled the score is: high when you read the deciding code, low when you ran out of steps.',
+        },
+        rationale: {
+            type: 'string',
+            description: 'What you read and what it settled. Cite file:line.',
+        },
+    },
+    required: ['score', 'rationale'],
+};
+
+export function buildVeracityScorePrompt(
+    evidenceBundle: string,
+): { system: string; prompt: string } {
+    return {
+        system: `You are verifying ONE claim about a pull request. You have grep and readFile over the real repository.
+
+Answer ONE question: how likely is it that THE CLAIM IS TRUE OF THIS CODE?
+
+Not whether it is worth reporting. Not whether it is severe. Not whether the author would care. A typo in a log message that really is there scores high. A catastrophic data-loss bug that the code does not actually have scores zero.
+
+You can look. Use that.
+
+  100  you READ the code and confirmed it — you can point at the lines and they
+       say what the claim says
+  75   what you read supports the claim, but one step rests on behaviour you
+       could not check here: a third-party library, runtime configuration,
+       dynamic dispatch, something outside this repository
+  50   you INVESTIGATED and it is genuinely undecidable — you looked for what
+       would settle it and the answer is not in this codebase
+  25   what you read works against the claim: a guard, a default, an earlier
+       return or a type makes the described state unlikely, though you cannot
+       rule it out entirely
+  0    you found the refutation — the code contradicts the claim, or the symbol,
+       call or condition it names does not exist
+
+50 is for a question you CHASED and could not close, never for one you did not
+open. If you have steps left and have not looked, you have not earned a 50.
+
+Two traps. A confident, well-written claim is not more likely to be true —
+judge the code, not the prose. And when a claim says something is MISSING (no
+validation, no guard, no check), grep for it before believing it is absent;
+claims of absence are the ones most often wrong.
+
+Return JSON only at the end.`,
+        prompt: `${evidenceBundle}
+
+You have 8 steps. The LAST one is your answer — submitting the score is itself a
+step — so you have 7 to investigate with. Spend them: an unopened question is
+not a 50.
+
+Report TWO things, and they are different questions. "score" is how likely the
+claim is TRUE. "confidence" is how settled that score is — high when you read
+the code that decides it, low when you ran out of steps and are extrapolating.
+A score of 20 with high confidence means you refuted it; a score of 20 with low
+confidence means you suspect it is wrong and could not finish checking.
+
+Output JSON:
+\`\`\`json
+{
+  "score": 0,
+  "confidence": "high|medium|low",
+  "rationale": "what you read and what it settled, citing file:line"
+}
+\`\`\`
+`,
+    };
+}
+
+
+/**
+ * VERIFICADOR EM MODO FALHA — "voce consegue instanciar a falha?", com
+ * ferramenta.
+ *
+ * Por que a pergunta muda. O modo score pergunta se a alegacao e VERDADEIRA, e
+ * medido nos 188 grupos do GPT isso quase nao separa: a faixa 100 acerta 43%,
+ * a 75-99 acerta 24% e a 50-74 acerta 29% — plano, e invertido no meio. A causa
+ * nao e falta de evidencia (ele tem grep e readFile): e que os nossos falsos
+ * positivos NAO SAO MENTIRAS. "falta validacao", "poderia vir null" sao
+ * afirmacoes corretas sobre codigo que nao quebra. Nenhuma pergunta sobre
+ * verdade separa um defeito de uma observacao correta e inerte.
+ *
+ * O que separa e exigir a FALHA: uma entrada concreta que chega naquele codigo
+ * e produz a saida errada que a alegacao descreve. Um achado real sempre tem
+ * uma; uma observacao inerte nunca tem.
+ */
+export const FAILURE_SCORE_SCHEMA = {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+        score: {
+            type: 'number',
+            description: '0-100: how concretely the failure can be instantiated.',
+        },
+        trigger: {
+            type: 'string',
+            description:
+                'The concrete input or state you walked, and the wrong outcome it produced. Empty when you could not construct one.',
+        },
+        rationale: {
+            type: 'string',
+            description: 'What you read, citing file:line.',
+        },
+    },
+    required: ['score', 'rationale'],
+};
+
+export function buildFailureVerifierPrompt(
+    evidenceBundle: string,
+): { system: string; prompt: string } {
+    return {
+        system: `You are checking ONE claim about a pull request. You have grep and readFile over the real repository.
+
+Do not ask whether the claim is TRUE. Ask whether it BREAKS.
+
+Most wrong findings in this system are not lies — they are correct statements about code that never fails: "no validation here", "this could be null", "missing rate limit". Each can be perfectly accurate and still describe nothing that goes wrong. A finding earns a comment when someone can be shown the failure, not when the observation is defensible.
+
+So: can you instantiate it? Name a concrete input, request or state that reaches this code and produces the wrong outcome the claim describes. Walk it through the real code, not through what the code ought to do.
+
+  100  you walked a concrete case end to end — this input, these lines, this
+       wrong result — and every step is in code you read
+  75   the failing path is real, but one step rests on a caller, a config or a
+       library you could not reach from here
+  50   you tried to build a failing case and could not close it, and nothing you
+       read rules it out either
+  25   the case you tried is blocked: a guard, a default, an earlier return or a
+       type you READ stops it before the wrong outcome
+  0    it cannot happen — you found what prevents it, or the symbol, call or
+       condition the claim names does not exist
+
+A claim that is true but produces no wrong outcome is a 25, not a 75. Being
+right is not the bar; breaking is.
+
+Do not lower the score because the trigger is rare, adversarial or concurrent.
+A race that needs two requests is still a failure you can instantiate.
+
+Return JSON only at the end.`,
+        prompt: `${evidenceBundle}
+
+You have 8 steps. The LAST one is your answer — submitting is itself a step — so
+you have 7 to investigate with. Spend them.
+
+In "trigger", write the concrete case you walked: the input or state, and the
+wrong outcome. If you could not construct one, leave it empty and say why in
+the rationale.
+
+Output JSON:
+\`\`\`json
+{
+  "score": 0,
+  "trigger": "the concrete input/state and the wrong outcome it produced",
+  "rationale": "what you read, citing file:line"
+}
+\`\`\`
+`,
+    };
+}

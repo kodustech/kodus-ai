@@ -33,6 +33,11 @@ export interface VerdictDimension {
 export interface Verdict {
     readonly keep: boolean;
     readonly confidence?: 'high' | 'medium' | 'low';
+    /** 0-100, quando o verificador foi perguntado por uma NOTA em vez de um
+     *  veredito. Um `keep` binario que diz `true` 95% das vezes nao ranqueia
+     *  nada; uma nota sim, e um ranqueador a jusante pode usa-la. Ausente no
+     *  modo veredito. */
+    readonly score?: number;
     readonly rationale?: string;
     readonly dimensions?: readonly VerdictDimension[];
     /** Tools the verifier invoked while judging this candidate (generic —
