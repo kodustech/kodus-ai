@@ -123,16 +123,23 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
 
         const inDiff = this.clipToDiff(findings, changedFiles);
 
-        if (inDiff.length > 0) {
-            this.logger.log({
-                message: `Analyzers reported ${inDiff.length} in-diff finding(s)`,
-                context: this.stageName,
-                metadata: {
-                    prNumber: context.pullRequest?.number,
-                    rules: [...new Set(inDiff.map((f) => f.ruleId))],
-                },
-            });
-        }
+        // Logged even when empty, and with the count BEFORE clipping. A tool
+        // that produced nothing and a tool whose findings were all clipped away
+        // are different failures, and both look identical from the published
+        // review — which is how a scan silently returning nothing hides.
+        this.logger.log({
+            message: `Analyzers produced ${findings.length} finding(s), ${inDiff.length} in diff`,
+            context: this.stageName,
+            metadata: {
+                prNumber: context.pullRequest?.number,
+                ran: selected.map(({ tool }) => tool.id),
+                failed,
+                raw: findings.length,
+                inDiff: inDiff.length,
+                clippedOut: findings.length - inDiff.length,
+                rules: [...new Set(inDiff.map((f) => f.ruleId))],
+            },
+        });
 
         return this.updateContext(context, (draft) => {
             draft.analyzerRouting = decisions;
