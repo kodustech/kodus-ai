@@ -120,10 +120,20 @@ export class SandboxLeaseRepository {
      * Only updates if the document is still in CREATING state to prevent
      * overwriting a concurrent INVALIDATED state change.
      */
-    async updateReady(prKey: string, sandboxId: string): Promise<void> {
+    async updateReady(
+        prKey: string,
+        sandboxId: string,
+        baseBranch?: string,
+    ): Promise<void> {
         await this.leaseModel.updateOne(
             { _id: prKey, state: 'CREATING' },
-            { $set: { state: 'READY', sandboxId } },
+            {
+                $set: {
+                    state: 'READY',
+                    sandboxId,
+                    ...(baseBranch ? { baseBranch } : {}),
+                },
+            },
         );
     }
 
