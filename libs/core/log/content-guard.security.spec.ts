@@ -16,6 +16,10 @@
  * jest.setup.ts globally mocks '@libs/core/log/logger', so pull the REAL pure
  * helpers via requireActual.
  */
+// Make this file a module so the const below is file-scoped; otherwise tsc
+// treats it as a global script and it collides with deep-sanitize.security.spec.ts.
+export {};
+
 const { deepSanitize } = jest.requireActual('@libs/core/log/logger') as {
     deepSanitize: (obj: any) => any;
 };
@@ -279,7 +283,10 @@ describe('deepSanitize — an exhausted budget must not evict small trailing key
             attributes: { a: 1 },
             createdAt,
         });
-        expect(out.createdAt).toBe(createdAt);
+        // A fresh Date by design (defeats a hostile toJSON on a subclass): the
+        // TTL index needs a valid Date with the same instant, not the same object.
+        expect(out.createdAt).toBeInstanceOf(Date);
+        expect(out.createdAt.getTime()).toBe(createdAt.getTime());
     });
 
     it('keeps tu, which startSpan appends last and credits metering reads', () => {
@@ -407,4 +414,74 @@ describe('deepSanitize — the tail never enumerates large values', () => {
         expect(out.payload).toBe('[budget spent]');
     });
 
+});
+
+describe('deepSanitize — review round: single read, full accounting, root reserve', () => {
+    const fat = () => {
+        const m: Record<string, string> = {};
+        for (let i = 0; i < 20; i++) m[`f${i}`] = 'x'.repeat(4000);
+        return m;
+    };
+
+    it('reads each tail property once — a getter that changes cannot smuggle a secret', () => {
+        let reads = 0;
+        const shifty = {
+            get inner(): any {
+                reads++;
+                return reads === 1 ? 'harmless' : { password: 'LEAKED-SECRET' };
+            },
+        };
+        const out = deepSanitize({ metadata: fat(), shifty });
+        expect(JSON.stringify(out)).not.toContain('LEAKED-SECRET');
+    });
+
+    it('never throws when a tail getter turns into a BigInt on a second read', () => {
+        // Validating in one pass and copying in another let this through: the
+        // first read saw a number (cheap), the second copied a BigInt, and the
+        // cost's JSON.stringify threw out of deepSanitize.
+        let reads = 0;
+        const shifty = {
+            get n(): any {
+                reads++;
+                return reads === 1 ? 1 : BigInt(1);
+            },
+        };
+        expect(() => deepSanitize({ metadata: fat(), shifty })).not.toThrow();
+    });
+
+    it('charges [unreadable] tail entries against the allowance', () => {
+        const hostile: Record<string, any> = { metadata: fat() };
+        for (let i = 0; i < 100; i++) {
+            Object.defineProperty(hostile, `${'k'.repeat(200)}${i}`, {
+                enumerable: true,
+                get() {
+                    throw new Error('boom');
+                },
+            });
+        }
+        const out = JSON.stringify(deepSanitize(hostile));
+        expect(out.length * 3).toBeLessThan(262_144);
+        expect(out).toContain('more keys omitted');
+    });
+
+    it('a nested tail cannot spend the pool and evict the root createdAt', () => {
+        // Only objects OPEN when the budget runs out process a tail, so the
+        // exhaustion happens deep (inside m2.fat) and both m2 and m1 then spend
+        // their tails. Each entry costs ~30 bytes, so a single shared pool
+        // fills to within 30 bytes of its cap — less than createdAt's ~39 —
+        // and the root's createdAt was evicted. With the root reserved, it
+        // survives. (An earlier version of this test used 200-char entries,
+        // left ~200 bytes of slack in the pool, and passed on the buggy code.)
+        const tail = () => {
+            const o: Record<string, string> = {};
+            for (let i = 0; i < 100; i++) o[`a${String(i).padStart(2, '0')}`] = 'v'.repeat(21);
+            return o;
+        };
+        const m2 = { fat: fat(), ...tail() };
+        const m1 = { m2, ...tail() };
+        const createdAt = new Date();
+        const out = deepSanitize({ m1, createdAt });
+        expect(out.createdAt).toBeInstanceOf(Date);
+        expect(out.createdAt.getTime()).toBe(createdAt.getTime());
+    });
 });

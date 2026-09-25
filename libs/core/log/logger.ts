@@ -609,47 +609,9 @@ const BUDGET_SPENT_MARKER = '[budget spent]';
  */
 const KEY_TAIL_ALLOWANCE = 100;
 
-/** Bounds the shallow-object case in isCheapValue. */
+/** Bounds the flat-object case in sanitizeTailValue. */
 const CHEAP_OBJECT_MAX_KEYS = 12;
 
-/**
- * Cheap enough to carry past an exhausted budget without measuring it: a
- * scalar, a short string, a Date, or a flat object of those. The flat-object
- * case exists for values like `tu` ({ credits: n }), which credits metering
- * reads and which `startSpan` appends last — a scalar-only rule would have
- * collapsed it to a marker for its position alone.
- */
-function isCheapValue(v: any): boolean {
-    const type = typeof v;
-    if (v === null || type === 'number' || type === 'boolean') return true;
-    if (type === 'string') return v.length <= 256;
-    if (type !== 'object') return false;
-    if (v instanceof Date) return true;
-    // Reject typed arrays BEFORE enumerating: every byte of a Buffer is an own
-    // enumerable key, so Object.keys() on a 1MB buffer builds a million index
-    // strings (measured: 53ms) just to learn it is too big. deepSanitize's
-    // main path already short-circuits this case the same way.
-    if (Array.isArray(v) || ArrayBuffer.isView(v)) return false;
-    try {
-        // Object.keys is deliberate. A for…in with an early break looks cheaper
-        // but is not: V8 builds the full enumeration list before the first
-        // iteration (measured 17.7ms vs 16.9ms on a 200k-key object). There is
-        // no O(1) own-key count in JS, and the main loop pays the same
-        // Object.keys on the same object, so this is not a tail regression.
-        const ks = Object.keys(v);
-        if (ks.length > CHEAP_OBJECT_MAX_KEYS) return false;
-        for (const k of ks) {
-            const inner = v[k];
-            const it = typeof inner;
-            if (inner === null || it === 'number' || it === 'boolean') continue;
-            if (it === 'string' && inner.length <= 256) continue;
-            return false;
-        }
-        return true;
-    } catch {
-        return false;
-    }
-}
 
 /**
  * JSON cost of a non-string leaf plus its punctuation. Deliberately generous:
@@ -660,37 +622,78 @@ const PRIMITIVE_BUDGET_COST = 20;
 
 interface SanitizeBudget {
     used: number;
-    /** Bytes spent on the post-exhaustion tail; see TAIL_BYTES_ALLOWANCE. */
+    /** Bytes spent on NESTED post-exhaustion tails; see TAIL_BYTES_ALLOWANCE. */
     tailUsed?: number;
+    /** Bytes spent on the ROOT object's tail, reserved separately. */
+    rootTailUsed?: number;
 }
 
 /**
- * Bytes the whole call may spend on trailing keys AFTER the main budget is
- * exhausted. Shared across the entire call (not per object), so nesting
- * cannot multiply it, and the line stays bounded by MAX_TOTAL + this.
- * `createdAt` and `tu` need a few dozen bytes; 4KB is generous.
+ * Bytes that trailing keys may spend AFTER the main budget is exhausted.
+ *
+ * Two pools, each of this size: one shared by every NESTED object in the call,
+ * one reserved for the ROOT object. Sharing across nested objects stops
+ * nesting from multiplying the tail; reserving the root stops a nested tail
+ * from spending the pool first and evicting the root's own trailing keys —
+ * `createdAt` on the exporter's log document (its TTL index is built on it)
+ * and `tu` on span attributes (credits metering reads it). The line stays
+ * bounded by MAX_TOTAL + 2 * this.
  */
 const TAIL_BYTES_ALLOWANCE = 4 * 1024;
 
 /**
- * Sanitize a value already judged cheap by isCheapValue, WITHOUT recursing.
+ * Validate AND sanitize a tail value in a single pass, reading each property
+ * exactly once. Returns undefined when the value is not cheap; the caller then
+ * emits a marker.
  *
- * The tail path must never emit raw values: an earlier version did, and past
- * budget exhaustion it leaked connection-string passwords, Authorization
- * headers and nested `token`/`password` keys that the normal path redacts.
- * So strings still go through sanitizeString, and a flat object still has its
- * sensitive and content keys handled exactly as the main loop would.
+ * Three earlier shapes of this code each leaked or broke, and this one exists
+ * to rule all three out:
+ *   - emitting cheap values raw skipped redaction entirely (secrets leaked);
+ *   - validating in one function and copying in another read every property
+ *     twice, so a getter returning something else on the second read (a nested
+ *     `{ password }`, a Buffer of customer code) was emitted unvalidated;
+ *   - calling Object.keys() on a Buffer enumerated every byte (53ms / MB).
+ * Only null, numbers, booleans, short strings (sanitized), a FRESH Date, and
+ * flat objects of those are ever emitted, so the result is always JSON-safe.
  */
-function sanitizeCheap(v: any): any {
-    if (typeof v === 'string') return sanitizeString(v);
-    if (v === null || typeof v !== 'object' || v instanceof Date) return v;
-    const out: Record<string, any> = {};
-    for (const k of Object.keys(v)) {
-        if (isSensitiveKey(k)) out[k] = '[REDACTED]';
-        else if (isContentKey(k)) out[k] = describeOmitted(v[k]);
-        else out[k] = typeof v[k] === 'string' ? sanitizeString(v[k]) : v[k];
+function sanitizeTailValue(v: any): any {
+    try {
+        const type = typeof v;
+        if (v === null || type === 'number' || type === 'boolean') return v;
+        if (type === 'string') {
+            return v.length <= 256 ? sanitizeString(v) : undefined;
+        }
+        if (type !== 'object') return undefined; // bigint, symbol, function
+        if (v instanceof Date) {
+            // A fresh Date: a subclass could carry a hostile toJSON.
+            return new Date(Date.prototype.getTime.call(v));
+        }
+        if (Array.isArray(v) || ArrayBuffer.isView(v)) return undefined;
+        const ks = Object.keys(v);
+        if (ks.length > CHEAP_OBJECT_MAX_KEYS) return undefined;
+        const out: Record<string, any> = {};
+        for (const k of ks) {
+            const inner = v[k]; // the ONLY read of this property
+            if (isSensitiveKey(k)) {
+                out[k] = '[REDACTED]';
+            } else if (isContentKey(k)) {
+                out[k] = describeOmitted(inner);
+            } else if (
+                inner === null ||
+                typeof inner === 'number' ||
+                typeof inner === 'boolean'
+            ) {
+                out[k] = inner;
+            } else if (typeof inner === 'string' && inner.length <= 256) {
+                out[k] = sanitizeString(inner);
+            } else {
+                return undefined; // not flat or not small: whole value is a marker
+            }
+        }
+        return out;
+    } catch {
+        return undefined;
     }
-    return out;
 }
 
 /**
@@ -714,7 +717,7 @@ function deepSanitize(
     obj: any,
     seen?: WeakSet<object>,
     depth = 0,
-    budget: SanitizeBudget = { used: 0, tailUsed: 0 },
+    budget: SanitizeBudget = { used: 0, tailUsed: 0, rootTailUsed: 0 },
 ): any {
     if (budget.used >= DEEP_SANITIZE_MAX_TOTAL) {
         return BUDGET_SPENT_MARKER;
@@ -866,40 +869,45 @@ function deepSanitize(
             }
             tailEmitted++;
             changed = true;
-            let tailRaw: any;
-            try {
-                tailRaw = obj[key];
-            } catch {
-                out[key] = '[unreadable]';
-                continue;
-            }
             let emitted: any;
-            if (isSensitiveKey(key)) emitted = '[REDACTED]';
-            else if (isContentKey(key)) emitted = describeOmitted(tailRaw);
-            else if (isCheapValue(tailRaw)) {
+            if (isSensitiveKey(key)) {
+                emitted = '[REDACTED]';
+            } else {
+                let tailRaw: any;
+                let readable = true;
                 try {
-                    emitted = sanitizeCheap(tailRaw);
+                    tailRaw = obj[key];
                 } catch {
-                    emitted = '[unreadable]';
+                    readable = false;
                 }
-            } else emitted = BUDGET_SPENT_MARKER;
+                if (!readable) emitted = '[unreadable]';
+                else if (isContentKey(key)) emitted = describeOmitted(tailRaw);
+                else {
+                    const cheap = sanitizeTailValue(tailRaw);
+                    emitted = cheap === undefined ? BUDGET_SPENT_MARKER : cheap;
+                }
+            }
 
-            // Charge the tail against its own shared allowance. Without this
-            // the tail was unbounded: 100 keys of flat 12x256-char objects
-            // produced a 1.1MB line.
-            const cost =
-                byteLen(key) +
-                4 +
-                (typeof emitted === 'string'
-                    ? byteLen(emitted)
-                    : emitted instanceof Date
-                      ? 26
-                      : byteLen(JSON.stringify(emitted) ?? ''));
-            if ((budget.tailUsed ?? 0) + cost > TAIL_BYTES_ALLOWANCE) {
+            // Every tail branch — [unreadable] included — is charged here, so
+            // no emission escapes the allowance. The cost is computed
+            // defensively even though sanitizeTailValue only returns JSON-safe
+            // values: deepSanitize must never throw.
+            let cost = byteLen(key) + 4;
+            try {
+                cost +=
+                    typeof emitted === 'string'
+                        ? byteLen(emitted)
+                        : byteLen(JSON.stringify(emitted) ?? '');
+            } catch {
+                cost += TAIL_BYTES_ALLOWANCE; // unmeasurable: refuse it
+            }
+            const used = depth === 0 ? (budget.rootTailUsed ?? 0) : (budget.tailUsed ?? 0);
+            if (used + cost > TAIL_BYTES_ALLOWANCE) {
                 out['…'] = `[+${keys.length - k} more keys omitted]`;
                 break;
             }
-            budget.tailUsed = (budget.tailUsed ?? 0) + cost;
+            if (depth === 0) budget.rootTailUsed = used + cost;
+            else budget.tailUsed = used + cost;
             out[key] = emitted;
             continue;
         }
