@@ -2762,11 +2762,24 @@ export class GithubService
                 evidence.push(mapped);
             }
         } else {
+            // Names the consequence, because the review continues with
+            // whatever is readable. A token without Checks:read — a PAT rather
+            // than the App installation — sees commit statuses only, and since
+            // only FAILING checks become evidence, a repository whose CI runs
+            // entirely on GitHub Actions then contributes nothing at all
+            // rather than obviously nothing.
             this.logger.warn({
-                message: 'Failed to list GitHub check runs',
+                message:
+                    'Failed to list GitHub check runs; CI evidence is limited ' +
+                    'to commit statuses for this commit. Grant the credential ' +
+                    'Checks:read, or connect the GitHub App installation.',
                 context: GithubService.name,
                 error: runs.reason,
-                metadata: { repository: repository.name, commitSha },
+                metadata: {
+                    repository: repository.name,
+                    commitSha,
+                    evidenceFrom: 'commit-statuses-only',
+                },
             });
         }
 
