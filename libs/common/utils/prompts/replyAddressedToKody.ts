@@ -73,14 +73,27 @@ function withoutHiddenMarkup(body: string): string {
     let start = nextHiddenMarkup(rest);
     while (start >= 0) {
         out += rest.slice(0, start);
-        const isComment = rest.startsWith('<!--', start);
-        const close = isComment
-            ? rest.indexOf('-->', start + 4)
-            : rest.indexOf('>', start + 2);
-        rest = close < 0 ? '' : rest.slice(close + (isComment ? 3 : 1));
+        const [close, closerLength] = rest.startsWith('<!--', start)
+            ? commentEnd(rest, start + 4)
+            : [rest.indexOf('>', start + 2), 1];
+        rest = close < 0 ? '' : rest.slice(close + closerLength);
         start = nextHiddenMarkup(rest);
     }
     return out + rest;
+}
+
+// Where a comment opened before `from` ends, as the HTML parser decides: an
+// immediate `>` or `->` (empty comment), else the first `-->` or `--!>`.
+function commentEnd(text: string, from: number): [number, number] {
+    if (text.startsWith('>', from)) return [from, 1];
+    if (text.startsWith('->', from)) return [from, 2];
+    const closers: Array<[number, number]> = [
+        [text.indexOf('-->', from), 3],
+        [text.indexOf('--!>', from), 4],
+    ];
+    const found = closers.filter(([at]) => at >= 0);
+    if (!found.length) return [-1, 0];
+    return found.reduce((a, b) => (b[0] < a[0] ? b : a));
 }
 
 function nextHiddenMarkup(text: string): number {
@@ -109,9 +122,9 @@ function decodeNumericReferences(text: string): string {
 // split a guard token: `<!\u200D--`, `<\u2066/NEWEST MESSAGE>`.
 const INVISIBLE = /\p{Default_Ignorable_Code_Point}/gu;
 
-// A body could otherwise open or close the envelope the thread is rendered in
-// (`</NEWEST MESSAGE>`) and pose as another participant.
-const ENVELOPE_TAG = /<(\/?)(newest message|message)\b/gi;
+// No `<` from a participant reaches the prompt, so no spelling of a tag can
+// open or close the envelope the thread is rendered in (`</NEWEST MESSAGE>`).
+const ANGLE_BRACKET = /</g;
 
 // Longest raw body cleaned. Markup removal can take quadratic time on a
 // crafted body, and only MAX_BODY_CHARS survive anyway; the slack covers
@@ -134,7 +147,7 @@ function clean(body: string): string {
         );
     } while (text.length < previous.length);
     text = text
-        .replace(ENVELOPE_TAG, '‹$1$2')
+        .replace(ANGLE_BRACKET, '‹')
         // Line-end padding only: `\s` would also eat blank lines.
         .replace(/[\t ]+$/gm, '')
         .trim();
