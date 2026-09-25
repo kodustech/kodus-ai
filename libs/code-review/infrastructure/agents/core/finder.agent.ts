@@ -1407,6 +1407,12 @@ export interface RecallPassStat {
     /** Relogio de parede da passada. Ausente nas passadas de papel de expert,
      *  que nao passam pelo runPass. */
     ms?: number;
+    /** Quando a passada COMECOU, em ms desde o inicio do finder. Com `ms` isto
+     *  da a linha do tempo inteira: quais passadas se sobrepoem, quanto tempo a
+     *  fase 0 levou de parede (nao a soma das passadas, que roda em paralelo) e
+     *  onde a fase 1 entra. Sem o inicio, `ms` sozinho nao distingue treze
+     *  passadas de um minuto em paralelo de treze em sequencia. */
+    startMs?: number;
     /** Range-less readFile calls — the whole-file reads. The critical-file pass
      *  is defined by reading the file end to end; if this stays 0 the pass ran
      *  but did not do the thing it exists to do, and its result says nothing
@@ -1448,6 +1454,9 @@ export async function runRecallPasses(
 }> {
     let findings = base;
     let usage = ZERO_RECALL_USAGE;
+    // Marco zero da linha do tempo: todo `startMs` e relativo a ele, entao os
+    // numeros ficam comparaveis entre PRs e entre rodadas sem carregar epoch.
+    const FINDER_T0 = Date.now();
     const passStats: RecallPassStat[] = [];
     let scoutFlags: ScoutFlag[] = [];
     if (params.skipHeavyPasses) {
@@ -1481,6 +1490,7 @@ export async function runRecallPasses(
         // review demorou": uma passada barata que espera 90s no provedor custa
         // o mesmo em token que uma de 9s, e so uma delas e o gargalo.
         const t0 = Date.now();
+        const inicioRelativo = t0 - FINDER_T0;
         const state = await params.runner.run(
             spec,
             {
@@ -1525,6 +1535,7 @@ export async function runRecallPasses(
             label,
             added,
             ms: elapsedMs,
+            startMs: inicioRelativo,
             // Steps, not tool calls: a step can fire several tool calls at
             // once, so toolCalls alone can't confirm a maxSteps cap held —
             // this is the number ForceFinalizePolicy/maxSteps actually bounds.
