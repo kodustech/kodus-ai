@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
+import { createLogger } from '@libs/core/log/logger';
+
 import { ManagedTool } from '@libs/code-review/infrastructure/adapters/services/ci-evidence/recognize-ci-analyzers';
 
 import { AnalyzerFinding } from '../analyzer-finding.type';
@@ -106,6 +108,8 @@ function addedLinesWithContext(
  */
 @Injectable()
 export class DependencyScanTool implements AnalyzerTool {
+    private readonly logger = createLogger(DependencyScanTool.name);
+
     readonly id = 'dependencies' as const;
     readonly coverage = ManagedTool.DEPENDENCIES;
 
@@ -156,6 +160,29 @@ export class DependencyScanTool implements AnalyzerTool {
         const setup = [`rm -rf ${quote(baseDir)}`, `mkdir -p ${quote(baseDir)}`];
 
         for (const file of files) {
+            // The base branch is fetched into the sandbox, so git holds the
+            // real previous manifest. Prefer it: reconstructing a 400KB
+            // lockfile from a 400-byte hunk depends on the patch's line
+            // numbers matching the checkout, which an incremental review —
+            // diffing against the previous commit rather than the base —
+            // breaks. That failure is silent, because a manifest we cannot
+            // rewind yields no baseline and therefore no findings.
+            const fromGit = await this.readFromBase(sandbox, file.filename);
+            if (fromGit !== null) {
+                if (fromGit.trim() === '') {
+                    continue;
+                }
+                const target = `${baseDir}/${file.filename}`;
+                const cut = target.lastIndexOf('/');
+                setup.push(`mkdir -p ${quote(target.slice(0, cut))}`);
+                setup.push(
+                    `printf %s ${quote(
+                        Buffer.from(fromGit, 'utf8').toString('base64'),
+                    )} | base64 -d > ${quote(target)}`,
+                );
+                continue;
+            }
+
             let current: string;
             try {
                 current = await sandbox.readFile(
@@ -167,6 +194,22 @@ export class DependencyScanTool implements AnalyzerTool {
 
             const rewound = revertPatch(current, file.patch);
             if (rewound === null) {
+                // Without a baseline every advisory in the tree would look
+                // introduced, so this reports nothing — and would do so
+                // silently if it did not say why.
+                this.logger.warn({
+                    message:
+                        `No baseline for ${file.filename}: the base branch is ` +
+                        'not in the sandbox and the patch does not fit the ' +
+                        'checkout. Reporting no dependency findings.',
+                    context: DependencyScanTool.name,
+                    metadata: {
+                        file: file.filename,
+                        hasBaseBranch: Boolean(sandbox.baseBranch),
+                        currentChars: current.length,
+                        patchChars: (file.patch ?? '').length,
+                    },
+                });
                 return null;
             }
 
@@ -198,6 +241,34 @@ export class DependencyScanTool implements AnalyzerTool {
         } finally {
             await sandbox.run(`rm -rf ${quote(baseDir)}`, { timeoutMs: 15_000 });
         }
+    }
+
+    /**
+     * The manifest as it stands on the pull request's base branch, or null
+     * when the sandbox has no base ref to read (the local provider does not
+     * fetch one) so the caller falls back to rewinding the patch.
+     */
+    private async readFromBase(
+        sandbox: ToolRunInput['sandbox'],
+        filename: string,
+    ): Promise<string | null> {
+        const base = sandbox.baseBranch;
+        if (!base) {
+            return null;
+        }
+
+        const result = await sandbox.run(
+            `cd ${quote(sandbox.repoDir)} && git show ` +
+                `${quote(`origin/${base}:${filename}`)} 2>/dev/null || true`,
+            { timeoutMs: 30_000 },
+        );
+
+        // Absent on the base branch means the change added it, which is a real
+        // answer — an empty base tree makes everything it brings in new.
+        if (result.exitCode !== 0) {
+            return null;
+        }
+        return result.stdout ?? '';
     }
 
     private async scan(
