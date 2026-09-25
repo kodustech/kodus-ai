@@ -61,29 +61,38 @@ export const prompt_replyAddressedToKody_user = (
     return `Thread, oldest first:\n\n${rendered.join('\n\n')}`;
 };
 
-// Kody's own markers (`<!-- kody-codereview -->`, `<!-- kody-conversation -->`,
-// zero-width padding) are noise to the classifier. They sit at the end of a
-// line or on lines of their own. The body is prompt data, never rendered, so
-// nothing else in it needs stripping.
-const KODY_MARKER = /<!--\s*kody[\w:-]*\s*-->$/;
-
-function withoutTrailingKodyMarkers(line: string): string {
-    let rest = line.replace(/(\s|&#8203;|\u200B)+$/u, '');
-    let match = KODY_MARKER.exec(rest);
-    while (match) {
-        rest = rest
-            .slice(0, match.index)
-            .replace(/(\s|&#8203;|\u200B)+$/u, '');
-        match = KODY_MARKER.exec(rest);
+// HTML comments are invisible on the pull request, so text hidden in one
+// (including Kody's own markers) must not reach the classifier. Removed by
+// scanning, repeated until no opener is left, since joining the pieces around
+// a comment can form a new one (`<!<!-- x -->--`). An unclosed comment hides
+// the rest of the body, as it does when rendered.
+function withoutHtmlComments(body: string): string {
+    let text = body;
+    while (text.includes('<!--')) {
+        let out = '';
+        let rest = text;
+        let start = rest.indexOf('<!--');
+        while (start !== -1) {
+            out += rest.slice(0, start);
+            const end = rest.indexOf('-->', start + 4);
+            rest = end === -1 ? '' : rest.slice(end + 3);
+            start = rest.indexOf('<!--');
+        }
+        text = out + rest;
     }
-    return rest;
+    return text;
 }
 
+// A body could otherwise open or close the envelope the thread is rendered in
+// (`</NEWEST MESSAGE>`) and pose as another participant.
+const ENVELOPE_TAG = /<(\/?)(newest message|message)\b/gi;
+
 function clean(body: string): string {
-    const text = (body ?? '')
-        .split('\n')
-        .map(withoutTrailingKodyMarkers)
-        .join('\n')
+    const text = withoutHtmlComments(body ?? '')
+        .replace(ENVELOPE_TAG, '‹$1$2')
+        .split('&#8203;')
+        .join('')
+        .replace(/[\u200B\s]+$/gmu, '')
         .trim();
     return text.length > MAX_BODY_CHARS
         ? `${text.slice(0, MAX_BODY_CHARS)}…`
