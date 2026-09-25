@@ -184,3 +184,66 @@ describe('deepSanitize — a throwing property getter must not escape', () => {
         expect(out.password).toBe('[REDACTED]');
     });
 });
+
+describe('deepSanitize — every read is guarded, not just obj[key]', () => {
+    const hostileArray = () =>
+        new Proxy([], {
+            get(t, p) {
+                if (p === 'length') throw new Error('boom');
+                return (t as any)[p];
+            },
+        });
+
+    it('survives a hostile array under an ORDINARY key', () => {
+        // Array.isArray() is true through a Proxy, so the array branch reads
+        // .length and used to throw straight out of deepSanitize.
+        const out = deepSanitize({ anyField: hostileArray() });
+        expect(out.anyField).toBe('[unreadable]');
+    });
+
+    it('survives an element read that throws', () => {
+        const hostile = new Proxy([1, 2, 3], {
+            get(t, p) {
+                if (p === '1') throw new Error('boom');
+                return (t as any)[p];
+            },
+        });
+        const out = deepSanitize({ items: hostile });
+        expect(out.items[1]).toBe('[unreadable]');
+        expect(out.items[0]).toBe(1);
+    });
+});
+
+describe('deepSanitize — the budget bounds the LINE, not one call', () => {
+    it('charges non-string primitives, so a numeric tree cannot escape', () => {
+        // A tree of numbers paid only for its root key and serialized to 721KB.
+        const nums: any = {};
+        for (let i = 0; i < 30; i++) {
+            nums[`m${i}`] = Array.from({ length: 40 }, () =>
+                Array.from({ length: 40 }, (_, j) => j * 1.23456789),
+            );
+        }
+        // The guarantee is about the emitted LINE, which carries this object
+        // up to MAX_LINE_COPIES times. The budget is checked before a value is
+        // processed, so a bounded overshoot past it is expected by design.
+        expect(JSON.stringify(deepSanitize(nums)).length * 3).toBeLessThan(262_144);
+    });
+
+    it('charges key names on the sensitive and content branches too', () => {
+        // isSensitiveName strips every non-[a-z0-9] char, so these thousands of
+        // distinct raw keys all normalize to "password" and each emitted
+        // "key":"[REDACTED]" used to cost the budget nothing.
+        const k: any = {};
+        for (let i = 0; i < 50_000; i++) k[`password${'.'.repeat(i % 3)}${i}`] = 'x';
+        expect(JSON.stringify(deepSanitize(k)).length * 3).toBeLessThan(262_144);
+    });
+
+    it('leaves room for the copies buildLogObject makes of the same object', () => {
+        // The line carries it spread at top level, again under `metadata`, and
+        // possibly a third time via the pino `err` serializer's own budget.
+        const flat: Record<string, string> = {};
+        for (let i = 0; i < 200; i++) flat[`field${i}`] = 'x'.repeat(4096);
+        const once = JSON.stringify(deepSanitize(flat)).length;
+        expect(once * 3).toBeLessThan(262_144);
+    });
+});

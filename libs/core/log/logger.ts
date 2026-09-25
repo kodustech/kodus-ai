@@ -591,8 +591,26 @@ const DEEP_SANITIZE_MAX_ARRAY = 50;
  * remaining value becomes a marker. 192KB leaves ~64KB of headroom for the
  * JSON structure pino adds around these values.
  */
-const DEEP_SANITIZE_MAX_TOTAL = 192 * 1024;
+const CLOUDWATCH_MAX_EVENT = 256 * 1024;
+/**
+ * The emitted line carries the SAME sanitized object more than once:
+ * buildLogObject spreads safeMetadata at the top level (line ~927) and stores
+ * it again under `metadata` (line ~930), and handleLog adds `err` (line ~826),
+ * which the pino serializer sanitizes with its own independent budget. So a
+ * per-call budget of B produces a line of up to 3B, and budgeting 192KB per
+ * call yields a ~576KB event — past the ceiling it was meant to defend.
+ */
+const MAX_LINE_COPIES = 3;
+const DEEP_SANITIZE_MAX_TOTAL = Math.floor(
+    (CLOUDWATCH_MAX_EVENT * 0.75) / MAX_LINE_COPIES,
+);
 const BUDGET_SPENT_MARKER = '[budget spent]';
+/**
+ * JSON cost of a non-string leaf plus its punctuation. Deliberately generous:
+ * a float serializes to ~18 characters ("48.148148271000004"), so charging 8
+ * let a numeric tree overshoot the budget by ~2x.
+ */
+const PRIMITIVE_BUDGET_COST = 20;
 
 interface SanitizeBudget {
     used: number;
@@ -640,6 +658,9 @@ function deepSanitize(
             budget.used += byteLen(sanitized);
             return sanitized !== obj ? sanitized : obj;
         }
+        // Numbers and booleans are not free: a tree of them (scores, embeddings)
+        // paid only for its root key and serialized to 721KB in testing.
+        budget.used += PRIMITIVE_BUDGET_COST;
         return obj;
     }
 
@@ -697,22 +718,41 @@ function deepSanitize(
     if (refs.has(obj)) return '[Circular]';
     refs.add(obj);
 
-    if (Array.isArray(obj)) {
+    let arrayLength = -1;
+    try {
+        if (Array.isArray(obj)) arrayLength = obj.length;
+    } catch {
+        return '[unreadable]';
+    }
+
+    if (arrayLength >= 0) {
         // Index loop, not `for…of obj.slice(...)`: slice() allocates a copy of
         // every array, including the short clean ones that structural sharing
         // exists to leave untouched.
-        const capped = obj.length > DEEP_SANITIZE_MAX_ARRAY;
-        const limit = capped ? DEEP_SANITIZE_MAX_ARRAY : obj.length;
+        const capped = arrayLength > DEEP_SANITIZE_MAX_ARRAY;
+        const limit = capped ? DEEP_SANITIZE_MAX_ARRAY : arrayLength;
         let changed = capped;
         const out: any[] = [];
         for (let i = 0; i < limit; i++) {
-            const item = obj[i];
+            if (budget.used >= DEEP_SANITIZE_MAX_TOTAL) {
+                out.push(`[+${arrayLength - i} more items omitted]`);
+                changed = true;
+                break;
+            }
+            let item: any;
+            try {
+                item = obj[i];
+            } catch {
+                out.push('[unreadable]');
+                changed = true;
+                continue;
+            }
             const sanitized = deepSanitize(item, refs, depth + 1, budget);
             out.push(sanitized);
             if (sanitized !== item) changed = true;
         }
-        if (capped) {
-            out.push(`[+${obj.length - DEEP_SANITIZE_MAX_ARRAY} more items omitted]`);
+        if (capped && out.length === DEEP_SANITIZE_MAX_ARRAY) {
+            out.push(`[+${arrayLength - DEEP_SANITIZE_MAX_ARRAY} more items omitted]`);
         }
         // Return original array reference if nothing was redacted.
         return changed ? out : obj;
@@ -720,7 +760,12 @@ function deepSanitize(
 
     let changed = false;
     const out: Record<string, any> = {};
-    const keys = Object.keys(obj);
+    let keys: string[];
+    try {
+        keys = Object.keys(obj);
+    } catch {
+        return '[unreadable]';
+    }
     for (let k = 0; k < keys.length; k++) {
         const key = keys[k];
         // Stop EMITTING, not just stop descending: replacing each value with a
@@ -731,8 +776,15 @@ function deepSanitize(
             changed = true;
             break;
         }
+        // Charge the key in EVERY branch. Charging it only on the ordinary
+        // path let thousands of keys that normalize into one SENSITIVE_KEYS /
+        // CONTENT_KEYS entry (`p-assword`, `P.ASSWORD`, …) emit ~25 bytes each
+        // with budget.used still at 0.
+        budget.used += byteLen(key) + 4;
+
         if (isSensitiveKey(key)) {
             out[key] = '[REDACTED]';
+            budget.used += 12;
             changed = true;
             continue;
         }
@@ -755,11 +807,11 @@ function deepSanitize(
         }
 
         if (isContentKey(key)) {
-            out[key] = describeOmitted(raw);
+            const marker = describeOmitted(raw);
+            out[key] = marker;
+            budget.used += byteLen(marker);
             changed = true;
         } else {
-            // The key itself costs bytes, and nothing caps key count.
-            budget.used += byteLen(key) + 4;
             const val = deepSanitize(raw, refs, depth + 1, budget);
             out[key] = val;
             if (val !== raw) changed = true;
