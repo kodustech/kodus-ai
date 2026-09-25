@@ -53,6 +53,30 @@ describe('formatSuggestionContent — nothing raw ships, whatever failed', () =>
         expect(out.get(0)?.suggestionContent).not.toMatch(/WHAT:/);
     });
 
+    it('aborts the recovery loop when an isolated retry hits a TERMINAL cause', async () => {
+        // Batch fails transiently (a 429); the FIRST isolated retry then hits a
+        // suspended account. Without the per-iteration terminal gate the loop
+        // would keep billing one call per remaining suggestion against a dead
+        // tenant — the 55-of-86 class the batch gate is built for, reached
+        // through the retry path instead. It must stop and hand the rest to the
+        // floor.
+        run.mockRejectedValueOnce(new Error('429 Too Many Requests'))
+            .mockRejectedValueOnce(
+                new Error(
+                    'Your account is suspended due to insufficient balance, please recharge',
+                ),
+            );
+
+        const out = await formatSuggestionContent(scaffolded(3));
+
+        // batch (1) + the one isolated call that turned terminal (2) — the
+        // remaining two suggestions are never re-issued.
+        expect(run).toHaveBeenCalledTimes(2);
+        expect(out.get(0)?.suggestionContent).not.toMatch(/WHAT:/);
+        expect(out.get(1)?.suggestionContent).not.toMatch(/WHY:/);
+        expect(out.get(2)?.suggestionContent).not.toMatch(/HOW:/);
+    });
+
     it('does NOT re-issue per-suggestion recovery calls on a TERMINAL batch failure', async () => {
         // Suspended-account / bad-key / unknown-model: running the isolated
         // retry is pointless — every call fails the same way and it only bills

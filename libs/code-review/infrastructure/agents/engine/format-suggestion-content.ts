@@ -297,6 +297,20 @@ export async function formatSuggestionContent(
             );
             if (single.error) {
                 noteReason(single.error.message);
+                // Same proof as the batch branch above: a TERMINAL cause
+                // (suspended account, bad/expired key, unknown model — the
+                // 55-of-86 production class) fails EVERY re-request, so the
+                // remaining per-suggestion calls would only bill an
+                // already-dead tenant. Stop the loop; the floor below still
+                // de-scaffolds whatever this never polished.
+                if (
+                    isTerminalCategory(
+                        classifyLLMError(single.error).category,
+                    )
+                ) {
+                    noteReason('recovery aborted: terminal batch failure');
+                    break;
+                }
                 continue;
             }
             const { formatted: singleFormatted, parseOk } =
@@ -337,6 +351,12 @@ export async function formatSuggestionContent(
     logger.log({
         message: `[FORMATTER] Formatted ${out.size}/${suggestions.length} suggestions`,
         context: 'SuggestionFormatter',
+        // Every other log in this pass stamps the tenant, so an investigator
+        // can tie the run back to a PR; keep this one uniform.
+        metadata: {
+            organizationId: options?.organizationId,
+            prNumber: options?.prNumber,
+        },
     });
 
     if (strippedMechanically > 0) {

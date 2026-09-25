@@ -31,6 +31,7 @@ import {
 import { getModelName } from '@libs/llm/byok-to-vercel';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { buildKodyRuleLink } from '@libs/code-review/utils/build-kody-rule-link';
+import type { FormatterDegradedReport } from '@libs/code-review/infrastructure/agents/engine/format-suggestion-content';
 import { type LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
 
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
@@ -1259,11 +1260,40 @@ metadata: {
                             context.codeReviewConfig?.languageResultPrompt,
                         organizationId:
                             context.organizationAndTeamData?.organizationId,
-                        prNumber: context.pullRequest?.number,
-                        // Degradation hook: fire and forget — formatting must
-                        // never take the review down; the failure itself is
-                        // already an error-level log + degraded report.
-                        onDegraded: () => {},
+                        prNumber,
+                        // Degradation surfacing: the comments still ship (the
+                        // floor de-scaffolds), so this is a PARTIAL execution —
+                        // the run must not read as a clean success when a chunk
+                        // of the prose polish was lost. Single, deduped entry;
+                        // the message carries counts, never suggestion text.
+                        onDegraded: (report: FormatterDegradedReport) => {
+                            context = this.updateContext(context, (draft) => {
+                                if (!draft.errors) {
+                                    draft.errors = [];
+                                }
+                                draft.errors.push({
+                                    pipelineId:
+                                        context.pipelineMetadata?.pipelineId,
+                                    stage: this.stageName,
+                                    substage: 'suggestion-formatter',
+                                    error: new Error(
+                                        `Suggestion formatting degraded: ${report.strippedMechanically}/${report.totalSuggestions} suggestion(s) stripped of WHAT/WHY/HOW locally${report.distinctReasons.length > 0 ? ` (${report.distinctReasons.slice(0, 2).join('; ')})` : ''}`,
+                                    ),
+                                    severity: 'partial',
+                                    metadata: {
+                                        totalSuggestions:
+                                            report.totalSuggestions,
+                                        polishedByModel:
+                                            report.polishedByModel,
+                                        strippedMechanically:
+                                            report.strippedMechanically,
+                                        distinctReasons:
+                                            report.distinctReasons,
+                                        prNumber,
+                                    },
+                                });
+                            });
+                        },
                     },
                 );
                 for (const [i, fmt] of formatted) {
