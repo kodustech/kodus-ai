@@ -51,7 +51,16 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
         }
 
         const sandbox = context.sandboxHandle;
-        const changedFiles = (context.changedFiles ?? []) as ChangedFile[];
+
+        // Files `ignorePaths` filtered out are included deliberately. That list
+        // answers "do not comment on this file"; lockfiles sit on it by
+        // default and are the only place a dependency advisory can be found,
+        // so excluding them here would leave the dependency scan unable to
+        // fire at all. Each tool's `selectFiles` still decides what it wants.
+        const changedFiles = [
+            ...((context.changedFiles ?? []) as ChangedFile[]),
+            ...((context.ignoredFileChanges ?? []) as ChangedFile[]),
+        ];
 
         const decisions = this.router.route(this.tools, {
             changedFiles,

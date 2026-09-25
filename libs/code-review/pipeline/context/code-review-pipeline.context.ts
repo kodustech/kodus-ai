@@ -106,6 +106,17 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     /** List of files ignored by configuration patterns */
     ignoredFiles?: string[];
 
+    /**
+     * The same ignored files, with their diffs.
+     *
+     * `ignorePaths` answers "do not comment on this file", which is not the
+     * same question as "do not check this file at all". Lockfiles are ignored
+     * by default and are also the only place a dependency advisory can be
+     * found, so the deterministic analyzers read this alongside `changedFiles`
+     * and let each tool's own `selectFiles` decide what it wants.
+     */
+    ignoredFileChanges?: FileChange[];
+
     lastExecution?: {
         commentId?: any;
         noteId?: any;

@@ -191,4 +191,33 @@ describe('RunAnalyzersStage', () => {
             expect(result.analyzerFindings).toBeUndefined();
         });
     });
+
+    /**
+     * `ignorePaths` carries lockfiles by default. Without this the dependency
+     * scan can never fire on a real repository, which is how it shipped and
+     * what the first end-to-end run caught.
+     */
+    it('scans files that ignorePaths filtered out of the review', async () => {
+        const selectFiles = jest.fn((files: unknown[]) => files);
+        const tool = makeTool({
+            id: 'dependencies',
+            selectFiles: selectFiles as never,
+        });
+        const stage = makeStage([tool]);
+
+        await run(
+            stage,
+            makeContext({
+                changedFiles: [{ filename: 'src/a.ts', patch: '@@ -0,0 +1 @@\n+x' }],
+                ignoredFileChanges: [
+                    { filename: 'yarn.lock', patch: '@@ -0,0 +1 @@\n+lodash' },
+                ],
+            } as never),
+        );
+
+        const seen = (selectFiles.mock.calls.at(-1)?.[0] ?? []) as Array<{
+            filename: string;
+        }>;
+        expect(seen.map((f) => f.filename)).toContain('yarn.lock');
+    });
 });
