@@ -186,6 +186,28 @@ describe('DependencyScanTool', () => {
             ).toHaveLength(2);
         });
 
+        /**
+         * A lockfile is hundreds of kilobytes. Passing one as a shell argument
+         * exceeds the maximum command length and the process never starts —
+         * which is how this first failed on a real repository.
+         */
+        it('materialises the base file in the sandbox rather than passing it', async () => {
+            const sandbox = sandboxWith(
+                osv([{ name: 'lodash', version: '4.17.11', id: 'GHSA-aaa' }]),
+                osv([]),
+            );
+            (sandbox as unknown as { baseBranch?: string }).baseBranch = 'main';
+
+            await tool.run({ sandbox, files: [file()] });
+
+            const setup = (
+                sandbox as unknown as { commands: string[] }
+            ).commands.find((c) => c.includes('kody-deps-base'));
+            expect(setup).toContain('git -C');
+            expect(setup).toContain("origin/main:package-lock.json");
+            expect(setup).not.toContain('base64 -d');
+        });
+
         it('cleans the reconstructed tree up', async () => {
             const sandbox = sandboxWith(
                 osv([{ name: 'lodash', version: '4.17.11', id: 'GHSA-aaa' }]),

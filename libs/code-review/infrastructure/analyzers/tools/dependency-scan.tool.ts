@@ -167,18 +167,19 @@ export class DependencyScanTool implements AnalyzerTool {
             // diffing against the previous commit rather than the base —
             // breaks. That failure is silent, because a manifest we cannot
             // rewind yields no baseline and therefore no findings.
-            const fromGit = await this.readFromBase(sandbox, file.filename);
-            if (fromGit !== null) {
-                if (fromGit.trim() === '') {
-                    continue;
-                }
+            // Materialise the base file INSIDE the sandbox. A lockfile is
+            // hundreds of kilobytes, and carrying one out and back as a shell
+            // argument exceeds the maximum command length — the process then
+            // fails to start at all. git already holds the ref here, so the
+            // content never has to travel.
+            if (sandbox.baseBranch) {
                 const target = `${baseDir}/${file.filename}`;
                 const cut = target.lastIndexOf('/');
                 setup.push(`mkdir -p ${quote(target.slice(0, cut))}`);
                 setup.push(
-                    `printf %s ${quote(
-                        Buffer.from(fromGit, 'utf8').toString('base64'),
-                    )} | base64 -d > ${quote(target)}`,
+                    `{ git -C ${quote(sandbox.repoDir)} show ` +
+                        `${quote(`origin/${sandbox.baseBranch}:${file.filename}`)} ` +
+                        `> ${quote(target)} 2>/dev/null || rm -f ${quote(target)}; }`,
                 );
                 continue;
             }
@@ -241,34 +242,6 @@ export class DependencyScanTool implements AnalyzerTool {
         } finally {
             await sandbox.run(`rm -rf ${quote(baseDir)}`, { timeoutMs: 15_000 });
         }
-    }
-
-    /**
-     * The manifest as it stands on the pull request's base branch, or null
-     * when the sandbox has no base ref to read (the local provider does not
-     * fetch one) so the caller falls back to rewinding the patch.
-     */
-    private async readFromBase(
-        sandbox: ToolRunInput['sandbox'],
-        filename: string,
-    ): Promise<string | null> {
-        const base = sandbox.baseBranch;
-        if (!base) {
-            return null;
-        }
-
-        const result = await sandbox.run(
-            `cd ${quote(sandbox.repoDir)} && git show ` +
-                `${quote(`origin/${base}:${filename}`)} 2>/dev/null || true`,
-            { timeoutMs: 30_000 },
-        );
-
-        // Absent on the base branch means the change added it, which is a real
-        // answer — an empty base tree makes everything it brings in new.
-        if (result.exitCode !== 0) {
-            return null;
-        }
-        return result.stdout ?? '';
     }
 
     private async scan(
