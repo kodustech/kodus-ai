@@ -8,11 +8,6 @@ import { Request, Response } from 'express';
 import { Public } from '@libs/identity/infrastructure/adapters/services/auth/public.decorator';
 import { NotificationService } from '@libs/notifications/application/notification.service';
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
-import {
-    IKodyRulesService,
-    KODY_RULES_SERVICE_TOKEN,
-} from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
-import { Inject } from '@nestjs/common';
 
 /**
  * Express request shape with the raw-body capture from
@@ -66,6 +61,11 @@ interface CreditsLowBody {
 const TOP_UP_URL = 'https://app.kodus.io/byok#kodus';
 
 /**
+ * LEGACY path for kodus-service-billing notifications. Billing now calls
+ * the API's `/billing/events/*` (BillingEventsController); this copy only
+ * keeps callbacks flowing while an older billing deploy still targets
+ * `/billing/webhook/*`. Delete it once billing is deployed (#2007).
+ *
  * Receives outbound notifications from kodus-service-billing.
  *
  * The billing service signs the raw request body with HMAC-SHA256
@@ -87,8 +87,6 @@ export class BillingController {
     constructor(
         private readonly notificationService: NotificationService,
         private readonly configService: ConfigService,
-        @Inject(KODY_RULES_SERVICE_TOKEN)
-        private readonly kodyRulesService: IKodyRulesService,
     ) {}
 
     @Post('/payment-failed')
@@ -175,24 +173,20 @@ export class BillingController {
                 .send('Missing organizationId');
         }
 
-        try {
-            await this.kodyRulesService.syncRulesWithPlanLimit({
+        // Acknowledge only: the Kody Rules sync lives in the API's
+        // BillingEventsController, because this ingestion service must not
+        // boot the Kody Rules graph and Mongo (#2007). Until billing moves,
+        // rules still reconcile before every review (codeBaseConfig.service.ts)
+        // and on list reads (KodyRulesService.find).
+        this.logger.log({
+            message: 'Billing plan-changed webhook acknowledged',
+            context: BillingController.name,
+            metadata: {
                 organizationId: body.organizationId,
-                teamId: body.teamId,
-            });
-            this.logger.log({
-                message: 'Kody Rules synced after billing plan-changed webhook',
-                context: BillingController.name,
-                metadata: { organizationId: body.organizationId },
-            });
-        } catch (error) {
-            this.logger.error({
-                message: 'Failed to sync Kody Rules after billing plan-changed webhook',
-                context: BillingController.name,
-                error,
-                metadata: { organizationId: body.organizationId },
-            });
-        }
+                planType: body.planType,
+                subscriptionStatus: body.subscriptionStatus,
+            },
+        });
 
         return res.status(HttpStatus.OK).send('ok');
     }

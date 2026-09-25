@@ -6,7 +6,6 @@ import { Response } from 'express';
 
 import { NotificationService } from '@libs/notifications/application/notification.service';
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
-import { KODY_RULES_SERVICE_TOKEN } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
 
 import { BillingController } from './billing.controller';
 
@@ -67,14 +66,6 @@ describe('BillingController', () => {
             providers: [
                 { provide: NotificationService, useValue: notify },
                 { provide: ConfigService, useValue: config },
-                {
-                    provide: KODY_RULES_SERVICE_TOKEN,
-                    useValue: {
-                        syncRulesWithPlanLimit: jest
-                            .fn()
-                            .mockResolvedValue(null),
-                    },
-                },
             ],
         }).compile();
 
@@ -236,6 +227,42 @@ describe('BillingController', () => {
                 },
                 organizationId: 'org-1',
             });
+        });
+    });
+
+    describe('plan-changed', () => {
+        it('acknowledges a signed request with 200 and emits nothing', async () => {
+            const body = { organizationId: 'org-1', planType: 'teams_byok' };
+            const { signature, rawBody } = sign(body);
+            const res = makeRes();
+
+            await controller.planChanged(
+                makeReq(body, signature, rawBody),
+                res as unknown as Response,
+            );
+
+            expect(res.status).toHaveBeenCalledWith(HttpStatus.OK);
+            expect(notify.emit).not.toHaveBeenCalled();
+        });
+
+        it('rejects an unsigned request (401) and a missing org (400)', async () => {
+            const unsigned = makeRes();
+            await controller.planChanged(
+                makeReq({ organizationId: 'org-1' }, undefined),
+                unsigned as unknown as Response,
+            );
+            expect(unsigned.status).toHaveBeenCalledWith(
+                HttpStatus.UNAUTHORIZED,
+            );
+
+            const body = { planType: 'free' };
+            const { signature, rawBody } = sign(body);
+            const noOrg = makeRes();
+            await controller.planChanged(
+                makeReq(body, signature, rawBody),
+                noOrg as unknown as Response,
+            );
+            expect(noOrg.status).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
         });
     });
 

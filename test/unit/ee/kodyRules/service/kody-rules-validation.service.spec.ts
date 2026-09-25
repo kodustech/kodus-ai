@@ -145,6 +145,49 @@ describe('KodyRulesValidationService', () => {
             expect(result.standardRules).toHaveLength(1);
             expect(result.standardRules[0].uuid).toBe('first');
         });
+
+        // The review-time guarantee for #1626: a rule PAUSED only by the free
+        // plan's quota must run once the org is paid, even when the plan-change
+        // write never reached Mongo.
+        describe('plan-locked rules', () => {
+            const rules = (): Partial<IKodyRule>[] => [
+                createRule({ uuid: 'active', rule: 'active rule' }),
+                {
+                    ...createRule({
+                        uuid: 'plan-locked',
+                        rule: 'plan-locked rule',
+                        status: KodyRulesStatus.PAUSED,
+                    }),
+                    lockedByPlan: true,
+                },
+                {
+                    ...createRule({
+                        uuid: 'user-paused',
+                        rule: 'user-paused rule',
+                        status: KodyRulesStatus.PAUSED,
+                    }),
+                    lockedByPlan: false,
+                },
+            ];
+
+            const uuids = (limited: boolean) =>
+                service
+                    .filterKodyRules(rules(), 'repo-1', undefined, limited)
+                    .standardRules.map((rule) => rule.uuid);
+
+            it('runs plan-locked rules on a paid plan', () => {
+                expect(uuids(false)).toEqual(['active', 'plan-locked']);
+            });
+
+            it('skips plan-locked rules on a free plan', () => {
+                expect(uuids(true)).toEqual(['active']);
+            });
+
+            it('never runs a rule the user paused, on any plan', () => {
+                expect(uuids(false)).not.toContain('user-paused');
+                expect(uuids(true)).not.toContain('user-paused');
+            });
+        });
     });
 
     describe('Inheritance behavior — proving the "INHERITED: DIRECTORY" leak', () => {
