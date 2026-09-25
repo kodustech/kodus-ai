@@ -347,14 +347,31 @@ function isContentKey(key: string): boolean {
 }
 
 function describeOmitted(value: any): string {
-    // Never serialize to measure. The whole point of this guard is to avoid
-    // paying the cost of a large payload; JSON.stringify on a ~200KB object
-    // costs ~0.25ms, against ~5ns for String#length, and would defeat it.
-    if (typeof value === 'string') {
-        return `[content omitted: ${formatBytes(value.length)}]`;
-    }
-    if (Array.isArray(value)) {
-        return `[content omitted: ${value.length} items]`;
+    // Two invariants, both load-bearing.
+    //
+    // Never serialize to measure: JSON.stringify on a ~200KB object costs
+    // ~0.25ms against ~5ns for String#length, and would defeat the very guard
+    // this function implements.
+    //
+    // Never throw: deepSanitize is exception-free by design — the WeakSet
+    // cycle guard, the depth cap and the typed-array marker all exist to keep
+    // it so — and callers rely on that. mongodb-exporter.ts:1032 calls it
+    // unguarded inside an `async exportLog` fired as `void this.exportLog(...)`
+    // (line 1061), so a throw here becomes an unhandled rejection that can take
+    // the process down. The value is discarded anyway, so a getter that throws
+    // must cost us a vaguer marker, never an exception.
+    try {
+        if (typeof value === 'string') {
+            return `[content omitted: ${formatBytes(value.length)}]`;
+        }
+        if (ArrayBuffer.isView(value)) {
+            return `[content omitted: ${formatBytes(value.byteLength)}]`;
+        }
+        if (Array.isArray(value)) {
+            return `[content omitted: ${value.length} items]`;
+        }
+    } catch {
+        // exotic object: a throwing length/byteLength getter, a hostile Proxy.
     }
     return '[content omitted]';
 }

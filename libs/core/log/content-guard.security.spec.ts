@@ -95,3 +95,31 @@ describe('deepSanitize — size bounds catch the field nobody named', () => {
         expect(JSON.stringify(out).length).toBeLessThan(262_144);
     });
 });
+
+describe('deepSanitize — the guard must never throw', () => {
+    it('survives a content key whose length getter throws', () => {
+        const hostile = new Proxy([], {
+            get(t, p) {
+                if (p === 'length') throw new Error('boom');
+                return (t as any)[p];
+            },
+        });
+        const out = deepSanitize({ improvedCode: hostile });
+        expect(out.improvedCode).toBe('[content omitted]');
+    });
+
+    it('survives a circular value under a content key', () => {
+        const circular: any = { a: 1 };
+        circular.self = circular;
+        expect(() => deepSanitize({ existingCode: circular })).not.toThrow();
+    });
+
+    it('survives a BigInt under a content key', () => {
+        expect(() => deepSanitize({ llmPrompt: { n: BigInt(9) } })).not.toThrow();
+    });
+
+    it('reports byte length for a typed array', () => {
+        const out = deepSanitize({ improvedCode: new Uint8Array(2048) });
+        expect(out.improvedCode).toBe('[content omitted: 2.0KB]');
+    });
+});
