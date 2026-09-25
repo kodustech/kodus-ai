@@ -294,97 +294,6 @@ const MICRO_AGENTS_TODOS: MicroAgentGroup[] = [
     },
 ];
 
-/**
- * VARIANTE FUNDIDA (opt-in, A/B) — 8 agentes no lugar de 12.
- *
- * A medida que motiva: contando golden EXCLUSIVO (aquele que nenhum outro
- * agente alcanca), seis agentes valem 1 ou 0 nos dois modelos. O
- * `contract-with-the-platform` nao forma par: 83% do que ele alcanca no GPT
- * (82% no DeepSeek) ja e alcancado pelo `invalid-state-and-concurrency`, entao
- * ele sai sem substituto.
- *
- * Os quatro de seguranca viram DOIS, nao um. Juntar os quatro num so misturava
- * "o dado" com "o sujeito", que sao perguntas independentes, e deixava o
- * DetectionFocus com 11 itens — o dobro de qualquer agente atual. A particao
- * saiu da sobreposicao medida de goldens (Jaccard, 30 PRs): no DeepSeek
- * `untrusted-input-sink` e `data-exposure` compartilham 38% e
- * `secret-and-identity` e `authorization` 18%, contra 0% nos cruzamentos; e a
- * particao com mais goldens em comum dentro dos pares (5 contra 2 da
- * alternativa). No GPT a amostra e pequena, mas o unico par com sinal e
- * `secret-and-identity` + `authorization`, com 25%.
- *
- * O que esta em jogo: os quatro de seguranca somam 74 candidatos nos dois
- * modelos para 5 goldens exclusivos, e 40 falsos positivos.
- *
- * REVERSIVEL POR CONSTRUCAO: `MICRO_AGENTS` continua sendo os 12. Esta lista so
- * e usada quando `RECALL_MICRO_FUNDIDOS=1`, e nada em producao a alcanca.
- */
-const MICRO_AGENTS_FUNDIDOS: MicroAgentGroup[] = [
-    {
-        id: 'untrusted-data-path',
-        label: 'security',
-        assignment:
-            'the path of an untrusted value: what enters without validation, and what leaves in the response, the log and the error message',
-        items: [
-            'Injection vulnerabilities',
-            'SSRF (Server-Side Request Forgery)',
-            'Input validation gaps',
-            'Input validation bypass',
-            'Data exposure',
-        ],
-        reasoningExample:
-            "Traced the `sort` query param into the ORDER BY built at repo.ts:88. Grepped for other callers of buildOrderBy(, found one at list.ts:31 passing a validated enum. The new path concatenates the raw value. Reported.",
-    },
-    {
-        id: 'identity-and-access',
-        label: 'security',
-        assignment:
-            'who can reach a changed entrypoint, with what credential and for how long, and how secrets or identity are compared, normalised and derived',
-        items: [
-            'AuthZ/AuthN flaws',
-            'Session management',
-            'Timing attacks',
-            'Case-sensitivity bypass',
-            'Crypto issues',
-            'Insecure fallback values',
-        ],
-        extraItems: [
-            '- Missing defensive measures: a changed or newly added entrypoint that lacks the protection its siblings have — CSRF token check, rate limit, or an authorization guard. Compare against how the neighbouring routes or handlers in the same file are protected.',
-        ],
-        reasoningExample:
-            "The new DELETE route at router.ts:22 has no guard. Read the two neighbouring routes: both call requireOwner() before the handler. Nothing in the diff adds one. Reported.",
-    },
-    {
-        id: 'value-in-motion',
-        label: 'bug',
-        assignment:
-            'what a value is at the moment it is used: when it was evaluated, what it became on the way, and what the code assumes about it at its boundaries and positions',
-        items: [
-            'Mutable default arguments',
-            'Closure capturing mutable references',
-            'Async timing bugs',
-            'Conditional validation errors',
-            'Floating-point equality in critical operations',
-        ],
-        extraItems: [
-            '- Index, slice and ordering assumptions: Boundary arithmetic on substrings, slices, ranges and pagination whose indices do not match the layout the code describes; comparisons whose extracted segment is off by one or inverted; code that assumes an iteration, lookup or zip preserves input order when the structure gives no such guarantee (dict/map values, concurrent results, unordered collections). Verify the arithmetic against a concrete example and check whether the ordering is actually guaranteed.',
-        ],
-        reasoningExample:
-            "The prefix check at token.ts:61 reads substring(4,6), but the comment and the writer at token.ts:20 place the shortcut at indices 5-6. Worked through a concrete token: the check reads one char short. Reported.",
-    },
-];
-
-/** Ids que a fusao absorve. Saem da lista quando a variante esta ligada. */
-const ABSORVIDOS_PELA_FUSAO = new Set([
-    'untrusted-input-sink',
-    'secret-and-identity',
-    'authorization',
-    'data-exposure',
-    'capture-and-evaluation',
-    'value-boundary-and-position',
-    // sem par: ja coberto em 82-83% pelo invalid-state-and-concurrency
-    'contract-with-the-platform',
-]);
 
 /**
  * `scale-and-blocking`, `repeated-work` e `resource-and-growth` foram REMOVIDOS
@@ -412,15 +321,7 @@ const BASE: MicroAgentGroup[] = MICRO_AGENTS_TODOS.filter(
     (g) => !DESLIGADOS.has(g.id),
 );
 
-/** RECALL_MICRO_FUNDIDOS=1 troca os sete redundantes pelos dois fundidos: 12
- *  agentes viram 8. Desligado por padrao — os 12 continuam sendo o que roda. */
-export const MICRO_AGENTS: MicroAgentGroup[] =
-    process.env.RECALL_MICRO_FUNDIDOS === '1'
-        ? [
-              ...BASE.filter((g) => !ABSORVIDOS_PELA_FUSAO.has(g.id)),
-              ...MICRO_AGENTS_FUNDIDOS,
-          ]
-        : BASE;
+export const MICRO_AGENTS: MicroAgentGroup[] = BASE;
 
 
 /** Pulls an item out of the shared category text by its prefix, so the wording
