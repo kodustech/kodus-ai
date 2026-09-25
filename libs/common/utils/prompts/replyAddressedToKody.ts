@@ -53,7 +53,7 @@ export const prompt_replyAddressedToKody_user = (
     const rendered = kept.map((message, index) => {
         const role = message.isKody
             ? 'Kody'
-            : `${message.author || 'unknown'}${message.isBot ? ' (bot)' : ''}`;
+            : `${authorName(message.author)}${message.isBot ? ' (bot)' : ''}`;
         const tag = index === kept.length - 1 ? 'NEWEST MESSAGE' : 'message';
         return `<${tag} author="${role}">\n${clean(message.body)}\n</${tag}>`;
     });
@@ -108,13 +108,33 @@ function nextHiddenMarkup(text: string): number {
 // zeros, hex, missing `;`), decoded so the guards see what is displayed.
 const NUMERIC_REFERENCE = /&#(?:x([0-9a-f]+)|(\d+));?/gi;
 
+// The display name is set by the participant too; it lands inside the
+// envelope's `author="…"`, so nothing in it may end the attribute or the tag.
+function authorName(name: string | undefined): string {
+    const safe = (name ?? '')
+        .replace(INVISIBLE, '')
+        .replace(/[<>"&\r\n]/g, ' ')
+        .trim();
+    return safe || 'unknown';
+}
+
+// The references that spell markup (`&lt;/NEWEST MESSAGE&gt;`); decoded so the
+// `<` they stand for is neutralized like any other.
+const MARKUP_REFERENCE = /&(lt|gt|amp);?/gi;
+const MARKUP_CHAR: Record<string, string> = { lt: '<', gt: '>', amp: '&' };
+
 function decodeNumericReferences(text: string): string {
-    return text.replace(NUMERIC_REFERENCE, (_, hex, dec) => {
-        const codePoint = hex ? parseInt(hex, 16) : Number(dec);
-        return codePoint > 0 && codePoint <= 0x10ffff
-            ? String.fromCodePoint(codePoint)
-            : '';
-    });
+    return text
+        .replace(NUMERIC_REFERENCE, (_, hex, dec) => {
+            const codePoint = hex ? parseInt(hex, 16) : Number(dec);
+            return codePoint > 0 && codePoint <= 0x10ffff
+                ? String.fromCodePoint(codePoint)
+                : '';
+        })
+        .replace(
+            MARKUP_REFERENCE,
+            (_, name: string) => MARKUP_CHAR[name.toLowerCase()],
+        );
 }
 
 // Every code point Unicode marks as not rendered (zero-width, bidi controls,
