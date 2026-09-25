@@ -625,8 +625,17 @@ function isCheapValue(v: any): boolean {
     if (type === 'string') return v.length <= 256;
     if (type !== 'object') return false;
     if (v instanceof Date) return true;
-    if (Array.isArray(v)) return false;
+    // Reject typed arrays BEFORE enumerating: every byte of a Buffer is an own
+    // enumerable key, so Object.keys() on a 1MB buffer builds a million index
+    // strings (measured: 53ms) just to learn it is too big. deepSanitize's
+    // main path already short-circuits this case the same way.
+    if (Array.isArray(v) || ArrayBuffer.isView(v)) return false;
     try {
+        // Object.keys is deliberate. A for…in with an early break looks cheaper
+        // but is not: V8 builds the full enumeration list before the first
+        // iteration (measured 17.7ms vs 16.9ms on a 200k-key object). There is
+        // no O(1) own-key count in JS, and the main loop pays the same
+        // Object.keys on the same object, so this is not a tail regression.
         const ks = Object.keys(v);
         if (ks.length > CHEAP_OBJECT_MAX_KEYS) return false;
         for (const k of ks) {

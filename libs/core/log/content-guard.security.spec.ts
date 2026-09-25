@@ -390,3 +390,21 @@ describe('deepSanitize — the tail is bounded in bytes, not just in keys', () =
         expect(JSON.stringify(deepSanitize(nest(20))).length * 3).toBeLessThan(262_144);
     });
 });
+
+describe('deepSanitize — the tail never enumerates large values', () => {
+    const fat = () => {
+        const m: Record<string, string> = {};
+        for (let i = 0; i < 20; i++) m[`f${i}`] = 'x'.repeat(4000);
+        return m;
+    };
+
+    it('rejects a Buffer without walking its bytes', () => {
+        // Object.keys() on a 1MB Buffer built a million index strings (~53ms).
+        const buf = Buffer.alloc(1024 * 1024);
+        const t0 = Date.now();
+        const out = deepSanitize({ metadata: fat(), payload: buf });
+        expect(Date.now() - t0).toBeLessThan(20);
+        expect(out.payload).toBe('[budget spent]');
+    });
+
+});
