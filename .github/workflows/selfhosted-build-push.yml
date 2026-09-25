@@ -765,7 +765,7 @@ jobs:
               id: discord-webhook
               run: |
                   # Same fallback chain as the failure notifier.
-                  if [ -n "${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK_SELFHOSTED || secrets.DISCORD_WEBHOOK }}" ]; then
+                  if [ -n "${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK_SELFHOSTED || secrets.DISCORD_WEBHOOK }}" ]; then
                     echo "configured=true" >> "$GITHUB_OUTPUT"
                   else
                     echo "configured=false" >> "$GITHUB_OUTPUT"
@@ -775,7 +775,7 @@ jobs:
               if: steps.discord-webhook.outputs.configured == 'true'
               uses: sarisia/actions-status-discord@v1.16.0
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK_SELFHOSTED || secrets.DISCORD_WEBHOOK }}
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK_SELFHOSTED || secrets.DISCORD_WEBHOOK }}
                   # "matrix green" alone hid real signal: advisory failures and
                   # setup skips don't gate, so a green run can still carry
                   # failed scenarios and coverage gaps. Say the numbers, wear
@@ -830,7 +830,7 @@ jobs:
         # human promote gate) — binding the FAILURE ALERT to it left the
         # 2026-06-05 release failure sitting in "waiting for approval" and
         # Discord silent. Webhooks resolve from repo-level secrets
-        # (DISCORD_WEBHOOK_INTERNAL / DISCORD_WEBHOOK), which need no
+        # (DISCORD_WEBHOOK_TESTS / _INTERNAL / DISCORD_WEBHOOK), which need no
         # approval to read.
         permissions: {}
         steps:
@@ -865,7 +865,7 @@ jobs:
                   # gating only on DISCORD_WEBHOOK_SELFHOSTED (an
                   # environment-scoped secret) silently skips the alert when
                   # the job runs without that environment.
-                  if [ -n "${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK_SELFHOSTED || secrets.DISCORD_WEBHOOK }}" ]; then
+                  if [ -n "${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK_SELFHOSTED || secrets.DISCORD_WEBHOOK }}" ]; then
                     echo "configured=true" >> "$GITHUB_OUTPUT"
                   else
                     echo "configured=false" >> "$GITHUB_OUTPUT"
@@ -875,7 +875,7 @@ jobs:
               if: steps.discord-webhook.outputs.configured == 'true'
               uses: sarisia/actions-status-discord@v1.16.0
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK_SELFHOSTED || secrets.DISCORD_WEBHOOK }}
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK_SELFHOSTED || secrets.DISCORD_WEBHOOK }}
                   content: ":x: Self-hosted release failed at: **${{ steps.ctx.outputs.phase }}**"
                   title: "Self-Hosted Release Failed (${{ steps.ctx.outputs.phase }})"
                   description: |
