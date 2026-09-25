@@ -74,7 +74,9 @@ export const RepositoryPicker = ({ cookieValue, teamId }: Props) => {
             await setCockpitRepositoryCookie(repositoryFullName, repositoryId);
             await setRepositoryParams(
                 {
-                    repository: repositoryFullName || null,
+                    // Keep ?repository= when clearing so the server reader
+                    // treats "all repositories" as authoritative over cookies.
+                    repository: repositoryFullName,
                     repositoryId: repositoryId ?? null,
                 },
                 { shallow: false },
