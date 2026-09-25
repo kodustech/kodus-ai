@@ -43,3 +43,11 @@ ObservabilityTelemetryModelSchema.index(
     },
     { background: true },
 );
+ObservabilityTelemetryModelSchema.index(
+    {
+        'attributes.organizationId': 1,
+        'attributes.repositoryId': 1,
+        timestamp: -1,
+    },
+    { background: true },
+);
