@@ -384,6 +384,11 @@ export class CockpitReportsService implements ICockpitReportsService {
         const prevByRepo = new Map(
             previous.map((r) => [repositoryKey(r), r.implementationRate]),
         );
+        const prevLegacyByName = new Map(
+            previous
+                .filter((r) => !r.repositoryId)
+                .map((r) => [r.repository, r.implementationRate]),
+        );
 
         let best: {
             repositoryId: string | null;
@@ -395,7 +400,9 @@ export class CockpitReportsService implements ICockpitReportsService {
             if (repo.prsReviewed < HIGHLIGHT_MIN_REVIEWS) {
                 continue;
             }
-            const from = prevByRepo.get(repositoryKey(repo));
+            const from =
+                prevByRepo.get(repositoryKey(repo)) ??
+                prevLegacyByName.get(repo.repository);
             if (from === undefined) {
                 continue;
             }

@@ -372,7 +372,7 @@ describe('CockpitReportsService', () => {
                           ]
                         : [
                               {
-                                  repositoryId: 'auth-id',
+                                  repositoryId: null,
                                   repository: 'acme/auth',
                                   prsReviewed: 25,
                                   implementationRate: 0.54,

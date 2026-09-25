@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@components/ui/button";
 import {
     Command,
@@ -19,6 +18,7 @@ import {
 import { Spinner } from "@components/ui/spinner";
 import { useGetSelectedRepositories } from "@services/codeManagement/hooks";
 import { Check, GitBranch } from "lucide-react";
+import { parseAsString, useQueryStates } from "nuqs";
 import { safeArray } from "src/core/utils/safe-array";
 
 import { setCockpitRepositoryCookie } from "../_actions/set-cockpit-repository";
@@ -35,9 +35,11 @@ export const RepositoryPicker = ({ cookieValue, teamId }: Props) => {
     const { data: repositories = [], isLoading } =
         useGetSelectedRepositories(teamId);
 
-    const router = useRouter();
-    const pathname = usePathname();
-    const searchParams = useSearchParams();
+    const [{ repository: repositoryParam }, setRepositoryParams] =
+        useQueryStates({
+            repository: parseAsString,
+            repositoryId: parseAsString,
+        });
     const [loading, startTransition] = useTransition();
     const [open, setOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
@@ -47,8 +49,8 @@ export const RepositoryPicker = ({ cookieValue, teamId }: Props) => {
 
     const [selectedRepository, setSelectedRepository] = useState<string>(() => {
         // URL wins: a shared link reflects its repository in the trigger.
-        if (searchParams.has(COCKPIT_PARAM.repository)) {
-            return searchParams.get(COCKPIT_PARAM.repository) ?? "";
+        if (repositoryParam !== null) {
+            return repositoryParam;
         }
         if (!cookieValue) return "";
         try {
@@ -68,17 +70,15 @@ export const RepositoryPicker = ({ cookieValue, teamId }: Props) => {
         repositoryFullName: string,
         repositoryId?: string,
     ) => {
-        const params = new URLSearchParams(searchParams.toString());
-        params.set(COCKPIT_PARAM.repository, repositoryFullName);
-        if (repositoryId) {
-            params.set(COCKPIT_PARAM.repositoryId, repositoryId);
-        } else {
-            params.delete(COCKPIT_PARAM.repositoryId);
-        }
-
         startTransition(async () => {
             await setCockpitRepositoryCookie(repositoryFullName, repositoryId);
-            router.push(`${pathname}?${params.toString()}`);
+            await setRepositoryParams(
+                {
+                    repository: repositoryFullName || null,
+                    repositoryId: repositoryId ?? null,
+                },
+                { shallow: false },
+            );
         });
     };
 

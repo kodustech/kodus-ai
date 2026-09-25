@@ -107,7 +107,12 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
         params.push(q.organizationId, q.startDate, q.endDate);
         const repoFilter = q.repositoryId
             ? (params.push(q.repositoryId),
-              `AND pr."repositoryId" = $${params.length}`)
+              `AND (pr."repositoryId" = $${params.length}${
+                  q.repository
+                      ? (params.push(q.repository),
+                        ` OR (pr."repositoryId" IS NULL AND pr.repo_full_name = $${params.length})`)
+                      : ''
+              })`)
             : q.repository
               ? (params.push(q.repository),
                 `AND pr.repo_full_name = $${params.length}`)

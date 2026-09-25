@@ -146,8 +146,16 @@ describe('CockpitReviewAnalyticsService (deterministic logic)', () => {
             );
 
             expect(where).toContain('pr."repositoryId" = $4');
-            expect(where).not.toContain('pr.repo_full_name');
-            expect(params).toEqual(['org-1', '2026-06-01', '2026-06-30', 'repo-1']);
+            expect(where).toContain(
+                'pr."repositoryId" IS NULL AND pr.repo_full_name = $5',
+            );
+            expect(params).toEqual([
+                'org-1',
+                '2026-06-01',
+                '2026-06-30',
+                'repo-1',
+                'platform/backend',
+            ]);
         });
 
         it('falls back to repository full name for legacy callers', () => {
