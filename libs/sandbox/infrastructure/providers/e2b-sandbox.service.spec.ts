@@ -24,7 +24,7 @@ jest.mock('e2b', () => {
     return { CommandExitError, Sandbox: class {} };
 });
 
-import { CommandExitError } from 'e2b';
+import { CommandExitError, Sandbox } from 'e2b';
 
 import {
     E2BSandboxService,
@@ -941,5 +941,29 @@ describe('syncE2BSandboxRepo — submodules on the reconnect path', () => {
                 (cmd as string).includes("'submodule'"),
             ),
         ).toHaveLength(0);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// createSandbox deployment tag — the orphan sweep lists only sandboxes that
+// carry this deployment's tag, so a missing tag means a leak nobody reaps.
+// ---------------------------------------------------------------------------
+describe('E2BSandboxService.createSandbox deployment tag', () => {
+    it.each([
+        ['production', 'production'],
+        [undefined, 'unknown'],
+    ])('API_NODE_ENV=%s tags metadata.deployment=%s', async (env, tag) => {
+        const create = jest.fn().mockResolvedValue({ sandboxId: 'sbx' });
+        (Sandbox as any).create = create;
+        const service = new E2BSandboxService({
+            get: (key: string) => (key === 'API_NODE_ENV' ? env : undefined),
+        } as any);
+
+        await (service as any).createSandbox('key', { stage: 'review' });
+
+        expect(create.mock.calls[0][0].metadata).toEqual({
+            stage: 'review',
+            deployment: tag,
+        });
     });
 });

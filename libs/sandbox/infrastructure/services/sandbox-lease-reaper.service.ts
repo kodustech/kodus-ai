@@ -9,6 +9,10 @@ import {
 } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 import { SandboxLeaseRepository } from '@libs/sandbox/infrastructure/repositories/sandbox-lease.repository';
 import {
+    E2B_DEPLOYMENT_METADATA_KEY,
+    e2bDeploymentTag,
+} from '@libs/sandbox/infrastructure/providers/e2b-sandbox.service';
+import {
     isLocalSandboxPath,
     deleteLocalSandbox,
 } from './local-sandbox-cleanup.service';
@@ -31,6 +35,21 @@ const MAX_KILL_RETRIES = 3;
 // prod failures are transient: TimeoutError/503) in exchange for a
 // guaranteed-bounded retry window.
 const HARD_KILL_RETRY_LIMIT = 20;
+
+// Orphan sweep: a PAUSED sandbox with no lease doc is unreachable — only
+// acquire() ever resumes a sandbox, and it only knows ids from leases — so it
+// sits paused forever. Sandboxes are created with onTimeout: 'pause', so
+// every path that drops a lease without a successful kill leaks one (21k had
+// piled up by 2026-09-24). A sandbox in use is at most ~65 min old (lease TTL
+// 30 min + a busy retire's 30 min + reaper tick), so the 3h floor leaves wide
+// margin. Ownership is the `deployment` tag, not this floor. The per-run cap
+// bounds a backlog.
+const ORPHAN_MIN_AGE_MS = 3 * 60 * 60 * 1000;
+const ORPHAN_SWEEP_MAX_PER_RUN = 2000;
+// Page budget per listing pass (E2B pages hold 100). Listing oldest-first puts
+// the orphans on the first pages; the budget stops an unfiltered pass from
+// walking the whole account every hour.
+const ORPHAN_SWEEP_MAX_PAGES = 30;
 
 const E2B_ALREADY_GONE_RE =
     /not found|does not exist|404|already (been )?(deleted|killed|terminated)/i;
@@ -364,6 +383,132 @@ export class SandboxLeaseReaperService {
             await this.releaseCronLock(
                 lock,
                 'Failed to release sandbox idle-kill lock',
+            );
+        }
+    }
+
+    /**
+     * Hourly safety net for every lease-drop path, known or not: kills PAUSED
+     * sandboxes created by this deployment (`metadata.deployment`, set at
+     * create) that are older than ORPHAN_MIN_AGE_MS and have no lease doc
+     * left. Another deployment's sandboxes are never listed: its leases live
+     * in a Mongo this one cannot see.
+     */
+    @Cron(CronExpression.EVERY_HOUR)
+    async sweepOrphanedSandboxes(): Promise<void> {
+        const apiKey = this.configService.get<string>('API_E2B_KEY');
+        if (!apiKey) return;
+
+        const lock = await this.acquireCronLock(
+            'CRON:SANDBOX:ORPHAN_SWEEP',
+            55 * 60 * 1000,
+        );
+        if (!lock) return;
+
+        try {
+            const cutoff = Date.now() - ORPHAN_MIN_AGE_MS;
+            const candidates: string[] = [];
+            const collect = async (
+                metadata: Record<string, string> | undefined,
+                keep: (meta: Record<string, string>) => boolean,
+            ) => {
+                const paginator = Sandbox.list({
+                    apiKey,
+                    order: 'asc',
+                    query: metadata
+                        ? { state: ['paused'], metadata }
+                        : { state: ['paused'] },
+                });
+                for (
+                    let page = 0;
+                    page < ORPHAN_SWEEP_MAX_PAGES &&
+                    paginator.hasNext &&
+                    candidates.length < ORPHAN_SWEEP_MAX_PER_RUN;
+                    page++
+                ) {
+                    for (const info of await paginator.nextItems()) {
+                        if (
+                            info.metadata?.stage &&
+                            keep(info.metadata) &&
+                            new Date(info.startedAt).getTime() < cutoff
+                        ) {
+                            candidates.push(info.sandboxId);
+                        }
+                    }
+                }
+            };
+
+            // This deployment's sandboxes.
+            await collect(
+                {
+                    [E2B_DEPLOYMENT_METADATA_KEY]: e2bDeploymentTag(
+                        this.configService.get<string>('API_NODE_ENV'),
+                    ),
+                },
+                () => true,
+            );
+            // Legacy: created before the deployment tag existed (the existing
+            // backlog, and old-code replicas during a rolling deploy). No
+            // deployment keeps a paused sandbox past the age floor, so an
+            // untagged one that old is an orphan wherever it came from.
+            await collect(
+                undefined,
+                (meta) => !meta[E2B_DEPLOYMENT_METADATA_KEY],
+            );
+            const batch = candidates.slice(0, ORPHAN_SWEEP_MAX_PER_RUN);
+            if (batch.length === 0) return;
+
+            const leased =
+                await this.leaseRepository.findSandboxIdsWithLease(batch);
+            const orphans = batch.filter((id) => !leased.has(id));
+
+            let killed = 0;
+            let failed = 0;
+            await mapWithConcurrency(
+                orphans,
+                CLEANUP_CONCURRENCY,
+                async (sandboxId) => {
+                    try {
+                        await Sandbox.kill(sandboxId, { apiKey });
+                        killed++;
+                    } catch (err) {
+                        if (!isE2BAlreadyGoneError(err)) failed++;
+                    }
+                },
+            );
+
+            if (orphans.length > 0) {
+                // warn, not log: every orphan is a lease-drop path that
+                // skipped the kill — a steady non-zero count is a bug to find.
+                this.logger.warn({
+                    message:
+                        '[SANDBOX-ORPHAN-SWEEP] Killed paused sandboxes with no lease',
+                    context: SandboxLeaseReaperService.name,
+                    metadata: {
+                        candidates: batch.length,
+                        orphans: orphans.length,
+                        killed,
+                        failed,
+                    },
+                });
+            }
+        } catch (error) {
+            this.logger.error({
+                message: '[SANDBOX-ORPHAN-SWEEP] Sweep failed',
+                context: SandboxLeaseReaperService.name,
+                error: error instanceof Error ? error : undefined,
+                metadata: {
+                    minAgeMs: ORPHAN_MIN_AGE_MS,
+                    deployment: e2bDeploymentTag(
+                        this.configService.get<string>('API_NODE_ENV'),
+                    ),
+                    maxPerRun: ORPHAN_SWEEP_MAX_PER_RUN,
+                },
+            });
+        } finally {
+            await this.releaseCronLock(
+                lock,
+                'Failed to release sandbox orphan-sweep lock',
             );
         }
     }
