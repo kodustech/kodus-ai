@@ -208,40 +208,6 @@ const MICRO_AGENTS_TODOS: MicroAgentGroup[] = [
             "The prefix check at token.ts:61 reads substring(4,6), but the comment and the writer at token.ts:20 place the shortcut at indices 5-6. Worked through 'abc:XY1234': the check compares the wrong two characters. Reported.",
     },
     {
-        id: 'resource-and-growth',
-        label: 'bug',
-        assignment:
-            'resources that are opened and not closed, and collections that grow without a bound',
-        items: ['Resource leaks', 'Unbounded growth', 'Memory waste'],
-        reasoningExample:
-            "The stream opened at import.ts:55 is closed only on the success path; the new early return at line 62 skips it. Reported.",
-    },
-    {
-        id: 'repeated-work',
-        label: 'performance',
-        assignment: 'work repeated once per processed item',
-        items: [
-            'Database inefficiency',
-            'Duplicate operations',
-            'Redundant operations',
-            'Cache misses',
-        ],
-        reasoningExample:
-            "The loop at list.ts:40 calls findUser() per row. Read findUser: one query each, no batching, and the cache added in this diff is keyed per request so it never hits across rows. N queries for N rows. Reported.",
-    },
-    {
-        id: 'scale-and-blocking',
-        label: 'performance',
-        assignment: 'what happens as n grows, and who waits while it does',
-        items: [
-            'Algorithm complexity',
-            'Blocking operations',
-            'Batch processing inefficiency',
-        ],
-        reasoningExample:
-            "The new dedup at merge.ts:18 does indexOf inside the loop over the same array — quadratic in the number of items, and the caller at job.ts:90 passes the full unpaged result. Reported.",
-    },
-    {
         id: 'invalid-state-and-concurrency',
         label: 'bug',
         assignment:
@@ -421,27 +387,26 @@ const ABSORVIDOS_PELA_FUSAO = new Set([
 ]);
 
 /**
- * Tres agentes nao rodam mais. Nao e economia de prompt: sobre os 29 PRs do
- * conjunto, nenhum dos tres produziu um unico achado que o reducer mantivesse —
- * tudo que eles geraram ou foi agrupado em cima de um achado de outro agente,
- * ou ficou abaixo da cota. Rodar os tres e pagar geracao para jogar fora.
+ * `scale-and-blocking`, `repeated-work` e `resource-and-growth` foram REMOVIDOS
+ * deste arquivo (nao desligados por flag). Sobre os 30 PRs do conjunto, nenhum
+ * dos tres produziu um unico achado que o reducer mantivesse: tudo que geraram
+ * ou foi agrupado em cima do achado de outro agente, ou ficou abaixo da cota.
  *
- * `RECALL_SKIP_AGENTS` acrescenta outros ids a lista (e so acrescenta): serve
- * para varrer qual agente paga, sem recompilar.
+ * Removidos e nao parametrizados de proposito. Enquanto foram uma flag, toda
+ * rodada dependia de alguem lembrar de passar a variavel, e uma medicao feita
+ * com eles ligados e indistinguivel de uma feita sem — foi exatamente assim que
+ * um pool com 17 passadas virou baseline de uma configuracao de 14. O historico
+ * deles esta no commit que os apagou.
+ *
+ * `RECALL_SKIP_AGENTS` continua existindo para varrer qual agente paga o
+ * proprio custo, sem recompilar. Ele so tira; nao devolve nada.
  */
-const DESLIGADOS_POR_PADRAO = [
-    'scale-and-blocking',
-    'repeated-work',
-    'resource-and-growth',
-];
-
-const DESLIGADOS = new Set([
-    ...DESLIGADOS_POR_PADRAO,
-    ...String(process.env.RECALL_SKIP_AGENTS || '')
+const DESLIGADOS = new Set(
+    String(process.env.RECALL_SKIP_AGENTS || '')
         .split(',')
         .map((x) => x.trim().replace(/^micro-/, ''))
         .filter(Boolean),
-]);
+);
 
 const BASE: MicroAgentGroup[] = MICRO_AGENTS_TODOS.filter(
     (g) => !DESLIGADOS.has(g.id),
@@ -655,7 +620,8 @@ class lives in — not when you already suspect a defect. You are not reviewing
 the code; you are deciding who gets to look at it.
 
 Examples of the judgement: a diff that adds a loop issuing a query per row makes
-"repeated-work" relevant whether or not it is actually slow. A diff that only
+"invalid-state-and-concurrency" relevant whether or not the loop is actually
+slow, because the per-row call can interleave. A diff that only
 renames a CSS class makes none of the code-path specialists relevant. A change
 to a function's signature or return type makes "contract-not-followed" relevant
 even if every caller looks updated.
