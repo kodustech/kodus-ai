@@ -495,11 +495,30 @@ async function main() {
         if (process.env.RECALL_DUMP) {
             try {
                 fs.mkdirSync(process.env.RECALL_DUMP, { recursive: true });
+                // Relogio de parede da REVISAO, medido aqui e nao no fim da
+                // linha: o judge roda depois e `durationMs` da row soma os dois.
+                // A soma de `recallPasses[].ms` tambem nao serve — as passadas
+                // rodam em paralelo, entao aquilo e tempo de agente, nao de
+                // parede. Para comparar duas configuracoes em VELOCIDADE (a
+                // poda de contexto por idade, por exemplo) e este numero que
+                // vale, e ele precisa estar no dump, junto do resto.
+                const reviewWallMs = Date.now() - startedAt;
+                let saida = apiResult.output;
+                try {
+                    const obj =
+                        typeof saida === 'string' ? JSON.parse(saida) : saida;
+                    if (obj && typeof obj === 'object') {
+                        obj.trace = { ...(obj.trace || {}), reviewWallMs };
+                        saida = obj;
+                    }
+                } catch {
+                    /* saida nao-JSON: grava crua, sem o relogio */
+                }
                 fs.writeFileSync(
                     path.join(process.env.RECALL_DUMP, `${caseId}.raw.txt`),
-                    typeof apiResult.output === 'string'
-                        ? apiResult.output
-                        : JSON.stringify(apiResult.output, null, 2),
+                    typeof saida === 'string'
+                        ? saida
+                        : JSON.stringify(saida, null, 2),
                 );
             } catch (e) {
                 console.warn(`[dump] ${caseId}: ${e.message}`);

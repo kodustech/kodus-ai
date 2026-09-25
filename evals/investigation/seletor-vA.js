@@ -162,6 +162,7 @@ function comEsforco(model, modelId) {
     }
 
     const casos = [];
+    const vazios = [];
     for (const f of fs.readdirSync(path.join(S, DUMP)).filter((x) => x.endsWith('.raw.txt'))) {
         const j = JSON.parse(fs.readFileSync(path.join(S, DUMP, f), 'utf8'));
         if (SO.length && !SO.includes(j.caseId)) continue;
@@ -182,11 +183,17 @@ function comEsforco(model, modelId) {
                 (c) => ESCALA.has(String(c?.severity || '').toLowerCase()) && !!c?.reason,
             );
         }
+        // PR sem candidato depois do contrato entra assim mesmo, com grupo
+        // vazio: se sumir daqui, some do relatorio, e um PR que nao gerou nada
+        // deixa de contar no denominador — era assim que 30 PRs viravam 29.
         if (cands.length) casos.push({ cid: j.caseId, cands });
+        else vazios.push(j.caseId);
     }
 
     const saida = {};
+    for (const cid of vazios) saida[cid] = { grupos: [], candidatos: 0, ms: 0 };
     const um = async ({ cid, cands }) => {
+        const t0 = Date.now();
         try {
             const r = await generateText({
                 ...tele('seletor-unico', { caseId: cid }),
@@ -197,10 +204,10 @@ function comEsforco(model, modelId) {
             });
             const call = (r.toolCalls || []).find((t) => (t.toolName ?? t.name) === 'selecionar');
             const grupos = (call?.input ?? call?.args)?.grupos || [];
-            saida[cid] = { grupos, candidatos: cands.length };
+            saida[cid] = { grupos, candidatos: cands.length, ms: Date.now() - t0 };
             console.log(`  ${cid.slice(0, 46).padEnd(48)} ${cands.length} cand -> ${grupos.length} grupos`);
         } catch (e) {
-            saida[cid] = { erro: String(e?.message || e).slice(0, 200), candidatos: cands.length };
+            saida[cid] = { erro: String(e?.message || e).slice(0, 200), candidatos: cands.length, ms: Date.now() - t0 };
             console.log(`  ${cid.slice(0, 46).padEnd(48)} FALHOU: ${saida[cid].erro}`);
         }
     };

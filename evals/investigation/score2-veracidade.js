@@ -152,7 +152,9 @@ Score every index exactly once. Call veracidade exactly once.`;
         if (reps.length) casos.push({ cid, reps, itens: reps.map((i) => cands[i]) });
     }
     const saida = {};
+    const ms = {};
     const um = async ({ cid, reps, itens }) => {
+        const t0 = Date.now();
         try {
             const r = await generateText({
                 ...tele('score2-veracidade', { caseId: cid }),
@@ -169,14 +171,16 @@ Score every index exactly once. Call veracidade exactly once.`;
                 if (Number.isInteger(p) && p < reps.length) porIndice[reps[p]] = it.verdadeiro;
             }
             saida[cid] = porIndice;
+            ms[cid] = Date.now() - t0;
             console.log(`  ${cid.slice(0, 46).padEnd(48)} ${reps.length} itens -> ${Object.keys(porIndice).length} notas`);
         } catch (e) {
             saida[cid] = {};
+            ms[cid] = Date.now() - t0;
             console.log(`  ${cid.slice(0, 46).padEnd(48)} FALHOU: ${String(e?.message || e).slice(0, 110)}`);
         }
     };
     for (let b = 0; b < casos.length; b += PARPR) await Promise.all(casos.slice(b, b + PARPR).map(um));
-    fs.writeFileSync(OUT, JSON.stringify({ dump: DUMP, modelo: MODEL, saida }, null, 2));
+    fs.writeFileSync(OUT, JSON.stringify({ dump: DUMP, modelo: MODEL, saida, ms }, null, 2));
     console.log(`\n-> ${OUT}`);
     await flush?.();
 })().catch((e) => { console.error(e); process.exit(1); });

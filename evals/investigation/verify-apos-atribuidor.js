@@ -46,6 +46,21 @@ const arg = (n, d) => {
 const DUMP = arg('dump');
 const OUT = arg('out', path.join(__dirname, 'results', `verify-${DUMP}.json`));
 const ONLY = (arg('only', '') || '').split(',').map((x) => x.trim()).filter(Boolean);
+/** --grupos=<arquivo>: reaproveita o agrupamento de uma rodada anterior em vez
+ *  de chamar o atribuidor de novo.
+ *
+ *  Nao e so economia de chamada. Comparar duas variantes do BUNDLE do verify
+ *  exige que o agrupamento seja o mesmo nas duas: re-rodar o atribuidor sorteia
+ *  grupos diferentes, e a diferenca medida passa a misturar o bundle com o
+ *  agrupamento. */
+const GRUPOS = arg('grupos');
+/** Quantos PRs ao mesmo tempo. Cada PR abre um worktree do git, entao isto
+ *  tambem e quantos clones ficam em disco ao mesmo tempo. */
+const PARPR = Number(arg('parpr', '1'));
+/** RECALL_VERIFY_SCORE=1: o verificador devolve 0-100 no lugar de keep/drop. */
+const SCORE = process.env.RECALL_VERIFY_SCORE === '1';
+/** RECALL_VERIFY_FALHA=1: pergunta se a FALHA pode ser instanciada. */
+const FALHA = process.env.RECALL_VERIFY_FALHA === '1';
 const MODEL = process.env.RECALL_MODEL || 'deepseek-v4.1-flash@fireworks';
 const J = (v) => (typeof v === 'string' ? JSON.parse(v) : v || []);
 
@@ -82,23 +97,35 @@ function candidatoDoGrupo(membros, rep) {
         } catch {}
     }
     const saida = {};
-    for (const f of fs.readdirSync(path.join(S, DUMP)).filter((x) => x.endsWith('.raw.txt'))) {
+    const arquivos = fs
+        .readdirSync(path.join(S, DUMP))
+        .filter((x) => x.endsWith('.raw.txt'));
+    const umCaso = async (f) => {
         const j = JSON.parse(fs.readFileSync(path.join(S, DUMP, f), 'utf8'));
         const cid = j.caseId;
-        if (ONLY.length && !ONLY.includes(cid)) continue;
+        if (ONLY.length && !ONLY.includes(cid)) return;
         const vars = casos[cid];
-        if (!vars) { console.log(`  ${cid.slice(0, 44)} sem dataset`); continue; }
+        if (!vars) { console.log(`  ${cid.slice(0, 44)} sem dataset`); return; }
 
         const cands = j.trace?.preFilterCandidates || [];
         const keep = cands.map((c, i) => [c, i]).filter(([c]) => passesContract(c)).map(([, i]) => i);
-        if (!keep.length) { saida[cid] = { grupos: [] }; continue; }
+        if (!keep.length) { saida[cid] = { grupos: [] }; return; }
         const filtrados = keep.map((i) => cands[i]);
         const diff = J(vars.changedFilesFull)
             .map((x) => `--- ${x.filename}\n${x.patchWithLinesStr || ''}`)
             .join('\n\n');
 
-        // --- ATRIBUIDOR (mesmo prompt de producao) ---
+        // --- ATRIBUIDOR (mesmo prompt de producao), ou o agrupamento reusado ---
         let grupos = [];
+        if (GRUPOS) {
+            const anterior = JSON.parse(fs.readFileSync(GRUPOS, 'utf8')).saida[cid];
+            if (!anterior) { console.log(`  ${cid.slice(0, 44)} sem grupo na rodada anterior`); return; }
+            grupos = (anterior.grupos || []).map((g) => ({
+                indices: g.indices,
+                representante: g.representante,
+                nota: g.nota,
+            }));
+        } else {
         try {
             const out = await generateText({
                 model,
@@ -123,7 +150,8 @@ function candidatoDoGrupo(membros, rep) {
                 .filter(Boolean);
         } catch (e) {
             console.log(`  ${cid.slice(0, 44)} atribuidor FALHOU: ${String(e.message || e).slice(0, 90)}`);
-            continue;
+            return;
+        }
         }
 
         // --- VERIFY por grupo, com ferramentas contra o repo de verdade ---
@@ -137,6 +165,18 @@ function candidatoDoGrupo(membros, rep) {
                 modelId: String(MODEL).replace(/@.*$/, ''),
                 tools,
                 agentName: 'verify-pos-atribuidor',
+                scoreMode: SCORE,
+                failureMode: FALHA,
+                // O prompt do modo score manda investigar antes de pontuar, e o
+                // teto de 5 cortou 30% dos grupos antes de responderem. O passo
+                // final (submeter) tambem consome um, entao 8 deixa 7 de
+                // investigacao. RECALL_VERIFY_PASSOS ajusta sem recompilar.
+                ...(SCORE || FALHA
+                    ? {
+                          lightMaxSteps: Number(process.env.RECALL_VERIFY_PASSOS) || 8,
+                          fullMaxSteps: Number(process.env.RECALL_VERIFY_PASSOS) || 8,
+                      }
+                    : {}),
                 // RECALL_VERIFY_REASON=1: manda o percurso do achado no bundle.
                 includeReason: process.env.RECALL_VERIFY_REASON === '1',
                 // RECALL_VERIFY_GRUPO=1: manda tambem a redacao e o percurso dos
@@ -155,9 +195,11 @@ function candidatoDoGrupo(membros, rep) {
                     : {}),
             });
             const res = [];
+            const tPR = Date.now();
             for (const g of grupos) {
                 const cand = candidatoDoGrupo(g.indices.map((i) => filtrados[i]), g.indices.indexOf(g.representante));
                 let v;
+                const tG = Date.now();
                 try {
                     v = await verifier.verify(cand, { runId: `${cid}:${g.representante}` });
                 } catch (e) {
@@ -165,23 +207,31 @@ function candidatoDoGrupo(membros, rep) {
                     v = { keep: true, confidence: undefined, rationale: `verify falhou: ${String(e.message || e).slice(0, 120)}`, erro: true };
                 }
                 res.push({
+                    ms: Date.now() - tG,
                     indices: g.indices,
                     representante: g.representante,
                     origem: keep[g.representante],
                     nota: g.nota,
                     keep: v.keep !== false,
+                    score: v.score,
+                    trigger: v.trigger,
                     confidence: v.confidence,
                     erro: !!v.erro,
                     rationale: String(v.rationale || '').slice(0, 300),
                 });
             }
-            saida[cid] = { grupos: res, candidatos: keep.length };
+            saida[cid] = { grupos: res, candidatos: keep.length, ms: Date.now() - tPR };
             const mantidos = res.filter((r) => r.keep).length;
             console.log(`  ${cid.slice(0, 44).padEnd(46)} ${keep.length} cand -> ${res.length} grupos -> ${mantidos} keep`);
         } finally {
             await repo?.cleanup?.();
         }
         fs.writeFileSync(OUT, JSON.stringify({ dump: DUMP, modelo: MODEL, saida }, null, 2));
+    };
+    // Em lotes de PARPR. Cada PR abre o proprio worktree, entao o paralelismo
+    // custa disco e memoria — por isso e parametro e nao padrao.
+    for (let b = 0; b < arquivos.length; b += PARPR) {
+        await Promise.all(arquivos.slice(b, b + PARPR).map(umCaso));
     }
     fs.writeFileSync(OUT, JSON.stringify({ dump: DUMP, modelo: MODEL, saida }, null, 2));
     console.log(`\n-> ${OUT}`);

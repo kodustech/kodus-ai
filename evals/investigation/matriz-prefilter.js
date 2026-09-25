@@ -37,7 +37,20 @@ const OUT = arg('out', path.join(__dirname, 'results', `matriz-pre-${DUMP}.json`
         if (SO.length && !SO.includes(cid)) continue;
         const gs = porCaso[cid] || [];
         const cands = j.trace?.preFilterCandidates || [];
-        if (!gs.length || !cands.length) continue;
+        // PR sem candidato ENTRA na matriz, com lista vazia. Pular aqui era a
+        // origem das tabelas de 29 PRs: o PR sumia da matriz, sumia do
+        // denominador, e o recall subia sozinho porque os goldens que ninguem
+        // achou deixavam de ser contados.
+        if (!gs.length) continue;
+        if (!cands.length) {
+            out[cid] = {
+                goldens: gs.map((g) => ({ comment: String(g.comment).slice(0, 220), category: g.category, severity: g.severity })),
+                candidatos: [],
+                conf: gs.map(() => []),
+            };
+            console.log(`  ${cid.slice(0, 46).padEnd(48)} 0 cand x ${gs.length} goldens (entra vazio)`);
+            continue;
+        }
 
         const textos = cands.map((c) =>
             [c.oneSentenceSummary, c.suggestionContent].filter(Boolean).join('\n').slice(0, 1800));
