@@ -1,0 +1,650 @@
+---
+title: "BYOK - Traga Sua Própria Chave"
+description: "Conecte suas próprias chaves de provedor e escolha qual modelo roda cada tarefa. Disponível em todos os planos do Kodus."
+---
+
+BYOK (Bring Your Own Key) é a **forma padrão como o Kodus usa LLMs em todos os planos** — Community, Teams e Enterprise. Você conecta suas próprias contas de provedor, habilita os modelos que quiser e escolhe qual modelo roda cada tarefa. Você paga diretamente ao seu provedor, o Kodus nunca cobra margem sobre tokens e nunca vê sua chave em texto simples.
+
+<Card
+  title="Como isso se aplica aos planos"
+  icon="scale-balanced"
+  href="/pt-BR/how_to_use/pricing#byok-é-o-padrão-em-todos-os-planos"
+>
+  O BYOK é gratuito no Community, incluído no Teams ($10/dev ativo/mês além do seu gasto com tokens) e uma das duas opções no Enterprise (a outra sendo uma chave de API gerenciada pelo Kodus).
+</Card>
+
+## Como o BYOK funciona
+
+O BYOK é **provider-first**: você conecta um provedor uma vez, adiciona os modelos que quiser a ele e então roteia esses modelos para as tarefas da Kody. A tela `/byok` tem três abas:
+
+<CardGroup cols={3}>
+  <Card title="Providers" icon="box">
+    Conecte provedores com sua chave e habilite modelos em cada um. O badge de contagem mostra quantos provedores você conectou.
+  </Card>
+  <Card title="Routing" icon="code-branch">
+    Escolha qual modelo roda cada tarefa — um padrão para tudo, um fallback opcional e overrides por agente.
+  </Card>
+  <Card title="Budget" icon="wallet">
+    Defina um limite mensal de gasto opcional entre os modelos conectados.
+  </Card>
+</CardGroup>
+
+<Info>
+  **Quem pode editar isso.** A página de BYOK é **exclusiva do Owner** — conectar, testar e excluir chaves exige o role **Owner**. Os demais roles (Billing Manager, Repo Admin, Contributor) não conseguem acessar `/byok`. Veja [Roles do workspace](/pt-BR/how_to_use/workspace_roles).
+</Info>
+
+## Conectar um provedor
+
+<Steps>
+  <Step title="Abrir as configurações de BYOK">
+    Acesse [app.kodus.io/byok](https://app.kodus.io/byok). Em um workspace novo você verá **Connect your first provider**.
+  </Step>
+
+  <Step title="Escolha um provedor">
+    A grade de provedores é dividida em duas partes:
+
+    - **Providers** — provedores de primeira classe que você conecta apenas com uma chave de API (OpenAI, Anthropic, Google AI Studio, OpenRouter, Novita…).
+    - **Custom** — provedores que você aponta para seu próprio endpoint ou nos quais roda um modelo arbitrário: **OpenAI-compatible**, **Anthropic-compatible**, **Google Vertex AI** e **Amazon Bedrock**. Eles vêm marcados com a dica *Custom endpoint*.
+
+    Um provedor que você já conectou exibe **Connected · N models**.
+  </Step>
+
+  <Step title="Adicione um modelo">
+    Escolher um provedor abre o formulário **Add a model** dele. Cole a chave de API uma vez (reutilizada em cada modelo que você adicionar àquele provedor depois) e então escolha o modelo:
+
+    - Se o Kodus conseguir listar os modelos do provedor, você recebe um dropdown.
+    - Caso contrário (endpoints personalizados, self-hosted ou quando chaves de plataforma não estão configuradas), digite o Model ID exato.
+
+    Endpoints personalizados (OpenAI-compatible / Anthropic-compatible) também pedem uma **base URL** primeiro.
+  </Step>
+
+  <Step title="Ajuste configurações avançadas (opcional)">
+    Em **Advanced settings**: thinking/reasoning, temperature, max output tokens, max input tokens e max concurrent requests. Os padrões são sensatos para a maioria dos provedores — veja [Reasoning](#reasoning--extended-thinking) e [Temperature](#temperature) para os campos que o Kodus trava ou oculta por modelo.
+  </Step>
+
+  <Step title="Teste e salve">
+    Clique em **Test** para sondar o provedor, ou **Test & save** para rodar o teste e persistir em caso de sucesso. Adicione quantos modelos quiser ao provedor — a chave é colada apenas uma vez.
+  </Step>
+</Steps>
+
+<Tip>
+  **Adicione outro provedor** a qualquer momento pela aba Providers. Cada provedor mantém sua própria chave; habilitar mais modelos em um provedor conectado nunca a pede de novo.
+</Tip>
+
+## Teste antes de salvar
+
+O botão **Test** verifica sua configuração antes que ela possa quebrar uma revisão real. O que ele faz depende do provedor:
+
+| Provedor | O que o Test faz |
+| --- | --- |
+| **Marcas Anthropic-compatible** (Kimi, Z.ai, DeepSeek), **OpenAI-compatible**, **Novita** | Envia uma **requisição de chat real de 1 token** ao modelo exato — a mesma chamada que uma revisão faz. Detecta um Model ID errado, uma chave restrita e problemas de endpoint na hora. |
+| **OpenAI, Anthropic, Google (Gemini/Vertex), OpenRouter, Bedrock** | Uma chamada barata de identidade/metadados (list-models, troca de token ou STS) — confirma que a chave e o endpoint funcionam. |
+
+No caminho de sondagem por chat, o Test também **valida o ajuste que você configurou contra as regras do próprio modelo** e retorna um erro específico e antecipado em vez de salvar uma configuração que o modelo ignoraria silenciosamente:
+
+- Uma temperature que um modelo sempre-thinking não respeitará (ela é fixada em `1` — veja [Temperature](#temperature)).
+- Reasoning **Off** em um modelo que sempre raciocina e não pode desabilitá-lo.
+
+<Info>
+  Como os provedores de chat agora exercitam o modelo real, um **typo no Model ID é detectado no momento do Test** em vez de na sua primeira revisão — a resposta volta como `Model not found`.
+</Info>
+
+## Routing: qual modelo roda cada tarefa
+
+Depois de conectar dois ou mais modelos, a aba **Routing** decide qual modelo roda o quê. O routing é **flat**: toda tarefa usa o padrão até você sobrescrever.
+
+<Steps>
+  <Step title="Policy">
+    **Manual · você escolhe** está ativo hoje. **Auto · Kodus optimizes** está a caminho.
+  </Step>
+
+  <Step title="Defaults">
+    - **Model for all tasks** — o único modelo que toda tarefa usa a menos que seja sobrescrito.
+    - **Fallback (opcional)** — um modelo *diferente* que a Kody re-executa uma chamada uma vez quando o modelo da tarefa falha: chave inválida ou expirada, sem crédito ou provedor indisponível (após as próprias retentativas dele).
+  </Step>
+
+  <Step title="Per agent">
+    Diferentes tarefas da Kody (revisão de código, Kody Rules, chat, resumos e mais) podem rodar cada uma um modelo diferente — um modelo mais caro para revisão profunda, um mais barato para resumos. Um modelo que não consegue fazer uma dada tarefa fica desabilitado naquela linha com um tooltip, antes que você possa salvá-lo.
+  </Step>
+</Steps>
+
+Clique em **Save routing** para persistir. **Reset agents to default** envia todos os overrides por agente de volta ao padrão e limpa o fallback (o modelo padrão em si é mantido). Um painel **Per repository** somente leitura abaixo espelha quaisquer overrides de modelo por repositório definidos em Code Review Settings.
+
+<Note>
+  Com um único modelo conectado, o routing é ignorado — toda tarefa usa esse modelo. Conecte um segundo modelo para que o routing faça sentido.
+</Note>
+
+## Escolhendo modelos
+
+Qualquer modelo que seu provedor sirva funciona. Se você não sabe por onde começar, estas são escolhas sólidas para revisão de código:
+
+<CardGroup cols={2}>
+  <Card title="Claude Sonnet / Opus" icon="crown">
+    **Melhor equilíbrio / qualidade flagship.** Extended thinking adaptativo da Anthropic e forte análise entre arquivos. Chaves: [console.anthropic.com](https://console.anthropic.com/settings/keys).
+  </Card>
+  <Card title="Gemini Pro" icon="brain">
+    **Maior contexto.** O flagship do Google — mais forte em PRs grandes e monorepos. Chaves: [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
+  </Card>
+  <Card title="GPT (latest)" icon="sparkles">
+    **Rápido e consistente.** A linha flagship da OpenAI — baixa latência confiável, conhecimento amplo. Chaves: [platform.openai.com/api-keys](https://platform.openai.com/api-keys).
+  </Card>
+  <Card title="Kimi / GLM (coding plans)" icon="moon">
+    **Mais barato via assinatura.** O Kimi da Moonshot e o GLM da Z.ai oferecem planos de codificação de taxa fixa que limitam o gasto mensal. Veja [Conectando Kimi e GLM](#conectando-kimi-moonshot-e-glm-zai) abaixo.
+  </Card>
+</CardGroup>
+
+<Info>
+  **Nossa recomendação padrão:** comece com o **Claude Sonnet** para a melhor experiência geral. Se o custo for prioridade, um **GLM Coding Plan** ou **Kimi Code Plan** oferece uma assinatura de taxa fixa. Informe o Model ID exato que seu provedor documenta — o Kodus deriva o nome de exibição a partir dele.
+</Info>
+
+## Conectando Kimi (Moonshot) e GLM (Z.ai)
+
+Moonshot e Z.ai cada uma oferece um plano de assinatura em um **endpoint diferente** da Developer API pay-per-token. Cada plano é uma conta separada com sua própria chave — escolha a base URL que corresponde à chave que você tem.
+
+<Tabs>
+  <Tab title="Kimi (Moonshot AI)">
+    | Plano | Endpoint | Chaves de | Melhor para |
+    | --- | --- | --- | --- |
+    | **Developer API** | `https://api.moonshot.ai/v1` (OpenAI-compatible) ou `https://api.moonshot.ai/anthropic` (Anthropic-compatible) | [platform.moonshot.ai](https://platform.moonshot.ai/console/api-keys) | Pay-per-token, simultaneidade escala com o tier de recarga |
+    | **Kimi Code Plan** | `https://api.kimi.com/coding/v1` | [kimi.com/code](https://www.kimi.com/code) | Assinatura com endpoint de codificação dedicado |
+
+    <Info>
+      O Kimi Code Plan está documentado com um limite de 30 requisições simultâneas — defina `maxConcurrentRequests=30`. Variantes Kimi sempre-reasoning (ex.: `kimi-k2p7-code`, `kimi-k3`) travam a temperature em `1` e não conseguem desligar o reasoning — veja [Temperature](#temperature).
+    </Info>
+  </Tab>
+
+  <Tab title="GLM (Z.ai)">
+    | Plano | Endpoint | Chaves de | Melhor para |
+    | --- | --- | --- | --- |
+    | **Developer API** | `https://api.z.ai/api/paas/v4/` | [z.ai/manage-apikey](https://z.ai/manage-apikey/apikey-list) | Cargas variáveis, pay-per-token |
+    | **Coding Plan** | `https://api.z.ai/api/coding/paas/v4` | [z.ai/subscribe](https://z.ai/subscribe) | Volume previsível de equipe, taxa mensal fixa |
+
+    <Warning>
+      Chaves do GLM Coding Plan funcionam **apenas** em `/api/coding/paas/v4`. Os tiers Lite e Pro geralmente são limitados a **1 requisição simultânea** — defina `maxConcurrentRequests=1` e aumente (até 30) apenas no tier Max.
+    </Warning>
+  </Tab>
+</Tabs>
+
+## Provedores Suportados
+
+<Tabs>
+  <Tab title="OpenAI">
+    **Melhor para:** modelos GPT mais recentes e desempenho confiável.
+
+    **Obter uma chave de API:**
+    1. Acesse [OpenAI API Keys](https://platform.openai.com/api-keys)
+    2. Crie uma nova chave para o Kodus
+    3. Adicione informações de cobrança
+  </Tab>
+
+  <Tab title="Google Gemini">
+    **Melhor para:** revisões de contexto grande (1M tokens) e preços competitivos.
+
+    **Obter uma chave de API:**
+    1. Acesse o [Google AI Studio](https://aistudio.google.com/app/apikey)
+    2. Crie uma nova chave
+    3. Habilite o faturamento no Google Cloud Console
+  </Tab>
+
+  <Tab title="Anthropic Claude">
+    **Melhor para:** análise detalhada e extended thinking adaptativo.
+
+    **Obter uma chave de API:**
+    1. Acesse o [Anthropic Console](https://console.anthropic.com/)
+    2. Crie uma conta e gere uma chave
+    3. Adicione créditos
+  </Tab>
+
+  <Tab title="Novita AI">
+    **Melhor para:** modelos open-source e hospedados (Llama, DeepSeek, Kimi) a preços competitivos.
+
+    **Obter uma chave de API:**
+    1. Cadastre-se em [Novita AI](https://novita.ai/)
+    2. Navegue até as configurações de API
+    3. Gere uma chave
+
+    <Card title="Guia de Configuração Novita" icon="rocket" href="/pt-BR/cookbook/novita">
+      Configuração detalhada com capturas de tela.
+    </Card>
+  </Tab>
+
+  <Tab title="OpenRouter">
+    **Melhor para:** uma única relação de cobrança para muitos modelos.
+
+    **Obter uma chave de API:**
+    1. Crie uma conta em [OpenRouter](https://openrouter.ai/)
+    2. Adicione créditos
+    3. Gere uma chave nas configurações
+
+    <Warning>
+      O OpenRouter roteia cada requisição para um provedor upstream diferente por padrão, o que pode causar variação de qualidade e latência entre chamadas. **Fixe upstreams específicos** em Advanced settings → OpenRouter routing para manter o comportamento estável. Veja [Fixando provedores do OpenRouter](#fixando-provedores-do-openrouter).
+    </Warning>
+  </Tab>
+
+  <Tab title="Google Vertex AI">
+    <Info>**Beta.** Um caminho de autenticação mais complexo que o padrão de chave única.</Info>
+
+    **Melhor para:** Times já no Google Cloud que precisam do Gemini (ou Claude) sob o billing, o IAM e as garantias de residência de dados que já têm na GCP.
+
+    **Como configurar:**
+    1. No fluxo de conexão, escolha **Google Vertex AI** (em Custom).
+    2. Cole o **conteúdo do arquivo JSON da sua service account** no campo Service Account JSON (base64 também funciona). O Kodus extrai o `project_id` do JSON automaticamente.
+    3. **Region** — deixe vazio para usar o endpoint global (recomendado). Fixe uma região (ex.: `us-east5`) só quando houver requisito de residência de dados.
+
+    A service account precisa de permissão para chamar a API de predição do Vertex AI naquele projeto. O Test sonda o *modelo realmente configurado*, então um modelo/região indisponível falha no momento do Test.
+  </Tab>
+
+  <Tab title="Amazon Bedrock">
+    <Info>**Beta.** Um caminho de autenticação mais complexo que o padrão de chave única.</Info>
+
+    **Melhor para:** Times padronizados em AWS que querem os modelos faturados na própria conta AWS.
+
+    **Como configurar:**
+    1. No fluxo de conexão, escolha **Amazon Bedrock** (em Custom).
+    2. Informe uma **Bedrock API key** (bearer token) — veja [como gerar uma Bedrock API key](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys-generate.html).
+    3. Defina a **Region** (ex.: `us-east-1`, `us-west-2`, `eu-central-1`).
+
+    <Accordion title="Avançado: credenciais IAM em vez da API key">
+      Se seu time ainda não migrou para Bedrock API keys, expanda **Advanced — use IAM user credentials instead** e informe access key ID + secret estáticos (mais um session token para credenciais temporárias do STS). O principal IAM precisa de `bedrock:InvokeModel`.
+
+      A API key tem precedência: se houver bearer token, os campos de IAM são ignorados.
+    </Accordion>
+  </Tab>
+
+  <Tab title="OpenAI Compatible">
+    **Melhor para:** provedores especializados (Moonshot, Z.ai, Fireworks, Together, Groq, DeepSeek) ou endpoints self-hosted.
+
+    **Como configurar:**
+    1. No fluxo de conexão, escolha **OpenAI Compatible** (em Custom).
+    2. Informe a URL base (ex.: `https://api.moonshot.ai/v1`, `https://api.z.ai/api/paas/v4/`, `https://api.fireworks.ai/inference/v1`).
+    3. Forneça a chave e o Model ID.
+
+    <Note>
+      Os Model IDs são específicos do provedor — alguns usam caminhos profundos (ex.: Fireworks: `accounts/fireworks/models/kimi-k2p7-code`). Copie o ID exato do painel do seu provedor; o Test envia uma requisição real, então um ID errado falha imediatamente.
+    </Note>
+
+    <CardGroup cols={2}>
+      <Card title="Guia Z.ai (GLM)" href="/pt-BR/knowledge_base/how-to-use-z-ai-with-kodus" icon="bolt">
+        Configuração completa do Z.ai com detalhes do Coding Plan.
+      </Card>
+      <Card title="Guia Moonshot (Kimi)" href="/pt-BR/knowledge_base/how-to-use-moonshot-with-kodus" icon="moon">
+        Configuração Kimi + Kimi Code Plan.
+      </Card>
+      <Card title="Fireworks AI" href="/pt-BR/knowledge_base/how-to-use-fireworks-with-kodus" icon="fire">
+        Configuração específica do Fireworks.
+      </Card>
+      <Card title="Together AI" href="/pt-BR/knowledge_base/how-to-use-together-ai-with-kodus" icon="handshake">
+        Configuração do Together AI.
+      </Card>
+    </CardGroup>
+  </Tab>
+
+  <Tab title="Anthropic-compatible">
+    **Melhor para:** Endpoints que falam a API Messages da Anthropic em vez da da OpenAI — incluindo endpoints de coding plan, como o da Kimi.
+
+    **Como configurar:**
+    1. No fluxo de conexão, escolha **Anthropic-compatible** (em Custom).
+    2. Informe a base URL, a chave e o Model ID.
+
+    <Note>
+      Cole a base URL no formato que seu provedor documenta — com ou sem `/v1` no final (ex.: `https://api.kimi.com/coding` ou `https://api.kimi.com/coding/v1`). O Kodus normaliza internamente, porque os dois caminhos do SDK da Anthropic discordam sobre onde o `/v1` entra. Para uma marca conhecida, um connect só com a chave resolve o endpoint automaticamente.
+    </Note>
+  </Tab>
+</Tabs>
+
+## Reasoning / Extended Thinking
+
+O formulário **Add a model** expõe um toggle **Thinking** (Off / Low / Medium / High / Custom) em **Advanced settings**. As opções disponíveis espelham o que o modelo realmente consegue fazer:
+
+- Um modelo que não consegue raciocinar fica travado em **Off** com uma nota.
+- Um modelo que só raciocina em certos níveis (ex.: o medium/high do GPT-5) desabilita os inválidos.
+- Um modelo reasoning-by-default recebe **Medium** como um ponto de partida sensato.
+
+### Níveis predefinidos
+
+Quando você escolhe Low / Medium / High, o Kodus traduz o nível para o formato nativo de cada provedor automaticamente:
+
+| Provedor | Como "medium" mapeia |
+| --- | --- |
+| **Anthropic** (Claude adaptativo) | `thinking: { type: "adaptive" }` + `effort: "medium"` |
+| **Google** (Gemini) | `thinkingConfig: { thinkingLevel: "medium" }` |
+| **OpenAI** (GPT-5 / o-series) | `reasoningEffort: "medium"` |
+| **OpenRouter** | `reasoning: { effort: "medium" }` |
+| **OpenAI-compatible / Anthropic-compatible** (Kimi, GLM, DeepSeek) | `thinking: { type: "enabled" }` — on/off binário, nível ignorado |
+
+<Note>
+  Kimi e GLM atualmente expõem reasoning como um flag único on/off. Escolher Low, Medium ou High emite o mesmo payload (thinking habilitado). **Variantes sempre-reasoning** (Kimi `k2p7-code`/`k3`, GLM-5.3) raciocinam incondicionalmente — não podem ser desligadas em Off, e o formulário desabilita essa opção.
+</Note>
+
+### Sobrescrita via JSON customizado
+
+Escolher **Custom** no toggle Thinking revela uma textarea de JSON. Cole as opções do provedor diretamente — **o Kodus faz o auto-wrap sob o namespace do provedor ativo**. Você não precisa conhecer as regras de roteamento do Vercel AI SDK.
+
+Use isso quando:
+
+- Você precisa de um valor específico de `budgetTokens` para o Claude (em vez do mapeamento por effort predefinido)
+- Você quer habilitar/desabilitar thinking por modelo para provedores OpenAI-compatible
+- Você quer campos além de reasoning — **caching, service tier, safety settings, tagging via `user`, etc.** A sobrescrita é mesclada em `providerOptions`, então qualquer campo do adapter passa direto
+- O provedor lança um novo campo que o Kodus ainda não envolveu
+
+#### Exemplos (cole direto — sem namespace)
+
+<Tabs>
+  <Tab title="Anthropic">
+    Sobrescrever o budget de thinking do Claude para exatamente 20.000 tokens:
+
+    ```json
+    {
+      "thinking": { "type": "enabled", "budgetTokens": 20000 }
+    }
+    ```
+
+    Habilitar prompt caching (exemplo não-reasoning):
+
+    ```json
+    {
+      "cacheControl": { "type": "ephemeral" }
+    }
+    ```
+  </Tab>
+
+  <Tab title="Google Gemini">
+    Budget de thinking explícito (Gemini 2.5) ou nível (Gemini 3+):
+
+    ```json
+    {
+      "thinkingConfig": { "thinkingBudget": 16000 }
+    }
+    ```
+
+    Ajustar safety settings:
+
+    ```json
+    {
+      "safetySettings": [
+        { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE" }
+      ]
+    }
+    ```
+  </Tab>
+
+  <Tab title="OpenAI">
+    Reasoning com campos específicos da OpenAI:
+
+    ```json
+    {
+      "reasoningEffort": "high",
+      "serviceTier": "flex",
+      "store": false,
+      "user": "kodus-review"
+    }
+    ```
+  </Tab>
+
+  <Tab title="OpenRouter">
+    Forçar reasoning + ignorar um upstream específico:
+
+    ```json
+    {
+      "reasoning": { "effort": "high" },
+      "ignore": ["deepinfra"]
+    }
+    ```
+  </Tab>
+
+  <Tab title="OpenAI-compatible (Kimi, GLM, etc.)">
+    Habilitar thinking com uma dica de budget:
+
+    ```json
+    {
+      "thinking": { "type": "enabled", "budget_tokens": 25000 }
+    }
+    ```
+
+    Desabilitar thinking explicitamente (apenas em um modelo que suporta):
+
+    ```json
+    {
+      "thinking": { "type": "disabled" }
+    }
+    ```
+
+    <Warning>
+      Campos que o provedor upstream não reconhece (ex.: `budget_tokens` em um servidor que ignora) são descartados silenciosamente. Verifique a documentação do provedor para confirmar o que ele aceita.
+    </Warning>
+  </Tab>
+</Tabs>
+
+#### Usando namespaces manualmente (usuários avançados)
+
+Se seu JSON já começa com uma chave de namespace conhecida no nível superior — qualquer chave da tabela de mapeamento abaixo — o Kodus deixa intocado. Útil quando você quer misturar múltiplos namespaces de provedor ou ser explícito:
+
+```json
+{
+  "openrouter": {
+    "reasoning": { "effort": "high" },
+    "provider": { "order": ["moonshot"], "allow_fallbacks": false }
+  }
+}
+```
+
+Nos bastidores, estes são os mapeamentos de namespace que o Kodus usa:
+
+| Provedor BYOK | Chave de namespace |
+| --- | --- |
+| `anthropic` / `anthropic_compatible` | `anthropic` |
+| `google_gemini` | `google` |
+| `google_vertex` | `google` para Gemini, `anthropic` para Claude no Vertex |
+| `openai` | `openai` |
+| `openai_compatible` | `openaiCompatible` |
+| `azure` | `azure` |
+| `amazon_bedrock` | `amazonBedrock` (também aceita `bedrock`) |
+| `novita` | `novita` |
+| `open_router` | `openrouter` |
+
+#### Pegadinhas
+
+- **Apenas JSON válido.** Vírgulas faltando ou vírgulas finais quebram o parse e o Kodus ignora a sobrescrita.
+- **Precedência:** a sobrescrita JSON **substitui totalmente** o bloco de namespace do effort predefinido — se você sobrescrever `anthropic.thinking` mas esquecer `anthropic.effort`, esse campo não será enviado. O roteamento do OpenRouter (Pin providers / Allow fallbacks) é a única exceção: ele faz deep-merge com sua sobrescrita sob `openrouter`.
+- **Provedor desconhecido = sem wrap.** Se seu provedor BYOK não está na tabela de namespace acima, o Kodus passa o JSON como está.
+
+## Temperature
+
+A temperature fica em **Advanced settings**, e o campo se adapta às regras do modelo — definidas pelo provedor, não adivinhadas pelo formulário:
+
+| Modelo | Campo de temperature |
+| --- | --- |
+| Maioria dos modelos | **Editável** (0 = determinístico, 2 = criativo). |
+| Modelos sempre-reasoning do protocolo Anthropic (Kimi `k2p7-code`/`k3`, GLM-5.3) | **Travado em `1`.** O protocolo fixa a temperature em 1 enquanto raciocina, então 1 é o único valor válido — o campo mostra um cadeado e o Kodus envia `1` independentemente do que foi armazenado. |
+| Claude 4.7+ e OpenAI GPT-5 / o-series | **Oculto.** Esses modelos removeram a temperature e rejeitam qualquer requisição que a defina — direcione-os pelo nível de thinking. |
+
+<Info>
+  Nos provedores de sondagem por chat, o [Test](#teste-antes-de-salvar) valida a temperature que você definiu contra essas regras e retorna um erro antes de salvar — assim você nunca persiste um valor que o modelo não respeitará.
+</Info>
+
+## Fixando provedores do OpenRouter
+
+O OpenRouter é um roteador — quando você solicita um modelo (ex.: `moonshotai/kimi-k2`), ele encaminha a chamada para um entre vários provedores upstream (Moonshot direto, Together, Groq, Fireworks, Novita…). Cada chamada pode cair em um backend diferente. Isso é conveniente, mas introduz variação silenciosa:
+
+- **Variação de qualidade** — upstreams rodam em precisões diferentes (FP8, INT4, full) e entregam saídas sutilmente diferentes para prompts idênticos
+- **Inconsistência de tool-calling** — alguns backends não suportam function calling da mesma forma, levando a uso de tool malformado
+- **Variação no formato de reasoning** — um upstream respeita `reasoning_effort`, outro só `thinking.enabled`, outro ignora ambos
+- **Oscilação de latência** — o p50 pode saltar de 800ms para 4s entre chamadas conforme o roteamento muda
+- **Surpresas de rate-limit** — você bate na cota de um backend que não escolheu explicitamente
+
+### Como fixar
+
+Quando seu provedor BYOK é o **OpenRouter**, o painel Advanced settings exibe uma seção **OpenRouter routing** com dois campos:
+
+- **Pin providers (in order)** — lista separada por vírgulas com nomes dos upstreams (ex.: `moonshot, together`). O OpenRouter os tenta em ordem e usa o primeiro disponível.
+- **Allow fallbacks** — quando desativado, as requisições falham diretamente se nenhum dos provedores fixados estiver disponível. Quando ativado (padrão), o OpenRouter pode recorrer a qualquer outro upstream que sirva o modelo.
+
+<Tip>
+  Para uma configuração **estável**, fixe um único provedor e desligue os fallbacks (`Pin: moonshot`, `Allow fallbacks: off`). As requisições sempre chegarão ao mesmo upstream ou falharão de forma explícita — sem mudanças silenciosas de qualidade. O trade-off é zero resiliência se esse upstream cair; combine com um Routing Fallback diferente (ex.: Anthropic) para absorver indisponibilidades.
+</Tip>
+
+<Warning>
+  Os nomes dos upstreams devem corresponder ao catálogo do OpenRouter. Consulte as tags de provedor em [openrouter.ai/docs/features/provider-routing](https://openrouter.ai/docs/features/provider-routing) — valores comuns incluem `moonshot`, `together`, `groq`, `fireworks`, `novita`.
+</Warning>
+
+Nos bastidores, o Kodus emite isto na chamada ao Vercel AI SDK:
+
+```json
+{
+  "openrouter": {
+    "provider": {
+      "order": ["moonshot", "together"],
+      "allow_fallbacks": false
+    }
+  }
+}
+```
+
+### Avançado: sobrescrita via JSON bruto
+
+Se você precisa de campos além de `order` e `allow_fallbacks` (ex.: `ignore`, `data_collection`, `require_parameters`), mude **Thinking** para **Custom** em Advanced settings e cole o payload de roteamento completo — ele é mesclado em `providerOptions` junto com qualquer configuração de reasoning:
+
+```json
+{
+  "openrouter": {
+    "provider": {
+      "order": ["moonshot"],
+      "allow_fallbacks": false,
+      "ignore": ["deepinfra"],
+      "data_collection": "deny"
+    },
+    "reasoning": { "effort": "medium" }
+  }
+}
+```
+
+## Simultaneidade e limites de taxa
+
+O campo `maxConcurrentRequests` (em **Advanced settings**) limita quantas requisições em voo o Kodus envia ao seu provedor em paralelo. Na maioria das vezes, o padrão é suficiente — mas planos de assinatura com limites estritos de simultaneidade precisam defini-lo explicitamente.
+
+### Valores a definir
+
+| Provedor / plano | Valor | Motivo |
+| --- | --- | --- |
+| **GLM Coding Plan (Lite/Pro)** | `1` | A assinatura permite apenas uma requisição em voo. Ir além dispara 429. |
+| **GLM Coding Plan (Max)** | até `30` | O Max permite até 30 simultâneas — aumente aqui para usar o budget completo. |
+| **Kimi Code Plan** | `30` | Limite documentado da Moonshot no endpoint de coding. |
+| **GLM Developer API** | _(vazio)_ | Limites escalam por chave; não há padrão global sensato. |
+| **Kimi Developer API** | _(vazio)_ | Escala com seu tier de recarga (Tier 1 ≈ 50, Tier 5 ≈ 1000). |
+| **Anthropic / OpenAI / Google / OpenRouter** | _(vazio)_ | Provedores aplicam seus próprios TPM/RPM; o Kodus não limita. |
+
+### Quando ajustar
+
+<CardGroup cols={2}>
+  <Card title="Aumentar" icon="arrow-up">
+    - Você tem uma recarga de tier alto na Moonshot/OpenRouter e quer mais throughput em PRs grandes
+    - Você fez upgrade do seu GLM Coding Plan para **Max** e quer usar o budget completo de 30 simultâneas
+    - As revisões parecem serializadas em PRs com muitos arquivos e você não vê 429s
+  </Card>
+  <Card title="Diminuir" icon="arrow-down">
+    - Você vê erros `429` ou `Too much concurrency` nos logs de revisão
+    - Seu provedor avisa sobre limites de taxa no painel
+    - Você quer preservar a janela do Coding Plan (5h/semanal) em mais PRs
+  </Card>
+</CardGroup>
+
+<Tip>
+  **Simultaneidade vs. RPM vs. TPM.** `maxConcurrentRequests` só limita requisições paralelas em voo. Muitos provedores também aplicam limites separados de **RPM** (requisições por minuto) e **TPM** (tokens por minuto). Se você está batendo em RPM/TPM enquanto a simultaneidade parece boa, a solução geralmente é fazer upgrade de tier ou distribuir a carga no tempo — não mudar `maxConcurrentRequests`.
+</Tip>
+
+<Note>
+  **Interação com o Fallback.** Quando o modelo de uma tarefa bate em 429 e a Kody faz failover para o Routing Fallback, o `maxConcurrentRequests` do próprio Fallback se aplica. Definir um Fallback generoso em um provedor diferente é uma boa forma de absorver picos quando seu modelo principal está em uma assinatura apertada.
+</Note>
+
+## Boas Práticas
+
+### Segurança
+
+<CardGroup cols={2}>
+  <Card title="Chaves Dedicadas" icon="shield-check">
+    Crie chaves de API separadas para o Kodus. Facilita auditoria de uso e rotação de chaves.
+  </Card>
+  <Card title="Rotação Regular" icon="arrows-rotate">
+    Rotacione as chaves periodicamente e atualize-as nas configurações BYOK.
+  </Card>
+  <Card title="Monitorar Uso" icon="chart-bar">
+    Verifique os painéis do seu provedor em busca de padrões incomuns.
+  </Card>
+  <Card title="Armazenamento Seguro" icon="lock">
+    Nunca faça commit de chaves em repositórios. O Kodus armazena as chaves criptografadas em repouso e em trânsito.
+  </Card>
+</CardGroup>
+
+### Estratégia de routing
+
+- Use um **provedor diferente** para seu padrão e seu fallback (ex.: Anthropic como padrão, Google como fallback). Protege contra indisponibilidades específicas de um provedor.
+- Assinaturas com limites de simultaneidade apertados (GLM Coding Plan Lite/Pro, Kimi Code Plan) fazem configurações solo ruins — combine-as com um fallback pay-per-token para que PRs em picos não fiquem sem recursos.
+- Roteie as tarefas pesadas (revisão profunda de código) para o seu modelo mais forte e as leves (resumos, chat) para um mais barato em **Per agent**.
+
+## Solução de Problemas
+
+<AccordionGroup>
+  <Accordion title="'Invalid API key' ao clicar em Test">
+    - Copie a chave sem espaços extras, aspas ou quebras de linha finais.
+    - Confirme que o faturamento está habilitado e que a conta tem créditos.
+    - Para chaves do GLM Coding Plan / Kimi Code Plan, certifique-se de que a **base URL** corresponde ao plano — chaves de assinatura não funcionam no endpoint Developer API e vice-versa.
+  </Accordion>
+
+  <Accordion title="'Model not found' ao clicar em Test">
+    - Para os provedores de sondagem por chat (Anthropic-compatible, OpenAI-compatible, Novita), o Test envia uma requisição real ao modelo, então um Model ID errado ou com erro de digitação falha aqui — isso é esperado e melhor do que falhar no momento da revisão.
+    - Copie o Model ID exato do painel do provedor. Alguns provedores usam caminhos profundos (ex.: Fireworks `accounts/fireworks/models/kimi-k2p7-code`) ou escrevem as versões de forma diferente (`k2p7` vs `k2.7`).
+  </Accordion>
+
+  <Accordion title="'Endpoint not found' ao clicar em Test">
+    - Verifique se a URL base corresponde exatamente ao provedor (barra final importa para alguns).
+    - Para provedores OpenAI-compatible, o endpoint geralmente é `{baseURL}/chat/completions` (o Kodus adiciona o caminho).
+  </Accordion>
+
+  <Accordion title="O Test rejeita a temperature ou o reasoning que defini">
+    - Alguns modelos fixam a temperature ou sempre raciocinam (Kimi `k2p7-code`/`k3`, GLM-5.3; Claude 4.7+/GPT-5 removem a temperature inteiramente). O Test valida seu ajuste contra as regras do modelo e retorna uma mensagem específica — siga-a (deixe a temperature indefinida ou use o valor exigido; não desligue o reasoning em Off em um modelo sempre-reasoning). Veja [Temperature](#temperature).
+  </Accordion>
+
+  <Accordion title="'Rate limited' ou 'Too much concurrency'">
+    - Reduza **Max concurrent requests** em Advanced settings.
+    - No GLM Coding Plan Lite/Pro, mantenha em **1 concurrent**. Faça upgrade para Max (30 concurrent) se precisar de mais throughput.
+    - No Kimi Code Plan, o limite documentado é **30 concurrent**.
+  </Accordion>
+
+  <Accordion title="Variáveis de ambiente self-hosted não aparecem">
+    - Se o Kodus está configurado via `.env` (Fixed Mode self-hosted), a tela de BYOK exibe um banner informativo azul com o provedor/modelo ativo — a chave nunca é exibida por segurança.
+    - Conectar um modelo e salvar sobrescreve a configuração do `.env`.
+  </Accordion>
+
+  <Accordion title="Custos altos ou inesperados">
+    - Reasoning adiciona tokens. Se o custo está disparando, reduza **Thinking** de Medium para Low, ou roteie tarefas pesadas para um modelo mais barato em **Per agent**.
+    - Verifique o painel do seu provedor para o detalhamento por modelo, e defina um limite na aba **Budget**.
+  </Accordion>
+</AccordionGroup>
+
+## Perguntas Frequentes
+
+<AccordionGroup>
+  <Accordion title="Posso trocar de provedor a qualquer momento?">
+    Sim. A mudança tem efeito na próxima revisão — sem necessidade de redeploy.
+  </Accordion>
+
+  <Accordion title="O que acontece se minha chave de API ficar sem créditos?">
+    As revisões mudam automaticamente para o Routing Fallback se um estiver configurado. Sem um Fallback, a revisão falha e retorna um erro. Sempre configure um Fallback.
+  </Accordion>
+
+  <Accordion title="Como funciona o sistema de padrão / fallback?">
+    Toda tarefa usa o modelo padrão a menos que você a sobrescreva por agente em Routing. Se o modelo de uma tarefa falhar (rate limit, 5xx, timeout, chave inválida), a Kody tenta novamente uma vez no Fallback. Você paga apenas pelo provedor que efetivamente processou a chamada.
+  </Accordion>
+
+  <Accordion title="Tarefas diferentes podem usar modelos diferentes?">
+    Sim — é para isso que serve **Routing → Per agent**. Roteie a revisão profunda de código para um modelo forte e resumos ou chat para um mais barato. Você precisa de pelo menos dois modelos conectados para que o routing faça sentido.
+  </Accordion>
+
+  <Accordion title="Vocês armazenam nossas chaves de API com segurança?">
+    Sim. As chaves são criptografadas em repouso e em trânsito e nunca são registradas em texto simples. O endpoint de status BYOK nunca retorna a chave bruta.
+  </Accordion>
+
+  <Accordion title="Posso usar um LLM self-hosted (ex.: Ollama, vLLM)?">
+    Sim — via o provedor **OpenAI Compatible** (em Custom). Informe a URL base do seu endpoint, o Model ID que ele expõe e uma chave de API placeholder (a maioria dos runtimes self-hosted ignora o header da chave, mas ainda exige um).
+  </Accordion>
+</AccordionGroup>

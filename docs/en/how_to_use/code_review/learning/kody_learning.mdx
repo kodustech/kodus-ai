@@ -1,0 +1,18 @@
+---
+title: "Feedback on suggestions"
+description: "What feedback records today, and which mechanisms shape future reviews."
+---
+
+<Note>
+Reaction-based fine-tuning is not currently active. 👍/👎 reactions and suggestion implementation status can be recorded, but they do not train a model, build preference clusters, or filter the next review.
+</Note>
+
+A thumbs-up or thumbs-down alone does not explain why a suggestion was rejected. Richer negative-feedback context is needed before this learning loop can be reintroduced.
+
+You can still leave reactions as optional product feedback. Do not expect reacting to a suggestion to automatically suppress similar suggestions in later reviews.
+
+## What affects future reviews
+
+- [Memories](/en/knowledge_base/how-to-teach-ai-your-team-conventions): Persist explicit team conventions through `@kody remember` and conversations.
+- [Kody Rules](/en/how_to_use/code_review/configs/kody_rules): Define standards that are applied during code review.
+- [Automatic Rules Generation](/en/how_to_use/code_review/learning/kody_rules_generation): Propose rules from review history for manual import. This is separate from reaction-based fine-tuning and remains an active feature.
