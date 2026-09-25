@@ -81,18 +81,48 @@ describe('deepSanitize — size bounds catch the field nobody named', () => {
         expect(out.items[50]).toBe('[+70 more items omitted]');
     });
 
-    it('keeps the whole log line well under the CloudWatch 256KB ceiling', () => {
+    it('keeps the whole log line under the CloudWatch ceiling — via the SIZE bounds, not the denylist', () => {
+        // Deliberately NOT content-named: an earlier version of this test used
+        // existingCode/improvedCode/llmPrompt, which the denylist omits
+        // outright, so it passed without the size bounds doing any work.
         const suggestion = {
             id: 'x',
             relevantFile: 'src/a.ts',
-            existingCode: 'a'.repeat(50_000),
-            improvedCode: 'b'.repeat(50_000),
-            llmPrompt: 'c'.repeat(50_000),
+            snippet: 'a'.repeat(50_000),
+            patch: 'b'.repeat(50_000),
+            context: 'c'.repeat(50_000),
         };
         const out = deepSanitize({
-            validSuggestions: Array.from({ length: 30 }, () => suggestion),
+            items: Array.from({ length: 30 }, () => suggestion),
         });
         expect(JSON.stringify(out).length).toBeLessThan(262_144);
+    });
+
+    it('bounds the AGGREGATE: many fields each sitting exactly AT the per-value cap', () => {
+        // 100 × 4096 chars serialized to ~410KB before the budget existed.
+        const flat: Record<string, string> = {};
+        for (let i = 0; i < 100; i++) flat[`field${i}`] = 'x'.repeat(4096);
+        expect(JSON.stringify(deepSanitize(flat)).length).toBeLessThan(262_144);
+    });
+
+    it('bounds an object with an unreasonable number of small keys', () => {
+        const wide: Record<string, string> = {};
+        for (let i = 0; i < 50_000; i++) wide[`k${i}`] = 'v';
+        expect(JSON.stringify(deepSanitize(wide)).length).toBeLessThan(262_144);
+    });
+
+    it('counts UTF-8 bytes, not UTF-16 code units', () => {
+        // 4096 CJK chars are 12,288 bytes. Reporting "4.0KB" under-reports 3x.
+        const out = deepSanitize({ note: '算'.repeat(5000) });
+        expect(out.note).toContain('[truncated: 14.6KB total]');
+    });
+
+    it('bounds a deeply nested structure that stays under every per-value cap', () => {
+        let nested: any = { leaf: 'z'.repeat(4000) };
+        for (let i = 0; i < 20; i++) {
+            nested = { pad: 'y'.repeat(4000), items: Array.from({ length: 40 }, () => nested) };
+        }
+        expect(JSON.stringify(deepSanitize(nested)).length).toBeLessThan(262_144);
     });
 });
 
@@ -121,5 +151,36 @@ describe('deepSanitize — the guard must never throw', () => {
     it('reports byte length for a typed array', () => {
         const out = deepSanitize({ improvedCode: new Uint8Array(2048) });
         expect(out.improvedCode).toBe('[content omitted: 2.0KB]');
+    });
+});
+
+describe('deepSanitize — a throwing property getter must not escape', () => {
+    it('survives a throwing getter on a content key', () => {
+        const out = deepSanitize({
+            get improvedCode(): string {
+                throw new Error('boom');
+            },
+        });
+        expect(out.improvedCode).toBe('[unreadable]');
+    });
+
+    it('survives a throwing getter on an ordinary key (pre-existing hazard)', () => {
+        const out = deepSanitize({
+            ok: 1,
+            get anyField(): string {
+                throw new Error('boom');
+            },
+        });
+        expect(out.anyField).toBe('[unreadable]');
+        expect(out.ok).toBe(1);
+    });
+
+    it('survives a throwing getter on a sensitive key', () => {
+        const out = deepSanitize({
+            get password(): string {
+                throw new Error('boom');
+            },
+        });
+        expect(out.password).toBe('[REDACTED]');
     });
 });

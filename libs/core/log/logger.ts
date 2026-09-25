@@ -380,6 +380,17 @@ function formatBytes(n: number): string {
     return n >= 1024 ? `${(n / 1024).toFixed(1)}KB` : `${n}B`;
 }
 
+/**
+ * UTF-8 byte length, not UTF-16 code units. String#length under-reports by up
+ * to 4x on non-ASCII (4096 chars of CJK is 12,288 bytes), and the ceiling we
+ * are defending is CloudWatch's, which counts bytes.
+ */
+function byteLen(s: string): number {
+    // Buffer.byteLength is native and beats a JS scan even on ASCII: measured
+    // ~0ns against ~12ns for a hand-rolled charCodeAt loop over 4096 chars.
+    return Buffer.byteLength(s, 'utf8');
+}
+
 // Object keys only. The cache never evicts, so names harvested from string
 // content (payload JSON keys, query params) would fill it for good; the
 // string scanners call isSensitiveName directly instead.
@@ -569,6 +580,25 @@ const DEEP_SANITIZE_MAX_STRING = 4096;
 const DEEP_SANITIZE_MAX_ARRAY = 50;
 
 /**
+ * Aggregate budget, in UTF-8 bytes.
+ *
+ * Per-value caps do NOT bound the line: 100 fields sitting exactly AT the
+ * 4096-char cap, none of them content-named, serialize to ~410KB and still
+ * blow through CloudWatch's 256KB per-event ceiling — the very symptom this
+ * guard exists to stop. Nothing caps object key count either.
+ *
+ * So the recursion carries a running byte total and, once it is spent, every
+ * remaining value becomes a marker. 192KB leaves ~64KB of headroom for the
+ * JSON structure pino adds around these values.
+ */
+const DEEP_SANITIZE_MAX_TOTAL = 192 * 1024;
+const BUDGET_SPENT_MARKER = '[budget spent]';
+
+interface SanitizeBudget {
+    used: number;
+}
+
+/**
  * Deep-sanitizes an object, redacting sensitive keys at any depth.
  * Also strips URL-embedded credentials from string values.
  * Uses structural sharing: returns the original reference when nothing changed,
@@ -585,7 +615,16 @@ function isRedirectableRequest(obj: any): boolean {
     );
 }
 
-function deepSanitize(obj: any, seen?: WeakSet<object>, depth = 0): any {
+function deepSanitize(
+    obj: any,
+    seen?: WeakSet<object>,
+    depth = 0,
+    budget: SanitizeBudget = { used: 0 },
+): any {
+    if (budget.used >= DEEP_SANITIZE_MAX_TOTAL) {
+        return BUDGET_SPENT_MARKER;
+    }
+
     if (obj === null || typeof obj !== 'object') {
         if (typeof obj === 'string') {
             // Truncate BEFORE scanning. The scanners are O(n) over the whole
@@ -594,9 +633,11 @@ function deepSanitize(obj: any, seen?: WeakSet<object>, depth = 0): any {
             // discarded tail is never read, let alone emitted.
             if (obj.length > DEEP_SANITIZE_MAX_STRING) {
                 const head = sanitizeString(obj.slice(0, DEEP_SANITIZE_MAX_STRING));
-                return `${head}…[truncated: ${formatBytes(obj.length)} total]`;
+                budget.used += byteLen(head);
+                return `${head}…[truncated: ${formatBytes(byteLen(obj))} total]`;
             }
             const sanitized = sanitizeString(obj);
+            budget.used += byteLen(sanitized);
             return sanitized !== obj ? sanitized : obj;
         }
         return obj;
@@ -666,7 +707,7 @@ function deepSanitize(obj: any, seen?: WeakSet<object>, depth = 0): any {
         const out: any[] = [];
         for (let i = 0; i < limit; i++) {
             const item = obj[i];
-            const sanitized = deepSanitize(item, refs, depth + 1);
+            const sanitized = deepSanitize(item, refs, depth + 1, budget);
             out.push(sanitized);
             if (sanitized !== item) changed = true;
         }
@@ -679,17 +720,49 @@ function deepSanitize(obj: any, seen?: WeakSet<object>, depth = 0): any {
 
     let changed = false;
     const out: Record<string, any> = {};
-    for (const key of Object.keys(obj)) {
+    const keys = Object.keys(obj);
+    for (let k = 0; k < keys.length; k++) {
+        const key = keys[k];
+        // Stop EMITTING, not just stop descending: replacing each value with a
+        // marker while still writing every key lets a 50k-key object blow the
+        // budget on key names alone.
+        if (budget.used >= DEEP_SANITIZE_MAX_TOTAL) {
+            out['…'] = `[+${keys.length - k} more keys omitted]`;
+            changed = true;
+            break;
+        }
         if (isSensitiveKey(key)) {
             out[key] = '[REDACTED]';
             changed = true;
-        } else if (isContentKey(key)) {
-            out[key] = describeOmitted(obj[key]);
+            continue;
+        }
+
+        // Read the property under guard. A getter can throw — the repo's own
+        // notes record that shape (mongodb-exporter.ts:1450-1454, "getters that
+        // throw") — and the read happens HERE, before any try/catch inside a
+        // helper could cover it. deepSanitize is relied on to be exception-free
+        // (mongodb-exporter.ts:1032 calls it unguarded inside an `async
+        // exportLog` fired as `void this.exportLog(...)` at line 1061, so a
+        // throw is an unhandled rejection that ends the process), so a hostile
+        // value must cost us a marker, never an exception.
+        let raw: any;
+        try {
+            raw = obj[key];
+        } catch {
+            out[key] = '[unreadable]';
+            changed = true;
+            continue;
+        }
+
+        if (isContentKey(key)) {
+            out[key] = describeOmitted(raw);
             changed = true;
         } else {
-            const val = deepSanitize(obj[key], refs, depth + 1);
+            // The key itself costs bytes, and nothing caps key count.
+            budget.used += byteLen(key) + 4;
+            const val = deepSanitize(raw, refs, depth + 1, budget);
             out[key] = val;
-            if (val !== obj[key]) changed = true;
+            if (val !== raw) changed = true;
         }
     }
     // Return original object reference if nothing was redacted.
