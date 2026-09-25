@@ -61,56 +61,78 @@ export const prompt_replyAddressedToKody_user = (
     return `Thread, oldest first:\n\n${rendered.join('\n\n')}`;
 };
 
-// HTML comments are invisible on the pull request, so text hidden in one
-// (including Kody's own markers) must not reach the classifier. Removed by
-// scanning, repeated until no opener is left, since joining the pieces around
-// a comment can form a new one (`<!<!-- x -->--`). An unclosed comment hides
-// the rest of the body, as it does when rendered.
-function withoutHtmlComments(body: string): string {
-    let text = body;
-    while (text.includes('<!--')) {
-        let out = '';
-        let rest = text;
-        let start = rest.indexOf('<!--');
-        while (start !== -1) {
-            out += rest.slice(0, start);
-            const end = rest.indexOf('-->', start + 4);
-            rest = end === -1 ? '' : rest.slice(end + 3);
-            start = rest.indexOf('<!--');
-        }
-        text = out + rest;
+// Markup a browser parses and never displays: comments (`<!-- … -->`) and the
+// bogus-comment/declaration family (`<!…>`, `<?…>`). Text hidden in them,
+// including Kody's own markers, must not reach the classifier. Removed by
+// scanning rather than by pattern, repeated by the caller until the text
+// stops shrinking, since joining the pieces around one can form another. An
+// unclosed one hides the rest of the body, as it does when rendered.
+function withoutHiddenMarkup(body: string): string {
+    let out = '';
+    let rest = body;
+    let start = nextHiddenMarkup(rest);
+    while (start >= 0) {
+        out += rest.slice(0, start);
+        const isComment = rest.startsWith('<!--', start);
+        const close = isComment
+            ? rest.indexOf('-->', start + 4)
+            : rest.indexOf('>', start + 2);
+        rest = close < 0 ? '' : rest.slice(close + (isComment ? 3 : 1));
+        start = nextHiddenMarkup(rest);
     }
-    return text;
+    return out + rest;
 }
+
+function nextHiddenMarkup(text: string): number {
+    const bang = text.indexOf('<!');
+    const question = text.indexOf('<?');
+    if (bang < 0) return question;
+    if (question < 0) return bang;
+    return Math.min(bang, question);
+}
+
+// Numeric character references in any spelling a browser accepts (leading
+// zeros, hex, missing `;`), decoded so the guards see what is displayed.
+const NUMERIC_REFERENCE = /&#(?:x([0-9a-f]+)|(\d+));?/gi;
+
+function decodeNumericReferences(text: string): string {
+    return text.replace(NUMERIC_REFERENCE, (_, hex, dec) => {
+        const codePoint = hex ? parseInt(hex, 16) : Number(dec);
+        return codePoint > 0 && codePoint <= 0x10ffff
+            ? String.fromCodePoint(codePoint)
+            : '';
+    });
+}
+
+// Every code point Unicode marks as not rendered (zero-width, bidi controls,
+// tag characters, variation selectors, soft hyphen, …); any of them could
+// split a guard token: `<!\u200D--`, `<\u2066/NEWEST MESSAGE>`.
+const INVISIBLE = /\p{Default_Ignorable_Code_Point}/gu;
 
 // A body could otherwise open or close the envelope the thread is rendered in
 // (`</NEWEST MESSAGE>`) and pose as another participant.
 const ENVELOPE_TAG = /<(\/?)(newest message|message)\b/gi;
 
-// Longest raw body cleaned. Comment removal can take quadratic time on a
+// Longest raw body cleaned. Markup removal can take quadratic time on a
 // crafted body, and only MAX_BODY_CHARS survive anyway; the slack covers
-// comments removed ahead of the kept text.
+// markup removed ahead of the kept text.
 const MAX_RAW_BODY_CHARS = MAX_BODY_CHARS * 4;
 
-// Invisible characters (and their decimal/hex entities) could split or pad the
-// guard tokens: `<!\u200D--`, `<\u2060/NEWEST MESSAGE>`.
-const INVISIBLE = /[\u00AD\u200B-\u200F\u2060\uFEFF]/g;
-const INVISIBLE_ENTITY =
-    /&#(?:173|820[3-7]|8288|65279|x(?:ad|200[b-f]|2060|feff));/gi;
-
 function clean(body: string): string {
-    // Comments first, as the browser reads the body, then invisible
-    // characters; repeated until stable so text hidden under either reading
-    // (a closer padded with an invisible character, an entity rebuilt by
-    // removing another) is dropped. Every step only deletes, so it ends.
+    // Each step only shortens the text (a reference is longer than what it
+    // decodes to), so repeating while it shrinks ends, and catches text that
+    // only becomes hidden markup after another step ran.
     let text = (body ?? '').slice(0, MAX_RAW_BODY_CHARS);
     let previous: string;
     do {
         previous = text;
-        text = withoutHtmlComments(text)
-            .replace(INVISIBLE, '')
-            .replace(INVISIBLE_ENTITY, '');
-    } while (text !== previous);
+        // Markup first, as the browser parses the raw body; then what the
+        // browser decodes or never draws.
+        text = decodeNumericReferences(withoutHiddenMarkup(text)).replace(
+            INVISIBLE,
+            '',
+        );
+    } while (text.length < previous.length);
     text = text
         .replace(ENVELOPE_TAG, '‹$1$2')
         // Line-end padding only: `\s` would also eat blank lines.
