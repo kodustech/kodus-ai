@@ -203,6 +203,100 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
             expect(persisted.value.credentials[0].apiKey).toBe(priorCipher);
         });
 
+        it('refuses to borrow a key when the provider has two credentials', async () => {
+            // Two OpenAI-compatible gateways (Fireworks and Together) are two
+            // upstreams with two keys. Matching a blank resubmit "by provider"
+            // would hand one of them the other's key, so an ambiguous provider
+            // resolves to no prior at all — and a credential with no usable
+            // secret is refused rather than silently mis-keyed.
+            const existing = v2({
+                credentials: [
+                    {
+                        id: 'cred-fireworks',
+                        provider: 'openai_compatible',
+                        apiKey: encrypt('sk-fireworks'),
+                        settings: {
+                            baseURL: 'https://api.fireworks.ai/inference/v1',
+                        },
+                    },
+                    {
+                        id: 'cred-together',
+                        provider: 'openai_compatible',
+                        apiKey: encrypt('sk-together'),
+                        settings: { baseURL: 'https://api.together.xyz/v1' },
+                    },
+                ],
+            });
+            const incoming = v2({
+                credentials: [
+                    {
+                        id: 'cred-brand-new',
+                        provider: 'openai_compatible',
+                        apiKey: '',
+                        settings: { baseURL: 'https://api.novita.ai/v3/openai' },
+                    },
+                ],
+                models: [
+                    {
+                        id: 'model-a',
+                        credentialId: 'cred-brand-new',
+                        model: 'deepseek-v3',
+                    },
+                ],
+            });
+
+            const { useCase } = buildUseCase(existing);
+
+            await expect(saveByok(useCase, incoming)).rejects.toThrow();
+        });
+
+        it('keeps each gateway on its own key when both are resubmitted blank', async () => {
+            const fireworksCipher = encrypt('sk-fireworks');
+            const togetherCipher = encrypt('sk-together');
+            const existing = v2({
+                credentials: [
+                    {
+                        id: 'cred-fireworks',
+                        provider: 'openai_compatible',
+                        apiKey: fireworksCipher,
+                    },
+                    {
+                        id: 'cred-together',
+                        provider: 'openai_compatible',
+                        apiKey: togetherCipher,
+                    },
+                ],
+            });
+            const incoming = v2({
+                credentials: [
+                    {
+                        id: 'cred-fireworks',
+                        provider: 'openai_compatible',
+                        apiKey: '',
+                    },
+                    {
+                        id: 'cred-together',
+                        provider: 'openai_compatible',
+                        apiKey: '',
+                    },
+                ],
+                models: [
+                    {
+                        id: 'model-a',
+                        credentialId: 'cred-together',
+                        model: 'deepseek-v3',
+                    },
+                ],
+            });
+
+            const { useCase, persisted } = buildUseCase(existing);
+            await saveByok(useCase, incoming);
+
+            // Matched by id, so each keeps what it had.
+            expect(persisted.value.credentials[0].apiKey).toBe(fireworksCipher);
+            expect(persisted.value.credentials[1].apiKey).toBe(togetherCipher);
+        });
+
         it('keeps Bedrock aws* secrets (in settings) on a blank resubmit', async () => {
             const bearerCipher = encrypt('ABSK-bearer-token');
             const existing = v2({

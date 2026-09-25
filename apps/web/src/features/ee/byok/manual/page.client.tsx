@@ -60,6 +60,7 @@ import {
 } from "../_components/_modals/edit-key/credential-config";
 import {
     buildByokBlob,
+    findReusableCredential,
     credentialSettingsFromConfig,
     modelFieldsFromConfig,
 } from "../_components/byok-write";
@@ -635,9 +636,13 @@ export function ByokManualPageClient({
         // into the existing config: edit the model in place, reuse a connected
         // provider's key, or connect a brand-new provider credential.
         const modelFields = modelFieldsFromConfig(newConfig);
-        const existingCred = (existing?.credentials ?? []).find(
-            (c) => !c.managed && c.provider === newConfig.provider,
-        );
+        // Same provider is not the same credential when the org supplies the
+        // endpoint: two `openai_compatible` gateways are two upstreams with
+        // two keys. See `findReusableCredential`.
+        const existingCred = findReusableCredential(existing?.credentials, {
+            provider: newConfig.provider,
+            settings: credentialSettingsFromConfig(newConfig),
+        });
         // The credential this save actually writes to, resolved HERE rather than
         // at mount: in the unlocked flow the provider is chosen inside the form,
         // so mount-time state knows nothing about it.
