@@ -87,12 +87,24 @@ function withoutHtmlComments(body: string): string {
 // (`</NEWEST MESSAGE>`) and pose as another participant.
 const ENVELOPE_TAG = /<(\/?)(newest message|message)\b/gi;
 
+// Longest raw body cleaned. Comment removal can take quadratic time on a
+// crafted body, and only MAX_BODY_CHARS survive anyway; the slack covers
+// comments removed ahead of the kept text.
+const MAX_RAW_BODY_CHARS = MAX_BODY_CHARS * 4;
+
 function clean(body: string): string {
-    const text = withoutHtmlComments(body ?? '')
-        .replace(ENVELOPE_TAG, '‹$1$2')
+    // Zero-width characters go first: left for later, `<!&#8203;--` or
+    // `<&#8203;/NEWEST MESSAGE>` would only become a comment or an envelope
+    // tag after both guards ran.
+    const visible = (body ?? '')
+        .slice(0, MAX_RAW_BODY_CHARS)
         .split('&#8203;')
         .join('')
-        .replace(/[\u200B\s]+$/gmu, '')
+        .replace(/\u200B/g, '');
+    const text = withoutHtmlComments(visible)
+        .replace(ENVELOPE_TAG, '‹$1$2')
+        // Line-end padding only: `\s` would also eat blank lines.
+        .replace(/[\t ]+$/gm, '')
         .trim();
     return text.length > MAX_BODY_CHARS
         ? `${text.slice(0, MAX_BODY_CHARS)}…`
