@@ -2771,8 +2771,10 @@ export class GithubService
             this.logger.warn({
                 message:
                     'Failed to list GitHub check runs; CI evidence is limited ' +
-                    'to commit statuses for this commit. Grant the credential ' +
-                    'Checks:read, or connect the GitHub App installation.',
+                    'to commit statuses for this commit. Observed with a ' +
+                    'fine-grained token, which cannot reach this endpoint; a ' +
+                    'GitHub App installation can, as can a classic token with ' +
+                    'the repo scope.',
                 context: GithubService.name,
                 error: runs.reason,
                 metadata: {
