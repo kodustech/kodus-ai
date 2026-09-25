@@ -46,6 +46,10 @@ const HARD_KILL_RETRY_LIMIT = 20;
 // bounds a backlog.
 const ORPHAN_MIN_AGE_MS = 3 * 60 * 60 * 1000;
 const ORPHAN_SWEEP_MAX_PER_RUN = 2000;
+// Page budget per listing pass (E2B pages hold 100). Listing oldest-first puts
+// the orphans on the first pages; the budget stops an unfiltered pass from
+// walking the whole account every hour.
+const ORPHAN_SWEEP_MAX_PAGES = 30;
 
 const E2B_ALREADY_GONE_RE =
     /not found|does not exist|404|already (been )?(deleted|killed|terminated)/i;
@@ -410,13 +414,17 @@ export class SandboxLeaseReaperService {
             ) => {
                 const paginator = Sandbox.list({
                     apiKey,
+                    order: 'asc',
                     query: metadata
                         ? { state: ['paused'], metadata }
                         : { state: ['paused'] },
                 });
-                while (
+                for (
+                    let page = 0;
+                    page < ORPHAN_SWEEP_MAX_PAGES &&
                     paginator.hasNext &&
-                    candidates.length < ORPHAN_SWEEP_MAX_PER_RUN
+                    candidates.length < ORPHAN_SWEEP_MAX_PER_RUN;
+                    page++
                 ) {
                     for (const info of await paginator.nextItems()) {
                         if (

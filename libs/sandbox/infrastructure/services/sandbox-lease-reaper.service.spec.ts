@@ -360,6 +360,7 @@ describe('SandboxLeaseReaperService', () => {
             // the E2B key keeps its leases in a Mongo we cannot see.
             expect(mockList).toHaveBeenNthCalledWith(1, {
                 apiKey: 'fake-api-key',
+                order: 'asc',
                 query: {
                     state: ['paused'],
                     metadata: { deployment: 'production' },
@@ -405,11 +406,49 @@ describe('SandboxLeaseReaperService', () => {
 
             expect(mockList).toHaveBeenNthCalledWith(2, {
                 apiKey: 'fake-api-key',
+                order: 'asc',
                 query: { state: ['paused'] },
             });
             expect(mockKill.mock.calls.map((c) => c[0])).toEqual([
                 'legacy-orphan',
             ]);
+        });
+
+        it('stops each listing pass at the page budget', async () => {
+            // Pages of sandboxes neither pass keeps (too young), so only
+            // the page budget can end the listing.
+            const nextItems = jest.fn(async () => [
+                {
+                    sandboxId: 'young',
+                    startedAt: hoursAgo(0.5),
+                    metadata: { stage: 'review' },
+                },
+            ]);
+            mockList.mockImplementation(() => ({ hasNext: true, nextItems }));
+
+            await service.sweepOrphanedSandboxes();
+
+            // 2 passes × 30 pages, never an unbounded walk of the account.
+            expect(nextItems).toHaveBeenCalledTimes(60);
+            expect(mockKill).not.toHaveBeenCalled();
+        });
+
+        it('tags the listing "unknown" when API_NODE_ENV is unset', async () => {
+            configService.get.mockImplementation((key: string) =>
+                key === 'API_E2B_KEY' ? 'fake-api-key' : undefined,
+            );
+
+            await service.sweepOrphanedSandboxes();
+
+            expect(mockList).toHaveBeenNthCalledWith(
+                1,
+                expect.objectContaining({
+                    query: {
+                        state: ['paused'],
+                        metadata: { deployment: 'unknown' },
+                    },
+                }),
+            );
         });
 
         it('keeps sweeping when one kill fails', async () => {
