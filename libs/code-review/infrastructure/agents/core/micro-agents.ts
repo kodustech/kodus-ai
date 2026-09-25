@@ -72,6 +72,38 @@ export interface MicroAgentGroup {
 const CONTRACT_CHANGE = `- Contract change not followed through: The change altered something callers depend on — a function became asynchronous, a return type became nullable or changed shape, a parameter was added/removed/reordered, a field disappeared from a response, an interface gained a required member. Reconstruct what the symbol looked like BEFORE this change and check every consumer against the new shape. Report the consumer that was not updated, anchoring the finding to the changed line.
   This includes a change to the BEHAVIOUR contract, not only to the type: an operation that was best-effort and now fails the request, work that was asynchronous or fire-and-forget and now blocks the caller, an error that was swallowed and now propagates, a fallback that used to cover a case and no longer does. Reconstruct what the caller could previously count on and name what it loses — reporting only the new cost (latency, an extra query) misses the point when the real change is that the operation can now refuse.`;
 
+/**
+ * Escrito a partir dos 14 goldens cross-file que NENHUMA configuracao achou —
+ * nem GPT nem DeepSeek, nos mesmos 30 PRs.
+ *
+ * O que a medicao mostrou e que nao e problema de busca: em 12 dos 14, os DOIS
+ * arquivos que o defeito exige ja estavam no diff, com hunk nao-vazio, no mesmo
+ * prompt. Treze agentes leram os dois lados e nenhum relacionou um com o outro,
+ * porque todo enunciado de hoje e "olhe este trecho e diga se tem defeito" —
+ * ninguem pergunta se DOIS trechos alterados sao compativeis entre si.
+ *
+ * Os 14 se dividem em tres formas da mesma pergunta:
+ *   7  produtor/consumidor: um valor nasce num arquivo e e consumido no outro
+ *      sob outra premissa ('80%' passado onde o outro lado exige WxH);
+ *   4  contrato declarado no outro arquivo: a nulidade, a assinatura ou a
+ *      classe base que torna a chamada errada esta na outra ponta;
+ *   3  gerador/validador: um lado produz e o outro confere, e discordam (a
+ *      rota entrega params[:id], o controller le params[:group_id]).
+ *
+ * NAO enumerar pares: num PR de 104 arquivos sao 5.356 combinacoes. A ancora e
+ * o SIMBOLO compartilhado — so confrontar hunks que citam o mesmo nome.
+ */
+/** Id do agente cross-file. Exportado porque o adapter precisa filtrar o que ele
+ *  produz da lista que a simulacao recebe — se as duas pontas repetirem a string,
+ *  renomear o agente quebra o filtro em silencio. */
+export const CROSS_FILE_AGENT_ID = 'changed-files-disagree';
+
+const CHANGED_FILES_DISAGREE = `- Two changed files that do not agree: this change touches more than one file, and two of the hunks are about the same symbol — the same function, constant, key, route, field, metric name or class. Neither hunk is wrong when you read it alone; the defect is that one side does not hold up what the other side assumes. Three shapes to look for, all of them the same question:
+  - PRODUCER AND CONSUMER: a value is built in one hunk and consumed in another under a different premise — a percentage passed where the consumer needs explicit dimensions, a datetime placed in a dict the other side serializes to JSON, a full URL passed where the receiver compares it against an origin, a return type the caller's base class does not accept.
+  - CONTRACT DECLARED ON THE OTHER SIDE: the call is only wrong against a declaration living in the other changed file — a callee that can return null, a required parameter on the signature, a base class or interface the subclass must satisfy.
+  - GENERATOR AND VALIDATOR: one hunk produces and the other checks, and they disagree — a route supplying one parameter key while the handler reads another, values generated lowercase and compared case-sensitively, an enrichment removed in one middleware and never re-added by the one that replaced it.
+  METHOD: list the symbols that appear in hunks of two DIFFERENT files. For each, read both sides and state what one produces and what the other requires. Report only when they genuinely conflict, and anchor the finding to the side a developer would have to change. Do NOT report a defect visible inside a single hunk — other reviewers own that; yours is the disagreement BETWEEN two of them.`
+
 const CROSS_REFERENCE = `- Cross-reference inconsistency: Two places that must agree and don't — a metric tagged with one name at emit and another at query, a constant or key written differently at the write site and the read site, a validator checking a different field than the writer sets, arguments passed in one order and consumed in another. Neither side is wrong in isolation; the defect is the disagreement. Compare every pair of sites in this change that share a name, key, tag, or ordering.`;
 
 const INDEX_AND_ORDER = `- Index, slice and ordering assumptions: Boundary arithmetic on substrings, slices, ranges and pagination whose indices do not match the layout the code describes; comparisons whose extracted segment is off by one or inverted; code that assumes an iteration, lookup or zip preserves input order when the structure gives no such guarantee (dict/map values, concurrent results, unordered collections). Verify the arithmetic against a concrete example and check whether the ordering is actually guaranteed.`;
@@ -269,6 +301,21 @@ const MICRO_AGENTS_TODOS: MicroAgentGroup[] = [
         extraItems: [BUILD_TIME_FAILURE, FRAMEWORK_CONTRACT],
         reasoningExample:
             "useSyncState is called inside the `if (ready)` added at panel.tsx:40. React requires hooks at the top level on every render; grepped the file for other hooks and all nine sit above the first conditional. Reported.",
+    },
+    {
+        // Roda na fase 0, ao lado dos outros, mas o que ele produz NAO entra no
+        // <AlreadyRaised> da simulacao (ver core-agent-loop.adapter.ts): aquela
+        // lista existe para a simulacao escolher terreno nao coberto, e ainda
+        // nao ha medida de como ela reage a um achado que relaciona dois
+        // arquivos. Mantendo fora, o A/B mede o agente novo e nada mais.
+        id: CROSS_FILE_AGENT_ID,
+        label: 'bug',
+        assignment:
+            'two hunks in different changed files that do not hold up each other\'s assumptions',
+        items: [],
+        extraItems: [CHANGED_FILES_DISAGREE],
+        reasoningExample:
+            "routes.rb:212 declares the member route, so Rails supplies params[:id]; groups_controller.rb:48, also in this diff, reads params.require(:group_id). Both hunks are new. The action raises ParameterMissing on every request. Reported, anchored to the controller.",
     },
     {
         // Both items are found by reading what a human will see and checking it

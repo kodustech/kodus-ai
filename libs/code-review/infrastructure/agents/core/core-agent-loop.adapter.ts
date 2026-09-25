@@ -77,6 +77,7 @@ import {
     MICRO_AGENT_SYSTEM_PROMPT,
     buildMicroAgentPrompt,
     runMicroPlanner,
+    CROSS_FILE_AGENT_ID,
 } from '@libs/code-review/infrastructure/agents/core/micro-agents';
 import {
     SIMULATION_SYSTEM_PROMPT,
@@ -748,8 +749,22 @@ export async function runAgentLoopViaCore(
                               {
                                   label: 'micro-simulate-the-change',
                                   phase: 1,
-                                  prompt: (prior: FinderSuggestion[]) =>
-                                      buildSimulationPrompt(
+                                  prompt: (todos: FinderSuggestion[]) => {
+                                      // O agente cross-file roda na fase 0 como
+                                      // os outros, mas o que ele levanta NAO
+                                      // entra aqui: <AlreadyRaised> existe para
+                                      // a simulacao escolher terreno nao
+                                      // coberto, e nao ha medida de como ela
+                                      // reage a um achado que relaciona dois
+                                      // arquivos. Fora da lista, o A/B do
+                                      // agente novo mede so o agente novo.
+                                      const prior = todos.filter(
+                                          (p) =>
+                                              (p as { producedBy?: string })
+                                                  .producedBy !==
+                                              `micro-${CROSS_FILE_AGENT_ID}`,
+                                      );
+                                      return buildSimulationPrompt(
                                           rawDiffPrompt(input.changedFiles, input.fileTiers, input.diffTierBudget),
                                           prior.length
                                               ? prior.map((p) => ({
@@ -763,7 +778,8 @@ export async function runAgentLoopViaCore(
                                                 // caso experimental.
                                                 input.priorFindings,
                                           grafoParaOsAgentes,
-                                      ),
+                                      );
+                                  },
                                   spec: buildSpecWithLedger(
                                       ledger(),
                                       input.maxSteps ?? 12,
