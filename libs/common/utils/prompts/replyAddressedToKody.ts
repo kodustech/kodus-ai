@@ -138,6 +138,10 @@ function decodeNumericReferences(text: string): string {
 // split a guard token: `<!\u200D--`, `<\u2066/NEWEST MESSAGE>`.
 const INVISIBLE = /\p{Default_Ignorable_Code_Point}/gu;
 
+// Control characters (C0, DEL, C1) draw nothing either; tab and line breaks
+// stay so paragraphs survive.
+const CONTROL = /(?![\t\n\r])\p{Cc}/gu;
+
 const SURVIVING_REFERENCE = /&(?=(?:lt|gt|amp|#\d+|#x[0-9a-f]+);?)/gi;
 
 // No `<` from a participant reaches the prompt, so no spelling of a tag can
@@ -163,6 +167,7 @@ function clean(body: string): string {
     } while (text.length < previous.length);
     text = decodeNumericReferences(text)
         .replace(INVISIBLE, '')
+        .replace(CONTROL, '')
         .replace(ANGLE_BRACKET, '‹')
         // A reference spelled out on the page (`&#38;lt;` shows as `&lt;`)
         // stays readable but no longer looks like one to the model.
