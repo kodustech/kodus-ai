@@ -92,16 +92,26 @@ const ENVELOPE_TAG = /<(\/?)(newest message|message)\b/gi;
 // comments removed ahead of the kept text.
 const MAX_RAW_BODY_CHARS = MAX_BODY_CHARS * 4;
 
+// Invisible characters (and their decimal/hex entities) could split or pad the
+// guard tokens: `<!\u200D--`, `<\u2060/NEWEST MESSAGE>`.
+const INVISIBLE = /[\u00AD\u200B-\u200F\u2060\uFEFF]/g;
+const INVISIBLE_ENTITY =
+    /&#(?:173|820[3-7]|8288|65279|x(?:ad|200[b-f]|2060|feff));/gi;
+
 function clean(body: string): string {
-    // Zero-width characters go first: left for later, `<!&#8203;--` or
-    // `<&#8203;/NEWEST MESSAGE>` would only become a comment or an envelope
-    // tag after both guards ran.
-    const visible = (body ?? '')
-        .slice(0, MAX_RAW_BODY_CHARS)
-        .split('&#8203;')
-        .join('')
-        .replace(/\u200B/g, '');
-    const text = withoutHtmlComments(visible)
+    // Comments first, as the browser reads the body, then invisible
+    // characters; repeated until stable so text hidden under either reading
+    // (a closer padded with an invisible character, an entity rebuilt by
+    // removing another) is dropped. Every step only deletes, so it ends.
+    let text = (body ?? '').slice(0, MAX_RAW_BODY_CHARS);
+    let previous: string;
+    do {
+        previous = text;
+        text = withoutHtmlComments(text)
+            .replace(INVISIBLE, '')
+            .replace(INVISIBLE_ENTITY, '');
+    } while (text !== previous);
+    text = text
         .replace(ENVELOPE_TAG, '‹$1$2')
         // Line-end padding only: `\s` would also eat blank lines.
         .replace(/[\t ]+$/gm, '')
