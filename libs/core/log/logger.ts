@@ -309,6 +309,60 @@ function isSensitiveName(name: string): boolean {
     return SENSITIVE_KEYS.has(name.toLowerCase().replace(/[^a-z0-9]/g, ''));
 }
 
+/**
+ * Customer content: fields that carry source code or model prompts derived
+ * from it. These are NOT secrets — we are authorized to process them, but not
+ * to retain them in operational logs, where they sit for the log group's
+ * retention period. They are therefore kept out of logs entirely, and replaced
+ * by a size marker so the operational signal ("there was content, this big")
+ * survives for debugging.
+ *
+ * Kept separate from SENSITIVE_KEYS on purpose: different policy, different
+ * censor, and mixing the two would make "[REDACTED]" ambiguous between
+ * "a secret was here" and "customer code was here".
+ */
+const CONTENT_KEYS = new Set([
+    'existingcode',
+    'improvedcode',
+    'suggestioncontent',
+    'llmprompt',
+    'onesentencesummary',
+]);
+
+function isContentName(name: string): boolean {
+    return CONTENT_KEYS.has(name.toLowerCase().replace(/[^a-z0-9]/g, ''));
+}
+
+const CONTENT_KEY_CACHE = new Map<string, boolean>();
+
+function isContentKey(key: string): boolean {
+    let result = CONTENT_KEY_CACHE.get(key);
+    if (result === undefined) {
+        result = isContentName(key);
+        if (CONTENT_KEY_CACHE.size < KEY_SENSITIVITY_CACHE_MAX) {
+            CONTENT_KEY_CACHE.set(key, result);
+        }
+    }
+    return result;
+}
+
+function describeOmitted(value: any): string {
+    // Never serialize to measure. The whole point of this guard is to avoid
+    // paying the cost of a large payload; JSON.stringify on a ~200KB object
+    // costs ~0.25ms, against ~5ns for String#length, and would defeat it.
+    if (typeof value === 'string') {
+        return `[content omitted: ${formatBytes(value.length)}]`;
+    }
+    if (Array.isArray(value)) {
+        return `[content omitted: ${value.length} items]`;
+    }
+    return '[content omitted]';
+}
+
+function formatBytes(n: number): string {
+    return n >= 1024 ? `${(n / 1024).toFixed(1)}KB` : `${n}B`;
+}
+
 // Object keys only. The cache never evicts, so names harvested from string
 // content (payload JSON keys, query params) would fill it for good; the
 // string scanners call isSensitiveName directly instead.
@@ -486,6 +540,18 @@ function redactUrlUserinfo(value: string): string {
 const DEEP_SANITIZE_MAX_DEPTH = 24;
 
 /**
+ * Size bounds — the siblings of DEEP_SANITIZE_MAX_DEPTH.
+ *
+ * Depth-bounding alone does not stop a single wide value: a 260KB string in a
+ * shallow object still produces a 260KB log line, which exceeds CloudWatch's
+ * 256KB per-event limit and arrives TRUNCATED — invalid JSON that no parser
+ * can read. These bounds catch the class that no denylist covers: the field
+ * nobody thought to name.
+ */
+const DEEP_SANITIZE_MAX_STRING = 4096;
+const DEEP_SANITIZE_MAX_ARRAY = 50;
+
+/**
  * Deep-sanitizes an object, redacting sensitive keys at any depth.
  * Also strips URL-embedded credentials from string values.
  * Uses structural sharing: returns the original reference when nothing changed,
@@ -505,6 +571,14 @@ function isRedirectableRequest(obj: any): boolean {
 function deepSanitize(obj: any, seen?: WeakSet<object>, depth = 0): any {
     if (obj === null || typeof obj !== 'object') {
         if (typeof obj === 'string') {
+            // Truncate BEFORE scanning. The scanners are O(n) over the whole
+            // string, so a 260KB value costs 260KB of scanning to then throw
+            // 256KB away. Cutting first also means a secret living in the
+            // discarded tail is never read, let alone emitted.
+            if (obj.length > DEEP_SANITIZE_MAX_STRING) {
+                const head = sanitizeString(obj.slice(0, DEEP_SANITIZE_MAX_STRING));
+                return `${head}…[truncated: ${formatBytes(obj.length)} total]`;
+            }
             const sanitized = sanitizeString(obj);
             return sanitized !== obj ? sanitized : obj;
         }
@@ -566,12 +640,21 @@ function deepSanitize(obj: any, seen?: WeakSet<object>, depth = 0): any {
     refs.add(obj);
 
     if (Array.isArray(obj)) {
-        let changed = false;
+        // Index loop, not `for…of obj.slice(...)`: slice() allocates a copy of
+        // every array, including the short clean ones that structural sharing
+        // exists to leave untouched.
+        const capped = obj.length > DEEP_SANITIZE_MAX_ARRAY;
+        const limit = capped ? DEEP_SANITIZE_MAX_ARRAY : obj.length;
+        let changed = capped;
         const out: any[] = [];
-        for (const item of obj) {
+        for (let i = 0; i < limit; i++) {
+            const item = obj[i];
             const sanitized = deepSanitize(item, refs, depth + 1);
             out.push(sanitized);
             if (sanitized !== item) changed = true;
+        }
+        if (capped) {
+            out.push(`[+${obj.length - DEEP_SANITIZE_MAX_ARRAY} more items omitted]`);
         }
         // Return original array reference if nothing was redacted.
         return changed ? out : obj;
@@ -582,6 +665,9 @@ function deepSanitize(obj: any, seen?: WeakSet<object>, depth = 0): any {
     for (const key of Object.keys(obj)) {
         if (isSensitiveKey(key)) {
             out[key] = '[REDACTED]';
+            changed = true;
+        } else if (isContentKey(key)) {
+            out[key] = describeOmitted(obj[key]);
             changed = true;
         } else {
             const val = deepSanitize(obj[key], refs, depth + 1);
