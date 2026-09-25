@@ -304,6 +304,26 @@ describe('DependencyScanTool', () => {
             ).rejects.toThrow(/unavailable/i);
         });
 
+        /**
+         * osv-scanner exits 1 when it finds something and the e2b provider
+         * THROWS on a non-zero exit, so the command must not be allowed to
+         * fail. This shipped broken: a local sandbox returns the exit code
+         * instead of throwing, so no test could see it.
+         */
+        it('never lets a non-zero exit fail the command', async () => {
+            const sandbox = sandboxWith(
+                osv([{ name: 'lodash', version: '4.17.11', id: 'GHSA-aaa' }]),
+                osv([]),
+            );
+
+            await tool.run({ sandbox, files: [file()] });
+
+            for (const command of (sandbox as unknown as { commands: string[] })
+                .commands.filter((c) => c.includes('osv-scanner'))) {
+                expect(command).toMatch(/\|\| true\s*$/);
+            }
+        });
+
         it('survives unparseable output', async () => {
             const sandbox = sandboxWith('not json', 'not json');
 

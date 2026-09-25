@@ -204,8 +204,13 @@ export class DependencyScanTool implements AnalyzerTool {
         sandbox: ToolRunInput['sandbox'],
         dir: string,
     ): Promise<Vulnerable[]> {
+        // osv-scanner exits 1 precisely WHEN it finds something, and the e2b
+        // provider throws on a non-zero exit rather than returning it. Without
+        // this the tool fails on every pull request that has a finding — which
+        // a local sandbox, returning the exit code instead of throwing, cannot
+        // reproduce.
         const result = await sandbox.run(
-            `osv-scanner scan source --format json ${quote(dir)}`,
+            `osv-scanner scan source --format json ${quote(dir)} || true`,
             { timeoutMs: RUN_TIMEOUT_MS },
         );
 
