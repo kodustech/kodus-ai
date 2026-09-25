@@ -27,6 +27,7 @@ describe('isBotAuthor', () => {
         [{ login: 'devin-ai-integration[bot]' }, true],
         [{ login: 'project_42_bot_3f9a' }, true],
         [{ bot: true, login: 'ci' }, true],
+        [{ type: 'app_user', login: 'devin-ai' }, true],
         [{ login: 'robert', type: 'User' }, false],
         [{ login: 'abbott' }, false],
         [{}, false],

@@ -2991,6 +2991,9 @@ export class BitbucketCloudService implements Omit<
                         id: this.sanitizeUUID(comment?.user?.uuid),
                         username: comment?.user?.nickname,
                         name: comment?.user?.display_name,
+                        // `app_user` for app and access-token users: lets the
+                        // conversation gate tell another agent from a person.
+                        type: comment?.user?.type,
                     },
                 }))
                 .sort(

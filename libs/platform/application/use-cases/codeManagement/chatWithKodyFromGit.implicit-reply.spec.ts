@@ -587,6 +587,120 @@ describe('ChatWithKodyFromGitUseCase — replies without @kody (#1946)', () => {
         );
     });
 
+    describe('loops with another agent outside GitHub (#2011 review)', () => {
+        // Kody root, then `rounds` of (agent, Kody), then a new agent reply.
+        function bitbucketLoop(rounds: number, agentType?: string) {
+            const agent = {
+                name: 'Devin AI',
+                username: 'devin-ai',
+                ...(agentType ? { type: agentType } : {}),
+            };
+            const kody = { name: 'Gabriel', username: 'gabriel' };
+            const comments: any[] = [
+                {
+                    id: 100,
+                    body: '`kody|code-review` `bug` The lock is released early.',
+                    createdAt: at(0),
+                    author: kody,
+                },
+            ];
+            let parent = 100;
+            let minute = 1;
+            for (let i = 0; i < rounds; i++) {
+                comments.push({
+                    id: 200 + i,
+                    body: 'Done, please check again.',
+                    createdAt: at(minute++),
+                    parent: { id: parent },
+                    author: agent,
+                });
+                comments.push({
+                    id: 300 + i,
+                    body: '`kody|code-review` Still not fixed.',
+                    createdAt: at(minute++),
+                    parent: { id: 200 + i },
+                    author: kody,
+                });
+                parent = 300 + i;
+            }
+            comments.push({
+                id: 999,
+                body: 'Done, please check again.',
+                createdAt: at(minute),
+                parent: { id: parent },
+                author: agent,
+            });
+            return comments;
+        }
+
+        const bitbucketReply = {
+            event: 'pullrequest:comment_created',
+            platformType: PlatformType.BITBUCKET,
+            payload: {
+                repository: { name: 'api', uuid: '{repo-1}' },
+                pullrequest: { id: 7 },
+                comment: {
+                    id: 999,
+                    content: { raw: 'Done, please check again.' },
+                    parent: { id: 304 },
+                },
+                actor: { display_name: 'Devin AI', uuid: '{u-9}' },
+            },
+        } as any;
+
+        it('stops at the bot cap when Bitbucket marks the agent as an app user', async () => {
+            classify.mockResolvedValue(true);
+            const { useCase, conversationAgentUseCase } = setup(
+                bitbucketLoop(5, 'app_user'),
+            );
+
+            await useCase.execute(bitbucketReply);
+
+            expect(classify).not.toHaveBeenCalled();
+            expect(conversationAgentUseCase.execute).not.toHaveBeenCalled();
+        });
+
+        it('stops at the thread cap when the agent cannot be told from a person', async () => {
+            classify.mockResolvedValue(true);
+            const comments = bitbucketLoop(10);
+            const last = comments[comments.length - 1];
+            const { useCase, conversationAgentUseCase } = setup(comments);
+
+            await useCase.execute({
+                ...bitbucketReply,
+                payload: {
+                    ...bitbucketReply.payload,
+                    comment: {
+                        ...bitbucketReply.payload.comment,
+                        parent: { id: last.parent.id },
+                    },
+                },
+            });
+
+            expect(classify).not.toHaveBeenCalled();
+            expect(conversationAgentUseCase.execute).not.toHaveBeenCalled();
+        });
+
+        it('still answers a person below the thread cap', async () => {
+            classify.mockResolvedValue(true);
+            const comments = bitbucketLoop(4);
+            const { useCase } = setup(comments);
+
+            await useCase.execute({
+                ...bitbucketReply,
+                payload: {
+                    ...bitbucketReply.payload,
+                    comment: {
+                        ...bitbucketReply.payload.comment,
+                        parent: { id: 303 },
+                    },
+                },
+            });
+
+            expect(classify).toHaveBeenCalled();
+        });
+    });
+
     it('Azure DevOps: answers a reply in a Kody thread', async () => {
         classify.mockResolvedValue(true);
         const { useCase, conversationAgentUseCase } = setup([

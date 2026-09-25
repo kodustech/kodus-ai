@@ -194,6 +194,7 @@ interface Comment {
         display_name?: string;
         id?: string;
         bot?: boolean;
+        type?: string;
     };
     diff_hunk?: string;
     /** Normalized provider discussion identifier (GitLab mapper output). */
@@ -1797,7 +1798,7 @@ export class ChatWithKodyFromGitUseCase {
                 ),
                 isBot: isBotAuthor({
                     login,
-                    type: c.user?.type,
+                    type: c.user?.type ?? c.author?.type,
                     bot: c.author?.bot,
                 }),
                 body: c.body ?? '',

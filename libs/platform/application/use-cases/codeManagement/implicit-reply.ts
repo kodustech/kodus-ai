@@ -21,11 +21,19 @@ import {
  */
 export const IMPLICIT_REPLY_BOT_CAP = 5;
 
+/**
+ * Kody answers in one thread after which unmentioned replies need @kody,
+ * whoever wrote them. Bot detection is partial outside GitHub (Azure exposes
+ * no author type), so this bounds a loop with an agent that looks human.
+ */
+export const IMPLICIT_REPLY_THREAD_CAP = 10;
+
 /** Why an unmentioned reply got no answer. Logged on every silent exit. */
 export type ImplicitReplySilence =
     | 'not_kody_thread'
     | 'kody_author'
     | 'bot_cap'
+    | 'thread_cap'
     | 'plan_blocked'
     | 'classified_no'
     | 'classifier_error';
@@ -47,7 +55,8 @@ export function isBotAuthor(author: {
     bot?: boolean;
 }): boolean {
     if (author?.bot === true) return true;
-    if (author?.type?.toLowerCase() === 'bot') return true;
+    const type = author?.type?.toLowerCase();
+    if (type === 'bot' || type === 'app_user') return true;
     return !!author?.login && BOT_LOGIN_PATTERN.test(author.login);
 }
 
@@ -73,6 +82,11 @@ export function implicitReplyGate(
         kodyRepliesSinceLastHuman(thread) >= IMPLICIT_REPLY_BOT_CAP
     ) {
         return 'bot_cap';
+    }
+
+    const kodyReplies = thread.slice(1).filter((m) => m.isKody).length;
+    if (kodyReplies >= IMPLICIT_REPLY_THREAD_CAP) {
+        return 'thread_cap';
     }
 
     return undefined;
