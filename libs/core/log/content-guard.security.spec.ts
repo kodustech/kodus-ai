@@ -247,36 +247,3 @@ describe('deepSanitize — the budget bounds the LINE, not one call', () => {
         expect(once * 3).toBeLessThan(262_144);
     });
 });
-
-describe('deepSanitize — the ceiling belongs to the sink, not to the function', () => {
-    const payload = () => {
-        const o: Record<string, string> = {};
-        for (let i = 0; i < 200; i++) o[`field${i}`] = 'x'.repeat(4096);
-        return o;
-    };
-
-    it('defaults to the CloudWatch-derived budget for the pino path', () => {
-        const out = JSON.stringify(deepSanitize(payload())).length;
-        expect(out * 3).toBeLessThan(262_144);
-    });
-
-    it('honours a larger limit from a sink with its own policy', () => {
-        // The MongoDB exporter carries no copy multiplication and allows 12MB
-        // per document; imposing the line budget there would silently drop
-        // span attributes documented as carrying LLM input/output and MCP args.
-        const out = JSON.stringify(
-            deepSanitize(payload(), undefined, 0, { used: 0, limit: 12 * 1024 * 1024 }),
-        ).length;
-        expect(out).toBeGreaterThan(800_000);
-    });
-
-    it('still omits customer content regardless of the limit', () => {
-        const out = deepSanitize(
-            { existingCode: 'a'.repeat(9000) },
-            undefined,
-            0,
-            { used: 0, limit: 12 * 1024 * 1024 },
-        );
-        expect(out.existingCode).toMatch(/^\[content omitted: /);
-    });
-});

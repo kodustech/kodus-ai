@@ -1029,13 +1029,7 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
             createdAt: new Date(),
         } as any; // Cast necessary due to dynamic 'attributes' field injection
 
-        const logItem = deepSanitize(rawLogItem, undefined, 0, {
-            used: 0,
-            // This sink is not the pino line: no copy multiplication, and its
-            // own BSON policy below is 12MB. Without this the CloudWatch-derived
-            // default would silently truncate log documents at 64KB.
-            limit: this.maxLogDocumentBytes,
-        }) as MongoDBLogItem;
+        const logItem = deepSanitize(rawLogItem) as MongoDBLogItem;
         if (this.isLogItemOversized(logItem)) {
             this.logger.warn({
                 message:
@@ -1110,10 +1104,7 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
             // Same circular-ref / BSON-safety guard as exportLog — span
             // attributes can carry rich payloads (LLM input/output, MCP
             // tool args) that occasionally contain self-references.
-            attributes: deepSanitize(item.attributes, undefined, 0, {
-                  used: 0,
-                  limit: this.maxLogDocumentBytes,
-              }),
+            attributes: deepSanitize(item.attributes),
             status: item.status.code as any,
             error: item.status.message
                 ? {
