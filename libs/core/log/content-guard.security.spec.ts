@@ -29,7 +29,6 @@ describe('deepSanitize — customer content is never stored', () => {
             improvedCode: CODE,
             suggestionContent: CODE,
             llmPrompt: CODE,
-            oneSentenceSummary: CODE,
             LLM_PROMPT: CODE,
             'existing-code': CODE,
         });
@@ -37,6 +36,18 @@ describe('deepSanitize — customer content is never stored', () => {
             expect(v).toMatch(/^\[content omitted: /);
         }
         expect(JSON.stringify(out)).not.toContain('apiKey');
+    });
+
+    it('keeps oneSentenceSummary — a model-written line, not customer code', () => {
+        // Deliberately NOT in CONTENT_KEYS: it is the model's own one-liner
+        // about a suggestion, and it is what makes a suggestion identifiable
+        // when debugging. Omitting it costs observability and protects nothing.
+        const out = deepSanitize({
+            oneSentenceSummary: 'Use a parameterized query here',
+            existingCode: CODE,
+        });
+        expect(out.oneSentenceSummary).toBe('Use a parameterized query here');
+        expect(out.existingCode).toMatch(/^\[content omitted: /);
     });
 
     it('keeps the size signal so a fat suggestion is still debuggable', () => {
@@ -245,5 +256,53 @@ describe('deepSanitize — the budget bounds the LINE, not one call', () => {
         for (let i = 0; i < 200; i++) flat[`field${i}`] = 'x'.repeat(4096);
         const once = JSON.stringify(deepSanitize(flat)).length;
         expect(once * 3).toBeLessThan(262_144);
+    });
+});
+
+describe('deepSanitize — an exhausted budget must not evict small trailing keys', () => {
+    const fatMetadata = () => {
+        const m: Record<string, string> = {};
+        for (let i = 0; i < 20; i++) m[`f${i}`] = 'x'.repeat(4000);
+        return m;
+    };
+
+    it('keeps createdAt, which the collection TTL index is built on', () => {
+        // Key order used to decide survival, and createdAt is the LAST key of
+        // the exporter's log document — so it was dropped and the document
+        // never expired, inverting the retention this guard enforces.
+        const createdAt = new Date();
+        const out = deepSanitize({
+            timestamp: new Date(),
+            level: 'info',
+            message: 'm',
+            metadata: fatMetadata(),
+            attributes: { a: 1 },
+            createdAt,
+        });
+        expect(out.createdAt).toBe(createdAt);
+    });
+
+    it('keeps tu, which startSpan appends last and credits metering reads', () => {
+        const attributes: Record<string, string> = {};
+        for (let i = 0; i < 20; i++) attributes[`a${i}`] = 'y'.repeat(4000);
+        const out = deepSanitize({ name: 's', attributes, tu: { credits: 42 } });
+        expect(out.tu).toEqual({ credits: 42 });
+    });
+
+    it('still collapses the heavy values that spent the budget', () => {
+        const out = deepSanitize({ metadata: fatMetadata(), big: fatMetadata(), id: 'x' });
+        expect(out.id).toBe('x');
+        expect(out.big).toBe('[budget spent]');
+    });
+
+    it('still bounds an object with tens of thousands of keys', () => {
+        const wide: Record<string, string> = { head: 'z'.repeat(70_000) };
+        for (let i = 0; i < 50_000; i++) wide[`k${i}`] = 'v';
+        // The guarantee is the byte bound, not a key count: 50,000 keys of
+        // ~10 bytes each take ~6,300 keys to spend the budget, and only then
+        // does KEY_TAIL_ALLOWANCE cap what follows.
+        const out = deepSanitize(wide);
+        expect(JSON.stringify(out).length * 3).toBeLessThan(262_144);
+        expect(JSON.stringify(out)).toContain('more keys omitted');
     });
 });

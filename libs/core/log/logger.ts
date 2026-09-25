@@ -326,7 +326,6 @@ const CONTENT_KEYS = new Set([
     'improvedcode',
     'suggestioncontent',
     'llmprompt',
-    'onesentencesummary',
 ]);
 
 function isContentName(name: string): boolean {
@@ -605,6 +604,46 @@ const DEEP_SANITIZE_MAX_TOTAL = Math.floor(
     (CLOUDWATCH_MAX_EVENT * 0.75) / MAX_LINE_COPIES,
 );
 const BUDGET_SPENT_MARKER = '[budget spent]';
+
+/**
+ * How many keys may still be emitted after the budget is spent, so a small
+ * trailing key (`createdAt`, `tu`) is never evicted by position alone.
+ */
+const KEY_TAIL_ALLOWANCE = 100;
+
+/** Bounds the shallow-object case in isCheapValue. */
+const CHEAP_OBJECT_MAX_KEYS = 12;
+
+/**
+ * Cheap enough to carry past an exhausted budget without measuring it: a
+ * scalar, a short string, a Date, or a flat object of those. The flat-object
+ * case exists for values like `tu` ({ credits: n }), which credits metering
+ * reads and which `startSpan` appends last — a scalar-only rule would have
+ * collapsed it to a marker for its position alone.
+ */
+function isCheapValue(v: any): boolean {
+    const type = typeof v;
+    if (v === null || type === 'number' || type === 'boolean') return true;
+    if (type === 'string') return v.length <= 256;
+    if (type !== 'object') return false;
+    if (v instanceof Date) return true;
+    if (Array.isArray(v)) return false;
+    try {
+        const ks = Object.keys(v);
+        if (ks.length > CHEAP_OBJECT_MAX_KEYS) return false;
+        for (const k of ks) {
+            const inner = v[k];
+            const it = typeof inner;
+            if (inner === null || it === 'number' || it === 'boolean') continue;
+            if (it === 'string' && inner.length <= 256) continue;
+            return false;
+        }
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 /**
  * JSON cost of a non-string leaf plus its punctuation. Deliberately generous:
  * a float serializes to ~18 characters ("48.148148271000004"), so charging 8
@@ -759,6 +798,7 @@ function deepSanitize(
     }
 
     let changed = false;
+    let tailEmitted = 0;
     const out: Record<string, any> = {};
     let keys: string[];
     try {
@@ -768,13 +808,38 @@ function deepSanitize(
     }
     for (let k = 0; k < keys.length; k++) {
         const key = keys[k];
-        // Stop EMITTING, not just stop descending: replacing each value with a
-        // marker while still writing every key lets a 50k-key object blow the
-        // budget on key names alone.
+        // Once the budget is spent, keep going but emit only cheap values.
+        //
+        // Breaking outright made survival depend on key ORDER, and the keys
+        // that matter come last: `createdAt` is the final key of the exporter's
+        // log document and the collection's TTL index is built on it, so
+        // dropping it produced a document that NEVER EXPIRES — the opposite of
+        // the retention this guard exists to enforce. `startSpan` appends `tu`
+        // last, so credits metering silently undercounted for the same reason.
+        //
+        // A scalar costs ~20 bytes, so carrying the tail is cheap and only the
+        // heavy values collapse. KEY_TAIL_ALLOWANCE still bounds an object with
+        // tens of thousands of keys.
         if (budget.used >= DEEP_SANITIZE_MAX_TOTAL) {
-            out['…'] = `[+${keys.length - k} more keys omitted]`;
+            if (tailEmitted >= KEY_TAIL_ALLOWANCE) {
+                out['…'] = `[+${keys.length - k} more keys omitted]`;
+                changed = true;
+                break;
+            }
+            tailEmitted++;
             changed = true;
-            break;
+            let tailRaw: any;
+            try {
+                tailRaw = obj[key];
+            } catch {
+                out[key] = '[unreadable]';
+                continue;
+            }
+            if (isSensitiveKey(key)) out[key] = '[REDACTED]';
+            else if (isContentKey(key)) out[key] = describeOmitted(tailRaw);
+            else if (isCheapValue(tailRaw)) out[key] = tailRaw;
+            else out[key] = BUDGET_SPENT_MARKER;
+            continue;
         }
         // Charge the key in EVERY branch. Charging it only on the ordinary
         // path let thousands of keys that normalize into one SENSITIVE_KEYS /
