@@ -78,6 +78,8 @@ import {
     buildMicroAgentPrompt,
     runMicroPlanner,
     CROSS_FILE_AGENT_ID,
+    semCrossFile,
+    xfileExtraLabel,
 } from '@libs/code-review/infrastructure/agents/core/micro-agents';
 import {
     SIMULATION_SYSTEM_PROMPT,
@@ -736,6 +738,31 @@ export async function runAgentLoopViaCore(
                               ),
                           }))
                         : []),
+                    // Braços extras do cross-file (so o eval liga). Mesma fase
+                    // e mesmo spec do agente original; so muda o rotulo e, no
+                    // braço de grafo, o bloco <CallGraph> no prompt.
+                    ...(() => {
+                        const xfile = MICRO_AGENTS.find(
+                            (g) => g.id === CROSS_FILE_AGENT_ID,
+                        );
+                        if (!xfile || !input.microAgentExtras?.length) return [];
+                        return input.microAgentExtras.map((extra) => ({
+                            label: xfileExtraLabel(extra),
+                            phase: 0,
+                            prompt: buildMicroAgentPrompt(
+                                xfile,
+                                rawDiffPrompt(input.changedFiles, input.fileTiers, input.diffTierBudget),
+                                extra === 'xfile-grafo'
+                                    ? input.xfileCallGraph
+                                    : grafoParaOsAgentes,
+                            ),
+                            spec: buildSpecWithLedger(
+                                ledger(),
+                                input.maxSteps ?? 12,
+                                MICRO_AGENT_SYSTEM_PROMPT,
+                            ),
+                        }));
+                    })(),
                     // FASE 1: depois dos agentes de classe, e vendo o que eles
                     // levantaram. Antes esta passada ia junto na fase 0 e o
                     // bloco <AlreadyRaised> so podia ser preenchido por fora
@@ -758,12 +785,9 @@ export async function runAgentLoopViaCore(
                                       // reage a um achado que relaciona dois
                                       // arquivos. Fora da lista, o A/B do
                                       // agente novo mede so o agente novo.
-                                      const prior = todos.filter(
-                                          (p) =>
-                                              (p as { producedBy?: string })
-                                                  .producedBy !==
-                                              `micro-${CROSS_FILE_AGENT_ID}`,
-                                      );
+                                      // O prefixo cobre tambem os braços extras
+                                      // (-grafo, -b), pelo mesmo motivo.
+                                      const prior = semCrossFile(todos);
                                       return buildSimulationPrompt(
                                           rawDiffPrompt(input.changedFiles, input.fileTiers, input.diffTierBudget),
                                           prior.length

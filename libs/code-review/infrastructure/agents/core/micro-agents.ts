@@ -98,6 +98,25 @@ const CONTRACT_CHANGE = `- Contract change not followed through: The change alte
  *  renomear o agente quebra o filtro em silencio. */
 export const CROSS_FILE_AGENT_ID = 'changed-files-disagree';
 
+/** Rotulo de um braço extra do agente cross-file (so o eval liga). Compartilha
+ *  o prefixo do agente original, que e o que `semCrossFile` filtra. */
+export function xfileExtraLabel(extra: 'xfile-grafo' | 'xfile-b'): string {
+    return `micro-${CROSS_FILE_AGENT_ID}-${extra === 'xfile-grafo' ? 'grafo' : 'b'}`;
+}
+
+/** O que a simulacao pode ver no <AlreadyRaised>: tudo MENOS o que saiu do
+ *  agente cross-file e dos braços extras dele. Sem medida de como a simulacao
+ *  reage a um achado que liga dois arquivos, e mantendo-os fora, remover os
+ *  candidatos deles reproduz a review sem eles. */
+export function semCrossFile<T>(todos: T[]): T[] {
+    return todos.filter(
+        (p) =>
+            !((p as { producedBy?: string }).producedBy ?? '').startsWith(
+                `micro-${CROSS_FILE_AGENT_ID}`,
+            ),
+    );
+}
+
 const CHANGED_FILES_DISAGREE = `- Two changed files that do not agree: this change touches more than one file, and two of the hunks are about the same symbol — the same function, constant, key, route, field, metric name or class. Neither hunk is wrong when you read it alone; the defect is that one side does not hold up what the other side assumes. Three shapes to look for, all of them the same question:
   - PRODUCER AND CONSUMER: a value is built in one hunk and consumed in another under a different premise — a percentage passed where the consumer needs explicit dimensions, a datetime placed in a dict the other side serializes to JSON, a full URL passed where the receiver compares it against an origin, a return type the caller's base class does not accept.
   - CONTRACT DECLARED ON THE OTHER SIDE: the call is only wrong against a declaration living in the other changed file — a callee that can return null, a required parameter on the signature, a base class or interface the subclass must satisfy.

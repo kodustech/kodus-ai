@@ -38,6 +38,14 @@ function casos(set) {
         try { v = JSON.parse(fs.readFileSync(path.join(__dirname, 'datasets', f), 'utf8'))[0].vars; } catch { continue; }
         if (v?.caseId && ids.has(v.caseId)) alvos.push(v);
     }
+    // --repos=cal.com,discourse: so os casos desses repositorios. Serve para
+    // montar em paralelo, um processo por grupo de clones, sem dois processos
+    // disputando o mesmo worktree de base.
+    const repos = (arg('repos', '') || '').split(',').map((x) => x.trim()).filter(Boolean);
+    if (repos.length) {
+        const doRepo = (v) => repos.some((r) => String(v.repositoryFullName || '').toLowerCase().includes(r.toLowerCase()));
+        alvos.splice(0, alvos.length, ...alvos.filter(doRepo));
+    }
     console.log(`${alvos.length} de ${ids.size} casos encontrados nos datasets\n`);
 
     const ruins = [];

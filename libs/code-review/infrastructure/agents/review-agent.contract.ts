@@ -651,6 +651,16 @@ export interface AgentLoopInput {
      *  para marcar tier no cabecalho dos arquivos. Opt-in porque o efeito em
      *  recall e precisao nunca foi medido em nenhuma rodada, com nenhum modelo. */
     microAgentCallGraph?: boolean;
+    /** Braços de experimento do agente cross-file, rodados como passadas A MAIS
+     *  na mesma review (so o eval liga): `xfile-grafo` = o mesmo agente com o
+     *  <CallGraph> de `xfileCallGraph` no prompt; `xfile-b` = uma segunda
+     *  amostra identica. Nenhum dos dois entra no <AlreadyRaised> da simulacao,
+     *  entao remover os candidatos deles reproduz a review sem eles. */
+    microAgentExtras?: Array<'xfile-grafo' | 'xfile-b'>;
+    /** O grafo do braço `xfile-grafo`. Campo proprio de proposito: passar pelo
+     *  `callGraph` liga a ferramenta de chamadores para TODOS os agentes e
+     *  contamina o braço de controle. */
+    xfileCallGraph?: string;
     /** Exige que cada achado traga o percurso que o produziu (`reason`). O
      *  `reasoning` de hoje e por PASSADA, entao todo filtro a jusante julga a
      *  conclusao sem o caminho. Opt-in para poder reverter: um campo

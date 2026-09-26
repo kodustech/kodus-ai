@@ -59,6 +59,12 @@ def main():
         wall = (t.get('reviewWallMs') or 0) / 60000
         if wall > PR_LENTO_MIN: a.append(f'PR levou {wall:.0f} min')
         if not cands: a.append('zero candidatos')
+        # Chamada que esgotou as tentativas: sem modelo reserva no eval, a
+        # passada do agente morre no meio e o PR sai com menos achados SEM
+        # virar INFRA. Foi assim que o limite de taxa do Fireworks contaminou
+        # uma rodada inteira com 10 PRs em paralelo.
+        esgotadas = len(re.findall(re.escape(cid[:40]) + r'[^\n]*failed \((?:RATE_LIMIT|TIMEOUT|OVERLOADED)[^\n]*Failed after', log))
+        if esgotadas: v.append(f'{esgotadas} chamada(s) desistiram por limite/timeout — passada incompleta')
         erros = len(re.findall(re.escape(cid[:40]) + r'[^\n]*(?:Error|ETIMEDOUT|ECONNRESET)', log))
         if erros: a.append(f'{erros} erro(s) no log')
         if v: vermelho.append((cid, v))

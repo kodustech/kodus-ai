@@ -23,6 +23,20 @@ dotenv.config({ path: path.join(__dirname, '../../.env.local'), override: true }
  * para o braco de comparacao. O cache da producao mora no Mongo com TTL de 24h;
  * aqui ele vive em memoria durante a rodada, o que so muda o custo, nao a resposta.
  */
+/**
+ * Janela de contexto do modelo servido, resolvida pelo id REAL do provedor —
+ * como a producao faz com o id do slot BYOK. O apelido do eval
+ * (`deepseek-v4.1-flash@fireworks`) nao existe na tabela e caia no padrao de
+ * 128k, contra ~1M do modelo: o compressor passava a cortar o historico do
+ * agente a partir de ~90k tokens, coisa que a producao nao faz.
+ */
+function janelaDoModelo() {
+    const apelido = process.env.RECALL_MODEL || '';
+    const { TIER0 } = require('../shared/tier0-models');
+    const real = TIER0[apelido]?.doModel || apelido.replace(/@sub$/, '');
+    return resolveContextWindow({ modelName: real });
+}
+
 let docsSearchSingleton;
 function docsSearchService() {
     if (process.env.RECALL_DOCS === '0' || !process.env.API_EXA_KEY) return undefined;
@@ -665,9 +679,7 @@ function buildCurrentPrompts(caseData) {
         // held six files and a 20k prompt, and decisive now that the complete
         // diff puts some PRs over 300k. Without it the window is managed by the
         // provider truncating, not by the harness compacting.
-        contextWindowTokens: resolveContextWindow({
-            modelName: process.env.RECALL_MODEL || '',
-        }),
+        contextWindowTokens: janelaDoModelo(),
     };
 
     // Priority tiering, mirroring what the provider's execute() does in
@@ -725,7 +737,7 @@ function runFingerprint() {
         datasetsHash: hashDe('evals/investigation/datasets'),
         model: process.env.RECALL_MODEL || null,
         reasoningEffort: process.env.RECALL_REASONING_EFFORT || null,
-        contextWindowTokens: resolveContextWindow({ modelName: process.env.RECALL_MODEL || '' }),
+        contextWindowTokens: janelaDoModelo(),
         docsSearch: !!docsSearchService(),
         env: Object.fromEntries(
             Object.entries(process.env)
@@ -924,6 +936,22 @@ class InvestigationAgentProvider {
                     caseData.callGraph = cg.xml;
                     callGraphCtx = cg.json;
                 }
+            }
+
+            // Braço xfile-grafo: o mesmo grafo, mas SO para o prompt da passada
+            // extra. Nao passa por caseData.callGraph, que liga a ferramenta de
+            // chamadores em todos os agentes e contaminaria o controle.
+            const extrasXfile = (process.env.RECALL_XFILE_EXTRAS || '')
+                .split(',').map((x) => x.trim()).filter((x) => x === 'grafo' || x === 'b');
+            let xfileCallGraph;
+            if (extrasXfile.includes('grafo')) {
+                if (!repoHandle) throw new Error('RECALL_XFILE_EXTRAS=grafo exige RECALL_REAL_REPO=1');
+                const { buildPrCallGraph } = require('./build-pr-callgraph');
+                const cg = await buildPrCallGraph(caseData, repoHandle.dir, caseData.caseId, (m) => console.log(m));
+                // Sem grafo o braço mediria o agente sem grafo com outro nome:
+                // falha alto em vez de rodar calado.
+                if (!cg?.xml?.trim()) throw new Error(`grafo vazio para ${caseData.caseId}`);
+                xfileCallGraph = cg.xml;
             }
 
             stage = 'build-prompts';
@@ -1221,6 +1249,12 @@ class InvestigationAgentProvider {
                     // flag nao faz nada, em silencio.
                     ...(process.env.RECALL_MICRO_GRAPH === '1'
                         ? { microAgentCallGraph: true }
+                        : {}),
+                    ...(extrasXfile.length
+                        ? {
+                              microAgentExtras: extrasXfile.map((x) => `xfile-${x}`),
+                              xfileCallGraph,
+                          }
                         : {}),
                     ...(/^(sim|1\+sim)$/.test(process.env.RECALL_MICRO_AGENTS || '')
                         ? {
