@@ -55,7 +55,7 @@ def main():
         if u.get('reasoningTokens', 0) == 0 and (d.get('config') or {}).get('reasoningEffort'):
             a.append('esforco de raciocinio pedido, zero tokens de raciocinio')
         modos = Counter(x.get('parseMode') for x in ver.get('decisions') or [])
-        if modos.get('default-keep'): a.append(f"verificador sem veredito em {modos['default-keep']} (mantido por padrao)")
+        if modos.get('default-keep') and not ((d.get('config') or {}).get('env') or {}).get('RECALL_SKIP_VERIFY') == '1': a.append(f"verificador sem veredito em {modos['default-keep']} (mantido por padrao)")
         wall = (t.get('reviewWallMs') or 0) / 60000
         if wall > PR_LENTO_MIN: a.append(f'PR levou {wall:.0f} min')
         if not cands: a.append('zero candidatos')
@@ -63,8 +63,18 @@ def main():
         # passada do agente morre no meio e o PR sai com menos achados SEM
         # virar INFRA. Foi assim que o limite de taxa do Fireworks contaminou
         # uma rodada inteira com 10 PRs em paralelo.
-        esgotadas = len(re.findall(re.escape(cid[:40]) + r'[^\n]*failed \((?:RATE_LIMIT|TIMEOUT|OVERLOADED)[^\n]*Failed after', log))
-        if esgotadas: v.append(f'{esgotadas} chamada(s) desistiram por limite/timeout — passada incompleta')
+        # Qualquer [LLM-ERROR] de chamada do agente e chamada perdida: ja veio como
+        # RATE_LIMIT, como cota esgotada e como UNKNOWN ("servers are overloaded"),
+        # e todas matam a passada.
+        erros_llm = re.findall(r'\[LLM-ERROR\] bench:' + re.escape(cid) + r'(-recovery)?:', log)
+        esgotadas = len(re.findall(re.escape(cid[:40]) + r'[^\n]*(?:usage limit has been reached)', log)) + sum(1 for x in erros_llm if not x)
+        if esgotadas: v.append(f'{esgotadas} chamada(s) com erro final (limite, cota, sobrecarga) — passada incompleta')
+        # A recuperacao de prosa (texto do agente que "parece achado" vira JSON) e uma
+        # chamada a parte. Ate 26/09 ela ia para o modelo padrao do ambiente, que o
+        # GPT por assinatura nao alcanca (MODEL_NOT_FOUND). Medido num PR com a
+        # correcao: 9 recuperacoes, 0 achados devolvidos. Avisa, nao bloqueia.
+        rec = sum(1 for x in erros_llm if x)
+        if rec: a.append(f'{rec} recuperacao(oes) de prosa falharam')
         erros = len(re.findall(re.escape(cid[:40]) + r'[^\n]*(?:Error|ETIMEDOUT|ECONNRESET)', log))
         if erros: a.append(f'{erros} erro(s) no log')
         if v: vermelho.append((cid, v))

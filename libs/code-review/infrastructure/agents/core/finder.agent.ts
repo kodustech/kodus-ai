@@ -9,6 +9,7 @@
  * concern. It runs ALONGSIDE the legacy agent (behind a flag, next step); the
  * legacy path is untouched.
  */
+import type { LanguageModel } from 'ai';
 import type {
     AgentRunner,
     AgentSpec,
@@ -458,6 +459,7 @@ export async function recoverFindingsFromProse(
     byokConfig: NormalizedModel | undefined,
     organizationId: string | undefined,
     usageRunName?: string,
+    prebuiltModel?: LanguageModel,
 ): Promise<FinderSuggestion[]> {
     if (!looksLikeFindings(prose)) return [];
     try {
@@ -497,6 +499,9 @@ export async function recoverFindingsFromProse(
                 ? `${usageRunName}-recovery`
                 : 'code-review-recovery',
             organizationId,
+            // Eval-only: the review's own already-built model. Unset in
+            // production, where byokConfig is the slot.
+            prebuiltModel,
         });
         return (result.suggestions as unknown as FinderSuggestion[]) ?? [];
     } catch {

@@ -742,7 +742,8 @@ function runFingerprint() {
         env: Object.fromEntries(
             Object.entries(process.env)
                 .filter(([k]) => k.startsWith('RECALL_') && !/KEY|TOKEN|SECRET/i.test(k))
-                .filter(([k]) => !['RECALL_DUMP', 'RECALL_CONCURRENCY'].includes(k))
+                // Quais PRs e onde gravar nao sao configuracao: dizem O QUE rodar, nao COMO.
+                .filter(([k]) => !['RECALL_DUMP', 'RECALL_CONCURRENCY', 'RECALL_CASES', 'RECALL_START_STAGGER_MS'].includes(k))
                 .sort(),
         ),
     };

@@ -21,6 +21,7 @@
  *  - discardedBySeverity is [] by design: the new path has no severity
  *    pre-filter — verify alone decides keep/drop.
  */
+import type { LanguageModel } from 'ai';
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 
 import { ContextWindowCompressor } from '@libs/agent-harness/infrastructure/compression/context-window-compressor';
@@ -902,6 +903,7 @@ export async function runAgentLoopViaCore(
                     secrets.byokConfig,
                     input.telemetryMetadata?.organizationId,
                     input.usageRunName,
+                    secrets.prebuiltModel as LanguageModel | undefined,
                 ),
         },
         { prompt: finderPrompt },
