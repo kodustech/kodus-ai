@@ -18,6 +18,65 @@ import { CreateOrUpdateKodyRulesUseCase } from './create-or-update.use-case';
 import { AddLibraryKodyRulesDto } from '@libs/kodyRules/dtos/add-library-kody-rules.dto';
 import { CreateKodyRuleDto } from '@libs/ee/kodyRules/dtos/create-kody-rule.dto';
 
+/**
+ * Languages recognised on import, mapped to the file extensions a glob for
+ * that language should cover. Keyed exactly like the `ProgrammingLanguage`
+ * keys the library payload carries
+ * (`apps/web/src/core/enums/programming-language.ts`: `jsts` covers JS/TS,
+ * plus `dart`/`kotlin`) — those are the values the web client forwards as
+ * `language` when importing a rule from the library. When a rule declares a
+ * `language` but ships no `path`, the engine's only scoping mechanism
+ * (`if (!rule.path) return true`) would otherwise apply the rule to EVERY file
+ * in every PR (#1832).
+ */
+const LANGUAGE_EXTENSIONS = new Map<string, string[]>([
+    ['jsts', ['.js', '.jsx', '.ts', '.tsx']],
+    // Legacy spellings: library entries and API consumers predating the
+    // client's `jsts` key may still send `typescript`/`javascript`. Treat them
+    // as aliases so a rule declared with either spelling still gets a scope —
+    // otherwise it silently falls back to an empty path and applies to every
+    // file in every PR (#1832).
+    ['typescript', ['.ts', '.tsx']],
+    ['javascript', ['.js', '.jsx']],
+    ['python', ['.py']],
+    ['java', ['.java']],
+    ['csharp', ['.cs']],
+    ['dart', ['.dart']],
+    ['ruby', ['.rb', '.rake', '.erb', '.gemspec']],
+    ['php', ['.php']],
+    ['go', ['.go']],
+    ['kotlin', ['.kt', '.kts']],
+    ['rust', ['.rs']],
+]);
+
+/**
+ * Resolve the path glob an imported rule should be persisted with. Prefer an
+ * explicit `path`; fall back to a language-derived glob when the rule carries
+ * a known `language`; otherwise keep whatever was given (this preserves
+ * current behaviour for installs that rely on an empty path).
+ */
+export function resolveLibraryRulePath(
+    path: string | undefined,
+    language: string | undefined,
+): string | undefined {
+    if (path) {
+        return path;
+    }
+    // A Map lookup keeps unknown/prototype-shaped values (e.g. `__proto__`,
+    // `constructor`) inert: they simply miss and fall back to `path`.
+    const extensions =
+        typeof language === 'string'
+            ? LANGUAGE_EXTENSIONS.get(language.trim().toLowerCase())
+            : undefined;
+    if (!extensions || extensions.length === 0) {
+        return path;
+    }
+    if (extensions.length === 1) {
+        return `**/*${extensions[0]}`;
+    }
+    return `**/*{${extensions.join(',')}}`;
+}
+
 @Injectable()
 export class AddLibraryKodyRulesUseCase {
     private readonly logger = createLogger(AddLibraryKodyRulesUseCase.name);
@@ -55,7 +114,10 @@ export class AddLibraryKodyRulesUseCase {
                 const kodyRule: CreateKodyRuleDto = {
                     title: libraryKodyRules.title,
                     rule: libraryKodyRules.rule,
-                    path: libraryKodyRules.path,
+                    path: resolveLibraryRulePath(
+                        libraryKodyRules.path,
+                        libraryKodyRules.language,
+                    ),
                     severity: libraryKodyRules.severity,
                     repositoryId: repoId,
                     examples: libraryKodyRules.examples,
@@ -94,7 +156,10 @@ export class AddLibraryKodyRulesUseCase {
                     const kodyRule: CreateKodyRuleDto = {
                         title: libraryKodyRules.title,
                         rule: libraryKodyRules.rule,
-                        path: libraryKodyRules.path,
+                        path: resolveLibraryRulePath(
+                            libraryKodyRules.path,
+                            libraryKodyRules.language,
+                        ),
                         severity: libraryKodyRules.severity,
                         repositoryId: directoryInfo.repositoryId,
                         directoryId: directoryInfo.directoryId,
