@@ -25,9 +25,11 @@ const CODEX_BASE_URL = 'https://chatgpt.com/backend-api/codex';
 
 type CodexAuth = { token: string; accountId: string };
 
-/** Lê o token OAuth gravado por `codex login`. */
+/** Lê o token OAuth gravado por `codex login`. Respeita CODEX_HOME, como o
+ *  proprio Codex: e assim que uma segunda conta de assinatura fica pronta em
+ *  outra pasta e entra quando a cota da primeira acaba. */
 export function readCodexAuth(
-    authPath = `${os.homedir()}/.codex/auth.json`,
+    authPath = `${process.env.CODEX_HOME || `${os.homedir()}/.codex`}/auth.json`,
 ): CodexAuth {
     const raw = JSON.parse(fs.readFileSync(authPath, 'utf8'));
     const token = raw?.tokens?.access_token;
