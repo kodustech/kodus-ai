@@ -1384,8 +1384,7 @@ metadata: {
             // Degradations the callback could not record while the formatter
             // was running (both the Immer write and the spread fallback
             // refused): flush them here, after the call returned, so the run
-            // still carries the 'partial' evidence. Guarded — a flush failure
-            // must not resurrect the exception the formatter already handled.
+            // still carries the 'partial' evidence.
             if (unflushedDegradations.length > 0) {
                 try {
                     context = this.updateContext(context, (draft) => {
@@ -1395,8 +1394,24 @@ metadata: {
                         draft.errors.push(...unflushedDegradations);
                     });
                 } catch (flushErr) {
+                    // Immer refused. One last attempt without it — rebuild the
+                    // errors array instead of the frozen context (safe under
+                    // autoFreeze: a new object is produced, nothing mutates).
+                    // If this plain write also refuses, its throw propagates to
+                    // the executor, which records the failure per the stage
+                    // severity — losing the 'partial' evidence must not
+                    // masquerade as a clean success (rule 14). The formatter's
+                    // own output is already applied by now, so nothing here
+                    // discards it.
+                    context = {
+                        ...context,
+                        errors: [
+                            ...(context.errors ?? []),
+                            ...unflushedDegradations,
+                        ],
+                    };
                     this.logger.warn({
-                        message: `[AGENT] Failed to flush buffered formatter degradations, keeping formatted output: ${flushErr instanceof Error ? flushErr.message : String(flushErr)}`,
+                        message: `[AGENT] Failed to flush buffered formatter degradations via context, recorded outside Immer: ${flushErr instanceof Error ? flushErr.message : String(flushErr)}`,
                         context: this.stageName,
                         metadata: {
                             organizationId:
