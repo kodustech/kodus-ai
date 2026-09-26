@@ -32,6 +32,7 @@ import { getModelName } from '@libs/llm/byok-to-vercel';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { buildKodyRuleLink } from '@libs/code-review/utils/build-kody-rule-link';
 import type { FormatterDegradedReport } from '@libs/code-review/infrastructure/agents/engine/format-suggestion-content';
+import type { PipelineError } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-context.interface';
 import { type LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
 
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
@@ -1275,37 +1276,70 @@ metadata: {
                             // the raw WHAT/WHY/HOW — the exact leak this pass
                             // exists to prevent. Reporting must never take the
                             // formatting down: own try/catch, warn, continue.
+                            const degradedEntry = (): PipelineError => ({
+                                pipelineId:
+                                    context.pipelineMetadata?.pipelineId,
+                                stage: this.stageName,
+                                substage: 'suggestion-formatter',
+                                error: new Error(
+                                    `Suggestion formatting degraded: ${report.strippedMechanically}/${report.totalSuggestions} suggestion(s) stripped of WHAT/WHY/HOW locally${report.distinctReasons.length > 0 ? ` (${report.distinctReasons.slice(0, 2).join('; ')})` : ''}`,
+                                ),
+                                severity: 'partial',
+                                metadata: {
+                                    totalSuggestions:
+                                        report.totalSuggestions,
+                                    polishedByModel: report.polishedByModel,
+                                    strippedMechanically:
+                                        report.strippedMechanically,
+                                    distinctReasons: report.distinctReasons,
+                                    prNumber,
+                                },
+                            });
+
                             try {
                                 context = this.updateContext(context, (draft) => {
                                     if (!draft.errors) {
                                         draft.errors = [];
                                     }
-                                    draft.errors.push({
-                                        pipelineId:
-                                            context.pipelineMetadata?.pipelineId,
-                                        stage: this.stageName,
-                                        substage: 'suggestion-formatter',
-                                        error: new Error(
-                                            `Suggestion formatting degraded: ${report.strippedMechanically}/${report.totalSuggestions} suggestion(s) stripped of WHAT/WHY/HOW locally${report.distinctReasons.length > 0 ? ` (${report.distinctReasons.slice(0, 2).join('; ')})` : ''}`,
-                                        ),
-                                        severity: 'partial',
-                                        metadata: {
-                                            totalSuggestions:
-                                                report.totalSuggestions,
-                                            polishedByModel:
-                                                report.polishedByModel,
-                                            strippedMechanically:
-                                                report.strippedMechanically,
-                                            distinctReasons:
-                                                report.distinctReasons,
-                                            prNumber,
-                                        },
-                                    });
+                                    draft.errors.push(degradedEntry());
                                 });
                             } catch (reportErr) {
+                                // The Immer write refused. Fall back to a
+                                // minimal, Immer-free write so the degradation
+                                // still lands a 'partial' entry instead of the
+                                // run reading as a clean success (rule 14). The
+                                // spread is safe on a frozen Immer context
+                                // (autoFreeze): it rebuilds instead of mutating.
+                                // Guarded so a second failure cannot escape the
+                                // callback and take the formatting down.
+                                try {
+                                    context = {
+                                        ...context,
+                                        errors: [
+                                            ...(context.errors ?? []),
+                                            degradedEntry(),
+                                        ],
+                                    };
+                                } catch {
+                                    // Both writes refused — the warn below keeps
+                                    // the traceability contract anyway.
+                                }
                                 this.logger.warn({
-                                    message: `[AGENT] Failed to record formatter degradation, continuing with formatted output: ${reportErr instanceof Error ? reportErr.message : String(reportErr)}`,
+                                    message: `[AGENT] Failed to record formatter degradation via context, continuing with formatted output: ${reportErr instanceof Error ? reportErr.message : String(reportErr)}`,
                                     context: this.stageName,
+                                    metadata: {
+                                        organizationId:
+                                            context.organizationAndTeamData
+                                                ?.organizationId,
+                                        prNumber,
+                                        totalSuggestions:
+                                            report.totalSuggestions,
+                                        polishedByModel:
+                                            report.polishedByModel,
+                                        strippedMechanically:
+                                            report.strippedMechanically,
+                                        distinctReasons: report.distinctReasons,
+                                    },
                                 });
                             }
                         },
