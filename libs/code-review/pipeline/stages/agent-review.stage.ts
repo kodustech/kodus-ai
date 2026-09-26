@@ -1240,6 +1240,11 @@ metadata: {
             }
 
             // Clean up suggestion text: remove WHAT/WHY/HOW labels, merge into natural prose
+            // Degradations that cannot be written to the context while inside
+            // the formatter callback are buffered here and flushed by the
+            // caller right after the call returns, so the failure to record
+            // them can never read as a clean success (rule 14).
+            const unflushedDegradations: PipelineError[] = [];
             try {
                 const {
                     formatSuggestionContent,
@@ -1265,8 +1270,7 @@ metadata: {
                         // Degradation surfacing: the comments still ship (the
                         // floor de-scaffolds), so this is a PARTIAL execution —
                         // the run must not read as a clean success when a chunk
-                        // of the prose polish was lost. Single, deduped entry;
-                        // the message carries counts, never suggestion text.
+                        // of the prose polish was lost. Single, deduped entry.
                         onDegraded: (report: FormatterDegradedReport) => {
                             // This callback runs synchronously inside the
                             // formatter, within this stage's try/catch: a throw
@@ -1276,13 +1280,19 @@ metadata: {
                             // the raw WHAT/WHY/HOW — the exact leak this pass
                             // exists to prevent. Reporting must never take the
                             // formatting down: own try/catch, warn, continue.
+                            // The user-visible message carries counts only:
+                            // error.message is printed verbatim on the PR-log
+                            // surfaces, and `distinctReasons` holds raw
+                            // provider/LLM error strings that can echo request
+                            // or response payload fragments. Reasons stay in
+                            // metadata and in the formatter's own logs.
                             const degradedEntry = (): PipelineError => ({
                                 pipelineId:
                                     context.pipelineMetadata?.pipelineId,
                                 stage: this.stageName,
                                 substage: 'suggestion-formatter',
                                 error: new Error(
-                                    `Suggestion formatting degraded: ${report.strippedMechanically}/${report.totalSuggestions} suggestion(s) stripped of WHAT/WHY/HOW locally${report.distinctReasons.length > 0 ? ` (${report.distinctReasons.slice(0, 2).join('; ')})` : ''}`,
+                                    `Suggestion formatting degraded: ${report.strippedMechanically}/${report.totalSuggestions} suggestion(s) stripped of WHAT/WHY/HOW locally (${report.distinctReasons.length} distinct failure reason(s))`,
                                 ),
                                 severity: 'partial',
                                 metadata: {
@@ -1321,11 +1331,14 @@ metadata: {
                                         ],
                                     };
                                 } catch {
-                                    // Both writes refused — the warn below keeps
-                                    // the traceability contract anyway.
+                                    // Both context writes refused (unwritable
+                                    // context or producer throw): buffer the
+                                    // entry — the caller flushes it right after
+                                    // the call returns, so it still records.
+                                    unflushedDegradations.push(degradedEntry());
                                 }
                                 this.logger.warn({
-                                    message: `[AGENT] Failed to record formatter degradation via context, continuing with formatted output: ${reportErr instanceof Error ? reportErr.message : String(reportErr)}`,
+                                    message: `[AGENT] Recorded formatter degradation outside the context (fallback path): ${reportErr instanceof Error ? reportErr.message : String(reportErr)}`,
                                     context: this.stageName,
                                     metadata: {
                                         organizationId:
@@ -1366,6 +1379,33 @@ metadata: {
                     message: `[AGENT] Content formatting failed, keeping original text: ${err instanceof Error ? err.message : String(err)}`,
                     context: this.stageName,
                 });
+            }
+
+            // Degradations the callback could not record while the formatter
+            // was running (both the Immer write and the spread fallback
+            // refused): flush them here, after the call returned, so the run
+            // still carries the 'partial' evidence. Guarded — a flush failure
+            // must not resurrect the exception the formatter already handled.
+            if (unflushedDegradations.length > 0) {
+                try {
+                    context = this.updateContext(context, (draft) => {
+                        if (!draft.errors) {
+                            draft.errors = [];
+                        }
+                        draft.errors.push(...unflushedDegradations);
+                    });
+                } catch (flushErr) {
+                    this.logger.warn({
+                        message: `[AGENT] Failed to flush buffered formatter degradations, keeping formatted output: ${flushErr instanceof Error ? flushErr.message : String(flushErr)}`,
+                        context: this.stageName,
+                        metadata: {
+                            organizationId:
+                                context.organizationAndTeamData?.organizationId,
+                            prNumber,
+                            bufferedDegradations: unflushedDegradations.length,
+                        },
+                    });
+                }
             }
 
             // Publication gate (issue #1833): four weeks of production
