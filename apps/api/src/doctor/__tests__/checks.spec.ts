@@ -263,6 +263,64 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             expectActionable(results);
         });
 
+        it('a failing server model names the organizations that depend on it (#2021)', async () => {
+            const byok = {
+                version: 2,
+                credentials: [
+                    { id: 'c1', provider: 'google_gemini', apiKey: 'x' },
+                ],
+                models: [
+                    { id: 'm1', credentialId: 'c1', model: 'gemini-2.5-flash' },
+                ],
+                routing: { defaultModelId: 'm1' },
+            };
+            const deps = {
+                getBYOKConfig: jest.fn(async (organizationId: string) =>
+                    organizationId === 'byok-org' ? (byok as any) : null,
+                ),
+                complete: jest.fn(async ({ slot }: { slot?: unknown }) => {
+                    if (!slot) {
+                        throw new Error('insufficient balance');
+                    }
+                }),
+            };
+            const teams = [
+                team({
+                    organizationId: 'byok-org',
+                    organizationName: 'uses-byok',
+                }),
+                team({ organizationId: 'env-a', organizationName: 'alpha' }),
+                team({ organizationId: 'env-b', organizationName: 'beta' }),
+            ];
+
+            const results = await llmCheck(deps).run(ctx({ teams }));
+            const failures = results.filter(
+                (r) => r.check === 'llm.completion' && r.status === 'fail',
+            );
+
+            expect(failures).toHaveLength(1);
+            expect(failures[0].scope).toContain('alpha');
+            expect(failures[0].scope).toContain('beta');
+            expect(failures[0].scope).not.toContain('uses-byok');
+        });
+
+        it('LLM failure never prints the provider account or key id (#2021)', async () => {
+            const results = await llmCheck(
+                llmDeps({
+                    fail: new Error(
+                        'Your account org-0123456789abcdef0123456789abcdef <ak-f00ba7f00ba7f00ba7> is suspended due to insufficient balance, please recharge your account',
+                    ),
+                }),
+            ).run(ctx());
+            const line = results.find((r) => r.check === 'llm.completion');
+
+            expect(line?.status).toBe('fail');
+            expect(`${line?.title} ${line?.fix}`).not.toMatch(
+                /org-[0-9a-f]{8}|ak-[a-z0-9]{8}/,
+            );
+            expect(line?.fix).toContain('insufficient balance');
+        });
+
         it('no LLM configured at all', async () => {
             const env = cleanEnv();
             delete env.API_LLM_PROVIDER_MODEL;
