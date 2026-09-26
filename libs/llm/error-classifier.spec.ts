@@ -226,6 +226,62 @@ describe('classifyLLMError', () => {
             );
         });
 
+        it.each([
+            // An AI_RetryError (SDK retries exhausted) embeds the last attempt
+            // as text with NO status field — the default RetryError is a plain
+            // Error. These must still classify as transient so the configured
+            // BYOK fallback cascades instead of failing the whole review (#1875).
+            'Failed after 4 attempts. Last error: AI_APICallError: Bad Gateway',
+            'Last error: AI_APICallError: 502 Bad Gateway',
+            'Upstream error: service unavailable',
+            'Proxy returned 530 (Bad Gateway) from Cloudflare',
+            'An upstream error occurred: internal server error',
+            'gateway timeout while waiting for the model to respond',
+        ])('5xx phrasing without a status (%s) → TRANSIENT', (msg) => {
+            // No `status`/`statusCode` on the error — message-string fallback only.
+            const err = new Error(msg);
+            const info = classifyLLMError(err);
+            expect(info.category).toBe(LlmErrorCategory.TRANSIENT);
+        });
+
+        it.each([
+            // A 5xx-like number embedded in a larger number is not a status:
+            // substring checks used to read "5032" as a 503 and flip a permanent
+            // failure to TRANSIENT, defeating the purpose of the fallback.
+            'The input token count (5032) exceeds the maximum allowed for this model',
+            'Request id req_5301 rejected by the gateway',
+            // A 5xx glued to arbitrary letters is a request id / hash / base64
+            // blob, not a status. Only an explicit status keyword (http/err/
+            // error/status/code) counts as adjacency; anything else must stay
+            // UNKNOWN so a permanent failure does not wrongly cascade to the
+            // paid fallback (#1898 review).
+            'Failed: request id req_a503b on the model call',
+            'the deployment 05d503ee45x is not reachable',
+            'blob payload ...d504e2f... failed to parse',
+        ])('bare digit inside a larger number (%s) → not TRANSIENT', (msg) => {
+            const err = new Error(msg);
+            expect(classifyLLMError(err).category).not.toBe(
+                LlmErrorCategory.TRANSIENT,
+            );
+        });
+
+        it.each([
+            // The status is often glued to letters or an underscore rather than
+            // surrounded by whitespace. Word boundaries are defined over
+            // [A-Za-z0-9_], so `\b` rejected these and they fell back to
+            // UNKNOWN — which never triggers the BYOK fallback.
+            'upstream responded HTTP_503',
+            'proxy hop failed: ERR_502',
+            'cloudflare: upstream_530 reported by the edge',
+            'gateway returned http504',
+            'connect failed with 502badgateway via the mesh proxy',
+        ])('status glued to a word (%s) → TRANSIENT', (msg) => {
+            const err = new Error(msg);
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.TRANSIENT,
+            );
+        });
+
         it('unrecognized message → UNKNOWN', () => {
             const err = new Error('something weird happened in the SDK');
             expect(classifyLLMError(err).category).toBe(
