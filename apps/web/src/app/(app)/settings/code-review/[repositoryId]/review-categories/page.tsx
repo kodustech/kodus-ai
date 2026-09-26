@@ -2,7 +2,9 @@
 
 import { useMemo } from "react";
 import { Button } from "@components/ui/button";
+import { Heading } from "@components/ui/heading";
 import { Page } from "@components/ui/page";
+import { Separator } from "@components/ui/separator";
 import { toast } from "@components/ui/toaster/use-toast";
 import { useGetCodeReviewLabels } from "@services/parameters/hooks";
 import { KodyLearningStatus } from "@services/parameters/types";
@@ -21,6 +23,7 @@ import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedba
 import { usePlatformConfig } from "../../../_components/context";
 import { useCodeReviewRouteParams } from "../../../_hooks";
 import { AnalysisTypes } from "../general/_components/analysis-types";
+import { DeterministicEvidence } from "./_components/deterministic-evidence";
 import {
     filterVisibleReviewLabels,
     mergeMissingReviewOptions,
@@ -143,6 +146,24 @@ export default function ReviewCategories() {
                 <CentralizedConfigReadOnlyAlert />
                 <div data-field-name="analysisTypes">
                     <AnalysisTypes />
+                </div>
+
+                <Separator />
+
+                <div
+                    className="flex flex-col gap-4"
+                    data-field-name="deterministicEvidence">
+                    <div className="flex flex-col gap-1">
+                        <Heading variant="h2">Deterministic checks</Heading>
+                        <p className="text-text-secondary text-sm">
+                            Scanners that answer a question of fact rather than
+                            judgement, and the results your own CI already
+                            produced. Everything here is off unless you turn it
+                            on.
+                        </p>
+                    </div>
+
+                    <DeterministicEvidence />
                 </div>
             </Page.Content>
         </Page.Root>

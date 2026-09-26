@@ -227,6 +227,7 @@ export const codeReviewConfigRemovePropertiesNotInType = (
         // Cross-repo context (#1576). Without it the stripper would drop
         // the field and the UI save would never persist linked repos.
         "linkedRepositories",
+        "deterministicEvidence",
     ];
 
     expectedKeys.forEach((key) => {
