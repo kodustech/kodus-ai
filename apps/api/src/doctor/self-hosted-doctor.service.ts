@@ -5,6 +5,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 
+import { AutomationMessage } from '@libs/automation/domain/automation/enum/automation-status';
+import { PipelineReasons } from '@libs/core/infrastructure/pipeline/constants/pipeline-reasons.const';
 import { createLogger } from '@libs/core/log/logger';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { CockpitHealthService } from '@libs/cockpit/infrastructure/services/cockpit-health.service';
@@ -55,11 +57,27 @@ export const CHECK_TIMEOUT_MS = 90_000;
 const SEAT_LOOKBACK_DAYS = 14;
 
 /**
+ * Skips decided in ValidatePrerequisitesStage before or at the seat check
+ * (closed/locked PR, org-level license, ignored author, config repositories).
+ * They say nothing about the author's seat. Every later stage runs only after
+ * the seat check passed, so its skips ("No changed files", "No new commits")
+ * prove the author has a seat.
+ */
+const SKIPS_BEFORE_SEAT_CHECK: string[] = [
+    ...Object.entries(PipelineReasons.PREREQUISITES)
+        .filter(([key]) => key !== 'USER_NO_LICENSE')
+        .map(([, reason]) => reason.message),
+    AutomationMessage.USER_IGNORED,
+    AutomationMessage.VALIDATION_FAILED,
+    'Code reviews are disabled for the ',
+];
+
+/**
  * Pull requests of a team ($1) whose latest run since $2 was skipped for a
- * missing seat. Only the latest run counts: a PR reviewed after its author got
- * a seat is fixed, not a problem to report for the rest of the window (#2021).
- * Skips for other reasons ("No changed files", ignored author) say nothing
- * about the seat, so they are left out and cannot hide an earlier seat skip.
+ * missing seat. Only the latest run counts: a PR reviewed, or skipped by a
+ * stage after the seat check, is fixed and not reported for the rest of the
+ * window (#2021). Skips before the seat check ($3) are left out, so they
+ * cannot hide an earlier seat skip.
  */
 export const UNLICENSED_SKIPS_SQL = `WITH latest AS (
                 SELECT DISTINCT ON (ae."repositoryId", ae."pullRequestNumber")
@@ -68,11 +86,8 @@ export const UNLICENSED_SKIPS_SQL = `WITH latest AS (
                   JOIN team_automations ta ON ta.uuid = ae.team_automation_id
                  WHERE ta."teamUuid" = $1
                    AND ae."createdAt" >= $2
-                   AND (ae.status <> 'skipped'
-                        OR ae."errorMessage" ILIKE 'User Not Licensed%'
-                        OR EXISTS (SELECT 1 FROM code_review_execution cre
-                                    WHERE cre.automation_execution_id = ae.uuid
-                                      AND cre.message ILIKE 'User Not Licensed%'))
+                   AND NOT (ae.status = 'skipped'
+                            AND COALESCE(ae."errorMessage", '') ILIKE ANY ($3::text[]))
                  ORDER BY ae."repositoryId", ae."pullRequestNumber", ae."createdAt" DESC)
              SELECT COUNT(*)::int AS count
                FROM latest l
@@ -81,6 +96,13 @@ export const UNLICENSED_SKIPS_SQL = `WITH latest AS (
                      OR EXISTS (SELECT 1 FROM code_review_execution cre
                                  WHERE cre.automation_execution_id = l.uuid
                                    AND cre.message ILIKE 'User Not Licensed%'))`;
+
+export function unlicensedSkipsParams(teamId: string, since: Date): unknown[] {
+    const patterns = SKIPS_BEFORE_SEAT_CHECK.map(
+        (message) => `${message.replace(/[\\%_]/g, '\\$&')}%`,
+    );
+    return [teamId, since, patterns];
+}
 
 @Injectable()
 export class SelfHostedDoctorService {
@@ -341,10 +363,10 @@ export class SelfHostedDoctorService {
         team: DoctorTeam,
     ): Promise<{ pullRequests: number; since: Date }> {
         const since = new Date(Date.now() - SEAT_LOOKBACK_DAYS * 86_400_000);
-        const [row] = await this.dataSource.query(UNLICENSED_SKIPS_SQL, [
-            team.teamId,
-            since,
-        ]);
+        const [row] = await this.dataSource.query(
+            UNLICENSED_SKIPS_SQL,
+            unlicensedSkipsParams(team.teamId, since),
+        );
         return { pullRequests: row?.count ?? 0, since };
     }
 

@@ -13,7 +13,10 @@ require('dotenv').config();
 
 import { DataSource, QueryRunner } from 'typeorm';
 
-import { UNLICENSED_SKIPS_SQL } from '../../../apps/api/src/doctor/self-hosted-doctor.service';
+import {
+    UNLICENSED_SKIPS_SQL,
+    unlicensedSkipsParams,
+} from '../../../apps/api/src/doctor/self-hosted-doctor.service';
 
 const PG_HOST = process.env.TEST_PG_HOST ?? 'localhost';
 const PG_PORT = parseInt(
@@ -107,7 +110,10 @@ describe('doctor missing-seat count (real Postgres)', () => {
     }
 
     async function count(): Promise<number> {
-        const [row] = await runner.query(UNLICENSED_SKIPS_SQL, [TEAM, since]);
+        const [row] = await runner.query(
+            UNLICENSED_SKIPS_SQL,
+            unlicensedSkipsParams(TEAM, since),
+        );
         return row.count;
     }
 
@@ -292,9 +298,18 @@ describe('doctor missing-seat count (real Postgres)', () => {
         expect(await count()).toBe(0);
     });
 
-    itPg(
-        'a later skip for another reason does not hide a seat skip',
-        async () => {
+    it.each([
+        ['an ignored author', 'User is ignored by configuration.'],
+        ['a locked PR', 'PR is Locked'],
+        [
+            'the centralized config repository',
+            'Code reviews are disabled for the centralized config repository',
+        ],
+    ])(
+        'a later skip before the seat gate (%s) does not hide a seat skip',
+        async (_label, message) => {
+            if (skipIntegration) return;
+            expect(reachable).toBe(true);
             await execution({
                 repo: 'r6',
                 pr: 9,
@@ -306,11 +321,38 @@ describe('doctor missing-seat count (real Postgres)', () => {
                 repo: 'r6',
                 pr: 9,
                 status: 'skipped',
-                errorMessage: 'No changed files in this pull request.',
+                errorMessage: message,
                 at: minutesAgo(10),
             });
 
             expect(await count()).toBe(1);
+        },
+    );
+
+    it.each([
+        ['No changed files', 'No changed files in this pull request.'],
+        ['no new commits', 'No new commits since the last run.'],
+    ])(
+        'a later skip after the seat gate (%s) proves the seat and clears it',
+        async (_label, message) => {
+            if (skipIntegration) return;
+            expect(reachable).toBe(true);
+            await execution({
+                repo: 'r7',
+                pr: 10,
+                status: 'skipped',
+                errorMessage: NOT_LICENSED,
+                at: minutesAgo(30),
+            });
+            await execution({
+                repo: 'r7',
+                pr: 10,
+                status: 'skipped',
+                errorMessage: message,
+                at: minutesAgo(10),
+            });
+
+            expect(await count()).toBe(0);
         },
     );
 });
