@@ -39,6 +39,11 @@ const SECRET_PATTERNS: ReadonlyArray<RegExp> = [
     /\bAIza[A-Za-z0-9\-_]{10,}/g,
     /\b(?:AKIA|ASIA)[A-Z0-9]{12,}/g,
     /\bgh[pousr]_[A-Za-z0-9]{20,}/g,
+    // Account and key ids a provider echoes in billing errors, e.g. Moonshot's
+    // "Your account org-… <ak-…> is suspended" (#2021). The length floor keeps
+    // ordinary words such as "org-level" intact.
+    /\borg-[A-Za-z0-9]{16,}/g,
+    /\bak-[A-Za-z0-9]{12,}/g,
     // A key named in a JSON body: {"api_key":"..."} / "authorization": "..."
     /("?(?:api[_-]?key|authorization|access[_-]?token|secret)"?\s*[:=]\s*"?)[^"\s,}]+/gi,
 ];

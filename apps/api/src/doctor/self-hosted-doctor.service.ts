@@ -54,6 +54,27 @@ const execFileAsync = promisify(execFile);
 export const CHECK_TIMEOUT_MS = 90_000;
 const SEAT_LOOKBACK_DAYS = 14;
 
+/**
+ * Pull requests of a team ($1) whose latest run since $2 was skipped for a
+ * missing seat. Only the latest run counts: a PR reviewed after its author got
+ * a seat is fixed, not a problem to report for the rest of the window (#2021).
+ */
+export const UNLICENSED_SKIPS_SQL = `WITH latest AS (
+                SELECT DISTINCT ON (ae."repositoryId", ae."pullRequestNumber")
+                       ae.uuid, ae.status, ae."errorMessage"
+                  FROM automation_execution ae
+                  JOIN team_automations ta ON ta.uuid = ae.team_automation_id
+                 WHERE ta."teamUuid" = $1
+                   AND ae."createdAt" >= $2
+                 ORDER BY ae."repositoryId", ae."pullRequestNumber", ae."createdAt" DESC)
+             SELECT COUNT(*)::int AS count
+               FROM latest l
+              WHERE l.status = 'skipped'
+                AND (l."errorMessage" ILIKE 'User Not Licensed%'
+                     OR EXISTS (SELECT 1 FROM code_review_execution cre
+                                 WHERE cre.automation_execution_id = l.uuid
+                                   AND cre.message ILIKE 'User Not Licensed%'))`;
+
 @Injectable()
 export class SelfHostedDoctorService {
     private readonly logger = createLogger(SelfHostedDoctorService.name);
@@ -313,19 +334,10 @@ export class SelfHostedDoctorService {
         team: DoctorTeam,
     ): Promise<{ pullRequests: number; since: Date }> {
         const since = new Date(Date.now() - SEAT_LOOKBACK_DAYS * 86_400_000);
-        const [row] = await this.dataSource.query(
-            `SELECT COUNT(DISTINCT (ae."repositoryId", ae."pullRequestNumber"))::int AS count
-               FROM automation_execution ae
-               JOIN team_automations ta ON ta.uuid = ae.team_automation_id
-              WHERE ta."teamUuid" = $1
-                AND ae.status = 'skipped'
-                AND ae."createdAt" >= $2
-                AND (ae."errorMessage" ILIKE 'User Not Licensed%'
-                     OR EXISTS (SELECT 1 FROM code_review_execution cre
-                                 WHERE cre.automation_execution_id = ae.uuid
-                                   AND cre.message ILIKE 'User Not Licensed%'))`,
-            [team.teamId, since],
-        );
+        const [row] = await this.dataSource.query(UNLICENSED_SKIPS_SQL, [
+            team.teamId,
+            since,
+        ]);
         return { pullRequests: row?.count ?? 0, since };
     }
 
