@@ -209,6 +209,7 @@ export class LLM {
                         telemetryMetadata: req.telemetryMetadata,
                         signal: req.signal,
                         maxOutputTokens: req.maxOutputTokens,
+                        hardTimeoutMs: req.hardTimeoutMs,
                         temperature: req.temperature,
                     }),
                 failoverOpts,

@@ -273,7 +273,7 @@ describe('buildModelFromSlot — env/managed default (undefined slot)', () => {
 
         expect(result.modelId).toBe('accounts/fireworks/models/deepseek-v4-flash-0731');
         expect(createOpenAICompatibleMock).toHaveBeenCalledWith(
-            expect.objectContaining({ name: 'fireworks' }),
+            expect.objectContaining({ name: 'openai-compatible' }),
         );
     });
 

@@ -53,6 +53,78 @@ describe('formatSuggestionContent — nothing raw ships, whatever failed', () =>
         expect(out.get(0)?.suggestionContent).not.toMatch(/WHAT:/);
     });
 
+    it('aborts the recovery loop when an isolated retry hits a TERMINAL cause', async () => {
+        // Batch fails transiently (a 429); the FIRST isolated retry then hits a
+        // suspended account. Without the per-iteration terminal gate the loop
+        // would keep billing one call per remaining suggestion against a dead
+        // tenant — the 55-of-86 class the batch gate is built for, reached
+        // through the retry path instead. It must stop and hand the rest to the
+        // floor.
+        run.mockRejectedValueOnce(new Error('429 Too Many Requests'))
+            .mockRejectedValueOnce(
+                new Error(
+                    'Your account is suspended due to insufficient balance, please recharge',
+                ),
+            );
+
+        const out = await formatSuggestionContent(scaffolded(3));
+
+        // batch (1) + the one isolated call that turned terminal (2) — the
+        // remaining two suggestions are never re-issued.
+        expect(run).toHaveBeenCalledTimes(2);
+        expect(out.get(0)?.suggestionContent).not.toMatch(/WHAT:/);
+        expect(out.get(1)?.suggestionContent).not.toMatch(/WHY:/);
+        expect(out.get(2)?.suggestionContent).not.toMatch(/HOW:/);
+    });
+
+    it('does NOT re-issue per-suggestion recovery calls on a TERMINAL batch failure', async () => {
+        // Suspended-account / bad-key / unknown-model: running the isolated
+        // retry is pointless — every call fails the same way and it only bills
+        // an already-dead tenant. One call touched, straight to the floor.
+        run.mockRejectedValueOnce(
+            new Error(
+                'Your account is suspended due to insufficient balance, please recharge',
+            ),
+        );
+
+        await formatSuggestionContent(scaffolded(2));
+
+        expect(run).toHaveBeenCalledTimes(1);
+    });
+
+    it('DOES recover in isolation when the batch failure is NOT terminal', async () => {
+        // A transient failure (rate limit, provider 5xx, timeout) warrants the
+        // second chance per uncovered suggestion: a fresh, smaller call can
+        // clear a limit that the larger one tripped.
+        run.mockRejectedValueOnce(new Error('429 Too Many Requests'))
+            .mockResolvedValueOnce(
+                JSON.stringify([
+                    {
+                        index: 0,
+                        suggestionContent: 'Recovered in isolation.',
+                        improvedCode: 'b',
+                    },
+                ]),
+            )
+            .mockResolvedValueOnce(
+                JSON.stringify([
+                    {
+                        index: 1,
+                        suggestionContent: 'And so was the other one.',
+                        improvedCode: 'b',
+                    },
+                ]),
+            );
+
+        const out = await formatSuggestionContent(scaffolded(2));
+
+        expect(out.get(0)?.suggestionContent).toBe('Recovered in isolation.');
+        expect(out.get(1)?.suggestionContent).toBe(
+            'And so was the other one.',
+        );
+        expect(run).toHaveBeenCalledTimes(3);
+    });
+
     it('strips locally when the response has no JSON array', async () => {
         run.mockResolvedValue('I cannot help with that.');
 
@@ -61,37 +133,52 @@ describe('formatSuggestionContent — nothing raw ships, whatever failed', () =>
         expect(out.get(0)?.suggestionContent).not.toMatch(/WHAT:/);
     });
 
-    it('fills only the gaps of a partial batch, and the model wins', async () => {
-        run.mockResolvedValue(
+    it('re-polishes a partial batch\'s gap in isolation, and the isolated answer wins', async () => {
+        // The batch answers for 0 of 2; index 1 is re-attempted SOLO, so the
+        // per-suggestion model answer is what ships for the gap — not a shared
+        // single response repeated to every slot, and not the local strip.
+        run.mockResolvedValueOnce(
             JSON.stringify([
                 { index: 0, suggestionContent: 'Model prose.', improvedCode: 'b' },
+            ]),
+        ).mockResolvedValueOnce(
+            JSON.stringify([
+                { index: 1, suggestionContent: 'Isolated prose for 1.', improvedCode: 'b' },
             ]),
         );
 
         const out = await formatSuggestionContent(scaffolded(2));
 
         expect(out.get(0)?.suggestionContent).toBe('Model prose.');
-        expect(out.get(1)?.suggestionContent).not.toMatch(/WHAT:/);
-        expect(out.get(1)?.suggestionContent).toContain('problem 1');
+        expect(out.get(1)?.suggestionContent).toBe(
+            'Isolated prose for 1.',
+        );
+        expect(run).toHaveBeenCalledTimes(2);
     });
 
-    it('fills a gap the model hid behind an out-of-range index', async () => {
+    it('re-polishes a gap the model hid behind an out-of-range index', async () => {
         // `parseFormatResponse` accepts any numeric index with no bounds check,
         // so this response makes `formatted.size` equal the batch size while
-        // index 1 is still uncovered. A size-based gate skips the fallback and
-        // suggestion 1 ships raw — the leak, reachable through its own fix.
-        run.mockResolvedValue(
+        // index 1 is still uncovered. A size-based gate would skip the fallback
+        // and suggestion 1 would ship raw — the leak, reachable through its own
+        // fix. The isolate-and-retry phase targets index 1 regardless.
+        run.mockResolvedValueOnce(
             JSON.stringify([
                 { index: 0, suggestionContent: 'Model prose.', improvedCode: 'b' },
                 { index: 5, suggestionContent: 'Nowhere.', improvedCode: 'b' },
+            ]),
+        ).mockResolvedValueOnce(
+            JSON.stringify([
+                { index: 1, suggestionContent: 'Isolated prose for 1.', improvedCode: 'b' },
             ]),
         );
 
         const out = await formatSuggestionContent(scaffolded(2));
 
-        expect(out.get(1)?.suggestionContent).toBeDefined();
-        expect(out.get(1)?.suggestionContent).not.toMatch(/WHAT:/);
-        expect(out.get(1)?.suggestionContent).toContain('problem 1');
+        expect(out.get(1)?.suggestionContent).toBe(
+            'Isolated prose for 1.',
+        );
+        expect(run).toHaveBeenCalledTimes(2);
     });
 
     it('does not touch a suggestion that was already prose', async () => {

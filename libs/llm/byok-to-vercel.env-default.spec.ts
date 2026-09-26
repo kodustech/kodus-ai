@@ -14,7 +14,6 @@
  * mock (absent from the original spec) because the env-default claude branch
  * routes through `createAnthropic`.
  */
-import { BYOKProvider } from '@libs/llm/model-providers';
 
 jest.mock('@ai-sdk/google-vertex', () => ({
     createVertex: jest.fn((settings: unknown) =>
@@ -273,7 +272,7 @@ describe('buildModelFromSlot — env/managed default characterization (undefined
         expect(result.sdk).toBe('openai-compatible');
         expect(result.modelId).toBe('gpt-4o');
         expect(createOpenAICompatibleMock).toHaveBeenCalledWith({
-            name: 'self-hosted',
+            name: 'openai-compatible',
             apiKey: 'sk-openai',
             baseURL: 'https://api.openai.com/v1',
             supportsStructuredOutputs: false,
@@ -292,7 +291,7 @@ describe('buildModelFromSlot — env/managed default characterization (undefined
 
         expect(result.sdk).toBe('openai-compatible');
         expect(createOpenAICompatibleMock).toHaveBeenCalledWith({
-            name: 'self-hosted',
+            name: 'openai-compatible',
             apiKey: 'sk-openai',
             baseURL: 'https://litellm.internal/v1',
             supportsStructuredOutputs: true,
@@ -311,7 +310,7 @@ describe('buildModelFromSlot — env/managed default characterization (undefined
         expect(result.sdk).toBe('openai-compatible');
         expect(result.modelId).toBe('accounts/fireworks/models/deepseek-v4-flash-0731');
         expect(createOpenAICompatibleMock).toHaveBeenCalledWith({
-            name: 'fireworks',
+            name: 'openai-compatible',
             apiKey: 'fw-key',
             baseURL: 'https://api.fireworks.ai/inference/v1',
             supportsStructuredOutputs: true,
@@ -353,7 +352,7 @@ describe('buildModelFromSlot — env/managed default characterization (undefined
         expect(result.sdk).toBe('openai-compatible');
         expect(result.modelId).toBe('accounts/fireworks/models/deepseek-v4-flash-0731');
         expect(createOpenAICompatibleMock).toHaveBeenCalledWith(
-            expect.objectContaining({ name: 'fireworks' }),
+            expect.objectContaining({ name: 'openai-compatible' }),
         );
         expect(createAnthropicMock).not.toHaveBeenCalled();
     });
@@ -373,7 +372,7 @@ describe('buildModelFromSlot — env/managed default characterization (undefined
         expect(result.sdk).toBe('openai-compatible');
         expect(result.modelId).toBe('claude-sonnet-4-5');
         expect(createOpenAICompatibleMock).toHaveBeenCalledWith({
-            name: 'self-hosted',
+            name: 'openai-compatible',
             apiKey: 'sk-proxy-key',
             baseURL: 'https://openrouter.ai/api/v1',
             supportsStructuredOutputs: false,

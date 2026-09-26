@@ -31,6 +31,8 @@ import {
 import { getModelName } from '@libs/llm/byok-to-vercel';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { buildKodyRuleLink } from '@libs/code-review/utils/build-kody-rule-link';
+import type { FormatterDegradedReport } from '@libs/code-review/infrastructure/agents/engine/format-suggestion-content';
+import type { PipelineError } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-context.interface';
 import { type LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
 
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
@@ -513,7 +515,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             this.logger.log({
                 message: `[AGENT][review-focus] steering PR#${prNumber} by directive: "${context.reviewDirective}"`,
                 context: this.stageName,
-                metadata: {
+metadata: {
                     prNumber,
                     reviewDirective: context.reviewDirective,
                     organizationId:
@@ -1238,6 +1240,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             }
 
             // Clean up suggestion text: remove WHAT/WHY/HOW labels, merge into natural prose
+            // Degradations that cannot be written to the context while inside
+            // the formatter callback are buffered here and flushed by the
+            // caller right after the call returns, so the failure to record
+            // them can never read as a clean success (rule 14).
+            const unflushedDegradations: PipelineError[] = [];
             try {
                 const {
                     formatSuggestionContent,
@@ -1259,6 +1266,96 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             context.codeReviewConfig?.languageResultPrompt,
                         organizationId:
                             context.organizationAndTeamData?.organizationId,
+                        prNumber,
+                        // Degradation surfacing: the comments still ship (the
+                        // floor de-scaffolds), so this is a PARTIAL execution —
+                        // the run must not read as a clean success when a chunk
+                        // of the prose polish was lost. Single, deduped entry.
+                        onDegraded: (report: FormatterDegradedReport) => {
+                            // This callback runs synchronously inside the
+                            // formatter, within this stage's try/catch: a throw
+                            // here (Immer produce on the context, message
+                            // construction) would be caught as "formatting
+                            // failed", DISCARD the de-scaffolded map and ship
+                            // the raw WHAT/WHY/HOW — the exact leak this pass
+                            // exists to prevent. Reporting must never take the
+                            // formatting down: own try/catch, warn, continue.
+                            // The user-visible message carries counts only:
+                            // error.message is printed verbatim on the PR-log
+                            // surfaces, and `distinctReasons` holds raw
+                            // provider/LLM error strings that can echo request
+                            // or response payload fragments. Reasons stay in
+                            // metadata and in the formatter's own logs.
+                            const degradedEntry = (): PipelineError => ({
+                                pipelineId:
+                                    context.pipelineMetadata?.pipelineId,
+                                stage: this.stageName,
+                                substage: 'suggestion-formatter',
+                                error: new Error(
+                                    `Suggestion formatting degraded: ${report.strippedMechanically}/${report.totalSuggestions} suggestion(s) stripped of WHAT/WHY/HOW locally (${report.distinctReasons.length} distinct failure reason(s))`,
+                                ),
+                                severity: 'partial',
+                                metadata: {
+                                    totalSuggestions:
+                                        report.totalSuggestions,
+                                    polishedByModel: report.polishedByModel,
+                                    strippedMechanically:
+                                        report.strippedMechanically,
+                                    distinctReasons: report.distinctReasons,
+                                    prNumber,
+                                },
+                            });
+
+                            try {
+                                context = this.updateContext(context, (draft) => {
+                                    if (!draft.errors) {
+                                        draft.errors = [];
+                                    }
+                                    draft.errors.push(degradedEntry());
+                                });
+                            } catch (reportErr) {
+                                // The Immer write refused. Fall back to a
+                                // minimal, Immer-free write so the degradation
+                                // still lands a 'partial' entry instead of the
+                                // run reading as a clean success (rule 14). The
+                                // spread is safe on a frozen Immer context
+                                // (autoFreeze): it rebuilds instead of mutating.
+                                // Guarded so a second failure cannot escape the
+                                // callback and take the formatting down.
+                                try {
+                                    context = {
+                                        ...context,
+                                        errors: [
+                                            ...(context.errors ?? []),
+                                            degradedEntry(),
+                                        ],
+                                    };
+                                } catch {
+                                    // Both context writes refused (unwritable
+                                    // context or producer throw): buffer the
+                                    // entry — the caller flushes it right after
+                                    // the call returns, so it still records.
+                                    unflushedDegradations.push(degradedEntry());
+                                }
+                                this.logger.warn({
+                                    message: `[AGENT] Recorded formatter degradation outside the context (fallback path): ${reportErr instanceof Error ? reportErr.message : String(reportErr)}`,
+                                    context: this.stageName,
+                                    metadata: {
+                                        organizationId:
+                                            context.organizationAndTeamData
+                                                ?.organizationId,
+                                        prNumber,
+                                        totalSuggestions:
+                                            report.totalSuggestions,
+                                        polishedByModel:
+                                            report.polishedByModel,
+                                        strippedMechanically:
+                                            report.strippedMechanically,
+                                        distinctReasons: report.distinctReasons,
+                                    },
+                                });
+                            }
+                        },
                     },
                 );
                 for (const [i, fmt] of formatted) {
@@ -1282,6 +1379,75 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     message: `[AGENT] Content formatting failed, keeping original text: ${err instanceof Error ? err.message : String(err)}`,
                     context: this.stageName,
                 });
+            }
+
+            // Degradations the callback could not record while the formatter
+            // was running (both the Immer write and the spread fallback
+            // refused): flush them here, after the call returned, so the run
+            // still carries the 'partial' evidence.
+            if (unflushedDegradations.length > 0) {
+                try {
+                    context = this.updateContext(context, (draft) => {
+                        if (!draft.errors) {
+                            draft.errors = [];
+                        }
+                        draft.errors.push(...unflushedDegradations);
+                    });
+                    // Recorded via Immer — done.
+                    unflushedDegradations.length = 0;
+                } catch (flushErr) {
+                    const recordOutsideImmer = (): boolean => {
+                        try {
+                            context = {
+                                ...context,
+                                errors: [
+                                    ...(context.errors ?? []),
+                                    ...unflushedDegradations,
+                                ],
+                            };
+                            unflushedDegradations.length = 0;
+                            return true;
+                        } catch {
+                            return false;
+                        }
+                    };
+
+                    // NEVER let a recording failure abort the stage at this
+                    // point: the outer try/catch of executeStage (opened at
+                    // ~527) on any throw resets fileAnalysisResults = [] and
+                    // grades the run 'critical' (catch at ~1715) — a refusal
+                    // here would discard the whole review, not just the
+                    // degraded evidence. Try outside Immer; if that too
+                    // refuses, hold the entries for the publish-time flush
+                    // (inside the final producer, where a lost 'partial'
+                    // record can no longer cost the review output).
+                    if (recordOutsideImmer()) {
+                        this.logger.warn({
+                            message: `[AGENT] Failed to flush buffered formatter degradations via context, recorded outside Immer: ${flushErr instanceof Error ? flushErr.message : String(flushErr)}`,
+                            context: this.stageName,
+                            metadata: {
+                                organizationId:
+                                    context.organizationAndTeamData
+                                        ?.organizationId,
+                                prNumber,
+                                bufferedDegradations: 0,
+                            },
+                        });
+                    } else {
+                        this.logger.warn({
+                            message: `[AGENT] Buffered formatter degradations unrecorded after Immer and plain rebuild; holding for publish-time flush`,
+                            context: this.stageName,
+                            metadata: {
+                                organizationId:
+                                    context.organizationAndTeamData
+                                        ?.organizationId,
+                                prNumber,
+                                bufferedDegradations:
+                                    unflushedDegradations.length,
+                            },
+                        });
+                    }
+                }
             }
 
             // Publication gate (issue #1833): four weeks of production
@@ -1572,6 +1738,19 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 // through validSuggestionsByPR above.
                 draft.validSuggestions = fileLevelSuggestions;
                 draft.discardedSuggestions = allDiscarded;
+
+                // Last-resort flush for degradations that survived every
+                // earlier write attempt (Immer + plain rebuild refused after
+                // the formatter). Inside the final producer, a refusal can no
+                // longer pre-empt fileAnalysisResults/validSuggestions — the
+                // output is already being published in this same draft, so a
+                // lost 'partial' record never costs the whole review.
+                if (unflushedDegradations.length > 0) {
+                    if (!draft.errors) {
+                        draft.errors = [];
+                    }
+                    draft.errors.push(...unflushedDegradations);
+                }
             });
         } catch (error) {
             const durationMs = Date.now() - startTime;
