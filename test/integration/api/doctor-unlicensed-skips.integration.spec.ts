@@ -298,65 +298,17 @@ describe('doctor missing-seat count (real Postgres)', () => {
         expect(await count()).toBe(0);
     });
 
-    itPg(
-        'a skip before the seat gate recorded only on the stage log does not hide a seat skip',
-        async () => {
-            await execution({
-                repo: 'r8',
-                pr: 11,
-                status: 'skipped',
-                errorMessage: NOT_LICENSED,
-                at: minutesAgo(30),
-            });
-            await execution({
-                repo: 'r8',
-                pr: 11,
-                status: 'skipped',
-                errorMessage: null,
-                stageMessage: 'User is ignored by configuration.',
-                at: minutesAgo(10),
-            });
-
-            expect(await count()).toBe(1);
-        },
-    );
-
-    it.each([
-        ['an ignored author', 'User is ignored by configuration.'],
-        ['a locked PR', 'PR is Locked'],
-        [
-            'the centralized config repository',
-            'Code reviews are disabled for the centralized config repository',
-        ],
-    ])(
-        'a later skip before the seat gate (%s) does not hide a seat skip',
-        async (_label, message) => {
-            if (skipIntegration) return;
-            expect(reachable).toBe(true);
-            await execution({
-                repo: 'r6',
-                pr: 9,
-                status: 'skipped',
-                errorMessage: NOT_LICENSED,
-                at: minutesAgo(30),
-            });
-            await execution({
-                repo: 'r6',
-                pr: 9,
-                status: 'skipped',
-                errorMessage: message,
-                at: minutesAgo(10),
-            });
-
-            expect(await count()).toBe(1);
-        },
-    );
-
+    // The latest run decides. A later skip for any other reason ends the seat
+    // report: either the author passed the seat check ("No changed files", "No
+    // new commits"), or there is nothing to review for them (ignored author,
+    // locked PR), where asking an admin to buy a seat would be wrong.
     it.each([
         ['No changed files', 'No changed files in this pull request.'],
         ['no new commits', 'No new commits since the last run.'],
+        ['an ignored author', 'User is ignored by configuration.'],
+        ['a locked PR', 'PR is Locked'],
     ])(
-        'a later skip after the seat gate (%s) proves the seat and clears it',
+        'a later skip for another reason (%s) ends the seat report',
         async (_label, message) => {
             if (skipIntegration) return;
             expect(reachable).toBe(true);
