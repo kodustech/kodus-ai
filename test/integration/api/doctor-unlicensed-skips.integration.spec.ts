@@ -153,10 +153,13 @@ describe('doctor missing-seat count (real Postgres)', () => {
 
     const itPg = (name: string, fn: () => Promise<void>) =>
         it(name, async () => {
-            if (skipIntegration || !reachable) {
-                console.warn(`[skip] Postgres not reachable: ${name}`);
+            if (skipIntegration) {
+                console.warn(`[skip] SKIP_INTEGRATION=true: ${name}`);
                 return;
             }
+            // This is the only end-to-end check of the seat query; a missing
+            // Postgres must fail it, not make it look tested.
+            expect(reachable).toBe(true);
             await fn();
         });
 
@@ -288,4 +291,26 @@ describe('doctor missing-seat count (real Postgres)', () => {
 
         expect(await count()).toBe(0);
     });
+
+    itPg(
+        'a later skip for another reason does not hide a seat skip',
+        async () => {
+            await execution({
+                repo: 'r6',
+                pr: 9,
+                status: 'skipped',
+                errorMessage: NOT_LICENSED,
+                at: minutesAgo(30),
+            });
+            await execution({
+                repo: 'r6',
+                pr: 9,
+                status: 'skipped',
+                errorMessage: 'No changed files in this pull request.',
+                at: minutesAgo(10),
+            });
+
+            expect(await count()).toBe(1);
+        },
+    );
 });

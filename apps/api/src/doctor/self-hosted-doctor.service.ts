@@ -58,6 +58,8 @@ const SEAT_LOOKBACK_DAYS = 14;
  * Pull requests of a team ($1) whose latest run since $2 was skipped for a
  * missing seat. Only the latest run counts: a PR reviewed after its author got
  * a seat is fixed, not a problem to report for the rest of the window (#2021).
+ * Skips for other reasons ("No changed files", ignored author) say nothing
+ * about the seat, so they are left out and cannot hide an earlier seat skip.
  */
 export const UNLICENSED_SKIPS_SQL = `WITH latest AS (
                 SELECT DISTINCT ON (ae."repositoryId", ae."pullRequestNumber")
@@ -66,6 +68,11 @@ export const UNLICENSED_SKIPS_SQL = `WITH latest AS (
                   JOIN team_automations ta ON ta.uuid = ae.team_automation_id
                  WHERE ta."teamUuid" = $1
                    AND ae."createdAt" >= $2
+                   AND (ae.status <> 'skipped'
+                        OR ae."errorMessage" ILIKE 'User Not Licensed%'
+                        OR EXISTS (SELECT 1 FROM code_review_execution cre
+                                    WHERE cre.automation_execution_id = ae.uuid
+                                      AND cre.message ILIKE 'User Not Licensed%'))
                  ORDER BY ae."repositoryId", ae."pullRequestNumber", ae."createdAt" DESC)
              SELECT COUNT(*)::int AS count
                FROM latest l
