@@ -1393,33 +1393,60 @@ metadata: {
                         }
                         draft.errors.push(...unflushedDegradations);
                     });
+                    // Recorded via Immer — done.
+                    unflushedDegradations.length = 0;
                 } catch (flushErr) {
-                    // Immer refused. One last attempt without it — rebuild the
-                    // errors array instead of the frozen context (safe under
-                    // autoFreeze: a new object is produced, nothing mutates).
-                    // If this plain write also refuses, its throw propagates to
-                    // the executor, which records the failure per the stage
-                    // severity — losing the 'partial' evidence must not
-                    // masquerade as a clean success (rule 14). The formatter's
-                    // own output is already applied by now, so nothing here
-                    // discards it.
-                    context = {
-                        ...context,
-                        errors: [
-                            ...(context.errors ?? []),
-                            ...unflushedDegradations,
-                        ],
+                    const recordOutsideImmer = (): boolean => {
+                        try {
+                            context = {
+                                ...context,
+                                errors: [
+                                    ...(context.errors ?? []),
+                                    ...unflushedDegradations,
+                                ],
+                            };
+                            unflushedDegradations.length = 0;
+                            return true;
+                        } catch {
+                            return false;
+                        }
                     };
-                    this.logger.warn({
-                        message: `[AGENT] Failed to flush buffered formatter degradations via context, recorded outside Immer: ${flushErr instanceof Error ? flushErr.message : String(flushErr)}`,
-                        context: this.stageName,
-                        metadata: {
-                            organizationId:
-                                context.organizationAndTeamData?.organizationId,
-                            prNumber,
-                            bufferedDegradations: unflushedDegradations.length,
-                        },
-                    });
+
+                    // NEVER let a recording failure abort the stage at this
+                    // point: the outer try/catch of executeStage (opened at
+                    // ~527) on any throw resets fileAnalysisResults = [] and
+                    // grades the run 'critical' (catch at ~1715) — a refusal
+                    // here would discard the whole review, not just the
+                    // degraded evidence. Try outside Immer; if that too
+                    // refuses, hold the entries for the publish-time flush
+                    // (inside the final producer, where a lost 'partial'
+                    // record can no longer cost the review output).
+                    if (recordOutsideImmer()) {
+                        this.logger.warn({
+                            message: `[AGENT] Failed to flush buffered formatter degradations via context, recorded outside Immer: ${flushErr instanceof Error ? flushErr.message : String(flushErr)}`,
+                            context: this.stageName,
+                            metadata: {
+                                organizationId:
+                                    context.organizationAndTeamData
+                                        ?.organizationId,
+                                prNumber,
+                                bufferedDegradations: 0,
+                            },
+                        });
+                    } else {
+                        this.logger.warn({
+                            message: `[AGENT] Buffered formatter degradations unrecorded after Immer and plain rebuild; holding for publish-time flush`,
+                            context: this.stageName,
+                            metadata: {
+                                organizationId:
+                                    context.organizationAndTeamData
+                                        ?.organizationId,
+                                prNumber,
+                                bufferedDegradations:
+                                    unflushedDegradations.length,
+                            },
+                        });
+                    }
                 }
             }
 
@@ -1711,6 +1738,19 @@ metadata: {
                 // through validSuggestionsByPR above.
                 draft.validSuggestions = fileLevelSuggestions;
                 draft.discardedSuggestions = allDiscarded;
+
+                // Last-resort flush for degradations that survived every
+                // earlier write attempt (Immer + plain rebuild refused after
+                // the formatter). Inside the final producer, a refusal can no
+                // longer pre-empt fileAnalysisResults/validSuggestions — the
+                // output is already being published in this same draft, so a
+                // lost 'partial' record never costs the whole review.
+                if (unflushedDegradations.length > 0) {
+                    if (!draft.errors) {
+                        draft.errors = [];
+                    }
+                    draft.errors.push(...unflushedDegradations);
+                }
             });
         } catch (error) {
             const durationMs = Date.now() - startTime;
