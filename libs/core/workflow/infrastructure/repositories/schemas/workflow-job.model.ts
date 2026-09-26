@@ -81,6 +81,16 @@ export class WorkflowJobModel extends CoreModel {
     @Column({ type: 'timestamp', nullable: true })
     startedAt?: Date;
 
+    // Leased job ownership (issue #1830). `leaseOwner` stamps which worker holds
+    // the job; `leaseExpiresAt` is renewed on a ~30s cadence while it runs, so
+    // the stale-job reaper can tell a dead worker (expired lease → reclaim in
+    // ~90s) from a merely slow job. Nullable for pre-lease rows.
+    @Column({ type: 'varchar', length: 255, nullable: true })
+    leaseOwner?: string;
+
+    @Column({ type: 'timestamp', nullable: true })
+    leaseExpiresAt?: Date;
+
     @Column({ type: 'timestamp', nullable: true })
     completedAt?: Date;
 
