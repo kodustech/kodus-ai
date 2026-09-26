@@ -4,6 +4,15 @@ jest.mock('@libs/core/observability', () => ({
     }),
 }));
 
+jest.mock('typeorm', () => ({
+    MoreThanOrEqual: jest.fn((value) => value),
+}));
+
+jest.mock(
+    '@libs/code-review/infrastructure/adapters/services/codeReviewHandlerService.service',
+    () => ({ CodeReviewHandlerService: class CodeReviewHandlerService {} }),
+);
+
 import { AutomationCodeReviewService } from './automationCodeReview';
 import { isPrReviewInProgressError } from '@libs/code-review/domain/errors/pr-review-in-progress.error';
 
@@ -77,9 +86,9 @@ describe('AutomationCodeReviewService', () => {
         it.each(['command', 'command-force'])(
             'raises so the request can be retried (origin %s)',
             async (origin) => {
-                const error = await service
-                    .run!(makePayload({ origin, triggerCommentId: 7 }))
-                    .catch((raised) => raised);
+                const error = await service.run!(
+                    makePayload({ origin, triggerCommentId: 7 }),
+                ).catch((raised) => raised);
 
                 expect(isPrReviewInProgressError(error)).toBe(true);
                 expect(error.gate).toBe('lock');
@@ -113,9 +122,9 @@ describe('AutomationCodeReviewService', () => {
                 { uuid: 'execution-1', createdAt: holderCreatedAt },
             ]);
 
-            const error = await service
-                .run!(makePayload({ origin: 'command' }))
-                .catch((raised) => raised);
+            const error = await service.run!(
+                makePayload({ origin: 'command' }),
+            ).catch((raised) => raised);
 
             expect(error.holderVisibleUntil).toEqual(
                 new Date(holderCreatedAt.getTime() + 30 * 60_000),
@@ -125,9 +134,9 @@ describe('AutomationCodeReviewService', () => {
         it('falls back to now when the holder has no execution row yet', async () => {
             automationExecutionService.find.mockResolvedValue([]);
 
-            const error = await service
-                .run!(makePayload({ origin: 'command' }))
-                .catch((raised) => raised);
+            const error = await service.run!(
+                makePayload({ origin: 'command' }),
+            ).catch((raised) => raised);
 
             expect(error.holderVisibleUntil.getTime()).toBeGreaterThan(
                 Date.now() + 29 * 60_000,
@@ -135,9 +144,9 @@ describe('AutomationCodeReviewService', () => {
         });
 
         it('never starts the pipeline', async () => {
-            await service
-                .run!(makePayload({ origin: 'command' }))
-                .catch(() => undefined);
+            await service.run!(makePayload({ origin: 'command' })).catch(
+                () => undefined,
+            );
 
             expect(
                 codeReviewHandlerService.handlePullRequest,
@@ -156,9 +165,9 @@ describe('AutomationCodeReviewService', () => {
         });
 
         it('raises so the request can be retried', async () => {
-            const error = await service
-                .run!(makePayload({ origin: 'command', triggerCommentId: 7 }))
-                .catch((raised) => raised);
+            const error = await service.run!(
+                makePayload({ origin: 'command', triggerCommentId: 7 }),
+            ).catch((raised) => raised);
 
             expect(isPrReviewInProgressError(error)).toBe(true);
             expect(error.gate).toBe('execution');
@@ -172,17 +181,17 @@ describe('AutomationCodeReviewService', () => {
         });
 
         it('releases the lock it acquired', async () => {
-            await service
-                .run!(makePayload({ origin: 'command' }))
-                .catch(() => undefined);
+            await service.run!(makePayload({ origin: 'command' })).catch(
+                () => undefined,
+            );
 
             expect(lock.release).toHaveBeenCalled();
         });
 
         it('does not report the refusal as an execution error', async () => {
-            await service
-                .run!(makePayload({ origin: 'command' }))
-                .catch(() => undefined);
+            await service.run!(makePayload({ origin: 'command' })).catch(
+                () => undefined,
+            );
 
             expect(
                 automationExecutionService.updateCodeReview,
@@ -203,6 +212,182 @@ describe('AutomationCodeReviewService', () => {
             expect(
                 codeReviewHandlerService.handlePullRequest,
             ).toHaveBeenCalled();
+        });
+    });
+
+    describe('business logic marker carry-over', () => {
+        const markers = {
+            businessLogicValidatedAt: '2026-09-01T00:00:00.000Z',
+            businessLogicHash: 'delivered-hash',
+        };
+
+        beforeEach(() => {
+            automationExecutionService.findLatestExecutionByFilters.mockImplementation(
+                async (filters) => {
+                    expect(
+                        automationExecutionService.createCodeReview,
+                    ).not.toHaveBeenCalled();
+                    return {
+                        dataExecution: filters.status
+                            ? { lastAnalyzedCommit: { sha: 'successful-sha' } }
+                            : {
+                                  ...markers,
+                                  lastAnalyzedCommit: { sha: 'failed-sha' },
+                              },
+                    };
+                },
+            );
+        });
+
+        it('uses failed-run markers without advancing the successful commit baseline', async () => {
+            await service.run!(makePayload());
+            expect(
+                codeReviewHandlerService.handlePullRequest.mock.calls[0][12],
+            ).toEqual({
+                ...markers,
+                lastAnalyzedCommit: { sha: 'successful-sha' },
+            });
+        });
+
+        it.each(['throw', 'validation', 'empty', 'error', 'skipped'])(
+            'preserves markers when the next run ends with %s',
+            async (outcome) => {
+                if (outcome === 'throw') {
+                    codeReviewHandlerService.handlePullRequest.mockRejectedValue(
+                        new Error('offline'),
+                    );
+                } else {
+                    codeReviewHandlerService.handlePullRequest.mockResolvedValue(
+                        outcome === 'empty'
+                            ? undefined
+                            : { statusInfo: { status: outcome } },
+                    );
+                }
+                await service.run!(
+                    makePayload(
+                        outcome === 'validation'
+                            ? {
+                                  validationError: {
+                                      errorType: 'invalid-config',
+                                  },
+                              }
+                            : {},
+                    ),
+                ).catch(() => undefined);
+                expect(
+                    automationExecutionService.updateCodeReview.mock.calls[0][1]
+                        .dataExecution,
+                ).toEqual(expect.objectContaining(markers));
+            },
+        );
+    });
+
+    describe('failure propagation', () => {
+        it('passes a marker first produced by an errored run into the following review', async () => {
+            let previous: any = null;
+            automationExecutionService.findLatestExecutionByFilters.mockImplementation(
+                async (filters) => (filters.status ? null : previous),
+            );
+            automationExecutionService.updateCodeReview.mockImplementation(
+                async (_filter, update) => {
+                    previous = update;
+                },
+            );
+            codeReviewHandlerService.handlePullRequest
+                .mockResolvedValueOnce({
+                    businessLogicValidatedAt: '2026-09-15T00:00:00.000Z',
+                    statusInfo: {
+                        status: 'error',
+                        message: 'Later stage failed',
+                    },
+                })
+                .mockResolvedValueOnce({ statusInfo: { status: 'success' } });
+
+            await expect(service.run!(makePayload())).rejects.toThrow(
+                'Later stage failed',
+            );
+            await service.run!(makePayload());
+
+            expect(
+                codeReviewHandlerService.handlePullRequest.mock.calls[1][12],
+            ).toEqual({
+                businessLogicValidatedAt: '2026-09-15T00:00:00.000Z',
+            });
+        });
+
+        it('rethrows execution persistence failures without masking the cause', async () => {
+            automationExecutionService.createCodeReview.mockRejectedValue(
+                new Error('execution database unavailable'),
+            );
+
+            await expect(service.run!(makePayload())).rejects.toThrow(
+                'execution database unavailable',
+            );
+            expect(
+                codeReviewHandlerService.handlePullRequest,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('marks validation failures once and raises a permanent failure', async () => {
+            const error = await service.run!(
+                makePayload({
+                    validationError: { errorType: 'invalid-config' },
+                }),
+            ).catch((raised) => raised);
+
+            expect(error.name).toBe('CodeReviewRunFailedError');
+            expect(error.errorClassification).toBe('PERMANENT');
+            expect(
+                automationExecutionService.updateCodeReview,
+            ).toHaveBeenCalledTimes(1);
+            expect(
+                codeReviewHandlerService.handlePullRequest,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('rethrows handler failures after recording the execution error', async () => {
+            codeReviewHandlerService.handlePullRequest.mockRejectedValue(
+                new Error('pipeline exploded'),
+            );
+
+            await expect(service.run!(makePayload())).rejects.toThrow(
+                'pipeline exploded',
+            );
+            expect(
+                automationExecutionService.updateCodeReview,
+            ).toHaveBeenCalled();
+        });
+
+        it('turns a critical pipeline outcome into a permanent job failure', async () => {
+            const loggerError = jest
+                .spyOn((service as any).logger, 'error')
+                .mockImplementation(() => undefined);
+            codeReviewHandlerService.handlePullRequest.mockResolvedValue({
+                statusInfo: {
+                    status: 'error',
+                    message: 'Code review failed: provider unavailable',
+                },
+            });
+
+            const error = await service.run!(makePayload()).catch(
+                (raised) => raised,
+            );
+
+            expect(error.name).toBe('CodeReviewRunFailedError');
+            expect(error.errorClassification).toBe('PERMANENT');
+            expect(
+                automationExecutionService.updateCodeReview,
+            ).toHaveBeenCalledTimes(1);
+            expect(loggerError).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    context: 'AutomationCodeReviewService',
+                    metadata: expect.objectContaining({
+                        organizationId: 'org-1',
+                        repositoryId: 'repo-1',
+                        pullRequestNumber: 42,
+                    }),
+                }),
+            );
         });
     });
 });

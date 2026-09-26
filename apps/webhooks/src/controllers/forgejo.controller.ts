@@ -1,6 +1,6 @@
 import { createLogger } from '@libs/core/log/logger';
 import { Controller, HttpStatus, Post, Req, Res } from '@nestjs/common';
-import { Request, Response } from 'express';
+import { Response } from 'express';
 
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { Public } from '@libs/identity/infrastructure/adapters/services/auth/public.decorator';
@@ -10,6 +10,10 @@ import {
     WebhookForgejoEvent,
     WebhookForgejoHookIssueAction,
 } from '@libs/platform/domain/platformIntegrations/types/webhooks/webhooks-forgejo.type';
+import {
+    RawBodyRequest,
+    WebhookSignatureService,
+} from '../services/webhook-signature.service';
 
 @Public()
 @Controller('forgejo')
@@ -18,10 +22,11 @@ export class ForgejoController {
 
     constructor(
         private readonly enqueueWebhookUseCase: EnqueueWebhookUseCase,
+        private readonly webhookSignatureService: WebhookSignatureService,
     ) {}
 
     @Post('/webhook')
-    handleWebhook(@Req() req: Request, @Res() res: Response) {
+    async handleWebhook(@Req() req: RawBodyRequest, @Res() res: Response) {
         // Forgejo uses X-Forgejo-Event header,
         // but also supports X-Gitea-Event, X-Gogs-Event and X-GitHub-Event for compatibility
         // @see https://forgejo.org/docs/next/user/webhooks/#event-information
@@ -30,6 +35,14 @@ export class ForgejoController {
             req.headers['x-github-event'] ||
             req.headers['x-gogs-event']) as string;
         const payload = req.body as any;
+
+        const signature = this.webhookSignatureService.validate(
+            PlatformType.FORGEJO,
+            req,
+        );
+        if (!signature.valid) {
+            return res.status(HttpStatus.UNAUTHORIZED).send('Unauthorized');
+        }
 
         // Filter unsupported events before enqueueing
         const supportedEvents: string[] = [
@@ -60,37 +73,37 @@ export class ForgejoController {
             }
         }
 
-        res.status(HttpStatus.OK).send('Webhook received');
-
-        setImmediate(() => {
-            void this.enqueueWebhookUseCase
-                .execute({
-                    platformType: PlatformType.FORGEJO,
+        try {
+            const deliveryId = (req.headers['x-forgejo-delivery'] ||
+                req.headers['x-gitea-delivery'] ||
+                req.headers['x-gogs-delivery']) as string;
+            const jobId = await this.enqueueWebhookUseCase.execute({
+                platformType: PlatformType.FORGEJO,
+                event,
+                payload,
+                ...(deliveryId ? { deliveryId } : {}),
+            });
+            this.logger.log({
+                message: `Webhook durably enqueued, ${event}`,
+                context: ForgejoController.name,
+                metadata: {
+                    jobId,
                     event,
-                    payload,
-                })
-                .then(() => {
-                    this.logger.log({
-                        message: `Webhook enqueued, ${event}`,
-                        context: ForgejoController.name,
-                        metadata: {
-                            event,
-                            repository: payload?.repository?.full_name,
-                            action: payload?.action,
-                        },
-                    });
-                })
-                .catch((error) => {
-                    this.logger.error({
-                        message: 'Error enqueuing webhook',
-                        context: ForgejoController.name,
-                        error,
-                        metadata: {
-                            event,
-                            platformType: PlatformType.FORGEJO,
-                        },
-                    });
-                });
-        });
+                    repository: payload?.repository?.full_name,
+                    action: payload?.action,
+                },
+            });
+            return res.status(HttpStatus.OK).send('Webhook received');
+        } catch (error) {
+            this.logger.error({
+                message: 'Error durably enqueuing webhook',
+                context: ForgejoController.name,
+                error,
+                metadata: { event, platformType: PlatformType.FORGEJO },
+            });
+            return res
+                .status(HttpStatus.SERVICE_UNAVAILABLE)
+                .send('Webhook persistence unavailable');
+        }
     }
 }
