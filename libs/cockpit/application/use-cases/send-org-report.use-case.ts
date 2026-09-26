@@ -93,6 +93,7 @@ export class SendOrgReportUseCase {
             ),
             repoRanking: data.repoRanking,
             highlights: data.highlights.map((h) => ({
+                repositoryId: h.repositoryId,
                 repository: h.repository,
                 detail: h.detail,
             })),

@@ -33,6 +33,8 @@ describe('CockpitReviewAnalyticsService (deterministic logic)', () => {
     const round = (v: unknown) => (service as any).round(v);
     const rate = (sent: number, implemented: number) =>
         (service as any).rate(sent, implemented);
+    const closedPrWhere = (q: CockpitRangeQuery, params: unknown[]) =>
+        (service as any).closedPrWhere(q, params);
 
     describe('round', () => {
         it('rounds to exactly two decimals (half-up at the 3rd place)', () => {
@@ -85,6 +87,92 @@ describe('CockpitReviewAnalyticsService (deterministic logic)', () => {
         it('does not treat sent=1 as the zero case (=== 0 boundary)', () => {
             expect(rate(1, 1)).toBe(1);
             expect(rate(1, 0)).toBe(0);
+        });
+    });
+
+    describe('operationalRepositoryFilter', () => {
+        it('uses indexed exact matching for a bare repository', () => {
+            const params: unknown[] = [];
+
+            const filter = (service as any).operationalRepositoryFilter(
+                'repo',
+                undefined,
+                params,
+            );
+
+            expect(filter).toContain('= $1');
+            expect(filter).not.toContain('LIKE');
+            expect(params).toEqual(['repo']);
+        });
+
+        it('uses repository identity to include qualified and legacy bare rows safely', () => {
+            const params: unknown[] = [];
+
+            const filter = (service as any).operationalRepositoryFilter(
+                'project/repo',
+                'repository-id',
+                params,
+            );
+
+            expect(filter).toContain('roe."repositoryId" = $1');
+            expect(filter).toContain(
+                'roe."repositoryId" IS NULL AND roe."repo_full_name" = $2',
+            );
+            expect(params).toEqual(['repository-id', 'project/repo']);
+        });
+
+        it('uses exact qualified matching when an old link has no repository identity', () => {
+            const params: unknown[] = [];
+
+            const filter = (service as any).operationalRepositoryFilter(
+                'project/repo',
+                undefined,
+                params,
+            );
+
+            expect(filter).toContain('roe."repo_full_name" = $1');
+            expect(filter).not.toContain('= $2');
+            expect(params).toEqual(['project/repo']);
+        });
+    });
+
+    describe('closedPrWhere repository filtering', () => {
+        it('prefers repositoryId over a duplicate repository full name', () => {
+            const params: unknown[] = [];
+
+            const where = closedPrWhere(
+                { ...Q, repository: 'platform/backend', repositoryId: 'repo-1' },
+                params,
+            );
+
+            expect(where).toContain('pr."repositoryId" = $4');
+            expect(where).toContain(
+                'pr."repositoryId" IS NULL AND pr.repo_full_name = $5',
+            );
+            expect(params).toEqual([
+                'org-1',
+                '2026-06-01',
+                '2026-06-30',
+                'repo-1',
+                'platform/backend',
+            ]);
+        });
+
+        it('falls back to repository full name for legacy callers', () => {
+            const params: unknown[] = [];
+
+            const where = closedPrWhere(
+                { ...Q, repository: 'platform/backend' },
+                params,
+            );
+
+            expect(where).toContain('pr.repo_full_name = $4');
+            expect(params).toEqual([
+                'org-1',
+                '2026-06-01',
+                '2026-06-30',
+                'platform/backend',
+            ]);
         });
     });
 

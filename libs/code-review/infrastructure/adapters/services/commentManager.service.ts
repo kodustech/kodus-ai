@@ -1089,21 +1089,38 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                 }
             }
 
-            await this.codeManagementService.updateIssueComment(
-                {
+            const updatedComment =
+                await this.codeManagementService.updateIssueComment(
+                    {
+                        organizationAndTeamData,
+                        prNumber,
+                        commentId,
+                        repository: {
+                            name: repository.name,
+                            id: repository.id,
+                        },
+                        body: commentBody,
+                        noteId,
+                        threadId,
+                    },
+                    undefined,
+                );
+
+            if (
+                platformType === PlatformType.AZURE_REPOS &&
+                threadId != null &&
+                updatedComment != null
+            ) {
+                await this.codeManagementService.markReviewCommentAsResolved({
                     organizationAndTeamData,
                     prNumber,
-                    commentId,
                     repository: {
                         name: repository.name,
                         id: repository.id,
                     },
-                    body: commentBody,
-                    noteId,
-                    threadId,
-                },
-                undefined,
-            );
+                    commentId: threadId,
+                });
+            }
 
             this.logger.log({
                 message: `Updated overall comment for PR#${prNumber}`,

@@ -4,6 +4,7 @@ export interface CockpitRangeQuery {
     startDate: string;
     endDate: string;
     repository?: string;
+    repositoryId?: string;
 }
 
 export interface CockpitValidation {
@@ -170,6 +171,7 @@ export interface IgnoredCriticalsHighlight {
 }
 
 export interface RepositoryHealthRow {
+    repositoryId: string | null;
     repository: string;
     prsReviewed: number;
     suggestionsSent: number;

@@ -317,16 +317,19 @@ describe('CockpitReportsService', () => {
         it('ranks only repos with >=10 reviews, by implementation rate', async () => {
             review.getRepositoriesHealth.mockResolvedValue([
                 {
+                    repositoryId: null,
                     repository: 'acme/small',
                     prsReviewed: 8,
                     implementationRate: 0.9,
                 },
                 {
+                    repositoryId: 'auth-id',
                     repository: 'acme/auth',
                     prsReviewed: 12,
                     implementationRate: 0.6,
                 },
                 {
+                    repositoryId: 'legacy-id',
                     repository: 'acme/legacy',
                     prsReviewed: 20,
                     implementationRate: 0.5,
@@ -361,6 +364,7 @@ describe('CockpitReportsService', () => {
                     q.startDate === START
                         ? [
                               {
+                                  repositoryId: 'auth-id',
                                   repository: 'acme/auth',
                                   prsReviewed: 30,
                                   implementationRate: 0.68,
@@ -368,6 +372,7 @@ describe('CockpitReportsService', () => {
                           ]
                         : [
                               {
+                                  repositoryId: null,
                                   repository: 'acme/auth',
                                   prsReviewed: 25,
                                   implementationRate: 0.54,
