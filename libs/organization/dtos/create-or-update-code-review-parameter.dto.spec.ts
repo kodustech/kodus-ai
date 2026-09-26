@@ -61,3 +61,39 @@ describe('CreateOrUpdateCodeReviewParameterDto — byokModelId', () => {
         expect(JSON.stringify(errors)).toContain('byokModelId');
     });
 });
+
+/**
+ * approvalLookbackDays is bounded at the API boundary, so an out-of-range
+ * window is answered with a 400 instead of being stored and then quietly
+ * replaced by the approval cron on every run.
+ */
+describe('CreateOrUpdateCodeReviewParameterDto — approvalLookbackDays', () => {
+    const errorsFor = async (approvalLookbackDays: unknown) => {
+        const dto = plainToInstance(CreateOrUpdateCodeReviewParameterDto, {
+            organizationAndTeamData: { teamId: 'team-1' },
+            configValue: { approvalLookbackDays },
+        });
+        const errors = await validate(dto, {
+            whitelist: false,
+            forbidUnknownValues: false,
+        });
+        return JSON.stringify(errors);
+    };
+
+    it('accepts a whole number of days from 1 to 3650', async () => {
+        expect(await errorsFor(1)).not.toContain('approvalLookbackDays');
+        expect(await errorsFor(30)).not.toContain('approvalLookbackDays');
+        expect(await errorsFor(3650)).not.toContain('approvalLookbackDays');
+    });
+
+    it('rejects zero, a negative number and anything above 3650', async () => {
+        expect(await errorsFor(0)).toContain('approvalLookbackDays');
+        expect(await errorsFor(-3)).toContain('approvalLookbackDays');
+        expect(await errorsFor(3651)).toContain('approvalLookbackDays');
+        expect(await errorsFor(36500)).toContain('approvalLookbackDays');
+    });
+
+    it('rejects a fractional number of days', async () => {
+        expect(await errorsFor(2.5)).toContain('approvalLookbackDays');
+    });
+});

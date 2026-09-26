@@ -4,10 +4,13 @@ import {
     IsBoolean,
     IsEnum,
     IsIn,
+    IsInt,
     IsNumber,
     IsObject,
     IsOptional,
     IsString,
+    Max,
+    Min,
     ValidateNested,
 } from 'class-validator';
 
@@ -19,6 +22,7 @@ import {
     CodeReviewVersion,
     GroupingModeSuggestions,
     LimitationType,
+    MAX_APPROVAL_LOOKBACK_DAYS,
     ReviewCadenceType,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { PullRequestMessageStatus } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
@@ -426,6 +430,14 @@ class CodeReviewConfigWithoutLLMProviderDto {
     @IsOptional()
     @IsBoolean()
     pullRequestApprovalActive?: boolean;
+
+    // Bounded here so an out-of-range window is answered with a 400 instead
+    // of being stored and then quietly replaced by the approval cron.
+    @IsOptional()
+    @IsInt()
+    @Min(1)
+    @Max(MAX_APPROVAL_LOOKBACK_DAYS)
+    approvalLookbackDays?: number;
 
     @IsOptional()
     @IsBoolean()

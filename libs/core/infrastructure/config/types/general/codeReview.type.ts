@@ -1,4 +1,7 @@
-import type { ContextLayer, ContextPack } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
+import type {
+    ContextLayer,
+    ContextPack,
+} from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
@@ -312,6 +315,32 @@ export type ImplementedSuggestionsToAnalyze = {
     existingCode: string;
 };
 
+/**
+ * Bounds for `approvalLookbackDays` below. They live beside the field because
+ * both ends of the setting need the same numbers: the DTO rejects an
+ * out-of-range value at the API boundary, and the approval cron re-checks
+ * whatever is already stored before using it.
+ *
+ * Seven days was the hardcoded window before the setting existed, so the
+ * default keeps that behaviour.
+ */
+export const DEFAULT_APPROVAL_LOOKBACK_DAYS = 7;
+
+/**
+ * Ten years is longer than any repository the approval cron runs against has
+ * been open, so a team that means "never expire" is already served by it.
+ *
+ * The bound also keeps the value away from the point where it stops being a
+ * window at all. The cron derives the start of the eligibility window with
+ * `date.setDate(date.getDate() - lookback)`, and past roughly 1e8 days that
+ * lands outside the range a `Date` can represent, so `setDate` yields an
+ * Invalid Date. An Invalid Date cannot be serialised into the eligibility
+ * query's filter, so the call rejects; the rejection is swallowed by the
+ * `Promise.allSettled` the per-team work runs inside, and the team is skipped
+ * on every run with nothing logged.
+ */
+export const MAX_APPROVAL_LOOKBACK_DAYS = 3650;
+
 export type CodeReviewConfig = {
     ignorePaths: string[];
     reviewMode?: 'fast' | 'normal' | 'deep';
@@ -330,6 +359,17 @@ export type CodeReviewConfig = {
     kodyMemoryRules?: Partial<IKodyRule>[];
     suggestionControl?: SuggestionControlConfig;
     pullRequestApprovalActive: boolean;
+    /**
+     * How many days back the approval cron looks for a completed review
+     * when deciding which open pull requests are eligible for automated
+     * approval. A review older than this is never considered again, so a
+     * clean review on a long-lived PR silently falls out of the window.
+     * A positive integer no greater than `MAX_APPROVAL_LOOKBACK_DAYS`. The
+     * API rejects anything else; a stored value above the maximum is
+     * clamped to it, and any other invalid value falls back to
+     * `DEFAULT_APPROVAL_LOOKBACK_DAYS`.
+     */
+    approvalLookbackDays?: number;
     kodusConfigFileOverridesWebPreferences: boolean;
     isRequestChangesActive?: boolean;
     kodyRulesGeneratorEnabled?: boolean;

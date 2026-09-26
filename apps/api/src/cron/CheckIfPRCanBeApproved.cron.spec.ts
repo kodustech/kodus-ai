@@ -77,6 +77,112 @@ describe('CheckIfPRCanBeApprovedCronProvider (deterministic logic)', () => {
         jest.clearAllMocks();
     });
 
+    describe('resolveApprovalLookbackDays', () => {
+        let provider: CheckIfPRCanBeApprovedCronProvider;
+
+        beforeEach(() => {
+            provider = buildProvider(buildDeps());
+        });
+
+        // Called with the parameter's `configValue` as the update use-case
+        // stores it: `{ id, configs, repositories }`, with the global
+        // settings under `configs`.
+        const call = (configValue?: any): number =>
+            (provider as any).resolveApprovalLookbackDays(configValue, {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            });
+        const withLookback = (value: unknown) => ({
+            id: 'global',
+            configs: { approvalLookbackDays: value },
+            repositories: [],
+        });
+
+        // The window was a hardcoded seven days before the setting existed;
+        // a team that never set it must keep exactly that behaviour.
+        it('returns the default of 7 when there is no config', () => {
+            expect(call(undefined)).toBe(7);
+        });
+
+        it('returns the default of 7 when the field is unset', () => {
+            expect(call({ id: 'global', configs: {}, repositories: [] })).toBe(
+                7,
+            );
+            expect(call({ id: 'global', repositories: [] })).toBe(7);
+            expect(call(withLookback(null))).toBe(7);
+        });
+
+        it('returns a configured positive integer as-is', () => {
+            expect(call(withLookback(30))).toBe(30);
+            expect(call(withLookback(1))).toBe(1);
+        });
+
+        // The setting lives under `configs`, never at the top level of
+        // `configValue`. A first version of this change read the top level,
+        // so a real saved value was never found; this pins the location.
+        it('ignores a value placed at the top level of configValue', () => {
+            expect(
+                call({
+                    id: 'global',
+                    approvalLookbackDays: 30,
+                    configs: {},
+                    repositories: [],
+                }),
+            ).toBe(7);
+        });
+
+        // A window of zero or less would make every review ineligible, and a
+        // fractional day is not a value the query can be trusted with, so
+        // each of these falls back rather than being passed through.
+        it('falls back to the default for zero or a negative number', () => {
+            expect(call(withLookback(0))).toBe(7);
+            expect(call(withLookback(-3))).toBe(7);
+        });
+
+        it('falls back to the default for a non-integer', () => {
+            expect(call(withLookback(2.5))).toBe(7);
+            expect(call(withLookback(Number.NaN))).toBe(7);
+        });
+
+        it('falls back to the default for a value that is not a number', () => {
+            expect(call(withLookback('30'))).toBe(7);
+            expect(call(withLookback(true))).toBe(7);
+        });
+
+        // Ten years is longer than any repository this cron runs against has
+        // been open, so a team that means "never expire" is already served by
+        // the largest accepted value.
+        it('returns the largest accepted window as-is', () => {
+            expect(call(withLookback(3650))).toBe(3650);
+        });
+
+        // Only rows saved before the API validated the range can hold a value
+        // above the maximum. A team that stored 36500 meant "never expire", so
+        // it gets the widest window rather than the narrowest.
+        it('clamps a value above the maximum to the maximum', () => {
+            expect(call(withLookback(3651))).toBe(3650);
+            expect(call(withLookback(36500))).toBe(3650);
+        });
+
+        // Far enough past the maximum the value stops being a window at all:
+        // subtracting it lands outside the range a Date can represent, and the
+        // Invalid Date that comes out cannot be serialised into the
+        // eligibility query's filter, so the call rejects. That rejection is
+        // swallowed by the `Promise.allSettled` the per-team work runs inside,
+        // and the team is skipped on every run with nothing logged. The probe
+        // below is the same arithmetic the call site does, so this pins the
+        // reason for the bound and not just the number.
+        it('clamps a window large enough to break the date arithmetic', () => {
+            const overflowing = 1_000_000_000;
+
+            const probe = new Date();
+            probe.setDate(probe.getDate() - overflowing);
+            expect(Number.isNaN(probe.getTime())).toBe(true);
+
+            expect(call(withLookback(overflowing))).toBe(3650);
+        });
+    });
+
     describe('getLastAnalyzedCommitSha', () => {
         let provider: CheckIfPRCanBeApprovedCronProvider;
 
@@ -134,9 +240,9 @@ describe('CheckIfPRCanBeApprovedCronProvider (deterministic logic)', () => {
         });
 
         it('prefers .commitSha over .commit.sha when .sha is absent', () => {
-            expect(
-                call({ commitSha: 'sha-b', commit: { sha: 'sha-c' } }),
-            ).toBe('sha-b');
+            expect(call({ commitSha: 'sha-b', commit: { sha: 'sha-c' } })).toBe(
+                'sha-b',
+            );
         });
     });
 

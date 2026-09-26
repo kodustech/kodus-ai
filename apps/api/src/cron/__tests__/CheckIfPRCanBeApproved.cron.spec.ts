@@ -130,6 +130,61 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         };
     };
 
+    // The eligibility query is called with (windowStart, now, teamAutomationId).
+    // Measured in whole days so a DST shift inside the window cannot move the
+    // result by an hour.
+    const windowDays = (deps: any): number => {
+        const [from, to] =
+            deps.automationExecutionService
+                .findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId
+                .mock.calls[0];
+        return Math.round(
+            (to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000),
+        );
+    };
+
+    it('looks back 7 days for eligible reviews when the team has not set approvalLookbackDays', async () => {
+        const { cron, deps } = makeCron();
+        deps.automationExecutionService.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId.mockResolvedValue(
+            [],
+        );
+
+        await cron.handleCron();
+
+        expect(
+            deps.automationExecutionService
+                .findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId,
+        ).toHaveBeenCalledWith(
+            expect.any(Date),
+            expect.any(Date),
+            'team-automation-1',
+        );
+        expect(windowDays(deps)).toBe(7);
+    });
+
+    it("uses the team's approvalLookbackDays as the eligibility window", async () => {
+        const { cron, deps } = makeCron();
+        // A review completed 20 days ago is invisible to the hardcoded
+        // seven-day window; with a 30-day lookback it is inside. The value
+        // sits under `configValue.configs`, where the update use-case writes
+        // the global settings — the shape the cron reads in production.
+        deps.parametersService.findOne.mockResolvedValue({
+            ...makeParameter(),
+            configValue: {
+                ...makeParameter().configValue,
+                id: 'global',
+                configs: { approvalLookbackDays: 30 },
+            },
+        });
+        deps.automationExecutionService.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId.mockResolvedValue(
+            [],
+        );
+
+        await cron.handleCron();
+
+        expect(windowDays(deps)).toBe(30);
+    });
+
     it('processes a successful PR when a different PR is in progress for the same team', async () => {
         const { cron, deps } = makeCron();
 
