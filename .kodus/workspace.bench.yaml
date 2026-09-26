@@ -1,0 +1,21 @@
+version: 1
+# Recall/precision benchmark host for #1821 (evals/investigation/protocolo.sh).
+# No compose stack: the harness runs in node against real clones of the five
+# benchmark repos. See evals/investigation/instructions-setup.md.
+setup:
+  # the harness is documented against Node 24; the base image ships 22
+  - node -v | grep -q '^v24' || (sudo npm install -g n && sudo n 24)
+  - pnpm install
+  - command -v rg >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep) || true
+  - mkdir -p "$HOME/projects/benchmark" && cd "$HOME/projects/benchmark" && for spec in calcom/cal.com:cal.com getsentry/sentry:sentry keycloak/keycloak:keycloak grafana/grafana:grafana discourse/discourse:discourse; do repo=${spec%%:*}; dir=${spec##*:}; [ -d "$dir/.git" ] || git clone --filter=blob:none "https://github.com/$repo.git" "$dir" || exit 1; done
+files:
+  copy: [.env, .env.local]
+services:
+  # runo requires one service; the benchmark is launched with `runo exec`
+  idle:
+    run: sleep infinity
+limits:
+  instance: t3.xlarge
+  disk: 100gb
+  # runs take ~1h30 each with no SSH session attached; suspend by hand when done
+  idle_suspend: "off"
