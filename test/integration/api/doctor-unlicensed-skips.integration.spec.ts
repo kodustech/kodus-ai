@@ -298,6 +298,29 @@ describe('doctor missing-seat count (real Postgres)', () => {
         expect(await count()).toBe(0);
     });
 
+    itPg(
+        'a skip before the seat gate recorded only on the stage log does not hide a seat skip',
+        async () => {
+            await execution({
+                repo: 'r8',
+                pr: 11,
+                status: 'skipped',
+                errorMessage: NOT_LICENSED,
+                at: minutesAgo(30),
+            });
+            await execution({
+                repo: 'r8',
+                pr: 11,
+                status: 'skipped',
+                errorMessage: null,
+                stageMessage: 'User is ignored by configuration.',
+                at: minutesAgo(10),
+            });
+
+            expect(await count()).toBe(1);
+        },
+    );
+
     it.each([
         ['an ignored author', 'User is ignored by configuration.'],
         ['a locked PR', 'PR is Locked'],

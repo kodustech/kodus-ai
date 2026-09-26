@@ -87,7 +87,10 @@ export const UNLICENSED_SKIPS_SQL = `WITH latest AS (
                  WHERE ta."teamUuid" = $1
                    AND ae."createdAt" >= $2
                    AND NOT (ae.status = 'skipped'
-                            AND COALESCE(ae."errorMessage", '') ILIKE ANY ($3::text[]))
+                            AND (COALESCE(ae."errorMessage", '') ILIKE ANY ($3::text[])
+                                 OR EXISTS (SELECT 1 FROM code_review_execution cre
+                                             WHERE cre.automation_execution_id = ae.uuid
+                                               AND cre.message ILIKE ANY ($3::text[]))))
                  ORDER BY ae."repositoryId", ae."pullRequestNumber", ae."createdAt" DESC)
              SELECT COUNT(*)::int AS count
                FROM latest l
