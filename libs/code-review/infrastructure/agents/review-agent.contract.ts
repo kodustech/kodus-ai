@@ -823,6 +823,9 @@ export interface AgentLoopSecrets {
      *  subscription). Production leaves it unset; when set it also reaches the
      *  verifier, since finder and verify share one runner. */
     prebuiltModel?: unknown;
+    /** Eval-only: the model for the one-shot prose recovery, set only when the
+     *  managed default cannot reach the eval's model (the Codex subscription). */
+    prebuiltRecoveryModel?: unknown;
     gitHubToken?: string;
     /** Cross-repo linked-repo access for agent tools (#1576). */
     linkedRepoAccess?: LinkedRepoAccess;

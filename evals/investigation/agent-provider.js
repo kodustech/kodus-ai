@@ -1421,6 +1421,15 @@ class InvestigationAgentProvider {
                     // seam that is — without it the run silently uses the env
                     // default under the requested model's label.
                     prebuiltModel: model,
+                    // A recuperacao de prosa e uma chamada avulsa. Modelos com chave
+                    // (DeepSeek etc.) ja chegam nela pelo padrao do ambiente
+                    // (applyModelEnv), que sabe o formato de JSON do provedor; so a
+                    // assinatura do Codex nao tem esse caminho. Passar o modelo pronto
+                    // para todos fez o DeepSeek falhar "did not match schema" (26/09).
+                    prebuiltRecoveryModel:
+                        require('../shared/tier0-models').TIER0[process.env.RECALL_MODEL || '']?.provider === 'codex_subscription'
+                            ? model
+                            : undefined,
                 },
             );
 

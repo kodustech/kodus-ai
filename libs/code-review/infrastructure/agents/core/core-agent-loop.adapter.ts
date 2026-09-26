@@ -764,6 +764,28 @@ export async function runAgentLoopViaCore(
                                 spec,
                             }];
                         }
+                        // Simulacao em PARALELO com os agentes, sem <AlreadyRaised>:
+                        // mede se a fase 1 (que soma ~1 min por PR) paga a espera.
+                        if (extra === 'exp-sim-paralela') {
+                            return [{
+                                label: experimentalExtraLabel('sim-paralela'),
+                                phase: 0,
+                                prompt: buildSimulationPrompt(diff, input.priorFindings, grafoParaOsAgentes),
+                                spec: buildSpecWithLedger(ledger(), input.maxSteps ?? 12, SIMULATION_SYSTEM_PROMPT),
+                            }];
+                        }
+                        // Os agentes de classe de novo, com teto de passos N: mede
+                        // o teto na mesma rodada (exp-p8 = copia de cada um com 8).
+                        const teto = /^exp-p(\d+)$/.exec(extra);
+                        if (teto) {
+                            const n = Number(teto[1]);
+                            return microGroups.map((group) => ({
+                                label: experimentalExtraLabel(`p${n}-${group.id}`),
+                                phase: 0,
+                                prompt: buildMicroAgentPrompt(group, diff, grafoParaOsAgentes, input.microAgentTeto ?? 2),
+                                spec: buildSpecWithLedger(ledger(), n, MICRO_AGENT_SYSTEM_PROMPT),
+                            }));
+                        }
                         const exp = EXPERIMENTAL_AGENTS.find((g) => `exp-${g.id}` === extra);
                         if (!exp) throw new Error(`agente experimental desconhecido: ${extra}`);
                         return [{
@@ -903,7 +925,7 @@ export async function runAgentLoopViaCore(
                     secrets.byokConfig,
                     input.telemetryMetadata?.organizationId,
                     input.usageRunName,
-                    secrets.prebuiltModel as LanguageModel | undefined,
+                    secrets.prebuiltRecoveryModel as LanguageModel | undefined,
                 ),
         },
         { prompt: finderPrompt },

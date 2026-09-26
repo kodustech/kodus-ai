@@ -298,6 +298,9 @@ def secao_formula():
     print('   anteriores; os pesos publicados nao entram aqui para nao haver dois numeros.)')
     a = montar_grupos('ver')
     tabela('A) atribuidor + veracidade', avaliar(a, BASE_FEATS))
+    # D: a veracidade e uma chamada a mais por PR (~0,1-1 min). Os mesmos grupos
+    # de A, sem as duas features que dependem dela: mede se ela paga a espera.
+    tabela('D) so atribuidor (sem veracidade)', avaliar(a, [k for k in BASE_FEATS if k not in ('ver','prod')]))
     b = montar_grupos('ambos')
     tabela('B) atribuidor + veracidade + verify', avaliar(b, BASE_FEATS+['vscore','prodsc']))
     c = montar_grupos('verify')
