@@ -8,6 +8,7 @@
 #   2. judge  ||  atribuidor        — independentes, rodam juntos
 #   3. veracidade  ||  verify       — os dois precisam do agrupamento, e so
 #   4. relatorio    offline, sem LLM
+#   5. debugger     pagina HTML do trace, tambem offline
 #
 # O judge julga TODOS os candidatos, nao os representantes: sem isso nao existe
 # TP/FP por agente, nem pre-reducer, e a cobertura de um grupo passaria a
@@ -93,5 +94,10 @@ node verify-apos-atribuidor.js --dump="$NOME" --grupos="results/seletor-$NOME.js
 PID_F=$!
 wait $PID_V; wait $PID_F
 
-echo; echo "==== 4/4 relatorio ===="
+echo; echo "==== 4/5 relatorio ===="
 python3 relatorio.py --run="$NOME"
+
+echo; echo "==== 5/5 trace debugger ===="
+# So le artefato ja gravado: nenhuma chamada de LLM, instantaneo. Pode ser
+# regerado a qualquer momento depois (ex.: depois de acrescentar o verify).
+node build-trace-debugger.js --run="$NOME"

@@ -177,7 +177,7 @@ module.exports = async (output, context) => {
         reason,
         // Os dois lados acrescentaram campos ao mesmo objeto, com esquemas de
         // nome diferentes para as mesmas contas. Mantidos os dois: cada campo
-        // tem consumidor (findingHit -> typesafe-filter e build-pr-debugger,
+        // tem consumidor (findingHit -> typesafe-filter e build-trace-debugger,
         // goldenResults -> rejudge, tpFindings/fpFindings -> confirm-gate), e
         // derrubar um quebra um script em silencio.
         metadata: {

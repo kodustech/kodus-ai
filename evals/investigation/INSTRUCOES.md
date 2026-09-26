@@ -75,10 +75,7 @@ anteriores entram na página.
 Gerado sozinho no fim de todo run que tenha `RECALL_DUMP`. Para gerar à mão:
 
 ```bash
-node evals/investigation/build-pr-debugger.js \
-  --dump=<dir do RECALL_DUMP> \
-  --results=<arquivo.json> \
-  --out=<pagina.html>
+node evals/investigation/build-trace-debugger.js --run=<nome-da-rodada>
 ```
 
 São 13 verificações **computadas** por PR — não asseridas. A contagem de
@@ -458,8 +455,7 @@ de "nunca encontrados" pulou de 40 para 48 quando corrigido.
 | `evals/investigation/materialize-full-diff.js` | grava o diff completo |
 | `evals/investigation/build-call-graphs.js` | grava o call graph do corpus |
 | `evals/investigation/build-pr-callgraph.js` | monta o `<CallGraph>` do prompt em tempo de run |
-| `evals/investigation/build-pr-debugger.js` | calcula as verificações do debugger |
-| `evals/investigation/pr-debugger-template.js` | o HTML do debugger |
+| `evals/investigation/build-trace-debugger.js` | monta a página de trace (ver `instructions-trace-debugger.md`) |
 | `evals/investigation/langfuse-traces.js` | resolve os traces via API |
 | `evals/investigation/eval-observability.js` | a porta `LlmObservability` do eval |
 | `libs/code-review/infrastructure/agents/core/micro-agents.ts` | os 14 microagentes |

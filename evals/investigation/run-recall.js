@@ -730,10 +730,14 @@ async function main() {
         console.warn(`langfuse flush: ${String(err).slice(0, 120)}`);
     }
 
-    // The PR debugger, built from the dump this run just wrote. Generated here
-    // rather than by hand because a diagnostic nobody remembers to run is a
-    // diagnostic nobody reads — and the three measurement bugs this harness hid
-    // were each found by reading a dump after the fact.
+    // O trace debugger, construido a partir do dump que esta rodada acabou de
+    // escrever. Gerado aqui e nao a mao porque diagnostico que alguem precisa
+    // lembrar de rodar e diagnostico que ninguem le — e os tres bugs de medicao
+    // que este harness escondeu foram cada um achado lendo dump depois do fato.
+    //
+    // Nesta altura o judge ainda nao rodou, entao a pagina sai sem metrica de
+    // qualidade. O protocolo a regera no fim, ja com a matriz; e ela pode ser
+    // regerada quantas vezes quiser, porque so le arquivo gravado.
     if (process.env.RECALL_DUMP) {
         const debuggerPath = outputPath.replace(/\.json$/, '') + '.debug.html';
         try {
@@ -741,12 +745,18 @@ async function main() {
             execFileSync(
                 process.execPath,
                 [
-                    path.join(__dirname, 'build-pr-debugger.js'),
-                    `--dump=${process.env.RECALL_DUMP}`,
-                    `--results=${path.basename(outputPath)}`,
+                    path.join(__dirname, 'build-trace-debugger.js'),
+                    `--run=${path.basename(process.env.RECALL_DUMP)}`,
                     `--out=${debuggerPath}`,
                 ],
-                { stdio: 'pipe', timeout: 300_000 },
+                {
+                    stdio: 'pipe',
+                    timeout: 300_000,
+                    env: {
+                        ...process.env,
+                        POOL_ROOT: path.dirname(process.env.RECALL_DUMP),
+                    },
+                },
             );
             console.log(
                 `debugger: ${path.relative(process.cwd(), debuggerPath)}`,
