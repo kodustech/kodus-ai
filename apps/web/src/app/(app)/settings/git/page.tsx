@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Badge } from "@components/ui/badge";
 import { Page } from "@components/ui/page";
 import { getIntegrationConfig } from "@services/integrations/integrationConfig/fetch";
+import { getWebhookCreationFailures } from "@services/codeManagement/fetch";
 import { getConnections } from "@services/setup/fetch";
 import { ErrorCard } from "src/core/components/ui/error-card";
 import {
@@ -37,6 +38,9 @@ export default async function GitSettings() {
     let organizationMembersRaw: Awaited<
         ReturnType<typeof getOrganizationMembers>
     > = MEMBERS_UNAVAILABLE;
+    let webhookFailures: Awaited<
+        ReturnType<typeof getWebhookCreationFailures>
+    > = {};
     let connectionsError = false;
 
     try {
@@ -45,11 +49,13 @@ export default async function GitSettings() {
             connectedRepositories,
             autoLicenseAssignmentConfig,
             organizationMembersRaw,
+            webhookFailures,
         ] = await Promise.all([
             getConnections(teamId),
             getIntegrationConfig({ teamId }),
             getAutoLicenseAssignmentConfig().catch(() => undefined),
             getOrganizationMembers({ teamId }).catch(() => MEMBERS_UNAVAILABLE),
+            getWebhookCreationFailures(teamId).catch(() => ({})),
         ]);
     } catch (err) {
         console.error("[GitSettings] error fetching data:", err);
@@ -133,6 +139,7 @@ export default async function GitSettings() {
                             <GitRepositoriesTable
                                 platformName={gitConnection.platformName}
                                 repositories={connectedRepositories}
+                                webhookFailures={webhookFailures}
                             />
                         ) : (
                             <GitProviders />
