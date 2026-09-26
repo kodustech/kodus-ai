@@ -80,6 +80,8 @@ import {
     CROSS_FILE_AGENT_ID,
     semCrossFile,
     xfileExtraLabel,
+    EXPERIMENTAL_AGENTS,
+    experimentalExtraLabel,
 } from '@libs/code-review/infrastructure/agents/core/micro-agents';
 import {
     SIMULATION_SYSTEM_PROMPT,
@@ -730,6 +732,7 @@ export async function runAgentLoopViaCore(
                                   group,
                                   rawDiffPrompt(input.changedFiles, input.fileTiers, input.diffTierBudget),
                                   grafoParaOsAgentes,
+                                  input.microAgentTeto ?? 2,
                               ),
                               spec: buildSpecWithLedger(
                                   ledger(),
@@ -738,31 +741,37 @@ export async function runAgentLoopViaCore(
                               ),
                           }))
                         : []),
-                    // Braços extras do cross-file (so o eval liga). Mesma fase
-                    // e mesmo spec do agente original; so muda o rotulo e, no
-                    // braço de grafo, o bloco <CallGraph> no prompt.
-                    ...(() => {
-                        const xfile = MICRO_AGENTS.find(
-                            (g) => g.id === CROSS_FILE_AGENT_ID,
-                        );
-                        if (!xfile || !input.microAgentExtras?.length) return [];
-                        return input.microAgentExtras.map((extra) => ({
-                            label: xfileExtraLabel(extra),
+                    // Braços extras (so o eval liga): o cross-file com grafo ou
+                    // numa segunda amostra, e os agentes experimentais. Mesma fase
+                    // e mesmo spec dos agentes de classe; ficam fora do
+                    // <AlreadyRaised> da simulacao (semCrossFile).
+                    ...(input.microAgentExtras ?? []).flatMap((extra) => {
+                        const xfile = MICRO_AGENTS.find((g) => g.id === CROSS_FILE_AGENT_ID);
+                        const diff = rawDiffPrompt(input.changedFiles, input.fileTiers, input.diffTierBudget);
+                        const spec = buildSpecWithLedger(ledger(), input.maxSteps ?? 12, MICRO_AGENT_SYSTEM_PROMPT);
+                        if (extra === 'xfile-grafo' || extra === 'xfile-b') {
+                            if (!xfile) return [];
+                            return [{
+                                label: xfileExtraLabel(extra),
+                                phase: 0,
+                                prompt: buildMicroAgentPrompt(
+                                    xfile,
+                                    diff,
+                                    extra === 'xfile-grafo' ? input.xfileCallGraph : grafoParaOsAgentes,
+                                    input.microAgentTeto ?? 2,
+                                ),
+                                spec,
+                            }];
+                        }
+                        const exp = EXPERIMENTAL_AGENTS.find((g) => `exp-${g.id}` === extra);
+                        if (!exp) throw new Error(`agente experimental desconhecido: ${extra}`);
+                        return [{
+                            label: experimentalExtraLabel(exp.id),
                             phase: 0,
-                            prompt: buildMicroAgentPrompt(
-                                xfile,
-                                rawDiffPrompt(input.changedFiles, input.fileTiers, input.diffTierBudget),
-                                extra === 'xfile-grafo'
-                                    ? input.xfileCallGraph
-                                    : grafoParaOsAgentes,
-                            ),
-                            spec: buildSpecWithLedger(
-                                ledger(),
-                                input.maxSteps ?? 12,
-                                MICRO_AGENT_SYSTEM_PROMPT,
-                            ),
-                        }));
-                    })(),
+                            prompt: buildMicroAgentPrompt(exp, diff, grafoParaOsAgentes, input.microAgentTeto ?? 2),
+                            spec,
+                        }];
+                    }),
                     // FASE 1: depois dos agentes de classe, e vendo o que eles
                     // levantaram. Antes esta passada ia junto na fase 0 e o
                     // bloco <AlreadyRaised> so podia ser preenchido por fora
@@ -991,6 +1000,7 @@ export async function runAgentLoopViaCore(
                               relevantLinesEnd: d.finding.relevantLinesEnd,
                               label: d.finding.label,
                               severity: d.finding.severity,
+                              reason: d.finding.reason,
                               producedBy: (d.finding as { producedBy?: string })
                                   .producedBy,
                           },

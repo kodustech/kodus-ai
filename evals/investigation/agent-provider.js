@@ -1250,11 +1250,21 @@ class InvestigationAgentProvider {
                     ...(process.env.RECALL_MICRO_GRAPH === '1'
                         ? { microAgentCallGraph: true }
                         : {}),
-                    ...(extrasXfile.length
+                    // RECALL_MICRO_EXP=id1,id2: agentes experimentais como passadas
+                    // extras (EXPERIMENTAL_AGENTS em micro-agents.ts).
+                    ...((extrasXfile.length || process.env.RECALL_MICRO_EXP)
                         ? {
-                              microAgentExtras: extrasXfile.map((x) => `xfile-${x}`),
+                              microAgentExtras: [
+                                  ...extrasXfile.map((x) => `xfile-${x}`),
+                                  ...(process.env.RECALL_MICRO_EXP || '').split(',').map((x) => x.trim()).filter(Boolean).map((x) => `exp-${x}`),
+                              ],
                               xfileCallGraph,
                           }
+                        : {}),
+                    // RECALL_MICRO_TETO=4: teto de achados por agente de classe,
+                    // ordenados do mais seguro ao menos seguro.
+                    ...(process.env.RECALL_MICRO_TETO
+                        ? { microAgentTeto: Number(process.env.RECALL_MICRO_TETO) }
                         : {}),
                     ...(/^(sim|1\+sim)$/.test(process.env.RECALL_MICRO_AGENTS || '')
                         ? {

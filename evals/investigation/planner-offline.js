@@ -59,6 +59,7 @@ function idsDaResposta(texto) {
     const arquivos = fs.readdirSync(path.join(S, DUMP)).filter((f) => f.endsWith('.raw.txt'));
     const out = {};
     let falhas = 0;
+    let erros = 0;
     for (let b = 0; b < arquivos.length; b += PAR) {
         await Promise.all(arquivos.slice(b, b + PAR).map(async (f) => {
             const d = JSON.parse(fs.readFileSync(path.join(S, DUMP, f), 'utf8'));
@@ -67,8 +68,15 @@ function idsDaResposta(texto) {
             const prompt = buildMicroPlannerPrompt(diff) +
                 '\n\nRespond with JSON only: {"run":[{"id":"<specialist id>","why":"<one sentence>"}]}';
             let ids = null;
+            let ultimoErro = null;
             for (let t = 0; t < 3 && !ids; t++) {
-                try { ids = idsDaResposta((await generateText({ model: buildModel(MODELO), prompt })).text); } catch { /* tenta de novo */ }
+                try { ids = idsDaResposta((await generateText({ model: buildModel(MODELO), prompt })).text); } catch (e) { ultimoErro = e; }
+            }
+            // Erro de API NAO e escolha do planner. No produto ele cai em "todos";
+            // aqui isso mascararia uma chave faltando como resultado (26/09).
+            if (!ids && ultimoErro) {
+                erros++;
+                console.log(`  ERRO ${d.caseId}: ${String(ultimoErro.message || ultimoErro).slice(0, 160)}`);
             }
             // Mesma regra do produto: resposta vazia ou invalida = todos os agentes.
             const escolhidos = (ids || []).filter((id) => validos.has(id));
@@ -79,5 +87,6 @@ function idsDaResposta(texto) {
     }
     fs.writeFileSync(OUT, JSON.stringify(out, null, 1));
     const media = Object.values(out).reduce((a, x) => a + x.length, 0) / Object.keys(out).length;
-    console.log(`\n${Object.keys(out).length} PRs · media ${media.toFixed(1)} agentes por PR · ${falhas} caíram no fallback\n-> ${OUT}`);
+    console.log(`\n${Object.keys(out).length} PRs · media ${media.toFixed(1)} agentes por PR · ${falhas} caíram no fallback · ${erros} com ERRO de chamada\n-> ${OUT}`);
+    if (erros) { console.error('ABORTADO: houve erro de chamada; o plano nao mede o planner.'); process.exit(2); }
 })().catch((e) => { console.error(e); process.exit(1); });

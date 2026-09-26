@@ -656,7 +656,11 @@ export interface AgentLoopInput {
      *  <CallGraph> de `xfileCallGraph` no prompt; `xfile-b` = uma segunda
      *  amostra identica. Nenhum dos dois entra no <AlreadyRaised> da simulacao,
      *  entao remover os candidatos deles reproduz a review sem eles. */
-    microAgentExtras?: Array<'xfile-grafo' | 'xfile-b'>;
+    microAgentExtras?: Array<'xfile-grafo' | 'xfile-b' | `exp-${string}`>;
+    /** Teto de achados por agente de classe (padrao 2, o texto de sempre). Acima
+     *  de 2 o agente ordena do mais seguro ao menos seguro, e os dois primeiros
+     *  reproduzem o teto 2 dentro da mesma rodada. So o eval muda. */
+    microAgentTeto?: number;
     /** O grafo do braço `xfile-grafo`. Campo proprio de proposito: passar pelo
      *  `callGraph` liga a ferramenta de chamadores para TODOS os agentes e
      *  contamina o braço de controle. */
@@ -969,6 +973,9 @@ export interface VerificationDecisionTrace {
         relevantLinesEnd?: number;
         label?: string;
         severity?: string;
+        /** O percurso do achado: sem ele o filtro de contrato do reducer
+         *  descartaria o achado de novo numa simulacao "sem verificador". */
+        reason?: string;
         producedBy?: string;
     };
 }

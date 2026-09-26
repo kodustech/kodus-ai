@@ -179,8 +179,13 @@ function comEsforco(model, modelId) {
         // RECALL_FILTRO_CONTRATO=0, para poder medir o contrafactual.
         if (process.env.RECALL_FILTRO_CONTRATO !== '0') {
             const ESCALA = new Set(['low', 'medium', 'high', 'critical']);
+            // Achado devolvido pelo verificador (derivar-sem-verificador.py) de
+            // rodada anterior a 26/09 nao tem `reason` gravado: passa so pela
+            // escala de severidade, senao o contrato o derrubaria de novo e a
+            // simulacao "sem verificador" mediria o verificador outra vez.
             cands = cands.filter(
-                (c) => ESCALA.has(String(c?.severity || '').toLowerCase()) && !!c?.reason,
+                (c) => ESCALA.has(String(c?.severity || '').toLowerCase()) &&
+                    (!!c?.reason || !!c?.devolvidoDoVerificador),
             );
         }
         // PR sem candidato depois do contrato entra assim mesmo, com grupo

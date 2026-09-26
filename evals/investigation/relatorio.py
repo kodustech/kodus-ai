@@ -19,7 +19,9 @@ CORE = {'bug','security','concurrency','data','api','perf','test_gap','doc_defec
 SEVN = {'low':.25,'medium':.5,'high':.75,'critical':1.0}
 CROSS = 'micro-changed-files-disagree'
 LIM = float(os.environ.get('REL_LIMIAR', '0.22'))
-COTAS = (3,4,5,6,7)
+# REL_COTAS=3,5,7,9,12: o ponto de operacao de F2 fica em cotas mais altas que o
+# de F1 (F2 pesa recall 4x), e a tabela padrao parava em 7.
+COTAS = tuple(int(x) for x in os.environ.get('REL_COTAS', '3,4,5,6,7').split(','))
 BASE_FEATS = ['nota','ver','prod','conf','tam','sev','nag','vies']
 
 def arg(n, d=None):
@@ -220,7 +222,7 @@ def montar_grupos(fonte):
         d = dados[cid]
         cands = d['cands']
         keep = [i for i,c in enumerate(cands)
-                if str(c.get('severity','')).lower() in SEVN and c.get('reason')]
+                if str(c.get('severity','')).lower() in SEVN and (c.get('reason') or c.get('devolvidoDoVerificador'))]  # mesma regra do seletor-vA.js
         core = [i for i,g in enumerate(d['gs']) if g.get('category') in CORE]
         dono = {}
         for gi in core:

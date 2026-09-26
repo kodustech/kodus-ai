@@ -104,17 +104,51 @@ export function xfileExtraLabel(extra: 'xfile-grafo' | 'xfile-b'): string {
     return `micro-${CROSS_FILE_AGENT_ID}-${extra === 'xfile-grafo' ? 'grafo' : 'b'}`;
 }
 
+/** Agentes EXPERIMENTAIS (#1821): fora de MICRO_AGENTS, entram so como passada
+ *  extra no eval (microAgentExtras 'exp-<id>'), para medir o que acrescentam
+ *  dentro da mesma rodada. Escritos a partir das CLASSES de defeito que as
+ *  melhores ferramentas acham e nos nao — sem copiar caso do gabarito, com
+ *  exemplos proprios, para nao vazar a resposta do benchmark no prompt. */
+export const EXPERIMENTAL_AGENTS: MicroAgentGroup[] = [
+    {
+        id: 'exploitable-injection',
+        label: 'security',
+        assignment:
+            'a value an attacker controls reaching a browser, a redirect, a server-side fetch or an origin check in a way they can exploit',
+        items: [],
+        extraItems: [
+            `- Exploitable path, not hardening: report only when you can name the attacker, the input they control and what they achieve. Look for: a request header, URL, query or stored field interpolated into HTML or JavaScript without escaping for that context; an origin, host or domain check done by substring, prefix or suffix matching that a lookalike domain passes; a message posted or accepted with a target or source origin that is wrong or unchecked; a redirect or fetch whose destination comes from input or a configurable setting with no allowlist, reaching internal addresses; a response header or framing policy that disables a protection the page relies on. Missing defense in depth without an attacker path is NOT a finding.`,
+        ],
+        reasoningExample:
+            "The new preview endpoint at preview.rb:18 renders params[:return_to] inside a <script> block with raw(). Read the helper: no JS escaping on that path. An attacker link with return_to=';alert(1)// runs script in the victim's session. Reported.",
+    },
+    {
+        id: 'failure-and-absence-paths',
+        label: 'bug',
+        assignment:
+            'what the changed code does when a call fails, finds nothing, or returns a shape the caller did not expect',
+        items: [],
+        extraItems: [
+            `- The unhappy path of the change: a success check that reads the wrong field of a response or result; a lookup that can come back empty or null whose result is used or passed on without a check; a parse or validation that throws where the surrounding code expects a handled error, turning a client error into a crash or a 500; a type or class check that the values actually produced by this change will never satisfy; an error caught and replaced by a default that hides the failure; a function whose return shape changed while its documentation or callers still describe the old one. Walk the failing input, not the happy one.`,
+        ],
+        reasoningExample:
+            "The new retry loop at sync.ts:52 treats any response with a body as success. Read the client: 4xx responses also carry a JSON body, so a rejected token is stored as refreshed and the next call fails later with no trace. Reported.",
+    },
+];
+
+export function experimentalExtraLabel(id: string): string {
+    return `micro-exp-${id}`;
+}
+
 /** O que a simulacao pode ver no <AlreadyRaised>: tudo MENOS o que saiu do
- *  agente cross-file e dos braços extras dele. Sem medida de como a simulacao
- *  reage a um achado que liga dois arquivos, e mantendo-os fora, remover os
- *  candidatos deles reproduz a review sem eles. */
+ *  agente cross-file, dos braços extras dele e dos agentes experimentais. Sem
+ *  medida de como a simulacao reage a esses achados, e mantendo-os fora,
+ *  remover os candidatos deles reproduz a review sem eles. */
 export function semCrossFile<T>(todos: T[]): T[] {
-    return todos.filter(
-        (p) =>
-            !((p as { producedBy?: string }).producedBy ?? '').startsWith(
-                `micro-${CROSS_FILE_AGENT_ID}`,
-            ),
-    );
+    return todos.filter((p) => {
+        const por = (p as { producedBy?: string }).producedBy ?? '';
+        return !por.startsWith(`micro-${CROSS_FILE_AGENT_ID}`) && !por.startsWith('micro-exp-');
+    });
 }
 
 const CHANGED_FILES_DISAGREE = `- Two changed files that do not agree: this change touches more than one file, and two of the hunks are about the same symbol — the same function, constant, key, route, field, metric name or class. Neither hunk is wrong when you read it alone; the defect is that one side does not hold up what the other side assumes. Three shapes to look for, all of them the same question:
@@ -431,6 +465,7 @@ export function buildMicroAgentPrompt(
     group: MicroAgentGroup,
     diffText: string,
     callGraph?: string,
+    teto = 2,
 ): string {
     // <Diffs> FIRST, and the assignment after it. The twelve agents run under
     // one Promise.all against the same pull request, so the diff is the only
@@ -540,13 +575,27 @@ ${focusBlockFor(group)}
   none of yours, submit an empty suggestions array — that is a valid answer, and
   a forced finding costs more than a silent pass.
 
-  AT MOST TWO. Submit no more than two suggestions, and only the ones you are
+${tetoTexto(teto)}
+</OutputFormat>`;
+}
+
+/** O teto de achados por agente. Com 2 (o padrao) o texto e EXATAMENTE o de
+ *  antes, entao o produto nao muda. Acima de 2 (so o eval liga) o agente ordena
+ *  do mais seguro ao menos seguro — e isso que deixa medir o teto 2 dentro da
+ *  mesma rodada: os dois primeiros de cada agente sao o braco de controle. */
+function tetoTexto(teto: number): string {
+    if (teto === 2) {
+        return `  AT MOST TWO. Submit no more than two suggestions, and only the ones you are
   surest of. This is a ceiling, never a quota: zero is the ordinary answer and
   one is common. Do not add a second finding to fill the space — a weak second
   buries the strong first, because the developer reads the list, not the
   ranking. If you found more than two that you are equally sure of, keep the two
-  whose failure is most concrete and drop the rest.
-</OutputFormat>`;
+  whose failure is most concrete and drop the rest.`;
+    }
+    return `  AT MOST ${teto}. Submit no more than ${teto} suggestions. This is a ceiling, never a
+  quota: zero is the ordinary answer and one is common. Do not add a finding to
+  fill the space. ORDER the suggestions from the one you are surest of to the one
+  you are least sure of — the first entry must be your strongest.`;
 }
 
 /* ------------------------------------------------------------------------ *
