@@ -1267,32 +1267,47 @@ metadata: {
                         // of the prose polish was lost. Single, deduped entry;
                         // the message carries counts, never suggestion text.
                         onDegraded: (report: FormatterDegradedReport) => {
-                            context = this.updateContext(context, (draft) => {
-                                if (!draft.errors) {
-                                    draft.errors = [];
-                                }
-                                draft.errors.push({
-                                    pipelineId:
-                                        context.pipelineMetadata?.pipelineId,
-                                    stage: this.stageName,
-                                    substage: 'suggestion-formatter',
-                                    error: new Error(
-                                        `Suggestion formatting degraded: ${report.strippedMechanically}/${report.totalSuggestions} suggestion(s) stripped of WHAT/WHY/HOW locally${report.distinctReasons.length > 0 ? ` (${report.distinctReasons.slice(0, 2).join('; ')})` : ''}`,
-                                    ),
-                                    severity: 'partial',
-                                    metadata: {
-                                        totalSuggestions:
-                                            report.totalSuggestions,
-                                        polishedByModel:
-                                            report.polishedByModel,
-                                        strippedMechanically:
-                                            report.strippedMechanically,
-                                        distinctReasons:
-                                            report.distinctReasons,
-                                        prNumber,
-                                    },
+                            // This callback runs synchronously inside the
+                            // formatter, within this stage's try/catch: a throw
+                            // here (Immer produce on the context, message
+                            // construction) would be caught as "formatting
+                            // failed", DISCARD the de-scaffolded map and ship
+                            // the raw WHAT/WHY/HOW — the exact leak this pass
+                            // exists to prevent. Reporting must never take the
+                            // formatting down: own try/catch, warn, continue.
+                            try {
+                                context = this.updateContext(context, (draft) => {
+                                    if (!draft.errors) {
+                                        draft.errors = [];
+                                    }
+                                    draft.errors.push({
+                                        pipelineId:
+                                            context.pipelineMetadata?.pipelineId,
+                                        stage: this.stageName,
+                                        substage: 'suggestion-formatter',
+                                        error: new Error(
+                                            `Suggestion formatting degraded: ${report.strippedMechanically}/${report.totalSuggestions} suggestion(s) stripped of WHAT/WHY/HOW locally${report.distinctReasons.length > 0 ? ` (${report.distinctReasons.slice(0, 2).join('; ')})` : ''}`,
+                                        ),
+                                        severity: 'partial',
+                                        metadata: {
+                                            totalSuggestions:
+                                                report.totalSuggestions,
+                                            polishedByModel:
+                                                report.polishedByModel,
+                                            strippedMechanically:
+                                                report.strippedMechanically,
+                                            distinctReasons:
+                                                report.distinctReasons,
+                                            prNumber,
+                                        },
+                                    });
                                 });
-                            });
+                            } catch (reportErr) {
+                                this.logger.warn({
+                                    message: `[AGENT] Failed to record formatter degradation, continuing with formatted output: ${reportErr instanceof Error ? reportErr.message : String(reportErr)}`,
+                                    context: this.stageName,
+                                });
+                            }
                         },
                     },
                 );
