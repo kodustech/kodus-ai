@@ -44,7 +44,9 @@ export RECALL_REAL_REPO=1
 export RECALL_REDUCER=v2
 export RECALL_GATE=0
 export RECALL_DUMP="$AQUI/pools/$NOME"
-export RECALL_CONCURRENCY="${RECALL_CONCURRENCY:-4}"
+# 8 PRs em paralelo: com 4 a VM do runo ficava ociosa (load 0,2) e a latencia
+# do provedor decidia o tempo. Cota estourada aparece no portao abaixo.
+export RECALL_CONCURRENCY="${RECALL_CONCURRENCY:-8}"
 export POOL_ROOT="$AQUI/pools"
 # GPT so roda com esforco baixo nesta investigacao; o DeepSeek pensa por padrao
 # e nao aceita "ligar" — ver a medicao do reasoning_effort na Fireworks.
@@ -74,14 +76,28 @@ if [ "$DUMPS" != "30" ] || [ "$INFRA" != "0" ]; then
     exit 1
 fi
 
-echo; echo "==== 2/4 judge (todos os candidatos)  ||  atribuidor ===="
+# PORTAO DE SAUDE: 30 dumps nao quer dizer 30 PRs medidos direito. Repo nao
+# montado, diff truncado, agente com zero passos ou reducer que falhou e postou
+# tudo ja foram lidos como "a arquitetura piorou". Vermelho aqui para a rodada.
+echo; echo "==== saude, PR por PR ===="
+if ! python3 saude.py "$RECALL_DUMP" "results/run-$NOME.log" | tee "results/saude-$NOME.log"; then
+    echo "ABORTADO: saude vermelha. Corrija o harness antes de pagar judge por cima disso."
+    exit 1
+fi
+
+echo; echo "==== 2/4 judge (todos os candidatos + descartados pelo verificador)  ||  atribuidor ===="
 node matriz-prefilter.js --dump="$NOME" --par=10 --out="results/matriz-$NOME.json" \
     > "results/matriz-$NOME.log" 2>&1 &
 PID_J=$!
+# O que o verificador derrubou, julgado contra os mesmos goldens: responde se
+# ele descarta bug bom. Custa uma chamada de judge por descartado x golden.
+node matriz-prefilter.js --dump="$NOME" --fonte=descartados --par=10 \
+    --out="results/matriz-descartados-$NOME.json" > "results/matriz-descartados-$NOME.log" 2>&1 &
+PID_D=$!
 node seletor-vA.js --dump="$NOME" --parpr=5 --out="results/seletor-$NOME.json" \
     > "results/seletor-$NOME.log" 2>&1 &
 PID_A=$!
-wait $PID_J; wait $PID_A
+wait $PID_J; wait $PID_D; wait $PID_A
 echo "judge e atribuidor prontos"
 
 echo; echo "==== 3/4 veracidade  ||  verify 8 passos ===="

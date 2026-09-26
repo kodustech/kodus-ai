@@ -940,6 +940,7 @@ export async function runAgentLoopViaCore(
                   afterCount: r.kept.length,
                   droppedByVerifier: r.droppedByVerify.length,
                   droppedByEvidenceFilter: 0,
+                  verifyMs: r.verifyMs,
                   decisions: [
                       ...r.kept.map((f, i) => ({
                           index: i,
@@ -959,6 +960,16 @@ export async function runAgentLoopViaCore(
                           parseMode: d.parseMode,
                           rationale: d.evidence ?? '',
                           verifierEvidence: d.verifierEvidence,
+                          droppedFinding: {
+                              oneSentenceSummary: d.finding.oneSentenceSummary,
+                              suggestionContent: d.finding.suggestionContent,
+                              relevantLinesStart: d.finding.relevantLinesStart,
+                              relevantLinesEnd: d.finding.relevantLinesEnd,
+                              label: d.finding.label,
+                              severity: d.finding.severity,
+                              producedBy: (d.finding as { producedBy?: string })
+                                  .producedBy,
+                          },
                       })),
                   ],
               };

@@ -177,6 +177,15 @@ default já entrega o volume máximo de raciocínio e os parâmetros só reduzem
 | `The usage limit has been reached` | cota do plano de assinatura | esperar a janela virar, ou trocar de modelo. Login novo não resolve |
 | recall muito abaixo do esperado, sem erro | ver §6 | antes de culpar o código, comparar o trabalho por passo |
 | `score ausente` em muitos grupos do verify | extração do modo score | já corrigido com `scoreFromText`; se voltar, é regressão |
+| `ABORTADO: saude vermelha` | o `saude.py` achou falha de harness num PR: repo não montado, arquivo faltando no prompt, agente com 0 passos, reducer que falhou, pool com configurações misturadas | abrir `results/saude-<rodada>.log`, corrigir o harness e rodar de novo. Amarelo não bloqueia, mas vale abrir o PR antes de confiar no número dele |
+| `NAO COMPARAVEL` no `comparar-config.py` | as duas rodadas diferem em algo além do braço declarado | não compare. Rode os dois braços com a mesma configuração |
+
+### O que cada rodada grava desde 26/09
+
+- `config` em cada dump: hash do código e dos datasets, modelo, esforço, janela de contexto, busca de docs e as `RECALL_*`. O `relatorio.py` para se o pool mistura configurações; `python3 comparar-config.py A B --braco=<chave>` diz se duas rodadas podem ser comparadas.
+- `verification.verifyMs` e, em cada descarte, `droppedFinding` com o texto. O protocolo julga os descartados em `results/matriz-descartados-<rodada>.json`: é assim que se sabe se o verificador joga fora bug bom.
+- `searchDocs` (Exa) ligado nos agentes, como na produção. `RECALL_DOCS=0` desliga, para o braço de comparação.
+- 8 PRs em paralelo por padrão (`RECALL_CONCURRENCY`).
 
 **Nunca pontue pelo campo `findings` do dump quando a rodada não passou pelo
 reducer.** É o caminho que produziu um "baseline" de 0,356 com 208 falsos

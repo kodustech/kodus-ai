@@ -13,6 +13,36 @@ const dotenv = require('dotenv');
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 dotenv.config({ path: path.join(__dirname, '../../.env.local'), override: true });
 
+/**
+ * Busca de documentacao (searchDocs, Exa) — a mesma ferramenta que a producao
+ * da aos agentes quando API_EXA_KEY existe (base-code-review-agent.provider.ts).
+ * O eval nunca a passava, entao todo agente do benchmark investigava contrato
+ * de biblioteca sem poder consultar a documentacao que o produto consulta.
+ *
+ * Ligada por padrao, porque o benchmark mede o produto. RECALL_DOCS=0 desliga,
+ * para o braco de comparacao. O cache da producao mora no Mongo com TTL de 24h;
+ * aqui ele vive em memoria durante a rodada, o que so muda o custo, nao a resposta.
+ */
+let docsSearchSingleton;
+function docsSearchService() {
+    if (process.env.RECALL_DOCS === '0' || !process.env.API_EXA_KEY) return undefined;
+    if (docsSearchSingleton) return docsSearchSingleton;
+    const {
+        DocumentationSearchExaService,
+    } = require('../../libs/code-review/infrastructure/adapters/services/documentation-search-exa.service.ts');
+    const cache = new Map();
+    const chave = (p) => `${p.provider}|${p.packageNameNormalized}|${p.queryNormalized}`;
+    docsSearchSingleton = new DocumentationSearchExaService(
+        { get: (k) => process.env[k] },
+        {
+            get: async (p) => cache.get(chave(p)) || null,
+            set: async (p) => { cache.set(chave(p), p.documentationItem); },
+        },
+        undefined,
+    );
+    return docsSearchSingleton;
+}
+
 // Langfuse, registered AFTER dotenv and never before it. Two ordering traps
 // live here: `shouldTrace()` reads LANGFUSE_PUBLIC_KEY/SECRET_KEY, which do not
 // exist until the lines above run — registering earlier silently produced a
@@ -666,9 +696,51 @@ function assignEvalFileTiers(input) {
     return assignFileTiers(scores);
 }
 
+/**
+ * Impressao digital da configuracao que produziu o dump. Duas rodadas so se
+ * comparam se ela bate. Sem isso, a janela do GPT mudou de 400k para 922k num
+ * merge e ninguem viu; e um pool colado de duas rodadas com numero de passadas
+ * diferente passou por baseline.
+ *
+ * O hash e do CONTEUDO dos arquivos, nao do commit: a VM do runo recebe um
+ * snapshot com commit proprio, e alteracao nao commitada tambem muda o que roda.
+ */
+let fingerprintCache;
+function runFingerprint() {
+    if (fingerprintCache) return fingerprintCache;
+    const crypto = require('crypto');
+    const { execSync } = require('child_process');
+    const raiz = path.join(__dirname, '../..');
+    const hashDe = (padroes) => {
+        const h = crypto.createHash('sha256');
+        const arquivos = execSync(`git ls-files -co --exclude-standard -- ${padroes}`, { cwd: raiz })
+            .toString().split('\n').filter(Boolean).sort();
+        for (const f of arquivos) {
+            try { h.update(f).update(fs.readFileSync(path.join(raiz, f))); } catch { /* removido */ }
+        }
+        return h.digest('hex').slice(0, 12);
+    };
+    fingerprintCache = {
+        codeHash: hashDe("libs/code-review libs/llm libs/agent-harness 'evals/investigation/*.js'"),
+        datasetsHash: hashDe('evals/investigation/datasets'),
+        model: process.env.RECALL_MODEL || null,
+        reasoningEffort: process.env.RECALL_REASONING_EFFORT || null,
+        contextWindowTokens: resolveContextWindow({ modelName: process.env.RECALL_MODEL || '' }),
+        docsSearch: !!docsSearchService(),
+        env: Object.fromEntries(
+            Object.entries(process.env)
+                .filter(([k]) => k.startsWith('RECALL_') && !/KEY|TOKEN|SECRET/i.test(k))
+                .filter(([k]) => !['RECALL_DUMP', 'RECALL_CONCURRENCY'].includes(k))
+                .sort(),
+        ),
+    };
+    return fingerprintCache;
+}
+
 function serializeResult(caseId, agentResult, remoteCommands, input, modelStats, dedupTrace, preFilterCandidates, pipeline) {
     return {
         caseId,
+        config: runFingerprint(),
         reasoning: agentResult.findings?.reasoning || '',
         // Post-dedup — this IS what gets judged (agent-review.stage.ts's real
         // order: generate -> dedup -> rest of pipeline). See dedupTrace.before
@@ -1298,6 +1370,8 @@ class InvestigationAgentProvider {
                     remoteCommands,
                     byokConfig: undefined,
                     byokErrorReporter: undefined,
+                    documentationSearchService: docsSearchService(),
+                    documentationSearchOptions: { prNumber: input.prNumber },
                     // `input.model` is NOT read by the loop adapter. This is the
                     // seam that is — without it the run silently uses the env
                     // default under the requested model's label.

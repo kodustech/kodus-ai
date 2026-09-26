@@ -22,7 +22,18 @@ const arg = (n, d) => {
 const DUMP = arg('dump');
 const SO = (arg('only', '') || '').split(',').map((x) => x.trim()).filter(Boolean);
 const PAR = Number(arg('par', '10'));
-const OUT = arg('out', path.join(__dirname, 'results', `matriz-pre-${DUMP}.json`));
+// --fonte=descartados julga o que o VERIFICADOR jogou fora, em vez dos
+// candidatos que seguiram. E a unica forma de saber se ele descarta bug bom:
+// o que ele derruba nunca chega em preFilterCandidates.
+const FONTE = arg('fonte', 'candidatos');
+const OUT = arg('out', path.join(__dirname, 'results',
+    FONTE === 'descartados' ? `matriz-descartados-${DUMP}.json` : `matriz-pre-${DUMP}.json`));
+const candidatosDe = (j) =>
+    FONTE === 'descartados'
+        ? (j.trace?.verification?.decisions || [])
+              .filter((d) => d.action === 'drop' && d.droppedFinding)
+              .map((d) => ({ ...d.droppedFinding, relevantFile: d.relevantFile }))
+        : j.trace?.preFilterCandidates || [];
 
 (async () => {
     const v2 = JSON.parse(fs.readFileSync(path.join(__dirname, '../benchmark-sets/v002/goldens.json'), 'utf8'));
@@ -36,7 +47,7 @@ const OUT = arg('out', path.join(__dirname, 'results', `matriz-pre-${DUMP}.json`
         const cid = j.caseId;
         if (SO.length && !SO.includes(cid)) continue;
         const gs = porCaso[cid] || [];
-        const cands = j.trace?.preFilterCandidates || [];
+        const cands = candidatosDe(j);
         // PR sem candidato ENTRA na matriz, com lista vazia. Pular aqui era a
         // origem das tabelas de 29 PRs: o PR sumia da matriz, sumia do
         // denominador, e o recall subia sozinho porque os goldens que ninguem

@@ -886,6 +886,10 @@ export interface FinderWithVerifyResult {
      *  finder's own usage is in finderState.usage; this is reported separately
      *  so callers can attribute cost — it is NOT in finderState. */
     verifyUsage: VerifyUsage;
+    /** Wall-clock of the verify sub-step (first pass + evidence gate), in ms.
+     *  Undefined when verify did not run. Without it the verifier's share of
+     *  review latency could only be inferred by subtraction. */
+    verifyMs?: number;
     /** Token usage of the recall pass (the extra synthesis-rescue finder run).
      *  NOT in finderState — summed here so the caller can add it to the finder
      *  cost. */
@@ -1091,6 +1095,7 @@ export async function runFinderWithVerify(
     // Verify each finding (HV2 refute-to-drop, or path-feasibility when the
     // knob is on) with the confidence SPLIT inside LlmVerifier:
     // high-confidence → light depth, low-confidence → full depth.
+    const verifyT0 = Date.now();
     const verifier = new LlmVerifier(params.runner, {
         modelId: params.modelId,
         fallbackModelId: params.fallbackModelId,
@@ -1188,6 +1193,7 @@ export async function runFinderWithVerify(
         })),
         finderState,
         verifyUsage: sumVerifyUsage(verifier.usage, gateUsage),
+        verifyMs: Date.now() - verifyT0,
         recallUsage,
         passStats,
         shardPlan,

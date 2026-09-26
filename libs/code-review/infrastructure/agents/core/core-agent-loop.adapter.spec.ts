@@ -157,6 +157,19 @@ describe('runAgentLoopViaCore (harness + agent integration)', () => {
         expect(out.verification?.beforeCount).toBe(2);
         expect(out.verification?.afterCount).toBe(1);
         expect(out.verification?.droppedByVerifier).toBe(1);
+        expect(typeof out.verification?.verifyMs).toBe('number');
+
+        // A dropped finding keeps its text in the trace so it can be judged
+        // later; a kept one travels on as a finding and carries none.
+        const decisions = out.verification?.decisions ?? [];
+        const drop = decisions.find((d) => d.action === 'drop');
+        expect(drop?.relevantFile).toBe('b.ts');
+        expect(drop?.droppedFinding).toMatchObject({
+            suggestionContent: expect.any(String),
+        });
+        expect(
+            decisions.find((d) => d.action === 'keep')?.droppedFinding,
+        ).toBeUndefined();
 
         // mapping basics (usage is summed fu+vu+ru; exact token counts depend on
         // real model usage — the mock doesn't propagate it, so assert the shape)

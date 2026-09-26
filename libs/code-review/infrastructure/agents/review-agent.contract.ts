@@ -948,6 +948,19 @@ export interface VerificationDecisionTrace {
     confidence?: 'high' | 'medium' | 'low';
     verifierEvidence: ToolEvidenceSummary;
     rawTextPreview?: string;
+    /** Only on `drop`: what the finding said, so a dropped finding can be
+     *  judged afterwards. The kept ones travel on as findings; a dropped one
+     *  otherwise leaves only its file behind, and whether the verifier threw
+     *  away real defects cannot be measured. */
+    droppedFinding?: {
+        oneSentenceSummary?: string;
+        suggestionContent?: string;
+        relevantLinesStart?: number;
+        relevantLinesEnd?: number;
+        label?: string;
+        severity?: string;
+        producedBy?: string;
+    };
 }
 
 export interface VerificationTraceSummary {
@@ -957,6 +970,8 @@ export interface VerificationTraceSummary {
     /** @deprecated Always 0 — evidence gate now forces verification instead of dropping. Kept for backwards compatibility. */
     droppedByEvidenceFilter: number;
     sentToEvidenceGate?: number;
+    /** Wall-clock of the verify sub-step, in ms. */
+    verifyMs?: number;
     decisions: VerificationDecisionTrace[];
 }
 

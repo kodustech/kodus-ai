@@ -303,9 +303,32 @@ def secao_formula():
 
 SECOES = {'tempo':secao_tempo,'tokens':secao_tokens,'prereducer':secao_prereducer,
           'agentes':secao_agentes,'formula':secao_formula}
+def configuracao():
+    """A configuracao que produziu a rodada. Um pool com dumps de configuracoes
+    diferentes nao descreve configuracao nenhuma (foi assim que o gpt-30, 24 PRs
+    de uma rodada e 6 de outra, passou por baseline) — o relatorio para."""
+    vistas = {}
+    for cid in OS30:
+        d = dump(cid)
+        if not d: continue
+        chave = json.dumps(d.get('config'), sort_keys=True)
+        vistas.setdefault(chave, []).append(cid)
+    if len(vistas) > 1:
+        print('\nABORTADO: esta rodada mistura configuracoes diferentes.')
+        for chave, cids in vistas.items():
+            print(f'  {len(cids)} PRs com {chave[:300]}')
+        sys.exit(2)
+    cfg = json.loads(next(iter(vistas))) if vistas else None
+    if cfg is None:
+        print('config: (dumps anteriores a gravacao de configuracao — nao comparavel com rodadas novas)')
+    else:
+        print('config: ' + json.dumps({k: v for k, v in cfg.items() if k != 'env'}, sort_keys=True))
+    return cfg
+
 if __name__ == '__main__':
     pedida = arg('secao')
     print(f'rodada: {RUN}   universo: {len(OS30)} PRs / 120 goldens (111 core)')
+    configuracao()
     for nome, fn in SECOES.items():
         if pedida and pedida != nome: continue
         try: fn()
