@@ -150,6 +150,28 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                 'files.id': 'file-id-1',
             });
         });
+
+        it('uses the UUID suggestion generator when no id is provided', async () => {
+            const generatedId = '123e4567-e89b-12d3-a456-426614174000';
+            const newSuggestionId = jest
+                .spyOn(repo, 'newSuggestionId')
+                .mockReturnValue(generatedId);
+
+            await repo.addSuggestionToFile(
+                'file-id-1',
+                { suggestionContent: 'x' } as any,
+                42,
+                'cal.com',
+                ORG,
+            );
+
+            const update = findOneAndUpdate.mock.calls[0][1];
+            expect(newSuggestionId).toHaveBeenCalledTimes(1);
+            expect(update.$push['files.$.suggestions']).toMatchObject({
+                id: generatedId,
+                suggestionContent: 'x',
+            });
+        });
     });
 
     describe('updateFile', () => {
@@ -499,6 +521,29 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
             );
             expect(findOneAndUpdate.mock.calls[1][0].organizationId).toBe(
                 'org-B',
+            );
+        });
+    });
+
+    describe('sub-document id formats (#1846)', () => {
+        let model: any;
+        let repo: PullRequestsRepository;
+
+        beforeEach(() => {
+            model = {
+                findOneAndUpdate: jest.fn().mockReturnValue({ exec }),
+                aggregate: jest.fn().mockReturnValue({ exec }),
+            };
+            repo = new PullRequestsRepository(model as any);
+        });
+
+        it('keeps file ids ObjectId-shaped', () => {
+            expect(repo.newSubDocumentId()).toMatch(/^[0-9a-fA-F]{24}$/);
+        });
+
+        it('generates UUID-shaped suggestion ids the fine-tuning ingest accepts', () => {
+            expect(repo.newSuggestionId()).toMatch(
+                /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
             );
         });
     });

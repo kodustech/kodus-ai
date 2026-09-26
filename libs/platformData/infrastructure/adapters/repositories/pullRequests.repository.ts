@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import * as crypto from 'crypto';
 import { Model } from 'mongoose';
 import mongoose from 'mongoose';
 import { PullRequestsModel } from './schemas/pullRequests.model';
@@ -1885,14 +1886,20 @@ export class PullRequestsRepository implements IPullRequestsRepository {
     }
 
     /**
-     * Stable generator for sub-document ids used in `bulkApplyFileChanges`.
-     * Exposed on the repository so the service can pre-compute file/
-     * suggestion ids before the bulkWrite — the alternative (letting
-     * Mongo generate during $push) doesn't return the new ids in a
-     * shape we can use to reference suggestions later.
+     * Stable ObjectId-shaped generator for file sub-documents. Mongo's native
+     * generated ids are unavailable in a shape bulk writes can reference.
      */
     newSubDocumentId(): string {
         return new mongoose.Types.ObjectId().toString();
+    }
+
+    /**
+     * Generates ids for suggestion sub-documents. The fine-tuning ingest path
+     * filters suggestion ids by UUID, so ObjectId hex strings were silently
+     * dropped before embedding (#1846).
+     */
+    newSuggestionId(): string {
+        return crypto.randomUUID();
     }
 
     async addSuggestionToFile(
@@ -1904,7 +1911,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
     ): Promise<PullRequestsEntity | null> {
         const suggestionWithId = {
             ...newSuggestion,
-            id: newSuggestion.id || new mongoose.Types.ObjectId().toString(),
+            id: newSuggestion.id || this.newSuggestionId(),
         };
 
         const doc = await this.pullRequestsModel
