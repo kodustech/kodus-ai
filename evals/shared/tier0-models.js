@@ -53,6 +53,9 @@ const TIER0 = {
     // (finder-recall-deepseek-v4.1-flash.submission.json, runAt 2026-09-10) —
     // added to reproduce that run's config, not the trial default.
     'deepseek-v4.1-flash@fireworks': { provider: 'openai_compatible', doModel: 'accounts/fireworks/models/deepseek-v4p1-flash', keyEnvs: ['API_FIREWORKS_API_KEY', 'FIREWORKS_API_KEY'], baseURL: 'https://api.fireworks.ai/inference/v1' },
+    // Mesmo modelo pela Together. Em 26/09 a conta do Fireworks passou a
+    // devolver limite de taxa com 2+ PRs de DeepSeek em paralelo (#1821).
+    'deepseek-v4.1-flash@together': { provider: 'openai_compatible', doModel: 'deepseek-ai/DeepSeek-V4.1-Flash', keyEnvs: ['BYOK_TOGETHER_API_KEY'], baseURL: 'https://api.together.xyz/v1' },
     // K3 usa chave própria (KIMI_NEW) — crédito limitado, ver custo antes de
     // disparar passada cheia: $3/$15 por milhão, ~3x o k2.7.
     'kimi-k3': { provider: 'openai_compatible', keyEnvs: ['KIMI_NEW', 'BYOK_MOONSHOT_API_KEY'], baseURL: 'https://api.moonshot.ai/v1' },

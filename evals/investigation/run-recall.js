@@ -590,7 +590,16 @@ async function main() {
         `(concorrência: ${concurrency}${process.env.RECALL_HEAVY === '1' ? ' · HEAVY' : ''})\n`,
     );
     let cursor = 0;
+    // RECALL_START_STAGGER_MS: o worker k so comeca depois de k x esse tempo.
+    // Na largada todos os PRs soltam as ~16 passadas ao mesmo tempo; com 4 PRs
+    // sao ~64 chamadas no mesmo segundo, e o Fireworks devolveu limite de taxa
+    // exatamente ai — chamadas desistiram e as passadas morreram no meio. Depois
+    // da primeira leva os PRs terminam em tempos diferentes e se espalham sozinhos.
+    const stagger = Number(process.env.RECALL_START_STAGGER_MS) || 0;
+    let proximoWorker = 0;
     const worker = async () => {
+        const k = proximoWorker++;
+        if (stagger && k) await new Promise((r) => setTimeout(r, k * stagger));
         for (;;) {
             const idx = cursor++;
             if (idx >= selectedTests.length) return;
