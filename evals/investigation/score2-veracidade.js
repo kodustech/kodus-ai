@@ -141,9 +141,10 @@ Score every index exactly once. Call veracidade exactly once.`;
         if (!g) continue;
         const cands = j.trace?.preFilterCandidates || [];
         // mesmo filtro de contrato que o atribuidor aplicou, para os indices baterem
+        const exige = cands.some((c) => !!c?.reason);
         const orig = cands
             .map((c, i) => [c, i])
-            .filter(([c]) => ESCALA.has(String(c?.severity || '').toLowerCase()) && (!!c?.reason || !!c?.devolvidoDoVerificador)) // mesma regra do seletor-vA.js
+            .filter(([c]) => ESCALA.has(String(c?.severity || '').toLowerCase()) && (!exige || !!c?.reason || !!c?.devolvidoDoVerificador)) // mesma regra do seletor-vA.js
             .map(([, i]) => i);
         const reps = (g.grupos || [])
             .map((x) => x.representante)

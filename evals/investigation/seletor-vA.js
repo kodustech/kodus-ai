@@ -183,9 +183,13 @@ function comEsforco(model, modelId) {
             // rodada anterior a 26/09 nao tem `reason` gravado: passa so pela
             // escala de severidade, senao o contrato o derrubaria de novo e a
             // simulacao "sem verificador" mediria o verificador outra vez.
+            // Mesma regra do finding-reducer.ts: exige `reason` so se algum
+            // candidato do PR tiver; senao, so a severidade (o generalista quase
+            // nunca preenche, e exigir apagaria a revisao dele inteira).
+            const exige = cands.some((c) => !!c?.reason);
             cands = cands.filter(
                 (c) => ESCALA.has(String(c?.severity || '').toLowerCase()) &&
-                    (!!c?.reason || !!c?.devolvidoDoVerificador),
+                    (!exige || !!c?.reason || !!c?.devolvidoDoVerificador),
             );
         }
         // PR sem candidato depois do contrato entra assim mesmo, com grupo

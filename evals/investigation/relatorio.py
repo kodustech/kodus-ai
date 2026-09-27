@@ -226,8 +226,9 @@ def montar_grupos(fonte):
     for cid in OS30:
         d = dados[cid]
         cands = d['cands']
+        exige = any(c.get('reason') for c in cands)  # regra do finding-reducer.ts: reason so se algum tiver
         keep = [i for i,c in enumerate(cands)
-                if str(c.get('severity','')).lower() in SEVN and (c.get('reason') or c.get('devolvidoDoVerificador'))]  # mesma regra do seletor-vA.js
+                if str(c.get('severity','')).lower() in SEVN and (not exige or c.get('reason') or c.get('devolvidoDoVerificador'))]  # mesma regra do seletor-vA.js
         core = [i for i,g in enumerate(d['gs']) if g.get('category') in CORE]
         dono = {}
         for gi in core:
