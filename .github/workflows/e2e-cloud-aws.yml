@@ -101,7 +101,7 @@ jobs:
                   # provider is stated, never inferred from the model name.
                   API_LLM_PROVIDER: ${{ vars.E2E_LLM_PROVIDER || 'openai_compatible' }}
                   API_OPENAI_FORCE_BASE_URL: ${{ vars.E2E_LLM_BASE_URL || 'https://api.fireworks.ai/inference/v1' }}
-                  API_LLM_PROVIDER_MODEL: ${{ vars.E2E_LLM_MODEL || 'accounts/fireworks/models/deepseek-v4-flash-0731' }}
+                  API_LLM_PROVIDER_MODEL: ${{ vars.E2E_LLM_MODEL || 'accounts/fireworks/models/deepseek-v4p1-flash' }}
                   # "Kodus as the provider" (prepaid credits) is a private
                   # alpha: on a fresh environment there is no PostHog flag and
                   # no alpha release track, so the credits cells need the
@@ -149,7 +149,7 @@ jobs:
                   # provider is stated, never inferred from the model name.
                   API_LLM_PROVIDER: ${{ vars.E2E_LLM_PROVIDER || 'openai_compatible' }}
                   API_OPENAI_FORCE_BASE_URL: ${{ vars.E2E_LLM_BASE_URL || 'https://api.fireworks.ai/inference/v1' }}
-                  API_LLM_PROVIDER_MODEL: ${{ vars.E2E_LLM_MODEL || 'accounts/fireworks/models/deepseek-v4-flash-0731' }}
+                  API_LLM_PROVIDER_MODEL: ${{ vars.E2E_LLM_MODEL || 'accounts/fireworks/models/deepseek-v4p1-flash' }}
               working-directory: tests/e2e
               run: ./node_modules/.bin/tsx cli/run-matrix.ts "$MATRIX_FILE" --target cloud --skip-missing-tokens
 

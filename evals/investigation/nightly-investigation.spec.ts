@@ -48,9 +48,9 @@ describe('nightly comparison', () => {
         const targets = { sets: { light: { models: { m: { observed: { sdPerPrRunDiff: 0.318, runs: [0.384, 0.352] } } } } } };
         expect(nightNoise(targets, 'light', 'm')).toBeCloseTo(0.05, 2);
         expect(nightNoise(targets, 'light', 'other')).toBeNull();
-        expect(catalogIdFor('deepseek-v4-flash@fireworks')).toBe('fireworks/accounts/fireworks/models/deepseek-v4-flash-0731');
+        expect(catalogIdFor('deepseek-v4-flash@fireworks')).toBe('fireworks/accounts/fireworks/models/deepseek-v4p1-flash');
         expect(catalogIdFor('gpt-5.4')).toBeNull();
-        expect(costUpperBound({ prompt: 1e6, completion: 0 }, 'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731')).toBeGreaterThan(0);
+        expect(costUpperBound({ prompt: 1e6, completion: 0 }, 'fireworks/accounts/fireworks/models/deepseek-v4p1-flash')).toBeGreaterThan(0);
         expect(costUpperBound({ prompt: 1e6, completion: 0 }, 'not-in-catalog')).toBeNull();
     });
 });

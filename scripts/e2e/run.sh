@@ -274,7 +274,7 @@ case "$MODE" in
             export API_OPEN_AI_API_KEY="$E2E_LLM_API_KEY"
             export API_LLM_PROVIDER="${E2E_LLM_PROVIDER:-openai_compatible}"
             export API_OPENAI_FORCE_BASE_URL="${E2E_LLM_BASE_URL:-https://api.fireworks.ai/inference/v1}"
-            export API_LLM_PROVIDER_MODEL="${E2E_LLM_MODEL:-accounts/fireworks/models/deepseek-v4-flash-0731}"
+            export API_LLM_PROVIDER_MODEL="${E2E_LLM_MODEL:-accounts/fireworks/models/deepseek-v4p1-flash}"
         fi
 
         # Resolve only the secrets the matrix will actually use. Cloud-only
