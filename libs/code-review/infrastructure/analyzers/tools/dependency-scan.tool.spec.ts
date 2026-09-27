@@ -363,3 +363,133 @@ describe('DependencyScanTool', () => {
         });
     });
 });
+
+/**
+ * The failure that matters here is not "no findings" — it is the opposite.
+ * If the base tree cannot be built, an EMPTY base makes every advisory
+ * already in the lockfile look introduced by this pull request, and the
+ * author gets blamed for the whole tree. No baseline must therefore mean no
+ * findings, never "all of them".
+ */
+describe('an untrustworthy baseline reports nothing, not everything', () => {
+    const tool = new DependencyScanTool();
+
+    const withFailingSetup = (head: string, fail: (cmd: string) => boolean) =>
+        ({
+            repoDir: '/repo',
+            baseBranch: 'main',
+            run: jest.fn(async (command: string) => {
+                if (fail(command)) {
+                    return { stdout: '', stderr: '', exitCode: 1 };
+                }
+                if (command.includes('osv-scanner')) {
+                    const isBase = command.includes('kody-deps-base');
+                    // An empty base tree — the dangerous state.
+                    return {
+                        stdout: isBase ? osv([]) : head,
+                        stderr: '',
+                        exitCode: 0,
+                    };
+                }
+                return { stdout: '', stderr: '', exitCode: 0 };
+            }),
+            readFile: jest.fn(async () => HEAD),
+            writeFile: jest.fn(),
+        }) as never;
+
+    const preexisting = osv([
+        { name: 'lodash', version: '4.17.11', id: 'GHSA-aaa' },
+        { name: 'minimist', version: '1.2.0', id: 'GHSA-bbb' },
+    ]);
+
+    it('reports nothing when the base ref is not in the sandbox', async () => {
+        const sandbox = withFailingSetup(preexisting, (c) =>
+            c.includes('rev-parse'),
+        );
+
+        const findings = await tool.run({ sandbox, files: [file()] });
+
+        expect(findings).toEqual([]);
+    });
+
+    it('reports nothing when the base file cannot be materialized', async () => {
+        const sandbox = withFailingSetup(preexisting, (c) =>
+            c.includes('cat-file'),
+        );
+
+        const findings = await tool.run({ sandbox, files: [file()] });
+
+        expect(findings).toEqual([]);
+    });
+
+    it('reports nothing when the sandbox throws instead of returning an exit code', async () => {
+        const sandbox = {
+            repoDir: '/repo',
+            baseBranch: 'main',
+            run: jest.fn(async (command: string) => {
+                if (command.includes('kody-deps-base') && !command.includes('osv-scanner')) {
+                    throw new Error('exit status 1');
+                }
+                if (command.includes('osv-scanner')) {
+                    return { stdout: preexisting, stderr: '', exitCode: 0 };
+                }
+                return { stdout: '', stderr: '', exitCode: 0 };
+            }),
+            readFile: jest.fn(async () => HEAD),
+            writeFile: jest.fn(),
+        } as never;
+
+        const findings = await tool.run({ sandbox, files: [file()] });
+
+        expect(findings).toEqual([]);
+    });
+});
+
+/**
+ * The `|| true` guard exists because osv-scanner exits 1 exactly when it finds
+ * something and the e2b provider THROWS on a non-zero exit. Asserting the
+ * string is in the command does not prove the guard works — this models the
+ * shell and the provider together, so removing `|| true` turns the scan red
+ * instead of leaving it green.
+ */
+describe('a scanner that exits non-zero on findings still returns them', () => {
+    const tool = new DependencyScanTool();
+
+    /** Throws on a non-zero exit, as e2b does — after the shell has had its say. */
+    const throwingSandbox = (head: string) =>
+        ({
+            repoDir: '/repo',
+            run: jest.fn(async (command: string) => {
+                const isScan = command.includes('osv-scanner');
+                // osv-scanner's real behaviour: exit 1 when it has findings.
+                const rawExit = isScan ? 1 : 0;
+                // `cmd || true` makes the SHELL exit 0 regardless.
+                const shellExit = /\|\|\s*true\s*$/.test(command) ? 0 : rawExit;
+                if (shellExit !== 0) {
+                    throw new Error(`exit status ${shellExit}`);
+                }
+                return {
+                    stdout: isScan
+                        ? command.includes('kody-deps-base')
+                            ? osv([])
+                            : head
+                        : '',
+                    stderr: '',
+                    exitCode: 0,
+                };
+            }),
+            readFile: jest.fn(async () => HEAD),
+            writeFile: jest.fn(),
+        }) as never;
+
+    it('survives the non-zero exit and reports the introduced advisory', async () => {
+        const sandbox = throwingSandbox(
+            osv([{ name: 'lodash', version: '4.17.11', id: 'GHSA-aaa' }]),
+        );
+
+        const findings = await tool.run({ sandbox, files: [file()] });
+
+        expect(findings).toHaveLength(1);
+        expect(findings[0].ruleId).toContain('GHSA-aaa');
+    });
+});

@@ -164,6 +164,18 @@ export class DependencyScanTool implements AnalyzerTool {
 
         const setup = [`rm -rf ${quote(baseDir)}`, `mkdir -p ${quote(baseDir)}`];
 
+        // Prove the base ref is actually in the sandbox before trusting
+        // anything read from it. Without this, an unfetched ref makes every
+        // per-file lookup miss, the base tree comes out empty, and every
+        // advisory already in the tree is reported as introduced by this pull
+        // request — the flood the whole base/head difference exists to avoid.
+        if (sandbox.baseBranch) {
+            setup.push(
+                `git -C ${quote(sandbox.repoDir)} rev-parse --verify --quiet ` +
+                    `${quote(`origin/${sandbox.baseBranch}^{commit}`)} > /dev/null`,
+            );
+        }
+
         for (const file of files) {
             // The base branch is fetched into the sandbox, so git holds the
             // real previous manifest. Prefer it: reconstructing a 400KB
@@ -181,10 +193,19 @@ export class DependencyScanTool implements AnalyzerTool {
                 const target = `${baseDir}/${toRepoRelativePath(file.filename)}`;
                 const cut = target.lastIndexOf('/');
                 setup.push(`mkdir -p ${quote(target.slice(0, cut))}`);
+                const ref = quote(
+                    `origin/${sandbox.baseBranch}:${toRepoRelativePath(file.filename)}`,
+                );
+                // A manifest this pull request ADDED has no base version, and
+                // that absence is the signal that its advisories are new. A
+                // manifest that exists on the base but cannot be read is a
+                // different thing entirely: swallowing it would blame the
+                // author for advisories that were already there. `cat-file -e`
+                // separates the two, so only the second fails the run.
                 setup.push(
-                    `{ git -C ${quote(sandbox.repoDir)} show ` +
-                        `${quote(`origin/${sandbox.baseBranch}:${toRepoRelativePath(file.filename)}`)} ` +
-                        `> ${quote(target)} 2>/dev/null || rm -f ${quote(target)}; }`,
+                    `if git -C ${quote(sandbox.repoDir)} cat-file -e ${ref} 2>/dev/null; then ` +
+                        `git -C ${quote(sandbox.repoDir)} show ${ref} > ${quote(target)} || exit 1; ` +
+                        `else rm -f ${quote(target)}; fi`,
                 );
                 continue;
             }
@@ -235,10 +256,18 @@ export class DependencyScanTool implements AnalyzerTool {
             );
         }
 
-        const result = await sandbox.run(setup.join(' && '), {
-            timeoutMs: 30_000,
-        });
-        if (result.exitCode !== 0) {
+        // The e2b provider throws on a non-zero exit where the local one
+        // returns it. Both mean the same thing here — the base tree is not
+        // trustworthy — and both must yield no baseline rather than a
+        // half-built one.
+        try {
+            const result = await sandbox.run(setup.join(' && '), {
+                timeoutMs: 30_000,
+            });
+            if (result.exitCode !== 0) {
+                return null;
+            }
+        } catch {
             return null;
         }
 
