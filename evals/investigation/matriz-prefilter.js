@@ -41,6 +41,9 @@ const candidatosDe = (j) =>
     const key = loadJudgeKey();
     const out = {};
     let chamadas = 0;
+    // Chamada que falhou NAO e "nao bate": sem credito na chave (27/09) isto
+    // gravaria uma matriz de zeros em silencio. Conta e aborta sem gravar.
+    let erros = 0, primeiroErro = '';
 
     for (const f of fs.readdirSync(path.join(S, DUMP)).filter((x) => x.endsWith('.raw.txt'))) {
         const j = JSON.parse(fs.readFileSync(path.join(S, DUMP, f), 'utf8'));
@@ -75,7 +78,7 @@ const candidatosDe = (j) =>
                         try {
                             const v = await matchCommentDetailed(key, gs[gi].comment, t);
                             return v?.match ? (v.confidence ?? 0) : 0;
-                        } catch { return 0; }
+                        } catch (e) { erros++; primeiroErro ||= String(e?.message || e).slice(0, 200); return 0; }
                     }),
                 );
                 linha.push(...lote);
@@ -95,6 +98,10 @@ const candidatosDe = (j) =>
             conf,
         };
         console.log(`  ${cid.slice(0, 46).padEnd(48)} ${cands.length} cand x ${gs.length} goldens`);
+    }
+    if (erros) {
+        console.error(`ABORTADO: ${erros} chamadas de judge falharam (${primeiroErro}). Matriz NAO gravada.`);
+        process.exit(2);
     }
     fs.writeFileSync(OUT, JSON.stringify(out));
     console.log(`\n${Object.keys(out).length} PRs · ${chamadas} chamadas de judge\n-> ${OUT}`);

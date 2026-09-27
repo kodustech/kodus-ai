@@ -1204,6 +1204,12 @@ class InvestigationAgentProvider {
                         : {}),
                     // RECALL_MICRO_AGENTS=1: 12 narrow passes, one per class of
                     // defect, instead of the single broad pass.
+                    // RECALL_MICRO_MAX_STEPS=8: teto de passos so dos agentes de classe.
+                    ...(process.env.RECALL_MICRO_MAX_STEPS
+                        ? { microAgentMaxSteps: Number(process.env.RECALL_MICRO_MAX_STEPS) }
+                        : {}),
+                    // RECALL_SIM_PARALELA=1: simulacao na fase 0, sem <AlreadyRaised>.
+                    ...(process.env.RECALL_SIM_PARALELA === '1' ? { simulationParallel: true } : {}),
                     // RECALL_MICRO_IDS=a,b,c: so estes agentes de classe.
                     ...(process.env.RECALL_MICRO_IDS
                         ? { microAgentIds: process.env.RECALL_MICRO_IDS.split(',').map((x) => x.trim()).filter(Boolean) }

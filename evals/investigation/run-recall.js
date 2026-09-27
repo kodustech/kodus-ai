@@ -452,41 +452,8 @@ async function main() {
             return;
         }
 
-        if (NO_JUDGE) {
-            unscored += 1;
-            // Carry the trace summary even unscored: it holds the verify funnel
-            // (beforeCount / afterCount / droppedByVerifier and each decision's
-            // parseMode), which needs no judge and is the only way this mode can
-            // say whether the pipeline still works rather than just that it ran.
-            rows.push({
-                caseId,
-                status: 'unscored',
-                reason: 'judge skipped (--no-judge): findings saved for an external judge',
-                traceSummary: traceSummaryFromOutput(apiResult.output),
-            });
-            // Log what was SAVED, read off the saved record itself. Deriving the
-            // count separately is how this line came to print 0 while the
-            // submission held 4: the engine's output is a JSON string, not an
-            // object, so a second bespoke read of it silently found nothing.
-            const saved = submissionResultFromOutput(
-                caseId,
-                apiResult.output,
-                apiResult.tokenUsage,
-            );
-            submissionResults.push(saved);
-            writeJson(checkpointPath, {
-                benchmarkVersion: `${args.all ? 'all50' : args.cases ? 'custom' : args.set}-v1`,
-                run: runMetaOf(args),
-                partial: true,
-                completedCases: submissionResults.length,
-                results: submissionResults,
-            });
-            console.log(`SAVED  ${caseId} findings=${saved.findings.length}`);
-            return;
-        }
-
         // RECALL_DUMP=<dir>: grava a saida crua do agente por caso, ANTES do
-        // judge rodar. A revisao em si (a parte cara: minutos de agent loop
+        // judge rodar (e antes do desvio --no-judge, que saia sem gravar nada). A revisao em si (a parte cara: minutos de agent loop
         // real) ja terminou aqui — se o judge quebrar (rate limit, credito,
         // parse), essa saida nao pode se perder junto, senao a unica forma de
         // reavaliar e pagar a revisao inteira de novo. Sem isso a submission
@@ -523,6 +490,39 @@ async function main() {
             } catch (e) {
                 console.warn(`[dump] ${caseId}: ${e.message}`);
             }
+        }
+
+        if (NO_JUDGE) {
+            unscored += 1;
+            // Carry the trace summary even unscored: it holds the verify funnel
+            // (beforeCount / afterCount / droppedByVerifier and each decision's
+            // parseMode), which needs no judge and is the only way this mode can
+            // say whether the pipeline still works rather than just that it ran.
+            rows.push({
+                caseId,
+                status: 'unscored',
+                reason: 'judge skipped (--no-judge): findings saved for an external judge',
+                traceSummary: traceSummaryFromOutput(apiResult.output),
+            });
+            // Log what was SAVED, read off the saved record itself. Deriving the
+            // count separately is how this line came to print 0 while the
+            // submission held 4: the engine's output is a JSON string, not an
+            // object, so a second bespoke read of it silently found nothing.
+            const saved = submissionResultFromOutput(
+                caseId,
+                apiResult.output,
+                apiResult.tokenUsage,
+            );
+            submissionResults.push(saved);
+            writeJson(checkpointPath, {
+                benchmarkVersion: `${args.all ? 'all50' : args.cases ? 'custom' : args.set}-v1`,
+                run: runMetaOf(args),
+                partial: true,
+                completedCases: submissionResults.length,
+                results: submissionResults,
+            });
+            console.log(`SAVED  ${caseId} findings=${saved.findings.length}`);
+            return;
         }
 
         let assertion;

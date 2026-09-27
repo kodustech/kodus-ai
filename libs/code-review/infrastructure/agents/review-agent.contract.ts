@@ -663,6 +663,10 @@ export interface AgentLoopInput {
     microAgentTeto?: number;
     /** Eval-only: run just these class agents (ids from MICRO_AGENTS). */
     microAgentIds?: string[];
+    /** Step cap for the class agents only (the simulation and verifier keep maxSteps). */
+    microAgentMaxSteps?: number;
+    /** Run the simulation in phase 0, alongside the agents, without <AlreadyRaised>. */
+    simulationParallel?: boolean;
     /** O grafo do braço `xfile-grafo`. Campo proprio de proposito: passar pelo
      *  `callGraph` liga a ferramenta de chamadores para TODOS os agentes e
      *  contamina o braço de controle. */

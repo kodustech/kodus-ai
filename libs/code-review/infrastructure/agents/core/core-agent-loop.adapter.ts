@@ -743,9 +743,12 @@ export async function runAgentLoopViaCore(
                                   grafoParaOsAgentes,
                                   input.microAgentTeto ?? 2,
                               ),
+                              // Teto de passos proprio dos agentes de classe (medido
+                              // em 26/09: 8 empata ou ganha de 12 e corta ~1/3 dos
+                              // tokens no DeepSeek). Sem ele, o teto geral.
                               spec: buildSpecWithLedger(
                                   ledger(),
-                                  input.maxSteps ?? 12,
+                                  input.microAgentMaxSteps ?? input.maxSteps ?? 12,
                                   MICRO_AGENT_SYSTEM_PROMPT,
                               ),
                           }))
@@ -815,8 +818,17 @@ export async function runAgentLoopViaCore(
                         ? [
                               {
                                   label: 'micro-simulate-the-change',
-                                  phase: 1,
-                                  prompt: (todos: FinderSuggestion[]) => {
+                                  // Em paralelo (fase 0) a simulacao nao espera os
+                                  // agentes e nao recebe <AlreadyRaised>: medido em
+                                  // 26/09, empata no F2 e corta ~1 min por PR.
+                                  phase: input.simulationParallel ? 0 : 1,
+                                  prompt: input.simulationParallel
+                                      ? buildSimulationPrompt(
+                                            rawDiffPrompt(input.changedFiles, input.fileTiers, input.diffTierBudget),
+                                            input.priorFindings,
+                                            grafoParaOsAgentes,
+                                        )
+                                      : (todos: FinderSuggestion[]) => {
                                       // O agente cross-file roda na fase 0 como
                                       // os outros, mas o que ele levanta NAO
                                       // entra aqui: <AlreadyRaised> existe para
