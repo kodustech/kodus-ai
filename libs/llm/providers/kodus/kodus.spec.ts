@@ -105,6 +105,13 @@ describe('model id grammar', () => {
         );
     });
 
+    it('does not resolve Object.prototype names as retired ids', () => {
+        for (const id of ['constructor', 'toString', '__proto__']) {
+            expect(splitKodusModelId(id)).toBeNull();
+            expect(isKodusCatalogModel(id)).toBe(false);
+        }
+    });
+
     it('rejects unknown prefixes, missing slash, and empty halves', () => {
         expect(splitKodusModelId('deepseek/deepseek-v4')).toBeNull();
         expect(splitKodusModelId('accounts/fireworks/models/glm-5p2')).toBeNull();

@@ -38,15 +38,17 @@ export interface KodusModelRef {
  * run). Resolving it here keeps those configs reviewing, billed at the
  * replacement's price.
  */
-const RETIRED_KODUS_MODELS: Readonly<Record<string, string>> = {
+const RETIRED_KODUS_MODELS: ReadonlyMap<string, string> = new Map([
     // Fireworks: 404 "Model not found … not deployed" since 2026-09-27.
-    'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731':
+    [
+        'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731',
         'fireworks/accounts/fireworks/models/deepseek-v4p1-flash',
-};
+    ],
+]);
 
 /** The id a saved Kodus model id runs as today (retired ids → replacement). */
 export function canonicalKodusModelId(id: string): string {
-    return RETIRED_KODUS_MODELS[id] ?? id;
+    return RETIRED_KODUS_MODELS.get(id) ?? id;
 }
 
 /** Split `<upstream>/<model>` into its parts, or null when the prefix is not
