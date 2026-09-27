@@ -511,7 +511,15 @@ export async function runAgentLoopViaCore(
                   input.usageRunName,
               )
             : null;
-    const microGroups = microPlan?.groups ?? MICRO_AGENTS;
+    // Eval: so estes agentes de classe (e as copias exp-p<N> deles). Id
+    // desconhecido e erro, nao silencio — um typo viraria "agente cortado".
+    const soEstes = input.microAgentIds;
+    if (soEstes?.some((id) => !MICRO_AGENTS.some((g) => g.id === id))) {
+        throw new Error(`microAgentIds com id desconhecido: ${soEstes.join(',')}`);
+    }
+    const microGroups =
+        microPlan?.groups ??
+        (soEstes ? MICRO_AGENTS.filter((g) => soEstes.includes(g.id)) : MICRO_AGENTS);
 
     const finderSpec = buildSpecWithLedger(coverageLedger);
 

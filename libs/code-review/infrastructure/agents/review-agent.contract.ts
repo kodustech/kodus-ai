@@ -661,6 +661,8 @@ export interface AgentLoopInput {
      *  de 2 o agente ordena do mais seguro ao menos seguro, e os dois primeiros
      *  reproduzem o teto 2 dentro da mesma rodada. So o eval muda. */
     microAgentTeto?: number;
+    /** Eval-only: run just these class agents (ids from MICRO_AGENTS). */
+    microAgentIds?: string[];
     /** O grafo do braço `xfile-grafo`. Campo proprio de proposito: passar pelo
      *  `callGraph` liga a ferramenta de chamadores para TODOS os agentes e
      *  contamina o braço de controle. */
