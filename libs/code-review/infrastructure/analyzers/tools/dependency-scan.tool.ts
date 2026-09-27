@@ -6,7 +6,12 @@ import { ManagedTool } from '@libs/code-review/infrastructure/adapters/services/
 
 import { AnalyzerFinding } from '../analyzer-finding.type';
 import { revertPatch } from '../revert-patch';
-import { AnalyzerTool, ChangedFile, ToolRunInput } from '../tool.contract';
+import {
+    AnalyzerTool,
+    ChangedFile,
+    ToolRunInput,
+    toRepoRelativePath,
+} from '../tool.contract';
 
 const RUN_TIMEOUT_MS = 120_000;
 
@@ -173,12 +178,12 @@ export class DependencyScanTool implements AnalyzerTool {
             // fails to start at all. git already holds the ref here, so the
             // content never has to travel.
             if (sandbox.baseBranch) {
-                const target = `${baseDir}/${file.filename}`;
+                const target = `${baseDir}/${toRepoRelativePath(file.filename)}`;
                 const cut = target.lastIndexOf('/');
                 setup.push(`mkdir -p ${quote(target.slice(0, cut))}`);
                 setup.push(
                     `{ git -C ${quote(sandbox.repoDir)} show ` +
-                        `${quote(`origin/${sandbox.baseBranch}:${file.filename}`)} ` +
+                        `${quote(`origin/${sandbox.baseBranch}:${toRepoRelativePath(file.filename)}`)} ` +
                         `> ${quote(target)} 2>/dev/null || rm -f ${quote(target)}; }`,
                 );
                 continue;
@@ -187,7 +192,7 @@ export class DependencyScanTool implements AnalyzerTool {
             let current: string;
             try {
                 current = await sandbox.readFile(
-                    `${sandbox.repoDir}/${file.filename}`,
+                    `${sandbox.repoDir}/${toRepoRelativePath(file.filename)}`,
                 );
             } catch {
                 return null;
@@ -220,7 +225,7 @@ export class DependencyScanTool implements AnalyzerTool {
                 continue;
             }
 
-            const target = `${baseDir}/${file.filename}`;
+            const target = `${baseDir}/${toRepoRelativePath(file.filename)}`;
             const cut = target.lastIndexOf('/');
             setup.push(`mkdir -p ${quote(target.slice(0, cut))}`);
             setup.push(

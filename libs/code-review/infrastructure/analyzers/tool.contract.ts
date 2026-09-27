@@ -69,3 +69,16 @@ export interface AnalyzerTool {
 }
 
 export const ANALYZER_TOOLS_TOKEN = Symbol('ANALYZER_TOOLS_TOKEN');
+
+/**
+ * A path as the host reports it, reduced to a repository-relative one.
+ *
+ * Azure Repos returns changed-file paths with a leading slash ("/yarn.lock").
+ * Pasted into a sandbox command that becomes an absolute path outside the
+ * checkout, so the scanner is handed a file that does not exist: betterleaks
+ * exits non-zero and the dependency scan finds no manifest. Finding metadata
+ * keeps the host's original spelling — comment anchoring matches against the
+ * host's own changed-file list — so only the filesystem path is normalized.
+ */
+export const toRepoRelativePath = (filename?: string): string =>
+    (filename ?? '').replace(/^\/+/, '');

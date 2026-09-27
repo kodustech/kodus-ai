@@ -3,7 +3,12 @@ import { Injectable } from '@nestjs/common';
 import { ManagedTool } from '@libs/code-review/infrastructure/adapters/services/ci-evidence/recognize-ci-analyzers';
 
 import { AnalyzerFinding, parseAnalyzerSarif } from '../analyzer-finding.type';
-import { AnalyzerTool, ChangedFile, ToolRunInput } from '../tool.contract';
+import {
+    AnalyzerTool,
+    ChangedFile,
+    ToolRunInput,
+    toRepoRelativePath,
+} from '../tool.contract';
 
 const RUN_TIMEOUT_MS = 60_000;
 
@@ -42,7 +47,9 @@ export class SecretScanTool implements AnalyzerTool {
     }
 
     async run({ sandbox, files }: ToolRunInput): Promise<AnalyzerFinding[]> {
-        const targets = files.map((file) => quote(file.filename)).join(' ');
+        const targets = files
+            .map((file) => quote(toRepoRelativePath(file.filename)))
+            .join(' ');
 
         const result = await sandbox.run(
             `cd ${quote(sandbox.repoDir)} && betterleaks dir ${targets} ` +

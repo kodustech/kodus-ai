@@ -127,3 +127,26 @@ describe('SecretScanTool', () => {
         expect(command).toContain("'src/b.ts'");
     });
 });
+
+describe('host path normalization', () => {
+    it('strips the leading slash Azure Repos puts on changed-file paths', async () => {
+        const commands: string[] = [];
+        const sandbox = {
+            repoDir: '/home/user/repo',
+            run: async (cmd: string) => {
+                commands.push(cmd);
+                return { exitCode: 0, stdout: '{"runs":[]}', stderr: '' };
+            },
+        };
+
+        await new SecretScanTool().run({
+            sandbox: sandbox as never,
+            files: [
+                { filename: '/src/e2e/config.ts', patch: '@@ -0,0 +1 @@\n+x' },
+            ] as never,
+        });
+
+        expect(commands[0]).toContain("'src/e2e/config.ts'");
+        expect(commands[0]).not.toContain("'/src/e2e/config.ts'");
+    });
+});
