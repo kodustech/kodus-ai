@@ -33,6 +33,11 @@ RUN = arg('run')
 if not RUN: sys.exit('uso: relatorio.py --run=<nome>')
 
 OS30 = json.load(open(os.path.join(AQUI,'light-30.json')))
+# REL_SO=arquivo.json (lista de caseIds): mede so esses PRs — para comparar com
+# uma rodada incompleta nos MESMOS PRs (ex.: GPT cortado pela cota em 27/09).
+if os.environ.get('REL_SO'):
+    _so = set(json.load(open(os.environ['REL_SO'])))
+    OS30 = [c for c in OS30 if c in _so]
 GOLD = {p['caseId']: p.get('comments') or []
         for p in json.load(open(os.path.join(AQUI,'../benchmark-sets/v002/goldens.json')))['prs']}
 
