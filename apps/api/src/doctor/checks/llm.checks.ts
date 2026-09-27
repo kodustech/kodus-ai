@@ -3,6 +3,7 @@ import { LLM_TASK } from '@libs/llm/llm-tasks';
 import { LLM } from '@libs/llm/llm';
 import { resolveContextWindow } from '@libs/llm/model-context-window';
 import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
+import { redactSecrets } from '@libs/llm/review-error-diagnostics';
 import type { BYOKConfig, NormalizedModel } from '@libs/llm/byok-config';
 
 import { DoctorCheck, DoctorContext, DoctorResult } from '../doctor.types';
@@ -48,8 +49,9 @@ function modelLabel(slot?: NormalizedModel, envModel?: string): string {
     return envModel ?? 'the default model';
 }
 
+/** The provider's sentence without the account or key ids it may echo (#2021). */
 function errorText(error: any): string {
-    return String(error?.message ?? error).slice(0, 200);
+    return redactSecrets(String(error?.message ?? error)).slice(0, 200);
 }
 
 /**
@@ -68,6 +70,8 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
                 : undefined;
             const tested = new Map<string, DoctorResult | null>();
             const reported = new Set<DoctorResult>();
+            /** Orgs whose reviews run on the server model, not their own. */
+            const envOrgs: string[] = [];
             const now = deps.now ?? Date.now;
             const deadline = now() + LLM_BUDGET_MS;
 
@@ -122,6 +126,9 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
                 const key = slot
                     ? `byok:${slot.provider}:${slot.model}:${slot.baseURL ?? ''}:${organizationId}`
                     : 'env';
+                if (!slot && scope) {
+                    envOrgs.push(scope);
+                }
                 const remaining = deadline - now();
                 // A probe gets its full timeout or does not start: cutting it
                 // short would fail a slow but working model as "did not
@@ -185,6 +192,15 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
                         fix: `Use a model with a context window of ${MIN_CONTEXT_WINDOW.toLocaleString('en-US')} tokens or more, or set its real limit in the BYOK page (user menu > BYOK) if it is larger.`,
                     });
                 }
+            }
+
+            // The server model is probed once for every org that uses it, so its
+            // failure has no single owner. Name them: an admin whose own org runs
+            // on BYOK would otherwise read "reviews fail" about reviews that run
+            // (#2021).
+            const envFailure = tested.get('env');
+            if (envFailure && envOrgs.length) {
+                envFailure.scope = envOrgs.join(', ');
             }
 
             return results;
