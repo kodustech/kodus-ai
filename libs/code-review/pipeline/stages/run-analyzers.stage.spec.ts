@@ -221,3 +221,41 @@ describe('RunAnalyzersStage', () => {
         expect(seen.map((f) => f.filename)).toContain('yarn.lock');
     });
 });
+
+describe('host path spelling', () => {
+    it('keeps a finding whose file the host spells with a leading slash', async () => {
+        // Azure Repos reports "/src/app.ts"; the scanner, running against the
+        // checkout, reports "src/app.ts". Without mapping the finding back to
+        // the host's spelling clipToDiff loses it as "outside the diff".
+        const tool = makeTool({
+            run: jest
+                .fn()
+                .mockResolvedValue([
+                    finding({ path: 'src/app.ts', startLine: 2 }),
+                ]),
+        });
+
+        const stage = new RunAnalyzersStage(
+            new AnalyzerToolRouter(),
+            { isEnabled: jest.fn().mockResolvedValue(true) } as never,
+            [tool],
+        );
+
+        const context = makeContext({
+            changedFiles: [
+                { filename: '/src/app.ts', patch: patchAdding(1, 3) },
+            ],
+        } as never);
+
+        const result = await (
+            stage as unknown as {
+                executeStage: (c: unknown) => Promise<{
+                    analyzerFindings?: Array<{ path: string }>;
+                }>;
+            }
+        ).executeStage(context);
+
+        expect(result.analyzerFindings).toHaveLength(1);
+        expect(result.analyzerFindings?.[0].path).toBe('/src/app.ts');
+    });
+});

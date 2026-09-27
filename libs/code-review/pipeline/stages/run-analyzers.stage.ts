@@ -11,6 +11,7 @@ import {
     AnalyzerTool,
     ChangedFile,
     RouteDecision,
+    toRepoRelativePath,
 } from '@libs/code-review/infrastructure/analyzers/tool.contract';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
@@ -98,6 +99,25 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
         const findings: AnalyzerFinding[] = [];
         const failed: string[] = [];
 
+        // A scanner reports the path it was given on disk, which is always
+        // repository-relative. Azure Repos spells its changed files with a
+        // leading slash, so a finding would no longer match the file it came
+        // from and would be clipped as "outside the diff". Map each finding
+        // back to the host's own spelling.
+        const byRepoRelative = new Map(
+            changedFiles
+                .filter((file) => file.filename)
+                .map((file) => [
+                    toRepoRelativePath(file.filename),
+                    file.filename,
+                ]),
+        );
+        const toHostPath = (filename?: string): string | undefined =>
+            filename === undefined
+                ? filename
+                : (byRepoRelative.get(toRepoRelativePath(filename)) ??
+                  filename);
+
         results.forEach((result, index) => {
             if (result.status === 'fulfilled') {
                 // Tagged here because only the stage knows which tool ran
@@ -106,6 +126,7 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
                 findings.push(
                     ...result.value.map((finding) => ({
                         ...finding,
+                        path: toHostPath(finding.path) ?? finding.path,
                         tool: toolId,
                     })),
                 );
