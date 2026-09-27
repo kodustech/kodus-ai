@@ -83,6 +83,7 @@ import {
     xfileExtraLabel,
     EXPERIMENTAL_AGENTS,
     experimentalExtraLabel,
+    groupedMicroAgent,
 } from '@libs/code-review/infrastructure/agents/core/micro-agents';
 import {
     SIMULATION_SYSTEM_PROMPT,
@@ -760,7 +761,9 @@ export async function runAgentLoopViaCore(
                     ...(input.microAgentExtras ?? []).flatMap((extra) => {
                         const xfile = MICRO_AGENTS.find((g) => g.id === CROSS_FILE_AGENT_ID);
                         const diff = rawDiffPrompt(input.changedFiles, input.fileTiers, input.diffTierBudget);
-                        const spec = buildSpecWithLedger(ledger(), input.maxSteps ?? 12, MICRO_AGENT_SYSTEM_PROMPT);
+                        // Mesmo teto dos agentes de classe: um experimental comparado
+                        // com eles tem que rodar nas mesmas condicoes.
+                        const spec = buildSpecWithLedger(ledger(), input.microAgentMaxSteps ?? input.maxSteps ?? 12, MICRO_AGENT_SYSTEM_PROMPT);
                         if (extra === 'xfile-grafo' || extra === 'xfile-b') {
                             if (!xfile) return [];
                             return [{
@@ -796,6 +799,16 @@ export async function runAgentLoopViaCore(
                                 prompt: buildMicroAgentPrompt(group, diff, grafoParaOsAgentes, input.microAgentTeto ?? 2),
                                 spec: buildSpecWithLedger(ledger(), n, MICRO_AGENT_SYSTEM_PROMPT),
                             }));
+                        }
+                        // exp-grp-<classe>+<classe>...: um agente com varias classes.
+                        if (extra.startsWith('exp-grp-')) {
+                            const grupo = groupedMicroAgent(extra.slice('exp-grp-'.length).split('+'));
+                            return [{
+                                label: experimentalExtraLabel(grupo.id),
+                                phase: 0,
+                                prompt: buildMicroAgentPrompt(grupo, diff, grafoParaOsAgentes, input.microAgentTeto ?? 2),
+                                spec,
+                            }];
                         }
                         const exp = EXPERIMENTAL_AGENTS.find((g) => `exp-${g.id}` === extra);
                         if (!exp) throw new Error(`agente experimental desconhecido: ${extra}`);

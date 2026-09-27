@@ -12,7 +12,10 @@
 const fs = require('fs');
 const path = require('path');
 
-const DATASETS_DIR = path.join(__dirname, 'datasets');
+// RECALL_DATASETS_DIR: outro conjunto de casos no mesmo formato (ex.: o de
+// seguranca por reversao de correcao, datasets-security/). Com ele, sem
+// RECALL_CASES, roda todos os casos do diretorio.
+const DATASETS_DIR = process.env.RECALL_DATASETS_DIR || path.join(__dirname, 'datasets');
 
 // One high-signal case per repo (cal.com / sentry / grafana-codex / keycloak /
 // discourse-cursor). 5 cases / 25 goldens, useful for quick local checks.
@@ -103,7 +106,7 @@ module.exports = async () => {
         }
         const c = Array.isArray(raw) ? raw[0] : raw;
         const caseId = c?.vars?.caseId || file.replace(/\.json$/, '');
-        const include = all
+        const include = all || (process.env.RECALL_DATASETS_DIR && !only.length)
             ? true
             : only.length
               ? only.includes(caseId)

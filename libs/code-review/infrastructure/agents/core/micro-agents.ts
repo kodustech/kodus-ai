@@ -123,6 +123,30 @@ export const EXPERIMENTAL_AGENTS: MicroAgentGroup[] = [
             "The new preview endpoint at preview.rb:18 renders params[:return_to] inside a <script> block with raw(). Read the helper: no JS escaping on that path. An attacker link with return_to=';alert(1)// runs script in the victim's session. Reported.",
     },
     {
+        // authorization + untrusted-input-sink numa passada so (27/09): os dois
+        // nao tinham golden exclusivo nos 30 PRs, mas o conjunto quase nao mede
+        // seguranca (9 de 111 goldens). Um agente cobre as duas fronteiras pela
+        // metade do custo; o texto de defesas ausentes e o de MISSING_DEFENSES,
+        // escrito aqui porque aquela const e declarada depois deste array.
+        id: 'security-boundary',
+        label: 'security',
+        assignment:
+            'untrusted input reaching a sensitive sink, and who can reach a changed entrypoint with what credential',
+        items: [
+            'Injection vulnerabilities',
+            'SSRF (Server-Side Request Forgery)',
+            'Input validation gaps',
+            'Input validation bypass',
+            'AuthZ/AuthN flaws',
+            'Session management',
+        ],
+        extraItems: [
+            `- Missing defensive measures: a changed or newly added entrypoint that lacks the protection its siblings have — CSRF token check, rate limit, or an authorization guard. Compare against how the neighbouring routes or handlers in the same file are protected.`,
+        ],
+        reasoningExample:
+            "Traced the `sort` query param into the ORDER BY built at repo.ts:88; the new path concatenates the raw value, while the other caller at list.ts:31 passes a validated enum. Separately, the new DELETE route at router.ts:22 has no guard, while both neighbouring routes call requireOwner(). Reported both.",
+    },
+    {
         id: 'failure-and-absence-paths',
         label: 'bug',
         assignment:
@@ -135,6 +159,26 @@ export const EXPERIMENTAL_AGENTS: MicroAgentGroup[] = [
             "The new retry loop at sync.ts:52 treats any response with a body as success. Read the client: 4xx responses also carry a JSON body, so a rejected token is stored as refreshed and the next call fails later with no trace. Reported.",
     },
 ];
+
+/** Agente AGRUPADO (#1821, custo): varias classes de MICRO_AGENTS numa passada
+ *  so, montada a partir das definicoes existentes — nenhum texto novo, entao o
+ *  braço mede so o efeito de juntar. Mede se o custo (uma passada por classe)
+ *  pode cair sem perder o que cada classe acha. */
+export function groupedMicroAgent(ids: string[]): MicroAgentGroup {
+    const grupos = ids.map((id) => {
+        const g = MICRO_AGENTS.find((x) => x.id === id);
+        if (!g) throw new Error(`agente agrupado com classe desconhecida: ${id}`);
+        return g;
+    });
+    return {
+        id: `grp-${ids.join('+')}`,
+        label: grupos[0].label,
+        assignment: grupos.map((g, i) => `(${i + 1}) ${g.assignment}`).join('; '),
+        items: grupos.flatMap((g) => g.items),
+        extraItems: grupos.flatMap((g) => g.extraItems ?? []),
+        reasoningExample: grupos[0].reasoningExample,
+    };
+}
 
 export function experimentalExtraLabel(id: string): string {
     return `micro-exp-${id}`;

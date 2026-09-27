@@ -4,6 +4,7 @@ import {
     MICRO_AGENTS,
     buildMicroAgentPrompt,
     experimentalExtraLabel,
+    groupedMicroAgent,
     semCrossFile,
     xfileExtraLabel,
 } from './micro-agents';
@@ -78,5 +79,15 @@ describe('cross-file experiment arms', () => {
             { producedBy: 'micro-invalid-state-and-concurrency' },
             {},
         ]);
+    });
+
+    it('a grouped agent carries every class it merges, with no new text', () => {
+        const [a, b] = [MICRO_AGENTS[0], MICRO_AGENTS[1]];
+        const g = groupedMicroAgent([a.id, b.id]);
+        expect(g.items).toEqual([...a.items, ...b.items]);
+        expect(g.extraItems).toEqual([...(a.extraItems ?? []), ...(b.extraItems ?? [])]);
+        expect(g.assignment).toBe(`(1) ${a.assignment}; (2) ${b.assignment}`);
+        expect(buildMicroAgentPrompt(g, 'diff', undefined, 4)).toContain(a.assignment);
+        expect(() => groupedMicroAgent(['nao-existe'])).toThrow('desconhecida');
     });
 });
