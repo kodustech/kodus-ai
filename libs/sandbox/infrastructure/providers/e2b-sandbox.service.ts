@@ -782,8 +782,12 @@ export class E2BSandboxService implements ISandboxProvider {
         sandbox: Sandbox,
         params: CreateSandboxParams,
     ): Promise<string | undefined> {
-        const { cloneUrl, authToken, authUsername, platform, baseBranch } =
-            params;
+        const { cloneUrl, authToken, authUsername, platform } = params;
+        // Azure Repos names branches in full ("refs/heads/main"). Pasted into
+        // the refspec below that becomes "refs/heads/refs/heads/main", the
+        // fetch fails, and every tool that needs the base tree — the
+        // dependency baseline above all — silently loses it.
+        const baseBranch = params.baseBranch?.replace(/^refs\/heads\//, '');
         if (!baseBranch) return undefined;
 
         const hasAuth = !!authToken;
