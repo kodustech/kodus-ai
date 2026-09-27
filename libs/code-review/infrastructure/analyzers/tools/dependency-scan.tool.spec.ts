@@ -412,14 +412,74 @@ describe('an untrustworthy baseline reports nothing, not everything', () => {
         expect(findings).toEqual([]);
     });
 
-    it('reports nothing when the base file cannot be materialized', async () => {
-        const sandbox = withFailingSetup(preexisting, (c) =>
-            c.includes('cat-file'),
-        );
+    /**
+     * `cat-file -e` is an `if` CONDITION, not a failure: a miss means the
+     * manifest is new in this pull request and takes the `else rm -f` branch.
+     * Only a `git show` that fails after the blob was found is a real error,
+     * and the `|| exit 1` is what turns it into one. Modelling the shell —
+     * including whether that guard is present — is the only way this test can
+     * die when the guard is deleted.
+     */
+    const shellSandbox = (
+        head: string,
+        { blobExists, showFails }: { blobExists: boolean; showFails: boolean },
+    ) =>
+        ({
+            repoDir: '/repo',
+            baseBranch: 'main',
+            run: jest.fn(async (command: string) => {
+                const isSetup =
+                    command.includes('kody-deps-base') &&
+                    !command.includes('osv-scanner');
+                if (isSetup) {
+                    const guarded = command.includes('|| exit 1');
+                    // A missing blob is handled by `rm -f`; a failing show
+                    // only aborts the chain while the guard is there.
+                    const aborts = blobExists && showFails && guarded;
+                    return {
+                        stdout: '',
+                        stderr: '',
+                        exitCode: aborts ? 1 : 0,
+                    };
+                }
+                if (command.includes('osv-scanner')) {
+                    const isBase = command.includes('kody-deps-base');
+                    // Nothing was materialized, so the base tree is empty.
+                    return {
+                        stdout: isBase ? osv([]) : head,
+                        stderr: '',
+                        exitCode: 0,
+                    };
+                }
+                return { stdout: '', stderr: '', exitCode: 0 };
+            }),
+            readFile: jest.fn(async () => HEAD),
+            writeFile: jest.fn(),
+        }) as never;
+
+    it('reports nothing when a base file exists but cannot be read', async () => {
+        const sandbox = shellSandbox(preexisting, {
+            blobExists: true,
+            showFails: true,
+        });
 
         const findings = await tool.run({ sandbox, files: [file()] });
 
         expect(findings).toEqual([]);
+    });
+
+    it('still reports advisories for a manifest this PR added', async () => {
+        // No base blob is the normal, correct case for an added manifest:
+        // its advisories really are introduced here, so they must be kept.
+        const sandbox = shellSandbox(preexisting, {
+            blobExists: false,
+            showFails: false,
+        });
+
+        const findings = await tool.run({ sandbox, files: [file()] });
+
+        expect(findings).toHaveLength(1);
+        expect(findings[0].ruleId).toContain('GHSA-aaa');
     });
 
     it('reports nothing when the sandbox throws instead of returning an exit code', async () => {

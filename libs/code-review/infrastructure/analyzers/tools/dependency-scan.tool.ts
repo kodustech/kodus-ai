@@ -265,9 +265,14 @@ export class DependencyScanTool implements AnalyzerTool {
                 timeoutMs: 30_000,
             });
             if (result.exitCode !== 0) {
+                this.noBaseline(sandbox, files, {
+                    exitCode: result.exitCode,
+                    stderr: result.stderr?.slice(0, 500),
+                });
                 return null;
             }
-        } catch {
+        } catch (error) {
+            this.noBaseline(sandbox, files, { error });
             return null;
         }
 
@@ -276,6 +281,31 @@ export class DependencyScanTool implements AnalyzerTool {
         } finally {
             await sandbox.run(`rm -rf ${quote(baseDir)}`, { timeoutMs: 15_000 });
         }
+    }
+
+    /**
+     * Reporting nothing and finding nothing are indistinguishable downstream,
+     * so a baseline we could not build has to say so. The alternative — a
+     * half-built base tree — would blame this pull request for every advisory
+     * already in the lockfile, which is why the caller still returns null.
+     */
+    private noBaseline(
+        sandbox: ToolRunInput['sandbox'],
+        files: ChangedFile[],
+        detail: Record<string, unknown>,
+    ): void {
+        this.logger.warn({
+            message:
+                'Could not rebuild the dependency baseline; reporting no ' +
+                'dependency findings for this review.',
+            context: DependencyScanTool.name,
+            metadata: {
+                ...detail,
+                hasBaseBranch: Boolean(sandbox.baseBranch),
+                baseBranch: sandbox.baseBranch,
+                manifestCount: files.length,
+            },
+        });
     }
 
     private async scan(
