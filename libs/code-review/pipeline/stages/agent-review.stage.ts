@@ -1496,9 +1496,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 draft.fileAnalysisResults = [];
                 for (const filename of allAffectedFiles) {
                     const suggestions = byFile.get(filename) ?? [];
-                    const file = changedFiles.find(
-                        (f) => f.filename === filename,
-                    );
+                    // Analyzer findings legitimately land on files the review
+                    // itself ignores — a lockfile is the common case, since
+                    // ignorePaths hides it from the reviewer while the
+                    // dependency scan still has to report what it introduces.
+                    // Resolving only against changedFiles discarded those.
+                    const file =
+                        changedFiles.find((f) => f.filename === filename) ??
+                        context.ignoredFileChanges?.find(
+                            (f) => f.filename === filename,
+                        );
                     if (file) {
                         draft.fileAnalysisResults.push({
                             validSuggestionsToAnalyze: suggestions,
