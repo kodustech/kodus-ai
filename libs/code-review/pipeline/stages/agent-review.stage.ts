@@ -1240,11 +1240,12 @@ metadata: {
             }
 
             // Clean up suggestion text: remove WHAT/WHY/HOW labels, merge into natural prose
-            // Degradations that cannot be written to the context while inside
-            // the formatter callback are buffered here and flushed by the
-            // caller right after the call returns, so the failure to record
-            // them can never read as a clean success (rule 14).
-            const unflushedDegradations: PipelineError[] = [];
+            // The formatter reports degradation through onDegraded; the callback
+            // only snapshots the report (never touches the context — a write
+            // there can throw and take the formatting down). The 'partial'
+            // record is made exactly once, after the publish, where a refused
+            // write can no longer cost the review output.
+            let degradedReport: FormatterDegradedReport | undefined;
             try {
                 const {
                     formatSuggestionContent,
@@ -1270,91 +1271,16 @@ metadata: {
                         // Degradation surfacing: the comments still ship (the
                         // floor de-scaffolds), so this is a PARTIAL execution —
                         // the run must not read as a clean success when a chunk
-                        // of the prose polish was lost. Single, deduped entry.
+                        // of the prose polish was lost. The callback runs
+                        // synchronously inside the formatter, within this
+                        // stage's try/catch, so it NEVER writes to the context:
+                        // a throw here (Immer produce, message construction)
+                        // would be caught as "formatting failed" and discard
+                        // the de-scaffolded map, shipping the raw WHAT/WHY/HOW.
+                        // It only snapshots the report; the stage records the
+                        // 'partial' error once, after the publish.
                         onDegraded: (report: FormatterDegradedReport) => {
-                            // This callback runs synchronously inside the
-                            // formatter, within this stage's try/catch: a throw
-                            // here (Immer produce on the context, message
-                            // construction) would be caught as "formatting
-                            // failed", DISCARD the de-scaffolded map and ship
-                            // the raw WHAT/WHY/HOW — the exact leak this pass
-                            // exists to prevent. Reporting must never take the
-                            // formatting down: own try/catch, warn, continue.
-                            // The user-visible message carries counts only:
-                            // error.message is printed verbatim on the PR-log
-                            // surfaces, and `distinctReasons` holds raw
-                            // provider/LLM error strings that can echo request
-                            // or response payload fragments. Reasons stay in
-                            // metadata and in the formatter's own logs.
-                            const degradedEntry = (): PipelineError => ({
-                                pipelineId:
-                                    context.pipelineMetadata?.pipelineId,
-                                stage: this.stageName,
-                                substage: 'suggestion-formatter',
-                                error: new Error(
-                                    `Suggestion formatting degraded: ${report.strippedMechanically}/${report.totalSuggestions} suggestion(s) stripped of WHAT/WHY/HOW locally (${report.distinctReasons.length} distinct failure reason(s))`,
-                                ),
-                                severity: 'partial',
-                                metadata: {
-                                    totalSuggestions:
-                                        report.totalSuggestions,
-                                    polishedByModel: report.polishedByModel,
-                                    strippedMechanically:
-                                        report.strippedMechanically,
-                                    distinctReasons: report.distinctReasons,
-                                    prNumber,
-                                },
-                            });
-
-                            try {
-                                context = this.updateContext(context, (draft) => {
-                                    if (!draft.errors) {
-                                        draft.errors = [];
-                                    }
-                                    draft.errors.push(degradedEntry());
-                                });
-                            } catch (reportErr) {
-                                // The Immer write refused. Fall back to a
-                                // minimal, Immer-free write so the degradation
-                                // still lands a 'partial' entry instead of the
-                                // run reading as a clean success (rule 14). The
-                                // spread is safe on a frozen Immer context
-                                // (autoFreeze): it rebuilds instead of mutating.
-                                // Guarded so a second failure cannot escape the
-                                // callback and take the formatting down.
-                                try {
-                                    context = {
-                                        ...context,
-                                        errors: [
-                                            ...(context.errors ?? []),
-                                            degradedEntry(),
-                                        ],
-                                    };
-                                } catch {
-                                    // Both context writes refused (unwritable
-                                    // context or producer throw): buffer the
-                                    // entry — the caller flushes it right after
-                                    // the call returns, so it still records.
-                                    unflushedDegradations.push(degradedEntry());
-                                }
-                                this.logger.warn({
-                                    message: `[AGENT] Recorded formatter degradation outside the context (fallback path): ${reportErr instanceof Error ? reportErr.message : String(reportErr)}`,
-                                    context: this.stageName,
-                                    metadata: {
-                                        organizationId:
-                                            context.organizationAndTeamData
-                                                ?.organizationId,
-                                        prNumber,
-                                        totalSuggestions:
-                                            report.totalSuggestions,
-                                        polishedByModel:
-                                            report.polishedByModel,
-                                        strippedMechanically:
-                                            report.strippedMechanically,
-                                        distinctReasons: report.distinctReasons,
-                                    },
-                                });
-                            }
+                            degradedReport = report;
                         },
                     },
                 );
@@ -1379,75 +1305,6 @@ metadata: {
                     message: `[AGENT] Content formatting failed, keeping original text: ${err instanceof Error ? err.message : String(err)}`,
                     context: this.stageName,
                 });
-            }
-
-            // Degradations the callback could not record while the formatter
-            // was running (both the Immer write and the spread fallback
-            // refused): flush them here, after the call returned, so the run
-            // still carries the 'partial' evidence.
-            if (unflushedDegradations.length > 0) {
-                try {
-                    context = this.updateContext(context, (draft) => {
-                        if (!draft.errors) {
-                            draft.errors = [];
-                        }
-                        draft.errors.push(...unflushedDegradations);
-                    });
-                    // Recorded via Immer — done.
-                    unflushedDegradations.length = 0;
-                } catch (flushErr) {
-                    const recordOutsideImmer = (): boolean => {
-                        try {
-                            context = {
-                                ...context,
-                                errors: [
-                                    ...(context.errors ?? []),
-                                    ...unflushedDegradations,
-                                ],
-                            };
-                            unflushedDegradations.length = 0;
-                            return true;
-                        } catch {
-                            return false;
-                        }
-                    };
-
-                    // NEVER let a recording failure abort the stage at this
-                    // point: the outer try/catch of executeStage (opened at
-                    // ~527) on any throw resets fileAnalysisResults = [] and
-                    // grades the run 'critical' (catch at ~1715) — a refusal
-                    // here would discard the whole review, not just the
-                    // degraded evidence. Try outside Immer; if that too
-                    // refuses, hold the entries for the publish-time flush
-                    // (inside the final producer, where a lost 'partial'
-                    // record can no longer cost the review output).
-                    if (recordOutsideImmer()) {
-                        this.logger.warn({
-                            message: `[AGENT] Failed to flush buffered formatter degradations via context, recorded outside Immer: ${flushErr instanceof Error ? flushErr.message : String(flushErr)}`,
-                            context: this.stageName,
-                            metadata: {
-                                organizationId:
-                                    context.organizationAndTeamData
-                                        ?.organizationId,
-                                prNumber,
-                                bufferedDegradations: 0,
-                            },
-                        });
-                    } else {
-                        this.logger.warn({
-                            message: `[AGENT] Buffered formatter degradations unrecorded after Immer and plain rebuild; holding for publish-time flush`,
-                            context: this.stageName,
-                            metadata: {
-                                organizationId:
-                                    context.organizationAndTeamData
-                                        ?.organizationId,
-                                prNumber,
-                                bufferedDegradations:
-                                    unflushedDegradations.length,
-                            },
-                        });
-                    }
-                }
             }
 
             // Publication gate (issue #1833): four weeks of production
@@ -1740,34 +1597,56 @@ metadata: {
                 draft.discardedSuggestions = allDiscarded;
             });
 
-            // Last-resort flush for degradations that survived every earlier
-            // write attempt (formatter-callback Immer + spread, then the
-            // post-formatter Immer + rebuild). Deliberately runs AFTER the
-            // publish: a refused write here can no longer throw inside the
-            // publish producer and abort the whole review, so a lost 'partial'
-            // record never costs fileAnalysisResults/validSuggestions. Guarded
-            // the same way the pipeline executor guards the errors write
-            // (Array.isArray check, pipeline-executor.service.ts:47-49).
-            if (unflushedDegradations.length > 0) {
+            // Record the formatter degradation as 'partial', AFTER the publish:
+            // a refused write here can no longer throw inside the publish
+            // producer and abort the review, so a lost record never costs
+            // fileAnalysisResults/validSuggestions. The message carries counts
+            // only — error.message prints verbatim on the PR-log surfaces, and
+            // distinctReasons holds raw provider/LLM strings (they stay in
+            // metadata and in the formatter's own logs).
+            if (degradedReport) {
+                const degradedEntry: PipelineError = {
+                    pipelineId: context.pipelineMetadata?.pipelineId,
+                    stage: this.stageName,
+                    substage: 'suggestion-formatter',
+                    error: new Error(
+                        `Suggestion formatting degraded: ${degradedReport.strippedMechanically}/${degradedReport.totalSuggestions} suggestion(s) stripped of WHAT/WHY/HOW locally (${degradedReport.distinctReasons.length} distinct failure reason(s))`,
+                    ),
+                    severity: 'partial',
+                    metadata: {
+                        totalSuggestions: degradedReport.totalSuggestions,
+                        polishedByModel: degradedReport.polishedByModel,
+                        strippedMechanically:
+                            degradedReport.strippedMechanically,
+                        distinctReasons: degradedReport.distinctReasons,
+                        prNumber,
+                    },
+                };
                 try {
                     return this.updateContext(publishedContext, (draft) => {
+                        // Same defensive guard the pipeline executor uses for
+                        // the errors write (pipeline-executor.service.ts:47-49).
                         if (!Array.isArray(draft.errors)) {
                             draft.errors = [];
                         }
-                        draft.errors.push(...unflushedDegradations);
+                        draft.errors.push(degradedEntry);
                     });
                 } catch (flushErr) {
+                    // The publish already happened, so a refused record can
+                    // never cost the review output; but the run must NOT read
+                    // as a clean success when the 'partial' evidence is lost
+                    // (rule 14) — surface it as critical.
                     this.logger.warn({
-                        message: `[AGENT] Failed to record buffered formatter degradations after publishing the review: ${flushErr instanceof Error ? flushErr.message : String(flushErr)}`,
+                        message: `[AGENT] Failed to record formatter degradation after publishing the review: ${flushErr instanceof Error ? flushErr.message : String(flushErr)}`,
                         context: this.stageName,
                         metadata: {
                             organizationId:
                                 context.organizationAndTeamData?.organizationId,
                             prNumber,
-                            bufferedDegradations: unflushedDegradations.length,
+                            bufferedDegradations: 1,
                         },
                     });
-                    return publishedContext;
+                    throw flushErr;
                 }
             }
 
