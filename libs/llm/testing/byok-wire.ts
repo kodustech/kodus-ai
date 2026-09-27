@@ -36,6 +36,9 @@
 import { LLM } from '../llm';
 import { resolveModelConfig } from '../model-invocation';
 
+import type { Schema } from 'ai';
+import type { z } from 'zod';
+
 import type { NormalizedModel } from '../byok-config';
 import type { ReasoningEffort } from '../providers/kernel/types';
 
@@ -102,10 +105,31 @@ const GEMINI_OK = {
     },
 };
 
-function cannedBodyFor(url: string): unknown {
-    if (/generateContent/i.test(url)) return GEMINI_OK;
-    if (/\/messages\b/i.test(url)) return ANTHROPIC_OK;
-    return OPENAI_OK;
+function cannedBodyFor(url: string, text: string): unknown {
+    if (/generateContent/i.test(url)) {
+        return {
+            ...GEMINI_OK,
+            candidates: [
+                {
+                    content: { parts: [{ text }], role: 'model' },
+                    finishReason: 'STOP',
+                },
+            ],
+        };
+    }
+    if (/\/messages\b/i.test(url)) {
+        return { ...ANTHROPIC_OK, content: [{ type: 'text', text }] };
+    }
+    return {
+        ...OPENAI_OK,
+        choices: [
+            {
+                index: 0,
+                message: { role: 'assistant', content: text },
+                finish_reason: 'stop',
+            },
+        ],
+    };
 }
 
 /**
@@ -131,6 +155,21 @@ export async function captureByokWire(
         reasoningEffortDefault?: ReasoningEffort;
         openrouterProviderOrder?: string[];
         openrouterAllowFallbacks?: boolean;
+        /** Capture a STRUCTURED call instead of a plain loop turn: the request
+         *  goes through the structured executor, which is where the schema (or,
+         *  on a `json_object` route, the prompt contract that stands in for it)
+         *  is put on the wire. */
+        schema?: z.ZodType | Schema;
+        /** System prompt to send, when a case asserts what happens AROUND it
+         *  (e.g. that a prompt contract is appended, not substituted). */
+        system?: string;
+        /** User prompt to send. Defaults to 'ping'; a case passes the caller's
+         *  REAL prompt when the claim is about that prompt reaching the wire. */
+        user?: string;
+        /** Assistant text the canned response carries. A structured case passes
+         *  a JSON body its schema accepts, so the parse succeeds and the run
+         *  stops at ONE request instead of climbing the recovery ladder. */
+        cannedText?: string;
     } = {},
 ): Promise<CapturedWire> {
     const captured: CapturedWire[] = [];
@@ -150,10 +189,13 @@ export async function captureByokWire(
                 ]),
             ),
         });
-        return new Response(JSON.stringify(cannedBodyFor(url)), {
-            status: 200,
-            headers: { 'content-type': 'application/json' },
-        });
+        return new Response(
+            JSON.stringify(cannedBodyFor(url, opts.cannedText ?? 'ok')),
+            {
+                status: 200,
+                headers: { 'content-type': 'application/json' },
+            },
+        );
     }) as typeof fetch;
 
     try {
@@ -177,10 +219,17 @@ export async function captureByokWire(
                     ? { reasoningEffort: opts.reasoningEffortDefault }
                     : {}),
             } as NormalizedModel,
-            messages: [{ role: 'user', content: 'ping' }],
-            loop: { tools: {}, maxSteps: 1 },
+            // A schema routes to the structured executor; without one this is a
+            // plain message turn through the loop executor (the original mode).
+            ...(opts.system ? { system: opts.system } : {}),
+            ...(opts.schema
+                ? { user: opts.user ?? 'ping', schema: opts.schema }
+                : {
+                      messages: [{ role: 'user', content: 'ping' }],
+                      loop: { tools: {}, maxSteps: 1 },
+                  }),
             runName: 'byok-wire-harness',
-        });
+        } as any);
     } catch (err) {
         // The REQUEST is the subject under test. A canned response the provider's
         // parser rejects (or an upstream-shaped error) must not hide the body we

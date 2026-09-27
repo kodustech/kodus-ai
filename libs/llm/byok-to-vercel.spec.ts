@@ -271,7 +271,7 @@ describe('buildModelFromSlot — env/managed default (undefined slot)', () => {
     it('no slot + auto env → the managed Fireworks default (deepseek-v4-flash via Fireworks)', () => {
         const result: any = buildModelFromSlot(undefined);
 
-        expect(result.modelId).toBe('accounts/fireworks/models/deepseek-v4-flash-0731');
+        expect(result.modelId).toBe('accounts/fireworks/models/deepseek-v4p1-flash');
         expect(createOpenAICompatibleMock).toHaveBeenCalledWith(
             expect.objectContaining({ name: 'fireworks' }),
         );
@@ -307,7 +307,7 @@ describe('getModelName — resolved slot vs env default', () => {
 
     it('undefined slot + auto env → the managed default model id', () => {
         expect(getModelName(undefined)).toBe(
-            'accounts/fireworks/models/deepseek-v4-flash-0731',
+            'accounts/fireworks/models/deepseek-v4p1-flash',
         );
     });
 

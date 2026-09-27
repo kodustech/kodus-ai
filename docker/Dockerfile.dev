@@ -20,6 +20,15 @@ ENV SENTRY_RELEASE=${RELEASE_VERSION}
 WORKDIR /usr/src/app
 ENV NODE_ENV=development
 ENV NODE_OPTIONS="--max-old-space-size=4096"
+# dev-entrypoint.sh owns dependency installs (fingerprint + lock). pnpm 11
+# defaults `verify-deps-before-run` to `install`, so any `pnpm run` in the
+# container — the service's own command or a `docker exec` — re-checks
+# node_modules and, when it looks out of sync, installs the whole tree under
+# that service's memory cap. mcp-manager (1G) got OOM-killed mid-install and
+# crash-looped every ~30s, re-downloading ~450MB each time (1.6TB in 30h on
+# one preview). Image ENV, not an entrypoint export, so exec'd processes get
+# it too. `false` only: pnpm parses this env as a boolean, "warn" is dropped.
+ENV pnpm_config_verify_deps_before_run=false
 
 RUN corepack disable \
  && npm i -g pnpm@11.7.0

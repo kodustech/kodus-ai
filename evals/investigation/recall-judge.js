@@ -58,6 +58,9 @@ function providerFor(model) {
     if (/^claude/i.test(m)) return 'anthropic';
     if (/^gemini/i.test(m)) return 'google';
     if (/^(gpt|o\d)/i.test(m)) return 'openai';
+    // JUDGE_BASE_URL names an OpenAI-compatible endpoint (Fireworks, the local
+    // scripted model): its model ids follow no vendor prefix.
+    if (process.env.JUDGE_BASE_URL) return 'openai';
     throw new Error(`judge: cannot route unknown model '${model}' to a provider`);
 }
 

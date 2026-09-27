@@ -30,6 +30,7 @@ import type {
 import {
     NON_REASONING_TRAITS,
     type ModelReasoningTraits,
+    type StructuredOutputMode,
 } from '../kernel/reasoning-traits';
 import { normalizeSdkResult, normalizeSdkUsage } from '../kernel/usage';
 
@@ -175,6 +176,13 @@ export const bedrockModule: ProviderModule = {
         // Unidentified Claude: either shape is a 400 on the generation that does
         // not take it, so send neither.
         return {};
+    },
+
+    // The WIRE answer: Bedrock's Converse API does structured output through
+    // tool use — the schema travels as the tool's parameter definition, never as
+    // a response_format.
+    structuredOutputPolicy(_cfg: ProviderBuildConfig): StructuredOutputMode {
+        return 'none';
     },
 
     temperaturePolicy(cfg: ProviderBuildConfig): TemperaturePolicy {

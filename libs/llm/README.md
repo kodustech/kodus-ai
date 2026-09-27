@@ -77,6 +77,14 @@ that means "no BYOK configured" returns `undefined`; don't reintroduce `null`.
   `wrapLanguageModel`; the failure reporter is injected).
 - **`structured-review-call.ts`** — `runStructuredReviewCall` / `runTextReviewCall`,
   the executors `LLM.run` delegates to (span + telemetry + `BaseReviewCallParams`).
+- **`providers/kernel/structured-output.ts`** — `resolveStructuredOutputPolicy`:
+  what a structured call for a given config actually puts on the wire
+  (`json_schema` / `json_object` / `none`). Every provider module declares it
+  (`structuredOutputPolicy(cfg)`, required, sibling to `temperaturePolicy`) and
+  its `build()` derives `supportsStructuredOutputs` from the same call, so the
+  declaration and the request body cannot drift. On a `json_object` route the
+  wire carries NO schema, so the executor writes the schema — and the word
+  "json", which those providers require — into the prompt itself (#1916).
 - **`reasoning-options.ts`** — builds provider-specific reasoning/thinking
   `providerOptions` (Anthropic / Gemini / OpenAI / OpenRouter / compatible) from a
   normalized `ReasoningEffort`, plus OpenRouter provider-pinning.

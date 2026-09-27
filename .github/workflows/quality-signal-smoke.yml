@@ -1,0 +1,45 @@
+name: Quality signal smoke
+
+# Proves .github/actions/report-signal can write to BigQuery from this repo:
+# writes one row named smoke.report_signal and reads it back. Runs on PRs that
+# touch the action, and by hand when auth changes.
+
+permissions:
+    contents: read
+    id-token: write
+
+on:
+    workflow_dispatch:
+    pull_request:
+        paths:
+            - .github/actions/report-signal/**
+            - .github/workflows/quality-signal-smoke.yml
+
+jobs:
+    smoke:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6.0.2
+              with:
+                  sparse-checkout: .github/actions/report-signal
+
+            - name: Write the smoke row
+              uses: ./.github/actions/report-signal
+              with:
+                  name: smoke.report_signal
+                  status: success
+                  value: 1
+                  unit: count
+                  meta: '{"actor":"${{ github.actor }}"}'
+                  gcp_wif_provider: ${{ vars.GCP_WIF_PROVIDER }}
+                  gcp_sa_email: ${{ vars.GCP_SA_EMAIL }}
+                  gcp_project: ${{ vars.GCP_PROJECT }}
+
+            - name: Read it back
+              env:
+                  PROJECT: ${{ vars.GCP_PROJECT }}
+              run: |
+                  bq query --project_id="$PROJECT" --location=northamerica-northeast1 --use_legacy_sql=false --format=prettyjson \
+                    "SELECT ts, source, name, status, value, run_url FROM quality.signals WHERE name='smoke.report_signal' ORDER BY ts DESC LIMIT 1" \
+                    | tee out.json
+                  grep -q '"status": "green"' out.json

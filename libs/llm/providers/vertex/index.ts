@@ -20,6 +20,7 @@ import { anthropicModule } from '../anthropic';
 import {
     NON_REASONING_TRAITS,
     type ModelReasoningTraits,
+    type StructuredOutputMode,
 } from '../kernel/reasoning-traits';
 import { vertexModelListing } from './listing';
 import type { TemperaturePolicy } from '../kernel/model-types';
@@ -95,6 +96,13 @@ export const vertexModule: ProviderModule = {
         return isAnthropicModel(cfg.model)
             ? anthropicModule.reasoningTraits!(cfg)
             : NON_REASONING_TRAITS;
+    },
+
+    // The WIRE answer, per model: Vertex serves BOTH Gemini (schema in
+    // `generationConfig.responseSchema`) and Claude over the Anthropic protocol
+    // (forced tool use, no response_format) from this one id.
+    structuredOutputPolicy(cfg: ProviderBuildConfig): StructuredOutputMode {
+        return isAnthropicModel(cfg.model) ? 'none' : 'json_schema';
     },
 
     temperaturePolicy(cfg: ProviderBuildConfig): TemperaturePolicy {

@@ -37,7 +37,10 @@ import { buildToolEvidenceSummary } from '@libs/code-review/infrastructure/agent
 import { supportsStrictToolsForRun } from '@libs/code-review/infrastructure/agents/core/model-strictness';
 import type { ToolEvidenceSummary } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
-import type { Verdict } from '@libs/agent-harness/domain/contracts/verifier.contract';
+import type {
+    Verdict,
+    VerdictParseMode,
+} from '@libs/agent-harness/domain/contracts/verifier.contract';
 import {
     buildLangfuseTelemetry,
     toAiSdkTelemetryArgs,
@@ -409,6 +412,11 @@ export async function recoverFindingsFromProse(
             // Verified live against the real OpenAI API (2026-09-17): the
             // exact same request 400s with that message without this
             // sentence, and 200s with it.
+            // Since #1916 the structured executor guarantees the same thing
+            // centrally for every json_object route (it writes the schema AND
+            // the keyword into the system prompt), so this sentence is now a
+            // belt-and-braces duplicate rather than the only thing standing
+            // between this call and a 400.
             user:
                 "The following is a code reviewer's analysis written as " +
                 'prose. Extract EVERY concrete finding it describes into ' +
@@ -488,10 +496,16 @@ export interface FinderWithVerifyResult {
      *  `kept`): which files the verifier itself read/grepped while judging each.
      *  Empty summary when the verifier used no tools for that finding. */
     keptEvidence: ToolEvidenceSummary[];
+    /** How each KEPT finding's verdict was read (same order as `kept`) — the
+     *  verify funnel's provenance, so a `keep` that is really a parse miss is
+     *  visible in the trace instead of indistinguishable from a judged keep
+     *  (issue #1937). */
+    keptParseMode: VerdictParseMode[];
     droppedByVerify: Array<{
         finding: FinderSuggestion;
         evidence?: string;
         verifierEvidence: ToolEvidenceSummary;
+        parseMode: VerdictParseMode;
     }>;
     /** The finder's RunState (for usage/steps/trace mapping by callers). */
     finderState: RunState;
@@ -593,6 +607,7 @@ export async function runFinderWithVerify(
             reasoning,
             kept: [],
             keptEvidence: [],
+            keptParseMode: [],
             droppedByVerify: [],
             finderState,
             verifyUsage: ZERO_VERIFY_USAGE,
@@ -681,14 +696,19 @@ export async function runFinderWithVerify(
         );
 
     // The harness speaks neutral "candidate"; code-review's own term is "finding".
+    const parseModeOf = (f: FinderSuggestion): VerdictParseMode =>
+        verdictByFinding.get(f)?.parseMode ?? 'default-keep';
+
     return {
         reasoning,
         kept,
         keptEvidence: kept.map(evidenceOf),
+        keptParseMode: kept.map(parseModeOf),
         droppedByVerify: dropped.map((d) => ({
             finding: d.candidate,
             evidence: d.verdict.rationale,
             verifierEvidence: evidenceOf(d.candidate),
+            parseMode: d.verdict.parseMode ?? 'default-keep',
         })),
         finderState,
         verifyUsage: sumVerifyUsage(verifier.usage, gateUsage),

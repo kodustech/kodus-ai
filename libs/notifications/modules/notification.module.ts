@@ -21,6 +21,7 @@ import { ROUTING_RULE_REPOSITORY_TOKEN } from '../domain/contracts/routing-rule.
 // Application services
 import { ByokErrorCounter } from '../application/byok-error-counter.service';
 import { NotificationService } from '../application/notification.service';
+import { EmitBillingNotificationUseCase } from '../application/use-cases/emit-billing-notification.use-case';
 import { NotificationDispatcherService } from '../application/notification-dispatcher.service';
 import { NotificationQueryService } from '../application/notification-query.service';
 import { NotificationRateLimiter } from '../application/notification-rate-limiter.service';
@@ -139,11 +140,15 @@ import { WorkflowCoreModule } from '@libs/core/workflow/modules/workflow-core.mo
         PrAuthorRecipientResolver,
         RoutingRuleService,
 
+        // ── Use cases ─────────────────────────────────────────
+        EmitBillingNotificationUseCase,
+
         // ── Consumer ──────────────────────────────────────────
         NotificationConsumer,
     ],
     exports: [
         ByokErrorCounter,
+        EmitBillingNotificationUseCase,
         NotificationService,
         NotificationQueryService,
         NotificationRateLimiter,

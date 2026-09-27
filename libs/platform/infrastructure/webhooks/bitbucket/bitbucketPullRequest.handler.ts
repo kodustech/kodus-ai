@@ -19,6 +19,7 @@ import {
     parseReviewDirective,
     isHeavyReviewCommand
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
+import { isNewThreadReply } from '@libs/common/utils/codeManagement/threadReply';
 import { getMappedPlatform } from '@libs/common/utils/webhooks';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { PullRequestClosedEvent } from '@libs/core/domain/events/pull-request-closed.event';
@@ -564,7 +565,12 @@ export class BitbucketPullRequestHandler implements IWebhookEventHandler {
             if (
                 !isStartCommand &&
                 !hasMarker &&
-                isKodyMentionNonReview(comment.body)
+                (isKodyMentionNonReview(comment.body) ||
+                    isNewThreadReply(
+                        PlatformType.BITBUCKET,
+                        params.event,
+                        payload,
+                    ))
             ) {
                 this.chatWithKodyFromGitUseCase.execute(params);
                 return;
@@ -665,7 +671,14 @@ export class BitbucketPullRequestHandler implements IWebhookEventHandler {
                     return true;
                 }
 
-                if (storedPR && pullrequest.state === 'OPEN') {
+                // null when Bitbucket rejected the call (already logged by the
+                // service); without commits there is nothing to compare, so the
+                // open PR falls through to a review like any other update.
+                if (
+                    storedPR &&
+                    pullrequest.state === 'OPEN' &&
+                    pullRequestCommits?.length
+                ) {
                     const prCommit =
                         pullRequestCommits[pullRequestCommits.length - 1];
                     const storedPRCommitHashes = storedPR?.commits?.map(

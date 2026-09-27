@@ -12,6 +12,7 @@ import { geminiReasoningConfig } from './reasoning';
 import {
     NON_REASONING_TRAITS,
     type ModelReasoningTraits,
+    type StructuredOutputMode,
 } from '../kernel/reasoning-traits';
 import { googleGeminiModelListing } from './listing';
 import type {
@@ -99,6 +100,12 @@ export const googleGeminiModule: ProviderModule = {
 
     /** Gemini accepts a sampling temperature on every model, thinking or not —
      *  stated here so no caller has to fall back to guessing. */
+    // The WIRE answer: Gemini carries the schema natively in
+    // `generationConfig.responseSchema`.
+    structuredOutputPolicy(): StructuredOutputMode {
+        return 'json_schema';
+    },
+
     temperaturePolicy(): TemperaturePolicy {
         return { kind: 'adjustable' };
     },

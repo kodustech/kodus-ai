@@ -35,6 +35,12 @@
  *
  * The harness (`testing/byok-wire.ts`) runs the REAL stack — resolveModelConfig,
  * the real provider module, the real AI SDK — and only stubs `globalThis.fetch`.
+ *
+ * SIBLING TABLE: this file asks what a stored config puts on the wire for
+ * reasoning, temperature and routing, over a plain (loop) turn.
+ * `json-object-contract.spec.ts` asks the STRUCTURED question — which
+ * response_format channel the call goes out on, and what the messages must
+ * carry on it (#1916). Same harness, different question.
  */
 
 jest.mock('@libs/common/utils/crypto', () => ({
@@ -268,6 +274,34 @@ const CASES = [
                 output_config: { effort: 'high' },
             },
         },
+    },
+    {
+        id: 'anthropic/claude-opus-5-5 — a Claude newer than the table still gets its effort',
+        why: '#1996: the 5.x pattern was anchored with `$`, so a point release fell to `unknown` and the slot effort was never sent. Any claude-* not on the closed list of older generations is newer, so it takes adaptive + effort',
+        doc: 'platform.claude.com/docs/en/build-with-claude/extended-thinking',
+        slot: {
+            provider: 'anthropic',
+            model: 'claude-opus-5-5',
+            reasoningEffort: 'high',
+        },
+        wire: {
+            url: 'https://api.anthropic.com/v1/messages',
+            has: {
+                thinking: { type: 'adaptive' },
+                output_config: { effort: 'high' },
+            },
+            hasNot: ['temperature'],
+        },
+    },
+    {
+        id: 'anthropic/claude-opus-5-5 — "off" omits, because an unrecognized Claude may reject `disabled`',
+        why: 'Opus 5 accepts thinking:{type:"disabled"}; Opus 5.5 and Fable reject it with a 400. The id cannot say which kind a new model is, so an unrecognized Claude is never sent the disable',
+        slot: {
+            provider: 'anthropic',
+            model: 'claude-opus-5-5',
+            reasoningEffort: 'none',
+        },
+        wire: { hasNot: ['thinking'] },
     },
     {
         id: 'anthropic_compatible/claude-sonnet-4-5 — the older generation keeps the budget',
@@ -590,6 +624,24 @@ const CASES = [
             has: {
                 additionalModelRequestFields: {
                     thinking: { type: 'enabled', budget_tokens: 40000 },
+                },
+            },
+        },
+    },
+    {
+        id: 'bedrock claude-opus-5-5 — an unrecognized Claude gets the adaptive shape here too',
+        why: 'Bedrock reads the same generation resolver as native Claude, so the #1996 fix has to reach this envelope without a host-specific change',
+        slot: {
+            provider: 'amazon_bedrock',
+            awsRegion: 'us-east-1',
+            model: 'global.anthropic.claude-opus-5-5-v1:0',
+            reasoningEffort: 'high',
+        },
+        wire: {
+            has: {
+                additionalModelRequestFields: {
+                    thinking: { type: 'adaptive' },
+                    output_config: { effort: 'high' },
                 },
             },
         },

@@ -221,4 +221,66 @@ describe('BitbucketPullRequestHandler deterministic logic', () => {
             expect(call(event)).toBe(true);
         });
     });
+    // getCommitsForPullRequestForCodeReview returns null when Bitbucket rejects
+    // the call (dead credentials, 2FA); reading `.length` on it logged a
+    // misleading TypeError on every such webhook (87/day).
+    describe('shouldTriggerCodeReview on pullrequest:updated', () => {
+        const buildHandler = (commits: unknown) => {
+            const codeManagement = {
+                getCommitsForPullRequestForCodeReview: jest
+                    .fn()
+                    .mockResolvedValue(commits),
+            };
+            const h = new BitbucketPullRequestHandler(
+                {
+                    getContext: jest.fn().mockResolvedValue({
+                        organizationAndTeamData: {
+                            organizationId: 'org-1',
+                            teamId: 'team-1',
+                        },
+                    }),
+                } as any,
+                {
+                    findByNumberAndRepositoryName: jest.fn().mockResolvedValue({
+                        isDraft: false,
+                        commits: [{ sha: 'stored-sha' }],
+                    }),
+                } as any,
+                {} as any,
+                {} as any,
+                codeManagement as any,
+                {} as any,
+                {} as any,
+                {} as any,
+                {} as any,
+                {} as any,
+            );
+            return h as any;
+        };
+
+        const params = {
+            event: 'pullrequest:updated',
+            platformType: PlatformType.BITBUCKET,
+            payload: {
+                pullrequest: { id: 7, state: 'OPEN', draft: false },
+                actor: { uuid: '{actor}' },
+                repository: { uuid: '{repo-1}', name: 'repo' },
+            },
+        } as unknown as IWebhookEventParams;
+
+        it('does not throw when the commit fetch returned null and still reviews the open PR', async () => {
+            const h = buildHandler(null);
+
+            await expect(h.shouldTriggerCodeReview(params)).resolves.toBe(true);
+            expect(h.logger.error).not.toHaveBeenCalled();
+        });
+
+        it('skips the review when the head commit was already analyzed', async () => {
+            const h = buildHandler([{ sha: 'stored-sha' }]);
+
+            await expect(h.shouldTriggerCodeReview(params)).resolves.toBe(
+                false,
+            );
+        });
+    });
 });

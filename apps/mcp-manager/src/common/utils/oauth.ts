@@ -353,7 +353,13 @@ export async function checkAndRefreshOAuth(
 
         const tokens = parseTokenResponse(tokenResp);
 
-        return tokens;
+        // RFC 6749 §6: a refresh response MAY omit refresh_token, in which
+        // case the current one stays valid — dropping it made the next
+        // expiry unrecoverable.
+        return {
+            ...tokens,
+            refreshToken: tokens.refreshToken ?? refreshToken,
+        };
     }
 }
 

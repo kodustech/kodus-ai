@@ -85,3 +85,64 @@ describe('GitLabMergeRequestHandler.handleComment — project without automation
         expect(warn).toHaveBeenCalledTimes(1);
     });
 });
+
+describe('GitLabMergeRequestHandler.handleComment — replies without @kody (#1946)', () => {
+    const makeChatHandler = () => {
+        const chat = { execute: jest.fn() };
+        const handler = new GitLabMergeRequestHandler(
+            {} as any,
+            {
+                getContext: jest.fn().mockResolvedValue({
+                    organizationAndTeamData: { organizationId: 'o', teamId: 't' },
+                    botUsername: 'kody',
+                }),
+            } as any,
+            chat as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+        );
+        (handler as any).logger = {
+            log: jest.fn(),
+            warn: jest.fn(),
+            error: jest.fn(),
+            debug: jest.fn(),
+        };
+        return { handler, chat };
+    };
+
+    const note = (attrs: object) => ({
+        event: 'note',
+        payload: {
+            ...commentPayload,
+            object_attributes: {
+                ...commentPayload.object_attributes,
+                id: 21,
+                ...attrs,
+            },
+        },
+    });
+
+    it('forwards a discussion reply to the conversation use case', async () => {
+        const { handler, chat } = makeChatHandler();
+
+        await (handler as any).handleComment(
+            note({ note: 'why would this be null?', type: 'DiffNote' }),
+        );
+
+        expect(chat.execute).toHaveBeenCalledTimes(1);
+    });
+
+    it('still ignores an individual note without @kody', async () => {
+        const { handler, chat } = makeChatHandler();
+
+        await (handler as any).handleComment(
+            note({ note: 'LGTM', type: null }),
+        );
+
+        expect(chat.execute).not.toHaveBeenCalled();
+    });
+});

@@ -36,7 +36,7 @@ jobs:
               uses: sarisia/actions-status-discord@v1.16.0
               with:
                   # Same fallback chain every release-pipeline notification uses.
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK_SELFHOSTED || secrets.DISCORD_WEBHOOK }}
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK_SELFHOSTED || secrets.DISCORD_WEBHOOK }}
                   status: ${{ github.event.inputs.status }}
                   title: ${{ github.event.inputs.status == 'success' && 'Self-Hosted Release' || 'Self-Hosted Release Failed' }}
                   description: |

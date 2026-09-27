@@ -32,6 +32,7 @@ import {
     resolveCompatibleReasoningTraits,
     compatibleTemperaturePolicy,
     type ModelReasoningTraits,
+    type StructuredOutputMode,
 } from '../kernel/reasoning-traits';
 import { normalizeSdkResult, normalizeSdkUsage } from '../kernel/usage';
 import { isOpenCodeGoBaseUrl, openCodeSessionId } from '@libs/llm/opencode-go';
@@ -292,6 +293,15 @@ export const anthropicModule: ProviderModule = {
     // an anthropic-compatible upstream that DOES surface a split still works. output
     // is the FULL completion count and is NEVER reduced by reasoning (Q4 double-count
     // trap: reasoning is additive info only).
+    // The WIRE answer: the Anthropic protocol has no response_format at all —
+    // a structured call carries the schema on the protocol's own channel
+    // (`output_config`, or a forced tool definition), so the model is told the
+    // shape either way. Same for every brand built on this transport (Kimi over
+    // `anthropic_compatible`, Z.ai/GLM).
+    structuredOutputPolicy(_cfg: ProviderBuildConfig): StructuredOutputMode {
+        return 'none';
+    },
+
     temperaturePolicy(cfg: ProviderBuildConfig): TemperaturePolicy {
         // `anthropic_compatible` upstreams (Kimi/Z.ai/DeepSeek) implement the legacy
         // shape and ACCEPT temperature — but the always-thinking ones (Kimi

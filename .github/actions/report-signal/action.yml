@@ -1,0 +1,156 @@
+name: 'Report quality signal'
+description: 'Write one row to BigQuery quality.signals (see docs/quality-signals.md)'
+
+# One block per workflow, always with `if: always()`, so red runs are rows too.
+# Auth is Workload Identity Federation: the caller needs
+#     permissions:
+#         id-token: write
+# and passes the repo variables GCP_WIF_PROVIDER, GCP_SA_EMAIL, GCP_PROJECT
+# (scripts/quality/bootstrap-gcp.sh sets them) as the three gcp_* inputs:
+# a composite action cannot read `vars` itself.
+#
+# Graceful degradation, like discord-notify: when any gcp_* input is empty
+# (fork, or the variable isn't set yet) we warn and exit 0, and the auth and
+# insert steps are continue-on-error. This is telemetry: it never turns a
+# green gate red. A missing row shows up as a gap in the series, which the
+# dashboard makes visible.
+
+inputs:
+    name:
+        description: '<area>.<gate>[.<dimension>], e.g. evals.nightly.recall'
+        required: true
+    status:
+        description: 'green | yellow | red | skipped | infra, or a GitHub job status (success | failure | cancelled | skipped), which is mapped'
+        required: true
+    value:
+        description: 'Optional number'
+        required: false
+        default: ''
+    unit:
+        description: 'ratio | count | usd | ms | pct'
+        required: false
+        default: ''
+    meta:
+        description: 'Optional JSON object as a string'
+        required: false
+        default: ''
+    run_url:
+        description: 'Defaults to this run'
+        required: false
+        default: ''
+    source:
+        description: 'Defaults to <repo>/<workflow file>'
+        required: false
+        default: ''
+    gcp_wif_provider:
+        description: 'Pass vars.GCP_WIF_PROVIDER'
+        required: false
+        default: ''
+    gcp_sa_email:
+        description: 'Pass vars.GCP_SA_EMAIL'
+        required: false
+        default: ''
+    gcp_project:
+        description: 'Pass vars.GCP_PROJECT'
+        required: false
+        default: ''
+
+runs:
+    using: composite
+    steps:
+        - name: Check WIF is configured
+          id: check
+          shell: bash
+          env:
+              PROVIDER: ${{ inputs.gcp_wif_provider }}
+              SA: ${{ inputs.gcp_sa_email }}
+              PROJECT: ${{ inputs.gcp_project }}
+              NAME: ${{ inputs.name }}
+          run: |
+              if [ -z "$PROVIDER" ] || [ -z "$SA" ] || [ -z "$PROJECT" ]; then
+                  echo "::warning::gcp_wif_provider / gcp_sa_email / gcp_project not all set — quality signal '$NAME' not recorded."
+                  echo "skip=true" >> "$GITHUB_OUTPUT"
+              else
+                  echo "skip=false" >> "$GITHUB_OUTPUT"
+              fi
+
+        - name: Build row
+          if: steps.check.outputs.skip == 'false'
+          id: row
+          # Telemetry: a bad status, name or value is the producer's bug, reported
+          # as a failed step of this action, never as a red gate for the caller.
+          continue-on-error: true
+          shell: bash
+          env:
+              IN_NAME: ${{ inputs.name }}
+              IN_STATUS: ${{ inputs.status }}
+              IN_VALUE: ${{ inputs.value }}
+              IN_UNIT: ${{ inputs.unit }}
+              IN_META: ${{ inputs.meta }}
+              IN_RUN_URL: ${{ inputs.run_url }}
+              IN_SOURCE: ${{ inputs.source }}
+              GH_REPO: ${{ github.repository }}
+              GH_WORKFLOW_REF: ${{ github.workflow_ref }}
+              GH_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+              # On pull_request the default sha/ref are the synthetic merge commit and '<n>/merge'.
+              GH_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+              GH_REF: ${{ github.head_ref || github.ref_name }}
+          run: |
+              node -e '
+                const map = { success: "green", failure: "red", cancelled: "infra", skipped: "skipped" };
+                const allowed = new Set(["green", "yellow", "red", "skipped", "infra"]);
+                const raw = (process.env.IN_STATUS || "").trim().toLowerCase();
+                const status = map[raw] || raw;
+                if (!allowed.has(status)) { console.error(`report-signal: unknown status "${raw}"`); process.exit(1); }
+                // Producers interpolate model ids and similar into names: fold them to the contract
+                // (lowercase, [a-z0-9._-]) instead of failing, e.g. evals.tier0.minimax-m3@nvidia -> ..._nvidia.
+                const name = (process.env.IN_NAME || "").trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "_");
+                // Accept exactly what the fold can produce. Only a name without a dot is still a producer bug.
+                if (!/^[a-z0-9_-]+(\.[a-z0-9_-]+)+$/.test(name)) { console.error(`report-signal: bad name "${name}": want <area>.<gate>[.<dimension>]`); process.exit(1); }
+                const value = process.env.IN_VALUE.trim() === "" ? null : Number(process.env.IN_VALUE);
+                if (value !== null && Number.isNaN(value)) { console.error(`report-signal: value is not a number: ${process.env.IN_VALUE}`); process.exit(1); }
+                let meta = null;
+                if (process.env.IN_META.trim() !== "") {
+                  // A producer that interpolated an empty step output ends up with {"total": } (invalid).
+                  // Telemetry must not fail the job: keep the raw text and warn.
+                  try { meta = JSON.stringify(JSON.parse(process.env.IN_META)); }
+                  catch { console.log(`::warning::report-signal: meta is not valid JSON, recorded as raw text`); meta = JSON.stringify({ raw_meta: process.env.IN_META }); }
+                }
+                // github.workflow_ref = owner/repo/.github/workflows/<file>@<ref>
+                const file = (process.env.GH_WORKFLOW_REF.match(/\.github\/workflows\/([^@]+)@/) || [])[1] || "unknown";
+                const source = process.env.IN_SOURCE.trim() || `${process.env.GH_REPO.split("/")[1]}/${file}`;
+                const row = {
+                  ts: new Date().toISOString(), source, name, status, value,
+                  unit: process.env.IN_UNIT.trim() || null,
+                  run_url: process.env.IN_RUN_URL.trim() || process.env.GH_RUN_URL,
+                  commit: process.env.GH_SHA, branch: process.env.GH_REF, meta,
+                };
+                require("fs").writeFileSync("quality-signal-row.json", JSON.stringify(row) + "\n");
+                console.log(JSON.stringify(row));
+              '
+
+        - name: Authenticate to GCP (WIF)
+          if: steps.check.outputs.skip == 'false' && steps.row.outcome == 'success'
+          continue-on-error: true
+          uses: google-github-actions/auth@v2
+          with:
+              workload_identity_provider: ${{ inputs.gcp_wif_provider }}
+              service_account: ${{ inputs.gcp_sa_email }}
+              project_id: ${{ inputs.gcp_project }}
+
+        - name: Set up bq
+          if: steps.check.outputs.skip == 'false' && steps.row.outcome == 'success'
+          continue-on-error: true
+          uses: google-github-actions/setup-gcloud@v2
+          with:
+              project_id: ${{ inputs.gcp_project }}
+
+        - name: Insert row
+          if: steps.check.outputs.skip == 'false' && steps.row.outcome == 'success'
+          continue-on-error: true
+          shell: bash
+          env:
+              PROJECT: ${{ inputs.gcp_project }}
+          run: |
+              bq insert --project_id="$PROJECT" quality.signals quality-signal-row.json
+              rm -f quality-signal-row.json
