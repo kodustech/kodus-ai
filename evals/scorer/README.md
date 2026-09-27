@@ -1,4 +1,4 @@
-# Scorer do benchmark
+# Benchmark scorer
 
 > - **Answers:** Re-score a saved submission (new judge, new metric) without re-running the model.
 > - **Runs:** on demand; a tool, not a gate.
@@ -6,37 +6,41 @@
 > - **Gate:** none.
 > - **Cost:** judge calls only.
 
-Pontua uma **submission** contra os golden comments do dataset e emite um **scorecard**.
+Scores a **submission** against the dataset's golden comments and emits a **scorecard**.
 
-Separa **pontuar** de **rodar**. Antes, `run-recall.js` fazia tudo numa passada e
-descartava as findings do modelo. Consequências: trocar de judge exigia re-rodar
-todos os modelos (uma passada custa US$ 15–80 por modelo; o judge custa centavos),
-o site não tinha dado para as páginas de trace, e terceiro nenhum conseguia participar.
+Separates **scoring** from **running**. `run-recall.js` used to do both in one pass
+and discard the model's findings. Consequences: changing the judge meant re-running
+every model (one pass costs US$ 15–80 per model; the judge costs cents), the site had
+no data for the trace pages, and no third party could take part.
 
 ```
-harness (caro, roda uma vez)  →  submission.json  →  scorer (barato, roda sempre)  →  scorecard.json  →  site
+harness (expensive, runs once)  →  submission.json  →  scorer (cheap, runs always)  →  scorecard.json  →  site
 ```
 
-## Uso
+## Usage
 
 ```bash
-node evals/scorer/cli.js --submission=sub.json                    # pontua
-node evals/scorer/cli.js --submission=sub.json --validate         # só valida schema
+node evals/scorer/cli.js --submission=sub.json                    # score it
+node evals/scorer/cli.js --submission=sub.json --validate         # schema only
 node evals/scorer/cli.js --submission=sub.json --judge=gpt-5.4-mini
 ```
 
-Judge: `--judge=<modelo>` ou `JUDGE_MODEL` (default `claude-haiku-4-5`). A chave vem
-do provider do judge via `recall-judge.js` — aceita API key (`sk-ant-api…`) e
-credencial OAuth do `ant auth login` (`sk-ant-oat…`).
+Judge: `--judge=<model>` or `JUDGE_MODEL` (default `claude-haiku-4-5`). The key is resolved
+by `evals/investigation/recall-judge.js`: `JUDGE_API_KEY` wins outright when set, otherwise
+the model prefix picks the provider and only that provider's env names are read — so with
+`JUDGE_API_KEY` unset, `--judge=gpt-5.4-mini` needs an OpenAI key, not an Anthropic one.
+Misses fall back to the repo's `.env.local`/`.env` and then `~/.kodus-dev/config`.
+`sk-ant-api…` and `sk-ant-oat…` are the Anthropic forms; `ant auth login` does not supply
+the key, `ant` is only called to refresh a token that expires mid-run.
 
-## Formato: submission
+## Submission format
 
-O que um participante entrega. `results[].findings` vazio é válido e significativo
-("não achei nada neste PR") — não é o mesmo que não submeter o caso.
+What a participant delivers. An empty `results[].findings` is valid and meaningful
+("I found nothing in this PR") — it is not the same as not submitting the case.
 
 ```json
 {
-  "benchmarkVersion": "light-30-v1",
+  "benchmarkVersion": "light-v1",
   "run": {
     "harness":  { "name": "kodus", "version": "1.4.2", "commit": "abc123" },
     "model":    { "id": "gpt-5.6-luna", "provider": "openai", "accessPath": "api" },
@@ -53,7 +57,7 @@ O que um participante entrega. `results[].findings` vazio é válido e significa
           "endLine": 418,
           "severity": "high",
           "category": "bug",
-          "description": "Comparação de e-mail case-sensitive permite burlar a blacklist."
+          "description": "Case-sensitive email comparison lets you bypass the blacklist."
         }
       ],
       "usage": { "inputTokens": 512340, "outputTokens": 8210 },
@@ -64,75 +68,118 @@ O que um participante entrega. `results[].findings` vazio é válido e significa
 }
 ```
 
-### Campos de `run`
+`benchmarkVersion` is `<set>-v1` for the set you ran: `pr-v1` (default, no `--set`),
+`smoke-v1` for `--set=smoke`, `light-v1` for `--set=light`, `all50-v1` for `--all`,
+`custom-v1` for an explicit `--cases` list. The value is whatever `--set` says, so a
+misspelled set name is stamped into the artifact rather than rejected. The scorer does not
+check it against a registry either — declare it honestly, because a mislabelled version is
+how two incomparable runs end up compared.
 
-| campo | obrigatório | nota |
+### `run` fields
+
+| field | required | note |
 |---|---|---|
-| `harness.name` | sim | `kodus`, `claude-code`, `codex`, `greptile`… O harness é dimensão de primeira classe: o mesmo modelo em motores diferentes é entrada diferente. |
-| `model` | não | `null` quando o harness não deixa escolher modelo (produto fechado). |
-| `model.accessPath` | não | `api` \| `subscription` \| `local` \| `unknown`. Regimes de cobrança/limite diferentes não são comparáveis em latência — declare. |
-| `executionMode` | sim | `replay` (tool outputs gravados, determinístico) ou `live` (rodou no repo de verdade). **Só compare dentro do mesmo modo.** |
-| `reasoning` | não | `{config, effortRequested}`. `config` ∈ `vendor-default` \| `explicit` \| `disabled`. Ver abaixo — é confundidor real. |
-| `runAt` | sim | ISO-8601. |
+| `harness.name` | yes | `kodus`, `claude-code`, `codex`, `greptile`… The harness is a first-class dimension: the same model under different engines is a different entry. |
+| `model` | no | `null` when the harness does not let you pick a model (closed product). |
+| `model.id` | if `model` is an object | a string, or the submission is rejected. |
+| `model.accessPath` | no | `api` \| `subscription` \| `local` \| `unknown`. Different billing and rate-limit regimes are not comparable on latency — declare it. |
+| `executionMode` | yes | `replay` (recorded tool outputs, deterministic) or `live` (ran against the real repo). **Only compare within the same mode.** |
+| `reasoning` | no | `{config, effortRequested}`. `config` ∈ `vendor-default` \| `explicit` \| `disabled`. `effortRequested` is required when `config` is `explicit` — otherwise `explicit` says nothing. See below — it is a real confounder. |
+| `runAt` | yes | ISO-8601. |
 
-### Reasoning é confundidor, não detalhe
+### Reasoning is a confounder, not a detail
 
-O harness não força effort, então cada fornecedor aplica o próprio default — e eles
-divergem muito. Medido no light 30: `deepseek-v4-flash` gerou **49k tokens de output
-por caso** e `gpt-5.6-luna` **5,9k** — 8x, ambos "no default".
+The harness does not force an effort level, so each vendor applies its own default —
+and they diverge sharply. Measured on the light 30: `deepseek-v4-flash` produced **49k
+output tokens per case** and `gpt-5.6-luna` **5.9k** — 8x, both "on the default".
 
-Isso significa que um ranking sem esse campo embute **calibração de vendor** como se
-fosse qualidade de modelo. Duas posturas são defensáveis, e são benchmarks diferentes:
+That means a ranking without this field bakes in vendor calibration as if it were
+model quality. Two positions are defensible, and they are different benchmarks:
 
-- **`vendor-default`** — o que um time recebe ao plugar o modelo. Mais útil para
-  decisão de compra, e é o padrão aqui.
-- **`explicit`** — effort fixo entre modelos, isola capacidade. Mas nem todo
-  fornecedor expõe o mesmo controle, então a paridade é parcial por construção.
+- **`vendor-default`** — what a team gets when they plug the model in. More useful for
+  a purchase decision, and the default here.
+- **`explicit`** — effort fixed across models, which isolates capability. But not every
+  vendor exposes the same control, so parity is partial by construction.
 
-Qualquer que seja, **declare**. Comparar entradas com `config` diferente sem rotular
-é o mesmo erro que comparar `replay` com `live`.
+Whichever you pick, **declare it**. Comparing entries with a different `config` without
+labelling them is the same error as comparing `replay` against `live`.
 
-### Campos de `findings[]`
+### `findings[]` fields
 
-`description` é o único obrigatório — é o texto que o judge compara contra o golden.
-Os demais (`path`, `startLine`, `endLine`, `severity`, `category`) enriquecem o site
-e análises futuras, mas não entram no matching hoje.
+`description` is the only required field. It, plus `path` and `category`, form the text
+the judge compares against the golden (`evals/scorer/score.js`); `startLine`, `endLine`
+and `severity` are collected and enrich the site, but do not enter the matching.
+`severity` is one of `critical`, `high`, `medium`, `low`, `info`, or `null`; the validator
+accumulates every error, so an unrecognised value fails the whole submission.
 
-## Formato: scorecard
+## Scorecard format
 
-Carrega o bloco `run` inteiro da submission (proveniência) mais o judge usado, e:
+Carries the whole `run` block from the submission (provenance) plus the judge used, and:
 
-| métrica | o que é |
+| metric | what it is |
 |---|---|
-| `recallMicro` | goldens cobertos / total de goldens. **É o número para ranking** — pondera por bug, não por PR. |
-| `recallMacro` | média dos recalls por caso. Comparável com o histórico do `finder-recall`. |
-| `precisionMacro` | das findings emitidas, quantas acertaram um golden. |
-| `f1Macro`, `fairRecallMacro` | idem `recall-assertion.js`. |
-| `loopFidelityMacro` | só em `replay` com `trace`; `null` quando não medido. |
+| `recallMicro` | goldens covered / total goldens. **The number for ranking** — weights by bug, not by PR. |
+| `recallMacro` | mean of the per-case recalls. Comparable with the `finder-recall` history. |
+| `precisionMacro` | of the findings emitted, how many hit a golden. |
+| `f1Macro`, `fairRecallMacro` | same as `evals/investigation/recall-assertion.js`. |
+| `loopFidelityMacro` | only in `replay` with a `trace`; `null` when not measured. |
 
-## Modos de execução
+## Execution modes
 
-`replay` serve tool outputs gravados: determinístico, barato, comparável — mas
-favorece harness que não explora além do que foi gravado (é o que `loopFidelity`
-mede). `live` roda no repo real no SHA fixado: realista, porém cada execução vê
-algo diferente. Produto fechado (Greptile, CodeRabbit) só consegue `live`.
+`replay` serves recorded tool outputs: deterministic, cheap, comparable — but it favours
+a harness that does not explore beyond what was recorded (which is what `loopFidelity`
+measures). `live` runs against the real repo at a pinned SHA: realistic, but every run
+sees something different. Closed products (Greptile, CodeRabbit) can only do `live`.
 
-Por isso o modo é **campo, não decisão** — e rankings devem ser segmentados por ele.
+That is why the mode is a **field, not a decision**, and rankings are segmented by it.
 
-## Submissão de terceiro
+## Third-party submission
 
-Abrir PR com o arquivo de submission. O CI valida schema (`--validate`) e roda o
-scorer. O que o revisor confere: `caseId`s existem, `benchmarkVersion` bate,
-`executionMode` condiz com o harness declarado, e o `harness.commit` é verificável.
+The benchmark site links to this file, so this section is the whole contribution path.
+Three parts of it are not guessable from the schema above.
 
-## Limitações conhecidas
+**Get the cases.** The datasets are not in the benchmark repo: they are versioned here,
+one JSON file per case under `evals/investigation/datasets/`, carrying the `toolReplay`
+and `goldenComments` the scorer reads. That directory also holds `smoke` and
+`trace-context` fixtures for other evals, which carry no goldens. Clone this repository;
+there is no separate download.
 
-- **Goldens são públicos** (vêm do `withmartian/code-review-benchmark`). Um
-  participante pode otimizar para o gabarito. Um test set rotativo resolveria;
-  `evals/kody-rules/harvest-github-cases.js` já colhe PRs novos do GitHub.
-- **O judge é um LLM e tem viés de família.** Judge da mesma família de um
-  concorrente avaliado é conflito — use painel cross-vendor e publique o
-  agreement (`evals/investigation/agreement/`). Como o scorer é separado,
-  re-pontuar com outro judge não custa nada.
-- **Matching é por texto**, não por linha. Uma finding certa descrita de forma
-  vaga pode não casar; `path`/`startLine` são coletados mas ainda não usados.
+**Run the set the leaderboard is built from.** The comparable set is the 30-case `light`
+set — `node evals/investigation/run-recall.js --set=light`. The default is `pr` (8 cases),
+so omitting `--set` scores a different set and the result is not comparable, and an
+unrecognised set name falls back to `pr` silently.
+
+That runner is the Kodus reference run: it stamps `harness.name` as `kodus` and
+`executionMode` as `replay`, and it rejects any model outside Kodus's own tier-0 list.
+Another harness has to write the same file itself, declaring its own `run.harness` and
+`run.executionMode`; the schema above is the whole contract.
+
+The case list is owned by `evals/investigation/recall-tests.js` (`LIGHT_CASES`) and is not
+copied here so it cannot drift. Recall divides by the goldens actually measured, so
+scoring a different subset is quietly flattered rather than penalised: some published
+entries cover 29 cases instead of 30. A Kodus run writes
+`evals/investigation/results/finder-recall-<model>.submission.json`.
+
+**Open the PR against `kodustech/codereviewbench`, not this repository.** Drop the
+submission in `submissions/` and the scorecard in `scorecards/` — the scorer writes
+`evals/investigation/results/scorecard-<harness>-<model>.json` unless `--out` says
+otherwise. Then regenerate the site data there with `node process-scorecards.js`.
+
+The reviewer checks that the `caseId`s exist, that `benchmarkVersion` matches, and that
+`executionMode` is consistent with the declared harness. There is no CI on this path:
+`--validate` and the scorer are run by hand, so a stale or non-comparable submission is
+caught by a person reading the diff, not by a red check. `harness.commit` is in the
+example because a commit makes a run reproducible, but the schema does not require it
+and most published entries carry only a `version`.
+
+## Known limitations
+
+- **Goldens are public** (they come from `withmartian/code-review-benchmark`). A
+  participant can optimise against the answer key. A rotating test set would fix it;
+  `evals/kody-rules/harvest-github-cases.js` already harvests fresh PRs from GitHub.
+- **The judge is an LLM and has family bias.** A judge from the same family as a
+  competitor being evaluated is a conflict — use a cross-vendor panel and publish the
+  agreement (`evals/investigation/agreement/`). Because the scorer is separate,
+  re-scoring with another judge costs cents.
+- **Matching is by text**, not by line. A correct finding described vaguely may not
+  match; `startLine`/`endLine`/`severity` are collected but still unused.
