@@ -437,6 +437,18 @@ export class BitbucketService implements Omit<
         return impl.getPullRequestByNumber(params);
     }
 
+    async getCheckEvidence(params: any) {
+        const impl = await this.getImplementation(
+            params.organizationAndTeamData,
+        );
+        // Data Center has no implementation yet; the facade treats a missing
+        // method as "no evidence", so answer that here instead of throwing.
+        if (typeof impl.getCheckEvidence !== 'function') {
+            return [];
+        }
+        return impl.getCheckEvidence(params);
+    }
+
     async getCommitsForPullRequestForCodeReview(params: any) {
         const impl = await this.getImplementation(
             params.organizationAndTeamData,
