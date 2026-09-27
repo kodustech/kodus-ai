@@ -507,8 +507,13 @@ export async function syncE2BSandboxRepo(
             // Round N reuses the sandbox, so the base ref is whatever the
             // previous round fetched. Absent or stale, the shared module
             // fetches nothing and says so.
+            // Normalized like the fetch above: a host that reports
+            // `refs/heads/main` would otherwise produce
+            // `origin/refs/heads/main`, which resolves to nothing, and the
+            // submodule fetch would report "base ref is not in the sandbox"
+            // on every reconnect.
             baseRef: params.baseBranch
-                ? `origin/${params.baseBranch}`
+                ? `origin/${toBranchName(params.baseBranch)}`
                 : undefined,
         },
     );
