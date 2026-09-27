@@ -9,6 +9,7 @@ import {
     ISandboxProvider,
     SandboxInstance,
     SandboxRunResult,
+    toBranchName,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
@@ -953,7 +954,7 @@ export class E2BSandboxService implements ISandboxProvider {
         // the refspec below that becomes "refs/heads/refs/heads/main", the
         // fetch fails, and every tool that needs the base tree — the
         // dependency baseline above all — silently loses it.
-        const baseBranch = params.baseBranch?.replace(/^refs\/heads\//, '');
+        const baseBranch = toBranchName(params.baseBranch);
         if (!baseBranch) return undefined;
 
         const hasAuth = !!authToken;

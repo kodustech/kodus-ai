@@ -10,6 +10,7 @@ import {
     ISandboxProvider,
     SandboxInstance,
     SANDBOX_PROVIDER_TOKEN,
+    toBranchName,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -966,7 +967,11 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             // tool that needs the previous version of a file then silently has
             // no baseline — the same creator/reconnect drift the shared
             // remoteCommands above exists to prevent.
-            baseBranch,
+            // Normalized here rather than at each call site: creator and
+            // joiner reach this from different places, and a joiner that
+            // re-introduced the host's raw `refs/heads/...` spelling would
+            // break `origin/<base>` for every consumer.
+            baseBranch: toBranchName(baseBranch),
             // Single shared implementation (see e2b-sandbox.service.ts) — resolves
             // paths against the repo root, surfaces errors, logs empty reads.
             // Sharing it prevents the creator/reconnect drift that blinded reviews.
