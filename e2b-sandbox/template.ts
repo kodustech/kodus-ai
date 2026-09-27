@@ -3,13 +3,13 @@ import { Template, waitForPort } from 'e2b';
 const shadowsocksVersion = '1.24.0';
 const downloadUrl = `https://github.com/shadowsocks/shadowsocks-rust/releases/download/v${shadowsocksVersion}/shadowsocks-v${shadowsocksVersion}.x86_64-unknown-linux-gnu.tar.xz`;
 
-// Security rule pass (RunAnalyzersStage). Baked into the image rather than
-// installed per review: rule-pack startup already dominates the scan, and
-// downloading a binary inside the review would add seconds to every PR.
-// Pinned — an unpinned engine changes findings under us between reviews.
-
-// GitHub Actions tools. They only run when a PR touches `.github/workflows`,
-// so they cost nothing on most reviews — but the binaries must already be here.
+// Deterministic evidence pass (RunAnalyzersStage). Baked into the image rather
+// than installed per review: downloading a binary inside the review would add
+// seconds to every PR. Pinned — an unpinned scanner changes findings under us
+// between reviews, and the versions here must match docker/Dockerfile so the
+// E2B and local sandboxes cannot drift apart.
+//
+// x86_64 only, which is what E2B runs. The worker image builds both arches.
 
 const betterleaksVersion = '1.8.1';
 const betterleaksUrl = `https://github.com/betterleaks/betterleaks/releases/download/v${betterleaksVersion}/betterleaks_${betterleaksVersion}_linux_x64.tar.gz`;
@@ -17,11 +17,8 @@ const betterleaksUrl = `https://github.com/betterleaks/betterleaks/releases/down
 const osvScannerVersion = '2.6.0';
 const osvScannerUrl = `https://github.com/google/osv-scanner/releases/download/v${osvScannerVersion}/osv-scanner_linux_amd64`;
 
-
-
-
-
-
+// osv-scanner queries the OSV.dev API at run time, so it needs egress from the
+// sandbox — through the Shadowsocks proxy on the production template below.
 const installSecurityTools = [
     `wget -O betterleaks.tar.gz ${betterleaksUrl}`,
     'tar -xzf betterleaks.tar.gz betterleaks',

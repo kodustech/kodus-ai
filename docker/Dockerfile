@@ -118,18 +118,14 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
 # BUN_VERSION is declared as a global ARG at the top of this file.
 FROM docker.io/oven/bun:${BUN_VERSION}-debian AS bun-source
 
-# The security rule pass (RunAnalyzersStage) shells out to opengrep inside the
-# sandbox. Downloaded in its own stage so no curl lingers in the runtime image —
-# same pattern as the bun binary above. Pinned: an unpinned engine would change
-# findings between reviews. TARGETARCH matters because prod/QA build arm64 and
-# self-hosted builds both arches. Pinned to BUILDPLATFORM so the download
-# runs natively and needs no QEMU — only the fetched binary is target-arch.
-# The deterministic evidence pass shells out to these inside the sandbox.
-# Downloaded in their own stage so no curl lingers in the runtime image.
-# Pinned: an unpinned scanner would change findings between reviews.
-# TARGETARCH matters because prod/QA build arm64 and self-hosted builds both.
-# Pinned to BUILDPLATFORM so the download runs natively and needs no QEMU —
-# only the fetched binary is target-arch.
+# The deterministic evidence pass (RunAnalyzersStage) shells out to these
+# inside the sandbox. Downloaded in their own stage so no curl lingers in the
+# runtime image — same pattern as the bun binary above. Pinned: an unpinned
+# scanner would change findings between reviews, and the versions here must
+# match e2b-sandbox/template.ts so the two sandbox providers cannot drift
+# apart. TARGETARCH matters because prod/QA build arm64 and self-hosted builds
+# both arches. Pinned to BUILDPLATFORM so the download runs natively and needs
+# no QEMU — only the fetched binary is target-arch.
 FROM --platform=$BUILDPLATFORM docker.io/library/debian:bookworm-slim AS analyzer-source
 ARG TARGETARCH
 ARG BETTERLEAKS_VERSION=1.8.1
