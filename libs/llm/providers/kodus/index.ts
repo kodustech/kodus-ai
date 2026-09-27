@@ -19,7 +19,7 @@
  * loses the cache and 3-5×s the bill.
  *
  * Model ids are `<upstream>/<model>`
- * (`fireworks/accounts/fireworks/models/deepseek-v4-flash-0731`). The catalog
+ * (`fireworks/accounts/fireworks/models/deepseek-v4p1-flash`). The catalog
  * is CLOSED: an id
  * it does not list has no price, cannot be billed, and therefore must not run —
  * `capabilities()` answers non-routable for it and `build()` refuses it.
