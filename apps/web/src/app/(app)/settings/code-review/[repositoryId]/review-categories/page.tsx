@@ -20,7 +20,10 @@ import { CodeReviewSaveButton } from "../../_components/save-button";
 import { useCodeReviewSettingsMutation } from "../../_hooks/use-code-review-settings-mutation";
 import { type CodeReviewFormType } from "../../_types";
 import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
-import { usePlatformConfig } from "../../../_components/context";
+import {
+    useFeatureFlags,
+    usePlatformConfig,
+} from "../../../_components/context";
 import { useCodeReviewRouteParams } from "../../../_hooks";
 import { AnalysisTypes } from "../general/_components/analysis-types";
 import { DeterministicEvidence } from "./_components/deterministic-evidence";
@@ -31,6 +34,8 @@ import {
 
 export default function ReviewCategories() {
     const platformConfig = usePlatformConfig();
+    const deterministicEvidenceEnabled =
+        useFeatureFlags().deterministicEvidence === true;
     const form = useFormContext<CodeReviewFormType>();
     const { teamId } = useSelectedTeamId();
     const { repositoryId, directoryId } = useCodeReviewRouteParams();
@@ -148,23 +153,32 @@ export default function ReviewCategories() {
                     <AnalysisTypes />
                 </div>
 
-                <Separator />
+                {/* The pipeline gates this feature on its own and fails
+                    closed, so without the same gate here the toggles would
+                    save and then quietly do nothing. */}
+                {deterministicEvidenceEnabled && (
+                    <>
+                        <Separator />
 
-                <div
-                    className="flex flex-col gap-4"
-                    data-field-name="deterministicEvidence">
-                    <div className="flex flex-col gap-1">
-                        <Heading variant="h2">Deterministic checks</Heading>
-                        <p className="text-text-secondary text-sm">
-                            Scanners that answer a question of fact rather than
-                            judgement, and the results your own CI already
-                            produced. Everything here is off unless you turn it
-                            on.
-                        </p>
-                    </div>
+                        <div
+                            className="flex flex-col gap-4"
+                            data-field-name="deterministicEvidence">
+                            <div className="flex flex-col gap-1">
+                                <Heading variant="h2">
+                                    Deterministic checks
+                                </Heading>
+                                <p className="text-text-secondary text-sm">
+                                    Scanners that answer a question of fact
+                                    rather than judgement, and the results your
+                                    own CI already produced. Everything here is
+                                    off unless you turn it on.
+                                </p>
+                            </div>
 
-                    <DeterministicEvidence />
-                </div>
+                            <DeterministicEvidence />
+                        </div>
+                    </>
+                )}
             </Page.Content>
         </Page.Root>
     );

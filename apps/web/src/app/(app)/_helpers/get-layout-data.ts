@@ -27,6 +27,7 @@ export const getLayoutData = cache(async (teamId: string) => {
         llmConfigStatus,
         githubEnterpriseServerPatFeatureFlag,
         kodusProviderFeatureFlag,
+        deterministicEvidenceFeatureFlag,
     ] = await Promise.all([
         getPermissions().catch(() => ({})),
         getOrganizationName().catch(() => ""),
@@ -50,6 +51,15 @@ export const getLayoutData = cache(async (teamId: string) => {
                 }),
             )
             .catch(() => false),
+        releaseTrackPromise
+            .then((releaseTrack) =>
+                isFeatureEnabled({
+                    feature: FEATURE_FLAGS.deterministicEvidence,
+                    identifier: "organization",
+                    releaseTrack,
+                }),
+            )
+            .catch(() => false),
     ]);
 
     return {
@@ -61,6 +71,7 @@ export const getLayoutData = cache(async (teamId: string) => {
         featureFlags: {
             githubEnterpriseServerPat: githubEnterpriseServerPatFeatureFlag,
             kodusProvider: kodusProviderFeatureFlag,
+            deterministicEvidence: deterministicEvidenceFeatureFlag,
         },
     };
 });
