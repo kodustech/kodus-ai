@@ -1,5 +1,16 @@
 # Do the deterministic analyzers find what the reviewer misses?
 
+> - **Answers:** Does a deterministic analyzer catch vulnerabilities the LLM reviewer does not? Scoring a scanner in isolation cannot answer that — a finding the reviewer already makes is a duplicate, not new evidence.
+> - **Runs:** on demand, not in CI. It costs real model calls and the corpora are built by hand; it ran to decide which analyzers to ship and is kept as the record of that decision.
+> - **Run it:** `node evals/security-analyzers/llm-vs-analyzers.js` · `node evals/security-analyzers/agent-path.js`
+> - **Gate:** none. This is a measurement, not a regression gate — no threshold blocks a PR on it.
+> - **Cost:** one security-review call per sample, per run, against a live model. The 90-sample corpus exhausted a credit balance mid-run; see the caveat below.
+
+**The rule pack this compares against was removed** after these measurements
+(`libs/code-review/infrastructure/analyzers/` now ships only the secret and
+dependency scans). The rule-pack numbers below are kept because they are the
+evidence for that removal — but the command to reproduce them is gone with it.
+
 The security benchmark (`scripts/security-benchmark/`) scores analyzers in
 isolation. That is not the question the feature has to answer: a finding the
 LLM reviewer already makes is not new evidence, it is a duplicate. The value of
@@ -11,13 +22,10 @@ vulnerabilities the benchmark uses, and crosses the two.
 ```bash
 # analyzer detections first, per sample
 node scripts/security-benchmark/run.mjs scripts/security-benchmark/dataset.json \
-    --name rulepack --json /tmp/rp.json \
-    --tool "opengrep scan --config libs/code-review/infrastructure/analyzers/rule-pack --sarif --output {out} --quiet {dir}"
-node scripts/security-benchmark/run.mjs scripts/security-benchmark/dataset.json \
     --name betterleaks --json /tmp/bl.json \
     --tool "betterleaks dir {dir} --report-format sarif --report-path {out} --no-banner --exit-code 0"
 
-node evals/security-analyzers/llm-vs-analyzers.js --analyzers=/tmp/rp.json,/tmp/bl.json
+node evals/security-analyzers/llm-vs-analyzers.js --analyzers=/tmp/bl.json
 node evals/security-analyzers/llm-vs-analyzers.js --tranche=noise
 ```
 
