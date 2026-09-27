@@ -66,6 +66,7 @@ export class GitlabMappedPlatform implements IMappedPlatform {
                     fullName: mergeRequest?.source?.path_with_namespace,
                 },
                 ref: mergeRequest?.source_branch,
+                sha: (mergeRequest as any)?.last_commit?.id ?? '',
             },
             base: {
                 repo: {
