@@ -291,6 +291,10 @@ export class GitlabService implements Omit<
                 merged_at: mergeRequest.merged_at,
                 head: {
                     ref: mergeRequest.source_branch,
+                    sha:
+                        mergeRequest.diff_refs?.head_sha ??
+                        mergeRequest.sha ??
+                        '',
                     repo: {
                         name: params.repository.name,
                         // Use source project ID so forked MRs can fetch files from the right project
@@ -5174,6 +5178,10 @@ export class GitlabService implements Omit<
             sourceRefName: mergeRequest?.source_branch ?? '', // TODO: remove, legacy, use head.ref
             head: {
                 ref: mergeRequest?.source_branch ?? '',
+                sha:
+                    mergeRequest?.diff_refs?.head_sha ??
+                    mergeRequest?.sha ??
+                    '',
                 repo: {
                     id: mergeRequest?.source_project_id?.toString() ?? '',
                     name: '',

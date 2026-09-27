@@ -5939,6 +5939,7 @@ ${copyPrompt}
             sourceRefName: pr?.sourceRefName ?? '', // TODO: remove, legacy, use head.ref
             head: {
                 ref: pr?.sourceRefName?.replace('refs/heads/', ''),
+                sha: pr?.lastMergeSourceCommit?.commitId ?? '',
                 repo: {
                     id: pr?.repository?.id ?? '',
                     name: pr?.repository?.name ?? '',

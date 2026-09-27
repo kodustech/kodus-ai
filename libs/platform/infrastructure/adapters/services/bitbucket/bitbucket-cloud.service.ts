@@ -5805,6 +5805,7 @@ export class BitbucketCloudService implements Omit<
             sourceRefName: pullRequest?.source?.branch?.name ?? '', // TODO: remove, legacy, use head.ref
             head: {
                 ref: pullRequest?.source?.branch?.name ?? '',
+                sha: pullRequest?.source?.commit?.hash ?? '',
                 repo: {
                     id:
                         this.sanitizeUUID(
