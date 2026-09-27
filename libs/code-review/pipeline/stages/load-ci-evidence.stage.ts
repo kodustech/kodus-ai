@@ -106,6 +106,11 @@ export class LoadCiEvidenceStage extends BasePipelineStage<CodeReviewPipelineCon
      * Splits `fullName` on the LAST slash: GitLab projects can live under
      * nested groups ("group/subgroup/project"), where only the final segment
      * is the repository and everything before it is the owner path.
+     *
+     * Not every host has an owner/name form. Azure Repos reports the bare
+     * repository name and its adapter addresses the repo by id, so requiring
+     * a slash here dropped its CI evidence entirely. Fall back to the id when
+     * there is no owner to parse.
      */
     private resolveRepository(
         context: CodeReviewPipelineContext,
@@ -115,14 +120,23 @@ export class LoadCiEvidenceStage extends BasePipelineStage<CodeReviewPipelineCon
             context.pullRequest?.base?.repo?.fullName;
 
         const separator = fullName?.lastIndexOf('/') ?? -1;
-        if (!fullName || separator <= 0) {
+        if (fullName && separator > 0) {
+            return {
+                owner: fullName.slice(0, separator),
+                name: fullName.slice(separator + 1),
+                id: context.repository?.id,
+            };
+        }
+
+        const name = context.repository?.name || fullName;
+        if (!name || !context.repository?.id) {
             return null;
         }
 
         return {
-            owner: fullName.slice(0, separator),
-            name: fullName.slice(separator + 1),
-            id: context.repository?.id,
+            owner: '',
+            name,
+            id: context.repository.id,
         };
     }
 }

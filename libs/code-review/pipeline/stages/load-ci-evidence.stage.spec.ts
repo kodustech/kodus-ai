@@ -148,14 +148,38 @@ describe('LoadCiEvidenceStage', () => {
         expect(result.ciEvidence).toBeUndefined();
     });
 
-    it('does nothing when the repository has no full name to split', async () => {
+    it('still asks when the host has no owner/name form, as Azure does', async () => {
+        // Azure Repos reports a bare repository name and its adapter addresses
+        // the repo by id. Requiring an "owner/name" fullName here dropped its
+        // CI evidence on every review, silently.
+        const getCheckEvidence = jest.fn().mockResolvedValue([]);
+        const stage = makeStage(getCheckEvidence);
+
+        await run(
+            stage,
+            makeContext({
+                repository: { id: 'repo-3', name: 'widget-api' },
+            } as Partial<CodeReviewPipelineContext>),
+        );
+
+        expect(getCheckEvidence).toHaveBeenCalledWith(
+            expect.objectContaining({
+                repository: expect.objectContaining({
+                    id: 'repo-3',
+                    name: 'widget-api',
+                }),
+            }),
+        );
+    });
+
+    it('does nothing when there is neither a name nor an id', async () => {
         const getCheckEvidence = jest.fn();
         const stage = makeStage(getCheckEvidence);
 
         const result = await run(
             stage,
             makeContext({
-                repository: { id: 'repo-3', name: 'widget-api' },
+                repository: {},
             } as Partial<CodeReviewPipelineContext>),
         );
 
