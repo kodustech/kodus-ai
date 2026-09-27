@@ -81,12 +81,37 @@ function withGenerateFromStream(model: any): any {
     return new Proxy(model, {
         get(target, prop, receiver) {
             if (prop === 'doStream') {
-                return async (options: any) => target.doStream(withStore(options));
+                return async (options: any) => {
+                    // Sem teto: exatamente o caminho de antes.
+                    if (!TETO_CODEX) return target.doStream(withStore(options));
+                    const liberar = await vaga();
+                    try {
+                        const r = await target.doStream(withStore(options));
+                        // A vaga so volta quando o stream termina (ou quebra).
+                        return {
+                            ...r,
+                            stream: r.stream.pipeThrough(
+                                new TransformStream({ flush: () => liberar() }),
+                            ),
+                        };
+                    } catch (e) {
+                        liberar();
+                        throw e;
+                    }
+                };
             }
             if (prop !== 'doGenerate') {
                 return Reflect.get(target, prop, receiver);
             }
             return async (options: any) => {
+                const liberar = await vaga();
+                try {
+                    return await gerar(options);
+                } finally {
+                    liberar();
+                }
+            };
+            async function gerar(options: any) {
                 const { stream } = await target.doStream(withStore(options));
 
                 const content: any[] = [];
@@ -158,9 +183,31 @@ function withGenerateFromStream(model: any): any {
                     warnings,
                     response: responseMetadata,
                 };
-            };
+            }
         },
     });
+}
+
+/**
+ * Teto de chamadas simultaneas por processo (CODEX_MAX_CONCURRENT). A conta de
+ * assinatura nao aguenta as ~20 passadas paralelas de um PR: responde "servers
+ * overloaded" em vez de rate limit (27/09, conta C, sem incidente no status da
+ * OpenAI). Sem a variavel, sem teto — o comportamento de antes.
+ */
+const TETO_CODEX = Number(process.env.CODEX_MAX_CONCURRENT) || 0;
+let emUso = 0;
+const fila: Array<() => void> = [];
+async function vaga(): Promise<() => void> {
+    if (!TETO_CODEX) return () => {};
+    if (emUso >= TETO_CODEX) await new Promise<void>((ok) => fila.push(ok));
+    emUso++;
+    let solto = false;
+    return () => {
+        if (solto) return;
+        solto = true;
+        emUso--;
+        fila.shift()?.();
+    };
 }
 
 /**
