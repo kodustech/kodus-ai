@@ -292,11 +292,20 @@ def tabela(nome, linhas):
     for K,tp,fp,r,p,f1,f2,cpr in linhas:
         print(f'{K:>6}{tp:>5}{fp:>5}{r:>8.1%}{p:>9.1%}{f1:>8.3f}{f2:>8.3f}{cpr:>8.1f}')
 
+# Copia de REDUCER_WEIGHTS (libs/code-review/infrastructure/agents/engine/finding-reducer.ts).
+PESOS_PROD = {'nota':0.8021,'ver':-0.9322,'prod':1.064,'conf':-0.0787,'tam':1.0001,'sev':-0.797,'nag':0.7929,'vies':-1.2458}
+
 def secao_formula():
     print(f'\n== FORMULA ==  (limiar {LIM}; pesos SEMPRE reajustados leave-one-out por PR —')
     print('   o PR avaliado nunca entra no fit. E o mesmo regime de todas as simulacoes')
     print('   anteriores; os pesos publicados nao entram aqui para nao haver dois numeros.)')
     a = montar_grupos('ver')
+    if os.environ.get('REL_PESOS') == 'prod':
+        # Pesos de PRODUCAO (finding-reducer.ts, ajustados em 22/09 sobre outro
+        # pool): nenhum ajuste nesta rodada, nada escolhido depois de ver o
+        # resultado. E a leitura sem overfit.
+        tabela('P) pesos de producao (sem reajuste)', avaliar(a, BASE_FEATS, pesos=PESOS_PROD))
+        return
     tabela('A) atribuidor + veracidade', avaliar(a, BASE_FEATS))
     # D: a veracidade e uma chamada a mais por PR (~0,1-1 min). Os mesmos grupos
     # de A, sem as duas features que dependem dela: mede se ela paga a espera.
