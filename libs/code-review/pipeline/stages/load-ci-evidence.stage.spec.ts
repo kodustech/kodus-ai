@@ -69,12 +69,12 @@ describe('LoadCiEvidenceStage', () => {
 
     it('records which managed tools the CI already covers', async () => {
         const stage = makeStage(
-            jest.fn().mockResolvedValue([check('semgrep'), check('build')]),
+            jest.fn().mockResolvedValue([check('gitleaks'), check('build')]),
         );
 
         const result = await run(stage, makeContext());
 
-        expect(result.ciCoveredTools).toEqual([ManagedTool.RULE_PACK]);
+        expect(result.ciCoveredTools).toEqual([ManagedTool.SECRETS]);
     });
 
     it('records no coverage when CI runs nothing we recognize', async () => {

@@ -1493,6 +1493,18 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     ...discardedByFile.keys(),
                 ]);
 
+                // Keyed once rather than scanned per file: this loop runs over
+                // every affected file and both lists can be large on a wide PR.
+                const changedByName = new Map(
+                    changedFiles.map((f) => [f.filename, f]),
+                );
+                const ignoredByName = new Map(
+                    (context.ignoredFileChanges ?? []).map((f) => [
+                        f.filename,
+                        f,
+                    ]),
+                );
+
                 draft.fileAnalysisResults = [];
                 for (const filename of allAffectedFiles) {
                     const suggestions = byFile.get(filename) ?? [];
@@ -1502,10 +1514,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     // dependency scan still has to report what it introduces.
                     // Resolving only against changedFiles discarded those.
                     const file =
-                        changedFiles.find((f) => f.filename === filename) ??
-                        context.ignoredFileChanges?.find(
-                            (f) => f.filename === filename,
-                        );
+                        changedByName.get(filename) ??
+                        ignoredByName.get(filename);
                     if (file) {
                         draft.fileAnalysisResults.push({
                             validSuggestionsToAnalyze: suggestions,
