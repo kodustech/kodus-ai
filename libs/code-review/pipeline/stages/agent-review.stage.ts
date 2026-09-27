@@ -1613,7 +1613,7 @@ metadata: {
                 return aSeverity - bSeverity;
             });
 
-            return this.updateContext(context, (draft) => {
+            const publishedContext = this.updateContext(context, (draft) => {
                 const byFile = new Map<string, Partial<CodeSuggestion>[]>();
                 for (const s of fileLevelSuggestions) {
                     const file = s.relevantFile || '';
@@ -1738,20 +1738,40 @@ metadata: {
                 // through validSuggestionsByPR above.
                 draft.validSuggestions = fileLevelSuggestions;
                 draft.discardedSuggestions = allDiscarded;
-
-                // Last-resort flush for degradations that survived every
-                // earlier write attempt (Immer + plain rebuild refused after
-                // the formatter). Inside the final producer, a refusal can no
-                // longer pre-empt fileAnalysisResults/validSuggestions — the
-                // output is already being published in this same draft, so a
-                // lost 'partial' record never costs the whole review.
-                if (unflushedDegradations.length > 0) {
-                    if (!draft.errors) {
-                        draft.errors = [];
-                    }
-                    draft.errors.push(...unflushedDegradations);
-                }
             });
+
+            // Last-resort flush for degradations that survived every earlier
+            // write attempt (formatter-callback Immer + spread, then the
+            // post-formatter Immer + rebuild). Deliberately runs AFTER the
+            // publish: a refused write here can no longer throw inside the
+            // publish producer and abort the whole review, so a lost 'partial'
+            // record never costs fileAnalysisResults/validSuggestions. Guarded
+            // the same way the pipeline executor guards the errors write
+            // (Array.isArray check, pipeline-executor.service.ts:47-49).
+            if (unflushedDegradations.length > 0) {
+                try {
+                    return this.updateContext(publishedContext, (draft) => {
+                        if (!Array.isArray(draft.errors)) {
+                            draft.errors = [];
+                        }
+                        draft.errors.push(...unflushedDegradations);
+                    });
+                } catch (flushErr) {
+                    this.logger.warn({
+                        message: `[AGENT] Failed to record buffered formatter degradations after publishing the review: ${flushErr instanceof Error ? flushErr.message : String(flushErr)}`,
+                        context: this.stageName,
+                        metadata: {
+                            organizationId:
+                                context.organizationAndTeamData?.organizationId,
+                            prNumber,
+                            bufferedDegradations: unflushedDegradations.length,
+                        },
+                    });
+                    return publishedContext;
+                }
+            }
+
+            return publishedContext;
         } catch (error) {
             const durationMs = Date.now() - startTime;
             // Terminal BYOK (suspended key / no credit) → warn: user's provider
