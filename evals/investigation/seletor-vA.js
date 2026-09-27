@@ -225,5 +225,14 @@ function comEsforco(model, modelId) {
     }
     fs.writeFileSync(OUT, JSON.stringify({ dump: DUMP, modelo: MODEL, saida }, null, 2));
     console.log(`\n-> ${OUT}`);
+    // PR com chamada falha sai com grupos vazios e o braço parece PIOR, nao
+    // incompleto (27/09: credito do provedor acabou no meio e 11 de 30 PRs de
+    // um braço viraram "zero comentarios"). Falha barulhenta.
+    const falhas = Object.values(saida).filter((x) => x?.erro).length;
+    if (falhas) {
+        console.error(`ABORTADO: ${falhas} PRs com chamada falha no atribuidor — refaca antes de ler o braço.`);
+        await flush?.();
+        process.exit(2);
+    }
     await flush?.();
 })().catch((e) => { console.error(e); process.exit(1); });

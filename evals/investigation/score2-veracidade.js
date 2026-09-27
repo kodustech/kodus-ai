@@ -119,6 +119,7 @@ believing it is absent; claims of absence are the ones most often wrong.
 Score every index exactly once. Call veracidade exactly once.`;
 
 (async () => {
+    let falhas = 0;
     const model = comEsforco(buildModel(MODEL), String(MODEL).replace(/@sub$/, ''));
     console.log(`[modelo] ${descreveModelo(MODEL)}`);
     const GR = JSON.parse(fs.readFileSync(GRUPOS, 'utf8')).saida;
@@ -177,6 +178,7 @@ Score every index exactly once. Call veracidade exactly once.`;
         } catch (e) {
             saida[cid] = {};
             ms[cid] = Date.now() - t0;
+            falhas++;
             console.log(`  ${cid.slice(0, 46).padEnd(48)} FALHOU: ${String(e?.message || e).slice(0, 110)}`);
         }
     };
@@ -184,4 +186,9 @@ Score every index exactly once. Call veracidade exactly once.`;
     fs.writeFileSync(OUT, JSON.stringify({ dump: DUMP, modelo: MODEL, saida, ms }, null, 2));
     console.log(`\n-> ${OUT}`);
     await flush?.();
+    // Mesmo motivo do seletor-vA.js: nota faltando vira 50 em silencio.
+    if (falhas) {
+        console.error(`ABORTADO: ${falhas} PRs com chamada falha na veracidade.`);
+        process.exit(2);
+    }
 })().catch((e) => { console.error(e); process.exit(1); });
