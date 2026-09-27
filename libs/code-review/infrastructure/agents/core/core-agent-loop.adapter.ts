@@ -788,15 +788,33 @@ export async function runAgentLoopViaCore(
                                 spec: buildSpecWithLedger(ledger(), input.maxSteps ?? 12, SIMULATION_SYSTEM_PROMPT),
                             }];
                         }
+                        // exp-sim-p<N>: a simulacao paralela com teto de N passos (ela
+                        // sozinha gasta ~10x uma lente de 3 passos).
+                        const simTeto = /^exp-sim-p(\d+)$/.exec(extra);
+                        if (simTeto) {
+                            const n = Number(simTeto[1]);
+                            return [{
+                                label: experimentalExtraLabel(`sim-p${n}`),
+                                phase: 0,
+                                prompt: buildSimulationPrompt(diff, input.priorFindings, grafoParaOsAgentes),
+                                spec: buildSpecWithLedger(ledger(), n, SIMULATION_SYSTEM_PROMPT),
+                            }];
+                        }
                         // Os agentes de classe de novo, com teto de passos N: mede
                         // o teto na mesma rodada (exp-p8 = copia de cada um com 8).
-                        const teto = /^exp-p(\d+)$/.exec(extra);
+                        // exp-p<N>g: a mesma copia com o grafo de chamadas no prompt
+                        // (contexto pronto no lugar da investigacao que o teto corta).
+                        const teto = /^exp-p(\d+)(g?)$/.exec(extra);
                         if (teto) {
                             const n = Number(teto[1]);
+                            const comGrafo = teto[2] === 'g';
+                            if (comGrafo && !input.xfileCallGraph?.trim()) {
+                                throw new Error(`${extra} exige o grafo (RECALL_GRAFO_EXP=1)`);
+                            }
                             return microGroups.map((group) => ({
-                                label: experimentalExtraLabel(`p${n}-${group.id}`),
+                                label: experimentalExtraLabel(`p${n}${comGrafo ? 'g' : ''}-${group.id}`),
                                 phase: 0,
-                                prompt: buildMicroAgentPrompt(group, diff, grafoParaOsAgentes, input.microAgentTeto ?? 2),
+                                prompt: buildMicroAgentPrompt(group, diff, comGrafo ? input.xfileCallGraph : grafoParaOsAgentes, input.microAgentTeto ?? 2),
                                 spec: buildSpecWithLedger(ledger(), n, MICRO_AGENT_SYSTEM_PROMPT),
                             }));
                         }

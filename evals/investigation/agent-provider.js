@@ -945,7 +945,9 @@ class InvestigationAgentProvider {
             const extrasXfile = (process.env.RECALL_XFILE_EXTRAS || '')
                 .split(',').map((x) => x.trim()).filter((x) => x === 'grafo' || x === 'b');
             let xfileCallGraph;
-            if (extrasXfile.includes('grafo')) {
+            // RECALL_GRAFO_EXP=1: so monta o grafo (para as copias exp-p<N>g), sem
+            // ligar o agente cross-file extra.
+            if (extrasXfile.includes('grafo') || process.env.RECALL_GRAFO_EXP === '1') {
                 if (!repoHandle) throw new Error('RECALL_XFILE_EXTRAS=grafo exige RECALL_REAL_REPO=1');
                 const { buildPrCallGraph } = require('./build-pr-callgraph');
                 const cg = await buildPrCallGraph(caseData, repoHandle.dir, caseData.caseId, (m) => console.log(m));
