@@ -420,6 +420,10 @@ export class ObservabilityService implements OnModuleInit {
         credentialId?: string;
         route?: string;
         usedFallback?: boolean;
+        /** Model telemetry is on for this call. Only then is it wrapped in a
+         *  Langfuse observation: an untraced call sends Langfuse nothing, so
+         *  an observation around it would be an empty trace. */
+        traced?: boolean;
         attrs?: Record<string, any>;
         exec: () => Promise<T>;
     }): Promise<T> {
@@ -454,29 +458,30 @@ export class ObservabilityService implements OnModuleInit {
             params.spanName,
             async (span) => {
                 try {
-                    // One Langfuse trace per call, its id kept on the usage row
-                    // so the row leads straight to the trace.
-                    const result = await withLangfuseObservation(
-                        params.runName ?? params.spanName,
-                        (traceId) => {
-                            if (traceId) {
-                                span?.setAttributes?.({
-                                    externalTraceId: traceId,
-                                });
-                            }
-                            return params.exec();
-                        },
-                        {
-                            correlationId:
-                                this.getObsInstance().getContext()
-                                    ?.correlationId,
-                            organizationId: a.organizationId as
-                                | string
-                                | undefined,
-                            teamId: a.teamId as string | undefined,
-                            prNumber: a.prNumber as number | undefined,
-                        },
-                    );
+                    // One Langfuse trace per traced call, its id kept on the
+                    // usage row so the row leads straight to the trace.
+                    const result = await (params.traced
+                        ? withLangfuseObservation(
+                              params.runName ?? params.spanName,
+                              (traceId) => {
+                                  if (traceId) {
+                                      span?.setAttributes?.({
+                                          externalTraceId: traceId,
+                                      });
+                                  }
+                                  return params.exec();
+                              },
+                              {
+                                  correlationId:
+                                      this.getObsInstance().getContext()
+                                          ?.correlationId,
+                                  organizationId: a.organizationId as
+                                      string | undefined,
+                                  teamId: a.teamId as string | undefined,
+                                  prNumber: a.prNumber as number | undefined,
+                              },
+                          )
+                        : params.exec());
                     span?.setAttributes?.(
                         // Single shared reader — same mapping the agent harness
                         // uses, so cache-read/write + reasoning can't be captured

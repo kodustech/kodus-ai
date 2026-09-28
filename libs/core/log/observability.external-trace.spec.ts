@@ -22,7 +22,11 @@ import { ObservabilityService } from './observability.service';
  * row records that trace's id as `externalTraceId`.
  */
 describe('ObservabilityService.runAiSdkLLMInSpan — externalTraceId', () => {
-    const ENV = ['LANGFUSE_TRACING', 'LANGFUSE_PUBLIC_KEY', 'LANGFUSE_SECRET_KEY'];
+    const ENV = [
+        'LANGFUSE_TRACING',
+        'LANGFUSE_PUBLIC_KEY',
+        'LANGFUSE_SECRET_KEY',
+    ];
     let saved: Record<string, string | undefined>;
 
     function build() {
@@ -48,6 +52,7 @@ describe('ObservabilityService.runAiSdkLLMInSpan — externalTraceId', () => {
         service.runAiSdkLLMInSpan({
             spanName: 'CodeReviewAgent::review',
             runName: 'code-review-generalist',
+            traced: true,
             exec,
         });
 
@@ -132,15 +137,37 @@ describe('ObservabilityService.runAiSdkLLMInSpan — externalTraceId', () => {
         expect(attr('externalTraceId')).toBeUndefined();
     });
 
+    // A call whose model telemetry is off sends Langfuse nothing; an
+    // observation around it would be an empty trace, and its id a dead link.
+    it('opens no observation for a call that is not traced', async () => {
+        const { service, attr } = build();
+        const exec = jest.fn(ok);
+
+        await service.runAiSdkLLMInSpan({
+            spanName: 'CodeReviewAgent::review',
+            runName: 'code-review-generalist',
+            exec,
+        });
+
+        expect(exec).toHaveBeenCalledTimes(1);
+        expect(mockStartActiveObservation).not.toHaveBeenCalled();
+        expect(attr('externalTraceId')).toBeUndefined();
+    });
+
     // The other direction: from a log line or a usage row, find the call in
     // Langfuse by the ids they carry.
-    it('tags the observation with the correlationId and the call\'s ids', async () => {
+    it("tags the observation with the correlationId and the call's ids", async () => {
         const { service } = build();
 
         await service.runAiSdkLLMInSpan({
             spanName: 'CodeReviewAgent::review',
             runName: 'code-review-generalist',
-            attrs: { organizationId: 'org-1', teamId: 'team-1', prNumber: 2013 },
+            attrs: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+                prNumber: 2013,
+            },
+            traced: true,
             exec: ok,
         });
 
@@ -167,7 +194,11 @@ describe('ObservabilityService.runAiSdkLLMInSpan — externalTraceId', () => {
     it('falls back to the span name when the call has no run name', async () => {
         const { service } = build();
 
-        await service.runAiSdkLLMInSpan({ spanName: 'X::y', exec: ok });
+        await service.runAiSdkLLMInSpan({
+            spanName: 'X::y',
+            traced: true,
+            exec: ok,
+        });
 
         expect(mockStartActiveObservation).toHaveBeenCalledWith(
             'X::y',

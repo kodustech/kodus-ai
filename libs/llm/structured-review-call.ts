@@ -538,6 +538,9 @@ async function runReviewCall<T>(
                   // resolveTaskSlot (route = the LlmTask, not the tier).
                   route: mainSlot?.route,
                   usedFallback: mainSlot?.usedFallback,
+                  // Every review call builds its SDK telemetry (falling back
+                  // to the org id), so every one is traced.
+                  traced: true,
                   attrs: extraAttrs
                       ? { ...spanAttrs, ...extraAttrs }
                       : spanAttrs,
