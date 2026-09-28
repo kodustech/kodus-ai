@@ -213,8 +213,11 @@ export class CodeManagementService implements ICodeManagementService {
                 context: CodeManagementService.name,
                 error,
                 metadata: {
+                    organizationId:
+                        params.organizationAndTeamData?.organizationId,
                     platform: type,
                     prNumber: params.prNumber,
+                    repository: params.repository?.name,
                 },
             });
             return [];
