@@ -38,6 +38,7 @@ import {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AuditLogEvents } from '@libs/ee/codeReviewSettingsLog/events/audit-log.events';
 import { ActionType } from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
 import {
     TeamCliKeyCreatedResponseDto,
@@ -62,6 +63,7 @@ export class TeamCliKeyController {
         @Inject(REQUEST)
         private readonly request: UserRequest,
         private readonly eventEmitter: EventEmitter2,
+        private readonly telemetry: TelemetryService,
     ) {}
 
     /**
@@ -116,6 +118,13 @@ export class TeamCliKeyController {
             },
             actionType: ActionType.CREATE,
             keyName: body.name,
+        });
+
+        void this.telemetry.cliKeyChanged({
+            organizationId: this.request.user?.organization?.uuid,
+            teamId,
+            actorUserId: userId,
+            created: true,
         });
 
         return {
@@ -252,6 +261,13 @@ export class TeamCliKeyController {
             },
             actionType: ActionType.DELETE,
             keyName: key.name,
+        });
+
+        void this.telemetry.cliKeyChanged({
+            organizationId: this.request.user?.organization?.uuid,
+            teamId,
+            actorUserId: this.request.user?.uuid,
+            created: false,
         });
 
         return {

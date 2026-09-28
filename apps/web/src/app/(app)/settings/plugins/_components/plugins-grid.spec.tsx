@@ -97,7 +97,10 @@ describe("PluginsGrid — free plan cap", () => {
 
         renderOnFreePlan(plugins, ["exa", "osv", "docs", "issues"]);
 
-        expect(screen.getByText(/1 of your plugins is locked/i)).toBeInTheDocument();
+        // The banner names the plugin that never runs, not just a count.
+        expect(
+            screen.getByText(/issues is installed, but never runs/i),
+        ).toBeInTheDocument();
         expect(screen.getAllByText("Locked")).toHaveLength(1);
         expect(screen.getAllByText("Installed")).toHaveLength(3);
     });

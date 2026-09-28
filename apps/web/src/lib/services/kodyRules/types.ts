@@ -39,6 +39,9 @@ export type KodyRule = {
         status: KodyRuleCentralizedStatus;
     };
     origin: KodyRulesOrigin;
+    /** ISO timestamps from the API; "recent" sort and the table read them. */
+    createdAt?: string;
+    updatedAt?: string;
     requestType?: KodyRuleRequestType;
     targetRuleUuid?: string;
     resolvedAt?: string;

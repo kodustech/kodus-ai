@@ -151,7 +151,7 @@ describe("deleteConfirmCopy", () => {
 
     it("uses the distinct disconnect copy for the last model", () => {
         const copy = deleteConfirmCopy(true, "test-model-alpha");
-        expect(copy.title).toBe("Disconnect BYOK entirely?");
+        expect(copy.title).toBe("Disconnect your last model?");
         expect(copy.description).toContain("only connected model");
         expect(copy.description).toContain("environment-configured LLM");
         expect(copy.confirmText).toBe("Disconnect");
@@ -287,7 +287,7 @@ describe("useDeleteModel", () => {
         await act(async () => {
             fireEvent.click(screen.getByText("trigger"));
         });
-        expect(modalState.props?.title).toBe("Disconnect BYOK entirely?");
+        expect(modalState.props?.title).toBe("Disconnect your last model?");
         expect(modalState.props?.confirmText).toBe("Disconnect");
     });
 });

@@ -92,3 +92,23 @@ export function authorMatchesExact(
         .map((value) => value.toLowerCase());
     return candidates.includes(wanted);
 }
+
+/**
+ * Does this PR match the requested PR state?
+ *
+ * Kept next to `isOpenPullRequest` so the list filter and the "needs
+ * attention" facet can never drift onto two different notions of "open" —
+ * the screen shows both at once and a disagreement between them is the kind
+ * of bug nobody reports, they just stop trusting the numbers.
+ *
+ * `undefined` means "no state filter", which matches everything.
+ */
+export function matchesPullRequestState(
+    pr: { merged?: boolean | null; status?: string | null },
+    prState?: 'open' | 'closed',
+): boolean {
+    if (!prState) {
+        return true;
+    }
+    return prState === 'open' ? isOpenPullRequest(pr) : !isOpenPullRequest(pr);
+}

@@ -1,5 +1,4 @@
 import { useState } from "react";
-
 import { Button } from "@components/ui/button";
 import {
     Dialog,
@@ -11,7 +10,6 @@ import {
 } from "@components/ui/dialog";
 import { magicModal } from "@components/ui/magic-modal";
 import { useEffectOnce } from "@hooks/use-effect-once";
-
 import type { ImportedKodyRulesCounts } from "@services/kodyRules/fetch";
 
 export type DisableIdeSyncAction = "keep" | "pause" | "delete";
@@ -44,8 +42,7 @@ export const DisableIdeSyncModal = ({ counts }: Props) => {
                         auto-synced from IDE rule files (
                         <code className="text-xs">.cursorrules</code>,{" "}
                         <code className="text-xs">CLAUDE.md</code>, etc.). What
-                        should happen to{" "}
-                        {counts.active === 1 ? "it" : "them"}?
+                        should happen to {counts.active === 1 ? "it" : "them"}?
                     </DialogDescription>
                     {counts.pinned > 0 && (
                         // Pinned rules are skipped by pause/delete — the next
@@ -56,13 +53,13 @@ export const DisableIdeSyncModal = ({ counts }: Props) => {
                             <strong>{counts.pinned}</strong> of{" "}
                             {counts.active === 1 ? "it" : "them"}{" "}
                             {counts.pinned === 1 ? "is" : "are"} pinned via{" "}
-                            <code className="text-xs">@kody-sync</code> and
-                            will keep syncing regardless of your choice.
+                            <code className="text-xs">@kody-sync</code> and will
+                            keep syncing regardless of your choice.
                         </DialogDescription>
                     )}
                 </DialogHeader>
 
-                <fieldset className="text-sm flex flex-col gap-3 mt-2">
+                <fieldset className="mt-2 flex flex-col gap-3 text-sm">
                     <RadioOption
                         value="keep"
                         selected={action === "keep"}
@@ -90,7 +87,7 @@ export const DisableIdeSyncModal = ({ counts }: Props) => {
                 <DialogFooter>
                     <Button
                         size="md"
-                        variant="secondary"
+                        variant="cancel"
                         onClick={() => magicModal.hide()}>
                         Cancel
                     </Button>
@@ -125,7 +122,7 @@ const RadioOption = ({
 }: RadioOptionProps) => (
     <label
         className={
-            "flex gap-3 p-3 rounded-md border cursor-pointer transition-colors " +
+            "flex cursor-pointer gap-3 rounded-md border p-3 transition-colors " +
             (selected
                 ? "border-primary bg-primary/5"
                 : "border-card-lv2 hover:border-card-lv3")
@@ -139,10 +136,10 @@ const RadioOption = ({
             className="mt-1"
         />
         <div className="flex flex-col gap-1">
-            <div className="font-medium flex items-center gap-2">
+            <div className="flex items-center gap-2 font-medium">
                 {title}
                 {subtitle && (
-                    <span className="text-xs text-text-secondary font-normal">
+                    <span className="text-text-secondary text-xs font-normal">
                         ({subtitle})
                     </span>
                 )}

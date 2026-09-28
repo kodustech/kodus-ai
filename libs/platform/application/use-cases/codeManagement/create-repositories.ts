@@ -118,6 +118,27 @@ export class CreateRepositoriesUseCase implements IUseCase {
                 },
             });
 
+            // One event per save, beside the per-repo `repository_connected`
+            // ones: the setup funnel step is "picked repositories", not
+            // "picked the seventh repository". A chunked save reports each
+            // chunk, so `deferWebhooks` marks the non-authoritative ones.
+            const selectedRepoIds: string[] = (params.repositories ?? []).map(
+                (repo: { id: string | number }) => String(repo.id),
+            );
+            void this.telemetry.repositoriesSelected({
+                organizationId,
+                teamId,
+                actorUserId: this.request?.user?.uuid,
+                platform: params.type,
+                selectedCount: selectedRepoIds.length,
+                addedCount: selectedRepoIds.filter(
+                    (id) => !previouslyPersistedRepoIds.has(id),
+                ).length,
+                removedCount: [...previouslyPersistedRepoIds].filter(
+                    (id) => !selectedRepoIds.includes(id),
+                ).length,
+            });
+
             if (
                 team &&
                 ![STATUS.REMOVED, STATUS.ACTIVE].includes(team.status)

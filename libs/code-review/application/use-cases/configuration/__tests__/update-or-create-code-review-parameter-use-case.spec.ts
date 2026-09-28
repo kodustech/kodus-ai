@@ -57,6 +57,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await useCase.execute({
@@ -136,6 +137,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await useCase.execute({
@@ -233,6 +235,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         const result = await useCase.execute({
@@ -330,6 +333,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await useCase.execute({
@@ -425,6 +429,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await useCase.execute({
@@ -536,6 +541,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await expect(
@@ -633,6 +639,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await expect(
@@ -717,6 +724,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await expect(
@@ -819,6 +827,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await useCase.execute({
@@ -924,6 +933,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await useCase.execute({
@@ -1023,6 +1033,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await useCase.execute({
@@ -1120,6 +1131,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         const result = await useCase.execute({
@@ -1225,6 +1237,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         const result = await useCase.execute({
@@ -1323,6 +1336,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         const dtoShapedEmptyPayload = {
@@ -1438,6 +1452,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         const result = await useCase.execute({
@@ -1526,6 +1541,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await useCase.execute({
@@ -1611,6 +1627,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await useCase.execute({
@@ -1682,6 +1699,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await useCase.execute({
@@ -1760,6 +1778,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     planType: 'teams_byok',
                 }),
             } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
         await useCase.execute({

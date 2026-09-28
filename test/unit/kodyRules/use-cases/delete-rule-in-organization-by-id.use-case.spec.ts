@@ -20,6 +20,7 @@ import {
     KodyRulesStatus,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 describe('DeleteRuleInOrganizationByIdKodyRulesUseCase', () => {
     let useCase: DeleteRuleInOrganizationByIdKodyRulesUseCase;
@@ -60,6 +61,13 @@ describe('DeleteRuleInOrganizationByIdKodyRulesUseCase', () => {
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
+                {
+                    provide: TelemetryService,
+                    useValue: {
+                        kodyRuleChanged: jest.fn(),
+                        kodyRulesImported: jest.fn(),
+                    },
+                },
                 DeleteRuleInOrganizationByIdKodyRulesUseCase,
                 {
                     provide: KODY_RULES_SERVICE_TOKEN,
@@ -212,6 +220,13 @@ describe('DeleteRuleInOrganizationByIdKodyRulesUseCase — repo scope', () => {
     const buildUseCase = async (user: Record<string, unknown> | null) => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
+                {
+                    provide: TelemetryService,
+                    useValue: {
+                        kodyRuleChanged: jest.fn(),
+                        kodyRulesImported: jest.fn(),
+                    },
+                },
                 DeleteRuleInOrganizationByIdKodyRulesUseCase,
                 AuthorizationService,
                 PermissionsAbilityFactory,

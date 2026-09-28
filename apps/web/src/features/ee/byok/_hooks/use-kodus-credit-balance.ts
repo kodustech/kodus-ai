@@ -1,5 +1,6 @@
 "use client";
 
+import { getBYOK } from "@services/organizationParameters/fetch";
 import { useQuery } from "@tanstack/react-query";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { getCreditBalanceAction } from "src/features/ee/subscription/_actions/credits";
@@ -8,6 +9,8 @@ import type {
     CreditAutoTopUp,
     CreditBalance,
 } from "src/features/ee/subscription/_services/billing/types";
+
+import { routesThroughKodus } from "../_utils";
 
 /** Default commercial parameters until billing answers (mirrors the billing
  *  service's creditPricing config; only used to render, never to charge). */
@@ -20,10 +23,22 @@ const FALLBACK = {
 };
 
 export type KodusCreditBalanceView = {
-    /** The org routes at least one model through the Kodus provider. */
+    /** A model on the Kodus provider is CONFIGURED. Cheap, and true even when
+     *  nothing routes to it — do not raise an alarm on this alone. */
     usesKodusProvider: boolean;
+    /** Routing actually reaches a Kodus model (org default, fallback or a
+     *  per-task override), so an empty balance really does pause reviews.
+     *  Only resolved when it can change what the user is told. */
+    routedThroughKodus: boolean;
     /** Live balance from billing, falling back to the license snapshot. */
     balanceUsd: number | undefined;
+    /** Billing actually answered with a number. Every state flag below is
+     *  gated on it, so a screen that renders a balance MUST check this first:
+     *  coercing the unknown to 0 prints a confident "$0.00" that no badge and
+     *  no warning accompanies, because all of them are false while it's
+     *  unknown. "We don't know yet" and "you have nothing" look identical to
+     *  the reader and mean opposite things. */
+    known: boolean;
     /** Balance known and at or below zero. */
     exhausted: boolean;
     /** Balance known, positive, and at or below the low-balance threshold. */
@@ -78,11 +93,28 @@ export const useKodusCreditBalance = (): KodusCreditBalanceView => {
     const known = typeof balanceUsd === "number";
 
     const exhausted = known && balanceUsd <= 0;
+    const low = known && balanceUsd > 0 && balanceUsd <= lowThresholdUsd;
+
+    // Connecting Kodus is not the same as routing to it. Asked when the
+    // balance is gone OR running out on an org that has Kodus configured —
+    // the cases where the answer decides between "this threatens your
+    // reviews" and "nothing happens here". It used to be asked for
+    // `exhausted` alone, which quietly made `routedThroughKodus` always false
+    // while merely low: anything gated on both could never fire.
+    const routingQuery = useQuery({
+        queryKey: ["kodus-credits", "routing", teamId],
+        queryFn: () => getBYOK(),
+        enabled: credits.usesKodusProvider && (exhausted || low),
+        staleTime: 60_000,
+    });
+
     return {
         usesKodusProvider: credits.usesKodusProvider,
+        routedThroughKodus: routesThroughKodus(routingQuery.data),
         balanceUsd,
+        known,
         exhausted,
-        low: known && balanceUsd > 0 && balanceUsd <= lowThresholdUsd,
+        low,
         neverFunded:
             exhausted && !!balance && balance.lifetimePurchasedUsd === 0,
         autoTopUp: balance?.autoTopUp ?? null,

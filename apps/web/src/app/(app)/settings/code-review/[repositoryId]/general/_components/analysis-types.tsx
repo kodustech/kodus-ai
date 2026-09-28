@@ -38,7 +38,7 @@ function normalizeToken(value: string): string {
         .replace(/[^a-z0-9]+/g, "");
 }
 
-function hasTaskManagementConnection(
+export function hasTaskManagementConnection(
     connections: Array<{ appName: string; provider: string }>,
 ): boolean {
     return connections.some((conn) => {

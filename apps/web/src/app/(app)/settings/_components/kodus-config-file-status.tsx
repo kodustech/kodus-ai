@@ -121,7 +121,12 @@ const views = {
     },
 } as const;
 
-export const KodusConfigFileStatusBadge = () => {
+export const KodusConfigFileStatusBadge = ({
+    compact = false,
+}: {
+    /** Icon only, for the collapsed sidebar rail; the label moves into the tooltip. */
+    compact?: boolean;
+}) => {
     const status = useKodusConfigFileStatus();
 
     if (status.state === "hidden") {
@@ -135,15 +140,18 @@ export const KodusConfigFileStatusBadge = () => {
             <TooltipTrigger asChild>
                 <Badge
                     leftIcon={view.icon}
+                    aria-label={compact ? view.label : undefined}
                     className={cn(
                         "h-6 min-h-auto rounded-lg px-2 text-[10px] leading-px ring-1",
+                        compact && "px-1.5",
                         view.className,
                     )}>
-                    {view.label}
+                    {!compact && view.label}
                 </Badge>
             </TooltipTrigger>
 
             <TooltipContent className="max-w-xs">
+                {compact && <strong className="block">{view.label}</strong>}
                 {status.state === "unavailable" && status.error
                     ? `${view.description} (${status.error})`
                     : view.description}

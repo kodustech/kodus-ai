@@ -71,7 +71,8 @@ describe("LockedFeatureOverlay", () => {
                     label: "Upgrade plan",
                     href: "/settings/subscription",
                     feature: "cockpit",
-                    plan: "trial",
+                    surface: "locked_preview",
+                    subscriptionStatus: "trial",
                 }}>
                 <span>content</span>
             </LockedFeatureOverlay>,
@@ -80,7 +81,11 @@ describe("LockedFeatureOverlay", () => {
         fireEvent.click(screen.getByText(/upgrade plan/i));
 
         expect(captureGateCtaClick).toHaveBeenCalledWith(
-            expect.objectContaining({ feature: "cockpit", plan: "trial" }),
+            expect.objectContaining({
+                feature: "cockpit",
+                surface: "locked_preview",
+                subscriptionStatus: "trial",
+            }),
         );
     });
 

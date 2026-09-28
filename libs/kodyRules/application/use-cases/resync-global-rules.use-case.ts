@@ -10,6 +10,7 @@ import {
     ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 import { KodyRulesSyncService } from '@libs/kodyRules/infrastructure/adapters/services/kodyRulesSync.service';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 import {
     GlobalRulesSourceConfig,
     GlobalRulesSourceRepository,
@@ -29,6 +30,7 @@ export class ResyncGlobalRulesUseCase {
         @Inject(ORGANIZATION_PARAMETERS_SERVICE_TOKEN)
         private readonly organizationParametersService: IOrganizationParametersService,
         private readonly kodyRulesSyncService: KodyRulesSyncService,
+        private readonly telemetry: TelemetryService,
         @Inject(REQUEST)
         private readonly request: Request & {
             user: { organization: { uuid: string } };
@@ -69,6 +71,18 @@ export class ResyncGlobalRulesUseCase {
                         name: repo.name,
                         fullName: repo.fullName,
                     },
+                });
+            }
+
+            if (repositories.length > 0) {
+                void this.telemetry.kodyRulesImported({
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                    source: 'global_sync',
+                    // `syncRepositoryGlobal` returns void, so the rule count
+                    // is not observable here — the repository count is.
+                    ruleCount: 0,
+                    repositoryCount: repositories.length,
                 });
             }
         });

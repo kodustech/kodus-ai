@@ -10,6 +10,7 @@ import { TEAM_SERVICE_TOKEN } from '@libs/organization/domain/team/contracts/tea
 import { TEAM_MEMBERS_SERVICE_TOKEN } from '@libs/organization/domain/teamMembers/contracts/teamMembers.service.contracts';
 
 import { UpdateAnotherUserUseCase } from './update-another.use-case';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -67,6 +68,10 @@ describe('UpdateAnotherUserUseCase — org.role_changed emit', () => {
                 { provide: TEAM_MEMBERS_SERVICE_TOKEN, useValue: teamMembers },
                 { provide: EventEmitter2, useValue: eventEmitter },
                 { provide: NotificationService, useValue: notify },
+                {
+                    provide: TelemetryService,
+                    useValue: { memberRoleChanged: jest.fn() },
+                },
             ],
         }).compile();
 

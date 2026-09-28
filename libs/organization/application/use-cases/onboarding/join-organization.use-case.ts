@@ -38,6 +38,7 @@ import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 @Injectable()
 export class JoinOrganizationUseCase implements IUseCase {
@@ -66,6 +67,8 @@ export class JoinOrganizationUseCase implements IUseCase {
         private readonly parametersService: IParametersService,
 
         private readonly notificationService: NotificationService,
+
+        private readonly telemetry: TelemetryService,
     ) {}
 
     public async execute(data: JoinOrganizationDto): Promise<IUser> {
@@ -175,6 +178,13 @@ export class JoinOrganizationUseCase implements IUseCase {
             }
 
             await this.cleanUp(originalOrgId);
+
+            void this.telemetry.organizationJoined({
+                userId: user.uuid,
+                organizationId,
+                teamId: team.uuid,
+                via: 'invite',
+            });
 
             return updatedUser.toObject();
         } catch (error) {

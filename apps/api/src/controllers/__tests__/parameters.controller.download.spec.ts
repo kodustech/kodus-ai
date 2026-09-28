@@ -39,6 +39,7 @@ const buildController = (
         null as any, // listCodeReviewAutomationLabelsWithStatusUseCase
         null as any, // getDefaultConfigUseCase
         null as any, // getCodeReviewParameterUseCase
+        null as any, // getCodeReviewScopesUseCase
         null as any, // centralizedConfigSyncUseCase
         centralizedConfigDownloadZipUseCase as any,
         null as any, // centralizedConfigInitUseCase
@@ -57,9 +58,12 @@ describe('ParametersController › downloadCentralizedConfig', () => {
             execute: jest.fn().mockResolvedValue(archive),
         };
 
-        const controller = buildController(centralizedConfigDownloadZipUseCase, {
-            user,
-        });
+        const controller = buildController(
+            centralizedConfigDownloadZipUseCase,
+            {
+                user,
+            },
+        );
 
         const response = buildResponse();
         const chunks: Buffer[] = [];
@@ -88,9 +92,12 @@ describe('ParametersController › downloadCentralizedConfig', () => {
             execute: jest.fn().mockResolvedValue(archive),
         };
 
-        const controller = buildController(centralizedConfigDownloadZipUseCase, {
-            user,
-        });
+        const controller = buildController(
+            centralizedConfigDownloadZipUseCase,
+            {
+                user,
+            },
+        );
 
         const response = buildResponse();
         response.resume();
@@ -113,9 +120,12 @@ describe('ParametersController › downloadCentralizedConfig', () => {
             execute: jest.fn(),
         };
 
-        const controller = buildController(centralizedConfigDownloadZipUseCase, {
-            user: { uuid: 'user-1' },
-        });
+        const controller = buildController(
+            centralizedConfigDownloadZipUseCase,
+            {
+                user: { uuid: 'user-1' },
+            },
+        );
 
         await expect(
             controller.downloadCentralizedConfig(

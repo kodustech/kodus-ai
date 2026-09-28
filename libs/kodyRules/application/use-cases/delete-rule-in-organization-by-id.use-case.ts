@@ -21,6 +21,7 @@ import {
     KodyRulesStatus,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 @Injectable()
 export class DeleteRuleInOrganizationByIdKodyRulesUseCase {
@@ -34,6 +35,8 @@ export class DeleteRuleInOrganizationByIdKodyRulesUseCase {
         private readonly centralizedConfigPrService: CentralizedConfigPrService,
 
         private readonly authorizationService: AuthorizationService,
+
+        private readonly telemetry: TelemetryService,
     ) {}
 
     async execute(
@@ -168,7 +171,7 @@ export class DeleteRuleInOrganizationByIdKodyRulesUseCase {
                 }
             }
 
-            return await this.kodyRulesService.deleteRuleWithLogging(
+            const deleted = await this.kodyRulesService.deleteRuleWithLogging(
                 {
                     organizationId,
                 },
@@ -178,6 +181,17 @@ export class DeleteRuleInOrganizationByIdKodyRulesUseCase {
                     userEmail: actor?.userEmail || ru?.email,
                 },
             );
+
+            void this.telemetry.kodyRuleChanged({
+                organizationId,
+                teamId,
+                actorUserId: actor?.userId || ru?.uuid,
+                action: 'deleted',
+                origin: existingRule?.origin,
+                repositoryId: existingRule?.repositoryId,
+            });
+
+            return deleted;
         } catch (error) {
             this.logger.error({
                 message: 'Error deleting Kody Rule in organization by ID',

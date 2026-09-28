@@ -12,14 +12,14 @@ import {
 } from "@components/ui/popover";
 import { Progress } from "@components/ui/progress";
 import { Separator } from "@components/ui/separator";
+import type { PublicConfig } from "@config/publicConfig";
 import { UserRole } from "@enums";
 import { useEffectOnce } from "@hooks/use-effect-once";
+import { useConfig } from "@providers/ConfigProvider";
 import { ArrowRight } from "lucide-react";
 import { useAuth } from "src/core/providers/auth.provider";
-import { useConfig } from "@providers/ConfigProvider";
 import { cn } from "src/core/utils/components";
 import { ClientSideCookieHelpers } from "src/core/utils/cookie";
-import type { PublicConfig } from "@config/publicConfig";
 
 // TASKS is built per-render so the "Explore our docs" href can come from
 // useConfig() instead of process.env (which used to inline at build time).
@@ -115,11 +115,14 @@ export const GetStartedChecklist = () => {
                 <PopoverTrigger asChild>
                     <Button
                         size="lg"
-                        variant="primary"
-                        className="group h-full overflow-visible text-black"
+                        variant="primary-dark"
+                        className="group h-full overflow-visible"
                         leftIcon={
                             <div className="-mr-2 -mb-0.5 -ml-3 size-11">
-                                <Image alt="" src="/assets/images/kody/look-right.png" />
+                                <Image
+                                    alt=""
+                                    src="/assets/images/kody/look-right.png"
+                                />
                             </div>
                         }
                         rightIcon={
@@ -150,7 +153,10 @@ export const GetStartedChecklist = () => {
                         </div>
 
                         <div className="absolute -right-1 -bottom-3 size-14">
-                            <Image alt="" src="/assets/images/kody/look-left-with-paws.png" />
+                            <Image
+                                alt=""
+                                src="/assets/images/kody/look-left-with-paws.png"
+                            />
                         </div>
                     </div>
 
