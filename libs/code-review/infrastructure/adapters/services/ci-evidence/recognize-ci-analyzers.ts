@@ -69,7 +69,13 @@ const COVERED_BY: Record<ManagedTool, readonly KnownAnalyzer[]> = {
         'ggshield',
         'detect-secrets',
     ],
-    [ManagedTool.DEPENDENCIES]: ['osv-scanner', 'dependabot', 'snyk', 'trivy'],
+    // Deliberately narrow. Standing down is only safe when the check proves a
+    // dependency scan actually ran on this commit, and a NAME does not:
+    // "Dependabot auto-merge" is a merge workflow that scans nothing, while
+    // `trivy` and `snyk` are as often container or SAST jobs as they are SCA.
+    // Treating those as coverage silently disabled the scan; recognizing them
+    // for display (`recognizeCiAnalyzers`) stays unchanged.
+    [ManagedTool.DEPENDENCIES]: ['osv-scanner'],
 };
 
 /**

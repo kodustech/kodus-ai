@@ -96,9 +96,27 @@ describe('recognizeCiAnalyzers', () => {
 describe('isToolCoveredByCi', () => {
     it('skips our dependency scan when their CI runs an equivalent', () => {
         expect(
-            isToolCoveredByCi(ManagedTool.DEPENDENCIES, [check('dependabot')]),
+            isToolCoveredByCi(ManagedTool.DEPENDENCIES, [
+                check('osv-scanner'),
+            ]),
         ).toBe(true);
     });
+
+    /**
+     * Standing down needs proof that a dependency scan ran on this commit,
+     * and a check NAME is not that. "Dependabot auto-merge" merges a PR and
+     * scans nothing; trivy and snyk jobs are as often container or SAST runs
+     * as they are SCA. Treating either as coverage silently disabled our own
+     * scan on exactly the pull requests that most need it.
+     */
+    it.each(['Dependabot auto-merge', 'trivy', 'snyk'])(
+        'does not let %s stand in for the dependency scan',
+        (name) => {
+            expect(
+                isToolCoveredByCi(ManagedTool.DEPENDENCIES, [check(name)]),
+            ).toBe(false);
+        },
+    );
 
     it('skips our secret scan when their CI runs an equivalent scanner', () => {
         expect(
