@@ -191,6 +191,9 @@ export interface NotificationPayloadMap {
         windowStart: string;
         windowEnd: string;
         sampleError: string;
+        /** `LlmErrorCategory` of the sample error; absent when unclassified. */
+        category?: string;
+        httpStatus?: number;
     };
 
     // ── Spend limit ────────────────────────────────────────────

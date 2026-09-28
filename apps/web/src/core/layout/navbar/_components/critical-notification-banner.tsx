@@ -12,6 +12,8 @@ import type { UserNotification } from "@services/notifications/types";
 import { AlertTriangleIcon, ChevronDownIcon, XIcon } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
+import { byokFailureCopy } from "./byok-failure-copy";
+
 /** The one page-severity event we summarise + allow dismissing per session. */
 const BYOK_ERROR_EVENT = "byok.llm_errors_threshold";
 const DISMISSED_STORAGE_KEY = "byok-error-banner-dismissed";
@@ -111,12 +113,15 @@ export const CriticalNotificationBanner = () => {
         ? prettyProvider(banner.delivery.metadata?.provider)
         : null;
 
-    const title = isByokError
-        ? `Your ${provider} key is failing`
-        : banner.delivery.title;
-    const body = isByokError
-        ? `${provider} rejected recent requests — often an insufficient balance or a suspended/expired account. Reviews using this key may fail until it's fixed.`
-        : banner.delivery.body;
+    const category = banner.delivery.metadata?.category;
+    const byokCopy = isByokError
+        ? byokFailureCopy(
+              provider ?? "your provider",
+              typeof category === "string" ? category : undefined,
+          )
+        : null;
+    const title = byokCopy?.title ?? banner.delivery.title;
+    const body = byokCopy?.body ?? banner.delivery.body;
 
     const handleAction = () => {
         markRead.mutate(banner.uuid);
