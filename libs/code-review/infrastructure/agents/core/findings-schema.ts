@@ -6,7 +6,10 @@
  */
 import { z } from 'zod';
 import { createLogger } from '@libs/core/log/logger';
-import { normalizeEnvelope } from '@libs/llm/structured-output-repair';
+import {
+    extractJsonFromText,
+    normalizeEnvelope,
+} from '@libs/llm/structured-output-repair';
 import { LLM_ENVELOPE_TAG } from '@libs/llm/log-tags';
 
 const logger = createLogger('FindingsSchema');
@@ -46,6 +49,29 @@ const _findingsSchema = z.object({
 export type FindingsOutput = z.infer<typeof _findingsSchema>;
 
 /**
+ * Claude models (measured on Sonnet 5.5, #1821) often send the `suggestions`
+ * array of a tool call as a JSON-encoded STRING inside an otherwise valid
+ * object. normalizeEnvelope only parses a stringified container, so the field
+ * failed validation and every finding in it fell to text parsing and was lost
+ * (40 of 90 lens passes in one run). Parse the field when it holds a JSON
+ * array; any other string is left for validation to reject as before.
+ */
+function parseStringifiedSuggestions(value: unknown): unknown {
+    const suggestions = (value as { suggestions?: unknown } | null)
+        ?.suggestions;
+    if (typeof suggestions !== 'string') return value;
+    const candidate = extractJsonFromText(suggestions);
+    if (candidate == null) return value;
+    try {
+        const parsed = JSON.parse(candidate);
+        if (!Array.isArray(parsed)) return value;
+        return { ...(value as object), suggestions: parsed };
+    } catch {
+        return value;
+    }
+}
+
+/**
  * Validate and sanitize a done-tool result against the FindingsOutput schema.
  * Returns null if the result is null or fails validation, ensuring downstream
  * code never receives a FindingsOutput with missing `suggestions`.
@@ -67,10 +93,9 @@ export function sanitizeFindingsResult(
     // set under `{result:…}`, `{findings:…}`, a bare array, or a JSON string is
     // recovered instead of read as `undefined` and silently dropped. Pure and
     // conservative — a canonical `{reasoning,suggestions}` is returned untouched.
-    const normalized = normalizeEnvelope(raw, 'suggestions', [
-        'findings',
-        'codeSuggestions',
-    ]) as FindingsOutput;
+    const normalized = parseStringifiedSuggestions(
+        normalizeEnvelope(raw, 'suggestions', ['findings', 'codeSuggestions']),
+    ) as FindingsOutput;
     const parsed = _findingsSchema.safeParse(normalized);
     if (parsed.success) return parsed.data;
     logger.warn({

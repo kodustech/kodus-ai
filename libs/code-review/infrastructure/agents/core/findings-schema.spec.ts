@@ -67,6 +67,30 @@ describe('sanitizeFindingsResult', () => {
         expect(sanitizeFindingsResult(malformed)).toBeNull();
     });
 
+    it('recovers suggestions sent as a JSON-encoded string (Claude tool calls)', () => {
+        const item = {
+            relevantFile: 'src/foo.ts',
+            suggestionContent: 'Fix the null check',
+            existingCode: 'if (x)',
+            improvedCode: 'if (x != null)',
+        };
+        const result = sanitizeFindingsResult({
+            reasoning: 'found a bug',
+            suggestions: JSON.stringify([item]),
+        } as any);
+        expect(result).not.toBeNull();
+        expect(result!.suggestions).toEqual([item]);
+        expect(mockLogger.warn).not.toHaveBeenCalled();
+    });
+
+    it('leaves a JSON-encoded non-array suggestions string to fail as before', () => {
+        const result = sanitizeFindingsResult({
+            reasoning: 'x',
+            suggestions: JSON.stringify({ not: 'an array' }),
+        } as any);
+        expect(result).toBeNull();
+    });
+
     it('partially recovers when reasoning is missing but suggestions is a valid array', () => {
         const partial = {
             suggestions: [
