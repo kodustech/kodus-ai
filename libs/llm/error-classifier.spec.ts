@@ -258,6 +258,17 @@ describe('classifyLLMError', () => {
             'Failed: request id req_a503b on the model call',
             'the deployment 05d503ee45x is not reachable',
             'blob payload ...d504e2f... failed to parse',
+            // Same class with a `_`/`-` in front: `req_503ab`, `trace-503x` and
+            // `blob_503f` are id/hash fragments, not statuses. Only the
+            // explicit-keyword alternative (http/err/error/status/code) may
+            // read a status across a `_`/`-` (#1898 review).
+            'Failed: request id req_503ab on the model call',
+            'trace-503x rejected the call',
+            'blob_503f could not be parsed',
+            // `cloudflare: upstream_530` used to match only because the first
+            // alternative ignored the underscore. "upstream" is not a status
+            // keyword, so this must stay UNKNOWN rather than cascade.
+            'cloudflare: upstream_530 reported by the edge',
         ])('bare digit inside a larger number (%s) → not TRANSIENT', (msg) => {
             const err = new Error(msg);
             expect(classifyLLMError(err).category).not.toBe(
@@ -272,7 +283,6 @@ describe('classifyLLMError', () => {
             // UNKNOWN — which never triggers the BYOK fallback.
             'upstream responded HTTP_503',
             'proxy hop failed: ERR_502',
-            'cloudflare: upstream_530 reported by the edge',
             'gateway returned http504',
             'connect failed with 502badgateway via the mesh proxy',
         ])('status glued to a word (%s) → TRANSIENT', (msg) => {

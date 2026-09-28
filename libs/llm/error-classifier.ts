@@ -395,14 +395,15 @@ function matchByMessage(lower: string): LlmErrorCategory {
         lower.includes('internal server error') ||
         // Status numbers can appear as text without a status field (Cloudflare's
         // 530 over a 5xx, proxy passthrough). Guard so a standalone 5xx is not
-        // flanked by digits (a number "5032" is not a status), and allow the
-        // letter/underscore adjacency ONLY when it sits behind an explicit
-        // status keyword (`HTTP_503`, `ERR_502`, `http504`, `status: 530`,
-        // `code_503`). A bare digit glued to arbitrary letters is a request id,
-        // hash or base64 blob (`req_a503b`, `...d503e...`), NOT a status —
-        // matching it would mis-classify a permanent failure as TRANSIENT,
-        // wrongly cascade to the paid fallback and surface a wrong message.
-        /(?<![a-z0-9])(?:502|503|504|530)(?!\d)|(?<![a-z0-9])(?:http|err|error|status|code)[_-]?(?:502|503|504|530)(?!\d)/.test(
+        // flanked by digits (a number "5032" is not a status) and not glued to a
+        // `_`/`-` either (`req_503ab`, `trace-503x`, `blob_503f` are id or hash
+        // fragments): a letter/underscore/hyphen adjacency is a status ONLY
+        // behind an explicit status keyword (`HTTP_503`, `ERR_502`, `http504`,
+        // `code_503`). Anything else glued to arbitrary text is a request id,
+        // hash or base64 blob, NOT a status — matching it would mis-classify a
+        // permanent failure as TRANSIENT, wrongly cascade to the paid fallback
+        // and surface a wrong message.
+        /(?<![a-z0-9_-])(?:502|503|504|530)(?!\d)|(?<![a-z0-9])(?:http|err|error|status|code)[_-]?(?:502|503|504|530)(?!\d)/.test(
             lower,
         )
     ) {
