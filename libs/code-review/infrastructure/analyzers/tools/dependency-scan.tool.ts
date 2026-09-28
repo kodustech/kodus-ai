@@ -18,6 +18,32 @@ const RUN_TIMEOUT_MS = 120_000;
 /** Separates the scanner's JSON from the exit code appended after it. */
 const EXIT_MARKER = '__OSV_EXIT:';
 
+/**
+ * Whether an added line names this package, as opposed to merely containing
+ * its name. A plain substring test anchors `lodash` to a line adding
+ * `lodash.merge`, which both reports an advisory the change never introduced
+ * and points at the wrong line. A package name ends where a name character
+ * stops, so require a boundary on each side — `"node_modules/lodash"` and
+ * `lodash@4.17.11` still match, `lodash.merge` no longer does.
+ */
+const NAME_CHAR = /[A-Za-z0-9._-]/;
+
+function mentionsPackage(haystack: string, packageName: string): boolean {
+    let from = 0;
+    for (;;) {
+        const at = haystack.indexOf(packageName, from);
+        if (at === -1) return false;
+
+        const before = at === 0 ? '' : haystack[at - 1];
+        const after = haystack[at + packageName.length] ?? '';
+
+        if (!NAME_CHAR.test(before) && !NAME_CHAR.test(after)) {
+            return true;
+        }
+        from = at + 1;
+    }
+}
+
 /** Manifests and lockfiles osv-scanner understands. */
 const MANIFEST = new Set([
     'package-lock.json',
@@ -179,38 +205,59 @@ export class DependencyScanTool implements AnalyzerTool {
             `mkdir -p ${quote(baseDir)}`,
         ];
 
-        // Prove the base ref is actually in the sandbox before trusting
-        // anything read from it. Without this, an unfetched ref makes every
-        // per-file lookup miss, the base tree comes out empty, and every
-        // advisory already in the tree is reported as introduced by this pull
-        // request — the flood the whole base/head difference exists to avoid.
-        if (sandbox.baseBranch) {
-            setup.push(
-                `git -C ${quote(sandbox.repoDir)} rev-parse --verify --quiet ` +
-                    `${quote(`origin/${sandbox.baseBranch}^{commit}`)} > /dev/null`,
-            );
-        }
+        // Which manifests had to fall back to the base-branch TIP, which is
+        // not what this pull request forked from.
+        const fromTip: string[] = [];
+        let needsGit = false;
 
         for (const file of files) {
-            // The base branch is fetched into the sandbox, so git holds the
-            // real previous manifest. Prefer it: reconstructing a 400KB
-            // lockfile from a 400-byte hunk depends on the patch's line
-            // numbers matching the checkout, which an incremental review —
-            // diffing against the previous commit rather than the base —
-            // breaks. That failure is silent, because a manifest we cannot
-            // rewind yields no baseline and therefore no findings.
-            // Materialise the base file INSIDE the sandbox. A lockfile is
-            // hundreds of kilobytes, and carrying one out and back as a shell
-            // argument exceeds the maximum command length — the process then
-            // fails to start at all. git already holds the ref here, so the
-            // content never has to travel.
+            const relative = toRepoRelativePath(file.filename);
+            const target = `${baseDir}/${relative}`;
+            const cut = target.lastIndexOf('/');
+
+            // Rewinding the host's own patch is preferred because the host
+            // computes it against the MERGE BASE: the result is the manifest
+            // as this pull request found it. `origin/<base>` is the branch
+            // TIP, which has moved on — a dependency someone else bumped on
+            // the base after the fork then differs from head and reads as
+            // "introduced here", blaming an author who never touched it.
+            if (file.patch) {
+                let current: string | null = null;
+                try {
+                    current = await sandbox.readFile(
+                        `${sandbox.repoDir}/${relative}`,
+                    );
+                } catch {
+                    current = null;
+                }
+
+                const rewound =
+                    current === null ? null : revertPatch(current, file.patch);
+
+                if (rewound !== null) {
+                    // A manifest the change ADDED has no previous version;
+                    // leaving it out is what makes its advisories count as new.
+                    if (rewound.trim() === '') {
+                        continue;
+                    }
+                    setup.push(`mkdir -p ${quote(target.slice(0, cut))}`);
+                    setup.push(
+                        `printf %s ${quote(
+                            Buffer.from(rewound, 'utf8').toString('base64'),
+                        )} | base64 -d > ${quote(target)}`,
+                    );
+                    continue;
+                }
+            }
+
+            // The patch did not fit the checkout — an incremental review
+            // diffs against the previous commit, not the base. The tip is
+            // then the only baseline available, and it is approximate.
             if (sandbox.baseBranch) {
-                const target = `${baseDir}/${toRepoRelativePath(file.filename)}`;
-                const cut = target.lastIndexOf('/');
+                needsGit = true;
+                fromTip.push(file.filename);
                 setup.push(`mkdir -p ${quote(target.slice(0, cut))}`);
-                const ref = quote(
-                    `origin/${sandbox.baseBranch}:${toRepoRelativePath(file.filename)}`,
-                );
+                const ref = quote(`origin/${sandbox.baseBranch}:${relative}`);
                 // A manifest this pull request ADDED has no base version, and
                 // that absence is the signal that its advisories are new. A
                 // manifest that exists on the base but cannot be read is a
@@ -225,50 +272,35 @@ export class DependencyScanTool implements AnalyzerTool {
                 continue;
             }
 
-            let current: string;
-            try {
-                current = await sandbox.readFile(
-                    `${sandbox.repoDir}/${toRepoRelativePath(file.filename)}`,
-                );
-            } catch {
-                return null;
-            }
+            this.noBaseline(sandbox, files, {
+                file: file.filename,
+                reason: 'the patch does not fit the checkout and no base branch is available',
+            });
+            return null;
+        }
 
-            const rewound = revertPatch(current, file.patch);
-            if (rewound === null) {
-                // Without a baseline every advisory in the tree would look
-                // introduced, so this reports nothing — and would do so
-                // silently if it did not say why.
-                this.logger.warn({
-                    message:
-                        `No baseline for ${file.filename}: the base branch is ` +
-                        'not in the sandbox and the patch does not fit the ' +
-                        'checkout. Reporting no dependency findings.',
-                    context: DependencyScanTool.name,
-                    metadata: {
-                        file: file.filename,
-                        hasBaseBranch: Boolean(sandbox.baseBranch),
-                        currentChars: current.length,
-                        patchChars: (file.patch ?? '').length,
-                    },
-                });
-                return null;
-            }
-
-            // A manifest the change ADDED has no previous version; leaving it
-            // out of the base tree is what makes its advisories count as new.
-            if (rewound.trim() === '') {
-                continue;
-            }
-
-            const target = `${baseDir}/${toRepoRelativePath(file.filename)}`;
-            const cut = target.lastIndexOf('/');
-            setup.push(`mkdir -p ${quote(target.slice(0, cut))}`);
-            setup.push(
-                `printf %s ${quote(
-                    Buffer.from(rewound, 'utf8').toString('base64'),
-                )} | base64 -d > ${quote(target)}`,
+        // Only assert the ref when something actually reads from it: a review
+        // whose manifests all rewound cleanly needs no git at all.
+        if (needsGit) {
+            setup.splice(
+                2,
+                0,
+                `git -C ${quote(sandbox.repoDir)} rev-parse --verify --quiet ` +
+                    `${quote(`origin/${sandbox.baseBranch}^{commit}`)} > /dev/null`,
             );
+
+            this.logger.warn({
+                message:
+                    'Dependency baseline fell back to the base branch tip for ' +
+                    'some manifests. The tip may carry changes this pull ' +
+                    'request never made, so an advisory fixed on the base ' +
+                    'after the fork can read as introduced here.',
+                context: DependencyScanTool.name,
+                metadata: {
+                    files: fromTip,
+                    baseBranch: sandbox.baseBranch,
+                },
+            });
         }
 
         // The e2b provider throws on a non-zero exit where the local one
@@ -477,7 +509,7 @@ export class DependencyScanTool implements AnalyzerTool {
     ): { filename: string; line: number } | null {
         for (const file of addedByFile) {
             for (const { line, haystack } of file.added) {
-                if (haystack.includes(packageName)) {
+                if (mentionsPackage(haystack, packageName)) {
                     return { filename: file.filename, line };
                 }
             }

@@ -101,6 +101,24 @@ const sandboxWith = (
  */
 const scanned = (json: string, exitCode = 0) => `${json}__OSV_EXIT:${exitCode}`;
 
+/** The whole manifest added by this change — rewinds to an empty base. */
+const ADDED_PATCH = [
+    `@@ -0,0 +1,${HEAD.split('\n').length} @@`,
+    ...HEAD.split('\n').map((line) => `+${line}`),
+].join('\n');
+
+/**
+ * A patch that cannot be rewound against the checkout. The tool prefers the
+ * host's patch (it is relative to the merge base); only when that fails does
+ * it fall back to reading the base branch TIP through git, which is the path
+ * these tests exercise.
+ */
+const UNAPPLIABLE_PATCH = [
+    '@@ -1,2 +1,2 @@',
+    '-this line is not in the checkout',
+    '+neither is this one',
+].join('\n');
+
 const file = (patch = PATCH): ChangedFile => ({ filename: LOCKFILE, patch });
 
 describe('DependencyScanTool', () => {
@@ -224,7 +242,12 @@ describe('DependencyScanTool', () => {
             );
             (sandbox as unknown as { baseBranch?: string }).baseBranch = 'main';
 
-            await tool.run({ sandbox, files: [file()] });
+            // Only reached when the patch cannot be rewound; a patch that
+            // fits is preferred because it is relative to the merge base.
+            await tool.run({
+                sandbox,
+                files: [file(UNAPPLIABLE_PATCH)],
+            });
 
             const setup = (
                 sandbox as unknown as { commands: string[] }
@@ -503,7 +526,12 @@ describe('an untrustworthy baseline reports nothing, not everything', () => {
             c.includes('rev-parse'),
         );
 
-        const findings = await tool.run({ sandbox, files: [file()] });
+        // Reaching git at all needs a patch that cannot be rewound: a patch
+        // that fits is preferred, being relative to the merge base.
+        const findings = await tool.run({
+            sandbox,
+            files: [file(UNAPPLIABLE_PATCH)],
+        });
 
         expect(findings).toEqual([]);
     });
@@ -559,23 +587,30 @@ describe('an untrustworthy baseline reports nothing, not everything', () => {
             showFails: true,
         });
 
-        const findings = await tool.run({ sandbox, files: [file()] });
+        const findings = await tool.run({
+            sandbox,
+            files: [file(UNAPPLIABLE_PATCH)],
+        });
 
         expect(findings).toEqual([]);
     });
 
     it('still reports advisories for a manifest this PR added', async () => {
-        // No base blob is the normal, correct case for an added manifest:
-        // its advisories really are introduced here, so they must be kept.
+        // An added manifest rewinds to an empty base, and that emptiness is
+        // the correct signal that its advisories are new — not a failure to
+        // rebuild. They must survive.
         const sandbox = shellSandbox(preexisting, {
             blobExists: false,
             showFails: false,
         });
 
-        const findings = await tool.run({ sandbox, files: [file()] });
+        const findings = await tool.run({
+            sandbox,
+            files: [file(ADDED_PATCH)],
+        });
 
-        expect(findings).toHaveLength(1);
-        expect(findings[0].ruleId).toContain('GHSA-aaa');
+        expect(findings.length).toBeGreaterThan(0);
+        expect(findings.map((f) => f.ruleId).join(',')).toContain('GHSA-aaa');
     });
 
     it('reports nothing when the sandbox throws instead of returning an exit code', async () => {
@@ -657,5 +692,102 @@ describe('a scanner that exits non-zero on findings still returns them', () => {
 
         expect(findings).toHaveLength(1);
         expect(findings[0].ruleId).toContain('GHSA-aaa');
+    });
+});
+
+/**
+ * A pull request that adds `lodash.merge` does not introduce `lodash`'s
+ * advisories. A plain substring anchor matched them anyway — the added line
+ * contains the string "lodash" — so a pre-existing advisory was reported
+ * against an author who never touched that package, pointing at the wrong
+ * line to prove it.
+ */
+describe('anchoring a package name', () => {
+    const tool = new DependencyScanTool();
+
+    const addsLodashMerge = [
+        '@@ -1,4 +1,7 @@',
+        ' {',
+        '   "packages": {',
+        '+    "node_modules/lodash.merge": {',
+        '+      "version": "4.6.2"',
+        '+    },',
+        '     "node_modules/minimist": {',
+    ].join('\n');
+
+    it('does not anchor lodash to a line that adds lodash.merge', async () => {
+        const sandbox = {
+            repoDir: '/repo',
+            baseBranch: 'main',
+            run: jest.fn(async (command: string) =>
+                command.includes('osv-scanner')
+                    ? {
+                          // Only the pre-existing lodash advisory exists; the
+                          // base tree is empty because nothing rebuilt it.
+                          stdout: scanned(
+                              command.includes('kody-deps-base')
+                                  ? osv([])
+                                  : osv([
+                                        {
+                                            name: 'lodash',
+                                            version: '4.17.11',
+                                            id: 'GHSA-aaa',
+                                        },
+                                    ]),
+                          ),
+                          stderr: '',
+                          exitCode: 0,
+                      }
+                    : { stdout: '', stderr: '', exitCode: 0 },
+            ),
+            readFile: jest.fn(async () => HEAD),
+            writeFile: jest.fn(),
+        } as never;
+
+        const findings = await tool.run({
+            sandbox,
+            files: [
+                { filename: LOCKFILE, patch: addsLodashMerge } as ChangedFile,
+            ],
+        });
+
+        expect(findings).toEqual([]);
+    });
+
+    it('still anchors a package the line really names', async () => {
+        const sandbox = {
+            repoDir: '/repo',
+            baseBranch: 'main',
+            run: jest.fn(async (command: string) =>
+                command.includes('osv-scanner')
+                    ? {
+                          stdout: scanned(
+                              command.includes('kody-deps-base')
+                                  ? osv([])
+                                  : osv([
+                                        {
+                                            name: 'lodash.merge',
+                                            version: '4.6.2',
+                                            id: 'GHSA-ccc',
+                                        },
+                                    ]),
+                          ),
+                          stderr: '',
+                          exitCode: 0,
+                      }
+                    : { stdout: '', stderr: '', exitCode: 0 },
+            ),
+            readFile: jest.fn(async () => HEAD),
+            writeFile: jest.fn(),
+        } as never;
+
+        const findings = await tool.run({
+            sandbox,
+            files: [
+                { filename: LOCKFILE, patch: addsLodashMerge } as ChangedFile,
+            ],
+        });
+
+        expect(findings.map((f) => f.ruleId).join(',')).toContain('GHSA-ccc');
     });
 });
