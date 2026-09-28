@@ -5,11 +5,13 @@ import {
     IProfileService,
     PROFILE_SERVICE_TOKEN,
 } from '@libs/identity/domain/profile/contracts/profile.service.contract';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 export class SaveMarketingSurveyUseCase implements IUseCase {
     constructor(
         @Inject(PROFILE_SERVICE_TOKEN)
         private readonly profileService: IProfileService,
+        private readonly telemetry: TelemetryService,
     ) {}
 
     public async execute(
@@ -31,6 +33,12 @@ export class SaveMarketingSurveyUseCase implements IUseCase {
                 { user: { uuid: userId } },
                 updatePayload,
             );
+
+            void this.telemetry.marketingSurveyAnswered({
+                userId,
+                source: updatePayload.referralSource,
+                details: updatePayload.primaryGoal,
+            });
         }
     }
 }

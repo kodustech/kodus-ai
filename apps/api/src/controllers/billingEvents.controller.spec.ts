@@ -11,6 +11,7 @@ import { KODY_RULES_SERVICE_TOKEN } from '@libs/kodyRules/domain/contracts/kodyR
 import { NotificationService } from '@libs/notifications/application/notification.service';
 import { EmitBillingNotificationUseCase } from '@libs/notifications/application/use-cases/emit-billing-notification.use-case';
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 import { BillingSignatureGuard } from '../guards/billing-signature.guard';
 import {
@@ -54,6 +55,7 @@ describe('BillingEventsController (HTTP)', () => {
     let secret: string | undefined;
     let notify: { emit: jest.Mock };
     let kodyRules: { syncRulesWithPlanLimit: jest.Mock };
+    let telemetry: Record<string, jest.Mock>;
 
     const post = (
         event: string,
@@ -85,6 +87,13 @@ describe('BillingEventsController (HTTP)', () => {
         kodyRules = {
             syncRulesWithPlanLimit: jest.fn().mockResolvedValue(null),
         };
+        telemetry = {
+            paymentFailed: jest.fn().mockResolvedValue(undefined),
+            trialExpiring: jest.fn().mockResolvedValue(undefined),
+            planChanged: jest.fn().mockResolvedValue(undefined),
+            creditsPurchased: jest.fn().mockResolvedValue(undefined),
+            creditsLow: jest.fn().mockResolvedValue(undefined),
+        };
 
         const moduleRef = await Test.createTestingModule({
             controllers: [BillingEventsController],
@@ -94,6 +103,7 @@ describe('BillingEventsController (HTTP)', () => {
                 SyncRulesOnPlanChangeUseCase,
                 { provide: NotificationService, useValue: notify },
                 { provide: KODY_RULES_SERVICE_TOKEN, useValue: kodyRules },
+                { provide: TelemetryService, useValue: telemetry },
                 {
                     provide: ConfigService,
                     useValue: {
@@ -373,6 +383,90 @@ describe('BillingEventsController (HTTP)', () => {
         it('400 without organizationId, and emits nothing', async () => {
             await signedPost('credits-purchased', { balanceUsd: 0 }).expect(400);
             expect(notify.emit).not.toHaveBeenCalled();
+        });
+    });
+
+    // The money funnel rides on these callbacks: they are the moment the
+    // change is real. The legacy /billing/webhook/* controller in apps/webhooks
+    // emits the same five, and billing calls one path or the other (#2007).
+    describe('product telemetry', () => {
+        it('plan-changed emits plan_changed even when the rules sync fails', async () => {
+            kodyRules.syncRulesWithPlanLimit.mockRejectedValueOnce(
+                new Error('mongo down'),
+            );
+
+            await signedPost('plan-changed', {
+                organizationId: 'org-9',
+                teamId: 'team-9',
+                planType: 'teams_byok',
+                subscriptionStatus: 'active',
+            }).expect(200);
+
+            expect(telemetry.planChanged).toHaveBeenCalledWith({
+                organizationId: 'org-9',
+                teamId: 'team-9',
+                planType: 'teams_byok',
+                subscriptionStatus: 'active',
+            });
+        });
+
+        it('emits the other four with what the callback carried', async () => {
+            await signedPost('payment-failed', {
+                organizationId: 'org-9',
+                amount: 2400,
+                currency: 'usd',
+                failureReason: 'declined',
+            }).expect(200);
+            expect(telemetry.paymentFailed).toHaveBeenCalledWith({
+                organizationId: 'org-9',
+                amount: 2400,
+                currency: 'usd',
+                failureReason: 'declined',
+            });
+
+            await signedPost('trial-expiring', {
+                organizationId: 'org-9',
+                daysRemaining: 3,
+                trialEndsAt: '2026-10-01T00:00:00Z',
+            }).expect(200);
+            expect(telemetry.trialExpiring).toHaveBeenCalledWith({
+                organizationId: 'org-9',
+                daysRemaining: 3,
+                trialEndsAt: '2026-10-01T00:00:00Z',
+            });
+
+            await signedPost('credits-purchased', {
+                organizationId: 'org-9',
+                teamId: 'team-9',
+                creditUsd: 50,
+                balanceUsd: 50,
+            }).expect(200);
+            expect(telemetry.creditsPurchased).toHaveBeenCalledWith({
+                organizationId: 'org-9',
+                teamId: 'team-9',
+                creditUsd: 50,
+                balanceUsd: 50,
+            });
+
+            await signedPost('credits-low', {
+                organizationId: 'org-9',
+                balanceUsd: 0,
+                thresholdUsd: 5,
+                exhausted: true,
+            }).expect(200);
+            expect(telemetry.creditsLow).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    organizationId: 'org-9',
+                    balanceUsd: 0,
+                    thresholdUsd: 5,
+                    exhausted: true,
+                }),
+            );
+        });
+
+        it('emits nothing when the callback has no organizationId', async () => {
+            await signedPost('plan-changed', { planType: 'teams' }).expect(400);
+            expect(telemetry.planChanged).not.toHaveBeenCalled();
         });
     });
 });

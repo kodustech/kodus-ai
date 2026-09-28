@@ -12,6 +12,7 @@ import {
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { buildKodyRuleCentralizedMutationRequest } from '@libs/centralized-config/utils/kody-rules-centralized-pr.builder';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 import { Inject } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
@@ -34,6 +35,7 @@ export class ChangeStatusKodyRulesUseCase {
         private readonly centralizedConfigPrService: CentralizedConfigPrService,
         private readonly findRulesInOrganizationByRuleFilterKodyRulesUseCase: FindRulesInOrganizationByRuleFilterKodyRulesUseCase,
         private readonly authorizationService: AuthorizationService,
+        private readonly telemetry: TelemetryService,
         @Inject(REQUEST)
         private readonly request: Request & {
             user: {
@@ -195,6 +197,15 @@ export class ChangeStatusKodyRulesUseCase {
                     updated.push(result);
                 }
             }
+
+            void this.telemetry.kodyRuleChanged({
+                organizationId: organizationAndTeamData.organizationId,
+                teamId,
+                actorUserId: this.request.user?.uuid,
+                action: 'status_changed',
+                status,
+                ruleCount: targetRules.length,
+            });
 
             if (centralizedPrResult) {
                 return centralizedPrResult;

@@ -6,12 +6,14 @@ import {
     AUTH_SERVICE_TOKEN,
     IAuthService,
 } from '@libs/identity/domain/auth/contracts/auth.service.contracts';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 @Injectable()
 export class LoginUseCase implements IUseCase {
     constructor(
         @Inject(AUTH_SERVICE_TOKEN)
         private readonly authService: IAuthService,
+        private readonly telemetry: TelemetryService,
     ) {}
 
     async execute(email: string, password: string) {
@@ -32,6 +34,12 @@ export class LoginUseCase implements IUseCase {
                 user,
                 AuthProvider.CREDENTIALS,
             );
+
+            void this.telemetry.userLoggedIn({
+                userId: user.uuid,
+                organizationId: user.organization?.uuid,
+                method: 'password',
+            });
 
             return { accessToken, refreshToken };
         } catch {

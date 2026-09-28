@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { planCtaTarget } from "@components/system/plan-cta-target";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import {
@@ -97,7 +98,7 @@ export const LinkedRepositories = () => {
     }, [selectedReposQuery.data, repositoryId]);
 
     if (!planAllowed) {
-        return <LinkedRepositoriesPlanGate />;
+        return <LinkedRepositoriesPlanGate siblings={connectedRepos} />;
     }
 
     return (
@@ -374,7 +375,12 @@ export const LinkedRepositories = () => {
     );
 };
 
-function LinkedRepositoriesPlanGate() {
+function LinkedRepositoriesPlanGate({
+    siblings,
+}: {
+    /** Repos already connected to this workspace, minus the one being edited. */
+    siblings: ConnectedRepo[];
+}) {
     const { license } = useSubscriptionContext();
     const reported = useRef(false);
 
@@ -383,10 +389,18 @@ function LinkedRepositoriesPlanGate() {
         reported.current = true;
         void captureGateHit({
             feature: "linked_repositories",
-            plan: license.planType ?? license.subscriptionStatus,
-            metadata: { surface: "settings_general" },
+            surface: "settings_general",
+            planType: license.planType,
+            subscriptionStatus: license.subscriptionStatus,
+            metadata: { siblingCount: siblings.length },
         });
-    }, [license.planType, license.subscriptionStatus]);
+    }, [license.planType, license.subscriptionStatus, siblings.length]);
+
+    // The abstract pitch ("cross-repo context") lands much harder as the names
+    // of the repos sitting right next to this one, which the workspace already
+    // has connected. Three is enough to be recognised without wrapping.
+    const named = siblings.slice(0, 3).map((repo) => repo.name);
+    const rest = siblings.length - named.length;
 
     return (
         <FormControl.Root>
@@ -411,16 +425,36 @@ function LinkedRepositoriesPlanGate() {
                         Available on Teams and Enterprise
                     </p>
                     <p className="text-text-secondary max-w-sm text-xs leading-relaxed">
-                        Cross-repo context lets Kody check contracts and APIs
-                        across sibling services during review. Upgrade to unlock
-                        linked repositories.
+                        {named.length > 0 ? (
+                            <>
+                                Kody reviews this repository without ever
+                                opening{" "}
+                                <span className="text-text-primary font-medium">
+                                    {named.join(", ")}
+                                </span>
+                                {rest > 0
+                                    ? ` and ${rest} other${rest === 1 ? "" : "s"}`
+                                    : ""}
+                                . Linked repos let it read them as context, so
+                                it catches the contract that broke next door.
+                            </>
+                        ) : (
+                            <>
+                                Cross-repo context lets Kody check contracts and
+                                APIs across sibling services during review.
+                                Upgrade to unlock linked repositories.
+                            </>
+                        )}
                     </p>
                 </div>
                 <GateCtaLink
                     feature="linked_repositories"
-                    plan={license.planType ?? license.subscriptionStatus}
+                    surface="settings_general"
+                    planType={license.planType}
+                    subscriptionStatus={license.subscriptionStatus}
+                    {...planCtaTarget()}
                     size="sm"
-                    metadata={{ surface: "settings_general" }}
+                    metadata={{ siblingCount: siblings.length }}
                 />
             </div>
         </FormControl.Root>

@@ -22,6 +22,7 @@ import {
 import { Response } from 'express';
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
 import {
+    ApiArrayResponseDto,
     ApiStringResponseDto,
     ApiYamlStringResponseDto,
 } from '../dtos/api-response.dto';
@@ -54,6 +55,7 @@ import { CentralizedConfigDownloadZipUseCase } from '@libs/centralized-config/ap
 import { CentralizedConfigInitUseCase } from '@libs/centralized-config/application/use-cases/centralized-config-init.use-case';
 import { GenerateKodusConfigFileUseCase } from '@libs/code-review/application/use-cases/configuration/generate-kodus-config-file.use-case';
 import { GetCodeReviewParameterUseCase } from '@libs/code-review/application/use-cases/configuration/get-code-review-parameter.use-case';
+import { GetCodeReviewScopesUseCase } from '@libs/code-review/application/use-cases/configuration/get-code-review-scopes.use-case';
 import { ListCodeReviewAutomationLabelsWithStatusUseCase } from '@libs/code-review/application/use-cases/configuration/list-code-review-automation-labels-with-status.use-case';
 import { UpdateCodeReviewParameterRepositoriesUseCase } from '@libs/code-review/application/use-cases/configuration/update-code-review-parameter-repositories-use-case';
 import { UpdateOrCreateCodeReviewParameterUseCase } from '@libs/code-review/application/use-cases/configuration/update-or-create-code-review-parameter-use-case';
@@ -90,6 +92,7 @@ export class ParametersController {
         private readonly listCodeReviewAutomationLabelsWithStatusUseCase: ListCodeReviewAutomationLabelsWithStatusUseCase,
         private readonly getDefaultConfigUseCase: GetDefaultConfigUseCase,
         private readonly getCodeReviewParameterUseCase: GetCodeReviewParameterUseCase,
+        private readonly getCodeReviewScopesUseCase: GetCodeReviewScopesUseCase,
         private readonly centralizedConfigSyncUseCase: CentralizedConfigSyncUseCase,
         private readonly centralizedConfigDownloadZipUseCase: CentralizedConfigDownloadZipUseCase,
         private readonly centralizedConfigInitUseCase: CentralizedConfigInitUseCase,
@@ -354,6 +357,28 @@ export class ParametersController {
         );
     }
 
+    @Get('/code-review-scopes')
+    @ApiQuery({ name: 'teamId', type: String, required: true })
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.CodeReviewSettings,
+        }),
+    )
+    @ApiOperation({
+        summary: 'List code review scopes',
+        description:
+            'Repositories and configured directories as ids and names only, for scope pickers. Unlike /code-review-parameter it returns no configuration and never reads kodus-config.yml from the git provider.',
+    })
+    @ApiOkResponse({ type: ApiArrayResponseDto })
+    public async getCodeReviewScopes(@Query('teamId') teamId: string) {
+        return this.getCodeReviewScopesUseCase.execute(
+            this.request.user,
+            teamId,
+        );
+    }
+
     @Get('/default-code-review-parameter')
     @UseGuards(PolicyGuard)
     @CheckPolicies(
@@ -559,11 +584,10 @@ export class ParametersController {
             throw new Error('Organization ID is missing from request');
         }
 
-        const archive =
-            await this.centralizedConfigDownloadZipUseCase.execute(
-                this.request.user,
-                teamId,
-            );
+        const archive = await this.centralizedConfigDownloadZipUseCase.execute(
+            this.request.user,
+            teamId,
+        );
 
         response.set({
             'Content-Type': 'application/zip',

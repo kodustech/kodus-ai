@@ -44,8 +44,8 @@ export default function TokenUsageError({
                     </div>
 
                     <Button
-                        size="lg"
-                        variant="primary"
+                        size="md"
+                        variant="primary-dark"
                         leftIcon={<RefreshCw />}
                         onClick={reset}>
                         Try again

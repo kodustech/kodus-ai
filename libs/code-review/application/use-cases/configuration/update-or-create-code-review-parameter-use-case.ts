@@ -99,6 +99,7 @@ import {
     LICENSE_SERVICE_TOKEN,
 } from '@libs/ee/license/interfaces/license.interface';
 import { isTeamsOrEnterpriseTierAllowed } from '@libs/ee/license/tier/teams-or-enterprise-tier-policy';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 @Injectable()
 export class UpdateOrCreateCodeReviewParameterUseCase {
@@ -124,6 +125,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         private readonly generateInitialKodyRulesUseCase: GenerateInitialKodyRulesUseCase,
         @Inject(LICENSE_SERVICE_TOKEN)
         private readonly licenseService: ILicenseService,
+        private readonly telemetry: TelemetryService,
     ) {}
 
     async execute(
@@ -217,12 +219,21 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 this.filterRepositoryInfo(codeRepositories);
 
             if (!codeReviewConfigs || !codeReviewConfigs.configs) {
-                return await this.createNewGlobalConfig(
+                const createdGlobalConfig = await this.createNewGlobalConfig(
                     organizationAndTeamData,
                     configValue,
                     filteredRepositoryInfo,
                     body.actor,
                 );
+
+                void this.telemetry.codeReviewSettingsUpdated({
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                    actorUserId: body.actor?.userId ?? body.requestUser?.uuid,
+                    configLevel: ConfigLevel.GLOBAL,
+                });
+
+                return createdGlobalConfig;
             }
 
             this.mergeRepositories(codeReviewConfigs, filteredRepositoryInfo);
@@ -523,6 +534,19 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                         });
                     });
             }
+
+            void this.telemetry.codeReviewSettingsUpdated({
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+                actorUserId: body.actor?.userId ?? body.requestUser?.uuid,
+                configLevel:
+                    directoryId && repositoryId
+                        ? ConfigLevel.DIRECTORY
+                        : repositoryId
+                          ? ConfigLevel.REPOSITORY
+                          : ConfigLevel.GLOBAL,
+                repositoryId,
+            });
 
             return result;
         } catch (error) {

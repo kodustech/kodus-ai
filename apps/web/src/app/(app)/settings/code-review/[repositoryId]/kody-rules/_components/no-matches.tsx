@@ -31,7 +31,7 @@ export const KodyRulesNoMatches = ({
                 Adjust the search query or remove some filters to see more
                 results.
             </p>
-            <Button size="sm" variant="primary" onClick={onClearFilters}>
+            <Button size="sm" variant="helper" onClick={onClearFilters}>
                 Clear all filters
             </Button>
         </div>

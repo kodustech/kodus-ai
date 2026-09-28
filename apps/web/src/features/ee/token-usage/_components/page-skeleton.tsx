@@ -38,11 +38,11 @@ export const TokenUsageContentSkeleton = () => {
 export const TokenUsagePageSkeleton = () => {
     return (
         <Page.Root>
-            <Page.Header className="max-w-full px-6">
+            <Page.Header>
                 <Page.Title>Token Usage</Page.Title>
             </Page.Header>
 
-            <Page.Content className="max-w-full px-6">
+            <Page.Content>
                 <TokenUsageContentSkeleton />
             </Page.Content>
         </Page.Root>
