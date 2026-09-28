@@ -1353,6 +1353,23 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 }
             }
 
+            // Location lists for merged Kody Rule findings (#2015). Runs AFTER
+            // the content formatter, like the rule-link enrichment below and
+            // for the same reason: while this list was appended at dedup time
+            // the formatter rewrote it into prose or dropped it, so the posted
+            // comment named only the kept location. Same rendered form as
+            // before the move.
+            for (const s of deduped) {
+                const otherLocations = s.kodyRuleOtherLocations;
+                if (!otherLocations?.length) {
+                    continue;
+                }
+                const locationsList = otherLocations
+                    .map((loc) => `- \`${loc}\``)
+                    .join('\n');
+                s.suggestionContent = `${s.suggestionContent}\n\n**Also found in:**\n${locationsList}`;
+            }
+
             // Enrich kody_rules suggestions with markdown links to the rule
             // page. Runs AFTER the content formatter so the formatter LLM
             // cannot drop the "Kody rule violation: ..." appendix while
@@ -1745,10 +1762,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             }
 
             if (otherLocations.length > 0) {
-                const locationsList = otherLocations
-                    .map((loc) => `- \`${loc}\``)
-                    .join('\n');
-                keep.suggestionContent = `${keep.suggestionContent}\n\n**Also found in:**\n${locationsList}`;
+                // Carried on the suggestion instead of written into
+                // suggestionContent: the content formatter runs after this
+                // merge and rewrites suggestionContent from scratch, which
+                // folded this list into prose or dropped it, so every location
+                // but the kept one disappeared from the posted comment
+                // (#2015). executeStage renders the same list after the
+                // formatter, next to the rule-link enrichment that was moved
+                // there for the same reason.
+                keep.kodyRuleOtherLocations = otherLocations;
             }
 
             this.logger.log({

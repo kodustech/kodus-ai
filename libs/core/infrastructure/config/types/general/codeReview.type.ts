@@ -199,6 +199,16 @@ export type CodeSuggestion = {
         /** Severity as the producing tool reported it, before normalization. */
         analyzerSeverity?: string;
     };
+    /**
+     * Other `file:lineStart-lineEnd` locations where the same Kody Rule was
+     * violated, for a finding dedupKodyRulesByRuleUuid merged into its most
+     * detailed representative (issue #2015). The comment keeps the
+     * representative's anchor and names every other location in its body.
+     * Deliberately NOT baked into suggestionContent at merge time: the content
+     * formatter rewrites that field afterwards and folds or drops an appended
+     * list, so executeStage renders it after the formatter runs.
+     */
+    kodyRuleOtherLocations?: string[];
 
     isCommittable?: boolean;
     validatedData?: {
