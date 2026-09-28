@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useMemo } from "react";
+import { Badge } from "@components/ui/badge";
 import { Heading } from "@components/ui/heading";
 import { Page } from "@components/ui/page";
 import { Spinner } from "@components/ui/spinner";
@@ -185,7 +186,9 @@ function ReviewScopeContent() {
                         className="flex flex-col gap-4"
                         data-field-name="deterministicEvidence">
                         <div className="flex flex-col gap-1">
-                            <Heading variant="h2">Deterministic checks</Heading>
+                            <Heading variant="h2">
+                                Deterministic checks <Badge>Beta</Badge>
+                            </Heading>
                             <p className="text-text-secondary text-sm">
                                 Scanners that answer a question of fact rather
                                 than judgement, and the results your own CI
