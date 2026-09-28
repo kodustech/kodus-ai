@@ -55,6 +55,10 @@ const TIER0 = {
     'deepseek-v4.1-flash@fireworks': { provider: 'openai_compatible', doModel: 'accounts/fireworks/models/deepseek-v4p1-flash', keyEnvs: ['API_FIREWORKS_API_KEY', 'FIREWORKS_API_KEY'], baseURL: 'https://api.fireworks.ai/inference/v1' },
     // Mesmo modelo pela Together. Em 26/09 a conta do Fireworks passou a
     // devolver limite de taxa com 2+ PRs de DeepSeek em paralelo (#1821).
+    // GLM 5.3 via Together (27/09), serverless.
+    'glm-5.3@together': { provider: 'openai_compatible', doModel: 'zai-org/GLM-5.3', keyEnvs: ['BYOK_TOGETHER_API_KEY'], baseURL: 'https://api.together.xyz/v1' },
+    // Kimi K2.7 Code via Together (27/09): mesma chave do DeepSeek@together.
+    'kimi-k2.7-code@together': { provider: 'openai_compatible', doModel: 'moonshotai/Kimi-K2.7-Code', keyEnvs: ['BYOK_TOGETHER_API_KEY'], baseURL: 'https://api.together.xyz/v1' },
     'deepseek-v4.1-flash@together': { provider: 'openai_compatible', doModel: 'deepseek-ai/DeepSeek-V4.1-Flash', keyEnvs: ['BYOK_TOGETHER_API_KEY'], baseURL: 'https://api.together.xyz/v1' },
     // K3 usa chave própria (KIMI_NEW) — crédito limitado, ver custo antes de
     // disparar passada cheia: $3/$15 por milhão, ~3x o k2.7.
