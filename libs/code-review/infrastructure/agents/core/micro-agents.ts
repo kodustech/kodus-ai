@@ -511,6 +511,7 @@ export function buildMicroAgentPrompt(
     callGraph?: string,
     teto = 2,
     semCensura = false,
+    reguaEvidencia = false,
 ): string {
     // <Diffs> FIRST, and the assignment after it. The twelve agents run under
     // one Promise.all against the same pull request, so the diff is the only
@@ -566,7 +567,7 @@ ${focusBlockFor(group)}
   this change makes it worse or newly reachable.
 
   The diff above is the whole pull request. Your assignment is the block above —
-  read the diff against it, not broadly.
+  read the diff against it, not broadly.${reguaEvidencia ? REGUA_EVIDENCIA_TEXTO : ''}
 </Stance>
 
 <OutputFormat>
@@ -621,6 +622,23 @@ ${semCensura ? SEM_CENSURA_TEXTO : SILENCIO_TEXTO}
 ${semCensura ? tetoSemCensura(teto) : tetoTexto(teto)}
 </OutputFormat>`;
 }
+
+/** EXPERIMENTO (#1821, so o eval liga: exp-p<N>[g]ev). Nos raciocinios do GPT-6
+ *  os defeitos reais que ele descartou tinham a mesma justificativa: "nao consegui
+ *  estabelecer uma falha em producao". Este bloco NAO afrouxa a exigencia de
+ *  evidencia (o resto do prompt fica igual ao controle); ele diz que tipo de prova
+ *  vale: contradicao com algo escrito no proprio codigo. */
+const REGUA_EVIDENCIA_TEXTO = `
+
+  What counts as evidence: a runtime failure you can trace is one kind. A
+  contradiction with something written in this codebase is another, and it is
+  enough on its own: the change breaks a documented contract (a Javadoc or
+  docstring, a declared type or nullability, an interface's stated guarantee),
+  or it departs from the convention that the sibling functions in the same file
+  or module follow (the guard they all have, the flag they all check, the name
+  they all use). Report it with both sides cited — the file:line of the
+  declaration or the sibling, and the file:line of the change that contradicts
+  it — as the walk. You do not need a confirmed consumer that crashes.`;
 
 const SILENCIO_TEXTO = `  Most pull requests contain no defect of any single class. If this one contains
   none of yours, submit an empty suggestions array — that is a valid answer, and

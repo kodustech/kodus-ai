@@ -38,4 +38,13 @@ describe('prompt dos microagentes sem autocensura', () => {
         const ate = a.indexOf('<Role>');
         expect(b.slice(0, ate)).toBe(a.slice(0, ate));
     });
+
+    it('regua de evidencia: so acrescenta o bloco, o resto fica igual ao controle', () => {
+        const a = buildMicroAgentPrompt(grupo, 'DIFF', 'GRAFO', 4);
+        const b = buildMicroAgentPrompt(grupo, 'DIFF', 'GRAFO', 4, false, true);
+        expect(b).toContain('You do not need a confirmed consumer that crashes.');
+        for (const frase of SILENCIO) expect(b).toContain(frase);
+        const bloco = b.slice(b.indexOf('\n\n  What counts as evidence'), b.indexOf('\n</Stance>'));
+        expect(b.replace(bloco, '')).toBe(a);
+    });
 });
