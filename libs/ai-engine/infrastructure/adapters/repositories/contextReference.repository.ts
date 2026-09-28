@@ -100,11 +100,13 @@ export class ContextReferenceRepository implements IContextReferenceRepository {
 
     async find(
         filter?: Partial<IContextReference>,
+        limit?: number,
     ): Promise<ContextReferenceEntity[]> {
         const where = filter ? applyFilter(filter) : {};
         const results = await this.repository.find({
             where,
             order: { createdAt: 'DESC' },
+            ...(typeof limit === 'number' && limit >= 0 && { take: limit }),
         });
         return results.map(modelToEntity);
     }

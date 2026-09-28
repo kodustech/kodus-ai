@@ -106,11 +106,9 @@ export class ContextReferenceService implements IContextReferenceService {
         entityId: string,
         limit?: number,
     ): Promise<ContextReferenceEntity[]> {
-        const results = await this.repository.find({ entityType, entityId });
-        if (typeof limit === 'number' && limit >= 0) {
-            return results.slice(0, limit);
-        }
-        return results;
+        // The limit goes to the query: an entity gains a revision per save, and
+        // the latest one is read on every save.
+        return this.repository.find({ entityType, entityId }, limit);
     }
 
     async getLatestRevision(
