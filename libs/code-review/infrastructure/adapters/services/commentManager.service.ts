@@ -1170,6 +1170,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         language: string,
         suggestionCopyPrompt?: boolean,
         fallbackSuggestionsBySeverity?: FallbackSuggestionsBySeverity,
+        reviewedCommit?: string,
     ): Promise<{
         lastAnalyzedCommit: any;
         commits: any[];
@@ -1193,7 +1194,20 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                 };
             }
 
-            const lastAnalyzedCommit = commits[commits.length - 1];
+            // Anchor the comments on the commit the review actually read (the
+            // head the pipeline started from), not on the PR head re-read here
+            // at posting time. A push landing during the review would otherwise
+            // move every anchor to a tree this review never looked at, and the
+            // returned commit would report the pushed commits as already
+            // analyzed so the next incremental run skips them. The live fetch
+            // above is still returned to the caller, and stays the fallback
+            // when no reviewed commit was supplied.
+            // The providers read `commit?.sha` (GitHub commit_id, GitLab
+            // position.headSha), so the reviewed commit is carried in the same
+            // shape as the commits read from the provider.
+            const lastAnalyzedCommit = reviewedCommit
+                ? { sha: reviewedCommit }
+                : commits[commits.length - 1];
             const commentResults = [];
 
             if (!lineComments?.length) {

@@ -90,6 +90,7 @@ export interface ICommentManagerService {
         language: string,
         suggestionCopyPrompt?: boolean,
         fallbackSuggestionsBySeverity?: FallbackSuggestionsBySeverity,
+        reviewedCommit?: string,
     ): Promise<{
         lastAnalyzedCommit: any;
         commits: any[];
