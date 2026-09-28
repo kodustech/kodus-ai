@@ -1,3 +1,5 @@
+import { createHash } from 'crypto';
+
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
@@ -9,6 +11,7 @@ import {
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
 import {
     IKodyRule,
+    IKodyRuleFileScope,
     KodyRulesOrigin,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
@@ -25,12 +28,12 @@ import { CreateKodyRuleDto } from '@libs/ee/kodyRules/dtos/create-kody-rule.dto'
  * (`apps/web/src/core/enums/programming-language.ts`: `jsts` covers JS/TS,
  * plus `dart`/`kotlin`) — those are the values the web client forwards as
  * `language` when importing a rule from the library. When a rule declares a
- * `language` but ships no `path`, the engine's only scoping mechanism
- * (`if (!rule.path) return true`) would otherwise apply the rule to EVERY file
- * in every PR (#1832).
+ * `language` but ships no `path`, nothing narrows it, so the review path would
+ * otherwise judge the rule against EVERY file in every PR (#1832). The map
+ * feeds the rule's persisted `fileScope`; see `resolveLibraryRuleFileScope`.
  */
 const LANGUAGE_EXTENSIONS = new Map<string, string[]>([
-    ['jsts', ['.js', '.jsx', '.ts', '.tsx']],
+    ['jsts', ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.mts', '.cts', '.vue']],
     // Legacy spellings: library entries and API consumers predating the
     // client's `jsts` key may still send `typescript`/`javascript`. Treat them
     // as aliases so a rule declared with either spelling still gets a scope —
@@ -44,37 +47,66 @@ const LANGUAGE_EXTENSIONS = new Map<string, string[]>([
     ['dart', ['.dart']],
     ['ruby', ['.rb', '.rake', '.erb', '.gemspec']],
     ['php', ['.php']],
-    ['go', ['.go']],
+    // Manifest-centric rules ("use go.work instead of replace", "centralize
+    // Cargo deps in workspace.dependencies", "Gradle version catalogs",
+    // "Central Package Management") target files the source extension alone
+    // never reaches. The scope is a cost filter that abstains when it cannot
+    // decide, so carrying the manifest suffix costs nothing and dropping it
+    // would silently stop those rules from ever firing.
+    ['go', ['.go', '.work', '.mod']],
     ['kotlin', ['.kt', '.kts']],
-    ['rust', ['.rs']],
+    ['rust', ['.rs', '.toml']],
+    ['java', ['.java', '.gradle', '.kts']],
+    ['csharp', ['.cs', '.csproj', '.props']],
 ]);
 
 /**
- * Resolve the path glob an imported rule should be persisted with. Prefer an
- * explicit `path`; fall back to a language-derived glob when the rule carries
- * a known `language`; otherwise keep whatever was given (this preserves
- * current behaviour for installs that rely on an empty path).
+ * Resolve the language scope an imported rule should be persisted with.
+ *
+ * Persisted as a `fileScope` (issue #1826) rather than as a generated `path`
+ * glob. Three reasons, all visible in the review path:
+ *
+ * - `path` is the author's statement and outranks the scope, while a rule that
+ *   only carries a scope is still filtered by it (`rulesForFile` in the sharded
+ *   judge drops a file whose path fails `extensionScopeAppliesToFile` before it
+ *   ever considers the rule).
+ * - a glob is rendered in the rules list, where brace globs get truncated, so
+ *   the user sees a path they never wrote.
+ * - a glob excludes extensionless files (`Gemfile`, `Rakefile`, `Dockerfile`)
+ *   that the scope deliberately lets through: we cannot tell their language, so
+ *   excluding them would be a silent enforcement loss.
+ *
+ * The author's explicit `path` is kept as sent, which is how a directory import
+ * keeps BOTH constraints: the directory narrows through `path`, the language
+ * narrows through this scope, instead of one silently winning over the other.
+ *
+ * Returns `null` for an unknown language: no scope at all preserves the
+ * current behaviour (the rule applies wherever the author's path allows).
  */
-export function resolveLibraryRulePath(
-    path: string | undefined,
+
+export function resolveLibraryRuleFileScope(
+    ruleText: string,
     language: string | undefined,
-): string | undefined {
-    if (path) {
-        return path;
-    }
+): IKodyRuleFileScope | null {
     // A Map lookup keeps unknown/prototype-shaped values (e.g. `__proto__`,
-    // `constructor`) inert: they simply miss and fall back to `path`.
+    // `constructor`) inert: they simply miss and fall back to no scope.
     const extensions =
         typeof language === 'string'
             ? LANGUAGE_EXTENSIONS.get(language.trim().toLowerCase())
             : undefined;
     if (!extensions || extensions.length === 0) {
-        return path;
+        return null;
     }
-    if (extensions.length === 1) {
-        return `**/*${extensions[0]}`;
-    }
-    return `**/*{${extensions.join(',')}}`;
+    return {
+        extensions,
+        // Same hash contract as the inference: sha256 of the exact rule text
+        // the scope was derived from.
+        sourceHash: createHash('sha256').update(ruleText).digest('hex'),
+        // Declared by the library rule, not inferred from the text: an `author`
+        // scope is never overwritten by a later inference.
+        source: 'author',
+        inferredAt: new Date(),
+    };
 }
 
 @Injectable()
@@ -114,16 +146,26 @@ export class AddLibraryKodyRulesUseCase {
                 const kodyRule: CreateKodyRuleDto = {
                     title: libraryKodyRules.title,
                     rule: libraryKodyRules.rule,
-                    path: resolveLibraryRulePath(
-                        libraryKodyRules.path,
-                        libraryKodyRules.language,
-                    ),
+                    // Kept exactly as sent: a directory import sends
+                    // `<directory>/**`, and the language narrows that further
+                    // through the scope below instead of replacing it.
+                    path: libraryKodyRules.path,
                     severity: libraryKodyRules.severity,
                     repositoryId: repoId,
                     examples: libraryKodyRules.examples,
                     origin: KodyRulesOrigin.LIBRARY,
                     type: KodyRulesType.STANDARD,
                 };
+
+                // Internal write path: `CreateKodyRuleDto` is the HTTP boundary
+                // and does not declare `fileScope` (no form field, same reason
+                // `contextNeed` is undeclared), but `createOrUpdate` persists it
+                // from the plain rule object it is handed.
+                (kodyRule as Partial<IKodyRule>).fileScope =
+                    resolveLibraryRuleFileScope(
+                        libraryKodyRules.rule,
+                        libraryKodyRules.language,
+                    );
 
                 const result =
                     await this.createOrUpdateKodyRulesUseCase.execute(
