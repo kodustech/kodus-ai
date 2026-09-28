@@ -361,6 +361,19 @@ async function createModel(config) {
             );
         }
 
+        // API nativa da OpenAI como no BYOK da nuvem: o modulo 'openai' do
+        // registro (createOpenAI -> Responses API). O caminho de env (managed)
+        // trata chave OpenAI como openai_compatible (/v1/chat/completions), onde
+        // o gpt-6-sol recusa ferramentas com reasoning_effort.
+        if (spec && spec.byokNative) {
+            const { REGISTRY } = require('../../libs/llm/providers/index.ts');
+            const apiKey = spec.keyEnvs.map((e) => process.env[e]).find(Boolean);
+            if (!apiKey) throw new Error(`no API key for ${modelId} — set one of ${spec.keyEnvs.join('/')}`);
+            const id = spec.doModel || modelId;
+            const built = REGISTRY.get(spec.provider).build({ provider: spec.provider, model: id, apiKey }, {});
+            return withCallCounter(withReasoningEffort(built, id), modelId);
+        }
+
         const { buildEvalModel } = require('../shared/build-model');
         applyModelEnv(modelId);
         return withCallCounter(
@@ -1274,6 +1287,9 @@ class InvestigationAgentProvider {
                               xfileCallGraph,
                           }
                         : {}),
+                    // RECALL_MICRO_SO_EXTRAS=1: pula as passadas de classe e roda so
+                    // as copias experimentais delas (RECALL_MICRO_EXP=p1g,p1gnc).
+                    ...(process.env.RECALL_MICRO_SO_EXTRAS === '1' ? { microAgentsSoExtras: true } : {}),
                     // RECALL_MICRO_TETO=4: teto de achados por agente de classe,
                     // ordenados do mais seguro ao menos seguro.
                     ...(process.env.RECALL_MICRO_TETO
@@ -1439,7 +1455,8 @@ class InvestigationAgentProvider {
                     // assinatura do Codex nao tem esse caminho. Passar o modelo pronto
                     // para todos fez o DeepSeek falhar "did not match schema" (26/09).
                     prebuiltRecoveryModel:
-                        require('../shared/tier0-models').TIER0[process.env.RECALL_MODEL || '']?.provider === 'codex_subscription'
+                        (require('../shared/tier0-models').TIER0[process.env.RECALL_MODEL || '']?.provider === 'codex_subscription' ||
+                            require('../shared/tier0-models').TIER0[process.env.RECALL_MODEL || '']?.byokNative)
                             ? model
                             : undefined,
                 },

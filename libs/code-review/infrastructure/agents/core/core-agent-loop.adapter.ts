@@ -734,7 +734,7 @@ export async function runAgentLoopViaCore(
                         fileTiers: input.fileTiers,
                     });
                 const passes = [
-                    ...(input.microAgents
+                    ...(input.microAgents && !input.microAgentsSoExtras
                         ? microGroups.map((group) => ({
                               label: `micro-${group.id}`,
                               phase: 0,

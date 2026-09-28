@@ -661,6 +661,10 @@ export interface AgentLoopInput {
      *  de 2 o agente ordena do mais seguro ao menos seguro, e os dois primeiros
      *  reproduzem o teto 2 dentro da mesma rodada. So o eval muda. */
     microAgentTeto?: number;
+    /** Eval-only: skip the class-agent passes and run only the extras built
+     *  from them (exp-p<N>...), so a round can compare two variants of the
+     *  lenses without paying for a third copy nobody measures. */
+    microAgentsSoExtras?: boolean;
     /** Eval-only: run just these class agents (ids from MICRO_AGENTS). */
     microAgentIds?: string[];
     /** Step cap for the class agents only (the simulation and verifier keep maxSteps). */
