@@ -162,8 +162,9 @@ export class ContextReferenceService implements IContextReferenceService {
 
     async find(
         filter?: Partial<IContextReference>,
+        limit?: number,
     ): Promise<ContextReferenceEntity[]> {
-        return this.repository.find(filter);
+        return this.repository.find(filter, limit);
     }
 
     async findOne(

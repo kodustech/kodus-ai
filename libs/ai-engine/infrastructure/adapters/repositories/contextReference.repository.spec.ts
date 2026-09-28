@@ -37,6 +37,16 @@ describe('latest revision of an entity', () => {
         });
     });
 
+    it('passes a limit given to the service find through to the query', async () => {
+        const { orm, service } = build([row('rev-9')]);
+
+        await service.find({ entityType: 'kodyRule', entityId: 'rule-1' }, 1);
+
+        expect(orm.find).toHaveBeenCalledWith(
+            expect.objectContaining({ take: 1 }),
+        );
+    });
+
     it('still reads the whole history when no limit is given', async () => {
         const { orm, service } = build([row('rev-2'), row('rev-1')]);
 
