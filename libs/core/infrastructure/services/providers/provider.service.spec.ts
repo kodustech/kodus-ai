@@ -79,8 +79,11 @@ describe('ProviderService — registry-driven', () => {
                 expect(byId('google_vertex').listsModelsLive).toBe(false);
             });
 
-            it('openai_compatible: custom endpoint → not live (URL unknown until typed)', () => {
-                expect(byId('openai_compatible').listsModelsLive).toBe(false);
+            // Live once its base URL is typed: the picker waits for the URL,
+            // and the backend only sends a key to the host it belongs to.
+            it('openai_compatible: custom endpoint → live (lists once the URL is typed)', () => {
+                expect(byId('openai_compatible').listsModelsLive).toBe(true);
+                expect(byId('openai_compatible').autoListModels).toBe(false);
             });
 
             it('anthropic_compatible: manual listing → not live', () => {
