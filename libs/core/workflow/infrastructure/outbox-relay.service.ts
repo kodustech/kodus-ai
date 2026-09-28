@@ -572,8 +572,17 @@ export class OutboxRelayService
             // always false for `maxRetries: 1` (code_review /
             // check_implementation): a first-ever stale job (retryCount 0)
             // went straight to FAILED instead of being retried.
+            // Only rows that actually carried a lease are reclaimed and retried
+            // (#1830 review). A PROCESSING row with no lease predates the lease
+            // (every workflow type other than code review), and on `main` those
+            // were failed as PERMANENT. Requeueing them would republish a job
+            // that may be what killed its worker (an OOM on a huge repo) up to
+            // `maxRetries` times, taking several more workers down with it. They
+            // keep the legacy fail-only path below instead.
             const requeueable = stale.filter(
-                (job) => (job.retryCount ?? 0) < (job.maxRetries ?? 3),
+                (job) =>
+                    job.leaseExpiresAt != null &&
+                    (job.retryCount ?? 0) < (job.maxRetries ?? 3),
             );
             // Set membership keeps the dead partition O(n) instead of the
             // O(n²) `requeueable.includes(job)` scan over the whole batch.

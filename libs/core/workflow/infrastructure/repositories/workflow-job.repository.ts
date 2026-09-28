@@ -154,7 +154,22 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
         }
     }
 
-    async update(id: string, data: Partial<IWorkflowJob>): Promise<any> {
+    /**
+     * Update a job.
+     *
+     * `guard` (#1830 review) makes the write conditional on the caller still
+     * owning the job: it only lands when the row's `leaseOwner` still matches
+     * (and, unless `requireProcessing` is false, when it is still PROCESSING).
+     * In that mode the method returns whether the write landed, so a worker
+     * whose lease was reclaimed can stop instead of overwriting the state of
+     * whoever took the job over. Without a guard it keeps the old contract and
+     * returns the refreshed job.
+     */
+    async update(
+        id: string,
+        data: Partial<IWorkflowJob>,
+        guard?: { leaseOwner: string; requireProcessing?: boolean },
+    ): Promise<any> {
         try {
             const updateData: Partial<WorkflowJobModel> = {};
 
@@ -201,6 +216,28 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
             if (data.pipelineState !== undefined)
                 updateData.pipelineState = patch.pipelineState;
             if (data.payload !== undefined) updateData.payload = patch.payload;
+
+            if (guard) {
+                // Ownership-conditional write. The row may have been reclaimed
+                // by the reaper (leaseOwner replaced, status back to PENDING)
+                // between this worker's last renewal and now, so the condition
+                // has to be part of the UPDATE itself, not of a read before it.
+                const qb = this.repository
+                    .createQueryBuilder()
+                    .update(WorkflowJobModel)
+                    .set(updateData)
+                    .where('uuid = :uuid', { uuid: id })
+                    .andWhere('leaseOwner = :leaseOwner', {
+                        leaseOwner: guard.leaseOwner,
+                    });
+                if (guard.requireProcessing !== false) {
+                    qb.andWhere('status = :status', {
+                        status: JobStatus.PROCESSING,
+                    });
+                }
+                const result = await qb.execute();
+                return (result.affected ?? 0) > 0;
+            }
 
             await this.repository.update({ uuid: id }, updateData);
 
@@ -335,8 +372,16 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
         olderThan: Date;
     }): Promise<StaleWorkflowJobReapResult[]> {
         try {
+            // The entity is aliased here, in the builder itself: a bare
+            // `createQueryBuilder()` leaves `WorkflowJobModel` in FROM under its
+            // default alias, so a following `.from(WorkflowJobModel, 'job')`
+            // adds a SECOND entry and cross-joins the table with itself. Every
+            // stale job then came back once per row in `workflow_jobs`, the uuid
+            // list blew past Postgres' 65,535 bind-parameter limit and nothing
+            // was ever reclaimed — the exact failure this reaper exists to fix
+            // (#1830 review).
             const result = await this.repository
-                .createQueryBuilder()
+                .createQueryBuilder('job')
                 // Columns are quoted and alias-qualified: unquoted mixed-case
                 // identifiers are folded to lowercase by Postgres, so a bare
                 // `workflowType` selects `workflowtype` and errors out.
@@ -349,7 +394,6 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                     'job."retryCount"',
                     'job."maxRetries"',
                 ])
-                .from(WorkflowJobModel, 'job')
                 .where('job.status = :status', { status: JobStatus.PROCESSING })
                 // The whole disjunction is wrapped in its own parens so the
                 // `status = PROCESSING` guard applies to BOTH branches. Emitted

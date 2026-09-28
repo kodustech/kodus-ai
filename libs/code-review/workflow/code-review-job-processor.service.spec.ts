@@ -194,6 +194,29 @@ describe('CodeReviewJobProcessorService', () => {
             expect(jobRepository.update).toHaveBeenCalledWith(
                 'job-1',
                 expect.objectContaining({ status: JobStatus.COMPLETED }),
+                // Terminal transition carries the ownership guard: only the
+                // worker still holding the lease may complete the job.
+                { leaseOwner: expect.any(String) },
+            );
+        });
+
+        it('leaves the row alone when the lease was reclaimed mid-run', async () => {
+            // The guarded write matched no row (reaper requeued it, another
+            // worker owns it now), so the completion must not flip the row to
+            // COMPLETED behind that worker's back and swallow its retry.
+            jobRepository.update.mockImplementation(
+                (_id: string, data: any) =>
+                    data && data.status === JobStatus.COMPLETED
+                        ? Promise.resolve(false)
+                        : Promise.resolve(undefined),
+            );
+
+            await expect(service.process('job-1')).resolves.toBeUndefined();
+
+            expect(jobRepository.update).toHaveBeenCalledWith(
+                'job-1',
+                expect.objectContaining({ status: JobStatus.COMPLETED }),
+                { leaseOwner: expect.any(String) },
             );
         });
     });

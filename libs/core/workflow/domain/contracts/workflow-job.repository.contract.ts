@@ -10,7 +10,16 @@ export interface StaleWorkflowJobReapResult {
 
 export interface IWorkflowJobRepository {
     create(job: any, transactionManager?: unknown): Promise<any>;
-    update(id: string, data: any): Promise<any>;
+    /**
+     * Update a job. An optional `guard` makes the write conditional on the
+     * caller still owning the job's lease (#1830 review); in that mode the
+     * method resolves `false` when nothing was written, i.e. the lease is gone.
+     */
+    update(
+        id: string,
+        data: any,
+        guard?: { leaseOwner: string; requireProcessing?: boolean },
+    ): Promise<any>;
     findOne(id: string): Promise<any>;
     findMany(query: any): Promise<{ data: any[]; total?: number }>;
     prunePayloadForFinalizedJobs?(params: {
