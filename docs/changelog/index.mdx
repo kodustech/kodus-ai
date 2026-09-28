@@ -67,6 +67,135 @@ rss: true
 
     <div className="kodus-changelog-release">
         <div className="kodus-changelog-meta">
+            <span className="kodus-changelog-date">September 25, 2026</span>
+        </div>
+
+        <div className="kodus-changelog-content">
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">Improvements</div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-byok filter-ux-interface">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">More Bedrock models in the model picker</div>
+                    <p className="kodus-changelog-copy">When connecting Amazon Bedrock, the model list now includes supported text models beyond Anthropic’s inference profiles. This makes more of the models available in your Bedrock account selectable during BYOK setup.</p>
+                </div>
+            </div>
+
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">Bug fixes</div>
+
+                <div className="kodus-changelog-fix-list">
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-kody-rules filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Kody Rules using context beyond the diff:</strong> Rules that depended on code elsewhere in a file or in a related file could produce incorrect findings. Repository lookups could report an existing file as missing, and a finding could still be published after its claim had been disproved. Kody now handles that context and those checks consistently before posting the finding.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Contradictory reviews after new commits:</strong> As a PR evolved, Kody could lose track of earlier findings and suggest reversing a change the team had already made in response to her review. Review findings now reach the PR summary, and later review rounds receive previous suggestions and their implementation status as context. This helps Kody stay consistent across commits.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-byok filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">BYOK in implementation checks:</strong> Checks that validate whether suggestions were implemented now use the organization’s configured model. Previously, these calls could bypass its BYOK configuration.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Findings with unusable code fixes:</strong> If Kody produces a valid finding but its proposed replacement is empty, unchanged, or incomplete, she now keeps the finding and posts it without the unusable code block. Previously, the entire finding could be discarded.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-notifications">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Marking notifications as read:</strong> Marking one notification or all notifications as read works again. Both actions had been returning a server error.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-kody-rules">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Removing a Kody Rule source:</strong> Deleting a source file, or marking it to be ignored, now removes every rule associated with that path. Previously, duplicate rule records could leave a deleted rule active and still firing.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-mcp filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">The wrong issue used as review context:</strong> When a PR already identifies an issue, Kody’s fallback now looks for that issue instead of selecting an unrelated result from an issue search. If it cannot retrieve the referenced issue, it does not substitute another one.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Documentation search failures:</strong> Kody now distinguishes an unavailable documentation search from a successful search with no results. A search failure no longer tells the review that documentation does not exist.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-byok filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">OpenCode Go reviews:</strong> BYOK requests to OpenCode Go now include its required session header. Without it, the provider could reject review requests.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-byok filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Bedrock connection tests:</strong> Testing or saving a Bedrock connection with a selected model no longer fails while handling the credentials. The model picker also loads for a new Bedrock connection instead of waiting for an API key field Bedrock does not use.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-kody-rules filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Editing Kody Rules and Custom Prompts:</strong> The editors no longer lose keystrokes while you type or delete. Formatting in Kody Rule instructions, including line breaks and lists, is also preserved when you save and reopen them.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Saving Custom Prompts:</strong> The Save button now becomes available when a valid Custom Prompt has been edited.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Settings for organizations without repositories:</strong> Saving code review settings no longer fails when the organization has no connected repositories.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-self-hosted filter-security">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Self-hosted SAML sign-in:</strong> Sign-in links now use the installation’s public API address. Previously, they could point the user’s browser to an internal service address that it could not reach.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-kody-rules filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">PR-level Kody Rule findings:</strong> A finding that cannot be anchored to a file and changed line is now posted on the pull request. Previously, some of these findings were silently discarded.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-billing-licenses">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Credit balances:</strong> The production web deployment now has the credential required for billing requests. Without it, a failed balance request could incorrectly appear in the interface as a zero balance.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-byok filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">BYOK calls rejected for empty system messages:</strong> Kodus no longer sends an empty system message to providers that reject it, allowing affected validation calls to complete.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Findings returned outside the expected format:</strong> Kody can now recover findings returned as prose when an OpenAI or compatible provider requires JSON response mode. Previously, the recovery request itself could be rejected.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Findings with unusual confidence values:</strong> An out-of-range confidence value no longer discards an otherwise valid review finding.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Organization-wide conversations:</strong> Conversations no longer fail when the request has no selected team, which is valid for an organization-wide conversation.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-cli filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Trial reviews:</strong> Trial reviews no longer fail while trying to find an integration for the trial’s placeholder organization.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Concurrent settings updates:</strong> Simultaneous changes to the same team setting no longer collide and return an error.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">GitHub review comment placement:</strong> Kody now handles another line-validation error GitHub can return when she tries to attach a finding to a changed line.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Requests for changes:</strong> An incomplete, unpublished critical comment no longer stops Kody’s request-changes step. The step can continue without a link or summary that the comment does not have.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-byok filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Legacy Azure GPT model settings:</strong> Azure model IDs such as <code className="kodus-changelog-code">gpt-35-turbo</code> are no longer mistaken for reasoning models. Kodus keeps request settings compatible with those models.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-byok filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">GPT-6 Astra model settings:</strong> Kodus now recognizes GPT-6 Astra as a reasoning model and uses its correct context-window information. This fixes incompatible request parameters and avoids splitting reviews according to a much smaller default window.</p>
+                    </div>
+                </div>
+            </div>
+
+            <p className="kodus-changelog-empty">No changelog entries for this filter yet.</p>
+        </div>
+    </div>
+
+    <div className="kodus-changelog-release">
+        <div className="kodus-changelog-meta">
             <span className="kodus-changelog-date">September 8, 2026</span>
         </div>
 
