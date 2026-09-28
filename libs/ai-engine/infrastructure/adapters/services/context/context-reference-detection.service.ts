@@ -10,6 +10,7 @@ import { createLogger } from '@libs/core/log/logger';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { Inject, Injectable } from '@nestjs/common';
 import {
+    IDetectedReference,
     IPromptReferenceSyncError,
     PromptSourceType,
 } from '@libs/ai-engine/domain/prompt/interfaces/promptExternalReference.interface';
@@ -47,6 +48,17 @@ export interface ContextReferenceDetectionParams {
     organizationAndTeamData: OrganizationAndTeamData;
     byokConfig?: NormalizedModel;
     subscriptionStatus?: string;
+}
+
+/** JSON with object keys sorted, so two equal maps compare equal as strings. */
+function stableStringify(value: unknown): string {
+    return JSON.stringify(value, (_key, v) =>
+        v && typeof v === 'object' && !Array.isArray(v)
+            ? Object.fromEntries(
+                  Object.entries(v).sort(([a], [b]) => a.localeCompare(b)),
+              )
+            : v,
+    );
 }
 
 @Injectable()
@@ -111,6 +123,15 @@ export class ContextReferenceDetectionService {
             },
         });
 
+        // The previous revision carries the model's answers for the texts it
+        // was built from; a field whose text is unchanged reuses its answer.
+        const previous = await this.contextReferenceService.getLatestRevision(
+            entityType,
+            entityId,
+        );
+        const detectionCache = this.readDetectionCache(previous);
+        const referenceDetections: Record<string, IDetectedReference[]> = {};
+
         const requirements: ContextRequirement[] = [];
         const knowledgeRefsMap = new Map<
             string,
@@ -128,6 +149,10 @@ export class ContextReferenceDetectionService {
                 organizationAndTeamData,
                 byokConfig,
                 subscriptionStatus,
+                detectionCache,
+                onDetection: (fingerprint, refs) => {
+                    referenceDetections[fingerprint] = refs;
+                },
             });
 
             if (!result) {
@@ -145,39 +170,57 @@ export class ContextReferenceDetectionService {
             aggregatedSyncErrors.push(...result.syncErrors);
         }
 
+        const entityHash = this.calculateEntityHash(
+            preparedFields.map((field) => field.text.trim()).join('\n:::\n'),
+        );
+
         if (!requirements.length) {
+            // Only a revision that held references or sync errors has state a
+            // clean result must replace — the one case the caller gets an id
+            // back. Every Kody Rule runs detection, so an id for a rule that
+            // references nothing would make each review load its (empty)
+            // references and warn that none resolved.
+            const replacesState =
+                !!previous &&
+                ((previous.requirements?.length ?? 0) > 0 ||
+                    !!Number(previous.metadata?.syncErrorsCount));
+            // Nothing referenced, nothing broken, and the same text and
+            // answers as the stored revision: committing again would only add
+            // an identical revision per save.
+            if (
+                previous &&
+                this.isSameEmptyRevision(previous, entityHash, referenceDetections)
+            ) {
+                return undefined;
+            }
             // A CLEAN detection must still overwrite a previously-errored
             // revision: skipping the save here left stale syncErrors (and
             // their UI chip) alive forever — once a rule ever had a sync
             // error, no later fix could clear it because the clean result
-            // was never persisted.
-            const previous =
-                await this.contextReferenceService.getLatestRevision(
-                    entityType,
-                    entityId,
-                );
-            if (previous) {
+            // was never persisted. A clean detection is also saved when it
+            // carries answers, so the next save can reuse them; that revision
+            // is a cache, not a reference, so its id is not returned.
+            if (replacesState || Object.keys(referenceDetections).length > 0) {
                 this.logger.log({
-                    message:
-                        'Clean detection over an existing revision — committing empty revision to clear stale state',
+                    message: replacesState
+                        ? 'Clean detection over an existing revision — committing empty revision to clear stale state'
+                        : 'Clean detection — committing empty revision to keep its answers',
                     context: ContextReferenceDetectionService.name,
                     metadata: { entityType, entityId },
                 });
-                return this.saveToContextOS({
+                const revisionId = await this.saveToContextOS({
                     entityType,
                     entityId,
                     requirements: [],
                     knowledgeRefs: [],
-                    entityHash: this.calculateEntityHash(
-                        preparedFields
-                            .map((field) => field.text.trim())
-                            .join('\n:::\n'),
-                    ),
+                    entityHash,
                     aggregatedSyncErrors: [],
+                    referenceDetections,
                     organizationAndTeamData,
                     repositoryId,
                     repositoryName,
                 });
+                return replacesState ? revisionId : undefined;
             }
             this.logger.warn({
                 message: 'No requirements generated after processing fields',
@@ -186,10 +229,6 @@ export class ContextReferenceDetectionService {
             });
             return undefined;
         }
-
-        const entityHash = this.calculateEntityHash(
-            preparedFields.map((field) => field.text.trim()).join('\n:::\n'),
-        );
 
         const knowledgeRefs = Array.from(knowledgeRefsMap.values());
 
@@ -200,6 +239,7 @@ export class ContextReferenceDetectionService {
             knowledgeRefs,
             entityHash,
             aggregatedSyncErrors,
+            referenceDetections,
             organizationAndTeamData,
             repositoryId,
             repositoryName,
@@ -208,6 +248,42 @@ export class ContextReferenceDetectionService {
 
     private calculateEntityHash(text: string): string {
         return createHash('sha256').update(text).digest('hex');
+    }
+
+    /** The stored answers, keyed by detection fingerprint. Anything else in
+     *  that slot (an older revision, a hand-edited one) is ignored. */
+    private readDetectionCache(
+        revision: { metadata?: Record<string, unknown> } | undefined,
+    ): Record<string, IDetectedReference[]> {
+        const stored = revision?.metadata?.referenceDetections;
+        if (!stored || typeof stored !== 'object' || Array.isArray(stored)) {
+            return {};
+        }
+        const cache: Record<string, IDetectedReference[]> = {};
+        for (const [fingerprint, refs] of Object.entries(stored)) {
+            if (Array.isArray(refs)) {
+                cache[fingerprint] = refs as IDetectedReference[];
+            }
+        }
+        return cache;
+    }
+
+    private isSameEmptyRevision(
+        previous: {
+            requirements?: unknown[];
+            metadata?: Record<string, unknown>;
+        },
+        entityHash: string,
+        referenceDetections: Record<string, IDetectedReference[]>,
+    ): boolean {
+        const metadata = previous.metadata ?? {};
+        return (
+            (previous.requirements?.length ?? 0) === 0 &&
+            metadata.entityHash === entityHash &&
+            !Number(metadata.syncErrorsCount) &&
+            stableStringify(metadata.referenceDetections ?? {}) ===
+                stableStringify(referenceDetections)
+        );
     }
 
     private async processFieldDetection(params: {
@@ -219,6 +295,10 @@ export class ContextReferenceDetectionService {
         organizationAndTeamData: OrganizationAndTeamData;
         byokConfig?: NormalizedModel;
         subscriptionStatus?: string;
+        detectionCache?: Record<string, IDetectedReference[]>;
+        /** Receives each reusable detection, whether or not the field ends up
+         *  with a requirement — a rule with no references is still an answer. */
+        onDetection?: (fingerprint: string, refs: IDetectedReference[]) => void;
     }): Promise<
         | {
               requirement: ContextRequirement;
@@ -236,6 +316,8 @@ export class ContextReferenceDetectionService {
             organizationAndTeamData,
             byokConfig,
             subscriptionStatus,
+            detectionCache,
+            onDetection,
         } = params;
 
         const trimmedText = field.text.trim();
@@ -293,10 +375,17 @@ export class ContextReferenceDetectionService {
                 byokConfig,
                 subscriptionStatus,
                 fieldId: fieldKey,
+                detectionCache,
             });
 
             detectionReferences = detection.references;
             detectionSyncErrors = detection.syncErrors;
+            if (detection.detection) {
+                onDetection?.(
+                    detection.detection.fingerprint,
+                    detection.detection.references,
+                );
+            }
         } else {
             this.logger.debug({
                 message: 'Skipping detection due to lack of reference patterns',
@@ -501,6 +590,7 @@ export class ContextReferenceDetectionService {
         byokConfig?: NormalizedModel;
         subscriptionStatus?: string;
         fieldId?: string;
+        detectionCache?: Record<string, IDetectedReference[]>;
     }): Promise<{
         references: Array<{
             filePath: string;
@@ -511,6 +601,7 @@ export class ContextReferenceDetectionService {
             repositoryId?: string;
         }>;
         syncErrors: IPromptReferenceSyncError[];
+        detection?: { fingerprint: string; references: IDetectedReference[] };
     }> {
         const detection =
             await this.promptContextEngine.detectAndResolveReferences({
@@ -532,6 +623,7 @@ export class ContextReferenceDetectionService {
                     params.entityType === 'kodyRule' ? 'rule' : 'prompt',
                 byokConfig: params.byokConfig,
                 subscriptionStatus: params.subscriptionStatus,
+                detectionCache: params.detectionCache,
             });
 
         const allDependencies: ContextDependency[] =
@@ -600,6 +692,7 @@ export class ContextReferenceDetectionService {
         return {
             references,
             syncErrors: detection.syncErrors || [],
+            ...(detection.detection && { detection: detection.detection }),
         };
     }
 
@@ -687,6 +780,7 @@ export class ContextReferenceDetectionService {
         requirements: ContextRequirement[];
         knowledgeRefs: Array<{ itemId: string; version?: string }>;
         aggregatedSyncErrors: IPromptReferenceSyncError[];
+        referenceDetections?: Record<string, IDetectedReference[]>;
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryId?: string;
         repositoryName?: string;
@@ -698,6 +792,7 @@ export class ContextReferenceDetectionService {
             requirements,
             knowledgeRefs,
             aggregatedSyncErrors,
+            referenceDetections,
             organizationAndTeamData,
             repositoryId,
             repositoryName,
@@ -753,6 +848,10 @@ export class ContextReferenceDetectionService {
                     aggregatedSyncErrors.length > 0
                         ? aggregatedSyncErrors
                         : undefined,
+                ...(referenceDetections &&
+                    Object.keys(referenceDetections).length > 0 && {
+                        referenceDetections,
+                    }),
             },
         });
 

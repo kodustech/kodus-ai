@@ -2,6 +2,7 @@ import { ContextDependency } from '@libs/ai-engine/infrastructure/adapters/servi
 import { createLogger } from '@libs/core/log/logger';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { Injectable } from '@nestjs/common';
+import { createHash } from 'crypto';
 
 import {
     IDetectedReference,
@@ -99,9 +100,49 @@ export class ReferenceDetectorService {
         return patterns.some((pattern) => pattern.test(promptText));
     }
 
+    /**
+     * What a detection's answer depends on: the system prompt of its mode, the
+     * context, and the text the model sees. Two calls with the same fingerprint
+     * would send the model the same request, so the first answer can stand in
+     * for the second. The prompt itself is part of it, so editing a detection
+     * prompt invalidates every stored answer without a version to bump.
+     */
+    detectionFingerprint(
+        params: Pick<
+            DetectReferencesParams,
+            'promptText' | 'detectionMode' | 'context'
+        >,
+    ): string {
+        const isRuleMode = params.detectionMode === 'rule';
+        const systemPrompt = isRuleMode
+            ? prompt_kodyrules_detect_references_system()
+            : prompt_detect_external_references_system();
+        return createHash('sha256')
+            .update(
+                [
+                    systemPrompt,
+                    params.detectionMode ?? '',
+                    params.context ?? '',
+                    stripControlMarkers(params.promptText),
+                ].join('\n\u0000\n'),
+            )
+            .digest('hex');
+    }
+
     async detectReferences(
         params: DetectReferencesParams,
     ): Promise<IDetectedReference[]> {
+        return (await this.detectReferencesWithStatus(params)).references;
+    }
+
+    /**
+     * `reliable` is false when the model gave no usable answer (empty, or not a
+     * JSON array). That `[]` means "could not tell", not "no references", and
+     * must not be reused as if it were an answer.
+     */
+    async detectReferencesWithStatus(
+        params: DetectReferencesParams,
+    ): Promise<{ references: IDetectedReference[]; reliable: boolean }> {
         const { organizationAndTeamData } = params;
 
         // Trial-only override: on the 14-day trial with no BYOK key, route
@@ -169,12 +210,12 @@ export class ReferenceDetectorService {
             },
         });
         if (!raw) {
-            return [];
+            return { references: [], reliable: false };
         }
 
         const parsedRaw = extractJsonFromResponse(raw);
         if (!parsedRaw || !Array.isArray(parsedRaw)) {
-            return [];
+            return { references: [], reliable: false };
         }
         const parsed = parsedRaw.filter(
             (ref: any) =>
@@ -193,7 +234,7 @@ export class ReferenceDetectorService {
             },
         });
 
-        return parsed as IDetectedReference[];
+        return { references: parsed as IDetectedReference[], reliable: true };
     }
 
     extractMarkers(promptText: string, references: IFileReference[]): string[] {
