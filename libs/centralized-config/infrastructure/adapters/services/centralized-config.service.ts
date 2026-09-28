@@ -2261,16 +2261,17 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                         }
                     }
 
-                    const compliantRule =
+                    const compliance =
                         this.ensureKodyRuleCompliance(ruleContent);
 
-                    if (!compliantRule) {
+                    if (!compliance.success) {
                         failureDetails.push({
                             file: ruleFileMeta.ruleFilePath,
-                            error: 'Rule file does not comply with required schema',
+                            error: `Rule file does not comply with required schema: ${compliance.reason}`,
                         });
                         continue;
                     }
+                    const compliantRule = compliance.data;
 
                     const { enabled, ...ruleFields } = compliantRule;
                     const existingMatch = existingRuleBySourcePath.get(
@@ -2442,7 +2443,19 @@ export class CentralizedConfigService implements ICentralizedConfigService {
             })
             .safeParse(ruleContent);
 
-        return result.success ? result.data : null;
+        if (result.success) {
+            return { success: true as const, data: result.data };
+        }
+        // Name the field and why, so the owner knows what to change in the
+        // YAML; a bare "does not comply" left them guessing.
+        const reason = result.error.issues
+            .map((issue) =>
+                issue.path.length
+                    ? `${issue.path.join('.')}: ${issue.message}`
+                    : issue.message,
+            )
+            .join('; ');
+        return { success: false as const, reason };
     }
 
     async removeStaleKodyRules(params: {
