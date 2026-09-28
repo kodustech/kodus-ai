@@ -13,6 +13,7 @@ test("allScenarios: includes the registered release-gate scenarios", () => {
         "command-review-focus",
         "command-review-while-busy",
         "conversation-anthropic-byok",
+        "conversation-implicit-reply",
         "conversation-vertex-byok",
         "cross-repo-config",
         "finish-onboarding-slo",

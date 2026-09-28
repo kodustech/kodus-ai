@@ -30,7 +30,10 @@ import type {
     ProviderReasoningOptions,
     ReasoningEffort,
 } from '../kernel/types';
-import type { ModelReasoningTraits } from '../kernel/reasoning-traits';
+import type {
+    ModelReasoningTraits,
+    StructuredOutputMode,
+} from '../kernel/reasoning-traits';
 import { NON_REASONING_TRAITS } from '../kernel/reasoning-traits';
 import { isOpenAiReasonerId } from '../kernel/model-family';
 import {
@@ -106,6 +109,12 @@ export const azureModule: ProviderModule = {
             // Classic deployment routing (matches `model` = deployment name).
             useDeploymentBasedUrls: true,
         })(cfg.model);
+    },
+
+    // The WIRE answer: Azure OpenAI deployments speak the native OpenAI
+    // protocol, so response_format carries the schema.
+    structuredOutputPolicy(_cfg: ProviderBuildConfig): StructuredOutputMode {
+        return 'json_schema';
     },
 
     temperaturePolicy(cfg: ProviderBuildConfig): TemperaturePolicy {

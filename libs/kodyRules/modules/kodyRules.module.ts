@@ -26,6 +26,7 @@ import { AddLibraryKodyRulesUseCase } from '../application/use-cases/add-library
 import { ApplyPendingKodyRulesUseCase } from '../application/use-cases/apply-pending-kody-rules.use-case';
 import { ChangeStatusKodyRulesUseCase } from '../application/use-cases/change-status-kody-rules.use-case';
 import { CheckSyncStatusUseCase } from '../application/use-cases/check-sync-status.use-case';
+import { SyncRulesOnPlanChangeUseCase } from '../application/use-cases/sync-rules-on-plan-change.use-case';
 import { ListPastReviewersUseCase } from '../application/use-cases/list-past-reviewers.use-case';
 import { ConvertPendingUpdatesToNewUseCase } from '../application/use-cases/convert-pending-updates-to-new.use-case';
 import { CreateOrUpdateKodyRulesUseCase } from '../application/use-cases/create-or-update.use-case';
@@ -145,6 +146,7 @@ import { NotificationModule } from '@libs/notifications/modules/notification.mod
         ExternalReferenceLoaderService,
         AddLibraryKodyRulesUseCase,
         CheckSyncStatusUseCase,
+        SyncRulesOnPlanChangeUseCase,
         ListPastReviewersUseCase,
         DeleteRuleInOrganizationByIdKodyRulesUseCase,
         FastSyncIdeRulesUseCase,
@@ -190,6 +192,7 @@ import { NotificationModule } from '@libs/notifications/modules/notification.mod
         GetGlobalRulesImportStatusUseCase,
         AddLibraryKodyRulesUseCase,
         CheckSyncStatusUseCase,
+        SyncRulesOnPlanChangeUseCase,
         ListPastReviewersUseCase,
         DeleteRuleInOrganizationByIdKodyRulesUseCase,
         FastSyncIdeRulesUseCase,

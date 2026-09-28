@@ -478,6 +478,7 @@ export class AzureReposRequestHelper {
             fromDate?: string;
             toDate?: string;
             branch?: string;
+            top?: number;
         };
     }): Promise<AzureRepoCommit[]> {
         const {
@@ -501,6 +502,7 @@ export class AzureReposRequestHelper {
                 author: filters.author,
                 fromDate: filters.fromDate,
                 toDate: filters.toDate,
+                $top: filters.top,
                 itemVersion: {
                     version: filters.branch,
                     versionType: filters.branch ? 'branch' : undefined,

@@ -181,6 +181,70 @@ export class SandboxLeaseRepository {
     }
 
     /**
+     * Detach a sandbox from its prKey without losing track of it.
+     *
+     * Sandboxes are created with `onTimeout: 'pause'`, so an E2B timeout only
+     * pauses them — the only thing that ever kills one is the reaper crons,
+     * and they only see sandboxes that still have a lease doc. Deleting the
+     * lease outright therefore leaves a paused orphan forever.
+     *
+     * Deletes the prKey lease first (so no acquire can join the sandbox after
+     * this point), then writes a retired doc (`<org>:retired:<sandboxId>`,
+     * never matched by acquire) carrying `killAt`. `killIdleSandboxes` kills
+     * the sandbox at `killAt` and removes the retired doc, retrying on real
+     * failures; the TTL reaper backs it up via `expiresAt`, and the orphan
+     * sweep covers a crash between the two writes.
+     *
+     * `killAt` comes from the leaseCount the deleted doc had — read in the
+     * same atomic delete, so a joiner that attached just before still counts:
+     * `busyKillAt` while someone else still holds the sandbox, `idleKillAt`
+     * otherwise. `ownHolds` discounts the caller's own hold.
+     */
+    async retire(
+        prKey: string,
+        sandboxId: string,
+        opts: { idleKillAt: Date; busyKillAt: Date; ownHolds?: number },
+    ): Promise<void> {
+        const detached = await this.leaseModel
+            .findOneAndDelete({ _id: prKey, sandboxId })
+            .select('leaseCount')
+            .lean();
+        const otherHolders =
+            (detached?.leaseCount ?? 0) - (opts.ownHolds ?? 0);
+        const killAt = otherHolders > 0 ? opts.busyKillAt : opts.idleKillAt;
+
+        const orgSegment = prKey.split(':')[0];
+        await this.leaseModel.updateOne(
+            { _id: `${orgSegment}:retired:${sandboxId}` },
+            {
+                $setOnInsert: {
+                    sandboxId,
+                    state: 'READY',
+                    leaseCount: 0,
+                    createdAt: new Date(),
+                    expiresAt: killAt,
+                    killAt,
+                    organizationId: orgSegment,
+                },
+            },
+            { upsert: true },
+        );
+    }
+
+    /**
+     * Which of these sandbox ids still have a lease doc (active or retired).
+     * The orphan sweep kills only the ids NOT in this set.
+     */
+    async findSandboxIdsWithLease(sandboxIds: string[]): Promise<Set<string>> {
+        if (sandboxIds.length === 0) return new Set();
+        const docs = await this.leaseModel
+            .find({ sandboxId: { $in: sandboxIds } })
+            .select('sandboxId')
+            .lean();
+        return new Set(docs.map((d) => d.sandboxId));
+    }
+
+    /**
      * Atomically set the `killAt` timestamp on a lease document. Used by
      * release() to schedule an idle-kill that any worker (in a multi-worker
      * deployment) can pick up via findReadyToKill().

@@ -1567,7 +1567,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 }
 
                 draft.dedupTrace = dedupTrace;
-                draft.validSuggestions = deduped;
+                // File-level only: CreateFileCommentsStage posts every entry as
+                // a line comment, and the PR-level ones are already delivered
+                // through validSuggestionsByPR above.
+                draft.validSuggestions = fileLevelSuggestions;
                 draft.discardedSuggestions = allDiscarded;
             });
         } catch (error) {

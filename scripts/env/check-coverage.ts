@@ -72,7 +72,7 @@ const ALLOWLIST: Array<{ pattern: RegExp; reason: string }> = [
         // scripts in .github/workflows/*.yml (the scan includes *.yml).
         // Injected by the Actions runner — CI plumbing, never Kodus
         // runtime config, so they don't belong in .env.schema.
-        pattern: /^(GITHUB_OUTPUT|GITHUB_ENV|GITHUB_STATE|GITHUB_STEP_SUMMARY|GITHUB_PATH|RUNNER_TEMP)$/,
+        pattern: /^(GITHUB_OUTPUT|GITHUB_ENV|GITHUB_STATE|GITHUB_STEP_SUMMARY|GITHUB_PATH|GITHUB_WORKSPACE|RUNNER_TEMP)$/,
         reason: 'GitHub Actions workflow plumbing (inline node in *.yml), not a Kodus env var',
     },
 ];

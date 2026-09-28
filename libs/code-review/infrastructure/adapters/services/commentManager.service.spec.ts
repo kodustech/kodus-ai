@@ -1765,3 +1765,64 @@ describe('LLMResponseProcessor.processResponse — raw-string parse rows', () =>
         expect(out?.codeSuggestions?.[0]?.id).toBe('a');
     });
 });
+
+// A single-line suggestion has no start_line, so the old attempt 3
+// (`line = start_line`) sent a comment with no line at all and GitHub answered
+// "No subschema in oneOf matched … line, path weren't supplied" (30/day).
+describe('CommentManagerService.createReviewCommentWithRetry — line mismatch', () => {
+    const lineMismatch = () =>
+        Object.assign(new Error('line could not be resolved'), {
+            errorType: 'failed_lines_mismatch',
+        });
+
+    const retryWith = (lineComment: any) => {
+        const createReviewComment = jest.fn().mockRejectedValue(lineMismatch());
+        const svc = new CommentManagerService(
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            { createReviewComment } as any,
+        ) as any;
+        const result = svc.createReviewCommentWithRetry({
+            organizationAndTeamData: { organizationId: 'o', teamId: 't' },
+            repository: { name: 'r', id: '1', language: 'ts' },
+            commit: {},
+            prNumber: 1,
+            lineComment,
+            language: 'en-US',
+        });
+        return { result, createReviewComment };
+    };
+
+    it('never sends a comment without a line for a single-line suggestion', async () => {
+        const { result, createReviewComment } = retryWith({
+            path: 'a.ts',
+            start_line: undefined,
+            line: 10,
+            side: 'RIGHT',
+            body: {},
+        });
+
+        await expect(result).rejects.toMatchObject({
+            errorType: 'failed_lines_mismatch',
+        });
+        for (const [args] of createReviewComment.mock.calls) {
+            expect(args.lineComment.line).toBe(10);
+        }
+    });
+
+    it('still tries the start of a multi-line range as the last attempt', async () => {
+        const { result, createReviewComment } = retryWith({
+            path: 'a.ts',
+            start_line: 5,
+            line: 10,
+            side: 'RIGHT',
+            body: {},
+        });
+
+        await expect(result).rejects.toBeDefined();
+        expect(createReviewComment).toHaveBeenCalledTimes(3);
+        expect(createReviewComment.mock.calls[2][0].lineComment.line).toBe(5);
+    });
+});

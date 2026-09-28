@@ -6,7 +6,6 @@ import { Response } from 'express';
 
 import { NotificationService } from '@libs/notifications/application/notification.service';
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
-import { KODY_RULES_SERVICE_TOKEN } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
 import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 import { BillingController } from './billing.controller';
@@ -87,14 +86,6 @@ describe('BillingController', () => {
                 { provide: NotificationService, useValue: notify },
                 { provide: TelemetryService, useValue: telemetry },
                 { provide: ConfigService, useValue: config },
-                {
-                    provide: KODY_RULES_SERVICE_TOKEN,
-                    useValue: {
-                        syncRulesWithPlanLimit: jest
-                            .fn()
-                            .mockResolvedValue(null),
-                    },
-                },
             ],
         }).compile();
 
@@ -259,6 +250,42 @@ describe('BillingController', () => {
         });
     });
 
+    describe('plan-changed', () => {
+        it('acknowledges a signed request with 200 and emits nothing', async () => {
+            const body = { organizationId: 'org-1', planType: 'teams_byok' };
+            const { signature, rawBody } = sign(body);
+            const res = makeRes();
+
+            await controller.planChanged(
+                makeReq(body, signature, rawBody),
+                res as unknown as Response,
+            );
+
+            expect(res.status).toHaveBeenCalledWith(HttpStatus.OK);
+            expect(notify.emit).not.toHaveBeenCalled();
+        });
+
+        it('rejects an unsigned request (401) and a missing org (400)', async () => {
+            const unsigned = makeRes();
+            await controller.planChanged(
+                makeReq({ organizationId: 'org-1' }, undefined),
+                unsigned as unknown as Response,
+            );
+            expect(unsigned.status).toHaveBeenCalledWith(
+                HttpStatus.UNAUTHORIZED,
+            );
+
+            const body = { planType: 'free' };
+            const { signature, rawBody } = sign(body);
+            const noOrg = makeRes();
+            await controller.planChanged(
+                makeReq(body, signature, rawBody),
+                noOrg as unknown as Response,
+            );
+            expect(noOrg.status).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
+        });
+    });
+
     describe('prepaid credits webhooks', () => {
         it('credits-purchased → CREDITS_PURCHASED with the amounts', async () => {
             const body = { organizationId: 'org-1', teamId: 't', creditUsd: 100, balanceUsd: 142.5 };
@@ -334,14 +361,10 @@ describe('BillingController', () => {
     });
 
     describe('product telemetry', () => {
-        it('plan-changed emits plan_changed even when the Kody Rules sync throws', async () => {
-            const rules = module.get(KODY_RULES_SERVICE_TOKEN) as {
-                syncRulesWithPlanLimit: jest.Mock;
-            };
-            rules.syncRulesWithPlanLimit.mockRejectedValueOnce(
-                new Error('mongo down'),
-            );
-
+        // The rules sync this used to run alongside now lives in the API's
+        // BillingEventsController (#2007); this path only acknowledges, and the
+        // conversion event still has to leave.
+        it('plan-changed emits plan_changed on the acknowledge-only path', async () => {
             const body = {
                 organizationId: 'org-9',
                 teamId: 'team-9',
@@ -356,8 +379,6 @@ describe('BillingController', () => {
                 res as unknown as Response,
             );
 
-            // The plan really did change; an unrelated sync failure must not
-            // cost us the conversion event.
             expect(telemetry.planChanged).toHaveBeenCalledWith({
                 organizationId: 'org-9',
                 teamId: 'team-9',

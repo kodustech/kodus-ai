@@ -126,6 +126,7 @@
         "eval:anchoring:gate": "node evals/anchoring/anchor-eval.js --limit=25 --gate",
         "eval:pr-summary": "node evals/pr-summary/run.js --model=gpt-5.4-mini --gate",
         "eval:pr-summary:mock": "node evals/pr-summary/run.js --mock --gate",
+        "eval:reply-addressing": "node evals/reply-addressing/run.js --model=gemini-3-flash-preview --repeats=3",
         "eval:suite": "node evals/run-suite.js",
         "eval:wiring": "node evals/wiring-smoke.js",
         "eval:nightly": "JUDGE_MODEL=gpt-5.6-luna JUDGE_REASONING_EFFORT=low node evals/investigation/run-recall.js --model=deepseek-v4-flash@fireworks --set=light --concurrency=6 --gate",

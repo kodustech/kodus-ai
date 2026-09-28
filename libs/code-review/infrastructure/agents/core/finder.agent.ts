@@ -412,6 +412,11 @@ export async function recoverFindingsFromProse(
             // Verified live against the real OpenAI API (2026-09-17): the
             // exact same request 400s with that message without this
             // sentence, and 200s with it.
+            // Since #1916 the structured executor guarantees the same thing
+            // centrally for every json_object route (it writes the schema AND
+            // the keyword into the system prompt), so this sentence is now a
+            // belt-and-braces duplicate rather than the only thing standing
+            // between this call and a 400.
             user:
                 "The following is a code reviewer's analysis written as " +
                 'prose. Extract EVERY concrete finding it describes into ' +

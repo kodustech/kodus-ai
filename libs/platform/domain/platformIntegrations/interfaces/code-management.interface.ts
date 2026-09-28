@@ -25,6 +25,7 @@ import {
 } from '../types/codeManagement/pullRequests.type';
 import { Repositories } from '../types/codeManagement/repositories.type';
 import { RepositoryFile } from '../types/codeManagement/repositoryFile.type';
+import { RepositoryAccessDiagnosis } from '../types/codeManagement/repositoryAccessDiagnosis.type';
 import { ICommonPlatformIntegrationService } from './common.interface';
 
 type GitActor = {
@@ -320,6 +321,16 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryId: string;
     }): Promise<boolean>;
+
+    /**
+     * Read-only check of what the stored credential can do on one selected
+     * repository. Never throws; anything the provider does not report is
+     * `unknown`. Optional so a provider without it degrades to `unknown`.
+     */
+    diagnoseRepositoryAccess?(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; fullName?: string };
+    }): Promise<RepositoryAccessDiagnosis>;
 
     formatReviewCommentBody(params: {
         suggestion: any;

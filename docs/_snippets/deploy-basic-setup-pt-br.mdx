@@ -40,17 +40,17 @@
 
     **Opcionais:**
     - `kodus-mcp-manager` — broker do Model Context Protocol. Habilite
-      com `API_MCP_SERVER_ENABLED=true`. Veja [MCP Manager](/how_to_deploy/pt-br/deploy_kodus/mcp_manager).
+      com `API_MCP_SERVER_ENABLED=true`. Veja [MCP Manager](/pt-BR/how_to_deploy/deploy_kodus/mcp_manager).
     - `worker-analytics` — ingestão do Cockpit (métricas DORA, PR
       classifier). **Exclusivo do self-hosted Enterprise**, não vem por padrão.
-      Veja [Analytics Worker](/how_to_deploy/pt-br/deploy_kodus/analytics_worker).
+      Veja [Analytics Worker](/pt-BR/how_to_deploy/deploy_kodus/analytics_worker).
   </Accordion>
 </AccordionGroup>
 
 <Note>
   Code review usa um AST graph + contexto cross-file que roda em um
   sandbox — `local` (default, dentro do worker) ou `e2b` (sandbox remoto
-  pago). Veja [Sandbox & AST Graph](/how_to_deploy/pt-br/deploy_kodus/sandbox)
+  pago). Veja [Sandbox & AST Graph](/pt-BR/how_to_deploy/deploy_kodus/sandbox)
   pra entender os modos, comportamento de cache, e quando escolher cada um.
 </Note>
 
@@ -99,7 +99,7 @@ Ambos os subdomínios devem ter registros DNS A apontando para o endereço IP do
     nano .env
     ```
 
-    Consulte [Configuração de Variáveis de Ambiente](/how_to_deploy/pt-br/deploy_kodus/generic_vm#configuração-das-variáveis-de-ambiente) para instruções detalhadas.  
+    Consulte [Configuração de Variáveis de Ambiente](/pt-BR/how_to_deploy/deploy_kodus/generic_vm#configuração-das-variáveis-de-ambiente) para instruções detalhadas.
   </Step>
 
   <Step title="Executar o instalador">
@@ -122,7 +122,7 @@ Ambos os subdomínios devem ter registros DNS A apontando para o endereço IP do
 3. **Selecionar repositórios** para análise - Escolha quais repositórios de código o Kody irá revisar
 
 <Info>
-  Para etapas detalhadas sobre o processo de configuração inicial, consulte nosso [Guia de Início Rápido](/how_to_use/pt-br/quickstart).
+  Para etapas detalhadas sobre o processo de configuração inicial, consulte nosso [Guia de Início Rápido](/pt-BR/how_to_use/quickstart).
 </Info>
   </Step>
 </Steps>

@@ -102,6 +102,8 @@ async function main() {
         { name: 'shape-invariance', args: ['evals/review-chain/shape-invariance.js', '--gate'] },
         { name: 'verifier-verdict', args: ['evals/verifier-verdict/run.js', '--gate'] },
         { name: 'dedup', args: ['evals/dedup/run.js', '--mock=identity', '--gate'] },
+        // The live dedup runner goes through LLM.run like the stage does.
+        { name: 'dedup-engine', model: true, args: ['evals/dedup/run.js', '--model=eval-fake'] },
         { name: 'severity', args: ['evals/severity/run.js', '--mock=heuristic', '--gate'] },
         { name: 'format', args: ['evals/format/run.js', '--mock=perfect', '--gate'] },
         {
@@ -118,6 +120,7 @@ async function main() {
         { name: 'kody-rules', model: true, args: ['evals/kody-rules/real-agent.js', '--dataset=github-cases', '--model=eval-fake', '--runs=1', '--limit=1'] },
         { name: 'anchoring', model: true, args: ['evals/anchoring/anchor-eval.js', '--model=eval-fake', '--limit=1'] },
         { name: 'pr-summary', model: true, args: ['evals/pr-summary/run.js', '--model=eval-fake', '--gate'] },
+        { name: 'reply-addressing', model: true, args: ['evals/reply-addressing/run.js', '--model=eval-fake', '--limit=2'] },
     ];
 
     const results = [];

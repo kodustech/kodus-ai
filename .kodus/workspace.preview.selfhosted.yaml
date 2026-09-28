@@ -52,7 +52,9 @@ expose:
 limits:
   instance: t3.xlarge  # 16 GiB, permitted by the isolated Ohio identity
   disk: 100gb
-  # a reviewer comes back to the link minutes or hours later; while the
-  # hostname still carries the IP, a resume invalidates the posted link, so
-  # previews idle longer than a dev box does
-  idle_suspend: 60m
+  # Off 2h after the last deploy, whatever the traffic: a public URL draws
+  # bots and the stack's own outbound calls, so "no traffic" never happened
+  # and previews stayed up for days. A push or a `/preview` comment on the PR
+  # brings it back (the link changes: the hostname carries the IP).
+  idle_suspend: 2h
+  idle_activity: [ssh, agent]
