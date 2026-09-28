@@ -27,8 +27,8 @@ describe('registered code management services expose getCheckEvidence', () => {
     ];
 
     it.each(registered)('%s implements getCheckEvidence', (_platform, cls) => {
-        expect(typeof (cls.prototype as Record<string, unknown>).getCheckEvidence).toBe(
-            'function',
-        );
+        expect(
+            typeof (cls.prototype as Record<string, unknown>).getCheckEvidence,
+        ).toBe('function');
     });
 });

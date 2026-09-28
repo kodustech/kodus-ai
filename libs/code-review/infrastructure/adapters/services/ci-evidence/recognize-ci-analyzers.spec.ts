@@ -96,9 +96,7 @@ describe('recognizeCiAnalyzers', () => {
 describe('isToolCoveredByCi', () => {
     it('skips our dependency scan when their CI runs an equivalent', () => {
         expect(
-            isToolCoveredByCi(ManagedTool.DEPENDENCIES, [
-                check('osv-scanner'),
-            ]),
+            isToolCoveredByCi(ManagedTool.DEPENDENCIES, [check('osv-scanner')]),
         ).toBe(true);
     });
 
@@ -154,7 +152,10 @@ describe('isToolCoveredByCi', () => {
 
     it('runs our tool when CI has no recognized analyzer', () => {
         expect(
-            isToolCoveredByCi(ManagedTool.SECRETS, [check('build'), check('test')]),
+            isToolCoveredByCi(ManagedTool.SECRETS, [
+                check('build'),
+                check('test'),
+            ]),
         ).toBe(false);
     });
 });

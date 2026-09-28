@@ -185,10 +185,7 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
                 secrets: SecretScanTool,
                 dependencies: DependencyScanTool,
             ) => [secrets, dependencies],
-            inject: [
-                SecretScanTool,
-                DependencyScanTool,
-            ],
+            inject: [SecretScanTool, DependencyScanTool],
         },
         AgentReviewStage,
         BugAgentProvider,

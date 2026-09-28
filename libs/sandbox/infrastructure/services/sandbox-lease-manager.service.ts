@@ -611,7 +611,11 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
 
             sandboxId = sandbox.sandboxId;
 
-            await this.leaseRepo.updateReady(prKey, sandboxId, sandbox?.baseBranch);
+            await this.leaseRepo.updateReady(
+                prKey,
+                sandboxId,
+                sandbox?.baseBranch,
+            );
 
             // Check for mid-create invalidation (Pitfall 5)
             const latestDoc = await this.leaseRepo.findByPrKey(prKey);

@@ -64,7 +64,10 @@ export function revertPatch(
 
         if (raw.startsWith('+') || raw.startsWith(' ') || raw === '') {
             const expected = raw === '' ? '' : text;
-            if (cursor > headLines.length || headLines[cursor - 1] !== expected) {
+            if (
+                cursor > headLines.length ||
+                headLines[cursor - 1] !== expected
+            ) {
                 return null;
             }
             if (!raw.startsWith('+')) {

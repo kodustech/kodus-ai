@@ -53,10 +53,7 @@ describe('the analyzer tool registry', () => {
 
         beforeAll(async () => {
             const moduleRef = await Test.createTestingModule({
-                providers: [
-                    ...(provider.inject as never[]),
-                    provider as never,
-                ],
+                providers: [...(provider.inject as never[]), provider as never],
             }).compile();
 
             tools = moduleRef.get<AnalyzerTool[]>(ANALYZER_TOOLS_TOKEN);

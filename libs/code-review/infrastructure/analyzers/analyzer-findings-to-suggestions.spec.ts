@@ -24,7 +24,10 @@ describe('analyzerFindingsToSuggestions', () => {
     describe('one comment per category', () => {
         it('collapses many dependency findings into a single suggestion', () => {
             const suggestions = analyzerFindingsToSuggestions([
-                finding({ ruleId: 'osv/GHSA-aaa', message: 'lodash is affected' }),
+                finding({
+                    ruleId: 'osv/GHSA-aaa',
+                    message: 'lodash is affected',
+                }),
                 finding({
                     ruleId: 'osv/GHSA-bbb',
                     startLine: 9,
@@ -38,9 +41,15 @@ describe('analyzerFindingsToSuggestions', () => {
             ]);
 
             expect(suggestions).toHaveLength(1);
-            expect(suggestions[0].suggestionContent).toContain('lodash is affected');
-            expect(suggestions[0].suggestionContent).toContain('minimist is affected');
-            expect(suggestions[0].suggestionContent).toContain('axios is affected');
+            expect(suggestions[0].suggestionContent).toContain(
+                'lodash is affected',
+            );
+            expect(suggestions[0].suggestionContent).toContain(
+                'minimist is affected',
+            );
+            expect(suggestions[0].suggestionContent).toContain(
+                'axios is affected',
+            );
         });
 
         it('keeps dependencies and secrets as separate comments', () => {
@@ -93,8 +102,16 @@ describe('analyzerFindingsToSuggestions', () => {
     describe('where the comment lands', () => {
         it('anchors on the most severe finding', () => {
             const [suggestion] = analyzerFindingsToSuggestions([
-                finding({ ruleId: 'osv/GHSA-low', severity: 'note', startLine: 2 }),
-                finding({ ruleId: 'osv/GHSA-high', severity: 'error', startLine: 40 }),
+                finding({
+                    ruleId: 'osv/GHSA-low',
+                    severity: 'note',
+                    startLine: 2,
+                }),
+                finding({
+                    ruleId: 'osv/GHSA-high',
+                    severity: 'error',
+                    startLine: 40,
+                }),
             ]);
 
             expect(suggestion.relevantLinesStart).toBe(40);
@@ -102,8 +119,16 @@ describe('analyzerFindingsToSuggestions', () => {
 
         it('takes the earliest line when severity ties', () => {
             const [suggestion] = analyzerFindingsToSuggestions([
-                finding({ ruleId: 'osv/GHSA-a', severity: 'warning', startLine: 30 }),
-                finding({ ruleId: 'osv/GHSA-b', severity: 'warning', startLine: 8 }),
+                finding({
+                    ruleId: 'osv/GHSA-a',
+                    severity: 'warning',
+                    startLine: 30,
+                }),
+                finding({
+                    ruleId: 'osv/GHSA-b',
+                    severity: 'warning',
+                    startLine: 8,
+                }),
             ]);
 
             expect(suggestion.relevantLinesStart).toBe(8);
@@ -112,7 +137,11 @@ describe('analyzerFindingsToSuggestions', () => {
         it('carries the worst severity of the group', () => {
             const [suggestion] = analyzerFindingsToSuggestions([
                 finding({ ruleId: 'osv/GHSA-a', severity: 'note' }),
-                finding({ ruleId: 'osv/GHSA-b', severity: 'error', startLine: 9 }),
+                finding({
+                    ruleId: 'osv/GHSA-b',
+                    severity: 'error',
+                    startLine: 9,
+                }),
             ]);
 
             expect(suggestion.severity).toBe('high');

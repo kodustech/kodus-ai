@@ -27,9 +27,9 @@ describe('revertPatch', () => {
     });
 
     it('restores a file the patch emptied', () => {
-        expect(revertPatch('', ['@@ -1,2 +0,0 @@', '-a', '-b'].join('\n'))).toBe(
-            'a\nb\n',
-        );
+        expect(
+            revertPatch('', ['@@ -1,2 +0,0 @@', '-a', '-b'].join('\n')),
+        ).toBe('a\nb\n');
     });
 
     it('leaves content outside the hunks untouched', () => {
@@ -43,19 +43,23 @@ describe('revertPatch', () => {
 
     it('applies every hunk in a multi-hunk patch', () => {
         const patch = [
-            '@@ -2,1 +2,1 @@', '-b', '+B',
-            '@@ -6,1 +6,1 @@', '-f', '+F',
+            '@@ -2,1 +2,1 @@',
+            '-b',
+            '+B',
+            '@@ -6,1 +6,1 @@',
+            '-f',
+            '+F',
         ].join('\n');
 
-        expect(revertPatch(['a', 'B', 'c', 'd', 'e', 'F'].join('\n'), patch)).toBe(
-            ['a', 'b', 'c', 'd', 'e', 'f'].join('\n'),
-        );
+        expect(
+            revertPatch(['a', 'B', 'c', 'd', 'e', 'F'].join('\n'), patch),
+        ).toBe(['a', 'b', 'c', 'd', 'e', 'f'].join('\n'));
     });
 
     it('reads a hunk header with the counts omitted', () => {
-        expect(revertPatch('new', ['@@ -1 +1 @@', '-old', '+new'].join('\n'))).toBe(
-            'old',
-        );
+        expect(
+            revertPatch('new', ['@@ -1 +1 @@', '-old', '+new'].join('\n')),
+        ).toBe('old');
     });
 
     it('ignores the no-newline marker', () => {
@@ -81,24 +85,40 @@ describe('revertPatch', () => {
      */
     describe('refusing to guess', () => {
         it('returns null when a context line does not match the file', () => {
-            const patch = ['@@ -1,2 +1,2 @@', ' something else', '-x', '+y'].join('\n');
+            const patch = [
+                '@@ -1,2 +1,2 @@',
+                ' something else',
+                '-x',
+                '+y',
+            ].join('\n');
             expect(revertPatch('a\ny', patch)).toBeNull();
         });
 
         it('returns null when an added line is not in the file', () => {
             expect(
-                revertPatch('different', ['@@ -1,1 +1,1 @@', '-old', '+new'].join('\n')),
+                revertPatch(
+                    'different',
+                    ['@@ -1,1 +1,1 @@', '-old', '+new'].join('\n'),
+                ),
             ).toBeNull();
         });
 
         it('returns null when a hunk reaches past the end of the file', () => {
             expect(
-                revertPatch('short', ['@@ -10,1 +10,1 @@', '-old', '+new'].join('\n')),
+                revertPatch(
+                    'short',
+                    ['@@ -10,1 +10,1 @@', '-old', '+new'].join('\n'),
+                ),
             ).toBeNull();
         });
 
         it('returns null when hunks run backwards', () => {
-            const patch = ['@@ -5,1 +5,1 @@', ' e', '@@ -2,1 +2,1 @@', ' b'].join('\n');
+            const patch = [
+                '@@ -5,1 +5,1 @@',
+                ' e',
+                '@@ -2,1 +2,1 @@',
+                ' b',
+            ].join('\n');
             expect(revertPatch('a\nb\nc\nd\ne', patch)).toBeNull();
         });
 

@@ -35,7 +35,12 @@ const PATCH = [
 ].join('\n');
 
 const osv = (
-    packages: Array<{ name: string; version: string; id: string; sev?: string }>,
+    packages: Array<{
+        name: string;
+        version: string;
+        id: string;
+        sev?: string;
+    }>,
 ) =>
     JSON.stringify({
         results: [
@@ -47,7 +52,9 @@ const osv = (
                         {
                             id: p.id,
                             summary: `${p.name} is vulnerable`,
-                            database_specific: { severity: p.sev ?? 'MODERATE' },
+                            database_specific: {
+                                severity: p.sev ?? 'MODERATE',
+                            },
                         },
                     ],
                 })),
@@ -87,14 +94,12 @@ const sandboxWith = (
     } as never;
 };
 
-
 /**
  * The scan command appends its exit code after the JSON, because that code is
  * the only thing separating "clean" from "could not run". A double that omits
  * it models a command production never issues.
  */
-const scanned = (json: string, exitCode = 0) =>
-    `${json}__OSV_EXIT:${exitCode}`;
+const scanned = (json: string, exitCode = 0) => `${json}__OSV_EXIT:${exitCode}`;
 
 const file = (patch = PATCH): ChangedFile => ({ filename: LOCKFILE, patch });
 
@@ -103,11 +108,20 @@ describe('DependencyScanTool', () => {
 
     describe('file selection', () => {
         it.each([
-            'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'go.sum',
-            'requirements.txt', 'Gemfile.lock', 'poetry.lock', 'Cargo.lock',
-            'composer.lock', 'apps/web/package-lock.json',
+            'package-lock.json',
+            'yarn.lock',
+            'pnpm-lock.yaml',
+            'go.sum',
+            'requirements.txt',
+            'Gemfile.lock',
+            'poetry.lock',
+            'Cargo.lock',
+            'composer.lock',
+            'apps/web/package-lock.json',
         ])('claims the manifest %s', (filename) => {
-            expect(tool.selectFiles([{ filename, patch: PATCH }])).toHaveLength(1);
+            expect(tool.selectFiles([{ filename, patch: PATCH }])).toHaveLength(
+                1,
+            );
         });
 
         it.each(['src/index.ts', 'package.json.md', 'README.md'])(
@@ -136,7 +150,10 @@ describe('DependencyScanTool', () => {
             const findings = await tool.run({ sandbox, files: [file()] });
 
             expect(findings).toEqual([
-                expect.objectContaining({ ruleId: 'osv/GHSA-aaa', path: LOCKFILE }),
+                expect.objectContaining({
+                    ruleId: 'osv/GHSA-aaa',
+                    path: LOCKFILE,
+                }),
             ]);
         });
 
@@ -187,9 +204,9 @@ describe('DependencyScanTool', () => {
 
             await tool.run({ sandbox, files: [file()] });
 
-            expect(
-                sandbox.commands.some((c) => c.includes('base64 -d')),
-            ).toBe(true);
+            expect(sandbox.commands.some((c) => c.includes('base64 -d'))).toBe(
+                true,
+            );
             expect(
                 sandbox.commands.filter((c) => c.includes('osv-scanner')),
             ).toHaveLength(2);
@@ -213,7 +230,7 @@ describe('DependencyScanTool', () => {
                 sandbox as unknown as { commands: string[] }
             ).commands.find((c) => c.includes('kody-deps-base'));
             expect(setup).toContain('git -C');
-            expect(setup).toContain("origin/main:package-lock.json");
+            expect(setup).toContain('origin/main:package-lock.json');
             expect(setup).not.toContain('base64 -d');
         });
 
@@ -226,7 +243,9 @@ describe('DependencyScanTool', () => {
             await tool.run({ sandbox, files: [file()] });
 
             expect(
-                sandbox.commands.some((c) => /^rm -rf .*kody-deps-base/.test(c)),
+                sandbox.commands.some((c) =>
+                    /^rm -rf .*kody-deps-base/.test(c),
+                ),
             ).toBe(true);
         });
 
@@ -287,7 +306,12 @@ describe('DependencyScanTool', () => {
     ])('maps %s severity to %s', async (dbSeverity, expected) => {
         const sandbox = sandboxWith(
             osv([
-                { name: 'lodash', version: '4.17.11', id: 'GHSA-aaa', sev: dbSeverity },
+                {
+                    name: 'lodash',
+                    version: '4.17.11',
+                    id: 'GHSA-aaa',
+                    sev: dbSeverity,
+                },
             ]),
             osv([]),
         );
@@ -350,8 +374,9 @@ describe('DependencyScanTool', () => {
 
             await tool.run({ sandbox, files: [file()] });
 
-            for (const command of (sandbox as unknown as { commands: string[] })
-                .commands.filter((c) => c.includes('osv-scanner'))) {
+            for (const command of (
+                sandbox as unknown as { commands: string[] }
+            ).commands.filter((c) => c.includes('osv-scanner'))) {
                 expect(command).toContain('__OSV_EXIT:$?');
                 expect(command).not.toContain('|| true');
             }
@@ -397,7 +422,9 @@ describe('DependencyScanTool', () => {
 
             await tool.run({
                 sandbox,
-                files: [{ filename: 'apps/web/package-lock.json', patch: PATCH }],
+                files: [
+                    { filename: 'apps/web/package-lock.json', patch: PATCH },
+                ],
             });
 
             const scans = (
@@ -556,7 +583,10 @@ describe('an untrustworthy baseline reports nothing, not everything', () => {
             repoDir: '/repo',
             baseBranch: 'main',
             run: jest.fn(async (command: string) => {
-                if (command.includes('kody-deps-base') && !command.includes('osv-scanner')) {
+                if (
+                    command.includes('kody-deps-base') &&
+                    !command.includes('osv-scanner')
+                ) {
                     throw new Error('exit status 1');
                 }
                 if (command.includes('osv-scanner')) {

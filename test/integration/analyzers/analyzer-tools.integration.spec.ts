@@ -96,7 +96,10 @@ describe('analyzer tools against a real sandbox', () => {
     let repoDir: string;
     let sandbox: SandboxInstance;
 
-    const write = async (path: string, content: string): Promise<ChangedFile> => {
+    const write = async (
+        path: string,
+        content: string,
+    ): Promise<ChangedFile> => {
         const absolute = join(repoDir, path);
         await mkdir(dirname(absolute), { recursive: true });
         await writeFile(absolute, content, 'utf8');

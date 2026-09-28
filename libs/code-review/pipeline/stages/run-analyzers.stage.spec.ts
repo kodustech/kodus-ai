@@ -36,12 +36,16 @@ const makeContext = (
         repository: { id: 'repo-1', name: 'widget-api' },
         pullRequest: { number: 42 },
         codeReviewConfig: {
-            deterministicEvidence: { tools: { 'dependencies': 'on' } },
+            deterministicEvidence: { tools: { dependencies: 'on' } },
         },
         changedFiles: [
             { filename: 'src/db/orders.go', patch: patchAdding(10, 3) },
         ],
-        sandboxHandle: { repoDir: '/repo', run: jest.fn(), writeFile: jest.fn() },
+        sandboxHandle: {
+            repoDir: '/repo',
+            run: jest.fn(),
+            writeFile: jest.fn(),
+        },
         ...overrides,
     }) as unknown as CodeReviewPipelineContext;
 
@@ -53,7 +57,10 @@ describe('RunAnalyzersStage', () => {
             tools,
         );
 
-    const run = (stage: RunAnalyzersStage, context: CodeReviewPipelineContext) =>
+    const run = (
+        stage: RunAnalyzersStage,
+        context: CodeReviewPipelineContext,
+    ) =>
         (
             stage as unknown as {
                 executeStage: (
@@ -93,16 +100,20 @@ describe('RunAnalyzersStage', () => {
     });
 
     it('passes each tool only the files it selected', async () => {
-        const selectFiles = jest.fn().mockReturnValue([
-            { filename: 'src/db/orders.go', patch: patchAdding(10, 3) },
-        ]);
+        const selectFiles = jest
+            .fn()
+            .mockReturnValue([
+                { filename: 'src/db/orders.go', patch: patchAdding(10, 3) },
+            ]);
         const tool = makeTool({ selectFiles });
 
         await run(makeStage([tool]), makeContext());
 
         expect(tool.run).toHaveBeenCalledWith(
             expect.objectContaining({
-                files: [expect.objectContaining({ filename: 'src/db/orders.go' })],
+                files: [
+                    expect.objectContaining({ filename: 'src/db/orders.go' }),
+                ],
             }),
         );
     });
@@ -120,7 +131,7 @@ describe('RunAnalyzersStage', () => {
         it('records the reason a tool was skipped', async () => {
             const context = makeContext({
                 codeReviewConfig: {
-                    deterministicEvidence: { tools: { 'dependencies': 'off' } },
+                    deterministicEvidence: { tools: { dependencies: 'off' } },
                 },
             } as unknown as Partial<CodeReviewPipelineContext>);
 
@@ -175,10 +186,7 @@ describe('RunAnalyzersStage', () => {
         it('does nothing when the beta gate is closed', async () => {
             const tool = makeTool();
 
-            const result = await run(
-                makeStage([tool], false),
-                makeContext(),
-            );
+            const result = await run(makeStage([tool], false), makeContext());
 
             expect(tool.run).not.toHaveBeenCalled();
             expect(result.analyzerRouting).toBeUndefined();

@@ -82,7 +82,10 @@ function addedLinesWithContext(
         const text = raw.slice(1);
 
         if (raw.startsWith('+')) {
-            added.push({ line: cursor, haystack: [...recent, text].join('\n') });
+            added.push({
+                line: cursor,
+                haystack: [...recent, text].join('\n'),
+            });
             cursor++;
         } else if (!raw.startsWith('-')) {
             cursor++;
@@ -171,7 +174,10 @@ export class DependencyScanTool implements AnalyzerTool {
             .toString(36)
             .slice(2, 10)}`;
 
-        const setup = [`rm -rf ${quote(baseDir)}`, `mkdir -p ${quote(baseDir)}`];
+        const setup = [
+            `rm -rf ${quote(baseDir)}`,
+            `mkdir -p ${quote(baseDir)}`,
+        ];
 
         // Prove the base ref is actually in the sandbox before trusting
         // anything read from it. Without this, an unfetched ref makes every
@@ -292,7 +298,9 @@ export class DependencyScanTool implements AnalyzerTool {
                 files.map((file) => toRepoRelativePath(file.filename)),
             );
         } finally {
-            await sandbox.run(`rm -rf ${quote(baseDir)}`, { timeoutMs: 15_000 });
+            await sandbox.run(`rm -rf ${quote(baseDir)}`, {
+                timeoutMs: 15_000,
+            });
         }
     }
 
@@ -388,7 +396,8 @@ export class DependencyScanTool implements AnalyzerTool {
 
         const out: Vulnerable[] = [];
 
-        for (const group of (report as { results?: unknown[] })?.results ?? []) {
+        for (const group of (report as { results?: unknown[] })?.results ??
+            []) {
             for (const entry of (group as { packages?: unknown[] })?.packages ??
                 []) {
                 const typed = entry as {
@@ -447,7 +456,8 @@ export class DependencyScanTool implements AnalyzerTool {
                 path: anchor.filename,
                 startLine: anchor.line,
                 endLine: anchor.line,
-                severity: SEVERITY[(v.severity ?? '').toUpperCase()] ?? 'warning',
+                severity:
+                    SEVERITY[(v.severity ?? '').toUpperCase()] ?? 'warning',
                 message:
                     `${v.name}@${v.version} is affected by ${v.id}` +
                     (v.summary ? `: ${v.summary}` : ''),

@@ -26,7 +26,7 @@ describe('AnalyzerToolRouter', () => {
     it('runs a tool whose files are in the change', () => {
         const [decision] = router.route([toolFor('.go')], {
             changedFiles: [file('src/db.go')],
-            modes: { 'dependencies': 'on' },
+            modes: { dependencies: 'on' },
         });
 
         expect(decision).toEqual({
@@ -40,7 +40,7 @@ describe('AnalyzerToolRouter', () => {
     it('skips a tool that claims none of the changed files', () => {
         const [decision] = router.route([toolFor('.go')], {
             changedFiles: [file('README.md')],
-            modes: { 'dependencies': 'on' },
+            modes: { dependencies: 'on' },
         });
 
         expect(decision.run).toBe(false);
@@ -51,7 +51,7 @@ describe('AnalyzerToolRouter', () => {
     it('skips a tool the configuration disables', () => {
         const [decision] = router.route([toolFor('.go')], {
             changedFiles: [file('src/db.go')],
-            modes: { 'dependencies': 'off' },
+            modes: { dependencies: 'off' },
         });
 
         expect(decision.run).toBe(false);
@@ -73,7 +73,7 @@ describe('AnalyzerToolRouter', () => {
         it('skips on auto when their CI covers the category', () => {
             const [decision] = router.route([toolFor('.go')], {
                 changedFiles: [file('src/db.go')],
-                modes: { 'dependencies': 'auto' },
+                modes: { dependencies: 'auto' },
                 ciCoveredTools: [ManagedTool.DEPENDENCIES],
             });
 
@@ -84,7 +84,7 @@ describe('AnalyzerToolRouter', () => {
         it('runs on auto when their CI covers a different category', () => {
             const [decision] = router.route([toolFor('.go')], {
                 changedFiles: [file('src/db.go')],
-                modes: { 'dependencies': 'auto' },
+                modes: { dependencies: 'auto' },
                 ciCoveredTools: [ManagedTool.SECRETS],
             });
 
@@ -95,7 +95,7 @@ describe('AnalyzerToolRouter', () => {
         it('runs on "on" even when their CI covers it', () => {
             const [decision] = router.route([toolFor('.go')], {
                 changedFiles: [file('src/db.go')],
-                modes: { 'dependencies': 'on' },
+                modes: { dependencies: 'on' },
                 ciCoveredTools: [ManagedTool.DEPENDENCIES],
             });
 
@@ -107,7 +107,7 @@ describe('AnalyzerToolRouter', () => {
                 [toolFor('.go', { coverage: undefined })],
                 {
                     changedFiles: [file('src/db.go')],
-                    modes: { 'dependencies': 'auto' },
+                    modes: { dependencies: 'auto' },
                     ciCoveredTools: [ManagedTool.DEPENDENCIES],
                 },
             );
@@ -123,7 +123,7 @@ describe('AnalyzerToolRouter', () => {
             [toolFor('.go'), toolFor('.ts', { id: 'dependencies' })],
             {
                 changedFiles: [file('src/db.go')],
-                modes: { 'dependencies': 'on' },
+                modes: { dependencies: 'on' },
             },
         );
 
@@ -141,7 +141,7 @@ describe('AnalyzerToolRouter', () => {
     it('skips everything when nothing changed', () => {
         const [decision] = router.route([toolFor('.go')], {
             changedFiles: [],
-            modes: { 'dependencies': 'on' },
+            modes: { dependencies: 'on' },
         });
 
         expect(decision.run).toBe(false);
@@ -154,7 +154,7 @@ describe('AnalyzerToolRouter', () => {
         const selectFiles = jest.fn();
         router.route([toolFor('.go', { selectFiles })], {
             changedFiles: [file('src/db.go')],
-            modes: { 'dependencies': 'off' },
+            modes: { dependencies: 'off' },
         });
 
         expect(selectFiles).not.toHaveBeenCalled();

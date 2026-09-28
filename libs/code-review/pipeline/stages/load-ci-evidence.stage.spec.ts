@@ -49,7 +49,10 @@ describe('LoadCiEvidenceStage', () => {
         } as never);
     };
 
-    const run = (stage: LoadCiEvidenceStage, context: CodeReviewPipelineContext) =>
+    const run = (
+        stage: LoadCiEvidenceStage,
+        context: CodeReviewPipelineContext,
+    ) =>
         (
             stage as unknown as {
                 executeStage: (

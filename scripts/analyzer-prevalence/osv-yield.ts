@@ -33,24 +33,36 @@ const LIMIT = Number(arg('limit', '1000'));
 
 function makeSandbox(repoDir: string): SandboxInstance {
     return {
-        repoDir, type: 'local', sandboxId: 'osv-yield',
+        repoDir,
+        type: 'local',
+        sandboxId: 'osv-yield',
         remoteCommands: {} as never,
         cleanup: async () => undefined,
         run: async (command: string) => {
             try {
-                const { stdout, stderr } = await exec('bash', ['-lc', command], {
-                    maxBuffer: 128 * 1024 * 1024,
-                });
+                const { stdout, stderr } = await exec(
+                    'bash',
+                    ['-lc', command],
+                    {
+                        maxBuffer: 128 * 1024 * 1024,
+                    },
+                );
                 return { stdout, stderr, exitCode: 0 };
             } catch (e) {
-                const err = e as { stdout?: string; stderr?: string; code?: number };
+                const err = e as {
+                    stdout?: string;
+                    stderr?: string;
+                    code?: number;
+                };
                 return {
-                    stdout: err.stdout ?? '', stderr: err.stderr ?? '',
+                    stdout: err.stdout ?? '',
+                    stderr: err.stderr ?? '',
                     exitCode: typeof err.code === 'number' ? err.code : 1,
                 };
             }
         },
-        readFile: async (p: string) => (await exec('cat', [p], { maxBuffer: 128 * 1024 * 1024 })).stdout,
+        readFile: async (p: string) =>
+            (await exec('cat', [p], { maxBuffer: 128 * 1024 * 1024 })).stdout,
         writeFile: async (p: string, c: string) => {
             await mkdir(dirname(p), { recursive: true });
             await writeFile(p, c, 'utf8');
@@ -64,9 +76,15 @@ const gh = async (args: string[]) =>
 async function main() {
     const rows = JSON.parse(
         readFileSync('scripts/analyzer-prevalence/result.json', 'utf8'),
-    ).rows.filter(
-        (r: any) => !r.skipped && !r.fork && !r.archived && r.fired.includes('dependencies'),
-    ).slice(0, LIMIT);
+    )
+        .rows.filter(
+            (r: any) =>
+                !r.skipped &&
+                !r.fork &&
+                !r.archived &&
+                r.fired.includes('dependencies'),
+        )
+        .slice(0, LIMIT);
 
     const tool = new DependencyScanTool();
     const out: any[] = [];
@@ -76,12 +94,25 @@ async function main() {
         let files: Array<{ filename: string; patch?: string }>;
         let sha: string;
         try {
-            sha = (await gh(['api', `repos/${pr.repo}/pulls/${pr.number}`, '--jq', '.head.sha'])).trim();
-            files = JSON.parse(await gh([
-                'api', `repos/${pr.repo}/pulls/${pr.number}/files?per_page=100`,
-                '--jq', '[.[] | select(.patch != null) | {filename, patch}]',
-            ]));
-        } catch { continue; }
+            sha = (
+                await gh([
+                    'api',
+                    `repos/${pr.repo}/pulls/${pr.number}`,
+                    '--jq',
+                    '.head.sha',
+                ])
+            ).trim();
+            files = JSON.parse(
+                await gh([
+                    'api',
+                    `repos/${pr.repo}/pulls/${pr.number}/files?per_page=100`,
+                    '--jq',
+                    '[.[] | select(.patch != null) | {filename, patch}]',
+                ]),
+            );
+        } catch {
+            continue;
+        }
 
         const claimed = tool.selectFiles(files as ChangedFile[]);
         if (!claimed.length) continue;
@@ -93,30 +124,47 @@ async function main() {
                 try {
                     // Raw beats `--jq .content`: a multi-megabyte lockfile as
                     // base64 through jq is where this spent all its time.
-                    const content = await gh(['api',
+                    const content = await gh([
+                        'api',
                         `repos/${pr.repo}/contents/${encodeURI(f.filename)}?ref=${sha}`,
-                        '-H', 'Accept: application/vnd.github.raw']);
+                        '-H',
+                        'Accept: application/vnd.github.raw',
+                    ]);
                     const abs = join(dir, f.filename);
                     await mkdir(dirname(abs), { recursive: true });
                     await writeFile(abs, content, 'utf8');
                     wrote++;
-                } catch { /* too large or gone */ }
+                } catch {
+                    /* too large or gone */
+                }
             }
             if (!wrote) continue;
 
             let findings: any[] = [];
             try {
-                findings = await tool.run({ sandbox: makeSandbox(dir), files: claimed });
+                findings = await tool.run({
+                    sandbox: makeSandbox(dir),
+                    files: claimed,
+                });
             } catch (e) {
-                out.push({ pr: `${pr.repo}#${pr.number}`, bot: pr.bot, error: String((e as Error).message).slice(0, 80) });
+                out.push({
+                    pr: `${pr.repo}#${pr.number}`,
+                    bot: pr.bot,
+                    error: String((e as Error).message).slice(0, 80),
+                });
                 process.stderr.write('x');
                 continue;
             }
 
             out.push({
-                pr: `${pr.repo}#${pr.number}`, bot: pr.bot,
-                lockfiles: claimed.length, findings: findings.length,
-                advisories: [...new Set(findings.map((f) => f.ruleId))].slice(0, 6),
+                pr: `${pr.repo}#${pr.number}`,
+                bot: pr.bot,
+                lockfiles: claimed.length,
+                findings: findings.length,
+                advisories: [...new Set(findings.map((f) => f.ruleId))].slice(
+                    0,
+                    6,
+                ),
                 severities: findings.map((f) => f.severity),
             });
             process.stderr.write(findings.length ? '+' : '.');
@@ -130,25 +178,42 @@ async function main() {
     const withFindings = ok.filter((r) => r.findings > 0);
     const human = ok.filter((r) => !r.bot);
     const bot = ok.filter((r) => r.bot);
-    const pct = (a: number, b: number) => (b ? `${((a / b) * 100).toFixed(1)}%` : 'n/a');
+    const pct = (a: number, b: number) =>
+        b ? `${((a / b) * 100).toFixed(1)}%` : 'n/a';
 
     console.log(`\n\n=== dependency scan yield on real lockfile PRs ===`);
-    console.log(`scanned ${ok.length} PRs (${out.length - ok.length} errored)\n`);
-    console.log(`PRs with >=1 in-diff finding : ${withFindings.length}/${ok.length}  (${pct(withFindings.length, ok.length)})`);
-    console.log(`  human-authored             : ${human.filter((r) => r.findings > 0).length}/${human.length}  (${pct(human.filter((r) => r.findings > 0).length, human.length)})`);
-    console.log(`  bot-authored               : ${bot.filter((r) => r.findings > 0).length}/${bot.length}  (${pct(bot.filter((r) => r.findings > 0).length, bot.length)})`);
-    console.log(`total findings               : ${ok.reduce((a, r) => a + r.findings, 0)}`);
+    console.log(
+        `scanned ${ok.length} PRs (${out.length - ok.length} errored)\n`,
+    );
+    console.log(
+        `PRs with >=1 in-diff finding : ${withFindings.length}/${ok.length}  (${pct(withFindings.length, ok.length)})`,
+    );
+    console.log(
+        `  human-authored             : ${human.filter((r) => r.findings > 0).length}/${human.length}  (${pct(human.filter((r) => r.findings > 0).length, human.length)})`,
+    );
+    console.log(
+        `  bot-authored               : ${bot.filter((r) => r.findings > 0).length}/${bot.length}  (${pct(bot.filter((r) => r.findings > 0).length, bot.length)})`,
+    );
+    console.log(
+        `total findings               : ${ok.reduce((a, r) => a + r.findings, 0)}`,
+    );
     const sev: Record<string, number> = {};
-    for (const r of ok) for (const s of r.severities ?? []) sev[s] = (sev[s] ?? 0) + 1;
+    for (const r of ok)
+        for (const s of r.severities ?? []) sev[s] = (sev[s] ?? 0) + 1;
     console.log(`by severity                  : ${JSON.stringify(sev)}`);
 
     if (withFindings.length) {
         console.log('\nexamples:');
         for (const r of withFindings.slice(0, 10)) {
-            console.log(`  ${r.pr}${r.bot ? ' [bot]' : ''}  ${r.findings} finding(s)  ${r.advisories.join(', ')}`);
+            console.log(
+                `  ${r.pr}${r.bot ? ' [bot]' : ''}  ${r.findings} finding(s)  ${r.advisories.join(', ')}`,
+            );
         }
     }
-    writeFileSync('scripts/analyzer-prevalence/osv-yield.json', JSON.stringify(out, null, 2));
+    writeFileSync(
+        'scripts/analyzer-prevalence/osv-yield.json',
+        JSON.stringify(out, null, 2),
+    );
     console.log(`\nper-PR: scripts/analyzer-prevalence/osv-yield.json`);
 }
 

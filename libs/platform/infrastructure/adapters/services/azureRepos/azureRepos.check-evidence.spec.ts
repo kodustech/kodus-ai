@@ -3,7 +3,10 @@ import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { AzureReposService } from './azureRepos.service';
 
 describe('AzureReposService — getCheckEvidence', () => {
-    const organizationAndTeamData = { organizationId: 'org-1', teamId: 'team-1' };
+    const organizationAndTeamData = {
+        organizationId: 'org-1',
+        teamId: 'team-1',
+    };
     const repository = { owner: 'acme', name: 'widget-api', id: 'repo-uuid' };
     const commitSha = 'a1b2c3d4';
 

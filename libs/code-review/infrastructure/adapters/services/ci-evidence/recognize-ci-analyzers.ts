@@ -36,25 +36,25 @@ export enum ManagedTool {
 }
 
 const ANALYZER_ALIASES: Record<KnownAnalyzer, readonly string[]> = {
-    semgrep: ['semgrep'],
-    opengrep: ['opengrep'],
-    codeql: ['codeql'],
-    snyk: ['snyk'],
-    sonarqube: ['sonarqube', 'sonarcloud', 'sonar'],
-    checkmarx: ['checkmarx'],
-    bandit: ['bandit'],
-    brakeman: ['brakeman'],
-    gitleaks: ['gitleaks'],
-    trufflehog: ['trufflehog', 'truffle hog'],
-    ggshield: ['ggshield', 'gitguardian'],
+    'semgrep': ['semgrep'],
+    'opengrep': ['opengrep'],
+    'codeql': ['codeql'],
+    'snyk': ['snyk'],
+    'sonarqube': ['sonarqube', 'sonarcloud', 'sonar'],
+    'checkmarx': ['checkmarx'],
+    'bandit': ['bandit'],
+    'brakeman': ['brakeman'],
+    'gitleaks': ['gitleaks'],
+    'trufflehog': ['trufflehog', 'truffle hog'],
+    'ggshield': ['ggshield', 'gitguardian'],
     'detect-secrets': ['detect-secrets', 'detect secrets'],
-    actionlint: ['actionlint'],
-    zizmor: ['zizmor'],
+    'actionlint': ['actionlint'],
+    'zizmor': ['zizmor'],
     'osv-scanner': ['osv-scanner', 'osv scanner'],
-    dependabot: ['dependabot'],
-    trivy: ['trivy'],
-    checkov: ['checkov'],
-    tfsec: ['tfsec'],
+    'dependabot': ['dependabot'],
+    'trivy': ['trivy'],
+    'checkov': ['checkov'],
+    'tfsec': ['tfsec'],
 };
 
 /**
@@ -83,7 +83,12 @@ const COVERED_BY: Record<ManagedTool, readonly KnownAnalyzer[]> = {
  * exit is how most scanners report findings, so `failure` counts; the rest
  * mean the job never delivered an answer.
  */
-const CONCLUSIVE = new Set(['success', 'failure', 'neutral', 'action_required']);
+const CONCLUSIVE = new Set([
+    'success',
+    'failure',
+    'neutral',
+    'action_required',
+]);
 
 const escapeForRegex = (value: string): string =>
     value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

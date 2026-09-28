@@ -23,9 +23,7 @@ export type ChangedFile = { filename: string; patch?: string };
  * confusing the two manufactures confidence in code nothing examined.
  */
 export type RouteSkipReason =
-    | 'disabled-by-config'
-    | 'no-matching-files'
-    | 'covered-by-ci';
+    'disabled-by-config' | 'no-matching-files' | 'covered-by-ci';
 
 export type RouteDecision = {
     toolId: AnalyzerToolId;

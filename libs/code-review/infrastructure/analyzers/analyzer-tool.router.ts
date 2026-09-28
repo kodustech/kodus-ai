@@ -1,10 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import {
-    AnalyzerTool,
-    RouteDecision,
-    ToolRouteInput,
-} from './tool.contract';
+import { AnalyzerTool, RouteDecision, ToolRouteInput } from './tool.contract';
 
 /**
  * Decides which deterministic tools apply to a change.
@@ -27,10 +23,7 @@ export class AnalyzerToolRouter {
         return tools.map((tool) => this.decide(tool, input));
     }
 
-    private decide(
-        tool: AnalyzerTool,
-        input: ToolRouteInput,
-    ): RouteDecision {
+    private decide(tool: AnalyzerTool, input: ToolRouteInput): RouteDecision {
         const mode = input.modes?.[tool.id] ?? 'off';
 
         // Checked before file selection: a disabled tool is never asked to

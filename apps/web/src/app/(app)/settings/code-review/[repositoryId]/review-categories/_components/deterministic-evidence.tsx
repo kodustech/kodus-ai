@@ -10,10 +10,7 @@ import { Controller, useFormContext, useWatch } from "react-hook-form";
 import { useCodeReviewConfig } from "src/app/(app)/settings/_components/context";
 import { OverrideIndicatorForm } from "src/app/(app)/settings/code-review/_components/override";
 
-import type {
-    CodeReviewFormType,
-    DeterministicToolId,
-} from "../../../_types";
+import type { CodeReviewFormType, DeterministicToolId } from "../../../_types";
 
 /**
  * The two scanners, and what each answers that the reviewer cannot.

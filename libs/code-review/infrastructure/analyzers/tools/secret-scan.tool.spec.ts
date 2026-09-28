@@ -65,7 +65,9 @@ describe('SecretScanTool', () => {
         });
 
         it('ignores a file with no patch', () => {
-            expect(tool.selectFiles([{ filename: 'src/a.ts' }])).toHaveLength(0);
+            expect(tool.selectFiles([{ filename: 'src/a.ts' }])).toHaveLength(
+                0,
+            );
         });
     });
 

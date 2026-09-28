@@ -107,7 +107,8 @@ export function parseAnalyzerSarif(
             if (startLine <= 0) continue;
 
             findings.push({
-                ruleId: (typed.ruleId ?? 'unknown').split('.').pop() ?? 'unknown',
+                ruleId:
+                    (typed.ruleId ?? 'unknown').split('.').pop() ?? 'unknown',
                 path,
                 startLine,
                 endLine: location.region?.endLine ?? startLine,
@@ -117,7 +118,9 @@ export function parseAnalyzerSarif(
                         : typed.level === 'note'
                           ? 'note'
                           : 'warning',
-                message: (typed.message?.text ?? '').replace(/\s+/g, ' ').trim(),
+                message: (typed.message?.text ?? '')
+                    .replace(/\s+/g, ' ')
+                    .trim(),
             });
         }
     }

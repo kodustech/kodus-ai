@@ -3,7 +3,10 @@ import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { GitlabService } from './gitlab.service';
 
 describe('GitlabService — getCheckEvidence', () => {
-    const organizationAndTeamData = { organizationId: 'org-1', teamId: 'team-1' };
+    const organizationAndTeamData = {
+        organizationId: 'org-1',
+        teamId: 'team-1',
+    };
     const repository = { owner: 'acme', name: 'widget-api' };
     const commitSha = 'a1b2c3d4';
 
@@ -70,10 +73,7 @@ describe('GitlabService — getCheckEvidence', () => {
             commitSha,
         });
 
-        expect(allStatuses).toHaveBeenCalledWith(
-            'acme/widget-api',
-            commitSha,
-        );
+        expect(allStatuses).toHaveBeenCalledWith('acme/widget-api', commitSha);
     });
 
     it.each([
@@ -131,9 +131,11 @@ describe('GitlabService — getCheckEvidence', () => {
     // the pipeline. Calling it a failure would overstate what CI concluded.
     it('reports an allowed failure as neutral', async () => {
         const service = makeService(
-            jest.fn().mockResolvedValue([
-                status({ status: 'failed', allow_failure: true }),
-            ]),
+            jest
+                .fn()
+                .mockResolvedValue([
+                    status({ status: 'failed', allow_failure: true }),
+                ]),
         );
 
         const [evidence] = await service.getCheckEvidence({

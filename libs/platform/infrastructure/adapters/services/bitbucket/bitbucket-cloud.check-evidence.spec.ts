@@ -3,11 +3,17 @@ import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { BitbucketCloudService } from './bitbucket-cloud.service';
 
 describe('BitbucketCloudService — getCheckEvidence', () => {
-    const organizationAndTeamData = { organizationId: 'org-1', teamId: 'team-1' };
+    const organizationAndTeamData = {
+        organizationId: 'org-1',
+        teamId: 'team-1',
+    };
     const repository = { owner: 'acme', name: 'widget-api' };
     const commitSha = 'a1b2c3d4';
 
-    const makeService = (listCommitStatuses: jest.Mock, authDetail: unknown = {}) => {
+    const makeService = (
+        listCommitStatuses: jest.Mock,
+        authDetail: unknown = {},
+    ) => {
         const service = Object.create(
             BitbucketCloudService.prototype,
         ) as BitbucketCloudService;
@@ -88,7 +94,9 @@ describe('BitbucketCloudService — getCheckEvidence', () => {
         ['STOPPED', 'cancelled'],
     ])('maps a %s state to %s', async (state, expected) => {
         const service = makeService(
-            jest.fn().mockResolvedValue({ data: { values: [status({ state })] } }),
+            jest
+                .fn()
+                .mockResolvedValue({ data: { values: [status({ state })] } }),
         );
 
         const [evidence] = await service.getCheckEvidence({

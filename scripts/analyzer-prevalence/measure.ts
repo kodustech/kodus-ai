@@ -40,27 +40,42 @@ const TOOLS = [new SecretScanTool(), new DependencyScanTool()];
 
 /** Authored by automation. Reported separately: bots are overwhelmingly
  *  lockfile bumps, and blending them makes the dependency number meaningless. */
-const BOT = /\[bot\]$|^dependabot|^renovate|^greenkeeper|^snyk-bot|^imgbot|^allcontributors/i;
+const BOT =
+    /\[bot\]$|^dependabot|^renovate|^greenkeeper|^snyk-bot|^imgbot|^allcontributors/i;
 
 type Row = {
-    repo: string; number: number;
-    bot: boolean; stars: number; language: string | null;
-    fork: boolean; archived: boolean;
-    files: number; truncated: boolean;
+    repo: string;
+    number: number;
+    bot: boolean;
+    stars: number;
+    language: string | null;
+    fork: boolean;
+    archived: boolean;
+    files: number;
+    truncated: boolean;
     fired: string[];
     skipped?: string;
 };
 
 async function gh(path: string): Promise<unknown> {
-    const { stdout } = await exec('gh', ['api', path], { maxBuffer: 64 * 1024 * 1024 });
+    const { stdout } = await exec('gh', ['api', path], {
+        maxBuffer: 64 * 1024 * 1024,
+    });
     return JSON.parse(stdout);
 }
 
 async function one(pr: { repo: string; number: number }): Promise<Row | null> {
     const base: Row = {
-        repo: pr.repo, number: pr.number, bot: false, stars: 0,
-        language: null, fork: false, archived: false,
-        files: 0, truncated: false, fired: [],
+        repo: pr.repo,
+        number: pr.number,
+        bot: false,
+        stars: 0,
+        language: null,
+        fork: false,
+        archived: false,
+        files: 0,
+        truncated: false,
+        fired: [],
     };
 
     let meta: any;
@@ -104,33 +119,49 @@ async function one(pr: { repo: string; number: number }): Promise<Row | null> {
     return base;
 }
 
-async function pool<T, R>(items: T[], n: number, fn: (x: T, i: number) => Promise<R>) {
+async function pool<T, R>(
+    items: T[],
+    n: number,
+    fn: (x: T, i: number) => Promise<R>,
+) {
     const out: R[] = new Array(items.length);
     let i = 0;
-    await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
-        while (i < items.length) {
-            const k = i++;
-            out[k] = await fn(items[k], k);
-            if (k % 25 === 0) process.stderr.write(`${k} `);
-        }
-    }));
+    await Promise.all(
+        Array.from({ length: Math.min(n, items.length) }, async () => {
+            while (i < items.length) {
+                const k = i++;
+                out[k] = await fn(items[k], k);
+                if (k % 25 === 0) process.stderr.write(`${k} `);
+            }
+        }),
+    );
     return out;
 }
 
-const pct = (a: number, b: number) => (b === 0 ? '  n/a' : `${((a / b) * 100).toFixed(1)}%`);
+const pct = (a: number, b: number) =>
+    b === 0 ? '  n/a' : `${((a / b) * 100).toFixed(1)}%`;
 
 function report(rows: Row[], label: string) {
     const n = rows.length;
-    if (n === 0) { console.log(`\n${label}: no PRs`); return; }
+    if (n === 0) {
+        console.log(`\n${label}: no PRs`);
+        return;
+    }
     console.log(`\n=== ${label} (n=${n}) ===`);
     console.log('tool              fires on');
     for (const t of TOOLS) {
         const hit = rows.filter((r) => r.fired.includes(t.id)).length;
-        console.log(`  ${t.id.padEnd(16)} ${String(hit).padStart(5)}  ${pct(hit, n).padStart(6)}`);
+        console.log(
+            `  ${t.id.padEnd(16)} ${String(hit).padStart(5)}  ${pct(hit, n).padStart(6)}`,
+        );
     }
     const conditional = ['dependencies'];
-    const anyCond = rows.filter((r) => r.fired.some((f) => conditional.includes(f))).length;
-    console.log(`  ${'— any conditional'.padEnd(16)} ${String(anyCond).padStart(5)}  ${pct(anyCond, n).padStart(6)}`);
+    const anyCond = rows.filter((r) =>
+        r.fired.some((f) => conditional.includes(f)),
+    ).length;
+    console.log(
+        `  ${'— any conditional'.padEnd(16)} ${String(anyCond).padStart(5)}  ${pct(anyCond, n).padStart(6)}`,
+    );
 }
 
 async function main() {
@@ -141,25 +172,54 @@ async function main() {
     const rows = (await pool(prs, CONCURRENCY, one)).filter(Boolean) as Row[];
     const usable = rows.filter((r) => !r.skipped && !r.fork && !r.archived);
 
-    console.log(`\nsampled ${prs.length}  resolved ${rows.length}  usable ${usable.length}`);
-    console.log(`(dropped: ${rows.length - usable.length} fork/archived/empty; ${prs.length - rows.length} unreachable)`);
-    console.log(`truncated file lists (>100 files): ${usable.filter((r) => r.truncated).length}`);
+    console.log(
+        `\nsampled ${prs.length}  resolved ${rows.length}  usable ${usable.length}`,
+    );
+    console.log(
+        `(dropped: ${rows.length - usable.length} fork/archived/empty; ${prs.length - rows.length} unreachable)`,
+    );
+    console.log(
+        `truncated file lists (>100 files): ${usable.filter((r) => r.truncated).length}`,
+    );
 
     report(usable, 'ALL usable PRs');
-    report(usable.filter((r) => !r.bot), 'human-authored');
-    report(usable.filter((r) => r.bot), 'bot-authored');
+    report(
+        usable.filter((r) => !r.bot),
+        'human-authored',
+    );
+    report(
+        usable.filter((r) => r.bot),
+        'bot-authored',
+    );
 
     // Stars is a popularity proxy and popularity correlates with the CI hygiene
     // being measured, so it is reported as a sensitivity band, never as a filter.
-    console.log('\n=== sensitivity to repository popularity (human-authored) ===');
+    console.log(
+        '\n=== sensitivity to repository popularity (human-authored) ===',
+    );
     for (const floor of [0, 10, 100, 1000]) {
         const sub = usable.filter((r) => !r.bot && r.stars >= floor);
         const cond = ['dependencies'];
-        const hit = sub.filter((r) => r.fired.some((f) => cond.includes(f))).length;
-        console.log(`  stars >= ${String(floor).padEnd(5)} n=${String(sub.length).padStart(5)}  any conditional: ${pct(hit, sub.length)}`);
+        const hit = sub.filter((r) =>
+            r.fired.some((f) => cond.includes(f)),
+        ).length;
+        console.log(
+            `  stars >= ${String(floor).padEnd(5)} n=${String(sub.length).padStart(5)}  any conditional: ${pct(hit, sub.length)}`,
+        );
     }
 
-    writeFileSync(OUT, JSON.stringify({ sample: SAMPLE_FILE, generatedAt: new Date().toISOString(), rows }, null, 2));
+    writeFileSync(
+        OUT,
+        JSON.stringify(
+            {
+                sample: SAMPLE_FILE,
+                generatedAt: new Date().toISOString(),
+                rows,
+            },
+            null,
+            2,
+        ),
+    );
     console.log(`\nper-PR rows: ${OUT}`);
 }
 

@@ -11,14 +11,21 @@ import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { ForgejoService } from './forgejo.service';
 
 describe('ForgejoService — getCheckEvidence', () => {
-    const organizationAndTeamData = { organizationId: 'org-1', teamId: 'team-1' };
+    const organizationAndTeamData = {
+        organizationId: 'org-1',
+        teamId: 'team-1',
+    };
     const repository = { owner: 'acme', name: 'widget-api' };
     const commitSha = 'a1b2c3d4';
 
     beforeEach(() => repoListStatusesByRef.mockReset());
 
-    const makeService = (authDetail: unknown = { host: 'https://git.test' }) => {
-        const service = Object.create(ForgejoService.prototype) as ForgejoService;
+    const makeService = (
+        authDetail: unknown = { host: 'https://git.test' },
+    ) => {
+        const service = Object.create(
+            ForgejoService.prototype,
+        ) as ForgejoService;
 
         Object.defineProperty(service, 'logger', {
             value: { warn: jest.fn(), error: jest.fn(), log: jest.fn() },
@@ -29,9 +36,7 @@ describe('ForgejoService — getCheckEvidence', () => {
             'getAuthDetails',
         ).mockResolvedValue(authDetail);
 
-        jest.spyOn(service, 'createForgejoClient').mockReturnValue(
-            {} as never,
-        );
+        jest.spyOn(service, 'createForgejoClient').mockReturnValue({} as never);
 
         return service;
     };

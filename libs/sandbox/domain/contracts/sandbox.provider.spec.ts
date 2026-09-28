@@ -22,6 +22,8 @@ describe('toBranchName', () => {
     });
 
     it('only strips a leading prefix', () => {
-        expect(toBranchName('release/refs/heads/x')).toBe('release/refs/heads/x');
+        expect(toBranchName('release/refs/heads/x')).toBe(
+            'release/refs/heads/x',
+        );
     });
 });

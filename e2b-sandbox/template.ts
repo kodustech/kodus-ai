@@ -60,6 +60,4 @@ export const kodusTemplate = Template()
 export const kodusBenchmarkTemplate = Template()
     .fromBaseImage()
     .aptInstall(['git', 'ripgrep'])
-    .runCmd([
-        ...installSecurityTools,
-    ]);
+    .runCmd([...installSecurityTools]);

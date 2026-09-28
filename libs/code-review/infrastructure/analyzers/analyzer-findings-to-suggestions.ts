@@ -33,7 +33,9 @@ const HEADING: Record<string, (n: number) => string> = {
 };
 
 const fallbackHeading = (n: number): string =>
-    n === 1 ? 'A scanner flagged one issue in this change.' : `A scanner flagged ${n} issues in this change.`;
+    n === 1
+        ? 'A scanner flagged one issue in this change.'
+        : `A scanner flagged ${n} issues in this change.`;
 
 /**
  * Converts deterministic findings into review suggestions, ONE PER CATEGORY.
@@ -85,7 +87,8 @@ function toSuggestion(
     )[0];
 
     const worst = group.reduce(
-        (acc, f) => (SEVERITY_RANK[f.severity] > SEVERITY_RANK[acc] ? f.severity : acc),
+        (acc, f) =>
+            SEVERITY_RANK[f.severity] > SEVERITY_RANK[acc] ? f.severity : acc,
         'note' as AnalyzerFinding['severity'],
     );
 

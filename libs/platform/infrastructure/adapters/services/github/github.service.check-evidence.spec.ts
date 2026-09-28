@@ -12,7 +12,10 @@ import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { GithubService } from './github.service';
 
 describe('GithubService — getCheckEvidence', () => {
-    const organizationAndTeamData = { organizationId: 'org-1', teamId: 'team-1' };
+    const organizationAndTeamData = {
+        organizationId: 'org-1',
+        teamId: 'team-1',
+    };
     const repository = { owner: 'acme', name: 'widget-api' };
     const commitSha = 'a1b2c3d4';
 
@@ -37,7 +40,9 @@ describe('GithubService — getCheckEvidence', () => {
                 checks: {
                     listForRef:
                         octokitOverrides.listForRef ??
-                        jest.fn().mockResolvedValue({ data: { check_runs: [] } }),
+                        jest
+                            .fn()
+                            .mockResolvedValue({ data: { check_runs: [] } }),
                     listAnnotations:
                         octokitOverrides.listAnnotations ??
                         jest.fn().mockResolvedValue({ data: [] }),
@@ -242,9 +247,9 @@ describe('GithubService — getCheckEvidence', () => {
         it('does not fetch annotations unless asked', async () => {
             const listAnnotations = jest.fn();
             const { service } = makeService({
-                listForRef: jest
-                    .fn()
-                    .mockResolvedValue({ data: { check_runs: [annotated(3)] } }),
+                listForRef: jest.fn().mockResolvedValue({
+                    data: { check_runs: [annotated(3)] },
+                }),
                 listAnnotations,
             });
 
@@ -261,9 +266,9 @@ describe('GithubService — getCheckEvidence', () => {
 
         it('attaches normalized annotations when asked', async () => {
             const { service } = makeService({
-                listForRef: jest
-                    .fn()
-                    .mockResolvedValue({ data: { check_runs: [annotated(1)] } }),
+                listForRef: jest.fn().mockResolvedValue({
+                    data: { check_runs: [annotated(1)] },
+                }),
                 listAnnotations: jest
                     .fn()
                     .mockResolvedValue({ data: [annotation()] }),
@@ -293,9 +298,9 @@ describe('GithubService — getCheckEvidence', () => {
         it('skips the extra call for a run reporting no annotations', async () => {
             const listAnnotations = jest.fn();
             const { service } = makeService({
-                listForRef: jest
-                    .fn()
-                    .mockResolvedValue({ data: { check_runs: [annotated(0)] } }),
+                listForRef: jest.fn().mockResolvedValue({
+                    data: { check_runs: [annotated(0)] },
+                }),
                 listAnnotations,
             });
 
@@ -313,9 +318,9 @@ describe('GithubService — getCheckEvidence', () => {
         it('requests annotations for the owning check run', async () => {
             const listAnnotations = jest.fn().mockResolvedValue({ data: [] });
             const { service } = makeService({
-                listForRef: jest
-                    .fn()
-                    .mockResolvedValue({ data: { check_runs: [annotated(2)] } }),
+                listForRef: jest.fn().mockResolvedValue({
+                    data: { check_runs: [annotated(2)] },
+                }),
                 listAnnotations,
             });
 
@@ -342,9 +347,9 @@ describe('GithubService — getCheckEvidence', () => {
                 annotation({ start_line: i + 1, end_line: i + 1 }),
             );
             const { service } = makeService({
-                listForRef: jest
-                    .fn()
-                    .mockResolvedValue({ data: { check_runs: [annotated(120)] } }),
+                listForRef: jest.fn().mockResolvedValue({
+                    data: { check_runs: [annotated(120)] },
+                }),
                 listAnnotations: jest.fn().mockResolvedValue({ data: many }),
             });
 
@@ -360,9 +365,9 @@ describe('GithubService — getCheckEvidence', () => {
 
         it('keeps the check run when its annotation fetch fails', async () => {
             const { service } = makeService({
-                listForRef: jest
-                    .fn()
-                    .mockResolvedValue({ data: { check_runs: [annotated(3)] } }),
+                listForRef: jest.fn().mockResolvedValue({
+                    data: { check_runs: [annotated(3)] },
+                }),
                 listAnnotations: jest
                     .fn()
                     .mockRejectedValue(new Error('rate limited')),
@@ -381,9 +386,9 @@ describe('GithubService — getCheckEvidence', () => {
 
         it('defaults an unrecognized annotation level to warning', async () => {
             const { service } = makeService({
-                listForRef: jest
-                    .fn()
-                    .mockResolvedValue({ data: { check_runs: [annotated(1)] } }),
+                listForRef: jest.fn().mockResolvedValue({
+                    data: { check_runs: [annotated(1)] },
+                }),
                 listAnnotations: jest.fn().mockResolvedValue({
                     data: [annotation({ annotation_level: 'something-new' })],
                 }),
@@ -401,9 +406,9 @@ describe('GithubService — getCheckEvidence', () => {
 
         it('falls back to the start line when no end line is given', async () => {
             const { service } = makeService({
-                listForRef: jest
-                    .fn()
-                    .mockResolvedValue({ data: { check_runs: [annotated(1)] } }),
+                listForRef: jest.fn().mockResolvedValue({
+                    data: { check_runs: [annotated(1)] },
+                }),
                 listAnnotations: jest.fn().mockResolvedValue({
                     data: [annotation({ end_line: null })],
                 }),
