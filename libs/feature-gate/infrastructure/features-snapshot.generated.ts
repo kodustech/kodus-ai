@@ -5,9 +5,18 @@ import type { FeaturesSnapshot } from '../domain/snapshot.types';
 
 export const FEATURES_SNAPSHOT: FeaturesSnapshot = {
     "schema_version": 1,
-    "generated_at": "2026-09-17T12:41:35.107Z",
+    "generated_at": "2026-09-28T16:40:07.674Z",
     "source": "manual",
     "features": {
+        "deterministic-evidence": {
+            "name": "Deterministic evidence in review",
+            "stage": "beta",
+            "description": "Kody reads the checks your own CI already ran and runs a small set of security rules over the changed lines, then folds those findings into the same review instead of reporting them separately.",
+            "audience": [
+                "cloud",
+                "self-hosted"
+            ]
+        },
         "github-enterprise-server-pat": {
             "name": "GitHub Enterprise Server (PAT auth)",
             "stage": "beta",

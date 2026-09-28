@@ -52,6 +52,7 @@ import {
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import { AgentProgressEvent } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { analyzerFindingsToSuggestions } from '@libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions';
 import {
     LazyLinkedRepoAccess,
     evaluateCrossRepoBoundaryGate,
@@ -1029,8 +1030,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     severity: this.normalizeSeverity(suggestion.severity),
                 }));
 
+            // Rule-pack findings join the non-rule stream so they dedupe
+            // against the model's findings instead of arriving as a parallel
+            // set of comments on the same lines. Their severity is already on
+            // the v2 scale, so they skip normalizeSeverity.
+            const analyzerSuggestions = analyzerFindingsToSuggestions(
+                context.analyzerFindings ?? [],
+            );
+
             const severityNormalized: Partial<CodeSuggestion>[] = [
                 ...severityNormalizedNonRules,
+                ...analyzerSuggestions,
                 ...kodyRulesWithSeverity,
             ];
 
@@ -1483,12 +1493,29 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     ...discardedByFile.keys(),
                 ]);
 
+                // Keyed once rather than scanned per file: this loop runs over
+                // every affected file and both lists can be large on a wide PR.
+                const changedByName = new Map(
+                    changedFiles.map((f) => [f.filename, f]),
+                );
+                const ignoredByName = new Map(
+                    (context.ignoredFileChanges ?? []).map((f) => [
+                        f.filename,
+                        f,
+                    ]),
+                );
+
                 draft.fileAnalysisResults = [];
                 for (const filename of allAffectedFiles) {
                     const suggestions = byFile.get(filename) ?? [];
-                    const file = changedFiles.find(
-                        (f) => f.filename === filename,
-                    );
+                    // Analyzer findings legitimately land on files the review
+                    // itself ignores — a lockfile is the common case, since
+                    // ignorePaths hides it from the reviewer while the
+                    // dependency scan still has to report what it introduces.
+                    // Resolving only against changedFiles discarded those.
+                    const file =
+                        changedByName.get(filename) ??
+                        ignoredByName.get(filename);
                     if (file) {
                         draft.fileAnalysisResults.push({
                             validSuggestionsToAnalyze: suggestions,

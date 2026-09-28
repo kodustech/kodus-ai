@@ -275,3 +275,23 @@ export enum GitObjectType {
     ofsDelta = 'ofsDelta',
     refDelta = 'refDelta',
 }
+
+/**
+ * Build/quality status posted against a pull request. Distinct from
+ * `AzurePRStatus`, which is the PR's own lifecycle state.
+ */
+export interface AzureRepoPRBuildStatus {
+    id: number;
+    state:
+        | 'notSet'
+        | 'pending'
+        | 'succeeded'
+        | 'failed'
+        | 'error'
+        | 'notApplicable';
+    description?: string;
+    context?: { name?: string; genre?: string };
+    targetUrl?: string;
+    creationDate?: string;
+    updatedDate?: string;
+}

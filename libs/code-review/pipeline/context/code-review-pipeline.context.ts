@@ -11,6 +11,10 @@ import {
     CreateSandboxParams,
     SandboxInstance,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
+import { CheckEvidence } from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
+import { ManagedTool } from '@libs/code-review/infrastructure/adapters/services/ci-evidence/recognize-ci-analyzers';
+import { AnalyzerFinding } from '@libs/code-review/infrastructure/analyzers/analyzer-finding.type';
+import { RouteDecision } from '@libs/code-review/infrastructure/analyzers/tool.contract';
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { CollectCrossFileContextsResult } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import type { TraceContextDecision } from '@libs/cli-review/domain/types/trace-context.types';
@@ -101,6 +105,17 @@ export interface CodeReviewPipelineContext extends PipelineContext {
 
     /** List of files ignored by configuration patterns */
     ignoredFiles?: string[];
+
+    /**
+     * The same ignored files, with their diffs.
+     *
+     * `ignorePaths` answers "do not comment on this file", which is not the
+     * same question as "do not check this file at all". Lockfiles are ignored
+     * by default and are also the only place a dependency advisory can be
+     * found, so the deterministic analyzers read this alongside `changedFiles`
+     * and let each tool's own `selectFiles` decide what it wants.
+     */
+    ignoredFileChanges?: FileChange[];
 
     lastExecution?: {
         commentId?: any;
@@ -235,6 +250,31 @@ export interface CodeReviewPipelineContext extends PipelineContext {
 
     /** Graph JSON (nodes + edges) from kodus-graph parse, used by GraphContentFormatter for Tier 1 formatting */
     callGraphJson?: { nodes: any[]; edges: any[] };
+
+    /**
+     * CI results the customer's own pipeline reported for the head commit.
+     * Absent when the host cannot report them, or when there were none.
+     */
+    ciEvidence?: CheckEvidence[];
+
+    /**
+     * Managed tools whose analysis the customer's CI already covers, so we
+     * do not publish the same finding twice or pay to rediscover it.
+     */
+    ciCoveredTools?: ManagedTool[];
+
+    /** In-diff findings from the deterministic tools that ran. */
+    analyzerFindings?: AnalyzerFinding[];
+
+    /**
+     * What the router decided for every registered tool, including the ones
+     * it skipped and why. Absent findings alone cannot distinguish "found
+     * nothing" from "never ran"; this is what tells them apart.
+     */
+    analyzerRouting?: RouteDecision[];
+
+    /** Tools that were selected but failed. Never read as "clean". */
+    analyzerFailures?: string[];
 
     /** Sandbox handle kept alive for safeguard agent verification */
     sandboxHandle?: SandboxInstance;

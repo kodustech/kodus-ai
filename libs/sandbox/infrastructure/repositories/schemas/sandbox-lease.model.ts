@@ -58,6 +58,14 @@ export class SandboxLeaseModel extends CoreDocument {
     @Prop({ type: String, required: false })
     repositoryId?: string;
 
+    /**
+     * Base branch fetched into the sandbox at creation. Persisted so a joiner
+     * reconnecting to a READY sandbox gets it back — the ref is on disk either
+     * way, but without the name no tool can ask git for it.
+     */
+    @Prop({ type: String, required: false })
+    baseBranch?: string;
+
     @Prop({ type: String, required: false })
     prNumber?: string;
 

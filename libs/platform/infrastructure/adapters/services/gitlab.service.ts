@@ -79,6 +79,12 @@ import {
     ListIssuesParams,
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/issues.type';
 import {
+    CheckEvidence,
+    CheckEvidenceConclusion,
+    CheckEvidenceStatus,
+    GetCheckEvidenceParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
+import {
     PullRequest,
     PullRequestAuthor,
     PullRequestCodeReviewTime,
@@ -291,6 +297,10 @@ export class GitlabService implements Omit<
                 merged_at: mergeRequest.merged_at,
                 head: {
                     ref: mergeRequest.source_branch,
+                    sha:
+                        mergeRequest.diff_refs?.head_sha ??
+                        mergeRequest.sha ??
+                        '',
                     repo: {
                         name: params.repository.name,
                         // Use source project ID so forked MRs can fetch files from the right project
@@ -338,6 +348,172 @@ export class GitlabService implements Omit<
             queryTimeout: 600000,
             camelize: false,
         });
+    }
+
+    async getCheckEvidence(
+        params: GetCheckEvidenceParams,
+    ): Promise<CheckEvidence[]> {
+        const { organizationAndTeamData, repository, commitSha } = params;
+
+        const authDetail = await this.getAuthDetails(organizationAndTeamData);
+        if (!authDetail) {
+            return [];
+        }
+
+        const projectId = `${repository.owner}/${repository.name}`;
+
+        try {
+            const gitlabAPI = this.instanceGitlabApi(authDetail);
+            // One endpoint covers both pipeline jobs and externally posted
+            // commit statuses, so there is no second surface to merge here.
+            const statuses = await gitlabAPI.Commits.allStatuses(
+                projectId,
+                commitSha,
+            );
+
+            return (statuses ?? []).map((status) =>
+                this.mapGitlabCommitStatus(status),
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: 'Failed to read GitLab commit statuses',
+                context: GitlabService.name,
+                error,
+                metadata: { projectId, commitSha },
+            });
+            return [];
+        }
+    }
+
+    /**
+     * Hunks GitLab collapsed out of the merge-request diff.
+     *
+     * `/diffs` serves a cached, size-limited view: past `diff_max_patch_bytes`
+     * an entry comes back with `collapsed` or `too_large` set and an EMPTY
+     * `diff`, which a lockfile bump reaches easily. `access_raw_diffs` reads
+     * from the database instead and returns the real hunks.
+     */
+    async getFilePatches(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id?: string; name: string; owner?: string };
+        prNumber: number;
+        paths: string[];
+    }): Promise<Array<{ path: string; patch: string }>> {
+        const { organizationAndTeamData, repository, prNumber, paths } = params;
+
+        if (!paths.length) {
+            return [];
+        }
+
+        const authDetail = await this.getAuthDetails(organizationAndTeamData);
+        if (!authDetail) {
+            return [];
+        }
+
+        const projectId = repository.id
+            ? String(repository.id)
+            : `${repository.owner}/${repository.name}`;
+
+        try {
+            const gitlabAPI = this.instanceGitlabApi(authDetail);
+            const mr = await gitlabAPI.MergeRequests.showChanges(
+                projectId,
+                prNumber,
+                { accessRawDiffs: true },
+            );
+
+            const wanted = new Set(paths);
+            const out: Array<{ path: string; patch: string }> = [];
+
+            for (const change of (mr as { changes?: unknown[] })?.changes ??
+                []) {
+                const typed = change as {
+                    new_path?: string;
+                    old_path?: string;
+                    diff?: string;
+                };
+                const path = typed.new_path ?? typed.old_path;
+                if (!path || !wanted.has(path) || !typed.diff?.trim()) {
+                    continue;
+                }
+                out.push({ path, patch: typed.diff });
+            }
+
+            return out;
+        } catch (error) {
+            this.logger.warn({
+                message: 'Failed to read raw merge request diffs',
+                context: GitlabService.name,
+                error,
+                metadata: { projectId, prNumber },
+            });
+            return [];
+        }
+    }
+
+    private mapGitlabCommitStatus(status: {
+        id: number;
+        name?: string;
+        status: string;
+        target_url?: string | null;
+        finished_at?: string | null;
+        allow_failure?: boolean;
+    }): CheckEvidence {
+        const state = this.mapGitlabStatusState(status.status);
+        const failedButAllowed =
+            status.status === 'failed' && status.allow_failure === true;
+
+        const conclusion: CheckEvidenceConclusion | null =
+            state !== 'completed'
+                ? null
+                : failedButAllowed
+                  ? 'neutral'
+                  : this.mapGitlabConclusion(status.status);
+
+        return {
+            id: String(status.id),
+            name: status.name ?? '',
+            status: state,
+            conclusion,
+            url: status.target_url ?? null,
+            completedAt:
+                state === 'completed' ? (status.finished_at ?? null) : null,
+            platform: PlatformType.GITLAB,
+        };
+    }
+
+    private mapGitlabStatusState(status: string): CheckEvidenceStatus {
+        if (
+            status === 'success' ||
+            status === 'failed' ||
+            status === 'canceled' ||
+            status === 'skipped'
+        ) {
+            return 'completed';
+        }
+        if (status === 'running') {
+            return 'in_progress';
+        }
+        // created / pending / manual / scheduled / waiting_for_resource /
+        // preparing all mean the job has not produced a result yet.
+        return 'queued';
+    }
+
+    private mapGitlabConclusion(
+        status: string,
+    ): CheckEvidenceConclusion | null {
+        switch (status) {
+            case 'success':
+                return 'success';
+            case 'failed':
+                return 'failure';
+            case 'canceled':
+                return 'cancelled';
+            case 'skipped':
+                return 'skipped';
+            default:
+                return null;
+        }
     }
 
     async listIssues(params: ListIssuesParams): Promise<CodeManagementIssue[]> {
@@ -4588,9 +4764,7 @@ export class GitlabService implements Omit<
             if (webhookUrl) {
                 try {
                     const hooks = await gitlabAPI.ProjectHooks.all(projectId);
-                    result.hook = hooks.some(
-                        (hook) => hook?.url === webhookUrl,
-                    )
+                    result.hook = hooks.some((hook) => hook?.url === webhookUrl)
                         ? 'present'
                         : 'missing';
                 } catch (error) {
@@ -5215,6 +5389,16 @@ export class GitlabService implements Omit<
             sourceRefName: mergeRequest?.source_branch ?? '', // TODO: remove, legacy, use head.ref
             head: {
                 ref: mergeRequest?.source_branch ?? '',
+                // `diff_refs` is typed loosely by the client; the head sha
+                // lives there on a merge-request payload and falls back to
+                // the MR's own sha.
+                sha:
+                    (
+                        mergeRequest?.diff_refs as
+                            { head_sha?: string } | undefined
+                    )?.head_sha ??
+                    mergeRequest?.sha ??
+                    '',
                 repo: {
                     id: mergeRequest?.source_project_id?.toString() ?? '',
                     name: '',

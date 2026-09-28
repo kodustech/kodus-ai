@@ -1,6 +1,8 @@
 "use client";
 
 import { Suspense, useMemo } from "react";
+import { Badge } from "@components/ui/badge";
+import { Heading } from "@components/ui/heading";
 import { Page } from "@components/ui/page";
 import { Spinner } from "@components/ui/spinner";
 import { toast } from "@components/ui/toaster/use-toast";
@@ -19,6 +21,7 @@ import { type CodeReviewFormType } from "../../_types";
 import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
 import {
     useDefaultCodeReviewConfig,
+    useFeatureFlags,
     usePlatformConfig,
 } from "../../../_components/context";
 import { useCodeReviewRouteParams } from "../../../_hooks";
@@ -32,6 +35,7 @@ import {
     mergeMissingReviewOptions,
 } from "../general/_utils/review-options-state";
 import { CategoryList } from "./_components/category-list";
+import { DeterministicEvidence } from "./_components/deterministic-evidence";
 import { SeverityCard } from "./_components/severity-card";
 
 const PROMPT_FIELDS = [
@@ -47,6 +51,8 @@ function ReviewScopeContent() {
     const { repositoryId, directoryId } = useCodeReviewRouteParams();
     const { data: labels = [] } = useGetCodeReviewLabels("v2");
     const defaults = useDefaultCodeReviewConfig()?.v2PromptOverrides;
+    const deterministicEvidenceEnabled =
+        useFeatureFlags().deterministicEvidence === true;
     const canEdit = usePermission(
         Action.Update,
         ResourceType.CodeReviewSettings,
@@ -171,6 +177,29 @@ function ReviewScopeContent() {
                 <CentralizedConfigReadOnlyAlert />
                 <CategoryList canEdit={canEdit} defaults={defaults} />
                 <SeverityCard />
+
+                {/* The pipeline gates this feature on its own and fails
+                    closed, so without the same gate here the toggles would
+                    save and then quietly do nothing. */}
+                {deterministicEvidenceEnabled && (
+                    <div
+                        className="flex flex-col gap-4"
+                        data-field-name="deterministicEvidence">
+                        <div className="flex flex-col gap-1">
+                            <Heading variant="h2">
+                                Deterministic checks <Badge>Beta</Badge>
+                            </Heading>
+                            <p className="text-text-secondary text-sm">
+                                Scanners that answer a question of fact rather
+                                than judgement, and the results your own CI
+                                already produced. Everything here is off unless
+                                you turn it on.
+                            </p>
+                        </div>
+
+                        <DeterministicEvidence />
+                    </div>
+                )}
             </Page.Content>
         </Page.Root>
     );

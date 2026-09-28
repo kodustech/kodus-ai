@@ -62,6 +62,11 @@ import {
     ListIssuesParams,
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/issues.type';
 import {
+    CheckEvidence,
+    CheckEvidenceConclusion,
+    GetCheckEvidenceParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
+import {
     OneSentenceSummaryItem,
     PullRequest,
     PullRequestAuthor,
@@ -3420,6 +3425,80 @@ export class BitbucketCloudService implements Omit<
         }
     }
 
+    async getCheckEvidence(
+        params: GetCheckEvidenceParams,
+    ): Promise<CheckEvidence[]> {
+        const { organizationAndTeamData, repository, commitSha } = params;
+
+        const authDetail = await this.getAuthDetails(organizationAndTeamData);
+        if (!authDetail) {
+            return [];
+        }
+
+        try {
+            const bitbucketAPI = this.instanceBitbucketApi(authDetail);
+
+            const { data } = await bitbucketAPI.repositories.listCommitStatuses(
+                {
+                    workspace: repository.owner,
+                    repo_slug: repository.name,
+                    commit: commitSha,
+                    pagelen: 100,
+                },
+            );
+
+            return (data?.values ?? []).map((status) =>
+                this.mapBitbucketBuildStatus(status),
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: 'Failed to read Bitbucket commit statuses',
+                context: BitbucketCloudService.name,
+                error,
+                metadata: { repository: repository.name, commitSha },
+            });
+            return [];
+        }
+    }
+
+    private mapBitbucketBuildStatus(status: {
+        key?: string;
+        name?: string;
+        state?: string;
+        url?: string;
+        updated_on?: string;
+    }): CheckEvidence {
+        const inProgress = status.state === 'INPROGRESS';
+
+        return {
+            id: status.key ?? '',
+            // `name` is optional; the key is the only field always present.
+            name: status.name ?? status.key ?? '',
+            status: inProgress ? 'in_progress' : 'completed',
+            conclusion: inProgress
+                ? null
+                : this.mapBitbucketConclusion(status.state),
+            url: status.url ?? null,
+            completedAt: inProgress ? null : (status.updated_on ?? null),
+            platform: PlatformType.BITBUCKET,
+        };
+    }
+
+    private mapBitbucketConclusion(
+        state: string | undefined,
+    ): CheckEvidenceConclusion | null {
+        switch (state) {
+            case 'SUCCESSFUL':
+                return 'success';
+            case 'FAILED':
+                return 'failure';
+            case 'STOPPED':
+                return 'cancelled';
+            default:
+                return null;
+        }
+    }
+
     async listIssues(params: ListIssuesParams): Promise<CodeManagementIssue[]> {
         const { organizationAndTeamData, repository, filters = {} } = params;
 
@@ -5873,6 +5952,7 @@ export class BitbucketCloudService implements Omit<
             sourceRefName: pullRequest?.source?.branch?.name ?? '', // TODO: remove, legacy, use head.ref
             head: {
                 ref: pullRequest?.source?.branch?.name ?? '',
+                sha: pullRequest?.source?.commit?.hash ?? '',
                 repo: {
                     id:
                         this.sanitizeUUID(

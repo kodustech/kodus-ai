@@ -185,6 +185,21 @@ export type CodeSuggestion = {
      * where a rule like "this function is too long" has always died silently.
      */
     fileAnchored?: boolean;
+    /**
+     * Where a finding came from, when it was not the model. Present on
+     * findings a deterministic analyzer or the customer's CI produced, so a
+     * published comment can name its source and rule instead of implying Kody
+     * reasoned its way there.
+     */
+    evidence?: {
+        /** e.g. "kodus-analyzer", or "ci:semgrep". */
+        source: string;
+        ruleId?: string;
+        ruleUrl?: string;
+        /** Severity as the producing tool reported it, before normalization. */
+        analyzerSeverity?: string;
+    };
+
     isCommittable?: boolean;
     validatedData?: {
         code: string;
@@ -319,6 +334,21 @@ export type CodeReviewConfig = {
      *  review (CLI `--heavy` / PR `@kody review --heavy`). Off by default. */
     heavy?: boolean;
     reviewOptions: ReviewOptions;
+
+    /**
+     * Deterministic evidence sources. Off by default: reading a customer's CI
+     * costs API calls on every review, so it stays opt-in until something
+     * consumes the result.
+     */
+    deterministicEvidence?: {
+        /** Read check runs / statuses the customer's own pipeline produced. */
+        ciChecks?: boolean;
+        /**
+         * Per-tool switch. `auto` runs a tool only when the customer's CI has
+         * no equivalent analysis; `on` runs it regardless; absent is off.
+         */
+        tools?: Record<string, 'off' | 'auto' | 'on'>;
+    };
     ignoredTitleKeywords: string[];
     baseBranches: string[];
     automatedReviewActive: boolean;

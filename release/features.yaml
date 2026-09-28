@@ -27,6 +27,15 @@ features:
             access token, for environments where the GitHub App flow isn't
             available.
 
+    deterministic-evidence:
+        name: "Deterministic evidence in review"
+        stage: beta
+        audience: [cloud, self-hosted]
+        description: >-
+            Kody reads the checks your own CI already ran and runs a small set
+            of security rules over the changed lines, then folds those findings
+            into the same review instead of reporting them separately.
+
     heavy-review:
         name: "Heavy review (deeper pass)"
         stage: alpha
