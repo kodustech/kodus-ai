@@ -21,8 +21,14 @@ export const JOB_LEASE_MAX_CONSECUTIVE_FAILURES = 2;
 export interface JobLeaseRenewalOptions {
     /** Abort signal that stops the renewal (parent worker cancellation). */
     signal: AbortSignal;
-    /** Writes `leaseExpiresAt = now + TTL` for the owned job. */
-    renew: () => Promise<void> | void;
+    /**
+     * Writes `leaseExpiresAt = now + TTL` for the owned job. Returns `false`
+     * when the write matched no row, i.e. this worker no longer owns the job
+     * (reclaimed by the reaper, finished elsewhere, or owned by another
+     * worker); that is reported as a lost lease instead of being counted as a
+     * transient failure.
+     */
+    renew: () => Promise<boolean | void> | boolean | void;
     /** Renewal cadence (defaults to `JOB_LEASE_RENEW_INTERVAL_MS`). */
     intervalMs?: number;
     /**
@@ -118,19 +124,45 @@ export function startJobLeaseRenewal(
 
         options.onRenewError?.(error);
 
-        if (!leaseLost && consecutiveFailures >= maxConsecutiveFailures) {
-            leaseLost = true;
-            // Stop renewing: there is no point hammering a lease we no longer
-            // own, and stopping makes the loss terminal for the caller.
-            stop();
-            options.onLeaseLost?.(error);
+        if (consecutiveFailures >= maxConsecutiveFailures) {
+            loseLease(error);
         }
+    };
+
+    /**
+     * Terminal state: this worker no longer holds the job. `onLeaseLost` fires
+     * once and renewal stops, so the caller can abort the run instead of racing
+     * the reaper (or the worker that took the job over) toward a second
+     * execution.
+     */
+    const loseLease = (error: unknown): void => {
+        if (leaseLost) {
+            return;
+        }
+        leaseLost = true;
+        // Stop renewing: there is no point hammering a lease we no longer own,
+        // and stopping makes the loss terminal for the caller.
+        stop();
+        options.onLeaseLost?.(error);
     };
 
     timer = setInterval(() => {
         try {
             void Promise.resolve(options.renew()).then(
-                () => {
+                (renewed) => {
+                    if (renewed === false) {
+                        // The guarded write matched no row: the job is no
+                        // longer ours (requeued by the reaper and picked up
+                        // elsewhere, or terminal). That is a lost lease, not a
+                        // transient failure, so it must not spend the failure
+                        // budget queued for DB blips.
+                        loseLease(
+                            new Error(
+                                'Lease renewal matched no owned PROCESSING row',
+                            ),
+                        );
+                        return;
+                    }
                     // A successful tick proves the worker still owns the job.
                     consecutiveFailures = 0;
                 },

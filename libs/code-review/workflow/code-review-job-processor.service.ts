@@ -259,13 +259,21 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 logger: this.logger,
                 jobId,
                 organizationId: organizationAndTeamData?.organizationId,
+                // Guarded on ownership: if the reaper already requeued this job
+                // and another worker picked it up, the renewal writes nothing
+                // and the renewer treats it as a lost lease rather than racing
+                // that worker toward the same review (#1830 review).
                 renew: () =>
-                    this.jobRepository.update(jobId, {
-                        leaseOwner: this.instanceId,
-                        leaseExpiresAt: new Date(
-                            Date.now() + JOB_LEASE_TTL_MS,
-                        ),
-                    }),
+                    this.jobRepository.update(
+                        jobId,
+                        {
+                            leaseOwner: this.instanceId,
+                            leaseExpiresAt: new Date(
+                                Date.now() + JOB_LEASE_TTL_MS,
+                            ),
+                        },
+                        { leaseOwner: this.instanceId },
+                    ),
                 onRenewError: (error) =>
                     this.logger.warn({
                         message:
@@ -504,11 +512,32 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
     }
 
     async markCompleted(jobId: string, result?: unknown): Promise<void> {
-        await this.jobRepository.update(jobId, {
-            status: JobStatus.COMPLETED,
-            completedAt: new Date(),
-            result: result,
-        });
+        // Terminal transition, guarded the same way: a worker that lost its
+        // lease mid-run must not mark COMPLETED a job the reaper already handed
+        // to someone else, or that retry would be swallowed and the row would
+        // look finished while the other worker is still reviewing (#1830
+        // review).
+        const stillOwned = await this.jobRepository.update(
+            jobId,
+            {
+                status: JobStatus.COMPLETED,
+                completedAt: new Date(),
+                result: result,
+            },
+            { leaseOwner: this.instanceId },
+        );
+
+        if (stillOwned === false) {
+            this.logger.warn({
+                message:
+                    'Job lease no longer owned at completion — leaving the row to the worker that took it over',
+                context: CodeReviewJobProcessorService.name,
+                metadata: {
+                    jobId,
+                    instanceId: this.instanceId,
+                },
+            });
+        }
     }
 
     private removeByokConcurrencyGateMetadata(
