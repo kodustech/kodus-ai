@@ -31,6 +31,17 @@ function buildModel(modelId = MODELO, options = {}) {
     // com a chave de outro provedor — o erro que sai e "api key is invalid",
     // que parece chave errada e nao configuracao faltando.
     const { TIER0, applyModelEnv } = require('../shared/tier0-models');
+    // API nativa como no BYOK da nuvem (modulo 'openai' do registro -> Responses
+    // API), igual a geracao em agent-provider.js: o slot gerenciado mandaria a
+    // chave OpenAI como openai_compatible (/v1/chat/completions), onde o
+    // gpt-6-sol recusa ferramentas com reasoning_effort.
+    const spec = TIER0[modelId];
+    if (spec && spec.byokNative) {
+        const { REGISTRY } = require('../../libs/llm/providers/index.ts');
+        const apiKey = spec.keyEnvs.map((e) => process.env[e]).find(Boolean);
+        if (!apiKey) throw new Error(`no API key for ${modelId} — set one of ${spec.keyEnvs.join('/')}`);
+        return REGISTRY.get(spec.provider).build({ provider: spec.provider, model: spec.doModel || id, apiKey }, options);
+    }
     if (TIER0[modelId]) applyModelEnv(String(modelId));
 
     const { buildEvalModel } = require('../shared/build-model');
