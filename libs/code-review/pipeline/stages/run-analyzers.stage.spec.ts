@@ -426,3 +426,56 @@ describe('recovered hunks reach the tools that need them', () => {
         expect(seen.at(-1)).toContain('big.ts');
     });
 });
+
+/**
+ * Recovering a withheld hunk costs a full raw-diff download from the host.
+ * The shipped default has every tool `off`, so without a precondition check
+ * each review containing one withheld file paid for a download nobody read.
+ */
+describe('the cost of recovering hunks', () => {
+    const withheldFile = { changedFiles: [{ filename: 'big.ts' }] } as never;
+
+    const stageWith = (
+        getFilePatches: jest.Mock,
+        tools = [makeTool({ selectFiles: ((f: unknown[]) => f) as never })],
+    ) =>
+        new RunAnalyzersStage(
+            new AnalyzerToolRouter(),
+            { isEnabled: jest.fn().mockResolvedValue(true) } as never,
+            { getFilePatches } as never,
+            tools,
+        );
+
+    const execute = (stage: RunAnalyzersStage, context: unknown) =>
+        (
+            stage as unknown as {
+                executeStage: (c: unknown) => Promise<unknown>;
+            }
+        ).executeStage(context);
+
+    it('is not paid when every tool is off', async () => {
+        const getFilePatches = jest.fn().mockResolvedValue([]);
+
+        await execute(
+            stageWith(getFilePatches),
+            makeContext({
+                ...(withheldFile as object),
+                codeReviewConfig: {
+                    deterministicEvidence: {
+                        tools: { dependencies: 'off', secrets: 'off' },
+                    },
+                },
+            } as never),
+        );
+
+        expect(getFilePatches).not.toHaveBeenCalled();
+    });
+
+    it('is paid once a tool is enabled', async () => {
+        const getFilePatches = jest.fn().mockResolvedValue([]);
+
+        await execute(stageWith(getFilePatches), makeContext(withheldFile));
+
+        expect(getFilePatches).toHaveBeenCalledTimes(1);
+    });
+});

@@ -80,7 +80,18 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
         // files whose diff the host withheld, which are the ones this
         // recovery exists for. Recovering later would be too late for
         // everything except the one tool that does not filter on `patch`.
-        await this.backfillMissingPatches(context, changedFiles);
+        // Skipped when nothing can use the result: with no sandbox, or with
+        // every tool off (the shipped default), the recovered hunks are read
+        // by no one and the raw diff is a wasted round trip on every review
+        // that happens to contain a file the host withheld a patch for.
+        const modes = context.codeReviewConfig?.deterministicEvidence?.tools;
+        const anyToolEnabled = this.tools.some(
+            (tool) => (modes?.[tool.id] ?? 'off') !== 'off',
+        );
+
+        if (sandbox && anyToolEnabled) {
+            await this.backfillMissingPatches(context, changedFiles);
+        }
 
         const decisions = this.router.route(this.tools, {
             changedFiles,
