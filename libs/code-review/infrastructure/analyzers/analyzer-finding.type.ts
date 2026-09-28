@@ -52,7 +52,7 @@ export function addedLinesFromPatch(patch: string | undefined): Set<number> {
 }
 
 /**
- * Parses opengrep/semgrep SARIF into findings.
+ * Parses a scanner's SARIF output into findings.
  *
  * Rule ids carry the config directory as a prefix (`libs.code-review...
  * .kodus-sqli-concat-go`); only the tail identifies the rule.

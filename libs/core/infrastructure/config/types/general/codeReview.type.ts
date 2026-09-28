@@ -192,7 +192,7 @@ export type CodeSuggestion = {
      * reasoned its way there.
      */
     evidence?: {
-        /** e.g. "kodus-rule-pack", or "ci:semgrep". */
+        /** e.g. "kodus-analyzer", or "ci:semgrep". */
         source: string;
         ruleId?: string;
         ruleUrl?: string;

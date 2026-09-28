@@ -212,8 +212,6 @@ FROM runtime-common AS worker
 # RunAnalyzersStage resolves it from PATH.
 COPY --from=analyzer-source /betterleaks /usr/local/bin/betterleaks
 COPY --from=analyzer-source /osv-scanner /usr/local/bin/osv-scanner
-# Trivy's checks bundle, fetched once at build time so no review waits on a
-# registry pull. Paired with --skip-check-update at scan time.
 CMD ["node", "dist/apps/worker/main.js"]
 FROM runtime-common AS mcp-manager
 ENTRYPOINT ["/usr/local/bin/prod-entrypoint-mcp-manager"]

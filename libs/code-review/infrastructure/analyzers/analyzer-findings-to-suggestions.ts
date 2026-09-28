@@ -3,7 +3,7 @@ import { CodeSuggestion } from '@libs/core/infrastructure/config/types/general/c
 import { AnalyzerFinding } from './analyzer-finding.type';
 
 /** Where a deterministic finding says it came from. */
-export const RULE_PACK_SOURCE = 'kodus-rule-pack';
+export const ANALYZER_SOURCE = 'kodus-analyzer';
 
 const SEVERITY_BY_LEVEL: Record<AnalyzerFinding['severity'], string> = {
     error: 'high',
@@ -114,7 +114,7 @@ function toSuggestion(
         improvedCode: '',
         language: '',
         evidence: {
-            source: RULE_PACK_SOURCE,
+            source: ANALYZER_SOURCE,
             ruleId: group.map((f) => f.ruleId).join(','),
             analyzerSeverity: worst,
         },

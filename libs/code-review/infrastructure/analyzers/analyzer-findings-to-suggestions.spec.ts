@@ -1,6 +1,6 @@
 import { AnalyzerFinding } from './analyzer-finding.type';
 import {
-    RULE_PACK_SOURCE,
+    ANALYZER_SOURCE,
     analyzerFindingsToSuggestions,
 } from './analyzer-findings-to-suggestions';
 
@@ -150,7 +150,7 @@ describe('analyzerFindingsToSuggestions', () => {
 
             expect(suggestion.evidence).toEqual(
                 expect.objectContaining({
-                    source: RULE_PACK_SOURCE,
+                    source: ANALYZER_SOURCE,
                     ruleId: 'osv/GHSA-aaa,osv/GHSA-bbb',
                 }),
             );
@@ -176,7 +176,7 @@ describe('analyzerFindingsToSuggestions', () => {
                 'A GitHub token is committed here',
             );
             expect(suggestion.suggestionContent).not.toContain('github-pat');
-            expect(suggestion.suggestionContent).not.toContain(RULE_PACK_SOURCE);
+            expect(suggestion.suggestionContent).not.toContain(ANALYZER_SOURCE);
             expect(suggestion.evidence).toEqual(
                 expect.objectContaining({ ruleId: 'github-pat' }),
             );
