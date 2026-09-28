@@ -804,17 +804,19 @@ export async function runAgentLoopViaCore(
                         // o teto na mesma rodada (exp-p8 = copia de cada um com 8).
                         // exp-p<N>g: a mesma copia com o grafo de chamadas no prompt
                         // (contexto pronto no lugar da investigacao que o teto corta).
-                        const teto = /^exp-p(\d+)(g?)$/.exec(extra);
+                        // exp-p<N>[g]nc: a mesma copia com o prompt sem autocensura.
+                        const teto = /^exp-p(\d+)(g?)(nc)?$/.exec(extra);
                         if (teto) {
                             const n = Number(teto[1]);
                             const comGrafo = teto[2] === 'g';
+                            const semCensura = teto[3] === 'nc';
                             if (comGrafo && !input.xfileCallGraph?.trim()) {
                                 throw new Error(`${extra} exige o grafo (RECALL_GRAFO_EXP=1)`);
                             }
                             return microGroups.map((group) => ({
-                                label: experimentalExtraLabel(`p${n}${comGrafo ? 'g' : ''}-${group.id}`),
+                                label: experimentalExtraLabel(`p${n}${comGrafo ? 'g' : ''}${semCensura ? 'nc' : ''}-${group.id}`),
                                 phase: 0,
-                                prompt: buildMicroAgentPrompt(group, diff, comGrafo ? input.xfileCallGraph : grafoParaOsAgentes, input.microAgentTeto ?? 2),
+                                prompt: buildMicroAgentPrompt(group, diff, comGrafo ? input.xfileCallGraph : grafoParaOsAgentes, input.microAgentTeto ?? 2, semCensura),
                                 spec: buildSpecWithLedger(ledger(), n, MICRO_AGENT_SYSTEM_PROMPT),
                             }));
                         }

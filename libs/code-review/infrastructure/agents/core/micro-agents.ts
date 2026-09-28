@@ -510,6 +510,7 @@ export function buildMicroAgentPrompt(
     diffText: string,
     callGraph?: string,
     teto = 2,
+    semCensura = false,
 ): string {
     // <Diffs> FIRST, and the assignment after it. The twelve agents run under
     // one Promise.all against the same pull request, so the diff is the only
@@ -583,7 +584,7 @@ ${focusBlockFor(group)}
       "existingCode": "problematic code snippet from the diff",
       "improvedCode": "fixed code snippet (only if fix is clear from context)",
       "oneSentenceSummary": "Brief summary",
-      "reason": "REQUIRED when the schema asks for it — the walk that produced THIS finding, not a restatement of it: the concrete input or state you started from, the lines it passes through in order with file:line, and what the caller ends up with. A reason with no file:line is not one. If you cannot write the walk, you have not established the finding and should not submit it.",
+      "reason": "REQUIRED when the schema asks for it — the walk that produced THIS finding, not a restatement of it: the concrete input or state you started from, the lines it passes through in order with file:line, and what the caller ends up with. A reason with no file:line is not one. ${semCensura ? 'If you cannot write the whole walk, write the part you traced, say what is still unconfirmed, and lower the confidence — do not drop the finding.' : 'If you cannot write the walk, you have not established the finding and should not submit it.'}",
       "relevantLinesStart": 10,
       "relevantLinesEnd": 15,
       "severity": "critical|high|medium|low",
@@ -615,12 +616,34 @@ ${focusBlockFor(group)}
   without first using grep to confirm. Never claim a method has the wrong
   signature without first reading its definition.
 
-  Most pull requests contain no defect of any single class. If this one contains
-  none of yours, submit an empty suggestions array — that is a valid answer, and
-  a forced finding costs more than a silent pass.
+${semCensura ? SEM_CENSURA_TEXTO : SILENCIO_TEXTO}
 
-${tetoTexto(teto)}
+${semCensura ? tetoSemCensura(teto) : tetoTexto(teto)}
 </OutputFormat>`;
+}
+
+const SILENCIO_TEXTO = `  Most pull requests contain no defect of any single class. If this one contains
+  none of yours, submit an empty suggestions array — that is a valid answer, and
+  a forced finding costs more than a silent pass.`;
+
+/** EXPERIMENTO (#1821, so o eval liga: exp-p<N>[g]nc). Os modelos grandes
+ *  propoem menos da metade dos candidatos dos pequenos (GPT ~8 por PR contra 18
+ *  do DeepSeek) e ficam calados em ~60% das passadas. O prompt de producao pede
+ *  silencio em tres lugares (sem a caminhada completa nao submeta; zero e a
+ *  resposta comum; um achado forcado custa mais que o silencio). Aqui o filtro
+ *  fica com quem vem depois — verificador por achado e reducer com cota — e a
+ *  lente e cobrada por recall, com a confianca carregando a duvida. */
+const SEM_CENSURA_TEXTO = `  Every finding you submit is checked afterwards: a verifier re-reads the code
+  for each one, and a ranker decides what reaches the developer. Your job here
+  is recall. Report every defect of your class that the changed code makes you
+  suspect, with an honest confidence — a finding at confidence 3 that the
+  verifier can check is worth more than a suspicion left out of the list.
+  Submit an empty array only when you looked and found nothing to suspect.`;
+
+function tetoSemCensura(teto: number): string {
+    return `  AT MOST ${teto}. Submit no more than ${teto} suggestions. ORDER them from the one
+  you are surest of to the one you are least sure of — the first entry must be
+  your strongest.`;
 }
 
 /** O teto de achados por agente. Com 2 (o padrao) o texto e EXATAMENTE o de
