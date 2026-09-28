@@ -64,6 +64,15 @@ export interface AnalyzerTool {
      * check could stand in for this tool.
      */
     readonly coverage?: ManagedTool;
+    /**
+     * Whether this tool should also see files `ignorePaths` removed from the
+     * review. Opt-in, and true only for the dependency scan: lockfiles are on
+     * that list by default and are the only place an advisory can be found.
+     * Everything else must honour the setting — a credential reported in a
+     * path the customer excluded is a comment they explicitly asked not to
+     * get.
+     */
+    readonly readsIgnoredFiles?: boolean;
     selectFiles(files: ChangedFile[]): ChangedFile[];
     run(input: ToolRunInput): Promise<AnalyzerFinding[]>;
 }

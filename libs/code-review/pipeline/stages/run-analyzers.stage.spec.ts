@@ -197,28 +197,49 @@ describe('RunAnalyzersStage', () => {
      * scan can never fire on a real repository, which is how it shipped and
      * what the first end-to-end run caught.
      */
-    it('scans files that ignorePaths filtered out of the review', async () => {
+    const filesSeenBy = async (extra: Partial<AnalyzerTool>) => {
         const selectFiles = jest.fn((files: unknown[]) => files);
         const tool = makeTool({
             id: 'dependencies',
             selectFiles: selectFiles as never,
+            ...extra,
         });
-        const stage = makeStage([tool]);
 
         await run(
-            stage,
+            makeStage([tool]),
             makeContext({
-                changedFiles: [{ filename: 'src/a.ts', patch: '@@ -0,0 +1 @@\n+x' }],
+                changedFiles: [
+                    { filename: 'src/a.ts', patch: '@@ -0,0 +1 @@\n+x' },
+                ],
                 ignoredFileChanges: [
                     { filename: 'yarn.lock', patch: '@@ -0,0 +1 @@\n+lodash' },
                 ],
             } as never),
         );
 
-        const seen = (selectFiles.mock.calls.at(-1)?.[0] ?? []) as Array<{
-            filename: string;
-        }>;
-        expect(seen.map((f) => f.filename)).toContain('yarn.lock');
+        return (
+            (selectFiles.mock.calls.at(-1)?.[0] ?? []) as Array<{
+                filename: string;
+            }>
+        ).map((f) => f.filename);
+    };
+
+    it('scans files that ignorePaths filtered out, for a tool that asks', async () => {
+        // Lockfiles are on the default ignore list and are the only place a
+        // dependency advisory can be found.
+        expect(await filesSeenBy({ readsIgnoredFiles: true })).toContain(
+            'yarn.lock',
+        );
+    });
+
+    it('withholds them from a tool that does not', async () => {
+        // `ignorePaths` means "do not comment on this file". A credential
+        // reported from an excluded path is a comment the customer
+        // explicitly asked not to receive.
+        const seen = await filesSeenBy({});
+
+        expect(seen).not.toContain('yarn.lock');
+        expect(seen).toContain('src/a.ts');
     });
 });
 

@@ -30,7 +30,7 @@ import { CodeReviewPipelineContext } from '../context/code-review-pipeline.conte
 @Injectable()
 export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineContext> {
     readonly stageName = 'RunAnalyzersStage';
-    readonly label = 'Running Security Rules';
+    readonly label = 'Running Deterministic Checks';
     readonly visibility = StageVisibility.SECONDARY;
 
     private readonly logger = createLogger(RunAnalyzersStage.name);
@@ -53,15 +53,25 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
 
         const sandbox = context.sandboxHandle;
 
-        // Files `ignorePaths` filtered out are included deliberately. That list
-        // answers "do not comment on this file"; lockfiles sit on it by
-        // default and are the only place a dependency advisory can be found,
-        // so excluding them here would leave the dependency scan unable to
-        // fire at all. Each tool's `selectFiles` still decides what it wants.
-        const changedFiles = [
-            ...((context.changedFiles ?? []) as ChangedFile[]),
-            ...((context.ignoredFileChanges ?? []) as ChangedFile[]),
-        ];
+        const reviewedFiles = (context.changedFiles ?? []) as ChangedFile[];
+        const ignoredFiles = (context.ignoredFileChanges ??
+            []) as ChangedFile[];
+
+        // `ignorePaths` means "do not comment on this file", and that has to
+        // hold for the analyzers too. Only a tool that declares
+        // `readsIgnoredFiles` sees them — the dependency scan, because
+        // lockfiles are on that list by default and are the only place an
+        // advisory can be found. Handing them to every tool published secrets
+        // from paths the customer had excluded.
+        const filesFor = (tool: AnalyzerTool): ChangedFile[] =>
+            tool.readsIgnoredFiles
+                ? [...reviewedFiles, ...ignoredFiles]
+                : reviewedFiles;
+
+        // Routing still considers everything, so a tool is not recorded as
+        // `no-matching-files` when its only matches are ignored files that it
+        // is allowed to read.
+        const changedFiles = [...reviewedFiles, ...ignoredFiles];
 
         const decisions = this.router.route(this.tools, {
             changedFiles,
@@ -92,7 +102,7 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
         // One failing tool must not cost the findings of the others.
         const results = await Promise.allSettled(
             selected.map(({ tool }) =>
-                tool.run({ sandbox, files: tool.selectFiles(changedFiles) }),
+                tool.run({ sandbox, files: tool.selectFiles(filesFor(tool)) }),
             ),
         );
 
