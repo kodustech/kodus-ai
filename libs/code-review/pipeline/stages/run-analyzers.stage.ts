@@ -13,6 +13,7 @@ import {
     RouteDecision,
     toRepoRelativePath,
 } from '@libs/code-review/infrastructure/analyzers/tool.contract';
+import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
 import { createLogger } from '@libs/core/log/logger';
@@ -38,6 +39,7 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
     constructor(
         private readonly router: AnalyzerToolRouter,
         private readonly gate: DeterministicEvidenceGate,
+        private readonly codeManagementService: CodeManagementService,
         @Inject(ANALYZER_TOOLS_TOKEN)
         private readonly tools: AnalyzerTool[],
     ) {
@@ -99,10 +101,19 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
             return this.storeRouting(context, decisions);
         }
 
+        const selectedFiles = new Map(
+            selected.map(({ tool }) => [
+                tool,
+                tool.selectFiles(filesFor(tool)),
+            ]),
+        );
+
+        await this.backfillMissingPatches(context, selectedFiles);
+
         // One failing tool must not cost the findings of the others.
         const results = await Promise.allSettled(
             selected.map(({ tool }) =>
-                tool.run({ sandbox, files: tool.selectFiles(filesFor(tool)) }),
+                tool.run({ sandbox, files: selectedFiles.get(tool) ?? [] }),
             ),
         );
 
@@ -189,6 +200,63 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
     ): CodeReviewPipelineContext {
         return this.updateContext(context, (draft) => {
             draft.analyzerRouting = decisions;
+        });
+    }
+
+    /**
+     * Fills in hunks the host withheld.
+     *
+     * GitHub drops `patch` once a file's diff passes a size limit, and a
+     * lockfile bump passes it routinely — so the change most likely to
+     * introduce an advisory arrived with no diff to anchor a finding to, and
+     * the finding was dropped as "outside the diff". One raw-diff request
+     * recovers every missing hunk at once, so this costs a single call and
+     * only when something is actually missing.
+     */
+    private async backfillMissingPatches(
+        context: CodeReviewPipelineContext,
+        selectedFiles: Map<AnalyzerTool, ChangedFile[]>,
+    ): Promise<void> {
+        const missing = [
+            ...new Set(
+                [...selectedFiles.values()]
+                    .flat()
+                    .filter((file) => file.filename && !file.patch)
+                    .map((file) => file.filename),
+            ),
+        ];
+
+        const prNumber = context.pullRequest?.number;
+        if (!missing.length || !prNumber || !context.repository?.name) {
+            return;
+        }
+
+        const recovered = await this.codeManagementService.getFilePatches({
+            organizationAndTeamData: context.organizationAndTeamData,
+            repository: context.repository,
+            prNumber,
+            paths: missing,
+        });
+
+        const byPath = new Map(recovered.map((r) => [r.path, r.patch]));
+
+        for (const files of selectedFiles.values()) {
+            for (const file of files) {
+                const patch = byPath.get(file.filename);
+                if (!file.patch && patch) {
+                    file.patch = patch;
+                }
+            }
+        }
+
+        this.logger.log({
+            message: `Recovered ${byPath.size} of ${missing.length} missing file patch(es)`,
+            context: this.stageName,
+            metadata: {
+                prNumber,
+                requested: missing,
+                recovered: [...byPath.keys()],
+            },
         });
     }
 

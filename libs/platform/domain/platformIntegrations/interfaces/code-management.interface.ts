@@ -77,6 +77,19 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
      */
     getCheckEvidence?(params: GetCheckEvidenceParams): Promise<CheckEvidence[]>;
     /**
+     * Unified-diff hunks for specific paths, when the host's file listing
+     * omitted them. GitHub drops `patch` once a file's diff passes a size
+     * limit — which is exactly what a dependency bump does — and the raw diff
+     * media type is the only surface that still carries the hunks. Optional:
+     * a host without it simply keeps the gap, as it does today.
+     */
+    getFilePatches?(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id?: string; name: string; owner?: string };
+        prNumber: number;
+        paths: string[];
+    }): Promise<Array<{ path: string; patch: string }>>;
+    /**
      * What this host can actually report. Absent means status-only, which is
      * the conservative reading of "the reader exists but says nothing more".
      */

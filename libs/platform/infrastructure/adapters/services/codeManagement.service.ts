@@ -164,7 +164,9 @@ export class CodeManagementService implements ICodeManagementService {
         }
 
         if (typeof codeManagementService.supportsIssues === 'function') {
-            return codeManagementService.supportsIssues(organizationAndTeamData);
+            return codeManagementService.supportsIssues(
+                organizationAndTeamData,
+            );
         }
 
         return true;
@@ -177,6 +179,48 @@ export class CodeManagementService implements ICodeManagementService {
      * it only enriches a review, and a host that cannot supply it — or an API
      * that is briefly unavailable — must not take the review down with it.
      */
+    async getFilePatches(
+        params: {
+            organizationAndTeamData: OrganizationAndTeamData;
+            repository: { id?: string; name: string; owner?: string };
+            prNumber: number;
+            paths: string[];
+        },
+        type?: PlatformType,
+    ): Promise<Array<{ path: string; patch: string }>> {
+        if (!type) {
+            type = await this.getTypeIntegration(
+                params.organizationAndTeamData,
+            );
+        }
+
+        if (!type) {
+            return [];
+        }
+
+        const codeManagementService =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+
+        if (typeof codeManagementService.getFilePatches !== 'function') {
+            return [];
+        }
+
+        try {
+            return await codeManagementService.getFilePatches(params);
+        } catch (error) {
+            this.logger.warn({
+                message: 'Failed to read file patches',
+                context: CodeManagementService.name,
+                error,
+                metadata: {
+                    platform: type,
+                    prNumber: params.prNumber,
+                },
+            });
+            return [];
+        }
+    }
+
     async getCheckEvidence(
         params: GetCheckEvidenceParams,
         type?: PlatformType,

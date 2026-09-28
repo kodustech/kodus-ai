@@ -1,4 +1,5 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { extractDiffHunks } from './extract-diff-hunks';
 import { ConfigService } from '@nestjs/config';
 import { createAppAuth } from '@octokit/auth-app';
 import { INTEGRATION_REQUEST_TIMEOUT_MS } from '@libs/core/infrastructure/http/integration-timeouts';
@@ -171,6 +172,7 @@ export class GithubService
 
     /** Caps on the extra annotation round trips a single review will make. */
     private static readonly MAX_ANNOTATED_RUNS = 10;
+    private static readonly MAX_RAW_DIFF_CHARS = 8_000_000;
     private static readonly MAX_ANNOTATIONS_PER_RUN = 50;
 
     private readonly enterpriseOctokit = Octokit.plugin(
@@ -2813,6 +2815,73 @@ export class GithubService
         }
 
         return evidence;
+    }
+
+    /**
+     * The hunks GitHub omitted from the file listing.
+     *
+     * `pulls.listFiles` (and `compare`, which shares the limit) drop `patch`
+     * once a single file's diff grows past their size cap — routinely true of
+     * a lockfile bump, which is precisely the change a dependency scan cares
+     * about. The raw diff media type is not capped the same way, so one
+     * request recovers every missing hunk at once.
+     */
+    async getFilePatches(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id?: string; name: string; owner?: string };
+        prNumber: number;
+        paths: string[];
+    }): Promise<Array<{ path: string; patch: string }>> {
+        const { organizationAndTeamData, repository, prNumber, paths } = params;
+
+        if (!paths.length) {
+            return [];
+        }
+
+        try {
+            const octokit = await this.getAuthenticatedOctokit(
+                organizationAndTeamData,
+            );
+
+            const owner =
+                repository.owner ??
+                (await this.getGithubAuthDetails(organizationAndTeamData))?.org;
+
+            const { data } = await octokit.rest.pulls.get({
+                owner,
+                repo: repository.name,
+                pull_number: prNumber,
+                mediaType: { format: 'diff' },
+            });
+
+            // A whole-PR diff is large by nature; refuse one big enough to be
+            // a memory problem rather than trading a missing hunk for an OOM.
+            const diff = String(data ?? '');
+            if (diff.length > GithubService.MAX_RAW_DIFF_CHARS) {
+                this.logger.warn({
+                    message:
+                        'Raw pull request diff is too large to parse for the ' +
+                        'missing hunks; those files keep no patch.',
+                    context: GithubService.name,
+                    metadata: {
+                        prNumber,
+                        repository: repository.name,
+                        diffChars: diff.length,
+                    },
+                });
+                return [];
+            }
+
+            return extractDiffHunks(diff, paths);
+        } catch (error) {
+            this.logger.warn({
+                message: 'Failed to read the raw pull request diff',
+                context: GithubService.name,
+                error,
+                metadata: { prNumber, repository: repository.name },
+            });
+            return [];
+        }
     }
 
     async supportsCheckEvidence(

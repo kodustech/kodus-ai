@@ -154,7 +154,12 @@ export class DependencyScanTool implements AnalyzerTool {
 
     selectFiles(files: ChangedFile[]): ChangedFile[] {
         return files.filter((file) => {
-            if (!file.filename || !file.patch) {
+            // A manifest is a manifest whether or not the host gave us its
+            // diff. GitHub omits `patch` once a file's diff passes a size
+            // limit, which is routine for a lockfile bump — the exact change
+            // most likely to pull in an advisory. The stage backfills the
+            // hunks; the baseline comes from git either way.
+            if (!file.filename) {
                 return false;
             }
             return MANIFEST.has(file.filename.split('/').pop() ?? '');

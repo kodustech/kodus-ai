@@ -54,6 +54,8 @@ describe('RunAnalyzersStage', () => {
         new RunAnalyzersStage(
             new AnalyzerToolRouter(),
             { isEnabled: jest.fn().mockResolvedValue(gateEnabled) } as never,
+            // Nothing to recover unless a selected file arrived without a patch.
+            { getFilePatches: jest.fn().mockResolvedValue([]) } as never,
             tools,
         );
 
@@ -267,6 +269,7 @@ describe('host path spelling', () => {
         const stage = new RunAnalyzersStage(
             new AnalyzerToolRouter(),
             { isEnabled: jest.fn().mockResolvedValue(true) } as never,
+            { getFilePatches: jest.fn().mockResolvedValue([]) } as never,
             [tool],
         );
 
