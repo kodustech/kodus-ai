@@ -26,7 +26,18 @@ const EXIT_MARKER = '__OSV_EXIT:';
  * stops, so require a boundary on each side — `"node_modules/lodash"` and
  * `lodash@4.17.11` still match, `lodash.merge` no longer does.
  */
-const NAME_CHAR = /[A-Za-z0-9._-]/;
+/**
+ * The two boundaries are deliberately NOT the same class.
+ *
+ * `/` ends a name when it comes BEFORE — npm writes `"node_modules/lodash"`,
+ * and that is the package. It does NOT end a name when it comes AFTER: Go and
+ * Composer join module paths with it, so `github.com/aws/aws-sdk-go-v2` is a
+ * prefix of `github.com/aws/aws-sdk-go-v2/config` and matching there would
+ * blame the wrong package. Using one class for both sides breaks whichever
+ * ecosystem it is not written for.
+ */
+const BEFORE_BOUNDARY = /[A-Za-z0-9._-]/;
+const AFTER_BOUNDARY = /[A-Za-z0-9._/-]/;
 
 function mentionsPackage(haystack: string, packageName: string): boolean {
     let from = 0;
@@ -37,7 +48,7 @@ function mentionsPackage(haystack: string, packageName: string): boolean {
         const before = at === 0 ? '' : haystack[at - 1];
         const after = haystack[at + packageName.length] ?? '';
 
-        if (!NAME_CHAR.test(before) && !NAME_CHAR.test(after)) {
+        if (!BEFORE_BOUNDARY.test(before) && !AFTER_BOUNDARY.test(after)) {
             return true;
         }
         from = at + 1;
@@ -201,7 +212,10 @@ export class DependencyScanTool implements AnalyzerTool {
         sandbox: ToolRunInput['sandbox'],
         files: ChangedFile[],
     ): Promise<Vulnerable[] | null> {
-        const baseDir = `/tmp/kody-deps-base-${Date.now()}-${Math.random()
+        // Inside the checkout on purpose: the bytes are delivered through
+        // `sandbox.writeFile`, and the local provider refuses to write
+        // outside `repoDir`. Removed again in the `finally` below.
+        const baseDir = `${sandbox.repoDir}/.kody-deps-base-${Date.now()}-${Math.random()
             .toString(36)
             .slice(2, 10)}`;
 
@@ -217,6 +231,7 @@ export class DependencyScanTool implements AnalyzerTool {
         // `-L` on a path that does not exist makes osv-scanner fail, and a
         // failed base scan now throws rather than being read as "clean".
         const materialised: string[] = [];
+        const writes: Array<{ target: string; content: string }> = [];
         let needsGit = false;
 
         for (const file of files) {
@@ -250,11 +265,13 @@ export class DependencyScanTool implements AnalyzerTool {
                         continue;
                     }
                     setup.push(`mkdir -p ${quote(target.slice(0, cut))}`);
-                    setup.push(
-                        `printf %s ${quote(
-                            Buffer.from(rewound, 'utf8').toString('base64'),
-                        )} | base64 -d > ${quote(target)}`,
-                    );
+                    // Written through the file API, never as an argument. A
+                    // lockfile is hundreds of kilobytes and base64 inflates
+                    // it by 4:3, so inlining it blows past the kernel's
+                    // single-argument limit and `/bin/sh -c` fails with
+                    // E2BIG before anything runs — the process does not
+                    // start, and the scan silently reports nothing.
+                    writes.push({ target, content: rewound });
                     materialised.push(relative);
                     continue;
                 }
@@ -334,6 +351,11 @@ export class DependencyScanTool implements AnalyzerTool {
                     stderr: result.stderr?.slice(0, 500),
                 });
                 return null;
+            }
+
+            // After the setup, so the directories exist.
+            for (const { target, content } of writes) {
+                await sandbox.writeFile(target, content);
             }
         } catch (error) {
             this.noBaseline(sandbox, files, { error });

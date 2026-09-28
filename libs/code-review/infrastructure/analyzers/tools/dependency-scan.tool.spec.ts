@@ -222,28 +222,61 @@ describe('DependencyScanTool', () => {
 
             await tool.run({ sandbox, files: [file()] });
 
-            expect(sandbox.commands.some((c) => c.includes('base64 -d'))).toBe(
-                true,
-            );
+            // The rebuilt manifest is written, not echoed into a command.
+            expect(
+                (sandbox as unknown as { writeFile: jest.Mock }).writeFile,
+            ).toHaveBeenCalled();
             expect(
                 sandbox.commands.filter((c) => c.includes('osv-scanner')),
             ).toHaveLength(2);
         });
 
         /**
-         * A lockfile is hundreds of kilobytes. Passing one as a shell argument
-         * exceeds the maximum command length and the process never starts —
-         * which is how this first failed on a real repository.
+         * A lockfile is hundreds of kilobytes, and base64 inflates it by 4:3.
+         * Inlining one into a command exceeds the kernel's single-argument
+         * limit and `/bin/sh -c` fails with E2BIG before anything runs — the
+         * process never starts and the scan reports nothing. This first
+         * failed on a real repository, and later regressed when the rewind
+         * became the preferred baseline: the test then asserted the GIT
+         * branch, which never inlined anything, so it stayed green while the
+         * default path went back to inlining.
+         *
+         * Asserted over EVERY branch for that reason.
          */
-        it('materialises the base file in the sandbox rather than passing it', async () => {
+        it.each([
+            ['the rewound patch (default)', PATCH],
+            ['the base branch tip (fallback)', UNAPPLIABLE_PATCH],
+        ])(
+            'never inlines the manifest into a command — %s',
+            async (_case, patch) => {
+                const sandbox = sandboxWith(
+                    osv([
+                        { name: 'lodash', version: '4.17.11', id: 'GHSA-aaa' },
+                    ]),
+                    osv([]),
+                );
+                (sandbox as unknown as { baseBranch?: string }).baseBranch =
+                    'main';
+
+                await tool.run({ sandbox, files: [file(patch)] });
+
+                for (const command of (
+                    sandbox as unknown as { commands: string[] }
+                ).commands) {
+                    expect(command).not.toContain('base64 -d');
+                    // Nothing the size of a manifest belongs in a command line.
+                    expect(command.length).toBeLessThan(8_000);
+                }
+            },
+        );
+
+        it('reads the base branch tip through git when the patch will not rewind', async () => {
             const sandbox = sandboxWith(
                 osv([{ name: 'lodash', version: '4.17.11', id: 'GHSA-aaa' }]),
                 osv([]),
             );
             (sandbox as unknown as { baseBranch?: string }).baseBranch = 'main';
 
-            // Only reached when the patch cannot be rewound; a patch that
-            // fits is preferred because it is relative to the merge base.
             await tool.run({
                 sandbox,
                 files: [file(UNAPPLIABLE_PATCH)],
@@ -254,7 +287,6 @@ describe('DependencyScanTool', () => {
             ).commands.find((c) => c.includes('kody-deps-base'));
             expect(setup).toContain('git -C');
             expect(setup).toContain('origin/main:package-lock.json');
-            expect(setup).not.toContain('base64 -d');
         });
 
         it('cleans the reconstructed tree up', async () => {
@@ -845,5 +877,91 @@ describe('the base scan reads only what the base tree holds', () => {
         expect(baseScan).toBeUndefined();
         // And the advisories still surface: an added manifest introduces them.
         expect(findings.map((f) => f.ruleId).join(',')).toContain('GHSA-aaa');
+    });
+});
+
+/**
+ * Slash-joined ecosystems (Go, Composer) make a module name a PREFIX of its
+ * submodules, so `github.com/aws/aws-sdk-go-v2` must not claim a line adding
+ * `github.com/aws/aws-sdk-go-v2/config`. npm needs the opposite reading of
+ * the same character: `"node_modules/lodash"` IS lodash.
+ */
+describe('anchoring across ecosystems that join names with a slash', () => {
+    const tool = new DependencyScanTool();
+
+    const scanFor = async (
+        advisory: { name: string; version: string; id: string },
+        addedLine: string,
+        manifest = 'go.sum',
+    ) => {
+        const sandbox = {
+            repoDir: '/repo',
+            baseBranch: 'main',
+            run: jest.fn(async (command: string) =>
+                command.includes('osv-scanner')
+                    ? {
+                          stdout: scanned(
+                              command.includes('kody-deps-base')
+                                  ? osv([])
+                                  : osv([advisory]),
+                          ),
+                          stderr: '',
+                          exitCode: 0,
+                      }
+                    : { stdout: '', stderr: '', exitCode: 0 },
+            ),
+            readFile: jest.fn(async () => HEAD),
+            writeFile: jest.fn(),
+        } as never;
+
+        const findings = await tool.run({
+            sandbox,
+            files: [
+                {
+                    filename: manifest,
+                    patch: ['@@ -1,1 +1,2 @@', ' keep', `+${addedLine}`].join(
+                        '\n',
+                    ),
+                } as ChangedFile,
+            ],
+        });
+
+        return findings.map((f) => f.ruleId).join(',');
+    };
+
+    it('does not anchor a Go module to one of its submodules', async () => {
+        const rules = await scanFor(
+            {
+                name: 'github.com/aws/aws-sdk-go-v2',
+                version: '1.0.0',
+                id: 'GHSA-go1',
+            },
+            'github.com/aws/aws-sdk-go-v2/config v1.2.3',
+        );
+
+        expect(rules).not.toContain('GHSA-go1');
+    });
+
+    it('still anchors the module the line actually adds', async () => {
+        const rules = await scanFor(
+            {
+                name: 'github.com/aws/aws-sdk-go-v2/config',
+                version: '1.2.3',
+                id: 'GHSA-go2',
+            },
+            'github.com/aws/aws-sdk-go-v2/config v1.2.3',
+        );
+
+        expect(rules).toContain('GHSA-go2');
+    });
+
+    it('keeps npm working, where the slash precedes the name', async () => {
+        const rules = await scanFor(
+            { name: 'lodash', version: '4.17.11', id: 'GHSA-npm' },
+            '    "node_modules/lodash": {',
+            'package-lock.json',
+        );
+
+        expect(rules).toContain('GHSA-npm');
     });
 });
