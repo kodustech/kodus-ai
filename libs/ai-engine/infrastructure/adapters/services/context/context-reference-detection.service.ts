@@ -206,7 +206,12 @@ export class ContextReferenceDetectionService {
                         ? 'Clean detection over an existing revision — committing empty revision to clear stale state'
                         : 'Clean detection — committing empty revision to keep its answers',
                     context: ContextReferenceDetectionService.name,
-                    metadata: { entityType, entityId },
+                    metadata: {
+                        entityType,
+                        entityId,
+                        organizationId: organizationAndTeamData?.organizationId,
+                        teamId: organizationAndTeamData?.teamId,
+                    },
                 });
                 const revisionId = await this.saveToContextOS({
                     entityType,
@@ -225,7 +230,12 @@ export class ContextReferenceDetectionService {
             this.logger.warn({
                 message: 'No requirements generated after processing fields',
                 context: ContextReferenceDetectionService.name,
-                metadata: { entityType, entityId },
+                metadata: {
+                    entityType,
+                    entityId,
+                    organizationId: organizationAndTeamData?.organizationId,
+                    teamId: organizationAndTeamData?.teamId,
+                },
             });
             return undefined;
         }
