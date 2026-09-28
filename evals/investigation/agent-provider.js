@@ -165,6 +165,19 @@ function countPatchLines(patch) {
     return { additions, deletions };
 }
 
+function embaralharArquivos(files, seed, salt) {
+    if (!seed || !Array.isArray(files) || files.length < 2) return files;
+    let h = 2166136261;
+    for (const ch of `${seed}:${salt}`) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
+    const rand = () => ((h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0), (h ^= h >>> 13), (h >>> 0) / 4294967296);
+    const out = files.slice();
+    for (let i = out.length - 1; i > 0; i--) {
+        const j = Math.floor(rand() * (i + 1));
+        [out[i], out[j]] = [out[j], out[i]];
+    }
+    return out;
+}
+
 function normalizeChangedFiles(files) {
     return (files || []).map((file) => {
         const patch = file.patch || file.patchWithLinesStr || file.diff || '';
@@ -652,9 +665,16 @@ function buildCurrentPrompts(caseData) {
         // Falls back to the old field only for a case with no materialized
         // diff (see materialize-full-diff.js), so an un-regenerated dataset
         // still runs instead of silently reviewing nothing.
-        changedFiles: normalizeChangedFiles(
-            parseMaybeJson(caseData.changedFilesFull) ||
-                parseMaybeJson(caseData.changedFiles),
+        // RECALL_DIFF_SHUFFLE_SEED=<n>: ordem dos arquivos do diff embaralhada,
+        // deterministica por semente + PR (como os passes do Bugbot v1). So o
+        // eval liga; sem a env a ordem e a da producao.
+        changedFiles: embaralharArquivos(
+            normalizeChangedFiles(
+                parseMaybeJson(caseData.changedFilesFull) ||
+                    parseMaybeJson(caseData.changedFiles),
+            ),
+            process.env.RECALL_DIFF_SHUFFLE_SEED,
+            caseData.id || caseData.caseId || '',
         ),
         remoteCommands: {},
         prNumber: caseData.prNumber || 1,
