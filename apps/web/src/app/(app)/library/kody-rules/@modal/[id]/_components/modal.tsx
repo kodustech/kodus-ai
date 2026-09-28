@@ -172,11 +172,14 @@ export const KodyRuleLibraryItemModal = ({
                         : undefined;
 
                 toast({
-                    variant: "destructive",
+                    variant: "danger",
                     title: `Could not add rule "${rule.title}"`,
                     description:
                         message ??
-                        "The request was blocked before reaching us (e.g. a security-layer rejection). Try again, or import the rule without the flagged example.",
+                        ((error as { response?: { status?: number } })?.response
+                            ?.status === 403
+                            ? "The request was blocked by a security filter before reaching Kodus. Please try again later or contact support."
+                            : "Something went wrong while adding this rule. Please try again."),
                 });
                 return;
             }
