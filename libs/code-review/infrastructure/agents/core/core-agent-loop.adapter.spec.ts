@@ -567,16 +567,20 @@ describe('contract matrix — A. output-shape zoo (finder findings seam)', () =>
             reasoning: 'r',
             suggestions: [
                 validItem(),
-                {
-                    relevantFile: 'b.ts',
-                    suggestionContent: 'x',
-                    existingCode: 'y',
-                }, // no improvedCode
+                { suggestionContent: 'x', existingCode: 'y', improvedCode: 'z' }, // no relevantFile
             ],
         } as any);
         expect(r).not.toBeNull();
         expect(r!.suggestions).toHaveLength(1);
         expect(r!.suggestions[0].relevantFile).toBe('a.ts');
+    });
+    it('row 12b — a finding without improvedCode (the prompt makes it optional) is kept', () => {
+        const r = sanitizeFindingsResult({
+            reasoning: 'r',
+            suggestions: [validItem(), { relevantFile: 'b.ts', suggestionContent: 'x', existingCode: 'y' }],
+        } as any);
+        expect(r!.suggestions).toHaveLength(2);
+        expect(r!.suggestions[1].improvedCode).toBe('');
     });
 
     // Row 13 — Extra unknown keys are tolerated (stripped), never a crash.
@@ -752,11 +756,11 @@ describe('contract matrix — B. semantic-but-wrong', () => {
         expect(v.keep).toBe(false);
     });
 
-    // Row 24 — enum out of the allowed set (severity:"URGENT"). PROD: the whole
-    // (otherwise valid) finding is dropped because an OPTIONAL enum field is
-    // present-but-invalid (findings-schema.ts suggestionSchema). Losing a real
-    // finding over a label typo is a silent degradation → correct = keep it.
-    it.failing(
+    // Row 24 — enum out of the allowed set (severity:"URGENT"). The whole
+    // (otherwise valid) finding used to be dropped because an OPTIONAL enum field
+    // was present-but-invalid. Losing a real finding over a label typo is a
+    // silent degradation → keep it with the severity cleared (#1821 fix).
+    it(
         'row 24 — an out-of-set severity must not drop the whole finding',
         () => {
             const r = sanitizeFindingsResult({
@@ -764,7 +768,8 @@ describe('contract matrix — B. semantic-but-wrong', () => {
                 suggestions: [validItem({ severity: 'URGENT' })],
             } as any);
             expect(r).not.toBeNull();
-            expect(r!.suggestions).toHaveLength(1); // fails today (dropped → 0)
+            expect(r!.suggestions).toHaveLength(1);
+            expect(r!.suggestions[0].severity).toBeUndefined();
         },
     );
 

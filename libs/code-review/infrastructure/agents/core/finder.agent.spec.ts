@@ -459,7 +459,7 @@ describe('matrix A — output-shape zoo (submitResult artifact payload)', () => 
 
 // ─── B. Semantic-but-wrong (valid JSON, wrong value encoding) ────────────────
 describe('matrix B — semantic-but-wrong value encodings', () => {
-    it('[B24] enum out of allowed set (severity/label) → invalid item dropped, valid kept', () => {
+    it('[B24] enum out of allowed set: bad severity is cleared (kept), bad label still dropped', () => {
         const out = extractFindings(
             artifactState({
                 reasoning: 'r',
@@ -470,9 +470,10 @@ describe('matrix B — semantic-but-wrong value encodings', () => {
                 ],
             }),
         );
-        // Partial recovery: the out-of-set items are validated out (logged),
-        // the clean one survives — no silent keep-all of the bad encoding.
-        expect(out.suggestions).toHaveLength(1);
+        // Partial recovery: an out-of-set OPTIONAL severity no longer drops a
+        // real finding (it is cleared); the out-of-set label is still validated
+        // out — no silent keep-all of the bad encoding.
+        expect(out.suggestions).toHaveLength(2);
     });
 
     it('[B24b] wrong-type field (confidence as string) → item validated out', () => {

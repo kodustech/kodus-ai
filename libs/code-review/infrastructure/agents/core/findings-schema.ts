@@ -14,18 +14,34 @@ import { LLM_ENVELOPE_TAG } from '@libs/llm/log-tags';
 
 const logger = createLogger('FindingsSchema');
 
+const SEVERITIES = ['critical', 'high', 'medium', 'low'] as const;
+
+/** A missing/null code snippet is an empty one. The prompts tell the model to
+ *  give improvedCode "only if the fix is clear", so omitting it is following
+ *  the instructions — dropping the whole finding for it lost real bugs
+ *  (#1821: every model, ~3% of lens findings in a GPT-6 round). */
+const optionalSnippet = z.preprocess(
+    (v) => (v == null ? '' : v),
+    z.string(),
+);
+
 /** Schema for structured output */
 const suggestionSchema = z.object({
     relevantFile: z.string(),
     language: z.string().optional(),
     label: z.enum(['bug', 'security', 'performance']).optional(),
     suggestionContent: z.string(),
-    existingCode: z.string(),
-    improvedCode: z.string(),
+    existingCode: optionalSnippet,
+    improvedCode: optionalSnippet,
     oneSentenceSummary: z.string().optional(),
     relevantLinesStart: z.number().optional(),
     relevantLinesEnd: z.number().optional(),
-    severity: z.enum(['critical', 'high', 'medium', 'low']).optional(), // V2 compat
+    // Case-insensitive; an unknown value clears the field instead of dropping
+    // the finding (severity is optional anyway).
+    severity: z.preprocess((v) => {
+        const s = typeof v === 'string' ? v.trim().toLowerCase() : v;
+        return (SEVERITIES as readonly unknown[]).includes(s) ? s : undefined;
+    }, z.enum(SEVERITIES).optional()), // V2 compat
     // Self-reported, telemetry-only (see review-finding.ts) — the model is
     // prompted for 1-10 but not reliably in-range (prod audit 2026-09-17:
     // ~150/619 [LLM_ENVELOPE] drops were an otherwise-valid suggestion
@@ -48,6 +64,17 @@ const _findingsSchema = z.object({
 
 export type FindingsOutput = z.infer<typeof _findingsSchema>;
 
+/** A finding whose body is only in `oneSentenceSummary` still names a defect:
+ *  use the summary as the content instead of dropping it. */
+function withContentFallback(item: unknown): unknown {
+    if (!item || typeof item !== 'object') return item;
+    const it = item as Record<string, unknown>;
+    if (typeof it.suggestionContent === 'string' || typeof it.oneSentenceSummary !== 'string') {
+        return item;
+    }
+    return { ...it, suggestionContent: it.oneSentenceSummary };
+}
+
 /**
  * Claude models (measured on Sonnet 5.5, #1821) often send the `suggestions`
  * array of a tool call as a JSON-encoded STRING inside an otherwise valid
@@ -60,15 +87,22 @@ function parseStringifiedSuggestions(value: unknown): unknown {
     const suggestions = (value as { suggestions?: unknown } | null)
         ?.suggestions;
     if (typeof suggestions !== 'string') return value;
-    const candidate = extractJsonFromText(suggestions);
-    if (candidate == null) return value;
-    try {
-        const parsed = JSON.parse(candidate);
-        if (!Array.isArray(parsed)) return value;
-        return { ...(value as object), suggestions: parsed };
-    } catch {
-        return value;
+    // The raw string first: a suggestion usually carries ``` fences in its own
+    // text, and extractJsonFromText unwraps the FIRST fence it sees — an inner
+    // code block, not the array (that is what kept 10 of 40 failing after the
+    // first fix). The extractor stays as the fallback for prose/fence wrapping.
+    for (const candidate of [suggestions.trim(), extractJsonFromText(suggestions)]) {
+        if (!candidate) continue;
+        try {
+            const parsed = JSON.parse(candidate);
+            if (Array.isArray(parsed)) {
+                return { ...(value as object), suggestions: parsed };
+            }
+        } catch {
+            // try the next candidate
+        }
     }
+    return value;
 }
 
 /**
@@ -96,7 +130,14 @@ export function sanitizeFindingsResult(
     const normalized = parseStringifiedSuggestions(
         normalizeEnvelope(raw, 'suggestions', ['findings', 'codeSuggestions']),
     ) as FindingsOutput;
-    const parsed = _findingsSchema.safeParse(normalized);
+    const parsed = _findingsSchema.safeParse(
+        Array.isArray((normalized as any)?.suggestions)
+            ? {
+                  ...(normalized as any),
+                  suggestions: (normalized as any).suggestions.map(withContentFallback),
+              }
+            : normalized,
+    );
     if (parsed.success) return parsed.data;
     logger.warn({
         message:
@@ -119,10 +160,14 @@ export function sanitizeFindingsResult(
     if (Array.isArray((normalized as any)?.suggestions)) {
         const kept: FindingsOutput['suggestions'] = [];
         let dropped = 0;
+        const failedFields = new Set<string>();
         for (const item of (normalized as any).suggestions) {
-            const s = suggestionSchema.safeParse(item);
+            const s = suggestionSchema.safeParse(withContentFallback(item));
             if (s.success) kept.push(s.data);
-            else dropped++;
+            else {
+                dropped++;
+                for (const i of s.error.issues) failedFields.add(`${i.path.join('.')}: ${i.code}`);
+            }
         }
         if (dropped > 0) {
             logger.warn({
@@ -131,6 +176,8 @@ export function sanitizeFindingsResult(
                 metadata: {
                     kept: kept.length,
                     dropped,
+                    // Field names only, no content: which contract the model broke.
+                    failedFields: [...failedFields],
                     organizationId: telemetryMetadata?.organizationId,
                 },
             });

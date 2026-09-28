@@ -83,6 +83,54 @@ describe('sanitizeFindingsResult', () => {
         expect(mockLogger.warn).not.toHaveBeenCalled();
     });
 
+    it('recovers a stringified array whose items carry markdown code fences', () => {
+        const item = {
+            relevantFile: 'src/foo.ts',
+            suggestionContent: 'Use a guard:\n```ts\nif (x != null) {}\n```',
+            existingCode: 'if (x)',
+            improvedCode: 'if (x != null)',
+        };
+        const result = sanitizeFindingsResult({
+            reasoning: 'r',
+            suggestions: JSON.stringify([item]),
+        } as any);
+        expect(result!.suggestions).toEqual([item]);
+    });
+
+    it('keeps a finding that omits improvedCode / existingCode or sends null', () => {
+        const result = sanitizeFindingsResult({
+            reasoning: 'r',
+            suggestions: [
+                { relevantFile: 'a.ts', suggestionContent: 'bug A', existingCode: 'x' },
+                { relevantFile: 'b.ts', suggestionContent: 'bug B', existingCode: null, improvedCode: null },
+            ],
+        } as any);
+        expect(result!.suggestions).toHaveLength(2);
+        expect(result!.suggestions[0].improvedCode).toBe('');
+        expect(result!.suggestions[1].existingCode).toBe('');
+    });
+
+    it('uses oneSentenceSummary when suggestionContent is missing', () => {
+        const result = sanitizeFindingsResult({
+            reasoning: 'r',
+            suggestions: [{ relevantFile: 'a.ts', oneSentenceSummary: 'null deref in foo', existingCode: 'x', improvedCode: 'y' }],
+        } as any);
+        expect(result!.suggestions[0].suggestionContent).toBe('null deref in foo');
+    });
+
+    it('normalizes severity case and clears an unknown severity instead of dropping', () => {
+        const result = sanitizeFindingsResult({
+            reasoning: 'r',
+            suggestions: [
+                { relevantFile: 'a.ts', suggestionContent: 'A', existingCode: 'x', improvedCode: 'y', severity: 'High' },
+                { relevantFile: 'b.ts', suggestionContent: 'B', existingCode: 'x', improvedCode: 'y', severity: 'info' },
+            ],
+        } as any);
+        expect(result!.suggestions).toHaveLength(2);
+        expect(result!.suggestions[0].severity).toBe('high');
+        expect(result!.suggestions[1].severity).toBeUndefined();
+    });
+
     it('leaves a JSON-encoded non-array suggestions string to fail as before', () => {
         const result = sanitizeFindingsResult({
             reasoning: 'x',
