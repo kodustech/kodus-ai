@@ -28,7 +28,7 @@ export function byokFailureCopy(
         case "RATE_LIMIT":
             return {
                 title: `${provider} is rate limiting your key`,
-                body: `${provider} is refusing requests over its rate limit. Free model variants have low limits. ${tail}`,
+                body: `${provider} is refusing requests over its rate limit. ${tail}`,
             };
         case "MODEL_NOT_FOUND":
         case "MODEL_ACCESS_DENIED":

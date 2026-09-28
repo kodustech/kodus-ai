@@ -15,6 +15,11 @@ describe("byokFailureCopy", () => {
         expect(`${title} ${body}`).toMatch(/rate limit/i);
     });
 
+    it("does not blame a free model: the copy cannot tell which model it is", () => {
+        const { title, body } = byokFailureCopy("Anthropic", "RATE_LIMIT");
+        expect(`${title} ${body}`).not.toMatch(/free/i);
+    });
+
     it("does not guess a cause when the error was not classified", () => {
         for (const category of [undefined, "UNKNOWN", "TRANSIENT"]) {
             const { title, body } = byokFailureCopy("OpenRouter", category);
