@@ -67,7 +67,11 @@ export class GetWebhookCreationFailuresUseCase implements IUseCase {
                 },
             });
 
-            return { failures: {} };
+            // Not swallowed: an empty payload reads as "no failures", which is
+            // the healthy answer this endpoint exists to distinguish from. A
+            // read failure stays a 500, and the BadRequestException above
+            // stays a 400.
+            throw error;
         }
     }
 }

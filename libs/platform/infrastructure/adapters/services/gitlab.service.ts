@@ -2834,78 +2834,101 @@ export class GitlabService implements Omit<
     async createMergeRequestWebhook(params: any) {
         const { organizationAndTeamData } = params;
 
-        const gitlabAuthDetail = await this.getAuthDetails(
-            organizationAndTeamData,
-        );
-
-        const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
-
-        const repositories = <Repositories[]>(
-            await this.findOneByOrganizationAndTeamDataAndConfigKey(
-                params?.organizationAndTeamData,
-                IntegrationConfigKey.REPOSITORIES,
-            )
-        );
-
         const webhookUrl = process.env.API_GITLAB_CODE_MANAGEMENT_WEBHOOK; // Replace with your webhook URL
 
-        const failures: Record<string, { reason: string; at: string }> = {};
+        try {
+            // No early return when `webhookUrl` is unset: the add below is
+            // attempted with an undefined URL, GitLab rejects it, and the
+            // rejection lands in `failures` like any other provider error. That
+            // is the contract of this PR — an unconfigured deployment has to
+            // see WHY its webhooks are missing, not a silently skipped step.
+            const gitlabAuthDetail = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
 
-        // One project failing must not cost the others their hook, and it must
-        // leave a trace. The caller fires this method without awaiting it and
-        // swallows the rejection, so a 403 used to leave the selection looking
-        // saved while the project stayed without a webhook and no review ever
-        // ran (#1983).
-        for (const repo of repositories) {
-            try {
-                const existingHooks = await gitlabAPI.ProjectHooks.all(repo.id);
+            const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
 
-                const hookExists = existingHooks.some(
-                    (hook) => hook?.url === webhookUrl,
-                );
+            const repositories = <Repositories[]>(
+                await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                    params?.organizationAndTeamData,
+                    IntegrationConfigKey.REPOSITORIES,
+                )
+            );
 
-                if (hookExists) {
-                    console.log(`Webhook already exists in project ${repo.id}`);
-                    continue;
+            const failures: Record<string, { reason: string; at: string }> = {};
+
+            // One project failing must not cost the others their hook, and it
+            // must leave a trace. The caller fires this method without awaiting
+            // it and swallows the rejection, so a 403 used to leave the
+            // selection looking saved while the project stayed without a
+            // webhook and no review ever ran (#1983).
+            for (const repo of repositories) {
+                try {
+                    const existingHooks = await gitlabAPI.ProjectHooks.all(
+                        repo.id,
+                    );
+
+                    const hookExists = existingHooks.some(
+                        (hook) => hook?.url === webhookUrl,
+                    );
+
+                    if (hookExists) {
+                        console.log(
+                            `Webhook already exists in project ${repo.id}`,
+                        );
+                        continue;
+                    }
+
+                    await gitlabAPI.ProjectHooks.add(repo.id, webhookUrl, {
+                        mergeRequestsEvents: true,
+                        enableSslVerification: true,
+                        noteEvents: true,
+                        issuesEvents: true,
+                    });
+                    this.logger.log({
+                        message: 'Webhook added to project',
+                        context: GitlabService.name,
+                        serviceName: 'GitlabService createMergeRequestWebhook',
+                        metadata: { repositoryId: repo.id },
+                    });
+                } catch (error) {
+                    failures[String(repo.id)] = {
+                        reason: this.describeWebhookCreationFailure(error),
+                        at: new Date().toISOString(),
+                    };
+
+                    this.logger.error({
+                        message: 'Error creating webhook:',
+                        context: GitlabService.name,
+                        serviceName: 'GitlabService createMergeRequestWebhook',
+                        error: error,
+                        metadata: {
+                            organizationId:
+                                organizationAndTeamData?.organizationId,
+                            teamId: organizationAndTeamData?.teamId,
+                            repositoryId: repo.id,
+                        },
+                    });
                 }
-
-                await gitlabAPI.ProjectHooks.add(repo.id, webhookUrl, {
-                    mergeRequestsEvents: true,
-                    enableSslVerification: true,
-                    noteEvents: true,
-                    issuesEvents: true,
-                });
-                this.logger.log({
-                    message: 'Webhook added to project',
-                    context: GitlabService.name,
-                    serviceName: 'GitlabService createMergeRequestWebhook',
-                    metadata: { repositoryId: repo.id },
-                });
-            } catch (error) {
-                failures[String(repo.id)] = {
-                    reason: this.describeWebhookCreationFailure(error),
-                    at: new Date().toISOString(),
-                };
-
-                this.logger.error({
-                    message: 'Error creating webhook:',
-                    context: GitlabService.name,
-                    serviceName: 'GitlabService createMergeRequestWebhook',
-                    error: error,
-                    metadata: {
-                        organizationId:
-                            organizationAndTeamData?.organizationId,
-                        teamId: organizationAndTeamData?.teamId,
-                        repositoryId: repo.id,
-                    },
-                });
             }
-        }
 
-        await this.recordWebhookCreationFailures(
-            organizationAndTeamData,
-            failures,
-        );
+            await this.recordWebhookCreationFailures(
+                organizationAndTeamData,
+                failures,
+            );
+        } catch (error) {
+            // The caller fires this method unawaited and only swallows the
+            // rejection: auth resolution, or a missing REPOSITORIES config that
+            // makes the loop below non-iterable, used to escape the method as
+            // an unhandled rejection instead of reaching this log.
+            this.logger.error({
+                message: 'Error creating GitLab webhooks',
+                context: GitlabService.name,
+                serviceName: 'GitlabService createMergeRequestWebhook',
+                error: error,
+                metadata: { organizationAndTeamData },
+            });
+        }
     }
 
     private describeWebhookCreationFailure(error: any): string {

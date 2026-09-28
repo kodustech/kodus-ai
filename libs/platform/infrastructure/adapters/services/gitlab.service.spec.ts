@@ -665,12 +665,15 @@ describe('GitlabService', () => {
                 authMode: AuthMode.TOKEN,
                 host: 'gitlab.example.com',
             });
-            jest.spyOn(service as any, 'instanceGitlabApi').mockReturnValue({
+            const gitlabApi = {
                 ProjectHooks: {
                     all: jest.fn().mockResolvedValue([]),
                     add,
                 },
-            });
+            };
+            jest.spyOn(service as any, 'instanceGitlabApi').mockReturnValue(
+                gitlabApi,
+            );
             jest.spyOn(
                 service as any,
                 'findOneByOrganizationAndTeamDataAndConfigKey',
@@ -678,7 +681,7 @@ describe('GitlabService', () => {
 
             process.env.API_GITLAB_CODE_MANAGEMENT_WEBHOOK = webhookUrl;
 
-            return { createOrUpdateConfig };
+            return { createOrUpdateConfig, gitlabApi };
         };
 
         afterEach(() => {
@@ -752,6 +755,47 @@ describe('GitlabService', () => {
                 {},
                 'integration-1',
                 organizationAndTeamData,
+            );
+        });
+
+        // Without the URL the hooks point at, GitLab rejects the add. That
+        // rejection must land in the recorded failures like any other provider
+        // error: the point of this PR is that an unconfigured deployment sees
+        // WHY its webhooks are missing, not a silently skipped step. This is
+        // also the direction the reviewer asked for, since the guard they
+        // expected does not exist and the failure path is the real behaviour.
+        it('records the failure when the webhook URL is not configured', async () => {
+            const add = jest
+                .fn()
+                .mockRejectedValue(
+                    new Error('url is missing, url must be a valid URL'),
+                );
+            const { gitlabApi } = setUpWebhookCreation({
+                repositories: [{ id: 11 }],
+                add,
+            });
+            const record = jest
+                .spyOn(service as any, 'recordWebhookCreationFailures')
+                .mockResolvedValue(undefined);
+
+            delete process.env.API_GITLAB_CODE_MANAGEMENT_WEBHOOK;
+
+            await service.createMergeRequestWebhook({
+                organizationAndTeamData,
+            });
+
+            // The hook is attempted with no URL (that is what GitLab rejects),
+            // and the rejection is recorded per repository.
+            expect(gitlabApi.ProjectHooks.all).toHaveBeenCalled();
+            expect(add).toHaveBeenCalled();
+            expect(record).toHaveBeenCalledWith(
+                organizationAndTeamData,
+                expect.objectContaining({
+                    '11': expect.objectContaining({
+                        reason: expect.any(String),
+                        at: expect.any(String),
+                    }),
+                }),
             );
         });
     });

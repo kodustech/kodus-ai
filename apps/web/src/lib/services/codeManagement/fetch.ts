@@ -1,3 +1,4 @@
+import { authorizedFetch } from "@services/fetch";
 import {
     AuthMode,
     OrganizationAndTeamData,
@@ -69,15 +70,17 @@ export type WebhookCreationFailure = {
 export const getWebhookCreationFailures = async (
     teamId: string,
 ): Promise<Record<string, WebhookCreationFailure>> => {
-    const {
-        data,
-    }: { data: { failures: Record<string, WebhookCreationFailure> } } =
-        await axiosAuthorized.fetcher(
-            CODE_MANAGEMENT_API_PATHS.GET_WEBHOOK_CREATION_FAILURES,
-            { params: { teamId } },
-        );
+    // Server components read this through the authorized server-side path:
+    // axiosAuthorized attaches no bearer token, so the API's JWT guard
+    // rejected every call and the alert never rendered (only reaches this
+    // through the /settings/git page today).
+    const response = await authorizedFetch<{
+        failures: Record<string, WebhookCreationFailure>;
+    }>(CODE_MANAGEMENT_API_PATHS.GET_WEBHOOK_CREATION_FAILURES, {
+        params: { teamId },
+    });
 
-    return data?.failures ?? {};
+    return response?.failures ?? {};
 };
 
 export const createOrUpdateRepositoriesInChunks = async (

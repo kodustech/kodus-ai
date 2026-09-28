@@ -462,6 +462,17 @@
     }
   },
   {
+    "key": "codeManagement.controller.ts#getWebhookCreationFailures",
+    "httpMethod": "GET",
+    "urlPath": "/code-management/webhook-failures",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "key": "codeManagement.controller.ts#onboardingReviewPR",
     "httpMethod": "POST",
     "urlPath": "/code-management/finish-onboarding",
