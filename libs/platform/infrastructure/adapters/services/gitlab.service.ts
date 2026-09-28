@@ -385,6 +385,72 @@ export class GitlabService implements Omit<
         }
     }
 
+    /**
+     * Hunks GitLab collapsed out of the merge-request diff.
+     *
+     * `/diffs` serves a cached, size-limited view: past `diff_max_patch_bytes`
+     * an entry comes back with `collapsed` or `too_large` set and an EMPTY
+     * `diff`, which a lockfile bump reaches easily. `access_raw_diffs` reads
+     * from the database instead and returns the real hunks.
+     */
+    async getFilePatches(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id?: string; name: string; owner?: string };
+        prNumber: number;
+        paths: string[];
+    }): Promise<Array<{ path: string; patch: string }>> {
+        const { organizationAndTeamData, repository, prNumber, paths } = params;
+
+        if (!paths.length) {
+            return [];
+        }
+
+        const authDetail = await this.getAuthDetails(organizationAndTeamData);
+        if (!authDetail) {
+            return [];
+        }
+
+        const projectId = repository.id
+            ? String(repository.id)
+            : `${repository.owner}/${repository.name}`;
+
+        try {
+            const gitlabAPI = this.instanceGitlabApi(authDetail);
+            const mr = await gitlabAPI.MergeRequests.showChanges(
+                projectId,
+                prNumber,
+                { accessRawDiffs: true },
+            );
+
+            const wanted = new Set(paths);
+            const out: Array<{ path: string; patch: string }> = [];
+
+            for (const change of (mr as { changes?: unknown[] })?.changes ??
+                []) {
+                const typed = change as {
+                    new_path?: string;
+                    old_path?: string;
+                    diff?: string;
+                };
+                const path = typed.new_path ?? typed.old_path;
+                if (!path || !wanted.has(path) || !typed.diff?.trim()) {
+                    continue;
+                }
+                out.push({ path, patch: typed.diff });
+            }
+
+            return out;
+        } catch (error) {
+            this.logger.warn({
+                message: 'Failed to read raw merge request diffs',
+                context: GitlabService.name,
+                error,
+                metadata: { projectId, prNumber },
+            });
+            return [];
+        }
+    }
+
     private mapGitlabCommitStatus(status: {
         id: number;
         name?: string;
@@ -433,7 +499,9 @@ export class GitlabService implements Omit<
         return 'queued';
     }
 
-    private mapGitlabConclusion(status: string): CheckEvidenceConclusion | null {
+    private mapGitlabConclusion(
+        status: string,
+    ): CheckEvidenceConclusion | null {
         switch (status) {
             case 'success':
                 return 'success';
@@ -4696,9 +4764,7 @@ export class GitlabService implements Omit<
             if (webhookUrl) {
                 try {
                     const hooks = await gitlabAPI.ProjectHooks.all(projectId);
-                    result.hook = hooks.some(
-                        (hook) => hook?.url === webhookUrl,
-                    )
+                    result.hook = hooks.some((hook) => hook?.url === webhookUrl)
                         ? 'present'
                         : 'missing';
                 } catch (error) {
@@ -5323,8 +5389,14 @@ export class GitlabService implements Omit<
             sourceRefName: mergeRequest?.source_branch ?? '', // TODO: remove, legacy, use head.ref
             head: {
                 ref: mergeRequest?.source_branch ?? '',
+                // `diff_refs` is typed loosely by the client; the head sha
+                // lives there on a merge-request payload and falls back to
+                // the MR's own sha.
                 sha:
-                    mergeRequest?.diff_refs?.head_sha ??
+                    (
+                        mergeRequest?.diff_refs as
+                            { head_sha?: string } | undefined
+                    )?.head_sha ??
                     mergeRequest?.sha ??
                     '',
                 repo: {

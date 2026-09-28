@@ -32,3 +32,47 @@ describe('registered code management services expose getCheckEvidence', () => {
         ).toBe('function');
     });
 });
+
+/**
+ * `getFilePatches` recovers hunks a host withheld. Only two hosts need it,
+ * and the reason each other host does NOT is worth pinning down: the facade
+ * treats a missing method as "nothing to recover", so an implementation added
+ * to the wrong class would be silently unreachable — exactly how Bitbucket's
+ * `getCheckEvidence` was lost.
+ *
+ *   GitHub  — `pulls.listFiles` and `compare` both drop `patch` past a size
+ *             cap; the raw diff media type does not.
+ *   GitLab  — `/diffs` serves a collapsed, size-limited view; reading the raw
+ *             diffs bypasses it.
+ *   Bitbucket — already fetches a per-file raw diff, which is not capped.
+ *   Azure   — builds its patches locally with `createTwoFilesPatch`, so no
+ *             API limit applies.
+ */
+describe('which hosts recover withheld file patches', () => {
+    const implemented: Array<[PlatformType, { prototype: object }]> = [
+        [PlatformType.GITHUB, GithubService],
+        [PlatformType.GITLAB, GitlabService],
+    ];
+
+    const notNeeded: Array<[PlatformType, { prototype: object }]> = [
+        [PlatformType.BITBUCKET, BitbucketService],
+        [PlatformType.AZURE_REPOS, AzureReposService],
+        [PlatformType.FORGEJO, ForgejoService],
+    ];
+
+    it.each(implemented)('%s implements getFilePatches', (_platform, cls) => {
+        expect(
+            typeof (cls.prototype as Record<string, unknown>).getFilePatches,
+        ).toBe('function');
+    });
+
+    it.each(notNeeded)(
+        '%s deliberately does not, and the facade degrades to no recovery',
+        (_platform, cls) => {
+            expect(
+                typeof (cls.prototype as Record<string, unknown>)
+                    .getFilePatches,
+            ).toBe('undefined');
+        },
+    );
+});
