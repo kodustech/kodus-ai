@@ -291,3 +291,89 @@ describe('host path spelling', () => {
         expect(result.analyzerFindings?.[0].path).toBe('/src/app.ts');
     });
 });
+
+/**
+ * `ignorePaths` has to hold all the way to the published comment. Two ways it
+ * leaked: a tool whose selection came out empty was still launched — and a
+ * scanner given no targets falls back to the whole checkout — and clipping
+ * matched findings against every file the STAGE saw, ignored ones included.
+ */
+describe('a tool that may not read ignored files', () => {
+    const contextWithOnlyIgnored = () =>
+        makeContext({
+            changedFiles: [],
+            ignoredFileChanges: [
+                {
+                    filename: 'fixtures/tok.ts',
+                    patch: '@@ -0,0 +1 @@\n+secret',
+                },
+            ],
+        } as never);
+
+    it('is not launched at all when everything it could scan was ignored', async () => {
+        const run = jest.fn().mockResolvedValue([]);
+        const tool = makeTool({
+            run,
+            selectFiles: ((f: unknown[]) => f) as never,
+        });
+
+        const stage = new RunAnalyzersStage(
+            new AnalyzerToolRouter(),
+            { isEnabled: jest.fn().mockResolvedValue(true) } as never,
+            { getFilePatches: jest.fn().mockResolvedValue([]) } as never,
+            [tool],
+        );
+
+        await (
+            stage as unknown as {
+                executeStage: (c: unknown) => Promise<unknown>;
+            }
+        ).executeStage(contextWithOnlyIgnored());
+
+        expect(run).not.toHaveBeenCalled();
+    });
+
+    it('cannot publish a finding anchored on an ignored file', async () => {
+        // A tool that reads ignored files reports one anyway; clipping must
+        // still drop it, because the review was told not to comment there.
+        const tool = makeTool({
+            readsIgnoredFiles: true,
+            selectFiles: ((files: Array<{ filename: string }>) =>
+                files.filter((f) => f.filename === 'src/a.ts')) as never,
+            run: jest
+                .fn()
+                .mockResolvedValue([
+                    finding({ path: 'fixtures/tok.ts', startLine: 1 }),
+                ]),
+        });
+
+        const stage = new RunAnalyzersStage(
+            new AnalyzerToolRouter(),
+            { isEnabled: jest.fn().mockResolvedValue(true) } as never,
+            { getFilePatches: jest.fn().mockResolvedValue([]) } as never,
+            [tool],
+        );
+
+        const result = await (
+            stage as unknown as {
+                executeStage: (c: unknown) => Promise<{
+                    analyzerFindings?: unknown[];
+                }>;
+            }
+        ).executeStage(
+            makeContext({
+                changedFiles: [
+                    { filename: 'src/a.ts', patch: patchAdding(1, 3) },
+                ],
+                ignoredFileChanges: [
+                    {
+                        filename: 'fixtures/tok.ts',
+                        patch: patchAdding(1, 3),
+                    },
+                ],
+            } as never),
+        );
+
+        expect(result.analyzerFindings ?? []).toEqual([]);
+    });
+});

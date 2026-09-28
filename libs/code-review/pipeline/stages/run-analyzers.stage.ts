@@ -101,18 +101,29 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
             return this.storeRouting(context, decisions);
         }
 
+        // Routing ran against reviewed + ignored files, but a tool that may
+        // not read the ignored ones can end up selecting nothing. Launching
+        // it anyway is worse than skipping it: given no targets a scanner
+        // falls back to the whole checkout.
         const selectedFiles = new Map(
-            selected.map(({ tool }) => [
-                tool,
-                tool.selectFiles(filesFor(tool)),
-            ]),
+            selected
+                .map(
+                    ({ tool }) =>
+                        [tool, tool.selectFiles(filesFor(tool))] as const,
+                )
+                .filter(([, files]) => files.length > 0),
         );
+
+        const ran = selected.filter(({ tool }) => selectedFiles.has(tool));
+        if (ran.length === 0) {
+            return this.storeRouting(context, decisions);
+        }
 
         await this.backfillMissingPatches(context, selectedFiles);
 
         // One failing tool must not cost the findings of the others.
         const results = await Promise.allSettled(
-            selected.map(({ tool }) =>
+            ran.map(({ tool }) =>
                 tool.run({ sandbox, files: selectedFiles.get(tool) ?? [] }),
             ),
         );
@@ -143,7 +154,7 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
             if (result.status === 'fulfilled') {
                 // Tagged here because only the stage knows which tool ran
                 // which position; the tools never see each other.
-                const toolId = selected[index].tool.id;
+                const toolId = ran[index].tool.id;
                 findings.push(
                     ...result.value.map((finding) => ({
                         ...finding,
@@ -153,7 +164,7 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
                 );
                 return;
             }
-            const toolId = selected[index].tool.id;
+            const toolId = ran[index].tool.id;
             failed.push(toolId);
             this.logger.warn({
                 message: `Analyzer "${toolId}" failed`,
@@ -163,7 +174,12 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
             });
         });
 
-        const inDiff = this.clipToDiff(findings, changedFiles);
+        // Clipped against the files the tools were actually handed. Using
+        // the stage's whole list would let a finding from an ignored path
+        // through on its own added lines — the very files withheld above.
+        const inDiff = this.clipToDiff(findings, [
+            ...new Set([...selectedFiles.values()].flat()),
+        ]);
 
         // Logged even when empty, and with the count BEFORE clipping. A tool
         // that produced nothing and a tool whose findings were all clipped away
@@ -174,7 +190,7 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
             context: this.stageName,
             metadata: {
                 prNumber: context.pullRequest?.number,
-                ran: selected.map(({ tool }) => tool.id),
+                ran: ran.map(({ tool }) => tool.id),
                 failed,
                 raw: findings.length,
                 inDiff: inDiff.length,

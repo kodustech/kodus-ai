@@ -47,6 +47,13 @@ export class SecretScanTool implements AnalyzerTool {
     }
 
     async run({ sandbox, files }: ToolRunInput): Promise<AnalyzerFinding[]> {
+        // `betterleaks dir` with no path scans the entire checkout, which
+        // would reach every file the review was told to ignore. No targets
+        // means nothing to scan, not "scan everything".
+        if (files.length === 0) {
+            return [];
+        }
+
         const targets = files
             .map((file) => quote(toRepoRelativePath(file.filename)))
             .join(' ');
