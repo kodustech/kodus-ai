@@ -416,6 +416,16 @@ describe('delivery chain: a merged Kody Rule comment keeps its other locations (
         expect(body(comment)).toContain(':27-27');
         expect(countOf(body(comment), 'Also found in')).toBe(1);
 
+        // The same list has to reach llmPrompt too: the per-comment "Prompt
+        // for LLM" copy block and the consolidated @agentPrompt read it, and
+        // validate-suggestions hands it to the fixer agent as the instruction.
+        // A prompt naming only the kept location makes an agent fix line 17 and
+        // miss line 27.
+        const prompt = String(comment.suggestion?.llmPrompt ?? '');
+        expect(prompt).toContain('Also found in');
+        expect(prompt).toContain(':27-27');
+        expect(countOf(prompt, 'Also found in')).toBe(1);
+
         // Ordering the fix establishes: the list is not part of what the
         // formatter sees, so nothing can rewrite it away.
         const formatterInput = formatter.mock.calls[0][0] as any[];
@@ -447,5 +457,7 @@ describe('delivery chain: a merged Kody Rule comment keeps its other locations (
         expect(comment.line).toBe(17);
         expect(body(comment)).toContain(':27-27');
         expect(countOf(body(comment), 'Also found in')).toBe(1);
+        // The prompt copy carries the list in this shape too.
+        expect(String(comment.suggestion?.llmPrompt ?? '')).toContain(':27-27');
     });
 });
