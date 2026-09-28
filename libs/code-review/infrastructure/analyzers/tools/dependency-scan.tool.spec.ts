@@ -791,3 +791,59 @@ describe('anchoring a package name', () => {
         expect(findings.map((f) => f.ruleId).join(',')).toContain('GHSA-ccc');
     });
 });
+
+/**
+ * `-L` names each manifest explicitly, and osv-scanner fails on a path that
+ * is not there. A manifest this pull request ADDED has no base version, so it
+ * is deliberately absent from the rebuilt tree — naming it anyway turned an
+ * ordinary added lockfile into a failed scan with nothing published.
+ */
+describe('the base scan reads only what the base tree holds', () => {
+    const tool = new DependencyScanTool();
+
+    it('does not name an added manifest in the base scan', async () => {
+        const commands: string[] = [];
+        const sandbox = {
+            repoDir: '/repo',
+            run: jest.fn(async (command: string) => {
+                commands.push(command);
+                if (command.includes('osv-scanner')) {
+                    return {
+                        stdout: scanned(
+                            command.includes('kody-deps-base')
+                                ? osv([])
+                                : osv([
+                                      {
+                                          name: 'lodash',
+                                          version: '4.17.11',
+                                          id: 'GHSA-aaa',
+                                      },
+                                  ]),
+                        ),
+                        stderr: '',
+                        exitCode: 0,
+                    };
+                }
+                return { stdout: '', stderr: '', exitCode: 0 };
+            }),
+            readFile: jest.fn(async () => HEAD),
+            writeFile: jest.fn(),
+        } as never;
+
+        // The whole manifest is added, so it rewinds to nothing.
+        const findings = await tool.run({
+            sandbox,
+            files: [file(ADDED_PATCH)],
+        });
+
+        const baseScan = commands.find(
+            (c) => c.includes('osv-scanner') && c.includes('kody-deps-base'),
+        );
+
+        // Either the base is not scanned at all, or it names no manifest —
+        // never a path the tree does not contain.
+        expect(baseScan).toBeUndefined();
+        // And the advisories still surface: an added manifest introduces them.
+        expect(findings.map((f) => f.ruleId).join(',')).toContain('GHSA-aaa');
+    });
+});

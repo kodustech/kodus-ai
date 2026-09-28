@@ -213,6 +213,10 @@ export class DependencyScanTool implements AnalyzerTool {
         // Which manifests had to fall back to the base-branch TIP, which is
         // not what this pull request forked from.
         const fromTip: string[] = [];
+        // Only manifests actually written into the base tree may be scanned:
+        // `-L` on a path that does not exist makes osv-scanner fail, and a
+        // failed base scan now throws rather than being read as "clean".
+        const materialised: string[] = [];
         let needsGit = false;
 
         for (const file of files) {
@@ -251,6 +255,7 @@ export class DependencyScanTool implements AnalyzerTool {
                             Buffer.from(rewound, 'utf8').toString('base64'),
                         )} | base64 -d > ${quote(target)}`,
                     );
+                    materialised.push(relative);
                     continue;
                 }
             }
@@ -273,6 +278,13 @@ export class DependencyScanTool implements AnalyzerTool {
                     `if git -C ${quote(sandbox.repoDir)} cat-file -e ${ref} 2>/dev/null; then ` +
                         `git -C ${quote(sandbox.repoDir)} show ${ref} > ${quote(target)} || exit 1; ` +
                         `else rm -f ${quote(target)}; fi`,
+                );
+                // Scanned only if the base really carries it — the else
+                // branch above removes the target for a manifest this pull
+                // request added, and scanning a path that is not there fails
+                // the whole run.
+                setup.push(
+                    `test -s ${quote(target)} && echo ${quote(relative)} >> ${quote(`${baseDir}/.materialised`)} || true`,
                 );
                 continue;
             }
@@ -329,11 +341,20 @@ export class DependencyScanTool implements AnalyzerTool {
         }
 
         try {
-            return await this.scan(
-                sandbox,
-                baseDir,
-                files.map((file) => toRepoRelativePath(file.filename)),
-            );
+            const present = needsGit
+                ? [
+                      ...materialised,
+                      ...(await this.listMaterialised(sandbox, baseDir)),
+                  ]
+                : materialised;
+
+            // Nothing carried over from the base: every advisory in head is
+            // genuinely new, which an empty result expresses exactly.
+            if (present.length === 0) {
+                return [];
+            }
+
+            return await this.scan(sandbox, baseDir, [...new Set(present)]);
         } finally {
             await sandbox.run(`rm -rf ${quote(baseDir)}`, {
                 timeoutMs: 15_000,
@@ -364,6 +385,29 @@ export class DependencyScanTool implements AnalyzerTool {
                 manifestCount: files.length,
             },
         });
+    }
+
+    /**
+     * Which manifests the git branch actually produced. The shell knows, the
+     * caller does not: `cat-file -e` decides per file whether the base even
+     * has that manifest, and only the ones it wrote may be scanned.
+     */
+    private async listMaterialised(
+        sandbox: ToolRunInput['sandbox'],
+        baseDir: string,
+    ): Promise<string[]> {
+        try {
+            const result = await sandbox.run(
+                `cat ${quote(`${baseDir}/.materialised`)} 2>/dev/null || true`,
+                { timeoutMs: 15_000 },
+            );
+            return (result.stdout ?? '')
+                .split('\n')
+                .map((line) => line.trim())
+                .filter(Boolean);
+        } catch {
+            return [];
+        }
     }
 
     private async scan(
