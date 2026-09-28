@@ -10,6 +10,7 @@ import { ConnectionString } from 'connection-string';
 import { DatabaseConnection } from '@libs/core/infrastructure/config/types';
 
 import { createLogger } from '@libs/core/log/logger';
+import { withLangfuseObservation } from './langfuse';
 import { deriveTu } from './token-usage-tu';
 import { setLlmObservability } from '@libs/llm/llm-observability';
 import {
@@ -453,7 +454,29 @@ export class ObservabilityService implements OnModuleInit {
             params.spanName,
             async (span) => {
                 try {
-                    const result = await params.exec();
+                    // One Langfuse trace per call, its id kept on the usage row
+                    // so the row leads straight to the trace.
+                    const result = await withLangfuseObservation(
+                        params.runName ?? params.spanName,
+                        (traceId) => {
+                            if (traceId) {
+                                span?.setAttributes?.({
+                                    externalTraceId: traceId,
+                                });
+                            }
+                            return params.exec();
+                        },
+                        {
+                            correlationId:
+                                this.getObsInstance().getContext()
+                                    ?.correlationId,
+                            organizationId: a.organizationId as
+                                | string
+                                | undefined,
+                            teamId: a.teamId as string | undefined,
+                            prNumber: a.prNumber as number | undefined,
+                        },
+                    );
                     span?.setAttributes?.(
                         // Single shared reader — same mapping the agent harness
                         // uses, so cache-read/write + reasoning can't be captured
