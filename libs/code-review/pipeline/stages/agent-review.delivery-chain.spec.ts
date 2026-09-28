@@ -104,7 +104,11 @@ const buildStages = () => {
         } as any,
     );
 
-    const posted = { prLevel: [] as any[], inline: [] as any[] };
+    const posted = {
+        prLevel: [] as any[],
+        inline: [] as any[],
+        anchors: [] as any[],
+    };
     const saved = { prLevel: [] as any[], fileLevel: [] as any[] };
 
     const commentManager = {
@@ -120,7 +124,11 @@ const buildStages = () => {
             },
         ),
         createLineComments: jest.fn(
-            async (_o: any, _n: any, _r: any, lineComments: any[]) => {
+            async (...args: any[]) => {
+                const lineComments = args[3];
+                // arg 8 (index 7) is the reviewed commit the stage pins into
+                // the posting call — the context's pull request head sha.
+                posted.anchors.push(args[7]);
                 posted.inline.push(...lineComments);
                 return {
                     lastAnalyzedCommit: { sha: 'head' },
@@ -189,7 +197,7 @@ const makeContext = (
     frozenContext({
         organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
         repository: { id: 'repo-1', name: 'repo-1', language: 'ts' },
-        pullRequest: { number: 7 },
+        pullRequest: { number: 7, head: { sha: 'context-head-sha' } },
         platformType: PlatformType.GITHUB,
         changedFiles: over.changedFiles ?? [{ filename: FILE, patch: PATCH }],
         prAllCommits: [{ sha: 'head' }],
@@ -310,6 +318,16 @@ describe('delivery chain — AgentReview → CreatePrLevelComments → CreateFil
         expect(posted.inline.map((c) => tag(c.suggestion))).toEqual(['C:']);
         expect(posted.prLevel).toEqual([]);
         expect(saved.fileLevel.map(tag)).toEqual(['C:']);
+    });
+
+    it('forwards the pipeline context head sha as the reviewed commit the stage anchors on', async () => {
+        const { posted } = await runChain([findings.inline]);
+
+        expect(posted.inline).toHaveLength(1);
+        // The stage must pass context.pullRequest.head.sha through, so the
+        // comments are posted against the commit the review read rather than
+        // whatever the PR head happens to be when the comment is posted.
+        expect(posted.anchors).toEqual(['context-head-sha']);
     });
 });
 

@@ -308,6 +308,7 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                 changedFiles,
                 platformType,
                 (error) => promptReplyErrors.push(error),
+                pullRequest?.head?.sha,
             );
 
         // Save pull request suggestions — comments already posted at this point
@@ -385,6 +386,7 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
         changedFiles: FileChange[] = [],
         platformType?: PlatformType,
         onPromptReplyError?: (error: Error) => void,
+        reviewedCommit?: string,
     ) {
         try {
             // Children in a cluster are merged into their parent's
@@ -519,6 +521,7 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                     fallbackSuggestionsBySeverity,
                     platformType,
                     onPromptReplyError,
+                    reviewedCommit,
                 );
 
             return { lastAnalyzedCommit, commentResults };

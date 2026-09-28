@@ -1922,3 +1922,89 @@ describe('CommentManagerService.createReviewCommentWithRetry — line mismatch',
         expect(createReviewComment.mock.calls[2][0].lineComment.line).toBe(5);
     });
 });
+
+// The anchor for every inline comment used to be re-derived at posting time
+// from the PR commit list, whose last element is the head as of the post — not
+// the commit the review actually read. A push landing during the review then
+// moved every anchor to a tree the review never looked at, and the commits
+// pushed meanwhile were reported to the pipeline as already analyzed, so the
+// next incremental run skipped them. The reviewed commit is known to the
+// caller (the pipeline context head sha), so createLineComments takes it as an
+// optional argument and anchors on it when present.
+describe('CommentManagerService.createLineComments — anchors on the reviewed commit', () => {
+    const REVIEWED = { sha: 'reviewed-commit-sha', message: 'reviewed' };
+    const PUSHED = { sha: 'pushed-during-review-sha', message: 'pushed' };
+
+    const build = () => {
+        const createReviewComment = jest
+            .fn()
+            .mockResolvedValue({ id: 'c-1', pull_request_review_id: 42 });
+        const codeManagementService = {
+            getCommitsForPullRequestForCodeReview: jest
+                .fn()
+                .mockResolvedValue([REVIEWED, PUSHED]),
+            createReviewComment,
+        };
+        const svc = new CommentManagerService(
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            codeManagementService as any,
+        );
+        return { svc, createReviewComment };
+    };
+
+    const lineComments = [
+        {
+            path: 'a.ts',
+            start_line: 3,
+            line: 10,
+            side: 'RIGHT',
+            body: {},
+            suggestion: { id: 's-1' },
+        },
+    ] as any;
+
+    it('posts against the reviewed commit and returns it, not the head at posting time', async () => {
+        const { svc, createReviewComment } = build();
+
+        const result = await svc.createLineComments(
+            { organizationId: 'o', teamId: 't' } as any,
+            7,
+            { name: 'repo', id: '1', language: 'ts' },
+            lineComments,
+            'en-US',
+            undefined,
+            undefined,
+            REVIEWED.sha,
+        );
+
+        // The per-comment posting call must anchor on the commit the review read.
+        expect(createReviewComment.mock.calls[0][0].commit).toEqual({
+            sha: REVIEWED.sha,
+        });
+        // The commit handed back to the caller drives the next incremental run:
+        // returning the post-time head would mark the push as already analyzed.
+        expect(result.lastAnalyzedCommit).toEqual({ sha: REVIEWED.sha });
+        // The live fetch still returns the full list, head included.
+        expect(result.commits).toEqual([REVIEWED, PUSHED]);
+        expect(result.commentResults).toHaveLength(1);
+    });
+
+    it('falls back to the live head when no reviewed commit is supplied', async () => {
+        const { svc, createReviewComment } = build();
+
+        const result = await svc.createLineComments(
+            { organizationId: 'o', teamId: 't' } as any,
+            7,
+            { name: 'repo', id: '1', language: 'ts' },
+            lineComments,
+            'en-US',
+        );
+
+        expect(createReviewComment.mock.calls[0][0].commit).toBe(PUSHED);
+        expect(result.lastAnalyzedCommit).toBe(PUSHED);
+    });
+});
+
