@@ -965,3 +965,34 @@ describe('anchoring across ecosystems that join names with a slash', () => {
         expect(rules).toContain('GHSA-npm');
     });
 });
+
+/**
+ * `scan source` with no `-L` walks the directory instead. On the head tree
+ * that is the whole checkout; on the base tree it is a set that no longer
+ * corresponds to head. Either way the difference between the two stops
+ * meaning "what this change introduced".
+ */
+describe('a scan is never issued without targets', () => {
+    const tool = new DependencyScanTool();
+
+    it('emits no command at all rather than one with no -L', async () => {
+        const commands: string[] = [];
+        const sandbox = {
+            repoDir: '/repo',
+            run: jest.fn(async (command: string) => {
+                commands.push(command);
+                return { stdout: scanned(osv([])), stderr: '', exitCode: 0 };
+            }),
+            readFile: jest.fn(async () => HEAD),
+            writeFile: jest.fn(),
+        } as never;
+
+        await tool.run({ sandbox, files: [] });
+
+        for (const command of commands.filter((c) =>
+            c.includes('osv-scanner'),
+        )) {
+            expect(command).toContain('-L ');
+        }
+    });
+});

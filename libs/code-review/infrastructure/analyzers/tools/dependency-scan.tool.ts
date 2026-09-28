@@ -448,6 +448,14 @@ export class DependencyScanTool implements AnalyzerTool {
         // comparable: `-r` would make head cover every lockfile in the tree
         // while the base holds only the changed ones, and the difference
         // between those two sets would read as "introduced".
+        // Never issue a target-less scan: `scan source` with no `-L` falls
+        // back to walking the directory, which for the head tree means the
+        // whole checkout and for the base tree means a set that no longer
+        // matches head — either way the difference stops being meaningful.
+        if (manifests.length === 0) {
+            return [];
+        }
+
         const targets = manifests
             .map((manifest) => `-L ${quote(`${dir}/${manifest}`)}`)
             .join(' ');
