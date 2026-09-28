@@ -2827,13 +2827,14 @@ export class KodyRulesSyncService {
                     },
                 );
 
-            if (contextReferenceId) {
-                await this.kodyRulesService.updateRuleReferences(
-                    organizationAndTeamData.organizationId,
-                    ruleId,
-                    { contextReferenceId },
-                );
-            }
+            // Written even when undefined: detection returns no id for a rule
+            // that references nothing, and the pointer must then be cleared —
+            // the same as a save from the UI (create-or-update.use-case.ts).
+            await this.kodyRulesService.updateRuleReferences(
+                organizationAndTeamData.organizationId,
+                ruleId,
+                { contextReferenceId },
+            );
 
             this.logger.log({
                 message: 'Processed context references for synced kody rule',
