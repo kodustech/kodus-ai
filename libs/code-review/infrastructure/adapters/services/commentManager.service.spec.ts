@@ -391,6 +391,79 @@ describe('CommentManagerService.generateSummaryPR', () => {
             expect(getClassification(thrown)).toBeDefined();
         });
 
+        // Production 2026-09-28: a gateway with a smaller window than the model
+        // name suggests rejected the single summary call ("Your input exceeds
+        // the context window of this model"), and the retry re-sent the same
+        // oversized prompt. With no maxInputTokens configured nothing split it.
+        describe('context overflow on the single call', () => {
+            const overflow = new Error(
+                'Your input exceeds the context window of this model. Please adjust your input and try again.',
+            );
+            const bigFiles = ['a.ts', 'b.ts', 'c.ts'].map((filename) => ({
+                filename,
+                patch: `+ ${'x'.repeat(4000)}`,
+                status: 'modified' as any,
+            }));
+
+            it('retries split into chunks and consolidates', async () => {
+                codeManagementService.getPullRequestByNumber.mockResolvedValue({
+                    body: '',
+                });
+                (tracedGenerateText as jest.Mock)
+                    .mockRejectedValueOnce(overflow)
+                    .mockImplementation(async ({ prompt }: { prompt?: string }) => {
+                        if (prompt) capturedPrompts.push({ prompt, role: 'user' });
+                        return { text: NEW_SUMMARY_TEXT };
+                    });
+
+                const result = await service.generateSummaryPR(
+                    stubPR,
+                    stubRepository,
+                    bigFiles,
+                    stubOrg,
+                    'en-US',
+                    summaryConfig,
+                );
+
+                expect(result).toContain(NEW_SUMMARY_TEXT);
+                const chunkPrompts = capturedPrompts.filter((p) =>
+                    /This is chunk \d+ of \d+/.test(p.prompt),
+                );
+                expect(chunkPrompts.length).toBeGreaterThanOrEqual(2);
+                // Every file still reaches the model, in some chunk.
+                for (const f of bigFiles) {
+                    expect(
+                        chunkPrompts.some((p) => p.prompt.includes(f.filename)),
+                    ).toBe(true);
+                }
+            });
+
+            it('does not split on an error that is not an overflow', async () => {
+                codeManagementService.getPullRequestByNumber.mockResolvedValue({
+                    body: '',
+                });
+                (tracedGenerateText as jest.Mock)
+                    .mockRejectedValueOnce(new Error('Service Unavailable'))
+                    .mockImplementation(async ({ prompt }: { prompt?: string }) => {
+                        if (prompt) capturedPrompts.push({ prompt, role: 'user' });
+                        return { text: NEW_SUMMARY_TEXT };
+                    });
+
+                await service.generateSummaryPR(
+                    stubPR,
+                    stubRepository,
+                    bigFiles,
+                    stubOrg,
+                    'en-US',
+                    summaryConfig,
+                );
+
+                expect(
+                    capturedPrompts.some((p) => /This is chunk/.test(p.prompt)),
+                ).toBe(false);
+            });
+        });
+
         it('still returns null for the deliberate skip (summary disabled)', async () => {
             const result = await service.generateSummaryPR(
                 stubPR,
