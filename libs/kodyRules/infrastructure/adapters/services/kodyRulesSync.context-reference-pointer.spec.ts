@@ -3,7 +3,8 @@ import { KodyRulesSyncService } from './kodyRulesSync.service';
 /**
  * A synced rule and a rule saved from the UI must end up pointing at the same
  * thing. Reference detection returns no id for a rule that references nothing;
- * the UI path clears the rule's pointer then, so the sync path must too — a
+ * both paths clear the rule's pointer then, with null (the repository drops
+ * undefined fields, so undefined would leave it in place) — a
  * rule left pointing at an empty revision is loaded on every review, and the
  * review warns that its references resolved to nothing.
  */
@@ -71,7 +72,7 @@ describe('KodyRulesSyncService — context reference pointer', () => {
         expect(kodyRulesService.updateRuleReferences).toHaveBeenCalledWith(
             'org-1',
             'rule-1',
-            { contextReferenceId: undefined },
+            { contextReferenceId: null },
         );
     });
 });

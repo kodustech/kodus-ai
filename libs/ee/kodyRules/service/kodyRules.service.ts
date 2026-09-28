@@ -953,7 +953,7 @@ export class KodyRulesService implements IKodyRulesService {
         organizationId: string,
         ruleId: string,
         references: {
-            contextReferenceId?: string;
+            contextReferenceId?: string | null;
             // Todos os outros campos de referência foram movidos para Context OS
         },
     ): Promise<IKodyRule | null> {
