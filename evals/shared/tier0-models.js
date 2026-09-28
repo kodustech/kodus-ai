@@ -100,6 +100,7 @@ const TIER0 = {
     // nao de env. Cobra na cota semanal do plano ChatGPT, nao por token — sai
     // no leaderboard com accessPath=subscription e SEM coluna de custo.
     'gpt-5.6-sol@sub': { provider: 'codex_subscription', codexModel: 'gpt-5.6-sol', keyEnvs: [] },
+    'gpt-6-sol@sub': { provider: 'codex_subscription', codexModel: 'gpt-6-sol', keyEnvs: [] },
     'gpt-5.6-luna@sub': { provider: 'codex_subscription', codexModel: 'gpt-5.6-luna', keyEnvs: [] },
     'gpt-5.6-terra@sub': { provider: 'codex_subscription', codexModel: 'gpt-5.6-terra', keyEnvs: [] },
 
