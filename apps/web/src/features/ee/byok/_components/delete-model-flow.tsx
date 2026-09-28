@@ -96,7 +96,7 @@ export function deleteConfirmCopy(
 ): DeleteConfirmCopy {
     if (isLast) {
         return {
-            title: "Disconnect BYOK entirely?",
+            title: "Disconnect your last model?",
             description:
                 "This removes your only connected model. Kodus falls back to " +
                 "your environment-configured LLM if one exists, or stops running " +

@@ -36,12 +36,14 @@ describe("GateCtaLink", () => {
         expect(link).toHaveAttribute("href", "/pricing");
     });
 
-    it("fires captureGateCtaClick with feature, plan, and metadata on click", () => {
+    it("fires captureGateCtaClick with the gate id, both plan fields and metadata", () => {
         render(
             <GateCtaLink
                 feature="mcp_plugins"
-                plan="free"
-                metadata={{ surface: "locked_banner", lockedCount: 1 }}
+                surface="locked_banner"
+                planType="free_byok"
+                subscriptionStatus="active"
+                metadata={{ lockedCount: 1 }}
             />,
         );
 
@@ -52,10 +54,14 @@ describe("GateCtaLink", () => {
         fireEvent.click(screen.getByText(/upgrade plan/i));
 
         expect(captureGateCtaClick).toHaveBeenCalledTimes(1);
+        // Plan type and subscription status travel separately: "active"
+        // alone cannot tell a Free org from a paying one.
         expect(captureGateCtaClick).toHaveBeenCalledWith({
             feature: "mcp_plugins",
-            plan: "free",
-            metadata: { surface: "locked_banner", lockedCount: 1 },
+            surface: "locked_banner",
+            planType: "free_byok",
+            subscriptionStatus: "active",
+            metadata: { lockedCount: 1 },
         });
     });
 });

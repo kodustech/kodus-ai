@@ -157,7 +157,7 @@ export default function ChooseWorkspacePage() {
                 </Button>
                 <Button
                     size="md"
-                    variant="secondary"
+                    variant="helper"
                     className="w-full"
                     onClick={handleCreateNew}
                     disabled={isSubmitting}>

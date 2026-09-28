@@ -273,7 +273,7 @@ export function UserAuthForm() {
 
                     <Button
                         type="button"
-                        variant="secondary"
+                        variant="helper"
                         size="lg"
                         className="w-full"
                         onClick={handleSsoLogin}

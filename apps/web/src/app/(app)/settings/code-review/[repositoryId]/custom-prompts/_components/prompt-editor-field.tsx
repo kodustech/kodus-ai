@@ -96,7 +96,7 @@ function PromptEditorFieldComponent({
 
     return (
         <FormControl.Root>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="mb-2 flex flex-row items-center gap-2">
                     <FormControl.Label className="mb-0" htmlFor={name}>
                         {label}

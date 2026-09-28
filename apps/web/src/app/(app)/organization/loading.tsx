@@ -1,3 +1,3 @@
-import { GenericLoading } from "@components/ui/generic-loading";
+import { OrganizationPageSkeleton } from "@components/system/page-skeletons";
 
-export default GenericLoading;
+export default OrganizationPageSkeleton;

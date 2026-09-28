@@ -229,6 +229,18 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
             currentValue: mergedConfigValue,
         });
 
+        if (result) {
+            // Every org setting, named by its key. BYOK gets the richer
+            // event below; this is what makes a new toggle visible in
+            // analytics without another method here.
+            void this.telemetry.organizationSettingsUpdated({
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+                actorUserId: this.request.user?.uuid,
+                settingKey: organizationParametersKey,
+            });
+        }
+
         if (result && this.request.user?.uuid) {
             const telemetryMeta =
                 this.describeByokForTelemetry(mergedConfigValue);
@@ -409,12 +421,22 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         existing?: BYOKConfig,
     ): BYOKConfig {
         const existingById = new Map<string, BYOKCredential>();
-        const existingByProvider = new Map<string, BYOKCredential>();
+        // Provider → the org's ONLY credential for it, or `null` once a second
+        // one appears. The provider fallback exists for blobs saved before
+        // credential ids were stable; with two credentials of one provider —
+        // two OpenAI-compatible gateways, say — "the first one" is a coin
+        // flip, and keeping its ciphertext would hand one gateway the other's
+        // key. Ambiguous means no prior: a blank secret then fails the auth
+        // check below instead of silently borrowing a neighbour's.
+        const existingByProvider = new Map<string, BYOKCredential | null>();
         for (const cred of existing?.credentials ?? []) {
             if (!cred) continue;
             if (cred.id) existingById.set(cred.id, cred);
-            if (cred.provider && !existingByProvider.has(cred.provider)) {
-                existingByProvider.set(cred.provider, cred);
+            if (cred.provider) {
+                existingByProvider.set(
+                    cred.provider,
+                    existingByProvider.has(cred.provider) ? null : cred,
+                );
             }
         }
 
@@ -445,7 +467,7 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
             const prior =
                 (cred.id ? existingById.get(cred.id) : undefined) ??
                 (cred.provider
-                    ? existingByProvider.get(cred.provider)
+                    ? (existingByProvider.get(cred.provider) ?? undefined)
                     : undefined);
             const encrypted = this.encryptCredentialSecrets(cred, prior);
             // Auth-path integrity: after encrypt/keep, a non-managed credential

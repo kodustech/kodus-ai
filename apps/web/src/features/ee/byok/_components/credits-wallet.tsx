@@ -36,7 +36,9 @@ import {
     RefreshCwIcon,
     SparklesIcon,
 } from "lucide-react";
+import { SkeletonRows } from "@components/system/page-skeletons";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
+import { cn } from "src/core/utils/components";
 import {
     createCreditCheckoutAction,
     createCreditPaymentMethodCheckoutAction,
@@ -44,10 +46,14 @@ import {
     removeCreditPaymentMethodAction,
     updateCreditAutoTopUpAction,
 } from "src/features/ee/subscription/_actions/credits";
-import type { CreditLedgerEntry } from "src/features/ee/subscription/_services/billing/types";
+import type {
+    CreditBalance,
+    CreditLedgerEntry,
+} from "src/features/ee/subscription/_services/billing/types";
 
 import {
     KODUS_CREDITS_PATH,
+    kodusCreditBalanceKey,
     useKodusCreditBalance,
 } from "../_hooks/use-kodus-credit-balance";
 
@@ -120,6 +126,11 @@ export const CreditsWalletStrip = () => {
     const credits = useKodusCreditBalance();
     const canEdit = usePermission(Action.Update, ResourceType.Billing);
     const [customAmount, setCustomAmount] = useState("");
+    // Which amount is selected. The packs and "Other" are values of ONE
+    // parameter, so they share one piece of state — they were four separate
+    // buttons with one arbitrarily marked `primary`, which read as a
+    // recommendation nobody asked for and made the other three look demoted.
+    const [selected, setSelected] = useState<number | "other" | null>(null);
     const [ledgerOpen, setLedgerOpen] = useState(false);
 
     const refresh = () => {
@@ -158,18 +169,34 @@ export const CreditsWalletStrip = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [creditsParam]);
 
+    // Which amount is being checked out, so the spinner lands on the button
+    // that was pressed instead of every pack at once.
+    const [pendingAmount, setPendingAmount] = useState<number | null>(null);
     const [topUp, { loading: checkingOut }] = useAsyncAction(
         async (creditUsd: number) => {
-            const { url } = await createCreditCheckoutAction({
-                teamId,
-                creditUsd,
-            });
-            window.location.href = url;
+            setPendingAmount(creditUsd);
+            try {
+                const { url } = await createCreditCheckoutAction({
+                    teamId,
+                    creditUsd,
+                });
+                window.location.href = url;
+            } finally {
+                setPendingAmount(null);
+            }
         },
     );
 
-    const balanceUsd = credits.balanceUsd ?? 0;
-    const { packsUsd: packs, markupPct: markup } = credits;
+    // NOT `?? 0`. Billing failing to answer is not the same fact as an empty
+    // wallet, and every state flag here (exhausted / low / neverFunded) is
+    // gated on `known` — so coercing the unknown to zero used to print a
+    // confident "$0.00" with no badge and no warning beside it, which is the
+    // single most alarming thing this component can say. The provider header
+    // one row above prints "—" for the same value, so the screen contradicted
+    // itself. Unknown stays unknown, and buying is held until we can say what
+    // the balance is.
+    const { known, packsUsd: packs, markupPct: markup } = credits;
+    const balanceUsd = credits.balanceUsd;
     const min = credits.minPurchaseUsd;
     const max = credits.maxPurchaseUsd;
     const custom = Number(customAmount);
@@ -178,15 +205,41 @@ export const CreditsWalletStrip = () => {
         Number.isFinite(custom) &&
         custom >= min &&
         custom <= max;
-    // The highlighted pack: the smallest one for a first funding, the second
-    // one otherwise.
-    const primaryPack = credits.neverFunded ? packs[0] : packs[1];
+    // The pre-selected amount: the smallest pack on a first funding, the
+    // second otherwise. A DEFAULT SELECTION, not a styled recommendation —
+    // the difference matters, because the old version dressed this one pack
+    // as `primary` and the other three as `helper`, which is the visual
+    // language for "this action outranks those" and not for "this value is
+    // pre-filled".
+    const defaultPack = credits.neverFunded ? packs[0] : packs[1];
+    const options: Array<number | "other"> = [...packs, "other"];
+    const selectedOption = selected ?? defaultPack;
+    // The amount actually being bought, whichever way it was chosen.
+    const amount =
+        selectedOption === "other"
+            ? customValid
+                ? Math.round(custom * 100) / 100
+                : null
+            : selectedOption;
+    const amountValid = typeof amount === "number" && amount > 0;
+    // What the card is actually charged, the fee included. The packs are
+    // labelled with what lands in the wallet; this is what leaves the account,
+    // and until now it appeared on screen only for custom amounts — so the
+    // one-click path was the one path that never showed its price.
+    const charged = (amount: number) => usd(amount * (1 + markup / 100));
+    // Nothing is buyable while the balance is unknown: topping up blind is how
+    // someone double-funds an account that was already full.
+    const canBuy = canEdit && known;
 
     return (
         <div
             id="kodus-credits"
             data-testid="kodus-credits-wallet"
-            className="bg-card-lv2/60 mb-3 flex flex-col gap-3 rounded-lg px-4 py-3">
+            /* No surface of its own: this sits inside the provider group's
+               card, and the notices inside it carry surfaces too, so a tinted
+               panel here made three nested boxes. A rule and space separate it
+               just as well — what AutoTopUpRow already does below. */
+            className="border-card-lv3/60 mb-3 flex flex-col gap-3 border-b px-1 pb-4">
             {credits.neverFunded && (
                 <div
                     className="bg-primary-light/10 text-text-primary flex items-start gap-2 rounded-md px-3 py-2 text-sm"
@@ -203,12 +256,20 @@ export const CreditsWalletStrip = () => {
                 </div>
             )}
 
-            <div className="flex flex-wrap items-start justify-between gap-4">
+            {/* Full width on purpose: the actions align to the same right edge
+                as the "Edit model" buttons on the rows below. Capping the row
+                instead left the cluster floating mid-card, out of step with
+                everything under it. The left column carries its own measure. */}
+            <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
                 <div className="flex min-w-0 flex-col gap-1">
                     <span className="text-text-secondary flex items-center gap-2 text-xs">
                         <CoinsIcon size={13} />
                         Kodus credits
-                        {credits.neverFunded ? (
+                        {!known && !credits.loading ? (
+                            <Badge variant="helper" size="xs">
+                                Unavailable
+                            </Badge>
+                        ) : credits.neverFunded ? (
                             <Badge variant="helper" size="xs">
                                 Not funded
                             </Badge>
@@ -221,76 +282,183 @@ export const CreditsWalletStrip = () => {
                                 Running low
                             </Badge>
                         ) : null}
-                    </span>
-                    <span
-                        className="text-text-primary text-2xl font-semibold tabular-nums"
-                        data-testid="kodus-credits-balance">
-                        {credits.loading ? "…" : usd(balanceUsd)}
-                    </span>
-                    <span className="text-text-tertiary max-w-md text-xs text-pretty">
-                        Pays for the models below, per token at the list price
-                        shown on each model. A {markup}% platform fee is added
-                        when you top up.
-                    </span>
-                </div>
-
-                <div className="flex shrink-0 flex-col items-end gap-2">
-                    <div className="flex flex-wrap justify-end gap-2">
-                        {packs.map((pack) => (
-                            <Button
-                                key={pack}
-                                size="md"
-                                variant={
-                                    pack === primaryPack ? "primary" : "helper"
-                                }
-                                disabled={!canEdit || checkingOut}
-                                loading={checkingOut}
-                                onClick={() => topUp(pack)}>
-                                +{usd(pack, 0)}
-                            </Button>
-                        ))}
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Input
-                            size="md"
-                            className="w-36"
-                            inputMode="decimal"
-                            placeholder="Custom amount"
-                            aria-label={`Custom amount, ${usd(min, 0)} to ${usd(max, 0)}`}
-                            value={customAmount}
-                            onChange={(e) => setCustomAmount(e.target.value)}
-                        />
+                        {/* Reading past charges is not a way to spend money.
+                            Sat in the buy cluster it was the loudest control
+                            there — a drawer link outranking the purchase. It
+                            belongs beside the label it reports on. */}
                         <Button
-                            size="md"
-                            variant="helper"
-                            disabled={!canEdit || checkingOut || !customValid}
-                            onClick={() =>
-                                topUp(Math.round(custom * 100) / 100)
-                            }>
-                            Top up
-                        </Button>
-                        <Button
-                            size="md"
+                            size="xs"
                             variant="cancel"
+                            className="text-text-tertiary h-auto px-1.5 py-0"
                             leftIcon={<ReceiptTextIcon />}
                             onClick={() => setLedgerOpen(true)}>
                             History
                         </Button>
-                    </div>
-                    <span className="text-text-tertiary text-xs tabular-nums">
-                        {customValid
-                            ? `You'll pay ${usd(custom * (1 + markup / 100))}`
-                            : `Custom amount: ${usd(min, 0)} to ${usd(max, 0)}`}
                     </span>
+                    <span
+                        className={cn(
+                            "text-2xl font-semibold tabular-nums",
+                            known ? "text-text-primary" : "text-text-tertiary",
+                        )}
+                        data-testid="kodus-credits-balance">
+                        {credits.loading
+                            ? "…"
+                            : known
+                              ? usd(balanceUsd as number)
+                              : "—"}
+                    </span>
+                    <span className="text-text-tertiary max-w-md text-xs text-pretty">
+                        {known || credits.loading ? (
+                            <>
+                                Pays for the models below, per token at the list
+                                price shown on each model. A {markup}% platform
+                                fee is added when you top up.
+                            </>
+                        ) : (
+                            <>
+                                We couldn&apos;t reach billing, so we can&apos;t
+                                show your balance — it hasn&apos;t changed.
+                                Topping up is held until we can read it again.
+                            </>
+                        )}
+                    </span>
+                </div>
+
+                <div className="flex min-w-0 flex-col items-stretch gap-2 sm:shrink-0 sm:items-end">
+                    {/* One form, one width. The selector, the field, the
+                        confirm and the fine print all share the same left and
+                        right edge — laid out as three right-aligned rows of
+                        different widths they made a staircase that read as an
+                        accident. And the selected chip no longer borrows the
+                        accent: selection and "this is the button you press"
+                        were the same colour, so two things competed to look
+                        like the action. Selection is a filled surface; the
+                        accent belongs to the button alone. */}
+                    <div className="flex w-full flex-col gap-2 sm:w-80">
+                        <div
+                            role="radiogroup"
+                            aria-label="Amount to add"
+                            className="border-card-lv3/60 bg-card-lv1 grid grid-cols-5 gap-1 rounded-lg border p-1"
+                            onKeyDown={(event) => {
+                                const dir =
+                                    event.key === "ArrowRight" ||
+                                    event.key === "ArrowDown"
+                                        ? 1
+                                        : event.key === "ArrowLeft" ||
+                                            event.key === "ArrowUp"
+                                          ? -1
+                                          : 0;
+                                if (!dir) return;
+                                event.preventDefault();
+                                const at = options.indexOf(
+                                    selectedOption as never,
+                                );
+                                const next =
+                                    options[
+                                        (at + dir + options.length) %
+                                            options.length
+                                    ];
+                                setSelected(next);
+                            }}>
+                            {options.map((option) => {
+                                const active = option === selectedOption;
+                                return (
+                                    <button
+                                        key={String(option)}
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={active}
+                                        tabIndex={active ? 0 : -1}
+                                        disabled={!canBuy || checkingOut}
+                                        onClick={() => setSelected(option)}
+                                        className={cn(
+                                            "focus-visible:ring-primary-light rounded-md px-1 py-1.5 text-center text-xs tabular-nums transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50",
+                                            active
+                                                ? "bg-card-lv3 text-text-primary ring-text-tertiary/30 font-semibold shadow-sm ring-1 ring-inset"
+                                                : "text-text-secondary hover:text-text-primary hover:bg-card-lv3/40",
+                                        )}>
+                                        {option === "other"
+                                            ? "Other"
+                                            : usd(option, 0)}
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {selectedOption === "other" && (
+                            <div className="relative">
+                                <span
+                                    aria-hidden
+                                    className="text-text-tertiary pointer-events-none absolute top-1/2 left-3 z-10 -translate-y-1/2 text-sm">
+                                    $
+                                </span>
+                                <Input
+                                    autoFocus
+                                    size="md"
+                                    className="w-full pl-7 tabular-nums"
+                                    inputMode="decimal"
+                                    placeholder={`${min}–${max}`}
+                                    aria-label={`Custom amount, ${usd(min, 0)} to ${usd(max, 0)}`}
+                                    value={customAmount}
+                                    disabled={!canBuy}
+                                    onChange={(e) =>
+                                        setCustomAmount(e.target.value)
+                                    }
+                                />
+                            </div>
+                        )}
+
+                        {/* The only accent on this surface, and it says what
+                            it costs. */}
+                        <Button
+                            size="md"
+                            variant="primary"
+                            className="w-full"
+                            disabled={!canBuy || checkingOut || !amountValid}
+                            loading={
+                                pendingAmount !== null &&
+                                pendingAmount === amount
+                            }
+                            onClick={() => amount && topUp(amount)}>
+                            {amountValid
+                                ? `Top up ${charged(amount as number)}`
+                                : "Top up"}
+                        </Button>
+
+                        <span className="text-text-tertiary text-right text-xs tabular-nums">
+                            {selectedOption === "other" && !amountValid
+                                ? `Enter ${usd(min, 0)}–${usd(max, 0)}`
+                                : amountValid
+                                  ? `Adds ${usd(amount as number, 2)} in credits · ${markup}% fee included`
+                                  : `${markup}% fee added at checkout`}
+                        </span>
+                    </div>
                 </div>
             </div>
 
             {credits.exhausted && !credits.neverFunded && (
-                <div className="bg-danger/10 text-text-primary flex items-start gap-2 rounded-md px-3 py-2 text-xs">
-                    <SparklesIcon size={14} className="mt-0.5 shrink-0" />
+                <div
+                    className={cn(
+                        "text-text-primary flex items-start gap-2 rounded-md px-3 py-2 text-xs",
+                        credits.routedThroughKodus
+                            ? "bg-danger/10"
+                            : "bg-card-lv2",
+                    )}>
+                    {/* A sparkle on "your reviews are paused" is decoration
+                        pretending to be a status. Reviews stopping is a
+                        warning; the icon should say so. */}
+                    {credits.routedThroughKodus ? (
+                        <AlertTriangleIcon
+                            size={14}
+                            className="text-danger mt-0.5 shrink-0"
+                        />
+                    ) : (
+                        <CoinsIcon size={14} className="mt-0.5 shrink-0" />
+                    )}
                     <span>
-                        Reviews on the models below are paused until you top up.
-                        Your own provider keys keep working.
+                        {credits.routedThroughKodus
+                            ? "Reviews on the models below are paused until you top up. Your own provider keys keep working."
+                            : "Nothing routes here right now, so an empty balance changes nothing. Top up before you send a task to one of the models below."}
                     </span>
                 </div>
             )}
@@ -318,6 +486,7 @@ const AutoTopUpRow = ({
     onChanged: () => void;
 }) => {
     const { teamId } = useSelectedTeamId();
+    const queryClient = useQueryClient();
     const credits = useKodusCreditBalance();
     const auto = credits.autoTopUp;
     const packs = credits.packsUsd;
@@ -336,17 +505,54 @@ const AutoTopUpRow = ({
             const thresholdUsd = next?.thresholdUsd ?? effectiveThreshold;
             const amountUsd = next?.amountUsd ?? effectiveAmount;
             try {
-                await updateCreditAutoTopUpAction({
+                const saved = await updateCreditAutoTopUpAction({
                     teamId,
                     enabled,
                     thresholdUsd,
                     amountUsd,
                 });
+                // The switch is driven by server state, so writing the
+                // mutation's OWN answer into the cache is what moves it. This
+                // used to discard `saved` and rely on the refetch below, which
+                // meant the toast claimed success while the control the user
+                // just flipped still showed the old position — and stayed
+                // there for good if the refetch came back stale. Announce the
+                // change only once it is on screen.
+                if (saved) {
+                    // MERGE, don't replace. A 200 that omits a field would
+                    // otherwise erase it from the cache — dropping
+                    // `hasPaymentMethod` alone flips the row into "save a
+                    // card first" for a team that has one.
+                    queryClient.setQueryData<CreditBalance | null>(
+                        kodusCreditBalanceKey(teamId),
+                        (current) =>
+                            current
+                                ? {
+                                      ...current,
+                                      autoTopUp: {
+                                          ...current.autoTopUp,
+                                          ...saved,
+                                      },
+                                  }
+                                : current,
+                    );
+                }
+                // Report what was SAVED, not what was asked for. Announcing
+                // the request and rendering the response is how a success
+                // message ends up next to a switch that disagrees with it.
+                // `?? enabled`, like the two lines below it: a response
+                // that omits the field tells us nothing, and reading that
+                // silence as `false` would announce the opposite of what was
+                // just done — the exact contradiction this block exists to
+                // remove.
+                const nowOn = saved?.enabled ?? enabled;
+                const savedAmount = saved?.amountUsd ?? amountUsd;
+                const savedThreshold = saved?.thresholdUsd ?? thresholdUsd;
                 toast({
                     variant: "success",
-                    title: enabled ? "Auto top-up on" : "Auto top-up off",
-                    description: enabled
-                        ? `We'll add ${usd(amountUsd, 0)} whenever the balance drops below ${usd(thresholdUsd, 0)}.`
+                    title: nowOn ? "Auto top-up on" : "Auto top-up off",
+                    description: nowOn
+                        ? `We'll add ${usd(savedAmount, 0)} whenever the balance drops below ${usd(savedThreshold, 0)}.`
                         : undefined,
                 });
                 onChanged();
@@ -610,21 +816,20 @@ export const CreditsLedgerDrawer = ({
                     </SheetDescription>
                 </SheetHeader>
 
-                <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-5">
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-6 overflow-y-auto px-6 py-5">
                     <section className="flex flex-col gap-2">
                         <h3 className="text-text-primary text-sm font-semibold">
                             Money movements
                         </h3>
                         {ledgerQuery.isLoading ? (
-                            <p className="text-text-tertiary text-xs">
-                                Loading…
-                            </p>
+                            <SkeletonRows rows={3} />
                         ) : ledger.length === 0 ? (
                             <p className="text-text-tertiary text-xs">
                                 No top-ups or debits yet.
                             </p>
                         ) : (
-                            <table className="w-full text-xs">
+                            <div className="-mx-1 overflow-x-auto px-1">
+                                <table className="w-full min-w-[26rem] text-xs">
                                 <thead>
                                     <tr className="text-text-tertiary border-card-lv3 border-b text-left">
                                         <th className="py-2 pr-4 font-medium">
@@ -676,6 +881,7 @@ export const CreditsLedgerDrawer = ({
                                     ))}
                                 </tbody>
                             </table>
+                            </div>
                         )}
                     </section>
 
@@ -683,16 +889,19 @@ export const CreditsLedgerDrawer = ({
                         <h3 className="text-text-primary text-sm font-semibold">
                             Charges by review
                         </h3>
-                        <p className="text-text-tertiary text-xs">
-                            {chargesQuery.isLoading
-                                ? "Loading…"
-                                : runs.length === 0
-                                  ? "No Kodus-routed usage metered yet."
-                                  : `${runs.length} run${runs.length === 1 ? "" : "s"} · ${formatUsd(total)} in the last ${chargesQuery.data?.length ?? 0} charges, newest first.`}
-                        </p>
+                        {chargesQuery.isLoading ? (
+                            <SkeletonRows rows={3} />
+                        ) : (
+                            <p className="text-text-tertiary text-xs">
+                                {runs.length === 0
+                                    ? "No Kodus-routed usage metered yet."
+                                    : `${runs.length} run${runs.length === 1 ? "" : "s"} · ${formatUsd(total)} in the last ${chargesQuery.data?.length ?? 0} charges, newest first.`}
+                            </p>
+                        )}
                         {runs.length > 0 && (
                             <>
-                                <table className="w-full text-xs">
+                                <div className="-mx-1 overflow-x-auto px-1">
+                                <table className="w-full min-w-[26rem] text-xs">
                                     <thead>
                                         <tr className="text-text-tertiary border-card-lv3 border-b text-left">
                                             <th className="py-2 pr-4 font-medium">
@@ -743,6 +952,7 @@ export const CreditsLedgerDrawer = ({
                                         ))}
                                     </tbody>
                                 </table>
+                            </div>
                                 {runs.length > INITIAL_RUNS && (
                                     <div className="flex items-center justify-center">
                                         <Button
