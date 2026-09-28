@@ -66,6 +66,46 @@ describe('extractDiffHunks', () => {
         expect(only.patch).toContain('example: diff --git a/fake b/fake');
     });
 
+    it('keeps trailing whitespace on the last line', () => {
+        // A patch that no longer matches the checkout makes revertPatch
+        // return null, and the baseline is then discarded entirely.
+        const withTrailing = [
+            'diff --git a/a.txt b/a.txt',
+            'index 1..2 100644',
+            '--- a/a.txt',
+            '+++ b/a.txt',
+            '@@ -1,1 +1,1 @@',
+            '-old',
+            '+new   ',
+        ].join('\n');
+
+        const [only] = extractDiffHunks(withTrailing, ['a.txt']);
+
+        expect(only.patch.endsWith('+new   ')).toBe(true);
+    });
+
+    it('reads a path git had to quote and escape', () => {
+        // git quotes the header as soon as the path holds a non-ASCII byte.
+        const quoted = [
+            'diff --git "a/caf\\303\\251/package-lock.json" "b/caf\\303\\251/package-lock.json"',
+            'index 1..2 100644',
+            '--- "a/caf\\303\\251/package-lock.json"',
+            '+++ "b/caf\\303\\251/package-lock.json"',
+            '@@ -1,1 +1,1 @@',
+            '-old',
+            '+new',
+        ].join('\n');
+
+        expect(
+            extractDiffHunks(quoted, ['caf\u00e9/package-lock.json']),
+        ).toEqual([
+            {
+                path: 'caf\u00e9/package-lock.json',
+                patch: '@@ -1,1 +1,1 @@\n-old\n+new',
+            },
+        ]);
+    });
+
     it('returns nothing rather than throwing on empty input', () => {
         expect(extractDiffHunks('', ['a.ts'])).toEqual([]);
         expect(extractDiffHunks(diff, [])).toEqual([]);
