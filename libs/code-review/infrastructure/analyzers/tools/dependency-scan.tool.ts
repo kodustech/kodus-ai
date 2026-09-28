@@ -15,6 +15,9 @@ import {
 
 const RUN_TIMEOUT_MS = 120_000;
 
+/** Separates the scanner's JSON from the exit code appended after it. */
+const EXIT_MARKER = '__OSV_EXIT:';
+
 /** Manifests and lockfiles osv-scanner understands. */
 const MANIFEST = new Set([
     'package-lock.json',
@@ -117,6 +120,8 @@ export class DependencyScanTool implements AnalyzerTool {
 
     readonly id = 'dependencies' as const;
     readonly coverage = ManagedTool.DEPENDENCIES;
+    /** Lockfiles are on the default `ignorePaths`; without them this cannot fire. */
+    readonly readsIgnoredFiles = true;
 
     selectFiles(files: ChangedFile[]): ChangedFile[] {
         return files.filter((file) => {
@@ -128,7 +133,11 @@ export class DependencyScanTool implements AnalyzerTool {
     }
 
     async run({ sandbox, files }: ToolRunInput): Promise<AnalyzerFinding[]> {
-        const head = await this.scan(sandbox, sandbox.repoDir);
+        const manifests = files.map((file) =>
+            toRepoRelativePath(file.filename),
+        );
+
+        const head = await this.scan(sandbox, sandbox.repoDir, manifests);
 
         // Nothing vulnerable in the new tree: no diff worth computing.
         if (head.length === 0) {
@@ -277,7 +286,11 @@ export class DependencyScanTool implements AnalyzerTool {
         }
 
         try {
-            return await this.scan(sandbox, baseDir);
+            return await this.scan(
+                sandbox,
+                baseDir,
+                files.map((file) => toRepoRelativePath(file.filename)),
+            );
         } finally {
             await sandbox.run(`rm -rf ${quote(baseDir)}`, { timeoutMs: 15_000 });
         }
@@ -311,28 +324,64 @@ export class DependencyScanTool implements AnalyzerTool {
     private async scan(
         sandbox: ToolRunInput['sandbox'],
         dir: string,
+        manifests: string[],
     ): Promise<Vulnerable[]> {
         // osv-scanner exits 1 precisely WHEN it finds something, and the e2b
         // provider throws on a non-zero exit rather than returning it. Without
         // this the tool fails on every pull request that has a finding — which
         // a local sandbox, returning the exit code instead of throwing, cannot
         // reproduce.
+        // `scan source <dir>` is NOT recursive in v2, so a lockfile anywhere
+        // but the repository root is never read and a monorepo silently gets
+        // no findings. Naming each manifest also keeps head and base directly
+        // comparable: `-r` would make head cover every lockfile in the tree
+        // while the base holds only the changed ones, and the difference
+        // between those two sets would read as "introduced".
+        const targets = manifests
+            .map((manifest) => `-L ${quote(`${dir}/${manifest}`)}`)
+            .join(' ');
+
+        // The exit code is the ONLY signal separating "clean" from "could not
+        // run": osv-scanner prints `{"results":[]}` either way, so `|| true`
+        // turned an unreachable advisory database into a clean bill of health.
+        // Captured through a marker because the e2b provider throws on a
+        // non-zero exit rather than returning it.
         const result = await sandbox.run(
-            `osv-scanner scan source --format json ${quote(dir)} || true`,
+            `osv-scanner scan source --format json ${targets}; echo "${EXIT_MARKER}$?"`,
             { timeoutMs: RUN_TIMEOUT_MS },
         );
 
+        const stdout = result.stdout ?? '';
+        const marker = stdout.lastIndexOf(EXIT_MARKER);
+        const exitCode =
+            marker === -1
+                ? null
+                : Number(stdout.slice(marker + EXIT_MARKER.length).trim());
+
+        // Matched on the shell's own message rather than on 127: osv-scanner
+        // also exits 127 when it cannot reach the advisory database, so the
+        // code alone cannot tell a missing binary from a failed lookup. Both
+        // are handled below; only the message distinguishes them.
         if (
-            result.exitCode === 127 ||
-            /command not found/.test(result.stdout ?? '') ||
+            /command not found/.test(stdout) ||
             /command not found/.test(result.stderr ?? '')
         ) {
             throw new Error('osv-scanner unavailable in the sandbox');
         }
 
+        // 0 = nothing found, 1 = vulnerabilities found. Anything else is the
+        // scanner failing to answer, and must not be read as "clean".
+        if (exitCode === null || (exitCode !== 0 && exitCode !== 1)) {
+            throw new Error(
+                `osv-scanner could not complete (exit ${exitCode ?? 'unknown'})`,
+            );
+        }
+
         let report: unknown;
         try {
-            report = JSON.parse(result.stdout ?? '{}');
+            report = JSON.parse(
+                (marker === -1 ? stdout : stdout.slice(0, marker)) || '{}',
+            );
         } catch {
             return [];
         }

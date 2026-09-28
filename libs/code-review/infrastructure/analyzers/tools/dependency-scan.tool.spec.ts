@@ -75,7 +75,7 @@ const sandboxWith = (
             if (command.includes('osv-scanner')) {
                 const isBase = command.includes('kody-deps-base');
                 return {
-                    stdout: isBase ? base : head,
+                    stdout: scanned(isBase ? base : head),
                     stderr: '',
                     exitCode: opts.exitCode ?? 0,
                 };
@@ -86,6 +86,15 @@ const sandboxWith = (
         writeFile: jest.fn(),
     } as never;
 };
+
+
+/**
+ * The scan command appends its exit code after the JSON, because that code is
+ * the only thing separating "clean" from "could not run". A double that omits
+ * it models a command production never issues.
+ */
+const scanned = (json: string, exitCode = 0) =>
+    `${json}__OSV_EXIT:${exitCode}`;
 
 const file = (patch = PATCH): ChangedFile => ({ filename: LOCKFILE, patch });
 
@@ -327,12 +336,13 @@ describe('DependencyScanTool', () => {
         });
 
         /**
-         * osv-scanner exits 1 when it finds something and the e2b provider
-         * THROWS on a non-zero exit, so the command must not be allowed to
-         * fail. This shipped broken: a local sandbox returns the exit code
-         * instead of throwing, so no test could see it.
+         * osv-scanner exits 1 when it finds something, and the e2b provider
+         * throws on a non-zero exit — so the code has to be captured rather
+         * than allowed to fail the command. It must be CAPTURED and not
+         * discarded: `|| true` also hid a scanner that could not reach the
+         * advisory database, which prints an empty result set and exits 127.
          */
-        it('never lets a non-zero exit fail the command', async () => {
+        it('captures the scanner exit code instead of discarding it', async () => {
             const sandbox = sandboxWith(
                 osv([{ name: 'lodash', version: '4.17.11', id: 'GHSA-aaa' }]),
                 osv([]),
@@ -342,7 +352,66 @@ describe('DependencyScanTool', () => {
 
             for (const command of (sandbox as unknown as { commands: string[] })
                 .commands.filter((c) => c.includes('osv-scanner'))) {
-                expect(command).toMatch(/\|\| true\s*$/);
+                expect(command).toContain('__OSV_EXIT:$?');
+                expect(command).not.toContain('|| true');
+            }
+        });
+
+        /**
+         * The failure Wellington reproduced: with the advisory database
+         * unreachable osv-scanner exits 127 and still prints `{"results":[]}`,
+         * so reading stdout alone reports a clean bill of health for a scan
+         * that never ran. Self-hosted installs without egress hit this.
+         */
+        it('refuses to read an unreachable database as a clean scan', async () => {
+            const sandbox = {
+                repoDir: '/repo',
+                run: jest.fn(async (command: string) =>
+                    command.includes('osv-scanner')
+                        ? {
+                              stdout: scanned(osv([]), 127),
+                              stderr: 'failed to resolve api.osv.dev',
+                              exitCode: 0,
+                          }
+                        : { stdout: '', stderr: '', exitCode: 0 },
+                ),
+                readFile: jest.fn(async () => HEAD),
+                writeFile: jest.fn(),
+            } as never;
+
+            await expect(
+                tool.run({ sandbox, files: [file()] }),
+            ).rejects.toThrow(/could not complete/i);
+        });
+
+        /**
+         * Every lockfile is named explicitly. `scan source <dir>` is not
+         * recursive in v2, so a manifest outside the repository root — the
+         * normal case in a monorepo — was never read at all.
+         */
+        it('names each changed manifest instead of scanning a directory', async () => {
+            const sandbox = sandboxWith(
+                osv([{ name: 'lodash', version: '4.17.11', id: 'GHSA-aaa' }]),
+                osv([]),
+            );
+
+            await tool.run({
+                sandbox,
+                files: [{ filename: 'apps/web/package-lock.json', patch: PATCH }],
+            });
+
+            const scans = (
+                sandbox as unknown as { commands: string[] }
+            ).commands.filter((c) => c.includes('osv-scanner'));
+
+            expect(scans.length).toBeGreaterThan(0);
+            for (const command of scans) {
+                // The head scan roots at the checkout and the base scan at the
+                // rebuilt tree, but both must name the same manifest.
+                expect(command).toMatch(
+                    /-L '[^']*\/apps\/web\/package-lock\.json'/,
+                );
+                expect(command).not.toMatch(/-L '\/repo'/);
             }
         });
 
@@ -386,7 +455,7 @@ describe('an untrustworthy baseline reports nothing, not everything', () => {
                     const isBase = command.includes('kody-deps-base');
                     // An empty base tree — the dangerous state.
                     return {
-                        stdout: isBase ? osv([]) : head,
+                        stdout: scanned(isBase ? osv([]) : head),
                         stderr: '',
                         exitCode: 0,
                     };
@@ -446,7 +515,7 @@ describe('an untrustworthy baseline reports nothing, not everything', () => {
                     const isBase = command.includes('kody-deps-base');
                     // Nothing was materialized, so the base tree is empty.
                     return {
-                        stdout: isBase ? osv([]) : head,
+                        stdout: scanned(isBase ? osv([]) : head),
                         stderr: '',
                         exitCode: 0,
                     };
@@ -491,7 +560,11 @@ describe('an untrustworthy baseline reports nothing, not everything', () => {
                     throw new Error('exit status 1');
                 }
                 if (command.includes('osv-scanner')) {
-                    return { stdout: preexisting, stderr: '', exitCode: 0 };
+                    return {
+                        stdout: scanned(preexisting),
+                        stderr: '',
+                        exitCode: 0,
+                    };
                 }
                 return { stdout: '', stderr: '', exitCode: 0 };
             }),
@@ -523,17 +596,20 @@ describe('a scanner that exits non-zero on findings still returns them', () => {
                 const isScan = command.includes('osv-scanner');
                 // osv-scanner's real behaviour: exit 1 when it has findings.
                 const rawExit = isScan ? 1 : 0;
-                // `cmd || true` makes the SHELL exit 0 regardless.
-                const shellExit = /\|\|\s*true\s*$/.test(command) ? 0 : rawExit;
-                if (shellExit !== 0) {
-                    throw new Error(`exit status ${shellExit}`);
+                // `cmd; echo marker$?` makes the SHELL exit with the echo's
+                // status, so the provider never sees the scanner's code — the
+                // marker carries it instead.
+                const captured = /__OSV_EXIT:\$\?/.test(command);
+                if (!captured && rawExit !== 0) {
+                    throw new Error(`exit status ${rawExit}`);
                 }
+                const json = isScan
+                    ? command.includes('kody-deps-base')
+                        ? osv([])
+                        : head
+                    : '';
                 return {
-                    stdout: isScan
-                        ? command.includes('kody-deps-base')
-                            ? osv([])
-                            : head
-                        : '',
+                    stdout: isScan ? scanned(json, rawExit) : '',
                     stderr: '',
                     exitCode: 0,
                 };
