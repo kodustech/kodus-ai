@@ -377,3 +377,52 @@ describe('a tool that may not read ignored files', () => {
         expect(result.analyzerFindings ?? []).toEqual([]);
     });
 });
+
+/**
+ * `selectFiles` is a pure filter, so recovering a withheld hunk only helps if
+ * it happens BEFORE selection. The secret scanner requires a patch; a
+ * credential in a large file — exactly the file GitHub withholds a diff for —
+ * was therefore never scanned even though the same pass recovered its hunks.
+ */
+describe('recovered hunks reach the tools that need them', () => {
+    it('lets a patch-requiring tool claim a file whose diff was withheld', async () => {
+        const seen: string[][] = [];
+        const tool = makeTool({
+            // Same filter SecretScanTool applies.
+            selectFiles: ((
+                files: Array<{ filename: string; patch?: string }>,
+            ) => {
+                const picked = files.filter((f) => f.patch);
+                seen.push(picked.map((f) => f.filename));
+                return picked;
+            }) as never,
+            run: jest.fn().mockResolvedValue([]),
+        });
+
+        const stage = new RunAnalyzersStage(
+            new AnalyzerToolRouter(),
+            { isEnabled: jest.fn().mockResolvedValue(true) } as never,
+            {
+                getFilePatches: jest
+                    .fn()
+                    .mockResolvedValue([
+                        { path: 'big.ts', patch: patchAdding(1, 3) },
+                    ]),
+            } as never,
+            [tool],
+        );
+
+        await (
+            stage as unknown as {
+                executeStage: (c: unknown) => Promise<unknown>;
+            }
+        ).executeStage(
+            makeContext({
+                // The host withheld this file's diff.
+                changedFiles: [{ filename: 'big.ts' }],
+            } as never),
+        );
+
+        expect(seen.at(-1)).toContain('big.ts');
+    });
+});

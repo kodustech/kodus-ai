@@ -75,6 +75,13 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
         // is allowed to read.
         const changedFiles = [...reviewedFiles, ...ignoredFiles];
 
+        // Before routing, because routing itself calls `selectFiles`: a tool
+        // that requires a patch is dropped as `no-matching-files` on the very
+        // files whose diff the host withheld, which are the ones this
+        // recovery exists for. Recovering later would be too late for
+        // everything except the one tool that does not filter on `patch`.
+        await this.backfillMissingPatches(context, changedFiles);
+
         const decisions = this.router.route(this.tools, {
             changedFiles,
             modes: context.codeReviewConfig?.deterministicEvidence?.tools,
@@ -118,8 +125,6 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
         if (ran.length === 0) {
             return this.storeRouting(context, decisions);
         }
-
-        await this.backfillMissingPatches(context, selectedFiles);
 
         // One failing tool must not cost the findings of the others.
         const results = await Promise.allSettled(
@@ -231,12 +236,11 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
      */
     private async backfillMissingPatches(
         context: CodeReviewPipelineContext,
-        selectedFiles: Map<AnalyzerTool, ChangedFile[]>,
+        files: ChangedFile[],
     ): Promise<void> {
         const missing = [
             ...new Set(
-                [...selectedFiles.values()]
-                    .flat()
+                files
                     .filter((file) => file.filename && !file.patch)
                     .map((file) => file.filename),
             ),
@@ -256,12 +260,10 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
 
         const byPath = new Map(recovered.map((r) => [r.path, r.patch]));
 
-        for (const files of selectedFiles.values()) {
-            for (const file of files) {
-                const patch = byPath.get(file.filename);
-                if (!file.patch && patch) {
-                    file.patch = patch;
-                }
+        for (const file of files) {
+            const patch = byPath.get(file.filename);
+            if (!file.patch && patch) {
+                file.patch = patch;
             }
         }
 
@@ -269,6 +271,7 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
             message: `Recovered ${byPath.size} of ${missing.length} missing file patch(es)`,
             context: this.stageName,
             metadata: {
+                organizationId: context.organizationAndTeamData?.organizationId,
                 prNumber,
                 requested: missing,
                 recovered: [...byPath.keys()],
