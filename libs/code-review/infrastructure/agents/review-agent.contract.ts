@@ -683,6 +683,11 @@ export interface AgentLoopInput {
     /** Findings a previous pass already posted on this PR, handed to the
      *  simulation pass so it does not spend its walks on covered ground. */
     priorFindings?: Array<{ file?: string; line?: number; summary?: string }>;
+    /** EXPERIMENTO #1821 — segunda rodada do dev-level: o que a primeira rodada
+     *  de cada categoria reportou neste PR. So o eval preenche. */
+    devLevelPriorFindings?: Partial<
+        Record<'bug' | 'security' | 'performance', Array<{ file?: string; line?: number; summary?: string }>>
+    >;
     /** Run a routing pass first: read the diff, pick which of the twelve
      *  classes it could contain, and run only those. */
     microPlanner?: boolean;

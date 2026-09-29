@@ -86,8 +86,24 @@ import {
     groupedMicroAgent,
 } from '@libs/code-review/infrastructure/agents/core/micro-agents';
 import {
+    buildDevLevelPrompt,
+    DEV_LEVEL_SYSTEM_PROMPT,
+    DEV_LEVEL_QA_SYSTEM_PROMPT,
+    buildDevChainPrompt,
+    devChainSystemPrompt,
+    type CategoriaDevLevel,
+    type NivelCadeia,
+    type VarianteDevLevel,
+} from '@libs/code-review/infrastructure/agents/core/dev-level-agent';
+import {
+    buildProcedurePrompt,
+    PROCEDURE_SYSTEM_PROMPT,
+    type ProcedimentoId,
+} from '@libs/code-review/infrastructure/agents/core/procedure-agents';
+import {
     SIMULATION_SYSTEM_PROMPT,
     buildSimulationPrompt,
+    type CenarioSimulacao,
 } from '@libs/code-review/infrastructure/agents/core/simulation-agent';
 
 const funnelLogger = createLogger('review-funnel');
@@ -487,11 +503,15 @@ export async function runAgentLoopViaCore(
         ledger: DiffCoverageLedger,
         maxStepsOverride?: number,
         systemPromptOverride?: string,
+        /** So as passadas dev-level ligam: o campo precisa estar no schema da
+         *  ferramenta, senao `additionalProperties:false` o descarta. */
+        requireDevLevel?: boolean,
     ) =>
         buildFinderAgentSpec({
             systemPrompt: systemPromptOverride ?? input.systemPrompt,
             requireFindingReason: input.requireFindingReason,
             claudeSafeWording,
+            ...(requireDevLevel ? { requireDevLevel: true } : {}),
             modelId: specModelId,
             fallbackModelId,
             usageRunName: input.usageRunName,
@@ -772,7 +792,12 @@ export async function runAgentLoopViaCore(
                     // numa segunda amostra, e os agentes experimentais. Mesma fase
                     // e mesmo spec dos agentes de classe; ficam fora do
                     // <AlreadyRaised> da simulacao (semCrossFile).
-                    ...(input.microAgentExtras ?? []).flatMap((extra) => {
+                    ...(input.microAgentExtras ?? []).flatMap((extra): Array<{
+                        label: string;
+                        phase: number;
+                        prompt: string | ((todos: FinderSuggestion[]) => string);
+                        spec: ReturnType<typeof buildSpecWithLedger>;
+                    }> => {
                         const xfile = MICRO_AGENTS.find((g) => g.id === CROSS_FILE_AGENT_ID);
                         const diff = rawDiffPrompt(input.changedFiles, input.fileTiers, input.diffTierBudget);
                         // Mesmo teto dos agentes de classe: um experimental comparado
@@ -803,6 +828,117 @@ export async function runAgentLoopViaCore(
                                 phase: 0,
                                 prompt: buildSimulationPrompt(diff, input.priorFindings, grafoParaOsAgentes),
                                 spec: buildSpecWithLedger(ledger(), input.maxSteps ?? 12, SIMULATION_SYSTEM_PROMPT),
+                            }];
+                        }
+                        // exp-sim-<cenario>-p<N>[g]: a simulacao restrita a UMA
+                        // familia de estados (feliz | erro | concorrencia).
+                        // Particionar por cenario, e nao por categoria de
+                        // defeito, e o que preserva o procedimento — ver o
+                        // cabecalho de simulation-agent.ts.
+                        //   `g` = com o grafo de chamadas. Obrigatorio com 1
+                        //   passo: a ForceFinalizePolicy deixa so a ferramenta
+                        //   de submissao nos dois ultimos passos, entao uma
+                        //   passada de 1 passo submete SEM ter lido nada, e o
+                        //   grafo e o unico contexto que ela recebe.
+                        const simCen = /^exp-sim-(feliz|erro|concorrencia)-p(\d+)(g?)$/.exec(extra);
+                        if (simCen) {
+                            const cen = simCen[1] as CenarioSimulacao;
+                            const n = Number(simCen[2]);
+                            const comGrafo = simCen[3] === 'g';
+                            if (comGrafo && !input.xfileCallGraph?.trim()) {
+                                throw new Error(`${extra} exige o grafo (RECALL_GRAFO_EXP=1)`);
+                            }
+                            return [{
+                                label: experimentalExtraLabel(`sim-${cen}-p${n}${comGrafo ? 'g' : ''}`),
+                                phase: 0,
+                                prompt: buildSimulationPrompt(
+                                    diff,
+                                    input.priorFindings,
+                                    comGrafo ? input.xfileCallGraph : grafoParaOsAgentes,
+                                    cen,
+                                ),
+                                spec: buildSpecWithLedger(ledger(), n, SIMULATION_SYSTEM_PROMPT),
+                            }];
+                        }
+                        // exp-dev-<categoria>-p<N>[g]: uma passada por categoria,
+                        // revista por tres niveis de desenvolvedor de uma vez, com
+                        // `developerLevel` obrigatorio por achado.
+                        // Sufixo opcional: -qa (quinto leitor, bug/security) ou
+                        // -real (performance so com problema real de escala).
+                        // exp-proc-<procedimento>-p<N>: passada de procedimento
+                        // (contrato, gemeo, forma), fase 0, sem developerLevel.
+                        const proc = /^exp-proc-(contrato|gemeo|forma)-p(\d+)$/.exec(extra);
+                        if (proc) {
+                            return [{
+                                label: experimentalExtraLabel(`proc-${proc[1]}-p${proc[2]}`),
+                                phase: 0,
+                                prompt: buildProcedurePrompt(proc[1] as ProcedimentoId, diff),
+                                spec: buildSpecWithLedger(ledger(), Number(proc[2]), PROCEDURE_SYSTEM_PROMPT),
+                            }];
+                        }
+                        // exp-chain-<categoria>-p<N>: pleno -> senior -> expert em
+                        // fases 0, 1 e 2; cada um recebe o que os anteriores DA
+                        // MESMA CADEIA reportaram.
+                        const cadeia = /^exp-chain-(bug|security|performance)-p(\d+)$/.exec(extra);
+                        if (cadeia) {
+                            const cat = cadeia[1] as CategoriaDevLevel;
+                            const n = Number(cadeia[2]);
+                            const niveis: NivelCadeia[] = ['pleno', 'senior', 'expert'];
+                            const rotulo = (nv: NivelCadeia) => experimentalExtraLabel(`chain-${cat}-p${n}-${nv}`);
+                            return niveis.map((nv, fase) => {
+                                const anteriores = new Set(niveis.slice(0, fase).map(rotulo));
+                                return {
+                                    label: rotulo(nv),
+                                    phase: fase,
+                                    prompt: (todos: FinderSuggestion[]) =>
+                                        buildDevChainPrompt(
+                                            cat,
+                                            nv,
+                                            diff,
+                                            todos
+                                                .filter((t) => anteriores.has((t as { producedBy?: string }).producedBy ?? ''))
+                                                .map((t) => ({
+                                                    file: t.relevantFile,
+                                                    line: t.relevantLinesStart,
+                                                    summary: t.oneSentenceSummary,
+                                                })),
+                                        ),
+                                    spec: buildSpecWithLedger(ledger(), n, devChainSystemPrompt(nv)),
+                                };
+                            });
+                        }
+                        const devNivel = /^exp-dev-(bug|security|performance)-p(\d+)(g?)(?:-(qa|real|r2))?$/.exec(extra);
+                        if (devNivel) {
+                            const cat = devNivel[1] as CategoriaDevLevel;
+                            const n = Number(devNivel[2]);
+                            const comGrafo = devNivel[3] === 'g';
+                            const sufixo = devNivel[4];
+                            const variante = sufixo === 'r2' ? undefined : (sufixo as VarianteDevLevel | undefined);
+                            if (comGrafo && !input.xfileCallGraph?.trim()) {
+                                throw new Error(`${extra} exige o grafo (RECALL_GRAFO_EXP=1)`);
+                            }
+                            // Segunda rodada sem a primeira seria so outra amostra,
+                            // e mediria a coisa errada em silencio.
+                            const primeira = sufixo === 'r2' ? input.devLevelPriorFindings?.[cat] : undefined;
+                            if (sufixo === 'r2' && !primeira) {
+                                throw new Error(`${extra} exige a primeira rodada (RECALL_DEV_R1)`);
+                            }
+                            return [{
+                                label: experimentalExtraLabel(`dev-${cat}-p${n}${comGrafo ? 'g' : ''}${sufixo ? `-${sufixo}` : ''}`),
+                                phase: 0,
+                                prompt: buildDevLevelPrompt(
+                                    cat,
+                                    diff,
+                                    comGrafo ? input.xfileCallGraph : grafoParaOsAgentes,
+                                    variante,
+                                    primeira,
+                                ),
+                                spec: buildSpecWithLedger(
+                                    ledger(),
+                                    n,
+                                    variante === 'qa' ? DEV_LEVEL_QA_SYSTEM_PROMPT : DEV_LEVEL_SYSTEM_PROMPT,
+                                    true,
+                                ),
                             }];
                         }
                         // exp-sim-p<N>: a simulacao paralela com teto de N passos (ela

@@ -28,7 +28,10 @@ const { repoDirFor } = require('./prepare-repo');
 try { require('dotenv').config({ path: path.join(__dirname, '../../.env') }); } catch {}
 try { require('dotenv').config({ path: path.join(__dirname, '../../.env.local'), override: true }); } catch {}
 
-const RESULTS = path.join(__dirname, 'results');
+// RESULTS_ROOT existe para a pagina poder ser gerada sobre uma copia da rodada
+// fora do repo (um pacote enviado para alguem, por exemplo), em vez de sempre
+// olhar para o results/ desta checkout.
+const RESULTS = process.env.RESULTS_ROOT || path.join(__dirname, 'results');
 const POOLS = process.env.POOL_ROOT || path.join(__dirname, 'pools');
 const DATASETS = path.join(__dirname, 'datasets');
 const LANGFUSE = (process.env.LANGFUSE_BASE_URL || 'https://us.cloud.langfuse.com').replace(/\/$/, '');

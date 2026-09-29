@@ -55,6 +55,23 @@ const suggestionSchema = z.object({
     // — foi o que aconteceu no primeiro run com a flag ligada, 0 de 21
     // candidatos chegaram com reason.
     reason: z.string().optional(),
+    // EXPERIMENTO (#1821, so o eval liga). O nivel de desenvolvedor que
+    // reportaria este achado. Precisa estar declarado aqui pelo mesmo motivo
+    // que o `reason`: campo que o zod nao conhece e descartado em silencio, e
+    // o experimento mediria um campo que nunca chegou.
+    //
+    // Normalizado porque o modelo responde em varias grafias (junior/Junior/
+    // jr, mid/pleno/intermediate, senior/sr, expert/staff/principal). Valor desconhecido limpa o
+    // campo em vez de derrubar o achado — a mesma regra do `severity`.
+    developerLevel: z.preprocess((v) => {
+        const s = typeof v === 'string' ? v.trim().toLowerCase() : '';
+        if (/^(jr|junior|j[uú]nior)$/.test(s)) return 'junior';
+        if (/^(mid|pleno|intermediate|mid-?level)$/.test(s)) return 'pleno';
+        if (/^(sr|senior|s[eê]nior)$/.test(s)) return 'senior';
+        if (/^(expert|especialista|staff|principal|architect)$/.test(s)) return 'expert';
+        if (/^(qa|quality[ -]?analy[sz](t|er)|tester)$/.test(s)) return 'qa';
+        return undefined;
+    }, z.enum(['junior', 'pleno', 'senior', 'expert', 'qa']).optional()),
 });
 
 const _findingsSchema = z.object({

@@ -1354,6 +1354,32 @@ class InvestigationAgentProvider {
                               xfileCallGraph,
                           }
                         : {}),
+                    // RECALL_DEV_R1=<pool>: segunda rodada do dev-level (braços
+                    // exp-dev-<cat>-p<N>-r2). Le deste PR, no pool indicado, o que
+                    // a primeira rodada de cada categoria reportou — o mesmo
+                    // conjunto que foi julgado, sem gerar a primeira de novo.
+                    ...(process.env.RECALL_DEV_R1
+                        ? (() => {
+                              const arq = path.join(
+                                  process.env.POOL_ROOT || path.join(__dirname, 'pools'),
+                                  process.env.RECALL_DEV_R1,
+                                  `${caseData.caseId}.raw.txt`,
+                              );
+                              const r1 = JSON.parse(fs.readFileSync(arq, 'utf8'));
+                              const n = process.env.RECALL_DEV_R1_TETO || '3';
+                              const porCat = {};
+                              for (const cat of ['bug', 'security', 'performance']) {
+                                  porCat[cat] = (r1.trace?.preFilterCandidates || [])
+                                      .filter((c) => c.producedBy === `micro-exp-dev-${cat}-p${n}`)
+                                      .map((c) => ({
+                                          file: c.relevantFile,
+                                          line: c.relevantLinesStart,
+                                          summary: c.oneSentenceSummary,
+                                      }));
+                              }
+                              return { devLevelPriorFindings: porCat };
+                          })()
+                        : {}),
                     // RECALL_MICRO_SO_EXTRAS=1: pula as passadas de classe e roda so
                     // as copias experimentais delas (RECALL_MICRO_EXP=p1g,p1gnc).
                     ...(process.env.RECALL_MICRO_SO_EXTRAS === '1' ? { microAgentsSoExtras: true } : {}),

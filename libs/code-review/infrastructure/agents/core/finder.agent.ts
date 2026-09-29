@@ -140,6 +140,12 @@ const REASON_DESCRIPTION_EVIDENCE =
 function buildSubmitResultSchema(
     requireFindingReason = false,
     claudeSafeWording = false,
+    /** EXPERIMENTO (#1821, so o eval liga): exige `developerLevel` por achado.
+     *  Precisa estar AQUI, e nao so no zod: o schema da ferramenta declara
+     *  `additionalProperties: false`, entao um campo ausente daqui e descartado
+     *  pelo provider antes de qualquer parsing — medido no smoke de 29/09, 1 de
+     *  9 achados chegou com o campo. E a mesma armadilha que engoliu o `reason`. */
+    requireDevLevel = false,
 ): JSONSchema {
     return {
         type: 'object',
@@ -179,6 +185,16 @@ function buildSubmitResultSchema(
                                 ? REASON_DESCRIPTION_EVIDENCE
                                 : REASON_DESCRIPTION_WALK,
                         },
+                        ...(requireDevLevel
+                            ? {
+                                  developerLevel: {
+                                      type: 'string',
+                                      enum: ['junior', 'pleno', 'senior', 'expert', 'qa'],
+                                      description:
+                                          'The LEAST experienced reviewer who would have caught this: junior if it is visible in the changed lines themselves, pleno if you had to follow the value somewhere else, senior if it only appears when you compare the change against what the code guaranteed before, expert if it only appears on a run that is not the simple one (a second execution, a concurrent one, a retry, a cold cache, or an API contract that disagrees with how the call reads), qa if it only showed up when a quality analyst exercised a concrete test case. This is not severity.',
+                                  },
+                              }
+                            : {}),
                     },
                     required: [
                         'relevantFile',
@@ -186,6 +202,7 @@ function buildSubmitResultSchema(
                         'existingCode',
                         'improvedCode',
                         ...(requireFindingReason ? ['reason'] : []),
+                        ...(requireDevLevel ? ['developerLevel'] : []),
                     ],
                 },
             },
@@ -215,12 +232,14 @@ export const submitResultTool: AgentTool = {
 export function buildSubmitResultTool(
     requireFindingReason = false,
     claudeSafeWording = false,
+    requireDevLevel = false,
 ): AgentTool {
     return {
         ...submitResultTool,
         inputSchema: buildSubmitResultSchema(
             requireFindingReason,
             claudeSafeWording,
+            requireDevLevel,
         ),
         description: requireFindingReason && !claudeSafeWording
             ? 'Submit your final findings and end the review. Every finding must carry a `reason`: the walk that produced it, with file:line. A finding you cannot walk is one you should not submit.'
@@ -236,6 +255,9 @@ export interface BuildFinderSpecParams {
      *  a strict tool built for the primary but swapped onto a non-strict fallback
      *  (e.g. Gemini → OpenAI) is rejected by the fallback's Structured Outputs. */
     fallbackModelId?: string;
+    /** EXPERIMENTO (#1821): exige `developerLevel` por achado. Desligado por
+     *  padrao — so as passadas dev-level do eval ligam. */
+    requireDevLevel?: boolean;
     /** Exige `reason` por achado no submitResult. Desligado por padrao: ver a
      *  nota em buildSubmitResultSchema. */
     requireFindingReason?: boolean;
@@ -272,6 +294,7 @@ export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
             ...buildSubmitResultTool(
                 params.requireFindingReason,
                 params.claudeSafeWording,
+                params.requireDevLevel,
             ),
             strict: supportsStrictToolsForRun(
                 params.modelId,

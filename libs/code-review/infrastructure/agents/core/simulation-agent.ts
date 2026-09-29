@@ -48,6 +48,69 @@ export const SIMULATION_SYSTEM_PROMPT =
  * is the shape of a golden the harness has missed, generalised away from the
  * case it came from.
  */
+/** EXPERIMENTO (#1821): a mesma simulacao, restrita a UMA familia de estados.
+ *
+ *  Por que particionar por CENARIO e nao por categoria de defeito: a forca
+ *  desta passada e nao ser uma lista de classes — o cabecalho deste arquivo
+ *  mostra que quinze variacoes do procedimento "procure algo que case com X"
+ *  caem nos mesmos goldens. Dividir por bug/security/performance a converteria
+ *  de volta nisso. Dividir por estado mantem o procedimento e so troca QUAIS
+ *  estados o agente carrega ate o fim — tres caminhadas focadas no lugar de
+ *  uma que escolhe sozinha onde parar.
+ *
+ *  As tres listas sao a particao da lista original do STEP 2, sem estado novo:
+ *  o experimento mede o foco, nao um enunciado diferente. */
+export type CenarioSimulacao = 'feliz' | 'erro' | 'concorrencia';
+
+const ESTADOS: Record<CenarioSimulacao, { titulo: string; foco: string; lista: string }> = {
+    feliz: {
+        titulo: 'THE PATH THAT WORKS',
+        foco: `the run where nothing fails. The inputs are present, the lookups
+  succeed, every call returns. What you are checking is whether the caller ends
+  up with the RIGHT answer, and whether it still gets everything it used to get.
+  A change that breaks nothing and silently returns something different is the
+  defect this walk exists to catch.`,
+        lista: `    - the ordinary call: every field present, every lookup finds its row,
+      every downstream call succeeds
+    - the collection has exactly one element; the collection has many
+    - the number sits exactly on the boundary the code compares against
+    - the value travels onward afterwards — it gets serialised, queued, cached,
+      logged, compared, or returned across a boundary
+    - the caller is an older version that has not been updated for this change`,
+    },
+    erro: {
+        titulo: 'THE PATH THAT FAILS',
+        foco: `the run where something is absent or refuses. What you are
+  checking is what the caller is told when that happens: whether it can tell
+  failure from success, whether the error it gets names what actually went
+  wrong, and whether a partial write was left behind.`,
+        lista: `    - the lookup finds nothing: the id does not exist, was deleted, or belongs
+      to someone else
+    - the field is missing from the payload; the field is present and null
+    - the collection is empty
+    - the number is zero or is negative
+    - this is the first run: no prior row, no cache entry, no file, nothing stored
+    - the operation half-succeeded: it wrote one thing and failed the next
+    - a downstream call raises, times out, or returns an error the new code did
+      not have to handle before`,
+    },
+    concorrencia: {
+        titulo: 'THE PATH THAT OVERLAPS',
+        foco: `the run that is not alone. Another caller, a retry, or the same
+  caller twice. What you are checking is whether two runs that interleave leave
+  the system in a state neither of them would produce by itself.`,
+        lista: `    - two callers arrive at the same moment, and both pass the same check
+      before either writes
+    - the same caller retries after a timeout, and the first attempt did land
+    - the operation runs twice with the same input — is the second run a no-op
+      or does it double something
+    - a read happens between two writes of the same operation
+    - the value is cached or memoised, and a second run reads the stale copy
+    - work moved from the background to the request path, or vice versa: who
+      waits now, and what happens if it never finishes`,
+    },
+};
+
 export function buildSimulationPrompt(
     diffText: string,
     /** What other passes RAISED on this PR, before any filtering. Measured
@@ -70,6 +133,9 @@ export function buildSimulationPrompt(
     /** Blob <CallGraph>, logo abaixo do diff — mesma posicao que nos
      *  microagentes, pelo mesmo motivo de cache. Opt-in. */
     callGraph?: string,
+    /** EXPERIMENTO: restringe o STEP 2 a uma familia de estados. Sem ele o
+     *  prompt e EXATAMENTE o de antes, entao o controle nao muda. */
+    cenario?: CenarioSimulacao,
 ): string {
     const covered = alreadyFound?.length
         ? `
@@ -97,6 +163,31 @@ ${alreadyFound
 
     const graphBlock = callGraph?.trim() ? `\n${callGraph.trim()}\n` : '';
 
+    const c = cenario ? ESTADOS[cenario] : null;
+    const estadosBloco = c
+        ? c.lista
+        : `    - the collection is empty; the collection has exactly one element
+    - the lookup finds nothing: the id does not exist, was deleted, or belongs
+      to someone else
+    - the field is missing from the payload; the field is present and null
+    - the number is zero, is negative, or sits exactly on the boundary the code
+      compares against
+    - this is the first run: no prior row, no cache entry, no file, nothing stored
+    - two callers arrive at the same moment, or the same caller retries
+    - the operation half-succeeded: it wrote one thing and failed the next
+    - the value travels onward afterwards — it gets serialised, queued, cached,
+      logged, compared, or returned across a boundary
+    - the caller is an older version that has not been updated for this change`;
+    const escopo = c
+        ? `
+
+  THIS PASS WALKS ONE FAMILY OF STATES: ${c.titulo}. You are walking ${c.foco}
+
+  Other passes walk the other families. A walk that leaves your family is not
+  yours to report, even when it ends wrong — say so in one clause in the
+  reasoning and move on.`
+        : '';
+
     return `<Diffs>
 ${diffText}
 </Diffs>
@@ -107,7 +198,7 @@ ${graphBlock}${covered}
   head against concrete situations and report the runs that end somewhere wrong.
 
   A defect you recognised by its shape, without walking it, is not yours to
-  report — it has already been looked for.
+  report — it has already been looked for.${escopo}
 </Role>
 
 <Procedure>
@@ -123,18 +214,7 @@ ${graphBlock}${covered}
   put it in. Not categories — actual values and actual conditions. Work through
   this list and keep the ones that can occur here, saying in one clause why you
   discarded the rest:
-    - the collection is empty; the collection has exactly one element
-    - the lookup finds nothing: the id does not exist, was deleted, or belongs
-      to someone else
-    - the field is missing from the payload; the field is present and null
-    - the number is zero, is negative, or sits exactly on the boundary the code
-      compares against
-    - this is the first run: no prior row, no cache entry, no file, nothing stored
-    - two callers arrive at the same moment, or the same caller retries
-    - the operation half-succeeded: it wrote one thing and failed the next
-    - the value travels onward afterwards — it gets serialised, queued, cached,
-      logged, compared, or returned across a boundary
-    - the caller is an older version that has not been updated for this change
+${estadosBloco}
 
   STEP 3 — WALK.
   Take each state and carry it through the changed lines, one line at a time.
