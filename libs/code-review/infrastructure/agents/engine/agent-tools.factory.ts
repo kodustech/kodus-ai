@@ -5,6 +5,11 @@ import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/servic
 import type { LinkedRepoAccess } from '@libs/ee/linked-repositories';
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
 import { createSubmoduleProbe } from '@libs/code-review/infrastructure/agents/engine/uninitialized-submodules';
+import {
+    findProjectLevelTypeScriptErrors,
+    isProjectLevelTypeScriptLine,
+    UNVERIFIED_TYPES_MARKER,
+} from '@libs/code-review/infrastructure/agents/engine/unverified-typecheck';
 
 const logger = createLogger('AgentTools');
 
@@ -1127,11 +1132,55 @@ fi
                         return;
                     }
 
+                    // #1940: a checker can run and still fail to check the
+                    // project — or check it with a configuration it could not
+                    // load. Decided from the RAW output, because both shapes in
+                    // the report need the same answer: the filter dropping
+                    // every line, and the filter keeping a tsconfig line
+                    // because its directory happens to be the target's scope.
+                    // See unverified-typecheck.ts.
+                    const projectLevelErrors =
+                        lang === 'TypeScript'
+                            ? findProjectLevelTypeScriptErrors(output)
+                            : [];
+
                     const filteredOutput = filterDiagnosticsToTarget(
                         output,
                         target,
                         scope,
                     );
+
+                    if (projectLevelErrors.length > 0) {
+                        // Some project-level errors (an unreadable `extends`,
+                        // an unknown option) are printed ALONGSIDE real source
+                        // diagnostics, so the scoped lines are kept rather than
+                        // replaced: dropping them would lose a finding and tell
+                        // the agent nothing was checked. The project-level lines
+                        // themselves are dropped here, since they are already
+                        // named below and are not diagnostics about the file
+                        // under review.
+                        const scopedDiagnostics = filteredOutput
+                            .split('\n')
+                            .filter(
+                                (line) => !isProjectLevelTypeScriptLine(line),
+                            )
+                            .join('\n')
+                            .trim();
+
+                        results.push(
+                            truncateShellOutput(
+                                `[${lang} — scope: ${scope}]\n${UNVERIFIED_TYPES_MARKER}\n` +
+                                    `tsc reported project-level errors (${projectLevelErrors.join(', ')}), so the project may not have been built with its intended configuration and a "no diagnostics" answer for ${target} is NOT a pass. ` +
+                                    `This is the shape a sandbox produces when the project's dependencies are not installed or its submodules were never fetched. ` +
+                                    `Verify manually: read the callee/definition with readFile and confirm the call matches its signature.` +
+                                    (scopedDiagnostics
+                                        ? `\nOther diagnostics in this run that mention ${target}:\n${scopedDiagnostics}`
+                                        : ''),
+                            ),
+                        );
+                        return;
+                    }
+
                     if (filteredOutput) {
                         results.push(
                             truncateShellOutput(
