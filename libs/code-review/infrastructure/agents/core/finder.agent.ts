@@ -127,7 +127,20 @@ export interface FinderSuggestion {
  * um campo obrigatorio a mais pode custar recall — um agente que nao consegue
  * articular o percurso pode simplesmente deixar de reportar. Com o interruptor,
  * reverter e desligar, e da para medir os dois lados no mesmo corpus. */
-function buildSubmitResultSchema(requireFindingReason = false): JSONSchema {
+/** Texto do `reason` por achado. O padrao descreve o percurso ("walk"); o
+ *  Claude Sonnet 5.5 recusa (stop_reason "refusal", categoria
+ *  reasoning_extraction) a maioria das chamadas quando a descricao da tool e o
+ *  campo falam em percurso. Para Claude vai a versao de evidencia; os demais
+ *  modelos seguem com o texto de antes, palavra por palavra (#1821). */
+const REASON_DESCRIPTION_WALK =
+    'The walk that produced THIS finding: the concrete input or state you started from, the lines it passes through in order, and what the caller ends up with. Cite file:line.';
+const REASON_DESCRIPTION_EVIDENCE =
+    'Evidence for THIS finding: the input or state that triggers it and the file:line locations involved.';
+
+function buildSubmitResultSchema(
+    requireFindingReason = false,
+    claudeSafeWording = false,
+): JSONSchema {
     return {
         type: 'object',
         // additionalProperties:false on every object is required by provider strict
@@ -162,8 +175,9 @@ function buildSubmitResultSchema(requireFindingReason = false): JSONSchema {
                         ruleUuid: { type: 'string' },
                         reason: {
                             type: 'string',
-                            description:
-                                'The walk that produced THIS finding: the concrete input or state you started from, the lines it passes through in order, and what the caller ends up with. Cite file:line.',
+                            description: claudeSafeWording
+                                ? REASON_DESCRIPTION_EVIDENCE
+                                : REASON_DESCRIPTION_WALK,
                         },
                     },
                     required: [
@@ -198,11 +212,17 @@ export const submitResultTool: AgentTool = {
 /** Variante com `reason` obrigatorio por achado. Mesma tool, mesmo nome — o
  *  CompletionGatePolicy detecta pelo nome, entao trocar o schema nao muda o
  *  fluxo. */
-export function buildSubmitResultTool(requireFindingReason = false): AgentTool {
+export function buildSubmitResultTool(
+    requireFindingReason = false,
+    claudeSafeWording = false,
+): AgentTool {
     return {
         ...submitResultTool,
-        inputSchema: buildSubmitResultSchema(requireFindingReason),
-        description: requireFindingReason
+        inputSchema: buildSubmitResultSchema(
+            requireFindingReason,
+            claudeSafeWording,
+        ),
+        description: requireFindingReason && !claudeSafeWording
             ? 'Submit your final findings and end the review. Every finding must carry a `reason`: the walk that produced it, with file:line. A finding you cannot walk is one you should not submit.'
             : submitResultTool.description,
     };
@@ -219,6 +239,9 @@ export interface BuildFinderSpecParams {
     /** Exige `reason` por achado no submitResult. Desligado por padrao: ver a
      *  nota em buildSubmitResultSchema. */
     requireFindingReason?: boolean;
+    /** Claude: texto de evidencia no lugar do percurso (ver
+     *  REASON_DESCRIPTION_EVIDENCE). */
+    claudeSafeWording?: boolean;
     /** Investigation tools (grep/readFile/...) from buildFinderToolRegistry. */
     tools: ToolRegistry;
     coverageLedger: ProgressLedger;
@@ -246,7 +269,10 @@ export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
         // Considers the failover target too: a strict tool built for a Gemini
         // primary must NOT be sent to an OpenAI fallback (it rejects the schema).
         {
-            ...buildSubmitResultTool(params.requireFindingReason),
+            ...buildSubmitResultTool(
+                params.requireFindingReason,
+                params.claudeSafeWording,
+            ),
             strict: supportsStrictToolsForRun(
                 params.modelId,
                 params.fallbackModelId,

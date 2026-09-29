@@ -505,6 +505,9 @@ export function focusBlockFor(group: MicroAgentGroup): string {
  * mode they address is documented — the model writing 17k characters of
  * analysis about the exact symbol a golden names, then reporting nothing.
  */
+const REASON_EVIDENCIA = (semCensura: boolean): string =>
+    `"REQUIRED — evidence for THIS finding: the input or state that triggers it and the file:line locations involved. ${semCensura ? 'If the evidence is partial, say what is still unconfirmed and lower the confidence — do not drop the finding.' : 'A finding without file:line evidence should not be submitted.'}"`;
+
 export function buildMicroAgentPrompt(
     group: MicroAgentGroup,
     diffText: string,
@@ -512,6 +515,9 @@ export function buildMicroAgentPrompt(
     teto = 2,
     semCensura = false,
     reguaEvidencia = false,
+    /** Claude: `reason` pedido como evidencia, nao como percurso — o texto do
+     *  percurso faz o Sonnet 5.5 recusar a chamada (#1821). */
+    claudeSafeWording = false,
 ): string {
     // <Diffs> FIRST, and the assignment after it. The twelve agents run under
     // one Promise.all against the same pull request, so the diff is the only
@@ -585,7 +591,7 @@ ${focusBlockFor(group)}
       "existingCode": "problematic code snippet from the diff",
       "improvedCode": "fixed code snippet (only if fix is clear from context)",
       "oneSentenceSummary": "Brief summary",
-      "reason": "REQUIRED when the schema asks for it — the walk that produced THIS finding, not a restatement of it: the concrete input or state you started from, the lines it passes through in order with file:line, and what the caller ends up with. A reason with no file:line is not one. ${semCensura ? 'If you cannot write the whole walk, write the part you traced, say what is still unconfirmed, and lower the confidence — do not drop the finding.' : 'If you cannot write the walk, you have not established the finding and should not submit it.'}",
+      "reason": ${claudeSafeWording ? REASON_EVIDENCIA(semCensura) : `"REQUIRED when the schema asks for it — the walk that produced THIS finding, not a restatement of it: the concrete input or state you started from, the lines it passes through in order with file:line, and what the caller ends up with. A reason with no file:line is not one. ${semCensura ? 'If you cannot write the whole walk, write the part you traced, say what is still unconfirmed, and lower the confidence — do not drop the finding.' : 'If you cannot write the walk, you have not established the finding and should not submit it.'}"`},
       "relevantLinesStart": 10,
       "relevantLinesEnd": 15,
       "severity": "critical|high|medium|low",

@@ -473,6 +473,16 @@ export async function runAgentLoopViaCore(
     // tool built for the primary would be rejected by a non-strict fallback
     // (e.g. Gemini primary → OpenAI fallback). See supportsStrictToolsForRun.
     const fallbackModelId = secrets.byokConfig?.fallback?.model;
+    // Claude gets the evidence wording for the per-finding `reason` (see
+    // REASON_DESCRIPTION_EVIDENCE in finder.agent.ts); every other model keeps
+    // the original text. The bench passes a prebuilt model with no slot.
+    const claudeSafeWording =
+        input.byokProvider === 'anthropic' ||
+        [
+            secrets.byokConfig?.model,
+            fallbackModelId,
+            (secrets.prebuiltModel as { modelId?: string } | undefined)?.modelId,
+        ].some((id) => typeof id === 'string' && /claude/i.test(id));
     const buildSpecWithLedger = (
         ledger: DiffCoverageLedger,
         maxStepsOverride?: number,
@@ -481,6 +491,7 @@ export async function runAgentLoopViaCore(
         buildFinderAgentSpec({
             systemPrompt: systemPromptOverride ?? input.systemPrompt,
             requireFindingReason: input.requireFindingReason,
+            claudeSafeWording,
             modelId: specModelId,
             fallbackModelId,
             usageRunName: input.usageRunName,
@@ -743,6 +754,9 @@ export async function runAgentLoopViaCore(
                                   rawDiffPrompt(input.changedFiles, input.fileTiers, input.diffTierBudget),
                                   grafoParaOsAgentes,
                                   input.microAgentTeto ?? 2,
+                                  undefined,
+                                  undefined,
+                                  claudeSafeWording,
                               ),
                               // Teto de passos proprio dos agentes de classe (medido
                               // em 26/09: 8 empata ou ganha de 12 e corta ~1/3 dos
@@ -774,6 +788,9 @@ export async function runAgentLoopViaCore(
                                     diff,
                                     extra === 'xfile-grafo' ? input.xfileCallGraph : grafoParaOsAgentes,
                                     input.microAgentTeto ?? 2,
+                                    undefined,
+                                    undefined,
+                                    claudeSafeWording,
                                 ),
                                 spec,
                             }];
@@ -817,7 +834,7 @@ export async function runAgentLoopViaCore(
                             return microGroups.map((group) => ({
                                 label: experimentalExtraLabel(`p${n}${comGrafo ? 'g' : ''}${teto[3] ?? ''}-${group.id}`),
                                 phase: 0,
-                                prompt: buildMicroAgentPrompt(group, diff, comGrafo ? input.xfileCallGraph : grafoParaOsAgentes, input.microAgentTeto ?? 2, semCensura, reguaEvidencia),
+                                prompt: buildMicroAgentPrompt(group, diff, comGrafo ? input.xfileCallGraph : grafoParaOsAgentes, input.microAgentTeto ?? 2, semCensura, reguaEvidencia, claudeSafeWording),
                                 spec: buildSpecWithLedger(ledger(), n, MICRO_AGENT_SYSTEM_PROMPT),
                             }));
                         }
@@ -827,7 +844,7 @@ export async function runAgentLoopViaCore(
                             return [{
                                 label: experimentalExtraLabel(grupo.id),
                                 phase: 0,
-                                prompt: buildMicroAgentPrompt(grupo, diff, grafoParaOsAgentes, input.microAgentTeto ?? 2),
+                                prompt: buildMicroAgentPrompt(grupo, diff, grafoParaOsAgentes, input.microAgentTeto ?? 2, false, false, claudeSafeWording),
                                 spec,
                             }];
                         }
@@ -836,7 +853,7 @@ export async function runAgentLoopViaCore(
                         return [{
                             label: experimentalExtraLabel(exp.id),
                             phase: 0,
-                            prompt: buildMicroAgentPrompt(exp, diff, grafoParaOsAgentes, input.microAgentTeto ?? 2),
+                            prompt: buildMicroAgentPrompt(exp, diff, grafoParaOsAgentes, input.microAgentTeto ?? 2, false, false, claudeSafeWording),
                             spec,
                         }];
                     }),

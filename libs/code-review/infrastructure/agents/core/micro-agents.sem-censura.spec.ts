@@ -47,4 +47,15 @@ describe('prompt dos microagentes sem autocensura', () => {
         const bloco = b.slice(b.indexOf('\n\n  What counts as evidence'), b.indexOf('\n</Stance>'));
         expect(b.replace(bloco, '')).toBe(a);
     });
+
+    it('texto para Claude: pede evidencia, sem percurso; o resto fica igual', () => {
+        const a = buildMicroAgentPrompt(grupo, 'DIFF', 'GRAFO', 4);
+        const c = buildMicroAgentPrompt(grupo, 'DIFF', 'GRAFO', 4, false, false, true);
+        expect(c).not.toMatch(/walk/i);
+        expect(c).toContain('evidence for THIS finding');
+        const linha = (p: string) => p.split('\n').find((l) => l.includes('"reason":'));
+        expect(c.replace(linha(c)!, '').replace(SILENCIO[0], '')).toBe(
+            a.replace(linha(a)!, '').replace(SILENCIO[0], ''),
+        );
+    });
 });
