@@ -86,7 +86,7 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
         // that happens to contain a file the host withheld a patch for.
         const modes = context.codeReviewConfig?.deterministicEvidence?.tools;
         const anyToolEnabled = this.tools.some(
-            (tool) => (modes?.[tool.id] ?? 'off') !== 'off',
+            (tool) => modes?.[tool.id] === true,
         );
 
         if (sandbox && anyToolEnabled) {

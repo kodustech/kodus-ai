@@ -36,7 +36,7 @@ const makeContext = (
         repository: { id: 'repo-1', name: 'widget-api' },
         pullRequest: { number: 42 },
         codeReviewConfig: {
-            deterministicEvidence: { tools: { dependencies: 'on' } },
+            deterministicEvidence: { tools: { dependencies: true } },
         },
         changedFiles: [
             { filename: 'src/db/orders.go', patch: patchAdding(10, 3) },
@@ -133,7 +133,7 @@ describe('RunAnalyzersStage', () => {
         it('records the reason a tool was skipped', async () => {
             const context = makeContext({
                 codeReviewConfig: {
-                    deterministicEvidence: { tools: { dependencies: 'off' } },
+                    deterministicEvidence: { tools: { dependencies: false } },
                 },
             } as unknown as Partial<CodeReviewPipelineContext>);
 
@@ -462,7 +462,7 @@ describe('the cost of recovering hunks', () => {
                 ...(withheldFile as object),
                 codeReviewConfig: {
                     deterministicEvidence: {
-                        tools: { dependencies: 'off', secrets: 'off' },
+                        tools: { dependencies: false, secrets: false },
                     },
                 },
             } as never),

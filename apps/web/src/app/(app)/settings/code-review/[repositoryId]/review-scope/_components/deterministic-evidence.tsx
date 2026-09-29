@@ -38,9 +38,8 @@ const TOOLS: Array<{
     },
 ];
 
-/** A tool is on unless it is explicitly off; `auto` stands down when CI covers it. */
-const isToolEnabled = (mode: string | undefined) =>
-    mode !== undefined && mode !== "off";
+/** An enabled tool still stands down when the repo's own CI already covers it. */
+const isToolEnabled = (mode: boolean | undefined) => mode === true;
 
 export const DeterministicEvidence = () => {
     const form = useFormContext<CodeReviewFormType>();
@@ -68,12 +67,7 @@ export const DeterministicEvidence = () => {
                             variant="helper"
                             disabled={field.disabled}
                             onClick={() =>
-                                // `auto` rather than `on`: a repository whose CI
-                                // already scans for this should not receive the
-                                // same finding twice.
-                                field.onChange(
-                                    isToolEnabled(field.value) ? "off" : "auto",
-                                )
+                                field.onChange(!isToolEnabled(field.value))
                             }
                             className="w-full">
                             <CardHeader className="flex flex-row items-center justify-between gap-6">

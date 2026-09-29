@@ -347,7 +347,11 @@ export type CodeReviewConfig = {
          * Per-tool switch. `auto` runs a tool only when the customer's CI has
          * no equivalent analysis; `on` runs it regardless; absent is off.
          */
-        tools?: Record<string, 'off' | 'auto' | 'on'>;
+        /**
+         * Per tool: on or off. An enabled tool still stands down when the
+         * repository's own CI already covers its category.
+         */
+        tools?: Record<string, boolean>;
     };
     ignoredTitleKeywords: string[];
     baseBranches: string[];

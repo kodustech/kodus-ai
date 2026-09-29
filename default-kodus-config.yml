@@ -1150,9 +1150,9 @@ reviewOptions:
 # deterministic evidence (opt-in)
 deterministicEvidence:
     ciChecks: false # read the CI results your own pipeline already produced
-    tools: # per tool: off | auto | on — auto skips when your CI already runs an equivalent
-        secrets: 'off' # credential scanning over the changed files
-        dependencies: 'off' # known CVEs in dependencies this PR adds or bumps
+    tools: # an enabled tool still skips when your CI already runs an equivalent
+        secrets: false # credential scanning over the changed files
+        dependencies: false # known CVEs in dependencies this PR adds or bumps
 
 # suggestion control
 suggestionControl:

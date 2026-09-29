@@ -378,14 +378,14 @@ class LinkedRepositoryDto {
  */
 class DeterministicEvidenceToolsDto {
     @IsOptional()
-    @IsIn(['off', 'auto', 'on'])
-    @ApiPropertyOptional({ enum: ['off', 'auto', 'on'] })
-    secrets?: 'off' | 'auto' | 'on';
+    @IsBoolean()
+    @ApiPropertyOptional()
+    secrets?: boolean;
 
     @IsOptional()
-    @IsIn(['off', 'auto', 'on'])
-    @ApiPropertyOptional({ enum: ['off', 'auto', 'on'] })
-    dependencies?: 'off' | 'auto' | 'on';
+    @IsBoolean()
+    @ApiPropertyOptional()
+    dependencies?: boolean;
 }
 
 class DeterministicEvidenceDto {
