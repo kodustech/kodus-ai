@@ -96,6 +96,26 @@ export function isProjectLevelTypeScriptLine(line: string): boolean {
 }
 
 /**
+ * True when the output carries at least one diagnostic about a source file.
+ * The caller pairs this with the compiler's exit status: a non-zero status and
+ * no located diagnostic means the compiler never checked anything (it could
+ * not be resolved, it crashed), which is a different answer from a real finding.
+ */
+export function hasLocatedTypeScriptDiagnostic(output: string): boolean {
+    return String(output ?? '')
+        .split('\n')
+        .some((rawLine) => {
+            const located = LOCATED_DIAGNOSTIC.exec(rawLine.trim());
+            if (!located?.groups?.code || !located.groups.file) {
+                return false;
+            }
+
+            const ext = path.extname(located.groups.file).toLowerCase();
+            return SOURCE_FILE_EXTENSIONS.has(ext);
+        });
+}
+
+/**
  * The project-level TypeScript error codes present in a compiler output, in
  * first-seen order and deduped. Empty means the output carries no evidence that
  * the compiler failed on the project or its configuration.

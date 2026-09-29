@@ -1,6 +1,7 @@
 import { buildAgentTools } from './agent-tools.factory';
 import {
     findProjectLevelTypeScriptErrors,
+    hasLocatedTypeScriptDiagnostic,
     UNVERIFIED_TYPES_MARKER,
 } from './unverified-typecheck';
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
@@ -47,28 +48,63 @@ const ELSEWHERE_OUTPUT = [
 /**
  * A sandbox holding one TypeScript file whose nearest tsconfig is `SCOPE`. The
  * exec mock answers the three shells `checkTypes` builds: the target scan, the
- * nearest-tsconfig lookup, and the compiler itself.
+ * nearest-tsconfig lookup, and the compiler itself. It returns the real
+ * executor's shape (`stdout`, `stderr`, `exitCode`) and records every command,
+ * so a spec can pin the compiler invocation instead of only its output.
  */
-function makeSandbox(tscOutput: string): RemoteCommands {
-    return {
+function makeSandbox(tscOutput: string, tscExitCode = 0) {
+    const commands: string[] = [];
+
+    const remote = {
         read: async (p: string) => {
             throw new Error(`cat: ${p}: No such file or directory`);
         },
         listDir: async () => '',
         grep: async () => '',
         exec: (async (cmd: string) => {
+            commands.push(cmd);
             // Order matters: the compiler command also mentions the tsconfig.
-            if (cmd.includes('npx tsc')) return { stdout: tscOutput };
-            if (cmd.includes('tsconfig.json')) return { stdout: SCOPE };
-            return { stdout: `${TARGET}\n` };
-        }) as any,
-    } as any;
+            if (cmd.includes('npx tsc')) {
+                return { stdout: tscOutput, stderr: '', exitCode: tscExitCode };
+            }
+            if (cmd.includes('tsconfig.json')) {
+                return { stdout: SCOPE, stderr: '', exitCode: 0 };
+            }
+            return { stdout: `${TARGET}\n`, stderr: '', exitCode: 0 };
+        }) as RemoteCommands['exec'],
+    } as RemoteCommands;
+
+    return { commands, remote };
 }
 
-const runCheckTypes = (tscOutput: string) =>
-    buildAgentTools(makeSandbox(tscOutput)).checkTypes.execute({
+const runCheckTypes = (tscOutput: string, tscExitCode = 0) =>
+    buildAgentTools(
+        makeSandbox(tscOutput, tscExitCode).remote,
+    ).checkTypes.execute({
         path: TARGET,
     });
+
+describe('hasLocatedTypeScriptDiagnostic', () => {
+    it('reads a diagnostic about a source file as a check that happened', () => {
+        expect(
+            hasLocatedTypeScriptDiagnostic(
+                `functions-splitted/store/src/requestable/api/controllers/menu.ts(12,9): error TS2322: Type 'string' is not assignable to type 'number'.`,
+            ),
+        ).toBe(true);
+    });
+
+    it('does not count a project-level or unlocated report', () => {
+        expect(hasLocatedTypeScriptDiagnostic(SCOPE_MATCHING_OUTPUT)).toBe(
+            false,
+        );
+        expect(
+            hasLocatedTypeScriptDiagnostic(
+                `error TS5083: Cannot read file '<root>/packages/acme-commons/tsconfig.base.json'.`,
+            ),
+        ).toBe(false);
+        expect(hasLocatedTypeScriptDiagnostic('')).toBe(false);
+    });
+});
 
 describe('findProjectLevelTypeScriptErrors', () => {
     it('reads the codes that mean the program was never built', () => {
@@ -187,6 +223,9 @@ describe('checkTypes — a compiler that could not check the project', () => {
         expect(out).toContain('TS2322');
         expect(out).toContain(TARGET);
         expect(out).not.toContain('No diagnostics matched');
+        // The kept lines come from the whole scope, not only from the target,
+        // so the heading must not claim they all mention it.
+        expect(out).toContain('not all of them mention');
     });
 
     it('still reports a clean run as clean', async () => {
@@ -194,6 +233,39 @@ describe('checkTypes — a compiler that could not check the project', () => {
 
         expect(out).toContain('no type errors or linter diagnostics found');
         expect(out).not.toContain(UNVERIFIED_TYPES_MARKER);
+    });
+
+    it('flags a compiler that never ran: a non-zero exit with no diagnostic', async () => {
+        // `npx` failing to resolve or start `tsc` prints nothing a TS-code
+        // pattern can match, so the previous guard read it as a scoped pass.
+        const out = await runCheckTypes('npx: not found', 127);
+
+        expect(out).toContain(UNVERIFIED_TYPES_MARKER);
+        expect(out).toMatch(/NOT a pass/i);
+        expect(out).not.toContain('No diagnostics matched');
+    });
+
+    it('does not call a non-zero exit unverified when a diagnostic was found', async () => {
+        const out = await runCheckTypes(
+            `${TARGET}(12,5): error TS2322: Type 'string' is not assignable to type 'number'.`,
+            2,
+        );
+
+        expect(out).toContain('TS2322');
+        expect(out).not.toContain(UNVERIFIED_TYPES_MARKER);
+    });
+
+    it('pins the compiler invocation and reads its own exit status', async () => {
+        // `| head` would make the pipeline report the pager's status, so the
+        // guard above could never see a failing compiler.
+        const sandbox = makeSandbox(SCOPE_MATCHING_OUTPUT, 2);
+        await buildAgentTools(sandbox.remote).checkTypes.execute({
+            path: TARGET,
+        });
+
+        expect(sandbox.commands.find((cmd) => cmd.includes('npx tsc'))).toBe(
+            `npx tsc --noEmit -p '${SCOPE}' 2>&1`,
+        );
     });
 
     it('keeps the scoped answer when the diagnostics are about other files', async () => {

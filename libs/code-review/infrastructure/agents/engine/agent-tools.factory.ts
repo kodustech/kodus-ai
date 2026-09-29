@@ -7,6 +7,7 @@ import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/service
 import { createSubmoduleProbe } from '@libs/code-review/infrastructure/agents/engine/uninitialized-submodules';
 import {
     findProjectLevelTypeScriptErrors,
+    hasLocatedTypeScriptDiagnostic,
     isProjectLevelTypeScriptLine,
     UNVERIFIED_TYPES_MARKER,
 } from '@libs/code-review/infrastructure/agents/engine/unverified-typecheck';
@@ -291,9 +292,7 @@ export function buildAgentTools(
             return { ok: false, error: 'Absolute paths are not allowed' };
         }
         const abs =
-            rel === '.'
-                ? rootPath
-                : `${rootPath.replace(/\/+$/, '')}/${rel}`;
+            rel === '.' ? rootPath : `${rootPath.replace(/\/+$/, '')}/${rel}`;
         return { ok: true, abs };
     };
 
@@ -376,15 +375,12 @@ export function buildAgentTools(
                         const safeGlob = glob
                             ? glob.replace(/'/g, "'\\''")
                             : '';
-                        const globArg = safeGlob
-                            ? ` --glob '${safeGlob}'`
-                            : '';
+                        const globArg = safeGlob ? ` --glob '${safeGlob}'` : '';
                         const excludeTestsArgs = excludeTests
                             ? ` --glob '!*test*' --glob '!*Test*' --glob '!*spec*' --glob '!*Spec*' --glob '!*__tests__*'`
                             : '';
                         const modeArg = namesOnly ? ' -l' : ' -n -C 2';
-                        const relForCd =
-                            searchPath === '.' ? '.' : searchPath;
+                        const relForCd = searchPath === '.' ? '.' : searchPath;
                         const cdCmd = `cd ${shSingleQuote(linked.rootPath)} && rg '${safePattern}'${globArg}${excludeTestsArgs}${modeArg} ${shSingleQuote(relForCd)}`;
                         const { stdout, exitCode } =
                             await remoteCommands.exec(cdCmd);
@@ -811,7 +807,9 @@ export function buildAgentTools(
                                 result.substring(0, MAX_LIST_LENGTH) +
                                 `\n... (truncated)`;
                         }
-                        return result || `(empty) linked repo ${linked.repository}`;
+                        return (
+                            result || `(empty) linked repo ${linked.repository}`
+                        );
                     } catch (err) {
                         return `Error listing linked repo ${linked.repository}: ${err instanceof Error ? err.message : String(err)}`;
                     }
@@ -1115,6 +1113,7 @@ fi
                     lang: string,
                     scope: string,
                     rawOutput: string,
+                    exitCode?: number,
                 ) => {
                     const output = rawOutput?.trim();
                     // Tool not present in the sandbox: the check did NOT run.
@@ -1128,9 +1127,6 @@ fi
                     // We got here because the compiler/linter actually ran
                     // (it either emitted diagnostics or produced clean output).
                     anyCheckerExecuted = true;
-                    if (!output) {
-                        return;
-                    }
 
                     // #1940: a checker can run and still fail to check the
                     // project — or check it with a configuration it could not
@@ -1140,17 +1136,25 @@ fi
                     // because its directory happens to be the target's scope.
                     // See unverified-typecheck.ts.
                     const projectLevelErrors =
-                        lang === 'TypeScript'
+                        lang === 'TypeScript' && output
                             ? findProjectLevelTypeScriptErrors(output)
                             : [];
 
-                    const filteredOutput = filterDiagnosticsToTarget(
-                        output,
-                        target,
-                        scope,
-                    );
+                    // The same answer is needed when the compiler never ran at
+                    // all: an unresolvable or crashing `npx tsc` exits non-zero
+                    // without printing a single diagnostic, which no error-code
+                    // pattern can recognise. The commands keep the compiler's
+                    // own status (`| head` would hand back the pager's), so a
+                    // non-zero status with no diagnostic about a source file is
+                    // this state.
+                    const didNotCheck =
+                        lang === 'TypeScript' &&
+                        (projectLevelErrors.length > 0 ||
+                            (typeof exitCode === 'number' &&
+                                exitCode !== 0 &&
+                                !hasLocatedTypeScriptDiagnostic(output ?? '')));
 
-                    if (projectLevelErrors.length > 0) {
+                    if (didNotCheck) {
                         // Some project-level errors (an unreadable `extends`,
                         // an unknown option) are printed ALONGSIDE real source
                         // diagnostics, so the scoped lines are kept rather than
@@ -1159,7 +1163,11 @@ fi
                         // themselves are dropped here, since they are already
                         // named below and are not diagnostics about the file
                         // under review.
-                        const scopedDiagnostics = filteredOutput
+                        const scopedDiagnostics = filterDiagnosticsToTarget(
+                            output ?? '',
+                            target,
+                            scope,
+                        )
                             .split('\n')
                             .filter(
                                 (line) => !isProjectLevelTypeScriptLine(line),
@@ -1167,19 +1175,35 @@ fi
                             .join('\n')
                             .trim();
 
+                        const reason =
+                            projectLevelErrors.length > 0
+                                ? `tsc reported project-level errors (${projectLevelErrors.join(', ')})`
+                                : `tsc exited with ${exitCode} without reporting a diagnostic about any source file`;
+
                         results.push(
                             truncateShellOutput(
                                 `[${lang} — scope: ${scope}]\n${UNVERIFIED_TYPES_MARKER}\n` +
-                                    `tsc reported project-level errors (${projectLevelErrors.join(', ')}), so the project may not have been built with its intended configuration and a "no diagnostics" answer for ${target} is NOT a pass. ` +
-                                    `This is the shape a sandbox produces when the project's dependencies are not installed or its submodules were never fetched. ` +
+                                    `${reason}, so the project may not have been built with its intended configuration and a "no diagnostics" answer for ${target} is NOT a pass. ` +
+                                    `This is the shape a sandbox produces when the compiler cannot be resolved or the project's dependencies are not installed and its submodules were never fetched. ` +
                                     `Verify manually: read the callee/definition with readFile and confirm the call matches its signature.` +
                                     (scopedDiagnostics
-                                        ? `\nOther diagnostics in this run that mention ${target}:\n${scopedDiagnostics}`
+                                        ? `\nOther diagnostics in this run within scope ${scope} (not all of them mention ${target}):\n${scopedDiagnostics}`
                                         : ''),
                             ),
                         );
                         return;
                     }
+
+                    // A clean run with nothing to report.
+                    if (!output) {
+                        return;
+                    }
+
+                    const filteredOutput = filterDiagnosticsToTarget(
+                        output,
+                        target,
+                        scope,
+                    );
 
                     if (filteredOutput) {
                         results.push(
@@ -1249,15 +1273,20 @@ fi
                         ));
 
                     try {
-                        const { stdout } = await exec(
+                        // No `| head`: the pipeline's status would be the
+                        // pager's, and the compiler's own status is what tells
+                        // "did not check" from "checked and found nothing".
+                        // truncateShellOutput caps the text instead.
+                        const { stdout, exitCode } = await exec(
                             tsconfig
-                                ? `npx tsc --noEmit -p ${shellQuote(tsconfig)} 2>&1 | head -40`
-                                : `npx tsc --noEmit --pretty false ${safeTarget} 2>&1 | head -40`,
+                                ? `npx tsc --noEmit -p ${shellQuote(tsconfig)} 2>&1`
+                                : `npx tsc --noEmit --pretty false ${safeTarget} 2>&1`,
                         );
                         pushScopedResult(
                             'TypeScript',
                             tsconfig || target,
                             stdout,
+                            exitCode,
                         );
                     } catch {
                         // tsc not available, skip
