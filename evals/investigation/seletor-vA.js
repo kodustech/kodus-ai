@@ -27,6 +27,7 @@ const path = require('path');
 const { generateText, tool, jsonSchema } = require('ai');
 const { registerTracing, tele, flush } = require('./eval-tracing');
 const { buildModel, descreveModelo } = require('./eval-model');
+const { chamadaEstruturada } = require('./eval-structured');
 
 const S = process.env.POOL_ROOT || path.join(__dirname, 'pools');
 const arg = (n, d) => {
@@ -40,9 +41,7 @@ const MODEL = process.env.RECALL_MODEL || 'gpt-5.6-sol@sub';
 const OUT = arg('out', path.join(__dirname, 'results', `seletor-vA-${DUMP}.json`));
 registerTracing('seletor-vA');
 
-const selecionarTool = tool({
-    description: 'Registra os grupos e as notas. Chame exatamente uma vez.',
-    inputSchema: jsonSchema({
+const SELECIONAR_SCHEMA = {
         type: 'object',
         properties: {
             grupos: {
@@ -64,9 +63,13 @@ const selecionarTool = tool({
                 },
             },
         },
-        required: ['grupos'],
-        additionalProperties: false,
-    }),
+    required: ['grupos'],
+    additionalProperties: false,
+};
+
+const selecionarTool = tool({
+    description: 'Registra os grupos e as notas. Chame exatamente uma vez.',
+    inputSchema: jsonSchema(SELECIONAR_SCHEMA),
     execute: async () => ({ output: 'ok' }),
 });
 
@@ -204,15 +207,16 @@ function comEsforco(model, modelId) {
     const um = async ({ cid, cands }) => {
         const t0 = Date.now();
         try {
-            const r = await generateText({
-                ...tele('seletor-unico', { caseId: cid }),
+            const r = await chamadaEstruturada({
                 model,
-                tools: { selecionar: selecionarTool },
-                toolChoice: { type: 'tool', toolName: 'selecionar' },
+                modelId: MODEL,
+                nome: 'selecionar',
+                schema: SELECIONAR_SCHEMA,
+                toolDef: selecionarTool,
                 prompt: prompt(cands, diffs[cid]),
+                extra: tele('seletor-unico', { caseId: cid }),
             });
-            const call = (r.toolCalls || []).find((t) => (t.toolName ?? t.name) === 'selecionar');
-            const grupos = (call?.input ?? call?.args)?.grupos || [];
+            const grupos = r.dados?.grupos || [];
             saida[cid] = { grupos, candidatos: cands.length, ms: Date.now() - t0 };
             console.log(`  ${cid.slice(0, 46).padEnd(48)} ${cands.length} cand -> ${grupos.length} grupos`);
         } catch (e) {

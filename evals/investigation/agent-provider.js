@@ -7,6 +7,7 @@ const path = require('path');
 const { resolveContextWindow } = require(
     path.join(__dirname, '../../libs/llm/model-context-window.ts'),
 );
+const { chamadaEstruturada } = require('./eval-structured');
 
 const dotenv = require('dotenv');
 
@@ -1597,31 +1598,25 @@ class InvestigationAgentProvider {
                             : undefined,
                         log: (m) => console.log(`    ${caseData.caseId?.slice(0, 40) || ''} ${m}`),
                         call: async ({ schema, prompt, runName }) => {
-                            const out = await generateText({
+                            const out = await chamadaEstruturada({
                                 model,
+                                modelId: process.env.RECALL_MODEL,
+                                nome: 'registrar',
+                                schema,
                                 prompt,
-                                tools: {
-                                    registrar: {
-                                        description: 'Registra o resultado. Chame exatamente uma vez.',
-                                        inputSchema: jsonSchema(schema),
-                                        execute: async () => ({ output: 'ok' }),
+                                extra: {
+                                    experimental_telemetry: {
+                                        isEnabled: true,
+                                        functionId: runName,
+                                        metadata: { caseId: caseData.caseId },
                                     },
-                                },
-                                toolChoice: { type: 'tool', toolName: 'registrar' },
-                                experimental_telemetry: {
-                                    isEnabled: true,
-                                    functionId: runName,
-                                    metadata: { caseId: caseData.caseId },
                                 },
                             });
                             const u = readAiSdkUsage(out.usage) || {};
                             usadoInput += u.inputTokens || 0;
                             usadoOutput += u.outputTokens || 0;
                             usadoTotal += u.totalTokens || 0;
-                            const call = (out.toolCalls || []).find(
-                                (t) => (t.toolName ?? t.name) === 'registrar',
-                            );
-                            return call?.input ?? call?.args ?? {};
+                            return out.dados ?? {};
                         },
                     });
                     agentResult.findings.suggestions = r.suggestions;
@@ -1835,23 +1830,24 @@ class InvestigationAgentProvider {
                             return partes.join('\n\n') || '(could not read the code)';
                         };
 
+                        const PROVAR_SCHEMA = {
+                            type: 'object',
+                            properties: {
+                                tipo: {
+                                    type: 'string',
+                                    enum: ['falha', 'contradicao', 'nenhuma'],
+                                },
+                                entrada: { type: 'string' },
+                                saida: { type: 'string' },
+                                promete: { type: 'string' },
+                                faz: { type: 'string' },
+                            },
+                            required: ['tipo', 'entrada', 'saida', 'promete', 'faz'],
+                            additionalProperties: false,
+                        };
                         const provarTool = tool({
                             description: 'Records the proof. Call exactly once.',
-                            inputSchema: jsonSchema({
-                                type: 'object',
-                                properties: {
-                                    tipo: {
-                                        type: 'string',
-                                        enum: ['falha', 'contradicao', 'nenhuma'],
-                                    },
-                                    entrada: { type: 'string' },
-                                    saida: { type: 'string' },
-                                    promete: { type: 'string' },
-                                    faz: { type: 'string' },
-                                },
-                                required: ['tipo', 'entrada', 'saida', 'promete', 'faz'],
-                                additionalProperties: false,
-                            }),
+                            inputSchema: jsonSchema(PROVAR_SCHEMA),
                             execute: async () => ({ output: 'ok' }),
                         });
 
@@ -1909,16 +1905,15 @@ Call provar exactly once.`;
                                 posReducer.slice(b, b + PAR).map(async (c) => {
                                     try {
                                         const fatia = await fatiar(c);
-                                        const r = await generateText({
+                                        const r = await chamadaEstruturada({
                                             model,
-                                            tools: { provar: provarTool },
-                                            toolChoice: { type: 'tool', toolName: 'provar' },
+                                            modelId: process.env.RECALL_MODEL,
+                                            nome: 'provar',
+                                            schema: PROVAR_SCHEMA,
+                                            toolDef: provarTool,
                                             prompt: prompt(c, fatia),
                                         });
-                                        const call = (r.toolCalls || []).find(
-                                            (t) => (t.toolName ?? t.name) === 'provar',
-                                        );
-                                        const a = call?.input ?? call?.args;
+                                        const a = r.dados;
                                         // Chamada que falhou nao pode virar
                                         // descarte: o portao so fecha com
                                         // resposta, nunca com ausencia dela.

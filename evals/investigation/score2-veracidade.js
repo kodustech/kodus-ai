@@ -24,6 +24,7 @@ const path = require('path');
 const { generateText, tool, jsonSchema } = require('ai');
 const { registerTracing, tele, flush } = require('./eval-tracing');
 const { buildModel, descreveModelo } = require('./eval-model');
+const { chamadaEstruturada } = require('./eval-structured');
 const S = process.env.POOL_ROOT || path.join(__dirname, 'pools');
 const arg = (n, d) => {
     const h = process.argv.slice(2).find((a) => a.startsWith(`--${n}=`));
@@ -54,9 +55,7 @@ function comEsforco(model, modelId) {
     });
 }
 
-const veracidadeTool = tool({
-    description: 'Registra a veracidade de cada achado. Chame exatamente uma vez.',
-    inputSchema: jsonSchema({
+const VERACIDADE_SCHEMA = {
         type: 'object',
         properties: {
             itens: {
@@ -73,9 +72,13 @@ const veracidadeTool = tool({
                 },
             },
         },
-        required: ['itens'],
-        additionalProperties: false,
-    }),
+    required: ['itens'],
+    additionalProperties: false,
+};
+
+const veracidadeTool = tool({
+    description: 'Registra a veracidade de cada achado. Chame exatamente uma vez.',
+    inputSchema: jsonSchema(VERACIDADE_SCHEMA),
     execute: async () => ({ output: 'ok' }),
 });
 
@@ -158,15 +161,16 @@ Score every index exactly once. Call veracidade exactly once.`;
     const um = async ({ cid, reps, itens }) => {
         const t0 = Date.now();
         try {
-            const r = await generateText({
-                ...tele('score2-veracidade', { caseId: cid }),
+            const r = await chamadaEstruturada({
                 model,
-                tools: { veracidade: veracidadeTool },
-                toolChoice: { type: 'tool', toolName: 'veracidade' },
+                modelId: MODEL,
+                nome: 'veracidade',
+                schema: VERACIDADE_SCHEMA,
+                toolDef: veracidadeTool,
                 prompt: prompt(itens, diffs[cid]),
+                extra: tele('score2-veracidade', { caseId: cid }),
             });
-            const call = (r.toolCalls || []).find((t) => (t.toolName ?? t.name) === 'veracidade');
-            const its = (call?.input ?? call?.args)?.itens || [];
+            const its = r.dados?.itens || [];
             const porIndice = {};
             for (const it of its) {
                 const p = it.indice;
