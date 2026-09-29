@@ -18,6 +18,16 @@ export type AnalyzerFinding = {
     /** CWE identifier from the rule's metadata, when it declares one. */
     cwe?: string;
     /**
+     * What the finding is ABOUT, when the tool can name it — for a dependency
+     * scan, the affected `name@version`.
+     *
+     * A lockfile bump produces advisories by the dozen across a handful of
+     * packages, and the reader acts per package, not per advisory. Without
+     * this the published comment could only list advisories, which spent its
+     * whole budget on whichever package sorted first.
+     */
+    subject?: string;
+    /**
      * Which tool produced this. Set by the stage, and what lets findings be
      * published as one comment per category rather than one per advisory.
      */

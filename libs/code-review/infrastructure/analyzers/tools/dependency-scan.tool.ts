@@ -569,6 +569,7 @@ export class DependencyScanTool implements AnalyzerTool {
                 endLine: anchor.line,
                 severity:
                     SEVERITY[(v.severity ?? '').toUpperCase()] ?? 'warning',
+                subject: `${v.name}@${v.version}`,
                 message:
                     `${v.name}@${v.version} is affected by ${v.id}` +
                     (v.summary ? `: ${v.summary}` : ''),
