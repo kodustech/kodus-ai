@@ -88,6 +88,39 @@ describe('library import persists a language scope (#1832)', () => {
         expect(extensionScopeAppliesToFile('services/app.ts', persisted.fileScope.extensions)).toBe(false);
     });
 
+    it('scopes a directory import too, and does not reach for a renamed helper', async () => {
+        // The directory branch called a helper this change renamed and deleted,
+        // so any import carrying `directoriesInfo` hit an undefined identifier
+        // (a 500 on a transpile-only build) and persisted no scope at all. The
+        // repositories-only case above never entered that branch.
+        const { useCase, created } = makeUseCase();
+
+        await useCase.execute({
+            ...rubySemicolonRule,
+            path: 'services/**',
+            repositoriesIds: [],
+            directoriesInfo: [
+                { repositoryId: 'repo-1', directoryId: 'dir-1' },
+            ],
+        } as unknown as AddLibraryKodyRulesDto);
+
+        const persisted = created[0];
+        expect(persisted.path).toBe('services/**');
+        expect(persisted.directoryId).toBe('dir-1');
+        expect(
+            extensionScopeAppliesToFile(
+                'services/app.rb',
+                persisted.fileScope.extensions,
+            ),
+        ).toBe(true);
+        expect(
+            extensionScopeAppliesToFile(
+                'services/app.ts',
+                persisted.fileScope.extensions,
+            ),
+        ).toBe(false);
+    });
+
     it('persists no scope when the rule declares no known language', async () => {
         const { useCase, created } = makeUseCase();
 

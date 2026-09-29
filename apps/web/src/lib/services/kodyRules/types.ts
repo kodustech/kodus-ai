@@ -14,6 +14,12 @@ export type KodyRule = {
     title: string;
     rule: string;
     path: string;
+    /**
+     * The library rule's language, forwarded on the import request so the
+     * server can persist the rule with a language scope. Without it the import
+     * lands unscoped and the rule applies to every file in every PR (#1832).
+     */
+    language?: keyof typeof ProgrammingLanguage;
     scope: 'file' | 'pull-request';
     severity: 'low' | 'medium' | 'high' | 'critical';
     repositoryId?: string;

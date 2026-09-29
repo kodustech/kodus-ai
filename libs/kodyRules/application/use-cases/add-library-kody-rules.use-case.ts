@@ -42,7 +42,6 @@ const LANGUAGE_EXTENSIONS = new Map<string, string[]>([
     ['typescript', ['.ts', '.tsx']],
     ['javascript', ['.js', '.jsx']],
     ['python', ['.py']],
-    ['java', ['.java']],
     ['csharp', ['.cs']],
     ['dart', ['.dart']],
     ['ruby', ['.rb', '.rake', '.erb', '.gemspec']],
@@ -198,10 +197,10 @@ export class AddLibraryKodyRulesUseCase {
                     const kodyRule: CreateKodyRuleDto = {
                         title: libraryKodyRules.title,
                         rule: libraryKodyRules.rule,
-                        path: resolveLibraryRulePath(
-                            libraryKodyRules.path,
-                            libraryKodyRules.language,
-                        ),
+                        // Kept exactly as sent, like the repositories branch: the
+                        // directory narrows through `path` and the language
+                        // through the scope below.
+                        path: libraryKodyRules.path,
                         severity: libraryKodyRules.severity,
                         repositoryId: directoryInfo.repositoryId,
                         directoryId: directoryInfo.directoryId,
@@ -209,6 +208,15 @@ export class AddLibraryKodyRulesUseCase {
                         origin: KodyRulesOrigin.LIBRARY,
                         type: KodyRulesType.STANDARD,
                     };
+
+                    // Same scope as the repositories branch, and for the same
+                    // reason: without it a directory import persists an
+                    // unscoped rule that applies to every file in the PR.
+                    (kodyRule as Partial<IKodyRule>).fileScope =
+                        resolveLibraryRuleFileScope(
+                            libraryKodyRules.rule,
+                            libraryKodyRules.language,
+                        );
 
                     const result =
                         await this.createOrUpdateKodyRulesUseCase.execute(
