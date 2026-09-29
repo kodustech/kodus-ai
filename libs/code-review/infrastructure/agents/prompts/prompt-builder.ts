@@ -9,6 +9,7 @@
  */
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { CheckEvidence } from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
+import { AnalyzerFinding } from '@libs/code-review/infrastructure/analyzers/analyzer-finding.type';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { convertTiptapJSONToText } from '@libs/common/utils/tiptap-json';
 
@@ -186,6 +187,68 @@ export function formatCiEvidence(
     A check passing — or saying nothing about a line — is NOT proof that line is correct.
 ${lines.join('\n')}
   </CiEvidence>`;
+}
+
+/** How many deterministic findings the prompt block names before counting. */
+const MAX_DETERMINISTIC_LISTED = 12;
+
+/**
+ * Findings Kody's own scanners already produced for this change.
+ *
+ * They are published as their own comment before the agent's output is
+ * assembled, so an agent that reports them again costs the reader a duplicate
+ * and costs us a dedup round that then has to pick which wording survives.
+ * Telling the agent up front is cheaper and more reliable than merging after
+ * the fact — the same reason `<CiEvidence>` exists.
+ *
+ * Scanner text is untrusted, so it is escaped exactly like CI annotations.
+ */
+export function formatDeterministicFindings(
+    findings: AnalyzerFinding[] | undefined,
+): string {
+    if (!findings?.length) {
+        return '';
+    }
+
+    const byTool = new Map<string, AnalyzerFinding[]>();
+    for (const finding of findings) {
+        const key = finding.tool ?? 'analyzer';
+        byTool.set(key, [...(byTool.get(key) ?? []), finding]);
+    }
+
+    const lines: string[] = [];
+    for (const [tool, group] of byTool) {
+        lines.push(`    - ${escapeRecordedDecisionText(tool)}`);
+
+        // Fifty advisories on one lockfile line are fifty findings that all
+        // read "yarn.lock:4709 axios@1.6.0". The model needs that fact once.
+        const entries = [
+            ...new Set(
+                group.map((finding) => {
+                    const what = escapeRecordedDecisionText(
+                        finding.subject ?? finding.message,
+                    );
+                    return `      - ${escapeRecordedDecisionText(finding.path)}:${finding.startLine} ${what}`;
+                }),
+            ),
+        ];
+
+        lines.push(...entries.slice(0, MAX_DETERMINISTIC_LISTED));
+        const rest =
+            entries.length - Math.min(entries.length, MAX_DETERMINISTIC_LISTED);
+        if (rest > 0) {
+            lines.push(`      - …and ${rest} more`);
+        }
+    }
+
+    return `\n  <DeterministicFindings>
+    Kody's own scanners already ran on this change and reported the following.
+    They are already published as their own review comment, so do NOT repeat
+    them as your own findings — not the same finding, and not a restatement of
+    it on a nearby line.
+    A scanner saying nothing about a line is NOT proof that line is correct.
+${lines.join('\n')}
+  </DeterministicFindings>`;
 }
 
 function escapeRecordedDecisionText(value: unknown): string {
@@ -611,7 +674,7 @@ export function buildUserPrompt(input: ReviewAgentInput, meta: PromptAgentMeta):
                   'issues introduced by these changes');
 
         return (
-            `<ReviewTask>${formatReviewFocus(input.reviewDirective)}${formatCiEvidence(input.ciEvidence, input.changedFiles)}
+            `<ReviewTask>${formatReviewFocus(input.reviewDirective)}${formatCiEvidence(input.ciEvidence, input.changedFiles)}${formatDeterministicFindings(input.analyzerFindings)}
   ${prContextSection}${traceDecisionsSection}${previousDecisionsSection}${commitsSection}
 
   <Diffs>
@@ -730,7 +793,7 @@ export function buildCompactUserPrompt(input: ReviewAgentInput, meta: PromptAgen
             ? `\n    Label each finding as one of: ${allowedSuggestionLabels.join(', ')}.`
             : '';
 
-        return `<ReviewTask>${formatReviewFocus(input.reviewDirective)}${formatCiEvidence(input.ciEvidence, input.changedFiles)}
+        return `<ReviewTask>${formatReviewFocus(input.reviewDirective)}${formatCiEvidence(input.ciEvidence, input.changedFiles)}${formatDeterministicFindings(input.analyzerFindings)}
   ${prContextSection}${traceDecisionsSection}${previousDecisionsSection}${commitsSection}
   <Diffs>
 ${diffsSection}
@@ -873,7 +936,7 @@ export function buildSelfContainedUserPrompt(input: ReviewAgentInput, meta: Prom
                   'issues introduced by these changes');
 
         return (
-            `<ReviewTask mode="self-contained">${formatReviewFocus(input.reviewDirective)}${formatCiEvidence(input.ciEvidence, input.changedFiles)}
+            `<ReviewTask mode="self-contained">${formatReviewFocus(input.reviewDirective)}${formatCiEvidence(input.ciEvidence, input.changedFiles)}${formatDeterministicFindings(input.analyzerFindings)}
   ${prContextSection}${traceDecisionsSection}${previousDecisionsSection}${commitsSection}
 
   <Diffs>
