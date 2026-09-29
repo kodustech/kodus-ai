@@ -178,7 +178,7 @@ export const KodyRuleLibraryItemModal = ({
                         message ??
                         ((error as { response?: { status?: number } })?.response
                             ?.status === 403
-                            ? "The request was blocked by a security filter before reaching Kodus. Please try again later or contact support."
+                            ? "The request was blocked by a security filter before reaching Kodus. A rule example that looks like an attack payload can trip it: edit the rule to drop or rephrase that sample, then import again."
                             : "Something went wrong while adding this rule. Please try again."),
                 });
                 return;
