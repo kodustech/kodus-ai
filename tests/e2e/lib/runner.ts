@@ -230,7 +230,7 @@ async function applyByokToTenant(
             headers: { Authorization: `Bearer ${session.accessToken}` },
             body: {
                 key: 'byok_config',
-                configValue: { main: byokFromEnv() },
+                configValue: byokFromEnv(),
             },
             timeoutMs: 30_000,
         },
@@ -239,24 +239,62 @@ async function applyByokToTenant(
 }
 
 /**
- * The BYOK block the matrix wants every tenant to use. `API_LLM_PROVIDER`
+ * The BYOK config the matrix wants every tenant to use. `API_LLM_PROVIDER`
  * defaults to `openai`; point it (with `API_OPENAI_FORCE_BASE_URL`) at any
  * OpenAI- or Anthropic-compatible vendor to run the matrix on a different
  * model without touching the product.
+ *
+ * This must be a v2 BYOK config: the server rejects the legacy `{main,fallback}`
+ * shape since the BYOK v2 migration (04b-06). A failed refresh leaves the
+ * tenant on its previously stored model id, which is fatal when that id has
+ * been retired by the upstream provider.
  */
 function byokFromEnv(): {
-    provider: string;
-    apiKey: string;
-    baseURL: string;
-    model: string;
+    version: 2;
+    credentials: Array<{
+        id: string;
+        provider: string;
+        apiKey: string;
+        settings: { baseURL: string };
+    }>;
+    models: Array<{
+        id: string;
+        credentialId: string;
+        model: string;
+    }>;
+    routing: {
+        mode: 'manual';
+        defaultModelId: string;
+        taskOverrides?: Record<string, string>;
+    };
 } {
+    const provider = process.env.API_LLM_PROVIDER ?? 'openai';
+    const apiKey = process.env.API_OPEN_AI_API_KEY ?? '';
+    const baseURL =
+        process.env.API_OPENAI_FORCE_BASE_URL ?? 'https://api.openai.com/v1';
+    const model = process.env.API_LLM_PROVIDER_MODEL ?? 'gpt-5.4-mini';
     return {
-        provider: process.env.API_LLM_PROVIDER ?? 'openai',
-        apiKey: process.env.API_OPEN_AI_API_KEY ?? '',
-        baseURL:
-            process.env.API_OPENAI_FORCE_BASE_URL ??
-            'https://api.openai.com/v1',
-        model: process.env.API_LLM_PROVIDER_MODEL ?? 'gpt-5.4-mini',
+        version: 2,
+        credentials: [
+            {
+                id: 'e2e-openai-cred',
+                provider,
+                apiKey,
+                settings: { baseURL },
+            },
+        ],
+        models: [
+            {
+                id: 'e2e-model',
+                credentialId: 'e2e-openai-cred',
+                model,
+            },
+        ],
+        routing: {
+            mode: 'manual',
+            defaultModelId: 'e2e-model',
+            taskOverrides: {},
+        },
     };
 }
 
@@ -718,9 +756,11 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                 const session = await login(target, tenant);
                 const applied = await applyByokToTenant(target, session);
                 const cfg = byokFromEnv();
+                const cfgProvider = cfg.credentials[0]?.provider ?? 'unknown';
+                const cfgModel = cfg.models[0]?.model ?? 'unknown';
                 if (applied.ok) {
                     log.info(
-                        `[byok] ${cell.provider}/${cell.license}: ${cfg.provider}:${cfg.model} written to the tenant`,
+                        `[byok] ${cell.provider}/${cell.license}: ${cfgProvider}:${cfgModel} written to the tenant`,
                     );
                 } else {
                     log.warn(
