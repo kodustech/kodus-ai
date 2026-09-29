@@ -1,3 +1,4 @@
+import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import { CodeSuggestion } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
 import { AnalyzerFinding } from './analyzer-finding.type';
@@ -192,7 +193,7 @@ function toSuggestion(
         relevantFile: anchor.path,
         relevantLinesStart: anchor.startLine,
         relevantLinesEnd: anchor.endLine,
-        label: 'security',
+        label: LabelType.DETERMINISTIC,
         severity: SEVERITY_BY_LEVEL[worst],
         // No attribution in the body: which rules fired is our telemetry, not
         // something the PR author needs to read. It rides on `evidence`.

@@ -9,7 +9,8 @@ const analyzer = (
     relevantFile: 'src/config.ts',
     relevantLinesStart: 4,
     relevantLinesEnd: 4,
-    label: 'security',
+    // What analyzerFindingsToSuggestions actually writes.
+    label: 'deterministic',
     evidence: { source: ANALYZER_SOURCE, ruleId: 'generic-api-key' } as any,
     ...over,
 });
@@ -75,6 +76,9 @@ describe('restatesAnalyzerFinding', () => {
     it('is false when the findings are about different kinds of defect', () => {
         expect(
             restatesAnalyzerFinding(agent({ label: 'bug' }), analyzer()),
+        ).toBe(false);
+        expect(
+            restatesAnalyzerFinding(agent({ label: 'performance' }), analyzer()),
         ).toBe(false);
     });
 

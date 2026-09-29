@@ -353,6 +353,17 @@ describe('analyzerFindingsToSuggestions', () => {
             );
         });
 
+        /**
+         * Its own category rather than `security`, so a scanner-proved fact is
+         * distinguishable from a model's security opinion everywhere the label
+         * is read — rank, badge, and anyone filtering a review by category.
+         */
+        it('publishes under its own category, not the model\'s', () => {
+            const [suggestion] = analyzerFindingsToSuggestions([finding()]);
+
+            expect(suggestion.label).toBe('deterministic');
+        });
+
         it('offers no rewrite, because a rule does not know the fix', () => {
             const [suggestion] = analyzerFindingsToSuggestions([finding()]);
 

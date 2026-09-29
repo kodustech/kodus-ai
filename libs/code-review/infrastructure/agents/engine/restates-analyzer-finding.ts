@@ -1,3 +1,4 @@
+import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import { isAnalyzerSuggestion } from '@libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions';
 import { CodeSuggestion } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
@@ -31,9 +32,15 @@ export function restatesAnalyzerFinding(
     }
 
     // A credential on line 4 and a logic bug spanning lines 3-29 share a span
-    // without being the same finding. Only a finding of the same kind can be
-    // a restatement of the scanner's.
-    if (dup.label !== keep.label) {
+    // without being the same finding. Both scanners report security facts, so
+    // only a security finding can be restating one — a `bug` or `performance`
+    // finding on the same lines is a different defect and must still go
+    // through the content guard.
+    //
+    // Compared against the DUP's label, not the keep's: the kept finding is
+    // the analyzer's and now carries its own `deterministic` category, so the
+    // two labels never match by construction.
+    if (dup.label !== LabelType.SECURITY) {
         return false;
     }
 
