@@ -167,7 +167,9 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                     previousMetadata.byokSlotExhausted?.notifiedAt,
                 );
 
-                await this.handleFailure(jobId, error);
+                await this.handleFailure(jobId, error, {
+                    ownedBy: this.instanceId,
+                });
 
                 if (alreadyNotified) {
                     this.logger.debug({
@@ -403,13 +405,28 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
             }
 
             if (error.name === 'WorkflowPausedError') {
-                await this.jobRepository.update(jobId, {
-                    status: JobStatus.WAITING_FOR_EVENT,
-                    waitingForEvent: {
-                        eventType: (error as any).eventType,
-                        eventKey: (error as any).eventKey,
+                // Same fence as the other writes reached from this catch: a
+                // worker that lost its lease mid-run must not move a row the
+                // reaper already handed to another worker.
+                const stillOwned = await this.jobRepository.update(
+                    jobId,
+                    {
+                        status: JobStatus.WAITING_FOR_EVENT,
+                        waitingForEvent: {
+                            eventType: (error as any).eventType,
+                            eventKey: (error as any).eventKey,
+                        },
                     },
-                });
+                    { leaseOwner: this.instanceId },
+                );
+                if (stillOwned === false) {
+                    this.logger.warn({
+                        message:
+                            'Job lease no longer owned when pausing for an event — leaving the row to the worker that took it over',
+                        context: CodeReviewJobProcessorService.name,
+                        metadata: { jobId, instanceId: this.instanceId },
+                    });
+                }
                 return;
             }
 
@@ -419,7 +436,9 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 context: CodeReviewJobProcessorService.name,
             });
 
-            await this.handleFailure(jobId, error);
+            await this.handleFailure(jobId, error, {
+                ownedBy: this.instanceId,
+            });
             // Don't spam the author with a failure notification when we
             // know the job is going to retry on its own (rate-limit will
             // resolve when the GitHub bucket resets). They'd get one
@@ -486,10 +505,16 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
             });
         }
 
-        await this.handleFailure(job.id, error);
+        await this.handleFailure(job.id, error, {
+            ownedBy: this.instanceId,
+        });
     }
 
-    async handleFailure(jobId: string, error: Error): Promise<void> {
+    async handleFailure(
+        jobId: string,
+        error: Error,
+        options?: { ownedBy?: string },
+    ): Promise<void> {
         this.metricsCollector?.recordCounter('code_review_errors_total', 1, {
             errorType: error.name || 'UnknownError',
         });
@@ -503,12 +528,43 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
             ? ErrorClassification.RATE_LIMITED
             : ErrorClassification.PERMANENT;
 
-        await this.jobRepository.update(jobId, {
+        const failurePatch = {
             status: JobStatus.FAILED,
             errorClassification: classification,
             lastError: error.message,
             failedAt: new Date(),
-        });
+        };
+
+        if (!options?.ownedBy) {
+            // The router's exhausted-retry path: no worker owns the row any
+            // more, and this FAILED status is what stops the job being
+            // redelivered forever, so it must land unguarded.
+            await this.jobRepository.update(jobId, failurePatch);
+            return;
+        }
+
+        // Same ownership fence as markCompleted: a worker whose lease lapsed
+        // must not stamp FAILED over the row the reaper already handed to
+        // another worker, whose own terminal write would then be blocked by a
+        // status it never wrote (#1830 review).
+        const stillOwned = await this.jobRepository.update(
+            jobId,
+            failurePatch,
+            { leaseOwner: options.ownedBy },
+        );
+
+        if (stillOwned === false) {
+            this.logger.warn({
+                message:
+                    'Job lease no longer owned when marking the failure — leaving the row to the worker that took it over',
+                context: CodeReviewJobProcessorService.name,
+                metadata: {
+                    jobId,
+                    instanceId: options.ownedBy,
+                    errorClassification: classification,
+                },
+            });
+        }
     }
 
     async markCompleted(jobId: string, result?: unknown): Promise<void> {

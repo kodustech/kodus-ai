@@ -152,6 +152,9 @@ describe('CodeReviewJobProcessorService', () => {
             expect(jobRepository.update).toHaveBeenCalledWith(
                 'job-1',
                 expect.objectContaining({ status: JobStatus.FAILED }),
+                // The abandon path runs inside the leased run, so the same
+                // ownership fence applies as everywhere else.
+                { leaseOwner: expect.any(String) },
             );
         });
 
@@ -182,8 +185,53 @@ describe('CodeReviewJobProcessorService', () => {
             expect(jobRepository.update).toHaveBeenCalledWith(
                 'job-1',
                 expect.objectContaining({ status: JobStatus.FAILED }),
+                // The failure path reached from a run that still holds the lease
+                // carries the same ownership guard as completion.
+                { leaseOwner: expect.any(String) },
             );
             expect(prReviewDeferralService.defer).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('handleFailure ownership (#1830 review)', () => {
+        it('leaves the row to the worker that took it over, and says so', async () => {
+            const warn = jest
+                .spyOn((service as unknown as { logger: any }).logger, 'warn')
+                .mockImplementation(() => undefined);
+            // The guarded write matched no row: the reaper already requeued
+            // this job and another worker owns it now.
+            jobRepository.update.mockResolvedValueOnce(false);
+
+            await service.handleFailure('job-1', new Error('boom'), {
+                ownedBy: 'instance-1',
+            });
+
+            expect(jobRepository.update).toHaveBeenCalledWith(
+                'job-1',
+                expect.objectContaining({ status: JobStatus.FAILED }),
+                { leaseOwner: 'instance-1' },
+            );
+            expect(warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining('no longer owned'),
+                    metadata: expect.objectContaining({
+                        jobId: 'job-1',
+                        instanceId: 'instance-1',
+                    }),
+                }),
+            );
+            warn.mockRestore();
+        });
+
+        it('still writes the failure unguarded on the exhausted-retry path', async () => {
+            // No worker owns the row by then, and this status is what stops the
+            // job being redelivered forever.
+            await service.handleFailure('job-1', new Error('boom'));
+
+            expect(jobRepository.update).toHaveBeenCalledWith(
+                'job-1',
+                expect.objectContaining({ status: JobStatus.FAILED }),
+            );
         });
     });
 
