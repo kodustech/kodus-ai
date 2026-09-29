@@ -58,6 +58,7 @@ import {
 } from '@libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions';
 import { preferAnalyzerKeep } from '@libs/code-review/infrastructure/agents/engine/prefer-analyzer-keep';
 import { restatesAnalyzerFinding } from '@libs/code-review/infrastructure/agents/engine/restates-analyzer-finding';
+import { survivesSeverityFilter } from '@libs/code-review/infrastructure/agents/engine/survives-severity-filter';
 import {
     LazyLinkedRepoAccess,
     evaluateCrossRepoBoundaryGate,
@@ -1226,14 +1227,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 const accepted =
                     acceptedLevels[severityFilter] || acceptedLevels.low;
                 const before = deduped.length;
-                const keeps = (s: Partial<CodeSuggestion>) => {
-                    if (s.label === 'kody_rules' && !applyFiltersToKodyRules) {
-                        return true; // kody rules bypass by default
-                    }
-                    return accepted.includes(
-                        (s.severity || 'medium').toLowerCase(),
+                const keeps = (s: Partial<CodeSuggestion>) =>
+                    survivesSeverityFilter(
+                        s,
+                        accepted,
+                        applyFiltersToKodyRules,
                     );
-                };
                 const droppedBySeverity = deduped.filter((s) => !keeps(s));
                 deduped = deduped.filter(keeps);
                 for (const s of droppedBySeverity) {
@@ -1858,18 +1857,23 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             return { honor: true, reason: 'lexical', score: lexical };
         }
 
-        // A scanner asserts a fact at a location; an agent finding covering
-        // that span restates it. Settled here so the merge does not depend on
-        // the embedding tier, which vetoes everything where it is unavailable.
-        if (restatesAnalyzerFinding(dup, keep)) {
-            return { honor: true, reason: 'restates-analyzer', score: lexical };
-        }
-
         const [vecDup, vecKeep] = await Promise.all([
             this.embedDedupSuggestion(dup, dupKey, embedCache),
             this.embedDedupSuggestion(keep, keepKey, embedCache),
         ]);
         if (!vecDup || !vecKeep) {
+            // Without embeddings this vetoes EVERY merge, which republishes
+            // the one duplicate we are most sure about: a scanner fact the
+            // model restated. Only that pair overrides the veto — where
+            // embeddings work, the full guard still decides, so a wide agent
+            // finding that merely overlaps a scanner line is not swallowed.
+            if (restatesAnalyzerFinding(dup, keep)) {
+                return {
+                    honor: true,
+                    reason: 'restates-analyzer (no-embed)',
+                    score: lexical,
+                };
+            }
             return {
                 honor: false,
                 reason: 'lexical-veto (no-embed)',

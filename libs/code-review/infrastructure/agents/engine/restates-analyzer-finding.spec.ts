@@ -9,14 +9,18 @@ const analyzer = (
     relevantFile: 'src/config.ts',
     relevantLinesStart: 4,
     relevantLinesEnd: 4,
+    label: 'security',
     evidence: { source: ANALYZER_SOURCE, ruleId: 'generic-api-key' } as any,
     ...over,
 });
 
-const agent = (over: Partial<CodeSuggestion> = {}): Partial<CodeSuggestion> => ({
+const agent = (
+    over: Partial<CodeSuggestion> = {},
+): Partial<CodeSuggestion> => ({
     relevantFile: 'src/config.ts',
     relevantLinesStart: 3,
     relevantLinesEnd: 29,
+    label: 'security',
     ...over,
 });
 
@@ -62,11 +66,26 @@ describe('restatesAnalyzerFinding', () => {
         ).toBe(true);
     });
 
+    /**
+     * A scanner reports a credential; an agent finding on the same lines about
+     * a DIFFERENT kind of defect is not a restatement of it. Measured on a real
+     * PR: a `bug` finding about String.replace semantics spanned the same lines
+     * as the secrets scanner's hit and would have been swallowed.
+     */
+    it('is false when the findings are about different kinds of defect', () => {
+        expect(
+            restatesAnalyzerFinding(agent({ label: 'bug' }), analyzer()),
+        ).toBe(false);
+    });
+
     /** Missing line numbers must not be read as an overlap at line 0. */
     it('is false when either side has no line range', () => {
         expect(
             restatesAnalyzerFinding(
-                agent({ relevantLinesStart: undefined, relevantLinesEnd: undefined }),
+                agent({
+                    relevantLinesStart: undefined,
+                    relevantLinesEnd: undefined,
+                }),
                 analyzer(),
             ),
         ).toBe(false);

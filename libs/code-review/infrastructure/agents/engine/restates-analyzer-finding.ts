@@ -30,6 +30,13 @@ export function restatesAnalyzerFinding(
         return false;
     }
 
+    // A credential on line 4 and a logic bug spanning lines 3-29 share a span
+    // without being the same finding. Only a finding of the same kind can be
+    // a restatement of the scanner's.
+    if (dup.label !== keep.label) {
+        return false;
+    }
+
     const span = (s: Partial<CodeSuggestion>): [number, number] | null => {
         const start = s.relevantLinesStart;
         const end = s.relevantLinesEnd ?? start;
