@@ -57,7 +57,10 @@ import {
     isAnalyzerSuggestion,
 } from '@libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions';
 import { preferAnalyzerKeep } from '@libs/code-review/infrastructure/agents/engine/prefer-analyzer-keep';
-import { restatesAnalyzerFinding } from '@libs/code-review/infrastructure/agents/engine/restates-analyzer-finding';
+import {
+    bothFromAnalyzers,
+    restatesAnalyzerFinding,
+} from '@libs/code-review/infrastructure/agents/engine/restates-analyzer-finding';
 import { survivesSeverityFilter } from '@libs/code-review/infrastructure/agents/engine/survives-severity-filter';
 import {
     LazyLinkedRepoAccess,
@@ -1886,6 +1889,19 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         opts?: { crossStream?: boolean },
     ): Promise<{ honor: boolean; reason: string; score: number }> {
         const lexical = contentSimilarity(dup, keep);
+
+        // Two scanner findings are never duplicates of each other — there is
+        // one suggestion per tool, so the only pair is secrets vs dependencies.
+        // Honoring it would not drop a duplicate; it would drop a whole
+        // category's comment, because the merge keeps only the representative.
+        if (bothFromAnalyzers(dup, keep)) {
+            return {
+                honor: false,
+                reason: 'distinct-analyzers',
+                score: lexical,
+            };
+        }
+
         if (!opts?.crossStream && lexical >= DEDUP_CONTENT_THRESHOLD) {
             return { honor: true, reason: 'lexical', score: lexical };
         }

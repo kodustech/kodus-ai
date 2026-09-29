@@ -1,7 +1,10 @@
 import { ANALYZER_SOURCE } from '@libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions';
 import { CodeSuggestion } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
-import { restatesAnalyzerFinding } from './restates-analyzer-finding';
+import {
+    bothFromAnalyzers,
+    restatesAnalyzerFinding,
+} from './restates-analyzer-finding';
 
 const analyzer = (
     over: Partial<CodeSuggestion> = {},
@@ -78,7 +81,10 @@ describe('restatesAnalyzerFinding', () => {
             restatesAnalyzerFinding(agent({ label: 'bug' }), analyzer()),
         ).toBe(false);
         expect(
-            restatesAnalyzerFinding(agent({ label: 'performance' }), analyzer()),
+            restatesAnalyzerFinding(
+                agent({ label: 'performance' }),
+                analyzer(),
+            ),
         ).toBe(false);
     });
 
@@ -93,5 +99,36 @@ describe('restatesAnalyzerFinding', () => {
                 analyzer(),
             ),
         ).toBe(false);
+    });
+
+    /**
+     * A scanner dup is not a restatement of another scanner's finding. There is
+     * at most one suggestion per tool, so the only pair possible is secrets vs
+     * dependencies — two categories, published as two comments on purpose.
+     */
+    it('is false when the duplicate is itself a scanner finding', () => {
+        expect(
+            restatesAnalyzerFinding(
+                analyzer({ relevantLinesStart: 3, relevantLinesEnd: 29 }),
+                analyzer(),
+            ),
+        ).toBe(false);
+    });
+});
+
+describe('bothFromAnalyzers', () => {
+    /**
+     * Merging them would not remove a duplicate — the honored-merge path drops
+     * the duplicate's body, so one whole category's comment disappears from the
+     * review. They are never duplicates of each other.
+     */
+    it('is true for two scanner findings', () => {
+        expect(bothFromAnalyzers(analyzer(), analyzer())).toBe(true);
+    });
+
+    it('is false when either side came from the model', () => {
+        expect(bothFromAnalyzers(agent(), analyzer())).toBe(false);
+        expect(bothFromAnalyzers(analyzer(), agent())).toBe(false);
+        expect(bothFromAnalyzers(agent(), agent())).toBe(false);
     });
 });

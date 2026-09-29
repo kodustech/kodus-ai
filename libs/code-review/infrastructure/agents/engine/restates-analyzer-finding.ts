@@ -61,3 +61,19 @@ export function restatesAnalyzerFinding(
 
     return a[0] <= b[1] && b[0] <= a[1];
 }
+
+/**
+ * Whether both sides of a proposed merge are scanner findings.
+ *
+ * `analyzerFindingsToSuggestions` emits at most one suggestion per tool, so
+ * the only pair that can occur is secrets vs dependencies — different
+ * categories, published as two comments deliberately. Merging them removes no
+ * duplicate: the honored-merge path keeps only the representative's body, so
+ * one category's findings would vanish from the review entirely.
+ */
+export function bothFromAnalyzers(
+    a: Partial<CodeSuggestion>,
+    b: Partial<CodeSuggestion>,
+): boolean {
+    return isAnalyzerSuggestion(a) && isAnalyzerSuggestion(b);
+}
