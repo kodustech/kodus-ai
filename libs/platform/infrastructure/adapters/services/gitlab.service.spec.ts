@@ -688,6 +688,60 @@ describe('GitlabService', () => {
             delete process.env.API_GITLAB_CODE_MANAGEMENT_WEBHOOK;
         });
 
+        it('records a failure for every selected project when auth resolution fails', async () => {
+            // An expired or revoked token fails for every project at once: the
+            // alert has to name them all, otherwise the silent failure #1983 is
+            // about survives whenever auth is the thing that broke.
+            const { createOrUpdateConfig } = setUpWebhookCreation({
+                repositories: [{ id: 11 }, { id: 22 }],
+                add: jest.fn().mockResolvedValue({}),
+            });
+            jest.spyOn(service as any, 'getAuthDetails').mockRejectedValue({
+                response: { status: 401, statusText: 'Unauthorized' },
+            });
+
+            // The method still swallows the error (its caller fires it unawaited
+            // and never attaches a handler, so a rejection would surface as an
+            // unhandled one) — what matters is that the record is written before
+            // the swallow.
+            await service.createMergeRequestWebhook({ organizationAndTeamData });
+
+            expect(createOrUpdateConfig).toHaveBeenCalledWith(
+                IntegrationConfigKey.WEBHOOK_CREATION_FAILURES,
+                expect.objectContaining({
+                    '11': expect.objectContaining({
+                        reason: expect.stringContaining('401'),
+                    }),
+                    '22': expect.objectContaining({
+                        reason: expect.stringContaining('401'),
+                    }),
+                }),
+                'integration-1',
+                organizationAndTeamData,
+            );
+        });
+
+        it('does not overwrite the record when the selection changed mid-run', async () => {
+            // Two overlapping saves (two tabs, or a change right after a save):
+            // the run that started first must not clobber the newer state.
+            const { createOrUpdateConfig } = setUpWebhookCreation({
+                repositories: [{ id: 11 }],
+                add: jest.fn().mockResolvedValue({}),
+            });
+            jest.spyOn(
+                service as any,
+                'findOneByOrganizationAndTeamDataAndConfigKey',
+            )
+                .mockResolvedValueOnce([{ id: 11 }])
+                .mockResolvedValueOnce([{ id: 22 }]);
+
+            await service.createMergeRequestWebhook({
+                organizationAndTeamData,
+            });
+
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
+        });
+
         it('keeps the hooks of the reachable projects and records the refused ones', async () => {
             const add = jest.fn().mockImplementation((projectId: number) => {
                 if (projectId === 22) {

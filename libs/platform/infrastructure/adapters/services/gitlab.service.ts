@@ -2836,24 +2836,42 @@ export class GitlabService implements Omit<
 
         const webhookUrl = process.env.API_GITLAB_CODE_MANAGEMENT_WEBHOOK; // Replace with your webhook URL
 
+        // Read the selection first: if auth resolution fails, the failure still
+        // has to be recorded per selected repository, and the selection is what
+        // names them (#1983 review). Reading it later also let a missing config
+        // make the loop non-iterable before anything was written.
+        const repositories = <Repositories[]>(
+            await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                params?.organizationAndTeamData,
+                IntegrationConfigKey.REPOSITORIES,
+            )
+        );
+        const selection = Array.isArray(repositories) ? repositories : [];
+
         try {
             // No early return when `webhookUrl` is unset: the add below is
             // attempted with an undefined URL, GitLab rejects it, and the
             // rejection lands in `failures` like any other provider error. That
             // is the contract of this PR — an unconfigured deployment has to
             // see WHY its webhooks are missing, not a silently skipped step.
-            const gitlabAuthDetail = await this.getAuthDetails(
-                organizationAndTeamData,
-            );
+            let gitlabAPI: ReturnType<GitlabService['instanceGitlabApi']>;
+            try {
+                const gitlabAuthDetail = await this.getAuthDetails(
+                    organizationAndTeamData,
+                );
 
-            const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
-
-            const repositories = <Repositories[]>(
-                await this.findOneByOrganizationAndTeamDataAndConfigKey(
-                    params?.organizationAndTeamData,
-                    IntegrationConfigKey.REPOSITORIES,
-                )
-            );
+                gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
+            } catch (error) {
+                // An expired or revoked token means no webhook can be created
+                // for ANY selected project: record one failure per project
+                // before rethrowing, otherwise the alert this PR adds never
+                // renders and the silent failure #1983 is about survives.
+                await this.recordWebhookCreationFailures(
+                    organizationAndTeamData,
+                    this.failuresForSelection(selection, error),
+                );
+                throw error;
+            }
 
             const failures: Record<string, { reason: string; at: string }> = {};
 
@@ -2862,7 +2880,7 @@ export class GitlabService implements Omit<
             // it and swallows the rejection, so a 403 used to leave the
             // selection looking saved while the project stayed without a
             // webhook and no review ever ran (#1983).
-            for (const repo of repositories) {
+            for (const repo of selection) {
                 try {
                     const existingHooks = await gitlabAPI.ProjectHooks.all(
                         repo.id,
@@ -2912,10 +2930,32 @@ export class GitlabService implements Omit<
                 }
             }
 
-            await this.recordWebhookCreationFailures(
-                organizationAndTeamData,
-                failures,
+            // Overlapping reconciliations are real (two tabs, or a save followed
+            // by another selection change) and the caller fires this method
+            // unawaited, so the run that started first can finish last and
+            // overwrite the newer record. Only persist while the selection this
+            // run reconciled is still the persisted one.
+            const currentRepositories = <Repositories[]>(
+                await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                    params?.organizationAndTeamData,
+                    IntegrationConfigKey.REPOSITORIES,
+                )
             );
+
+            if (this.sameSelection(selection, currentRepositories)) {
+                await this.recordWebhookCreationFailures(
+                    organizationAndTeamData,
+                    failures,
+                );
+            } else {
+                this.logger.log({
+                    message:
+                        'Skipping the webhook failure record: the repository selection changed while this run was creating webhooks',
+                    context: GitlabService.name,
+                    serviceName: 'GitlabService createMergeRequestWebhook',
+                    metadata: { organizationAndTeamData },
+                });
+            }
         } catch (error) {
             // The caller fires this method unawaited and only swallows the
             // rejection: auth resolution, or a missing REPOSITORIES config that
@@ -2952,6 +2992,44 @@ export class GitlabService implements Omit<
         return status === 403
             ? `${head}${suffix}. Creating a project webhook needs the Maintainer or Owner role on the project.`
             : `${head}${suffix}.`;
+    }
+
+    /**
+     * One failure entry per selected repository, for a failure that hits all of
+     * them (auth resolution or API setup).
+     */
+    private failuresForSelection(
+        repositories: Repositories[],
+        error: unknown,
+    ): Record<string, { reason: string; at: string }> {
+        const reason = this.describeWebhookCreationFailure(error);
+        const at = new Date().toISOString();
+        const failures: Record<string, { reason: string; at: string }> = {};
+        for (const repo of repositories) {
+            failures[String(repo.id)] = { reason, at };
+        }
+        return failures;
+    }
+
+    /**
+     * Whether two persisted REPOSITORIES values name the same projects. Order is
+     * not meaningful in the config, and a null or absent value is the empty
+     * selection rather than a wildcard.
+     */
+    private sameSelection(
+        left: Repositories[] | null | undefined,
+        right: Repositories[] | null | undefined,
+    ): boolean {
+        const ids = (value: Repositories[] | null | undefined): string[] =>
+            (Array.isArray(value) ? value : [])
+                .map((repo) => String(repo?.id))
+                .sort();
+        const leftIds = ids(left);
+        const rightIds = ids(right);
+        return (
+            leftIds.length === rightIds.length &&
+            leftIds.every((id, index) => id === rightIds[index])
+        );
     }
 
     private async recordWebhookCreationFailures(
