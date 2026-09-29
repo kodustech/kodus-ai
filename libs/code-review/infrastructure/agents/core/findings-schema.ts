@@ -102,7 +102,26 @@ function parseStringifiedSuggestions(value: unknown): unknown {
             // try the next candidate
         }
     }
+    dumpUnparsedSuggestions(suggestions);
     return value;
+}
+
+/** Eval-only (RECALL_DEBUG_ENVELOPE_DIR): keep the raw string a model sent when
+ *  it could not be parsed, so the shape can be fixed without re-running. */
+function dumpUnparsedSuggestions(raw: string): void {
+    const dir = process.env.RECALL_DEBUG_ENVELOPE_DIR;
+    if (!dir) return;
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const fs = require('fs');
+        fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(
+            `${dir}/suggestions-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.txt`,
+            raw,
+        );
+    } catch {
+        // diagnostics must never break a review
+    }
 }
 
 /**
