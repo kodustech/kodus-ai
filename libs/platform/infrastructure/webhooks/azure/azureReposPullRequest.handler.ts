@@ -14,6 +14,7 @@ import {
     parseReviewDirective,
     isHeavyReviewCommand
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
+import { isNewThreadReply } from '@libs/common/utils/codeManagement/threadReply';
 import { getMappedPlatform } from '@libs/common/utils/webhooks';
 import { CacheService } from '@libs/core/cache/cache.service';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
@@ -576,7 +577,12 @@ export class AzureReposPullRequestHandler implements IWebhookEventHandler {
             if (
                 !hasMarker &&
                 !isStartCommand &&
-                isKodyMentionNonReview(comment.body)
+                (isKodyMentionNonReview(comment.body) ||
+                    isNewThreadReply(
+                        PlatformType.AZURE_REPOS,
+                        params.event,
+                        payload,
+                    ))
             ) {
                 this.chatWithKodyFromGitUseCase.execute(params);
                 return;

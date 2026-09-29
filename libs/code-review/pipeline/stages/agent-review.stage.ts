@@ -52,6 +52,7 @@ import {
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import { AgentProgressEvent } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { analyzerFindingsToSuggestions } from '@libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions';
 import {
     LazyLinkedRepoAccess,
     evaluateCrossRepoBoundaryGate,
@@ -1029,8 +1030,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     severity: this.normalizeSeverity(suggestion.severity),
                 }));
 
+            // Rule-pack findings join the non-rule stream so they dedupe
+            // against the model's findings instead of arriving as a parallel
+            // set of comments on the same lines. Their severity is already on
+            // the v2 scale, so they skip normalizeSeverity.
+            const analyzerSuggestions = analyzerFindingsToSuggestions(
+                context.analyzerFindings ?? [],
+            );
+
             const severityNormalized: Partial<CodeSuggestion>[] = [
                 ...severityNormalizedNonRules,
+                ...analyzerSuggestions,
                 ...kodyRulesWithSeverity,
             ];
 
@@ -1343,6 +1353,34 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 }
             }
 
+            // Location lists for merged Kody Rule findings (#2015). Runs AFTER
+            // the content formatter, like the rule-link enrichment below and
+            // for the same reason: while this list was appended at dedup time
+            // the formatter rewrote it into prose or dropped it, so the posted
+            // comment named only the kept location. Same rendered form as
+            // before the move.
+            for (const s of deduped) {
+                const otherLocations = s.kodyRuleOtherLocations;
+                if (!otherLocations?.length) {
+                    continue;
+                }
+                const locationsList = otherLocations
+                    .map((loc) => `- \`${loc}\``)
+                    .join('\n');
+                const otherLocationsSection = `\n\n**Also found in:**\n${locationsList}`;
+                s.suggestionContent = `${s.suggestionContent}${otherLocationsSection}`;
+                // llmPrompt is assigned from the formatter output above, before
+                // this loop, and is read by the per-comment "Prompt for LLM"
+                // copy block and the consolidated @agentPrompt
+                // (messageTemplateProcessor), and passed to the fixer agent as
+                // its instruction by validate-suggestions. Left alone it names
+                // only the kept location, so an agent working from the prompt
+                // fixes that one and misses the rest.
+                if (s.llmPrompt) {
+                    s.llmPrompt = `${s.llmPrompt}${otherLocationsSection}`;
+                }
+            }
+
             // Enrich kody_rules suggestions with markdown links to the rule
             // page. Runs AFTER the content formatter so the formatter LLM
             // cannot drop the "Kody rule violation: ..." appendix while
@@ -1483,12 +1521,29 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     ...discardedByFile.keys(),
                 ]);
 
+                // Keyed once rather than scanned per file: this loop runs over
+                // every affected file and both lists can be large on a wide PR.
+                const changedByName = new Map(
+                    changedFiles.map((f) => [f.filename, f]),
+                );
+                const ignoredByName = new Map(
+                    (context.ignoredFileChanges ?? []).map((f) => [
+                        f.filename,
+                        f,
+                    ]),
+                );
+
                 draft.fileAnalysisResults = [];
                 for (const filename of allAffectedFiles) {
                     const suggestions = byFile.get(filename) ?? [];
-                    const file = changedFiles.find(
-                        (f) => f.filename === filename,
-                    );
+                    // Analyzer findings legitimately land on files the review
+                    // itself ignores — a lockfile is the common case, since
+                    // ignorePaths hides it from the reviewer while the
+                    // dependency scan still has to report what it introduces.
+                    // Resolving only against changedFiles discarded those.
+                    const file =
+                        changedByName.get(filename) ??
+                        ignoredByName.get(filename);
                     if (file) {
                         draft.fileAnalysisResults.push({
                             validSuggestionsToAnalyze: suggestions,
@@ -1567,7 +1622,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 }
 
                 draft.dedupTrace = dedupTrace;
-                draft.validSuggestions = deduped;
+                // File-level only: CreateFileCommentsStage posts every entry as
+                // a line comment, and the PR-level ones are already delivered
+                // through validSuggestionsByPR above.
+                draft.validSuggestions = fileLevelSuggestions;
                 draft.discardedSuggestions = allDiscarded;
             });
         } catch (error) {
@@ -1715,10 +1773,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             }
 
             if (otherLocations.length > 0) {
-                const locationsList = otherLocations
-                    .map((loc) => `- \`${loc}\``)
-                    .join('\n');
-                keep.suggestionContent = `${keep.suggestionContent}\n\n**Also found in:**\n${locationsList}`;
+                // Carried on the suggestion instead of written into
+                // suggestionContent: the content formatter runs after this
+                // merge and rewrites suggestionContent from scratch, which
+                // folded this list into prose or dropped it, so every location
+                // but the kept one disappeared from the posted comment
+                // (#2015). executeStage renders the same list after the
+                // formatter, next to the rule-link enrichment that was moved
+                // there for the same reason.
+                keep.kodyRuleOtherLocations = otherLocations;
             }
 
             this.logger.log({

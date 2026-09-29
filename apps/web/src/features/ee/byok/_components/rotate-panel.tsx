@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { Alert, AlertDescription } from "@components/ui/alert";
 import { Button } from "@components/ui/button";
+import { Skeleton } from "@components/ui/skeleton";
 import {
     testBYOK,
     testBYOKModel,
@@ -264,8 +265,11 @@ export function RotatePanel({
                     they read the provider list via a suspense query. */}
                 <Suspense
                     fallback={
-                        <div className="text-text-tertiary text-sm">
-                            Loading credential fields…
+                        <div className="flex flex-col gap-3" aria-hidden>
+                            <Skeleton className="h-4 w-28" />
+                            <Skeleton className="h-9 w-full rounded-lg" />
+                            <Skeleton className="h-4 w-20" />
+                            <Skeleton className="h-9 w-full rounded-lg" />
                         </div>
                     }>
                     <ByokCredentialsInput />

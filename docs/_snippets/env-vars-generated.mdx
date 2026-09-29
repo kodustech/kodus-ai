@@ -196,6 +196,7 @@
 | `API_E2B_KEY` | – | secret | ⚙️ Both | Required when SANDBOX_PROVIDER=e2b. |
 | `API_E2B_TEMPLATE_ID` | – | string | ☁️ Cloud |  |
 | `API_E2B_TEMPLATE_GRAPH_ID` | – | string | ☁️ Cloud |  |
+| `API_SANDBOX_CLONE_TIMEOUT_MS` | – | string | ⚙️ Both | Clone budget for the local sandbox, in milliseconds. Default 120000. Raise it when reviewing large monorepos — a shallow PR-ref fetch that exceeds this leaves the review with no sandbox and silently disables sandbox-backed stages. |
 
 ## Cron schedules (UTC)
 
@@ -412,6 +413,4 @@
 
 | Variable | Required | Type | Scope | Description |
 | --- | --- | --- | --- | --- |
-| `WEB_HOSTNAME_HELPDESK` | – | string | ⚙️ Both | Helpdesk service hostname (web frontend reads this to render help links). |
-| `WEB_PORT_HELPDESK` | – | port | ⚙️ Both |  |
 | `WEB_RULE_FILES_DOCS` | – | url | ⚙️ Both | Documentation URL for the rule-files detection feature, shown in the web UI when a user is configuring code review rules. |

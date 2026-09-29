@@ -18,7 +18,7 @@ one key, one variable to debug):
   E2E_LLM_BASE_URL  OpenAI-compatible base
                     (default https://api.fireworks.ai/inference/v1)
   E2E_LLM_MODEL     model id
-                    (default accounts/fireworks/models/deepseek-v4-flash-0731)
+                    (default accounts/fireworks/models/deepseek-v4p1-flash)
 
 Usage: llm-release-note.py [evidence-dir]
 """
@@ -135,7 +135,7 @@ def main():
         "E2E_LLM_BASE_URL", "https://api.fireworks.ai/inference/v1"
     ).strip()
     model = os.environ.get(
-        "E2E_LLM_MODEL", "accounts/fireworks/models/deepseek-v4-flash-0731"
+        "E2E_LLM_MODEL", "accounts/fireworks/models/deepseek-v4p1-flash"
     ).strip()
 
     facts = collect_facts(evidence_dir)

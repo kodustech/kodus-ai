@@ -40,17 +40,17 @@
 
     **Opcionales:**
     - `kodus-mcp-manager` — broker del Model Context Protocol. Habilita
-      con `API_MCP_SERVER_ENABLED=true`. Ver [MCP Manager](/how_to_deploy/es/deploy_kodus/mcp_manager).
+      con `API_MCP_SERVER_ENABLED=true`. Ver [MCP Manager](/es/how_to_deploy/deploy_kodus/mcp_manager).
     - `worker-analytics` — ingestión del Cockpit (métricas DORA,
       classifier de PR). **Exclusivo del self-hosted Enterprise**, no se
-      activa por defecto. Ver [Analytics Worker](/how_to_deploy/es/deploy_kodus/analytics_worker).
+      activa por defecto. Ver [Analytics Worker](/es/how_to_deploy/deploy_kodus/analytics_worker).
   </Accordion>
 </AccordionGroup>
 
 <Note>
   Code review usa un AST graph + contexto cross-file que corre en un
   sandbox — `local` (default, dentro del worker) o `e2b` (sandbox remoto
-  pago). Ver [Sandbox & AST Graph](/how_to_deploy/es/deploy_kodus/sandbox)
+  pago). Ver [Sandbox & AST Graph](/es/how_to_deploy/deploy_kodus/sandbox)
   para los modos, comportamiento de caché, y cuándo elegir cada uno.
 </Note>
 
@@ -99,7 +99,7 @@ Ambos subdominios deben tener registros DNS A apuntando a la dirección IP de tu
     nano .env
     ```
 
-    Consulta [Configuración de Variables de Entorno](/how_to_deploy/es/deploy_kodus/generic_vm#configuración-de-variables-de-entorno) para instrucciones detalladas.  
+    Consulta [Configuración de Variables de Entorno](/es/how_to_deploy/deploy_kodus/generic_vm#configuración-de-variables-de-entorno) para instrucciones detalladas.
   </Step>
 
   <Step title="Ejecutar el instalador">
@@ -122,7 +122,7 @@ Ambos subdominios deben tener registros DNS A apuntando a la dirección IP de tu
 3. **Seleccionar repositorios** para análisis - Elige qué repositorios de código revisará Kody
 
 <Info>
-  Para pasos detallados sobre el proceso de configuración inicial, consulta nuestra [Guía de Inicio Rápido](/how_to_use/es/quickstart).
+  Para pasos detallados sobre el proceso de configuración inicial, consulta nuestra [Guía de Inicio Rápido](/es/how_to_use/quickstart).
 </Info>
   </Step>
 </Steps>

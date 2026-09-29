@@ -1,31 +1,16 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
-import {
-    ChevronDownIcon,
-    GitBranchIcon,
-    GitCommitIcon,
-    ListFilterIcon,
-    TerminalIcon,
-    XIcon,
-} from "lucide-react";
-
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { ReviewsSourceTabs } from "@components/system/reviews-source-tabs";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
-import { Input } from "@components/ui/input";
-import { Label } from "@components/ui/label";
 import { Page } from "@components/ui/page";
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from "@components/ui/popover";
+import { Skeleton } from "@components/ui/skeleton";
 import { Spinner } from "@components/ui/spinner";
 import {
     Table,
     TableBody,
     TableCell,
-    TableContainer,
     TableHead,
     TableHeader,
     TableRow,
@@ -35,6 +20,7 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@components/ui/tooltip";
+import { useDebounce } from "@hooks/use-debounce";
 import {
     useCliReviewDetail,
     useInfiniteCliReviews,
@@ -45,8 +31,25 @@ import type {
     CliReviewSummary,
     CliReviewTimelineItem,
 } from "@services/cli-reviews/types";
-import { cn } from "src/core/utils/components";
+import { useGetSelectedRepositories } from "@services/codeManagement/hooks";
+import {
+    ChevronDownIcon,
+    GitBranchIcon,
+    GitCommitIcon,
+    TerminalIcon,
+    UserIcon,
+    XIcon,
+} from "lucide-react";
+import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
+import { cn } from "src/core/utils/components";
+
+import {
+    CliReviewsFilters,
+    SINCE_LABEL,
+    SINCE_PRESETS,
+    sinceFromPreset,
+} from "./cli-reviews-filters";
 
 const TABLE_COL_COUNT = 9;
 
@@ -90,9 +93,7 @@ function repoLabel(row: CliReviewSummary): string | null {
     if (row.repositoryName) return row.repositoryName;
     if (!row.git?.remote) return null;
     try {
-        const cleaned = row.git.remote
-            .replace(/\.git$/, "")
-            .replace(/\/$/, "");
+        const cleaned = row.git.remote.replace(/\.git$/, "").replace(/\/$/, "");
         const parts = cleaned.split(/[/:]/).filter(Boolean);
         if (parts.length >= 2) return parts.slice(-2).join("/");
     } catch {
@@ -142,7 +143,7 @@ function stageDisplay(item: CliReviewTimelineItem) {
             item.createdAt,
             item.status === "in_progress"
                 ? undefined
-                : item.finishedAt ?? item.updatedAt,
+                : (item.finishedAt ?? item.updatedAt),
         ),
         agentTrace: getAgentTrace(item.metadata),
         visibility:
@@ -267,19 +268,41 @@ function statusBadge(status: CliReviewStatus) {
 }
 
 const HEAD_CLS =
-    "text-text-tertiary text-xs font-medium tracking-wide uppercase";
+    "text-text-secondary text-2xs font-medium tracking-wide uppercase";
+
+// Filters live in the URL (nuqs) so a filtered view is shareable and survives
+// reload — same pattern as the Pull Requests tab. Writes are shallow with
+// history:replace so typing doesn't spam the back button.
+const urlOpts = { shallow: true, history: "replace" } as const;
+
+const PULSE_CHIP =
+    "inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-left transition";
 
 export function CliReviewsPageClient() {
     const { teamId } = useSelectedTeamId();
 
-    const [emailFilter, setEmailFilter] = useState("");
+    const [searchQuery, setSearchQuery] = useQueryState(
+        "q",
+        parseAsString.withOptions(urlOpts),
+    );
+    const [repositoryId, setRepositoryId] = useQueryState(
+        "repo",
+        parseAsString.withOptions(urlOpts),
+    );
+    const [sincePreset, setSincePreset] = useQueryState(
+        "since",
+        parseAsStringLiteral(SINCE_PRESETS).withOptions(urlOpts),
+    );
+    const debouncedQuery = useDebounce(searchQuery ?? "", 400);
 
     const filters = useMemo(
         () => ({
             teamId: teamId ?? undefined,
-            userEmail: emailFilter.trim() || undefined,
+            userEmail: debouncedQuery.trim() || undefined,
+            repositoryId: repositoryId ?? undefined,
+            since: sinceFromPreset(sincePreset),
         }),
-        [teamId, emailFilter],
+        [teamId, debouncedQuery, repositoryId, sincePreset],
     );
 
     const {
@@ -293,43 +316,167 @@ export function CliReviewsPageClient() {
         error,
     } = useInfiniteCliReviews(filters);
 
-    const showEmpty = !isLoading && !isError && reviews.length === 0;
+    // Pulse: team-wide "ran today" count, independent of the list filters.
+    const todayFilters = useMemo(
+        () => ({
+            teamId: teamId ?? undefined,
+            since: sinceFromPreset("today"),
+        }),
+        [teamId],
+    );
+    const today = useInfiniteCliReviews(todayFilters, { pageSize: 1 });
+    const reviewedTodayActive = sincePreset === "today";
+
+    const { data: repositories } = useGetSelectedRepositories(teamId);
+    const repoName = repositoryId
+        ? (Array.isArray(repositories) ? repositories : []).find(
+              (repo) => String(repo.id) === repositoryId,
+          )?.name
+        : undefined;
+
+    const activeChips: { key: string; label: string; clear: () => void }[] = [];
+    if (searchQuery) {
+        activeChips.push({
+            key: "q",
+            label: `User: ${searchQuery}`,
+            clear: () => setSearchQuery(null),
+        });
+    }
+    if (repositoryId) {
+        activeChips.push({
+            key: "repo",
+            label: `Repository: ${repoName ?? repositoryId}`,
+            clear: () => setRepositoryId(null),
+        });
+    }
+    if (sincePreset) {
+        activeChips.push({
+            key: "since",
+            label: SINCE_LABEL[sincePreset],
+            clear: () => setSincePreset(null),
+        });
+    }
+    const clearAllFilters = () => {
+        setSearchQuery(null);
+        setRepositoryId(null);
+        setSincePreset(null);
+    };
 
     return (
-        <Page.Root className="pb-0">
-            <Page.Header className="max-w-full">
-                <div className="flex w-full items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <Page.Title className="text-balance">
-                            CLI Reviews
-                        </Page.Title>
+        <Page.Root scrollable={false} className="min-h-0 gap-3 pt-6 pb-0">
+            <Page.Header>
+                {/* One compact band, like the Pull Requests tab: source tabs +
+                    count on the left, the pulse chip on the right, so the
+                    table starts near the top. */}
+                <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                    <div className="flex items-center gap-3">
+                        <ReviewsSourceTabs />
                         {!isLoading && total > 0 && (
                             <span className="text-text-tertiary text-sm tabular-nums">
                                 {total} review{total === 1 ? "" : "s"}
-                                {emailFilter && (
+                                {repoName && (
                                     <>
                                         {" "}
-                                        from{" "}
+                                        in{" "}
                                         <span className="text-text-secondary font-medium">
-                                            {emailFilter}
+                                            {repoName}
                                         </span>
                                     </>
                                 )}
                             </span>
                         )}
                     </div>
-                    <div className="ml-auto flex flex-wrap items-center gap-3">
-                        <EmailFilterPopover
-                            value={emailFilter}
-                            onChange={setEmailFilter}
-                        />
-                    </div>
+
+                    <button
+                        type="button"
+                        aria-pressed={reviewedTodayActive}
+                        title="CLI reviews your team ran today. Click to show only today's."
+                        onClick={() =>
+                            setSincePreset(reviewedTodayActive ? null : "today")
+                        }
+                        className={cn(
+                            PULSE_CHIP,
+                            reviewedTodayActive
+                                ? "border-primary-light/60 bg-primary/5 ring-primary-light/15 ring-2"
+                                : "border-card-lv3 bg-card-lv2 hover:border-primary-light/40 hover:bg-card-lv1/70",
+                        )}>
+                        <span className="text-text-secondary text-xs font-medium">
+                            Reviewed today
+                        </span>
+                        <span
+                            className={cn(
+                                "text-xs font-semibold tabular-nums",
+                                today.total === 0
+                                    ? "text-text-tertiary"
+                                    : "text-success",
+                            )}>
+                            {today.total}
+                        </span>
+                    </button>
                 </div>
             </Page.Header>
 
-            <Page.Content className="max-w-full px-6">
+            <Page.Content className="min-h-0 gap-3">
+                {/* Toolbar — search + structured filters on one wrapping row. */}
+                <div className="flex flex-wrap items-center gap-2">
+                    <div className="border-card-lv3 bg-card-lv2 focus-within:border-primary-light/50 focus-within:ring-primary-light/15 flex h-9 min-w-[18rem] flex-1 items-center gap-2 rounded-xl border pr-1.5 pl-3 transition focus-within:ring-3">
+                        <UserIcon className="text-text-tertiary size-4 shrink-0" />
+                        <input
+                            className="text-text-primary placeholder:text-text-tertiary/70 h-full min-w-0 flex-1 bg-transparent text-sm outline-none"
+                            type="search"
+                            inputMode="email"
+                            placeholder="Search by user email…"
+                            aria-label="Search by user email"
+                            value={searchQuery ?? ""}
+                            onChange={(event) =>
+                                setSearchQuery(event.target.value || null)
+                            }
+                        />
+                        {searchQuery && (
+                            <Button
+                                size="icon-xs"
+                                variant="cancel"
+                                aria-label="Clear search"
+                                onClick={() => setSearchQuery(null)}>
+                                <XIcon />
+                            </Button>
+                        )}
+                    </div>
+
+                    <CliReviewsFilters
+                        teamId={teamId}
+                        repositoryId={repositoryId}
+                        onRepositoryChange={(value) =>
+                            setRepositoryId(value ?? null)
+                        }
+                        since={sincePreset}
+                        onSinceChange={setSincePreset}
+                    />
+                </div>
+
+                {activeChips.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-2">
+                        {activeChips.map((chip) => (
+                            <Button
+                                key={chip.key}
+                                size="xs"
+                                variant="helper"
+                                rightIcon={<XIcon />}
+                                onClick={chip.clear}>
+                                {chip.label}
+                            </Button>
+                        ))}
+                        <Button
+                            size="xs"
+                            variant="cancel"
+                            onClick={clearAllFilters}>
+                            Clear all
+                        </Button>
+                    </div>
+                )}
+
                 {isError ? (
-                    <div className="py-12 text-center">
+                    <div className="min-h-0 flex-1 overflow-y-auto py-12 text-center">
                         <p className="text-danger text-sm">
                             Failed to load CLI reviews. Please try again.
                         </p>
@@ -339,92 +486,155 @@ export function CliReviewsPageClient() {
                             </p>
                         )}
                     </div>
-                ) : isLoading ? (
-                    <div className="flex items-center justify-center py-12">
-                        <Spinner className="size-7" />
-                    </div>
-                ) : showEmpty ? (
-                    <EmptyState />
                 ) : (
-                    <>
-                        <TableContainer className="border-card-lv3/40 bg-card-lv1/50 max-h-[calc(100dvh-13rem)] overflow-auto rounded-xl border">
-                            <Table className="w-full">
-                                <TableHeader sticky>
-                                    <TableRow className="hover:bg-transparent">
-                                        <TableHead className="w-8" />
-                                        <TableHead className={cn(HEAD_CLS, "w-32")}>
-                                            When
-                                        </TableHead>
-                                        <TableHead
-                                            className={cn(
-                                                HEAD_CLS,
-                                                "min-w-[14rem]",
-                                            )}>
-                                            User
-                                        </TableHead>
-                                        <TableHead className={cn(HEAD_CLS, "w-40")}>
-                                            Repo
-                                        </TableHead>
-                                        <TableHead
-                                            className={cn(
-                                                HEAD_CLS,
-                                                "hidden w-40 xl:table-cell",
-                                            )}>
-                                            Branch
-                                        </TableHead>
-                                        <TableHead
-                                            className={cn(
-                                                HEAD_CLS,
-                                                "hidden w-28 lg:table-cell",
-                                            )}>
-                                            Commit
-                                        </TableHead>
-                                        <TableHead className={cn(HEAD_CLS, "w-28")}>
-                                            Status
-                                        </TableHead>
-                                        <TableHead
-                                            className={cn(HEAD_CLS, "w-20")}
-                                            align="right">
-                                            Issues
-                                        </TableHead>
-                                        <TableHead
-                                            className={cn(
-                                                HEAD_CLS,
-                                                "hidden w-24 md:table-cell",
-                                            )}
-                                            align="right">
-                                            Duration
-                                        </TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {reviews.map((row) => (
-                                        <CliReviewRow
-                                            key={row.executionUuid}
-                                            row={row}
-                                        />
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
-
-                        {hasNextPage && (
-                            <div className="flex justify-center py-4">
-                                <Button
-                                    variant="cancel"
-                                    size="md"
-                                    onClick={() => fetchNextPage()}
-                                    disabled={isFetchingNextPage}>
-                                    {isFetchingNextPage
-                                        ? "Loading…"
-                                        : "Load more"}
-                                </Button>
-                            </div>
-                        )}
-                    </>
+                    <CliReviewsTable
+                        rows={reviews}
+                        loading={isLoading && !reviews.length}
+                        hasNextPage={hasNextPage}
+                        isFetchingNextPage={isFetchingNextPage}
+                        fetchNextPage={fetchNextPage}
+                        hasActiveFilters={activeChips.length > 0}
+                        onClearFilters={clearAllFilters}
+                    />
                 )}
             </Page.Content>
         </Page.Root>
+    );
+}
+
+/**
+ * Same shell as the Pull Requests table: one bordered scroll container, a
+ * sticky header row, infinite scroll at the bottom, skeleton while loading
+ * and a card-shaped empty state.
+ */
+function CliReviewsTable({
+    rows,
+    loading,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    hasActiveFilters,
+    onClearFilters,
+}: {
+    rows: CliReviewSummary[];
+    loading: boolean;
+    hasNextPage?: boolean;
+    isFetchingNextPage: boolean;
+    fetchNextPage: () => void;
+    hasActiveFilters: boolean;
+    onClearFilters: () => void;
+}) {
+    const scrollRef = useRef<HTMLDivElement | null>(null);
+    const loadMoreRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        const node = loadMoreRef.current;
+        const root = scrollRef.current;
+        if (!node || !root) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (
+                    entries[0]?.isIntersecting &&
+                    hasNextPage &&
+                    !isFetchingNextPage
+                ) {
+                    fetchNextPage();
+                }
+            },
+            { root, rootMargin: "0px 0px 400px 0px" },
+        );
+        observer.observe(node);
+        return () => observer.disconnect();
+    }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+
+    if (loading) {
+        return (
+            <div className="border-card-lv3/40 bg-card-lv1/50 divide-card-lv3/30 flex flex-col divide-y overflow-hidden rounded-xl border">
+                {Array.from({ length: 8 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-3 px-5 py-4">
+                        <Skeleton className="size-4 shrink-0 rounded" />
+                        <Skeleton className="h-4 w-24" />
+                        <Skeleton className="h-4 w-2/5" />
+                        <Skeleton className="ml-auto h-5 w-20 rounded-md" />
+                    </div>
+                ))}
+            </div>
+        );
+    }
+
+    if (!rows.length) {
+        return (
+            <EmptyState
+                hasActiveFilters={hasActiveFilters}
+                onClearFilters={onClearFilters}
+            />
+        );
+    }
+
+    return (
+        <div
+            ref={scrollRef}
+            className="border-card-lv3/60 bg-card-lv1 min-h-0 flex-1 overflow-y-auto rounded-xl border">
+            <Table className="w-full">
+                <TableHeader sticky className="bg-card-lv1/95 backdrop-blur">
+                    <TableRow className="hover:bg-transparent">
+                        <TableHead className="w-8" />
+                        <TableHead className={cn(HEAD_CLS, "w-32")}>
+                            When
+                        </TableHead>
+                        <TableHead className={cn(HEAD_CLS, "min-w-[14rem]")}>
+                            User
+                        </TableHead>
+                        <TableHead className={cn(HEAD_CLS, "w-40")}>
+                            Repo
+                        </TableHead>
+                        <TableHead
+                            className={cn(
+                                HEAD_CLS,
+                                "hidden w-40 xl:table-cell",
+                            )}>
+                            Branch
+                        </TableHead>
+                        <TableHead
+                            className={cn(
+                                HEAD_CLS,
+                                "hidden w-28 lg:table-cell",
+                            )}>
+                            Commit
+                        </TableHead>
+                        <TableHead className={cn(HEAD_CLS, "w-28")}>
+                            Status
+                        </TableHead>
+                        <TableHead
+                            className={cn(HEAD_CLS, "w-20")}
+                            align="right">
+                            Issues
+                        </TableHead>
+                        <TableHead
+                            className={cn(
+                                HEAD_CLS,
+                                "hidden w-24 md:table-cell",
+                            )}
+                            align="right">
+                            Duration
+                        </TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {rows.map((row) => (
+                        <CliReviewRow key={row.executionUuid} row={row} />
+                    ))}
+                </TableBody>
+            </Table>
+
+            <div ref={loadMoreRef} className="h-1 w-full" aria-hidden />
+            {isFetchingNextPage && (
+                <div className="flex justify-center py-4">
+                    <Spinner className="size-5" />
+                </div>
+            )}
+        </div>
     );
 }
 
@@ -458,7 +668,7 @@ function CliReviewRow({ row }: { row: CliReviewSummary }) {
                         {formatRelative(row.createdAt)}
                     </span>
                 </TableCell>
-                <TableCell className="min-w-0 max-w-[16rem]">
+                <TableCell className="max-w-[16rem] min-w-0">
                     <UserCell row={row} />
                 </TableCell>
                 <TableCell className="max-w-[10rem]">
@@ -672,7 +882,9 @@ function TimelineRow({ item }: { item: CliReviewTimelineItem }) {
                     <span className="text-text-primary truncate text-sm font-medium">
                         {stage.label}
                     </span>
-                    {isActive && <Spinner className="text-primary-light size-3" />}
+                    {isActive && (
+                        <Spinner className="text-primary-light size-3" />
+                    )}
                     {!isActive && statusBadge(item.status as CliReviewStatus)}
                 </div>
                 {showMessage && (
@@ -799,10 +1011,7 @@ function SuggestionsList({
     );
 }
 
-const SEVERITY_BADGE: Record<
-    string,
-    { className: string; label: string }
-> = {
+const SEVERITY_BADGE: Record<string, { className: string; label: string }> = {
     critical: {
         className: "bg-danger/10 text-danger",
         label: "Critical",
@@ -851,7 +1060,7 @@ function SuggestionItem({ issue }: { issue: CliReviewIssue }) {
                 </p>
             )}
             {issue.message && (
-                <p className="text-text-secondary mt-1 text-sm whitespace-pre-wrap text-pretty">
+                <p className="text-text-secondary mt-1 text-sm text-pretty whitespace-pre-wrap">
                     {issue.message}
                 </p>
             )}
@@ -874,9 +1083,7 @@ function SuggestionItem({ issue }: { issue: CliReviewIssue }) {
  */
 function TruncateStart({ text }: { text: string }) {
     return (
-        <span
-            className="min-w-0 flex-1 truncate"
-            style={{ direction: "rtl" }}>
+        <span className="min-w-0 flex-1 truncate" style={{ direction: "rtl" }}>
             <span style={{ direction: "ltr", unicodeBidi: "embed" }}>
                 {text}
             </span>
@@ -901,7 +1108,10 @@ function UserCell({ row }: { row: CliReviewSummary }) {
                 <TooltipContent className="text-xs">{primary}</TooltipContent>
             </Tooltip>
 
-            <CliAuthLine auth={row.cliAuth} gitUser={showGit ? gitUser : null} />
+            <CliAuthLine
+                auth={row.cliAuth}
+                gitUser={showGit ? gitUser : null}
+            />
         </div>
     );
 }
@@ -1005,96 +1215,33 @@ function IssuesCell({ count }: { count?: number | null }) {
     );
 }
 
-function EmailFilterPopover({
-    value,
-    onChange,
+function EmptyState({
+    hasActiveFilters,
+    onClearFilters,
 }: {
-    value: string;
-    onChange: (value: string) => void;
+    hasActiveFilters: boolean;
+    onClearFilters: () => void;
 }) {
-    const [open, setOpen] = useState(false);
-    const [draft, setDraft] = useState(value);
-
     return (
-        <Popover
-            open={open}
-            onOpenChange={(next) => {
-                setOpen(next);
-                if (next) setDraft(value);
-            }}>
-            <PopoverTrigger asChild>
-                <Button
-                    size="xs"
-                    variant="helper"
-                    leftIcon={<ListFilterIcon />}>
-                    Filters
-                    {value && (
-                        <span className="text-text-secondary">{` (1)`}</span>
-                    )}
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-80">
-                <div className="flex flex-col gap-3">
-                    <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="cli-review-email">User email</Label>
-                        <Input
-                            id="cli-review-email"
-                            placeholder="dev@kodus.io"
-                            value={draft}
-                            onChange={(e) => setDraft(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                    onChange(draft);
-                                    setOpen(false);
-                                }
-                            }}
-                        />
-                    </div>
-                    <div className="flex justify-end gap-2">
-                        {value && (
-                            <Button
-                                variant="cancel"
-                                size="sm"
-                                onClick={() => {
-                                    setDraft("");
-                                    onChange("");
-                                    setOpen(false);
-                                }}
-                                leftIcon={<XIcon className="size-3.5" />}>
-                                Clear
-                            </Button>
-                        )}
-                        <Button
-                            variant="primary-dark"
-                            size="sm"
-                            onClick={() => {
-                                onChange(draft);
-                                setOpen(false);
-                            }}>
-                            Apply
-                        </Button>
-                    </div>
-                </div>
-            </PopoverContent>
-        </Popover>
-    );
-}
-
-function EmptyState() {
-    return (
-        <div className="flex flex-col items-center gap-3 py-16 text-center">
-            <div className="bg-card-lv1 text-text-secondary flex size-12 items-center justify-center rounded-full">
+        <div className="border-card-lv3/40 bg-card-lv1/50 flex flex-col items-center justify-center gap-3 rounded-xl border py-16 text-center">
+            <div className="bg-card-lv2/60 text-text-tertiary flex size-11 items-center justify-center rounded-full">
                 <TerminalIcon aria-hidden className="size-5" />
             </div>
-            <div className="flex flex-col gap-1">
-                <p className="text-text-primary text-balance text-base font-medium">
-                    No CLI reviews yet
+            {hasActiveFilters ? (
+                <>
+                    <p className="text-text-secondary text-sm">
+                        No CLI reviews match these filters.
+                    </p>
+                    <Button size="xs" variant="helper" onClick={onClearFilters}>
+                        Clear filters
+                    </Button>
+                </>
+            ) : (
+                <p className="text-text-secondary max-w-sm text-sm text-pretty">
+                    No CLI reviews yet. Reviews your team runs with the Kodus
+                    CLI will appear here.
                 </p>
-                <p className="text-text-tertiary max-w-sm text-pretty text-sm">
-                    Reviews triggered with the Kodus CLI by your team will
-                    appear here.
-                </p>
-            </div>
+            )}
         </div>
     );
 }

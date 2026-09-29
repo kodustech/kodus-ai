@@ -48,7 +48,7 @@ export const SyncFromIDEFilesFirstTimeModal = () => {
                 <DialogFooter>
                     <Button
                         size="md"
-                        variant="secondary"
+                        variant="cancel"
                         leftIcon={<ClockFadingIcon />}
                         onClick={() => magicModal.hide()}>
                         Skip initial scan

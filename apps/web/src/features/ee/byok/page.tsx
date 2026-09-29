@@ -27,6 +27,25 @@ export default async function ByokPage() {
     // BYOK flag the Costs screen uses, so the chip value matches the Costs
     // screen it deep-links to (the chip==Costs invariant). Best-effort: a
     // failed fetch just renders the models without a cost chip.
+    // The catalog only needs `byokConfig`, so it must not queue behind the
+    // license → usage chain. Kicked off here and awaited at the end, it
+    // overlaps the two requests below instead of adding a fourth round-trip.
+    const hasKodus = (byokConfig?.credentials ?? []).some(
+        (c) => c.provider === "kodus",
+    );
+    const kodusCatalogPromise = hasKodus
+        ? getLLMProviderModels("kodus")
+              .then((models) =>
+                  Object.fromEntries(
+                      models.map((m) => [
+                          m.id,
+                          { name: m.name, pricing: m.pricing },
+                      ]),
+                  ),
+              )
+              .catch(() => undefined)
+        : Promise.resolve(undefined);
+
     const subscription = teamId
         ? await validateOrganizationLicense({ teamId }).catch(() => null)
         : null;
@@ -67,22 +86,8 @@ export default async function ByokPage() {
 
     // The Kodus catalog carries the curated names and the list prices the org
     // is billed at; the rows show both so the tariff is visible after saving,
-    // not only in the picker. Fetched only when a Kodus credential exists.
-    const hasKodus = (byokConfig?.credentials ?? []).some(
-        (c) => c.provider === "kodus",
-    );
-    const kodusCatalog = hasKodus
-        ? await getLLMProviderModels("kodus")
-              .then((models) =>
-                  Object.fromEntries(
-                      models.map((m) => [
-                          m.id,
-                          { name: m.name, pricing: m.pricing },
-                      ]),
-                  ),
-              )
-              .catch(() => undefined)
-        : undefined;
+    // not only in the picker. Started above, resolved here.
+    const kodusCatalog = await kodusCatalogPromise;
 
     return (
         <ByokPageClient

@@ -9,13 +9,21 @@ export const SyntaxHighlight: React.FC<{
     className?: string;
     language: LiteralUnion<keyof typeof ProgrammingLanguage>;
     contentStyle?: React.CSSProperties;
+    /**
+     * Soft-wrap long lines (default). Pass `false` for indentation-sensitive
+     * snippets: lines keep their shape and the block scrolls sideways
+     * instead of folding a statement onto a new, differently-indented line.
+     */
+    wrap?: boolean;
 }> = (props) => {
+    const wrap = props.wrap !== false;
     const customStyle: React.CSSProperties = {
         borderRadius: "0.75rem",
         paddingLeft: "1.5rem",
         paddingRight: "1.5rem",
         paddingTop: "1rem",
         paddingBottom: "1rem",
+        ...(wrap ? {} : { overflowX: "auto", tabSize: 4 }),
         ...props.contentStyle,
     };
 
@@ -45,7 +53,7 @@ export const SyntaxHighlight: React.FC<{
                 customStyle={customStyle}
                 codeTagProps={{
                     className: "**:font-mono",
-                    style: { whiteSpace: "break-spaces" },
+                    style: { whiteSpace: wrap ? "break-spaces" : "pre" },
                 }}>
                 {props.children?.replace(/\n$/, "") ?? ""}
             </SyntaxHighlighter>

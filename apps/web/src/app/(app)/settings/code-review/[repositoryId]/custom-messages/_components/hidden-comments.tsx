@@ -46,8 +46,8 @@ export const HiddenComments = (props: {
                             />
                         </div>
                         <p className="text-text-secondary">
-                            When enabled, all review messages will be posted as
-                            hidden/minimized comments.
+                            Kody's review comments arrive collapsed, so the PR
+                            conversation stays short.
                         </p>
                     </div>
                     <Switch decorative checked={props.hideComments?.value} />

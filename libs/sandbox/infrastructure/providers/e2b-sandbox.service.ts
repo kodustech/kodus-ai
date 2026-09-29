@@ -9,6 +9,7 @@ import {
     ISandboxProvider,
     SandboxInstance,
     SandboxRunResult,
+    toBranchName,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
@@ -29,6 +30,14 @@ import {
 // onPipelineFinish observer calls sandbox.cleanup() on every exit path,
 // so this is a safety ceiling, not a cost floor.
 const SANDBOX_TIMEOUT_MS = 35 * 60 * 1000;
+
+// Every sandbox is tagged with the deployment that created it, so the orphan
+// sweep (SandboxLeaseReaperService) only ever kills its own: environments can
+// share one E2B key (dev and prod do), and a sweep only sees its own Mongo.
+export const E2B_DEPLOYMENT_METADATA_KEY = 'deployment';
+export function e2bDeploymentTag(apiNodeEnv: string | undefined): string {
+    return apiNodeEnv || 'unknown';
+}
 const REPO_DIR = '/home/user/repo';
 
 const TIMEOUTS = {
@@ -498,8 +507,13 @@ export async function syncE2BSandboxRepo(
             // Round N reuses the sandbox, so the base ref is whatever the
             // previous round fetched. Absent or stale, the shared module
             // fetches nothing and says so.
+            // Normalized like the fetch above: a host that reports
+            // `refs/heads/main` would otherwise produce
+            // `origin/refs/heads/main`, which resolves to nothing, and the
+            // submodule fetch would report "base ref is not in the sandbox"
+            // on every reconnect.
             baseRef: params.baseBranch
-                ? `origin/${params.baseBranch}`
+                ? `origin/${toBranchName(params.baseBranch)}`
                 : undefined,
         },
     );
@@ -940,8 +954,12 @@ export class E2BSandboxService implements ISandboxProvider {
         sandbox: Sandbox,
         params: CreateSandboxParams,
     ): Promise<string | undefined> {
-        const { cloneUrl, authToken, authUsername, platform, baseBranch } =
-            params;
+        const { cloneUrl, authToken, authUsername, platform } = params;
+        // Azure Repos names branches in full ("refs/heads/main"). Pasted into
+        // the refspec below that becomes "refs/heads/refs/heads/main", the
+        // fetch fails, and every tool that needs the base tree — the
+        // dependency baseline above all — silently loses it.
+        const baseBranch = toBranchName(params.baseBranch);
         if (!baseBranch) return undefined;
 
         const hasAuth = !!authToken;
@@ -995,6 +1013,12 @@ export class E2BSandboxService implements ISandboxProvider {
         apiKey: string,
         metadata?: Record<string, string>,
     ): Promise<{ sandbox: Sandbox; usedTemplate: boolean }> {
+        metadata = {
+            ...metadata,
+            [E2B_DEPLOYMENT_METADATA_KEY]: e2bDeploymentTag(
+                this.configService.get<string>('API_NODE_ENV'),
+            ),
+        };
         const isGraphStage =
             metadata?.stage === 'graph-build' ||
             metadata?.stage === 'graph-incremental';

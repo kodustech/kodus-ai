@@ -13,6 +13,7 @@ import { FindLibraryKodyRulesWithFeedbackUseCase } from './find-library-kody-rul
 import { FindLibraryKodyRulesUseCase } from './find-library-kody-rules.use-case';
 import { FindRecommendedKodyRulesUseCase } from './find-recommended-kody-rules.use-case';
 import { FindRulesInOrganizationByRuleFilterKodyRulesUseCase } from './find-rules-in-organization-by-filter.use-case';
+import { GetKodyRulesIndexUseCase } from './get-kody-rules-index.use-case';
 import { FindSuggestionsByRuleUseCase } from './find-suggestions-by-rule.use-case';
 import { GenerateInitialKodyRulesUseCase } from './generate-initial-kody-rules.use-case';
 import { GenerateKodyRulesUseCase } from './generate-kody-rules.use-case';
@@ -52,4 +53,5 @@ export const UseCases = [
     ImportFastKodyRulesUseCase,
     ConvertPendingUpdatesToNewUseCase,
     ManageImportedKodyRulesUseCase,
+    GetKodyRulesIndexUseCase,
 ];

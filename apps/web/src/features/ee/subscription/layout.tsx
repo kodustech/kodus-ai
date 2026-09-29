@@ -47,29 +47,73 @@ export default function SubscriptionLayout({
         isSelfHosted && subscription.status === "licensed-self-hosted";
     const isUnlicensedSelfHosted =
         isSelfHosted && subscription.status === "self-hosted";
+    // Self-hosted "expired" is the license key's, not a cloud plan's: it
+    // belongs on the license page, not on "choose a plan".
+    const isExpiredSelfHosted =
+        isSelfHosted && subscription.status === "expired";
 
-    // Unlicensed self-hosted: show only the license key input
-    if (isUnlicensedSelfHosted)
-        return (
-            <Page.Root>
-                <Page.Content>
+    const tableTools = (
+        <div className="flex w-full items-center gap-2 md:w-auto">
+            <Input
+                size="md"
+                value={query}
+                className="min-w-0 flex-1 md:w-52 md:flex-none"
+                leftIcon={<SearchIcon />}
+                placeholder="Find by name"
+                onChange={(e) => setQuery(e.target.value)}
+            />
+
+            {selectedTab === tabs.admins && (
+                <Button
+                    size="md"
+                    variant="helper"
+                    leftIcon={<PlusIcon />}
+                    disabled={!canCreate}
+                    onClick={() => {
+                        magicModal.show(() => <InviteModal teamId={teamId} />);
+                    }}>
+                    Invite member
+                </Button>
+            )}
+        </div>
+    );
+
+    return (
+        <Page.Root>
+            <Page.Header>
+                <Page.TitleContainer>
+                    <Page.Title>Subscription</Page.Title>
+                    <Page.Description>
+                        Your plan, and who holds a review seat.
+                    </Page.Description>
+                </Page.TitleContainer>
+            </Page.Header>
+
+            <Page.Content>
+                {/* Self-hosted reads its plan from the license key, cloud
+                    from billing; both land in the same plan sheet. */}
+                {isLicensedSelfHosted ||
+                isUnlicensedSelfHosted ||
+                isExpiredSelfHosted ? (
                     <LicenseKeySettings />
-                </Page.Content>
-            </Page.Root>
-        );
+                ) : (
+                    status
+                )}
 
-    // Licensed self-hosted: show license settings + seat management tabs
-    if (isLicensedSelfHosted)
-        return (
-            <Page.Root>
-                <Page.Content>
-                    <LicenseKeySettings />
-
+                {/* Seats only exist once a plan has them: an unlicensed
+                    self-hosted instance has nothing to assign. */}
+                {!isUnlicensedSelfHosted && (
                     <TableFilterContext value={{ query, setQuery }}>
                         <Tabs
                             value={selectedTab}
                             onValueChange={setSelectedTab}>
-                            <TabsList className="mt-5">
+                            {/* On a phone the search can't share the tab
+                                row without scrolling it sideways, so it takes
+                                its own line above. */}
+                            <div className="mt-5 flex md:hidden">
+                                {tableTools}
+                            </div>
+                            <TabsList className="mt-3 md:mt-5">
                                 <TabsTrigger value={tabs.prs}>
                                     PR licenses
                                 </TabsTrigger>
@@ -77,36 +121,8 @@ export default function SubscriptionLayout({
                                     Workspace members
                                 </TabsTrigger>
 
-                                <div className="mb-5 flex h-full flex-1 items-center justify-end">
-                                    <div className="flex items-center gap-2">
-                                        <Input
-                                            size="md"
-                                            value={query}
-                                            className="w-52"
-                                            leftIcon={<SearchIcon />}
-                                            placeholder="Find by name"
-                                            onChange={(e) =>
-                                                setQuery(e.target.value)
-                                            }
-                                        />
-
-                                        {selectedTab === tabs.admins && (
-                                            <Button
-                                                size="md"
-                                                variant="helper"
-                                                leftIcon={<PlusIcon />}
-                                                disabled={!canCreate}
-                                                onClick={() => {
-                                                    magicModal.show(() => (
-                                                        <InviteModal
-                                                            teamId={teamId}
-                                                        />
-                                                    ));
-                                                }}>
-                                                Invite member
-                                            </Button>
-                                        )}
-                                    </div>
+                                <div className="mb-5 hidden h-full flex-1 items-center justify-end md:flex">
+                                    {tableTools}
                                 </div>
                             </TabsList>
 
@@ -131,80 +147,7 @@ export default function SubscriptionLayout({
                             </Suspense>
                         </Tabs>
                     </TableFilterContext>
-                </Page.Content>
-            </Page.Root>
-        );
-
-    // Cloud mode: show standard subscription UI
-    return (
-        <Page.Root>
-            <Page.Header>{status}</Page.Header>
-
-            <Page.Content>
-                <TableFilterContext value={{ query, setQuery }}>
-                    <Tabs value={selectedTab} onValueChange={setSelectedTab}>
-                        <TabsList className="mt-5">
-                            <TabsTrigger value={tabs.prs}>
-                                PR licenses
-                            </TabsTrigger>
-                            <TabsTrigger value={tabs.admins}>
-                                Workspace members
-                            </TabsTrigger>
-
-                            <div className="mb-5 flex h-full flex-1 items-center justify-end">
-                                <div className="flex items-center gap-2">
-                                    <Input
-                                        size="md"
-                                        value={query}
-                                        className="w-52"
-                                        leftIcon={<SearchIcon />}
-                                        placeholder="Find by name"
-                                        onChange={(e) =>
-                                            setQuery(e.target.value)
-                                        }
-                                    />
-
-                                    {selectedTab === tabs.admins && (
-                                        <Button
-                                            size="md"
-                                            variant="helper"
-                                            leftIcon={<PlusIcon />}
-                                            disabled={!canCreate}
-                                            onClick={() => {
-                                                magicModal.show(() => (
-                                                    <InviteModal
-                                                        teamId={teamId}
-                                                    />
-                                                ));
-                                            }}>
-                                            Invite member
-                                        </Button>
-                                    )}
-                                </div>
-                            </div>
-                        </TabsList>
-
-                        <TabsContent value={tabs.prs}>
-                            <Suspense
-                                fallback={
-                                    <Card className="flex h-40 flex-col items-center justify-center gap-3 bg-transparent shadow-none">
-                                        <Spinner />
-                                        <p className="text-sm">
-                                            Loading users...
-                                        </p>
-                                    </Card>
-                                }>
-                                {licenses}
-                            </Suspense>
-                        </TabsContent>
-
-                        <Suspense>
-                            <TabsContent value={tabs.admins}>
-                                {admins}
-                            </TabsContent>
-                        </Suspense>
-                    </Tabs>
-                </TableFilterContext>
+                )}
             </Page.Content>
         </Page.Root>
     );

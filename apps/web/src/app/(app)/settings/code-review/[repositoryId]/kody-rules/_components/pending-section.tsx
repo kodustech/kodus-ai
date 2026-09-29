@@ -1,10 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { IssueSeverityLevelBadge } from "@components/system/issue-severity-level-badge";
-import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
-import { Card, CardContent, CardHeader } from "@components/ui/card";
 import {
     Collapsible,
     CollapsibleContent,
@@ -30,17 +27,33 @@ import {
     KodyRulesType,
 } from "@services/kodyRules/types";
 import { isCentralizedPrResponse } from "@services/parameters/types";
-import { ChevronDownIcon } from "lucide-react";
+import { ArrowRightIcon, ChevronDownIcon } from "lucide-react";
 import PierreDiff from "src/app/(app)/pull-requests/[repositoryId]/[prNumber]/_components/pierre-diff";
+import { cn } from "src/core/utils/components";
 
 import { getCentralizedPrToastPayload } from "../../../_utils/centralized-pr-feedback";
 import { OriginBadge } from "./origin-badge";
+
+// How many items the block shows before "See all" — enough to see what is
+// waiting without pushing the active list below the fold.
+const PREVIEW_COUNT = 3;
+
+type PendingKind = "rule" | "memory" | "update";
+
+const KIND_CHIP: Record<PendingKind, { label: string; className: string }> = {
+    rule: { label: "Rule", className: "bg-card-lv2 text-text-secondary" },
+    memory: { label: "Memory", className: "bg-card-lv2 text-text-secondary" },
+    update: { label: "Update", className: "bg-warning/15 text-warning" },
+};
 
 const isMemory = (rule: KodyRule) =>
     (rule.type ?? KodyRulesType.STANDARD) === KodyRulesType.MEMORY;
 
 const isUpdateRequest = (rule: KodyRule) =>
     rule.requestType === KodyRuleRequestType.UPDATE;
+
+const kindOf = (rule: KodyRule): PendingKind =>
+    isUpdateRequest(rule) ? "update" : isMemory(rule) ? "memory" : "rule";
 
 const entityNoun = (rule: KodyRule) => (isMemory(rule) ? "memory" : "rule");
 
@@ -49,67 +62,90 @@ const entityNoun = (rule: KodyRule) => (isMemory(rule) ? "memory" : "rule");
 const buildDiffDoc = (item: KodyRule) =>
     `Title: ${item.title ?? ""}\nPath: ${item.path ?? ""}\n\n${item.rule ?? ""}`;
 
-const Header = ({
+const KindChip = ({ kind }: { kind: PendingKind }) => (
+    <span
+        className={cn(
+            "inline-flex h-5 shrink-0 items-center rounded px-1.5 text-xs font-semibold tracking-wide uppercase",
+            KIND_CHIP[kind].className,
+        )}>
+        {KIND_CHIP[kind].label}
+    </span>
+);
+
+const PendingRow = ({
     rule,
     title,
-    update,
     selection,
+    children,
 }: {
     rule: KodyRule;
     title: string;
-    update?: boolean;
     selection?: { isSelected: boolean; onToggle: () => void };
+    children: React.ReactNode;
 }) => (
-    <CardHeader className="flex flex-row items-center gap-3 px-5 py-4">
-        {selection && (
-            <input
-                type="checkbox"
-                checked={selection.isSelected}
-                onChange={selection.onToggle}
-                aria-label={"Select " + (title || entityNoun(rule))}
-                className="border-card-lv3 bg-card-lv2 accent-primary-light size-4 cursor-pointer rounded border"
-            />
-        )}
-
-        <span className="flex-1 truncate font-medium">{title}</span>
-
-        <div className="flex items-center gap-3">
-            <OriginBadge rule={rule} />
-            {!isMemory(rule) && (
-                <IssueSeverityLevelBadge severity={rule.severity} />
+    <Collapsible className="group/collapsible">
+        <div className="flex items-center gap-3 px-3 py-2">
+            {selection && (
+                <input
+                    type="checkbox"
+                    checked={selection.isSelected}
+                    onChange={selection.onToggle}
+                    aria-label={"Select " + (title || entityNoun(rule))}
+                    className="border-card-lv3 bg-card-lv2 accent-primary-light size-4 shrink-0 cursor-pointer rounded border"
+                />
             )}
-            {update && (
-                <Badge active size="xs" className="min-h-auto">
-                    Update
-                </Badge>
-            )}
+
+            <KindChip kind={kindOf(rule)} />
+
             <CollapsibleTrigger asChild>
-                <Button active size="icon-sm" variant="helper">
+                <button
+                    type="button"
+                    className="hover:text-primary-light flex min-w-0 flex-1 items-center gap-3 text-left">
+                    <span className="text-text-primary min-w-0 flex-1 truncate text-sm">
+                        {title || `Untitled ${entityNoun(rule)}`}
+                    </span>
+
+                    <span className="text-text-secondary hidden shrink-0 items-center gap-1.5 text-xs sm:flex">
+                        <OriginBadge rule={rule} variant="text" />
+                        {!isMemory(rule) && rule.severity && (
+                            <>
+                                <span aria-hidden>·</span>
+                                <span className="font-medium uppercase">
+                                    {rule.severity}
+                                </span>
+                            </>
+                        )}
+                    </span>
+
                     <CollapsibleIndicator />
-                </Button>
+                </button>
             </CollapsibleTrigger>
         </div>
-    </CardHeader>
+
+        <CollapsibleContent className="pb-0">
+            <div className="border-card-lv3/60 flex flex-col gap-4 border-t px-4 py-4">
+                {children}
+            </div>
+        </CollapsibleContent>
+    </Collapsible>
 );
 
 /**
- * Pending items for the current tab, rendered inline above the active list and
- * visually distinct. Create-requests offer approve / discard; update-requests
- * show a diff against the rule/memory they target and offer "update existing",
- * "create new instead", or discard. Renders nothing when there's nothing
- * pending.
+ * Everything waiting for approval in this scope — generated, imported and
+ * proposed rules and memories — in one block above the tabs. Create-requests
+ * offer approve / discard; update-requests show a diff against the item they
+ * target and offer "update existing", "create new instead", or discard. Shows
+ * the first few and expands on demand. Renders nothing when nothing is pending.
  */
 export const PendingSection = ({
     pendingRules,
     activeRules,
-    entityLabel,
     teamId,
     canEdit,
     refreshRulesList,
 }: {
     pendingRules: KodyRule[];
     activeRules: KodyRule[];
-    entityLabel: "rules" | "memories";
     teamId: string;
     canEdit: boolean;
     refreshRulesList: () => void;
@@ -161,6 +197,7 @@ export const PendingSection = ({
 
     const [selection, setSelection] = useState<Set<string>>(new Set());
     const [collapsed, setCollapsed] = useState(false);
+    const [showAll, setShowAll] = useState(false);
 
     const toggleSelection = (id: string) =>
         setSelection((prev) => {
@@ -170,8 +207,8 @@ export const PendingSection = ({
             return next;
         });
 
-    // Only act on items that are both selected and currently shown — keeps the
-    // bulk action honest when the selection survives a filter switch.
+    // Only act on items that are both selected and currently pending — keeps
+    // the bulk action honest when the selection outlives a refresh.
     const selectedShown = pendingRules.filter(
         (r) => r.uuid && selection.has(r.uuid),
     );
@@ -216,7 +253,7 @@ export const PendingSection = ({
     const allSelected =
         selectedIds.length > 0 && selectedIds.length >= allSelectableIds.length;
 
-    const cardSelection = (r: KodyRule) =>
+    const rowSelection = (r: KodyRule) =>
         canEdit && r.uuid
             ? {
                   isSelected: selection.has(r.uuid),
@@ -224,18 +261,25 @@ export const PendingSection = ({
               }
             : undefined;
 
+    const total = pendingRules.length;
+    const hasMore = total > PREVIEW_COUNT;
+    const visible = showAll
+        ? pendingRules
+        : pendingRules.slice(0, PREVIEW_COUNT);
+
     return (
-        <div className="border-warning/30 bg-warning/5 flex w-full flex-col gap-2 rounded-lg border border-dashed p-3">
-            <div className="flex items-center gap-2 px-1 pb-1">
+        <section
+            aria-label="Pending review"
+            className="border-warning/30 bg-warning/5 flex w-full flex-col gap-3 rounded-xl border border-dashed p-4">
+            <div className="flex items-center gap-2">
                 <span className="text-text-primary text-sm font-semibold">
                     Pending review
                 </span>
-                <Badge active size="xs" className="min-h-auto">
-                    {pendingRules.length}
-                </Badge>
-                <span className="text-text-secondary text-xs">
-                    Generated, imported, and proposed {entityLabel} awaiting
-                    approval.
+                <span className="bg-warning/15 text-warning inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold tabular-nums">
+                    {total}
+                </span>
+                <span className="text-text-secondary hidden text-xs sm:inline">
+                    Rules and memories awaiting approval.
                 </span>
                 <div className="flex-1" />
                 <Button
@@ -256,31 +300,31 @@ export const PendingSection = ({
                 <>
                     {canEdit && (
                         <div
-                            className="bg-card-lv1 ring-card-lv2 flex flex-wrap items-center gap-3 rounded-lg px-3 py-1.5 ring-1"
+                            className="text-text-secondary flex flex-wrap items-center gap-x-1 gap-y-1 text-xs"
                             role="toolbar"
                             aria-label="Pending bulk actions">
-                            <span className="text-text-secondary text-xs tabular-nums">
-                                <strong className="text-text-primary">
+                            <span className="tabular-nums">
+                                <strong className="text-text-primary font-semibold">
                                     {selectedShown.length}
                                 </strong>{" "}
                                 selected
                             </span>
-
-                            <div className="bg-card-lv2 h-4 w-px" aria-hidden />
-
-                            {!allSelected && (
-                                <Button
-                                    size="xs"
-                                    variant="cancel"
-                                    onClick={() =>
-                                        setSelection(new Set(allSelectableIds))
-                                    }>
-                                    Select all ({allSelectableIds.length})
-                                </Button>
-                            )}
+                            <span aria-hidden>·</span>
                             <Button
                                 size="xs"
                                 variant="cancel"
+                                className="h-auto min-h-0 px-1 py-0"
+                                disabled={allSelected}
+                                onClick={() =>
+                                    setSelection(new Set(allSelectableIds))
+                                }>
+                                Select all ({allSelectableIds.length})
+                            </Button>
+                            <span aria-hidden>·</span>
+                            <Button
+                                size="xs"
+                                variant="cancel"
+                                className="h-auto min-h-0 px-1 py-0"
                                 disabled={selectedShown.length === 0}
                                 onClick={() => setSelection(new Set())}>
                                 Clear
@@ -292,7 +336,8 @@ export const PendingSection = ({
                                 <DropdownMenuTrigger asChild>
                                     <Button
                                         size="xs"
-                                        variant="primary"
+                                        variant="helper"
+                                        className="ring-1"
                                         disabled={selectedShown.length === 0}
                                         rightIcon={
                                             <ChevronDownIcon aria-hidden />
@@ -319,8 +364,8 @@ export const PendingSection = ({
                         </div>
                     )}
 
-                    <div className="flex max-h-[480px] flex-col gap-2 overflow-y-auto pr-1">
-                        {pendingRules.map((r) => {
+                    <div className="border-card-lv3/60 bg-card-lv1 divide-card-lv3/60 flex flex-col divide-y overflow-hidden rounded-lg border">
+                        {visible.map((r) => {
                             if (!r.uuid) return null;
 
                             if (isUpdateRequest(r)) {
@@ -329,122 +374,106 @@ export const PendingSection = ({
                                     : undefined;
 
                                 return (
-                                    <Card key={r.uuid} className="shrink-0">
-                                        <Collapsible className="w-full">
-                                            <Header
-                                                rule={r}
-                                                title={target?.title || r.title}
-                                                update
-                                                selection={cardSelection(r)}
+                                    <PendingRow
+                                        key={r.uuid}
+                                        rule={r}
+                                        title={target?.title || r.title}
+                                        selection={rowSelection(r)}>
+                                        {!target ? (
+                                            <div className="text-warning text-sm">
+                                                Target {entityNoun(r)} was not
+                                                found in the current list —
+                                                review carefully.
+                                            </div>
+                                        ) : (
+                                            <PierreDiff
+                                                fileName={
+                                                    target.title ||
+                                                    entityNoun(r)
+                                                }
+                                                oldCode={buildDiffDoc(target)}
+                                                newCode={buildDiffDoc(r)}
+                                                diffStyle="unified"
                                             />
-                                            <CollapsibleContent
-                                                asChild
-                                                className="pb-0">
-                                                <CardContent className="bg-card-lv1 flex flex-col gap-4 pt-4">
-                                                    {!target ? (
-                                                        <div className="text-warning text-sm">
-                                                            Target{" "}
-                                                            {entityNoun(r)} was
-                                                            not found in the
-                                                            current list —
-                                                            review carefully.
-                                                        </div>
-                                                    ) : (
-                                                        <PierreDiff
-                                                            fileName={
-                                                                target.title ||
-                                                                entityNoun(r)
-                                                            }
-                                                            oldCode={buildDiffDoc(
-                                                                target,
-                                                            )}
-                                                            newCode={buildDiffDoc(
-                                                                r,
-                                                            )}
-                                                            diffStyle="unified"
-                                                        />
-                                                    )}
+                                        )}
 
-                                                    <div className="flex flex-wrap justify-end gap-2 pt-2">
-                                                        <Button
-                                                            size="sm"
-                                                            variant="helper"
-                                                            disabled={!canEdit}
-                                                            onClick={() =>
-                                                                createInstead(r)
-                                                            }>
-                                                            Create new instead
-                                                        </Button>
-                                                        <Button
-                                                            size="sm"
-                                                            variant="cancel"
-                                                            disabled={!canEdit}
-                                                            onClick={() =>
-                                                                discard(r)
-                                                            }>
-                                                            Discard
-                                                        </Button>
-                                                        <Button
-                                                            size="sm"
-                                                            variant="primary"
-                                                            disabled={!canEdit}
-                                                            onClick={() =>
-                                                                approve(r)
-                                                            }>
-                                                            Update existing
-                                                        </Button>
-                                                    </div>
-                                                </CardContent>
-                                            </CollapsibleContent>
-                                        </Collapsible>
-                                    </Card>
+                                        <div className="flex flex-wrap justify-end gap-2">
+                                            <Button
+                                                size="sm"
+                                                variant="helper"
+                                                disabled={!canEdit}
+                                                onClick={() =>
+                                                    createInstead(r)
+                                                }>
+                                                Create new instead
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="cancel"
+                                                disabled={!canEdit}
+                                                onClick={() => discard(r)}>
+                                                Discard
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="primary"
+                                                disabled={!canEdit}
+                                                onClick={() => approve(r)}>
+                                                Update existing
+                                            </Button>
+                                        </div>
+                                    </PendingRow>
                                 );
                             }
 
                             // Create-request — a brand-new rule/memory, nothing to diff.
                             return (
-                                <Card key={r.uuid} className="shrink-0">
-                                    <Collapsible className="w-full">
-                                        <Header
-                                            rule={r}
-                                            title={r.title}
-                                            selection={cardSelection(r)}
-                                        />
-                                        <CollapsibleContent
-                                            asChild
-                                            className="pb-0">
-                                            <CardContent className="bg-card-lv1 flex flex-col gap-5 pt-4">
-                                                <Markdown>{r.rule}</Markdown>
+                                <PendingRow
+                                    key={r.uuid}
+                                    rule={r}
+                                    title={r.title}
+                                    selection={rowSelection(r)}>
+                                    <Markdown>{r.rule}</Markdown>
 
-                                                <div className="flex flex-wrap justify-end gap-2">
-                                                    <Button
-                                                        size="sm"
-                                                        variant="cancel"
-                                                        disabled={!canEdit}
-                                                        onClick={() =>
-                                                            discard(r)
-                                                        }>
-                                                        Discard
-                                                    </Button>
-                                                    <Button
-                                                        size="sm"
-                                                        variant="primary"
-                                                        disabled={!canEdit}
-                                                        onClick={() =>
-                                                            approve(r)
-                                                        }>
-                                                        Approve
-                                                    </Button>
-                                                </div>
-                                            </CardContent>
-                                        </CollapsibleContent>
-                                    </Collapsible>
-                                </Card>
+                                    <div className="flex flex-wrap justify-end gap-2">
+                                        <Button
+                                            size="sm"
+                                            variant="cancel"
+                                            disabled={!canEdit}
+                                            onClick={() => discard(r)}>
+                                            Discard
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="primary"
+                                            disabled={!canEdit}
+                                            onClick={() => approve(r)}>
+                                            Approve
+                                        </Button>
+                                    </div>
+                                </PendingRow>
                             );
                         })}
                     </div>
+
+                    {hasMore && (
+                        <Button
+                            size="xs"
+                            variant="cancel"
+                            className="self-center"
+                            onClick={() => setShowAll((v) => !v)}
+                            rightIcon={
+                                showAll ? undefined : (
+                                    <ArrowRightIcon aria-hidden />
+                                )
+                            }>
+                            {showAll
+                                ? `Show first ${PREVIEW_COUNT}`
+                                : `See all ${total} pending items`}
+                        </Button>
+                    )}
                 </>
             )}
-        </div>
+        </section>
     );
 };

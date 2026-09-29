@@ -25,6 +25,7 @@ import {
     KodyRulesStatus,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -79,6 +80,13 @@ describe('CreateOrUpdateKodyRulesUseCase (centralized pending states)', () => {
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
+                {
+                    provide: TelemetryService,
+                    useValue: {
+                        kodyRuleChanged: jest.fn(),
+                        kodyRulesImported: jest.fn(),
+                    },
+                },
                 CreateOrUpdateKodyRulesUseCase,
                 {
                     provide: KODY_RULES_SERVICE_TOKEN,

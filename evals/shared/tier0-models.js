@@ -48,7 +48,7 @@ const TIER0 = {
     // Mirrors the PROD trial/managed default (KODUS_DEFAULT_MODEL): DeepSeek
     // served via FIREWORKS, not DeepSeek-native — different transport + the
     // `-0731` build. Use this to eval what the trial actually runs.
-    'deepseek-v4-flash@fireworks': { provider: 'openai_compatible', doModel: 'accounts/fireworks/models/deepseek-v4-flash-0731', keyEnvs: ['API_FIREWORKS_API_KEY', 'FIREWORKS_API_KEY', 'BYOK_FIREWORKS_API_KEY'], baseURL: 'https://api.fireworks.ai/inference/v1' },
+    'deepseek-v4-flash@fireworks': { provider: 'openai_compatible', doModel: 'accounts/fireworks/models/deepseek-v4p1-flash', keyEnvs: ['API_FIREWORKS_API_KEY', 'FIREWORKS_API_KEY', 'BYOK_FIREWORKS_API_KEY'], baseURL: 'https://api.fireworks.ai/inference/v1' },
     // K3 usa chave própria (KIMI_NEW) — crédito limitado, ver custo antes de
     // disparar passada cheia: $3/$15 por milhão, ~3x o k2.7.
     'kimi-k3': { provider: 'openai_compatible', keyEnvs: ['KIMI_NEW', 'BYOK_MOONSHOT_API_KEY'], baseURL: 'https://api.moonshot.ai/v1' },

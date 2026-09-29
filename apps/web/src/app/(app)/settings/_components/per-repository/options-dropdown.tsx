@@ -8,9 +8,9 @@ import {
     DropdownMenuTrigger,
 } from "@components/ui/dropdown-menu";
 import { magicModal } from "@components/ui/magic-modal";
+import { useSuspenseGetCodeReviewParameter } from "@services/parameters/hooks";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
-import { useSuspenseGetCodeReviewParameter } from "@services/parameters/hooks";
 import { EllipsisIcon, FolderPenIcon, TrashIcon } from "lucide-react";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 

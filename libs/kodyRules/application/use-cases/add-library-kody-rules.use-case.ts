@@ -13,6 +13,7 @@ import {
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { CentralizedPrMetadata } from '@libs/centralized-config/infrastructure/adapters/services/centralized-config-pr.service';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 import { CreateOrUpdateKodyRulesUseCase } from './create-or-update.use-case';
 import { AddLibraryKodyRulesDto } from '@libs/kodyRules/dtos/add-library-kody-rules.dto';
@@ -28,6 +29,7 @@ export class AddLibraryKodyRulesUseCase {
         },
         private readonly createOrUpdateKodyRulesUseCase: CreateOrUpdateKodyRulesUseCase,
         private readonly authorizationService: AuthorizationService,
+        private readonly telemetry: TelemetryService,
     ) {}
 
     async execute(
@@ -128,6 +130,19 @@ export class AddLibraryKodyRulesUseCase {
                     }
                 }
             }
+
+            void this.telemetry.kodyRulesImported({
+                organizationId: this.request.user.organization.uuid,
+                teamId: libraryKodyRules.teamId,
+                actorUserId: (this.request.user as any)?.uuid,
+                source: 'library',
+                // One rule row per target scope: every selected repository
+                // plus every selected directory.
+                ruleCount:
+                    libraryKodyRules.repositoriesIds.length +
+                    (libraryKodyRules.directoriesInfo?.length ?? 0),
+                repositoryCount: libraryKodyRules.repositoriesIds.length,
+            });
 
             if (centralizedPrResult) {
                 return centralizedPrResult;

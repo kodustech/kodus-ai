@@ -173,4 +173,27 @@ export class EnrichedPullRequestsQueryDto {
             "Filter to PRs authored by the current user ('me') — matched by git identity.",
     })
     author?: string;
+
+    /**
+     * The PULL REQUEST's own state, which is not the same thing as `status`
+     * above — that one is the state of Kody's review run. Someone looking for
+     * "what still needs a human" wants this one, and until now the screen had
+     * no way to express it.
+     *
+     * Note the data is only as fresh as the last webhook we processed for the
+     * PR: a close event we never received leaves the record `open` forever.
+     * Measured against GitHub, recent PRs are reliable and the error grows
+     * with age, so this filter leans on the list's existing ordering (most
+     * recent execution first) to keep those stale records at the bottom
+     * rather than silently dropping rows by age.
+     */
+    @IsOptional()
+    @IsString()
+    @IsIn(['open', 'closed'])
+    @ApiPropertyOptional({
+        enum: ['open', 'closed'],
+        description:
+            "The pull request's own state — NOT the review status. `open` is the reviewable backlog.",
+    })
+    prState?: 'open' | 'closed';
 }

@@ -16,6 +16,7 @@ import { AuditLogEvents } from '@libs/ee/codeReviewSettingsLog/events/audit-log.
 import { UserInviteLogParams } from '@libs/ee/codeReviewSettingsLog/infrastructure/adapters/services/userInviteLog.handler';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
 import { ActionType } from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 export class CreateOrUpdateTeamMembersUseCase implements IUseCase {
     private readonly logger = createLogger(
@@ -30,6 +31,8 @@ export class CreateOrUpdateTeamMembersUseCase implements IUseCase {
         private readonly request: UserRequest,
 
         private readonly eventEmitter: EventEmitter2,
+
+        private readonly telemetry: TelemetryService,
     ) {}
     public async execute(teamId: string, members: IMembers[]): Promise<any> {
         try {
@@ -72,6 +75,13 @@ export class CreateOrUpdateTeamMembersUseCase implements IUseCase {
                         context: CreateOrUpdateTeamMembersUseCase.name,
                     });
                 }
+
+                void this.telemetry.memberInvited({
+                    organizationId: this.request.user.organization.uuid,
+                    teamId,
+                    actorUserId: this.request.user.uuid,
+                    invitedCount: result.results.length,
+                });
             }
 
             return result;

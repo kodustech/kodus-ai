@@ -37,6 +37,7 @@ Neither trigger is a hand-kept folder list. The wiring smoke records every repo 
 | [kody-rules](kody-rules/README.md) | Does the Kody Rules agent flag every place a rule is broken? | PR (scripted model) |
 | [anchoring](anchoring/README.md) | How many findings are lost because their lines miss the diff? | PR (scripted model) |
 | [pr-summary](pr-summary/README.md) | Is the summary generated, posted, and sent to the configured model? | PR (scripted model) · Friday (every tier-0 model) |
+| [reply-addressing](reply-addressing/README.md) | Does Kody answer unmentioned replies meant for it, and stay out of the rest? | PR (scripted model) |
 | [review-chain](review-chain/README.md) | Is every LLM call in the review chain wired to the shared output recovery? | PR |
 | [dedup](dedup/README.md) · [severity](severity/README.md) · [format](format/README.md) | Do the secondary passes keep real findings? | PR (mocked model) |
 | [promotion](promotion/README.md) | On frozen evidence, does the verifier keep or drop a candidate correctly? | on demand |

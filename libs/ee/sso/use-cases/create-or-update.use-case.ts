@@ -2,6 +2,7 @@ import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { BadRequestException } from '@nestjs/common';
 
 import { createLogger } from '@libs/core/log/logger';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 import {
     ISSOConfigService,
     SSO_CONFIG_SERVICE_TOKEN,
@@ -28,6 +29,7 @@ export class CreateOrUpdateSSOConfigUseCase {
         private readonly ssoConfigService: ISSOConfigService,
         private readonly ssoTestSessionService: SSOTestSessionService,
         private readonly ssoDomainVerificationService: SSODomainVerificationService,
+        private readonly telemetry: TelemetryService,
     ) {}
 
     async execute(params: {
@@ -232,6 +234,14 @@ export class CreateOrUpdateSSOConfigUseCase {
                 metadata: { uuid: updated.uuid, organizationId },
             });
 
+            void this.telemetry.ssoConfigured({
+                organizationId,
+                actorUserId: userId,
+                protocol: targetProtocol,
+                active: targetActive,
+                domainCount: targetDomains.length,
+            });
+
             return updated.toJson();
         }
 
@@ -312,6 +322,14 @@ export class CreateOrUpdateSSOConfigUseCase {
             message: 'SSO config created successfully',
             context: CreateOrUpdateSSOConfigUseCase.name,
             metadata: { uuid: created.uuid, organizationId },
+        });
+
+        void this.telemetry.ssoConfigured({
+            organizationId,
+            actorUserId: userId,
+            protocol,
+            active: targetActive,
+            domainCount: normalizedDomains.length,
         });
 
         return created.toJson();

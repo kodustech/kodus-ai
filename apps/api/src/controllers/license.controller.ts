@@ -27,6 +27,7 @@ import {
     ILicenseService,
     LICENSE_SERVICE_TOKEN,
 } from '@libs/ee/license/interfaces/license.interface';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 import { SelfHostedLicenseService } from '@libs/ee/license/self-hosted-license.service';
 import { PruneRemovedLicenseSeatsUseCase } from '@libs/platform/application/use-cases/codeManagement/prune-removed-license-seats.use-case';
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
@@ -44,6 +45,7 @@ export class LicenseController {
         private readonly createOrUpdateOrganizationParametersUseCase: CreateOrUpdateOrganizationParametersUseCase,
         private readonly trialExtensionNotifierService: TrialExtensionNotifierService,
         private readonly pruneRemovedLicenseSeatsUseCase: PruneRemovedLicenseSeatsUseCase,
+        private readonly telemetry: TelemetryService,
 
         @Inject(REQUEST)
         private readonly request: UserRequest,
@@ -93,6 +95,15 @@ export class LicenseController {
         // Decode payload for status details
         const payload =
             this.selfHostedLicenseService.decodePayload(sanitizedKey);
+
+        void this.telemetry.licenseActivated({
+            organizationId,
+            userId: this.request?.user?.uuid,
+            planType: payload?.plan,
+            expiresAt: payload
+                ? new Date(payload.exp * 1000).toISOString()
+                : undefined,
+        });
 
         return {
             ...result,
@@ -260,6 +271,13 @@ export class LicenseController {
 
             if (ok) {
                 successful.push(user);
+                void this.telemetry.licenseSeatChanged({
+                    organizationId,
+                    actorUserId: this.request?.user?.uuid,
+                    targetGitId: user.gitId,
+                    assigned: user.licenseStatus === 'active',
+                    source: 'manual',
+                });
             } else {
                 failed.push(user);
             }

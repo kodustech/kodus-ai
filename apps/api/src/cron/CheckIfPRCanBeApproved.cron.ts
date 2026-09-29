@@ -379,6 +379,15 @@ export class CheckIfPRCanBeApprovedCronProvider {
                             return;
                         }
 
+                        // The resolved config depends only on the repository;
+                        // share one resolution across its PRs in this run.
+                        const configByRepository = new Map<
+                            string,
+                            ReturnType<
+                                typeof this.codeBaseConfigService.getConfig
+                            >
+                        >();
+
                         // Process PRs in parallel (bounded by prLimit)
                         await Promise.allSettled(
                             eligibleOpenPullRequests.map((pr) =>
@@ -396,14 +405,26 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                         return;
                                     }
 
+                                    if (
+                                        !configByRepository.has(
+                                            codeReviewConfigFromRepo.id,
+                                        )
+                                    ) {
+                                        configByRepository.set(
+                                            codeReviewConfigFromRepo.id,
+                                            this.codeBaseConfigService.getConfig(
+                                                organizationAndTeamData,
+                                                {
+                                                    id: codeReviewConfigFromRepo.id,
+                                                    name: codeReviewConfigFromRepo.name,
+                                                },
+                                                [],
+                                            ),
+                                        );
+                                    }
                                     const resolvedConfig =
-                                        await this.codeBaseConfigService.getConfig(
-                                            organizationAndTeamData,
-                                            {
-                                                id: codeReviewConfigFromRepo.id,
-                                                name: codeReviewConfigFromRepo.name,
-                                            },
-                                            [],
+                                        await configByRepository.get(
+                                            codeReviewConfigFromRepo.id,
                                         );
 
                                     if (

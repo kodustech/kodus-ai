@@ -22,6 +22,7 @@ import {
     ConfigLevel,
 } from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
 import { buildDefaultGlobalCodeReviewConfig } from '@libs/common/utils/validateCodeReviewConfigFile';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 interface ICodeRepository {
     avatar_url?: string;
@@ -60,6 +61,8 @@ export class UpdateCodeReviewParameterRepositoriesUseCase {
                 email: string;
             };
         },
+
+        private readonly telemetry: TelemetryService,
     ) {}
 
     async execute(body: {
@@ -210,6 +213,13 @@ export class UpdateCodeReviewParameterRepositoriesUseCase {
                     context: UpdateCodeReviewParameterRepositoriesUseCase.name,
                 });
             }
+
+            void this.telemetry.codeReviewSettingsUpdated({
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+                actorUserId: body.actor?.userId ?? this.request?.user?.uuid,
+                configLevel: ConfigLevel.REPOSITORY,
+            });
 
             return result;
         } catch (error) {

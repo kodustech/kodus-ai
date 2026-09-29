@@ -1,3 +1,3 @@
-import { GenericLoading } from "@components/ui/generic-loading";
+import { ReviewPageSkeleton } from "./_components/page.client";
 
-export default GenericLoading;
+export default ReviewPageSkeleton;

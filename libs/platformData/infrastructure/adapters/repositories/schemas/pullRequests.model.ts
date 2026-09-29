@@ -91,6 +91,15 @@ export class PullRequestsModel extends CoreDocument {
             label: string;
             severity: string;
             rankScore: number;
+            // Provenance for deterministic findings. The @Prop above is an
+            // untyped Array, so this persists as written — it is declared here
+            // to keep the stored shape documented rather than incidental.
+            evidence?: {
+                source: string;
+                ruleId?: string;
+                ruleUrl?: string;
+                analyzerSeverity?: string;
+            };
             priorityStatus: PriorityStatus;
             deliveryStatus: DeliveryStatus;
             brokenKodyRulesIds?: string[];

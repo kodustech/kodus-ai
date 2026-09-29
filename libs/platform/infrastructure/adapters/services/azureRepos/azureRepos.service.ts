@@ -39,6 +39,11 @@ import {
 } from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
 import { ICodeManagementService } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
 
+import {
+    CheckEvidence,
+    CheckEvidenceConclusion,
+    GetCheckEvidenceParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
 import { GitCloneParams } from '@libs/platform/domain/platformIntegrations/types/codeManagement/gitCloneParams.type';
 import {
     OneSentenceSummaryItem,
@@ -1175,6 +1180,89 @@ export class AzureReposService implements Omit<
                 metadata: { params },
             });
             return null;
+        }
+    }
+
+    async getCheckEvidence(
+        params: GetCheckEvidenceParams,
+    ): Promise<CheckEvidence[]> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+
+        // Azure attaches statuses to the pull request, not to a commit; with
+        // no PR to address there is nothing to read.
+        if (!prNumber) {
+            return [];
+        }
+
+        try {
+            const { orgName, token } = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+
+            const projectId = await this.getProjectIdFromRepository(
+                organizationAndTeamData,
+                repository.id,
+            );
+
+            const statuses =
+                await this.azureReposRequestHelper.getPullRequestStatuses({
+                    orgName,
+                    token,
+                    projectId,
+                    repositoryId: repository.id,
+                    prId: prNumber,
+                });
+
+            return (statuses ?? []).map((status) =>
+                this.mapAzureBuildStatus(status),
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: 'Failed to read Azure pull request statuses',
+                context: AzureReposService.name,
+                error,
+                metadata: { repository: repository.name, prNumber },
+            });
+            return [];
+        }
+    }
+
+    private mapAzureBuildStatus(status: {
+        id: number;
+        state: string;
+        context?: { name?: string; genre?: string };
+        targetUrl?: string;
+        updatedDate?: string;
+    }): CheckEvidence {
+        const unfinished = status.state === 'pending' || status.state === 'notSet';
+        const name = status.context?.genre
+            ? `${status.context.genre}/${status.context?.name ?? ''}`
+            : (status.context?.name ?? '');
+
+        return {
+            id: String(status.id),
+            name,
+            status: unfinished ? 'in_progress' : 'completed',
+            conclusion: unfinished
+                ? null
+                : this.mapAzureConclusion(status.state),
+            url: status.targetUrl ?? null,
+            completedAt: unfinished ? null : (status.updatedDate ?? null),
+            platform: PlatformType.AZURE_REPOS,
+        };
+    }
+
+    private mapAzureConclusion(state: string): CheckEvidenceConclusion | null {
+        switch (state) {
+            case 'succeeded':
+                return 'success';
+            case 'failed':
+            case 'error':
+                return 'failure';
+            case 'notApplicable':
+                return 'skipped';
+            default:
+                return null;
         }
     }
 
@@ -5948,6 +6036,7 @@ ${copyPrompt}
             sourceRefName: pr?.sourceRefName ?? '', // TODO: remove, legacy, use head.ref
             head: {
                 ref: pr?.sourceRefName?.replace('refs/heads/', ''),
+                sha: pr?.lastMergeSourceCommit?.commitId ?? '',
                 repo: {
                     id: pr?.repository?.id ?? '',
                     name: pr?.repository?.name ?? '',
