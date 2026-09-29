@@ -156,11 +156,34 @@ export function startJobLeaseRenewal(
                         // elsewhere, or terminal). That is a lost lease, not a
                         // transient failure, so it must not spend the failure
                         // budget queued for DB blips.
-                        loseLease(
-                            new Error(
-                                'Lease renewal matched no owned PROCESSING row',
-                            ),
+                        //
+                        // Built once and logged before the callback: this is a
+                        // terminal, operationally significant event (the worker
+                        // no longer owns the job and the reaper or another
+                        // worker may already be rerunning it), and the class
+                        // contract is that a renewal failure is never silent.
+                        const lostLeaseError = new Error(
+                            'Lease renewal matched no owned PROCESSING row',
                         );
+                        const metadata: Record<string, unknown> = {
+                            intervalMs,
+                            consecutiveFailures,
+                            maxConsecutiveFailures,
+                        };
+                        if (options.jobId) {
+                            metadata.jobId = options.jobId;
+                        }
+                        if (options.organizationId) {
+                            metadata.organizationId = options.organizationId;
+                        }
+                        options.logger?.error({
+                            message:
+                                'Job lease lost — another worker may already be running this job',
+                            context: 'startJobLeaseRenewal',
+                            error: lostLeaseError,
+                            metadata,
+                        });
+                        loseLease(lostLeaseError);
                         return;
                     }
                     // A successful tick proves the worker still owns the job.

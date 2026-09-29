@@ -159,4 +159,43 @@ describe('startJobLeaseRenewal (#1830)', () => {
 
         controller.abort();
     });
+
+    it('logs the lost lease before the callback, with the job metadata', async () => {
+        // Terminal and operationally significant: the worker no longer owns the
+        // job and another worker may already be rerunning it, so the loss must
+        // not be left to whichever caller happens to pass `onLeaseLost`.
+        const logger = { error: jest.fn(), warn: jest.fn() } as any;
+        const onLeaseLost = jest.fn();
+        const renew = jest.fn().mockResolvedValue(false);
+        const controller = new AbortController();
+
+        startJobLeaseRenewal({
+            signal: controller.signal,
+            renew,
+            logger,
+            jobId: 'job-7',
+            organizationId: 'org-7',
+            onLeaseLost,
+        });
+
+        jest.advanceTimersByTime(JOB_LEASE_RENEW_INTERVAL_MS);
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(onLeaseLost).toHaveBeenCalledTimes(1);
+        expect(logger.error).toHaveBeenCalledTimes(1);
+        const payload = logger.error.mock.calls[0][0];
+        expect(payload.message).toContain('lease lost');
+        expect(payload.context).toBe('startJobLeaseRenewal');
+        // The same error reaches the callback, so a caller that logs it too
+        // does not invent a second story about the same event.
+        expect(payload.error).toBe(onLeaseLost.mock.calls[0][0]);
+        expect(payload.metadata).toMatchObject({
+            jobId: 'job-7',
+            organizationId: 'org-7',
+            intervalMs: JOB_LEASE_RENEW_INTERVAL_MS,
+        });
+
+        controller.abort();
+    });
 });
