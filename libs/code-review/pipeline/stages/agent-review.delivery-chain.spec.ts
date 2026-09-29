@@ -5,6 +5,7 @@ import { CreateFileCommentsStage } from './create-file-comments.stage';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { LLM } from '@libs/llm/llm';
 import { PlatformType } from '@libs/core/domain/enums';
+import { formatSuggestionContent } from '@libs/code-review/infrastructure/agents/engine/format-suggestion-content';
 
 jest.mock(
     '@libs/code-review/infrastructure/agents/engine/classify-severity',
@@ -179,19 +180,24 @@ const buildStages = () => {
     };
 };
 
-const makeContext = () =>
+const makeContext = (
+    over: {
+        changedFiles?: any[];
+        kodyRules?: any[];
+    } = {},
+) =>
     frozenContext({
         organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
         repository: { id: 'repo-1', name: 'repo-1', language: 'ts' },
         pullRequest: { number: 7 },
         platformType: PlatformType.GITHUB,
-        changedFiles: [{ filename: FILE, patch: PATCH }],
+        changedFiles: over.changedFiles ?? [{ filename: FILE, patch: PATCH }],
         prAllCommits: [{ sha: 'head' }],
         codeReviewConfig: {
             reviewOptions: {},
             heavy: false,
             resolvedModelSlot: { provider: 'openai', model: 'gpt-4o-mini' },
-            kodyRules: [
+            kodyRules: over.kodyRules ?? [
                 {
                     uuid: CONTEXT_RULE,
                     title: 'functions stay under 50 lines',
@@ -218,7 +224,10 @@ const makeContext = () =>
         errors: [],
     }) as any as CodeReviewPipelineContext;
 
-const runChain = async (input: any[]) => {
+const runChain = async (
+    input: any[],
+    over: { changedFiles?: any[]; kodyRules?: any[] } = {},
+) => {
     const s = buildStages();
     s.reviewOrchestrator.execute.mockResolvedValue({
         suggestions: input,
@@ -228,7 +237,7 @@ const runChain = async (input: any[]) => {
         warnings: [],
     });
 
-    let ctx = await (s.agentReview as any).executeStage(makeContext());
+    let ctx = await (s.agentReview as any).executeStage(makeContext(over));
     ctx = await (s.prLevelStage as any).executeStage(ctx);
     ctx = await (s.fileStage as any).executeStage(ctx);
 
@@ -301,5 +310,154 @@ describe('delivery chain — AgentReview → CreatePrLevelComments → CreateFil
         expect(posted.inline.map((c) => tag(c.suggestion))).toEqual(['C:']);
         expect(posted.prLevel).toEqual([]);
         expect(saved.fileLevel.map(tag)).toEqual(['C:']);
+    });
+});
+
+/**
+ * Issue #2015: the "Also found in" list of a merged Kody Rules comment was
+ * appended to suggestionContent at dedup time, BEFORE formatSuggestionContent
+ * rewrote that field from scratch. The rewrite folded or dropped it, so every
+ * location but the kept one vanished from the posted comment. The list now
+ * travels on the suggestion and is rendered after the formatter runs.
+ */
+describe('delivery chain: a merged Kody Rule comment keeps its other locations (#2015)', () => {
+    const RULE = 'rule-stock-levels';
+    const RULE_FILE = 'app/controllers/top_sellers_report_controller.rb';
+    // The reported patch: a new file, one hunk covering lines 1-29.
+    const WHOLE_FILE_PATCH = [
+        '@@ -0,0 +1,29 @@',
+        ...Array.from({ length: 29 }, (_, i) => `+ line ${i + 1}`),
+    ].join('\n');
+
+    const rules = () => [
+        {
+            uuid: RULE,
+            title: 'stock levels are computed once per report',
+            rule: 'The stock level must not be recomputed inside the row loop.',
+            severity: 'high',
+        },
+    ];
+
+    // Two violations of the SAME rule in the SAME file.
+    // dedupKodyRulesByRuleUuid keeps the longest suggestionContent, so finding
+    // A (14-17) is the kept representative and B (27-27) is the location that
+    // must still be named in A's comment.
+    const mergedFindings = () => [
+        {
+            relevantFile: RULE_FILE,
+            relevantLinesStart: 14,
+            relevantLinesEnd: 17,
+            label: 'kody_rules',
+            severity: 'high',
+            brokenKodyRulesIds: [RULE],
+            oneSentenceSummary: 'A: the stock level is recomputed per row',
+            suggestionContent:
+                'A: WHAT: the stock level is recomputed for every row. WHY: that is one query per row. HOW: compute it once before the loop.',
+            existingCode: '',
+            improvedCode: '',
+        },
+        {
+            relevantFile: RULE_FILE,
+            relevantLinesStart: 27,
+            relevantLinesEnd: 27,
+            label: 'kody_rules',
+            severity: 'high',
+            brokenKodyRulesIds: [RULE],
+            oneSentenceSummary: 'B: the same rule is violated again',
+            suggestionContent: 'B: the same rule is violated again',
+            existingCode: '',
+            improvedCode: '',
+        },
+    ];
+
+    const over = () => ({
+        changedFiles: [{ filename: RULE_FILE, patch: WHOLE_FILE_PATCH }],
+        kodyRules: rules(),
+    });
+
+    const formatter = formatSuggestionContent as unknown as jest.Mock;
+    const body = (comment: any) =>
+        String(comment?.body?.suggestionContent ?? '');
+    const countOf = (text: string, needle: string) =>
+        text.split(needle).length - 1;
+
+    afterEach(() => {
+        // The module-level mock is shared with the cases above; restore its
+        // default so an override here cannot leak into them.
+        formatter.mockReset();
+        formatter.mockResolvedValue(new Map());
+    });
+
+    it('keeps the kept anchor and still names the other location after the formatter rewrote the prose', async () => {
+        // Production formatter behavior: the rewrite returns one reworded
+        // sentence and repeats nothing the stage appended.
+        formatter.mockResolvedValue(
+            new Map([
+                [
+                    0,
+                    {
+                        suggestionContent:
+                            'The stock level is recomputed inside the row loop; compute it once before iterating.',
+                    },
+                ],
+            ]),
+        );
+
+        const { posted } = await runChain(mergedFindings(), over());
+
+        // One comment, anchored on the kept finding (14-17)...
+        expect(posted.inline).toHaveLength(1);
+        const [comment] = posted.inline;
+        expect(comment.start_line).toBe(14);
+        expect(comment.line).toBe(17);
+
+        // ...and the other violation location is still named in its body.
+        expect(body(comment)).toContain('Also found in');
+        expect(body(comment)).toContain(':27-27');
+        expect(countOf(body(comment), 'Also found in')).toBe(1);
+
+        // The same list has to reach llmPrompt too: the per-comment "Prompt
+        // for LLM" copy block and the consolidated @agentPrompt read it, and
+        // validate-suggestions hands it to the fixer agent as the instruction.
+        // A prompt naming only the kept location makes an agent fix line 17 and
+        // miss line 27.
+        const prompt = String(comment.suggestion?.llmPrompt ?? '');
+        expect(prompt).toContain('Also found in');
+        expect(prompt).toContain(':27-27');
+        expect(countOf(prompt, 'Also found in')).toBe(1);
+
+        // Ordering the fix establishes: the list is not part of what the
+        // formatter sees, so nothing can rewrite it away.
+        const formatterInput = formatter.mock.calls[0][0] as any[];
+        expect(formatterInput).toHaveLength(1);
+        expect(
+            formatterInput.filter((s) =>
+                String(s.suggestionContent).includes('Also found in'),
+            ),
+        ).toEqual([]);
+    });
+
+    it('control: a formatter that returns its input unchanged still yields the list exactly once', async () => {
+        // The shape every real run has on models that leave the prose alone.
+        formatter.mockImplementation(
+            async (items: any[]) =>
+                new Map(
+                    items.map((item, i) => [
+                        i,
+                        { suggestionContent: item.suggestionContent },
+                    ]),
+                ),
+        );
+
+        const { posted } = await runChain(mergedFindings(), over());
+
+        expect(posted.inline).toHaveLength(1);
+        const [comment] = posted.inline;
+        expect(comment.start_line).toBe(14);
+        expect(comment.line).toBe(17);
+        expect(body(comment)).toContain(':27-27');
+        expect(countOf(body(comment), 'Also found in')).toBe(1);
+        // The prompt copy carries the list in this shape too.
+        expect(String(comment.suggestion?.llmPrompt ?? '')).toContain(':27-27');
     });
 });
