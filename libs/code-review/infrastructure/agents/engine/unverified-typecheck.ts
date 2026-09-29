@@ -56,9 +56,14 @@ const SOURCE_FILE_EXTENSIONS = new Set([
     '.svelte',
 ]);
 
-/** `file(12,5): error TS2322: ...` and its pretty form `file:12:5 - error ...`. */
+/**
+ * `file(12,5): error TS2322: ...` and its pretty form `file:12:5 - error ...`.
+ * The file group consumes spaces: tsc reports paths verbatim, and a repository
+ * can hold a directory with a space in its name, where a non-space group would
+ * read a real diagnostic as an unlocated one.
+ */
 const LOCATED_DIAGNOSTIC =
-    /^(?<file>\S+?)(?:\(\d+,\d+\)|:\d+:\d+)[:\s-]*error (?<code>TS\d{3,5})\b/;
+    /^(?<file>.+?)(?:\(\d+,\d+\)|:\d+:\d+)[:\s-]*error (?<code>TS\d{3,5})\b/;
 
 /** `error TS6053: File '...' not found.` — no location, so nothing about a file. */
 const UNLOCATED_DIAGNOSTIC = /^error (?<code>TS\d{3,5})\b/;

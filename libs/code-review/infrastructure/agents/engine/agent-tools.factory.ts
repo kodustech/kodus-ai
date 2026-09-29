@@ -1273,14 +1273,15 @@ fi
                         ));
 
                     try {
-                        // No `| head`: the pipeline's status would be the
-                        // pager's, and the compiler's own status is what tells
-                        // "did not check" from "checked and found nothing".
-                        // truncateShellOutput caps the text instead.
+                        // The output is staged in the sandbox so the command can
+                        // keep the compiler's own status (`| head` would hand
+                        // back the pager's) without forcing the whole dump
+                        // through the sandbox's output channel. truncateShellOutput
+                        // caps what the agent sees.
                         const { stdout, exitCode } = await exec(
                             tsconfig
-                                ? `npx tsc --noEmit -p ${shellQuote(tsconfig)} 2>&1`
-                                : `npx tsc --noEmit --pretty false ${safeTarget} 2>&1`,
+                                ? `npx tsc --noEmit -p ${shellQuote(tsconfig)} > /tmp/tsc.log 2>&1; rc=$?; head -200 /tmp/tsc.log; exit $rc`
+                                : `npx tsc --noEmit --pretty false ${safeTarget} > /tmp/tsc.log 2>&1; rc=$?; head -200 /tmp/tsc.log; exit $rc`,
                         );
                         pushScopedResult(
                             'TypeScript',

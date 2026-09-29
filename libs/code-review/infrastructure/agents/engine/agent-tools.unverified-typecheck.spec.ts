@@ -104,6 +104,14 @@ describe('hasLocatedTypeScriptDiagnostic', () => {
         ).toBe(false);
         expect(hasLocatedTypeScriptDiagnostic('')).toBe(false);
     });
+
+    it('reads a diagnostic whose path contains a space', () => {
+        expect(
+            hasLocatedTypeScriptDiagnostic(
+                `packages/my app/src/a.ts(12,5): error TS2322: Type 'string' is not assignable to type 'number'.`,
+            ),
+        ).toBe(true);
+    });
 });
 
 describe('findProjectLevelTypeScriptErrors', () => {
@@ -257,15 +265,29 @@ describe('checkTypes — a compiler that could not check the project', () => {
 
     it('pins the compiler invocation and reads its own exit status', async () => {
         // `| head` would make the pipeline report the pager's status, so the
-        // guard above could never see a failing compiler.
+        // guard above could never see a failing compiler; the output is staged
+        // in the sandbox instead, which keeps every line the tool reads.
         const sandbox = makeSandbox(SCOPE_MATCHING_OUTPUT, 2);
         await buildAgentTools(sandbox.remote).checkTypes.execute({
             path: TARGET,
         });
 
         expect(sandbox.commands.find((cmd) => cmd.includes('npx tsc'))).toBe(
-            `npx tsc --noEmit -p '${SCOPE}' 2>&1`,
+            `npx tsc --noEmit -p '${SCOPE}' > /tmp/tsc.log 2>&1; rc=$?; head -200 /tmp/tsc.log; exit $rc`,
         );
+    });
+
+    it('keeps a non-zero exit report when the path contains a space', async () => {
+        // A directory name with a space is legal, and the file group of the
+        // located pattern has to span it, otherwise the run reads as "the
+        // compiler reported nothing about any source file".
+        const out = await runCheckTypes(
+            `functions-splitted/store/src/requestable api/controllers/menu.ts(12,5): error TS2322: Type 'string' is not assignable to type 'number'.`,
+            2,
+        );
+
+        expect(out).toContain('TS2322');
+        expect(out).not.toContain(UNVERIFIED_TYPES_MARKER);
     });
 
     it('keeps the scoped answer when the diagnostics are about other files', async () => {
