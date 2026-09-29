@@ -14,6 +14,52 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 dotenv.config({ path: path.join(__dirname, '../../.env.local'), override: true });
 
 /**
+ * RECALL_RAW_HTTP_DIR: grava cada chamada HTTP da rodada, crua — corpo do
+ * pedido, status, cabecalhos e corpo da resposta — um arquivo por chamada.
+ * Serve para ver o que o provedor devolveu de fato (stop_reason, blocos de
+ * conteudo, uso) quando o harness recebe algo quebrado. O SDK resolve
+ * globalThis.fetch na hora da chamada, entao embrulhar aqui pega todas.
+ * Os cabecalhos de autenticacao nao sao gravados.
+ */
+if (process.env.RECALL_RAW_HTTP_DIR) {
+    const dir = process.env.RECALL_RAW_HTTP_DIR;
+    fs.mkdirSync(dir, { recursive: true });
+    const original = globalThis.fetch;
+    const SEGREDO = /^(authorization|x-api-key|api-key|x-goog-api-key|cookie|set-cookie)$/i;
+    let seq = 0;
+    const gravar = (arquivo, dados) => {
+        try {
+            fs.writeFileSync(path.join(dir, arquivo), JSON.stringify(dados));
+        } catch {}
+    };
+    globalThis.fetch = async (input, init) => {
+        const n = ++seq;
+        const url = typeof input === 'string' ? input : (input?.url ?? String(input));
+        const inicio = Date.now();
+        const arquivo = `http-${process.pid}-${inicio}-${n}.json`;
+        const request = typeof init?.body === 'string' ? init.body : null;
+        let res;
+        try {
+            res = await original(input, init);
+        } catch (err) {
+            gravar(arquivo, { url, request, error: String(err) });
+            throw err;
+        }
+        const headers = {};
+        res.headers.forEach((v, k) => {
+            if (!SEGREDO.test(k)) headers[k] = v;
+        });
+        res.clone()
+            .text()
+            .then((response) =>
+                gravar(arquivo, { url, ms: Date.now() - inicio, request, status: res.status, headers, response }),
+            )
+            .catch((err) => gravar(arquivo, { url, request, status: res.status, headers, error: String(err) }));
+        return res;
+    };
+}
+
+/**
  * Busca de documentacao (searchDocs, Exa) — a mesma ferramenta que a producao
  * da aos agentes quando API_EXA_KEY existe (base-code-review-agent.provider.ts).
  * O eval nunca a passava, entao todo agente do benchmark investigava contrato
