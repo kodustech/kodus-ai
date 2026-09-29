@@ -2295,6 +2295,27 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             ) {
                                 classifiedIndices.add(dupIdx);
                                 const dup = suggestions[dupIdx];
+                                // This branch absorbs duplicates without ever
+                                // consulting the content guard, so the invariant
+                                // has to be repeated here: two scanner findings
+                                // are different categories, and absorbing one
+                                // drops a whole category's comment.
+                                if (
+                                    bothFromAnalyzers(dup, suggestions[keepIdx])
+                                ) {
+                                    if (!addedIndices.has(dupIdx)) {
+                                        addedIndices.add(dupIdx);
+                                        indexToResult.set(
+                                            dupIdx,
+                                            result.length,
+                                        );
+                                        result.push(dup);
+                                        uniqueSuggestions.push(
+                                            this.summarizeDedupSuggestion(dup),
+                                        );
+                                    }
+                                    continue;
+                                }
                                 const loc = `${dup.relevantFile}:${dup.relevantLinesStart}-${dup.relevantLinesEnd}`;
                                 const keptLoc = `${suggestions[keepIdx].relevantFile}:${suggestions[keepIdx].relevantLinesStart}-${suggestions[keepIdx].relevantLinesEnd}`;
                                 if (loc !== keptLoc) {
