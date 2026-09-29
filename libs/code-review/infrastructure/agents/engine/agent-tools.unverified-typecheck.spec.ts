@@ -266,14 +266,18 @@ describe('checkTypes — a compiler that could not check the project', () => {
     it('pins the compiler invocation and reads its own exit status', async () => {
         // `| head` would make the pipeline report the pager's status, so the
         // guard above could never see a failing compiler; the output is staged
-        // in the sandbox instead, which keeps every line the tool reads.
+        // in the sandbox instead, which keeps every line the tool reads — in a
+        // file of its own, because checkTypes runs concurrently in one shared
+        // sandbox and a fixed path would let a sibling run overwrite the log
+        // under `head`. The status is captured before the staged file is
+        // removed, so cleanup cannot mask a failing compiler.
         const sandbox = makeSandbox(SCOPE_MATCHING_OUTPUT, 2);
         await buildAgentTools(sandbox.remote).checkTypes.execute({
             path: TARGET,
         });
 
         expect(sandbox.commands.find((cmd) => cmd.includes('npx tsc'))).toBe(
-            `npx tsc --noEmit -p '${SCOPE}' > /tmp/tsc.log 2>&1; rc=$?; head -200 /tmp/tsc.log; exit $rc`,
+            `log=$(mktemp /tmp/tsc.XXXXXX.log); npx tsc --noEmit -p '${SCOPE}' > "$log" 2>&1; rc=$?; head -200 "$log"; rm -f "$log"; exit $rc`,
         );
     });
 

@@ -1277,11 +1277,16 @@ fi
                         // keep the compiler's own status (`| head` would hand
                         // back the pager's) without forcing the whole dump
                         // through the sandbox's output channel. truncateShellOutput
-                        // caps what the agent sees.
+                        // caps what the agent sees. Each invocation stages into
+                        // its own file: checkTypes runs concurrently inside one
+                        // shared sandbox, so a fixed path lets a sibling run
+                        // truncate or overwrite the log while `head` reads it,
+                        // and this run reports another file's diagnostics.
+                        // `rc` is read before the file is removed.
                         const { stdout, exitCode } = await exec(
                             tsconfig
-                                ? `npx tsc --noEmit -p ${shellQuote(tsconfig)} > /tmp/tsc.log 2>&1; rc=$?; head -200 /tmp/tsc.log; exit $rc`
-                                : `npx tsc --noEmit --pretty false ${safeTarget} > /tmp/tsc.log 2>&1; rc=$?; head -200 /tmp/tsc.log; exit $rc`,
+                                ? `log=$(mktemp /tmp/tsc.XXXXXX.log); npx tsc --noEmit -p ${shellQuote(tsconfig)} > "$log" 2>&1; rc=$?; head -200 "$log"; rm -f "$log"; exit $rc`
+                                : `log=$(mktemp /tmp/tsc.XXXXXX.log); npx tsc --noEmit --pretty false ${safeTarget} > "$log" 2>&1; rc=$?; head -200 "$log"; rm -f "$log"; exit $rc`,
                         );
                         pushScopedResult(
                             'TypeScript',
