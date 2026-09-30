@@ -14,11 +14,11 @@
    </a>
 </p>
 
-<p align="center"><strong>Open source AI code review without vendor lock-in.</strong></p>
+<p align="center"><strong>Open source AI code review you can self-host, with the LLM you choose.</strong></p>
 
 <p align="center">
    Kodus reviews pull requests on GitHub, GitLab, Bitbucket, Azure DevOps, and Forgejo.
-   Run it on your own infrastructure or on Kodus Cloud, with the model you choose.
+   Run it on your own servers or use Kodus Cloud.
 </p>
 
 ---
