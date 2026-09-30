@@ -721,6 +721,99 @@ describe('GitlabService', () => {
             );
         });
 
+        it('does not write the auth-failure record when the selection changed before it landed', async () => {
+            // The same overlap the success path guards against, on the other
+            // branch: an older run whose auth fails last must not replace the
+            // record a newer run already wrote for the CURRENT selection, or the
+            // settings alert names repositories nobody has selected anymore.
+            const { createOrUpdateConfig } = setUpWebhookCreation({
+                repositories: [{ id: 11 }, { id: 22 }],
+                add: jest.fn().mockResolvedValue({}),
+            });
+            jest.spyOn(
+                service as any,
+                'findOneByOrganizationAndTeamDataAndConfigKey',
+            )
+                .mockReset()
+                .mockResolvedValueOnce([{ id: 11 }, { id: 22 }])
+                .mockResolvedValueOnce([{ id: 33 }]);
+            jest.spyOn(service as any, 'getAuthDetails').mockRejectedValue({
+                response: { status: 401, statusText: 'Unauthorized' },
+            });
+
+            await service.createMergeRequestWebhook({ organizationAndTeamData });
+
+            expect(createOrUpdateConfig).not.toHaveBeenCalledWith(
+                IntegrationConfigKey.WEBHOOK_CREATION_FAILURES,
+                expect.anything(),
+                expect.anything(),
+                expect.anything(),
+            );
+        });
+
+        it('records the failures anyway when the guard read fails', async () => {
+            // The guard protects a wholesale replacement, so losing the whole
+            // record to a transient read error costs more than a stale one — and
+            // that is exactly what a propagating BadRequestException did.
+            const { createOrUpdateConfig } = setUpWebhookCreation({
+                repositories: [{ id: 11 }, { id: 22 }],
+                add: jest.fn().mockResolvedValue({}),
+            });
+            jest.spyOn(
+                service as any,
+                'findOneByOrganizationAndTeamDataAndConfigKey',
+            )
+                .mockReset()
+                .mockResolvedValueOnce([{ id: 11 }, { id: 22 }])
+                .mockRejectedValueOnce(new Error('BadRequest'));
+            jest.spyOn(service as any, 'getAuthDetails').mockRejectedValue({
+                response: { status: 401, statusText: 'Unauthorized' },
+            });
+
+            await service.createMergeRequestWebhook({ organizationAndTeamData });
+
+            expect(createOrUpdateConfig).toHaveBeenCalledWith(
+                IntegrationConfigKey.WEBHOOK_CREATION_FAILURES,
+                expect.objectContaining({
+                    '11': expect.objectContaining({
+                        reason: expect.stringContaining('401'),
+                    }),
+                    '22': expect.objectContaining({
+                        reason: expect.stringContaining('401'),
+                    }),
+                }),
+                'integration-1',
+                organizationAndTeamData,
+            );
+        });
+
+        it('logs the failure and stops when the selection read itself fails', async () => {
+            // The read used to sit outside every try: its BadRequestException
+            // escaped the method unlogged while the caller swallows the
+            // rejection, so a transient DB failure left no trace at all.
+            const { createOrUpdateConfig } = setUpWebhookCreation({
+                repositories: [{ id: 11 }],
+                add: jest.fn().mockResolvedValue({}),
+            });
+            jest.spyOn(
+                service as any,
+                'findOneByOrganizationAndTeamDataAndConfigKey',
+            )
+                .mockReset()
+                .mockRejectedValue(new Error('BadRequest'));
+
+            await expect(
+                service.createMergeRequestWebhook({ organizationAndTeamData }),
+            ).resolves.toBeUndefined();
+
+            expect(createOrUpdateConfig).not.toHaveBeenCalledWith(
+                IntegrationConfigKey.WEBHOOK_CREATION_FAILURES,
+                expect.anything(),
+                expect.anything(),
+                expect.anything(),
+            );
+        });
+
         it('does not overwrite the record when the selection changed mid-run', async () => {
             // Two overlapping saves (two tabs, or a change right after a save):
             // the run that started first must not clobber the newer state.
