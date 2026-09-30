@@ -95,6 +95,8 @@ import {
     type NivelCadeia,
     type VarianteDevLevel,
 } from '@libs/code-review/infrastructure/agents/core/dev-level-agent';
+import { FOCUSED_INVESTIGATOR_SYSTEM_PROMPT } from '@libs/code-review/infrastructure/agents/core/investigator-prompts';
+import { comSaidaEnxuta } from '@libs/code-review/infrastructure/agents/core/lean-output';
 import {
     buildProcedurePrompt,
     PROCEDURE_SYSTEM_PROMPT,
@@ -185,6 +187,10 @@ export type DiffTierBudget = {
     /** Tiers que entram resumidos. Vazio desliga. */
     summarize: CoverageTier[];
 };
+
+/** EXPERIMENTO (#1821): system prompt do scout quando ele roda pelo loop. */
+const SCOUT_AGENT_SYSTEM_PROMPT =
+    'You are a code reviewer who skims a pull request and flags the spots most worth a deep, focused look. You answer by calling the submitResult tool.';
 
 export function rawDiffPrompt(
     changedFiles: AgentLoopInput['changedFiles'],
@@ -506,13 +512,17 @@ export async function runAgentLoopViaCore(
         /** So as passadas dev-level ligam: o campo precisa estar no schema da
          *  ferramenta, senao `additionalProperties:false` o descarta. */
         requireDevLevel?: boolean,
+        /** Saida enxuta (#1821): tambem desliga o `reason` obrigatorio. */
+        leanOutput?: boolean,
     ) =>
         buildFinderAgentSpec({
             systemPrompt: systemPromptOverride ?? input.systemPrompt,
-            requireFindingReason: input.requireFindingReason,
+            requireFindingReason: leanOutput ? false : input.requireFindingReason,
             claudeSafeWording,
             ...(requireDevLevel ? { requireDevLevel: true } : {}),
-            leanOutput: input.leanOutput,
+            // Global (RECALL_GEN_LEAN, o generalista e tudo que usa o spec dele)
+            // ou por passada (as variantes enxutas do eval).
+            leanOutput: leanOutput || input.leanOutput,
             modelId: specModelId,
             fallbackModelId,
             usageRunName: input.usageRunName,
@@ -590,6 +600,7 @@ export async function runAgentLoopViaCore(
                 changedFiles: input.changedFiles,
                 fileTiers: input.fileTiers,
             }),
+            input.investigatorMaxSteps,
         );
     // Critical-file / atomic-hunk passes get their OWN step budget: a pass
     // scoped to one hunk investigates far less than the full-PR pass, so a
@@ -648,6 +659,40 @@ export async function runAgentLoopViaCore(
             runner: finderRunner,
             finderSpec,
             makeResampleSpec,
+            ...(input.parallelMicroAgents ? { parallelMicroAgents: true } : {}),
+            ...(input.recordVerifyCost ? { recordVerifyCost: true } : {}),
+            ...(input.scoutAgentLoop
+                ? {
+                      makeScoutAgentSpec: () =>
+                          buildSpecWithLedger(
+                              new DiffCoverageLedger({
+                                  changedFiles: input.changedFiles,
+                                  fileTiers: input.fileTiers,
+                              }),
+                              1,
+                              SCOUT_AGENT_SYSTEM_PROMPT,
+                              false,
+                              true,
+                          ),
+                  }
+                : {}),
+            ...(input.investigatorVariants?.length
+                ? {
+                      investigatorVariants: input.investigatorVariants,
+                      investigatorOnlyVariants: input.investigatorOnlyVariants,
+                      investigatorSecondLook: input.investigatorSecondLook,
+                      investigatorDiff: rawDiffPrompt(input.changedFiles, input.fileTiers, input.diffTierBudget),
+                      makeFocusedInvestigatorSpec: () =>
+                          buildSpecWithLedger(
+                              new DiffCoverageLedger({
+                                  changedFiles: input.changedFiles,
+                                  fileTiers: input.fileTiers,
+                              }),
+                              input.investigatorMaxSteps,
+                              FOCUSED_INVESTIGATOR_SYSTEM_PROMPT,
+                          ),
+                  }
+                : {}),
             modelId: specModelId,
             fallbackModelId,
             tools,
@@ -716,6 +761,7 @@ export async function runAgentLoopViaCore(
             hypothesisDriven: input.hypothesisDriven,
             investigatorGroupByFile: input.investigatorGroupByFile,
             scoutCap: input.scoutCap,
+            scoutCallGraph: input.scoutCallGraph,
             challengeDismissals: input.challengeDismissals,
             secondLookSameFile: input.secondLookSameFile,
             secondLookAlways: input.secondLookAlways,
@@ -778,6 +824,7 @@ export async function runAgentLoopViaCore(
                                   undefined,
                                   undefined,
                                   claudeSafeWording,
+                                  !!input.microAgentLeanOutput,
                               ),
                               // Teto de passos proprio dos agentes de classe (medido
                               // em 26/09: 8 empata ou ganha de 12 e corta ~1/3 dos
@@ -786,6 +833,8 @@ export async function runAgentLoopViaCore(
                                   ledger(),
                                   input.microAgentMaxSteps ?? input.maxSteps ?? 12,
                                   MICRO_AGENT_SYSTEM_PROMPT,
+                                  false,
+                                  !!input.microAgentLeanOutput,
                               ),
                           }))
                         : []),
@@ -868,13 +917,15 @@ export async function runAgentLoopViaCore(
                         // -real (performance so com problema real de escala).
                         // exp-proc-<procedimento>-p<N>: passada de procedimento
                         // (contrato, gemeo, forma), fase 0, sem developerLevel.
-                        const proc = /^exp-proc-(contrato|gemeo|forma)-p(\d+)$/.exec(extra);
+                        const proc = /^exp-proc-(contrato|gemeo|forma)-p(\d+)(-lean)?$/.exec(extra);
                         if (proc) {
+                            const enxuto = !!proc[3];
+                            const base = buildProcedurePrompt(proc[1] as ProcedimentoId, diff);
                             return [{
-                                label: experimentalExtraLabel(`proc-${proc[1]}-p${proc[2]}`),
+                                label: experimentalExtraLabel(`proc-${proc[1]}-p${proc[2]}${proc[3] ?? ''}`),
                                 phase: 0,
-                                prompt: buildProcedurePrompt(proc[1] as ProcedimentoId, diff),
-                                spec: buildSpecWithLedger(ledger(), Number(proc[2]), PROCEDURE_SYSTEM_PROMPT),
+                                prompt: enxuto ? comSaidaEnxuta(base, 'bug', false) : base,
+                                spec: buildSpecWithLedger(ledger(), Number(proc[2]), PROCEDURE_SYSTEM_PROMPT, false, enxuto),
                             }];
                         }
                         // exp-chain-<categoria>-p<N>: pleno -> senior -> expert em
@@ -908,13 +959,14 @@ export async function runAgentLoopViaCore(
                                 };
                             });
                         }
-                        const devNivel = /^exp-dev-(bug|security|performance)-p(\d+)(g?)(?:-(qa|real|r2))?$/.exec(extra);
+                        const devNivel = /^exp-dev-(bug|security|performance)-p(\d+)(g?)(?:-(qa|real|r2|lean))?$/.exec(extra);
                         if (devNivel) {
                             const cat = devNivel[1] as CategoriaDevLevel;
                             const n = Number(devNivel[2]);
                             const comGrafo = devNivel[3] === 'g';
                             const sufixo = devNivel[4];
-                            const variante = sufixo === 'r2' ? undefined : (sufixo as VarianteDevLevel | undefined);
+                            const enxuto = sufixo === 'lean';
+                            const variante = sufixo === 'r2' || enxuto ? undefined : (sufixo as VarianteDevLevel | undefined);
                             if (comGrafo && !input.xfileCallGraph?.trim()) {
                                 throw new Error(`${extra} exige o grafo (RECALL_GRAFO_EXP=1)`);
                             }
@@ -927,18 +979,22 @@ export async function runAgentLoopViaCore(
                             return [{
                                 label: experimentalExtraLabel(`dev-${cat}-p${n}${comGrafo ? 'g' : ''}${sufixo ? `-${sufixo}` : ''}`),
                                 phase: 0,
-                                prompt: buildDevLevelPrompt(
-                                    cat,
-                                    diff,
-                                    comGrafo ? input.xfileCallGraph : grafoParaOsAgentes,
-                                    variante,
-                                    primeira,
-                                ),
+                                prompt: (() => {
+                                    const base = buildDevLevelPrompt(
+                                        cat,
+                                        diff,
+                                        comGrafo ? input.xfileCallGraph : grafoParaOsAgentes,
+                                        variante,
+                                        primeira,
+                                    );
+                                    return enxuto ? comSaidaEnxuta(base, cat, true) : base;
+                                })(),
                                 spec: buildSpecWithLedger(
                                     ledger(),
                                     n,
                                     variante === 'qa' ? DEV_LEVEL_QA_SYSTEM_PROMPT : DEV_LEVEL_SYSTEM_PROMPT,
                                     true,
+                                    enxuto,
                                 ),
                             }];
                         }
@@ -971,8 +1027,8 @@ export async function runAgentLoopViaCore(
                             return microGroups.map((group) => ({
                                 label: experimentalExtraLabel(`p${n}${comGrafo ? 'g' : ''}${teto[3] ?? ''}-${group.id}`),
                                 phase: 0,
-                                prompt: buildMicroAgentPrompt(group, diff, comGrafo ? input.xfileCallGraph : grafoParaOsAgentes, input.microAgentTeto ?? 2, semCensura, reguaEvidencia, claudeSafeWording),
-                                spec: buildSpecWithLedger(ledger(), n, MICRO_AGENT_SYSTEM_PROMPT),
+                                prompt: buildMicroAgentPrompt(group, diff, comGrafo ? input.xfileCallGraph : grafoParaOsAgentes, input.microAgentTeto ?? 2, semCensura, reguaEvidencia, claudeSafeWording, !!input.microAgentLeanOutput),
+                                spec: buildSpecWithLedger(ledger(), n, MICRO_AGENT_SYSTEM_PROMPT, false, !!input.microAgentLeanOutput),
                             }));
                         }
                         // exp-grp-<classe>+<classe>...: um agente com varias classes.
@@ -1087,7 +1143,9 @@ export async function runAgentLoopViaCore(
             freeformBasePrompt: input.freeformDedicatedPrompt
                 ? rawDiffPrompt(input.changedFiles, input.fileTiers, input.diffTierBudget)
                 : undefined,
-            scoutBasePrompt: input.scoutDedicatedPrompt
+            scoutBasePrompt: input.scoutBasePromptOverride
+                ? input.scoutBasePromptOverride
+                : input.scoutDedicatedPrompt
                 ? rawDiffPrompt(input.changedFiles, input.fileTiers, input.diffTierBudget)
                 : input.scoutCalibratedPrompt
                   ? calibratedDiffPrompt(input.changedFiles)
@@ -1117,7 +1175,8 @@ export async function runAgentLoopViaCore(
                           input.usageRunName,
                           category,
                           cap,
-                          input.scoutThinking ? 'medium' : undefined,
+                          input.scoutThinking ? 'medium' : input.scoutReasoningEffort,
+                          secrets.prebuiltModel,
                       )
                 : undefined,
             previousDecisions: input.previousDecisions,
@@ -1235,6 +1294,8 @@ export async function runAgentLoopViaCore(
                               reason: d.finding.reason,
                               producedBy: (d.finding as { producedBy?: string })
                                   .producedBy,
+                              // So existe quando o eval liga recordVerifyCost.
+                              verifyCost: (d.finding as { verifyCost?: unknown }).verifyCost,
                           },
                       })),
                   ],

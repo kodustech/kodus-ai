@@ -62,7 +62,7 @@ const TIER0 = {
     'deepseek-v4.1-flash@together': { provider: 'openai_compatible', doModel: 'deepseek-ai/DeepSeek-V4.1-Flash', keyEnvs: ['BYOK_TOGETHER_API_KEY'], baseURL: 'https://api.together.xyz/v1' },
     // K3 usa chave própria (KIMI_NEW) — crédito limitado, ver custo antes de
     // disparar passada cheia: $3/$15 por milhão, ~3x o k2.7.
-    'kimi-k3': { provider: 'openai_compatible', keyEnvs: ['KIMI_NEW', 'BYOK_MOONSHOT_API_KEY'], baseURL: 'https://api.moonshot.ai/v1' },
+    'kimi-k3': { provider: 'openai_compatible', keyEnvs: ['KIMI_NEW', 'BYOK_MOONSHOT_API_KEY', 'API_MOONSHOT_API_KEY'], baseURL: 'https://api.moonshot.ai/v1' },
     // Kimi k2.7-code served via NOVITA (openai_compatible transport) — the host
     // an org may pick instead of Moonshot-native. Different wrapping than the
     // Anthropic-protocol Moonshot endpoint, useful for the return-shape corpus.

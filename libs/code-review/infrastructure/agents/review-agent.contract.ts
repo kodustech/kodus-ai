@@ -516,6 +516,31 @@ export interface AgentLoopInput {
      *  dedicated to that spot. Concentrates depth by SUSPICION rather than by
      *  file/tier/role — see scout-investigator.ts. */
     scoutInvestigator?: boolean;
+    /** EXPERIMENTO (#1821, so o eval liga): grafo de chamadas SO no prompt do
+     *  scout. O grafo ajudou passada de 1 passo e atrapalhou a de 3; o scout e
+     *  de uma chamada so e o investigador investiga com ferramentas. */
+    scoutCallGraph?: string;
+    /** EXPERIMENTO (#1821): teto de passos de cada investigador do scout. */
+    investigatorMaxSteps?: number;
+    /** EXPERIMENTO (#1821, so o eval): prompt base pronto para o scout, no
+     *  lugar do prompt inteiro do generalista. O eval monta sem as secoes de
+     *  instrucao que o scout era mandado ignorar. Tem precedencia sobre
+     *  scoutDedicatedPrompt e scoutCalibratedPrompt. */
+    scoutBasePromptOverride?: string;
+    /** EXPERIMENTO (#1821): saida enxuta nas lentes (igual a do generalista). */
+    microAgentLeanOutput?: boolean;
+    /** EXPERIMENTO (#1821): microagentes em paralelo com o generalista. */
+    parallelMicroAgents?: boolean;
+    /** EXPERIMENTO (#1821): custo do verificador por achado. So o eval liga. */
+    recordVerifyCost?: boolean;
+    /** EXPERIMENTO (#1821): o scout roda pelo loop de agente, teto 1. */
+    scoutAgentLoop?: boolean;
+    /** Esforco de raciocinio do scout quando scoutThinking esta desligado. */
+    scoutReasoningEffort?: string;
+    /** EXPERIMENTO (#1821): investigadores reescritos ao lado do atual. */
+    investigatorVariants?: Array<'foco' | 'foco-cat'>;
+    investigatorOnlyVariants?: boolean;
+    investigatorSecondLook?: boolean;
     /** A/B knob (default off, requires scoutInvestigator): run the one-shot
      *  scout call with reasoning ("medium") instead of off. MEASURED (8 PRs)
      *  and discarded: F1 0.469→0.379, and a golden-by-golden diff found 0

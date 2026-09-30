@@ -219,10 +219,15 @@ export async function runScout(
     category?: ScoutCategory,
     cap: number = MAX_SCOUT_FLAGS,
     reasoningEffort?: string,
+    /** O modelo ja construido da rodada, quando o chamador tem um (o eval).
+     *  Sem ele, um modelo de chave nativa (GPT via API) caia no slot
+     *  managed-default e o scout falhava em silencio: zero pistas. */
+    prebuiltModel?: unknown,
 ): Promise<ScoutFlag[]> {
     try {
         const result = await LLM.run({
             byokConfig,
+            ...(prebuiltModel ? { prebuiltModel: prebuiltModel as never } : {}),
             schema: SCOUT_SCHEMA,
             user: prompt,
             runName: usageRunName

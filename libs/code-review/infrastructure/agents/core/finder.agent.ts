@@ -9,6 +9,7 @@
  * concern. It runs ALONGSIDE the legacy agent (behind a flag, next step); the
  * legacy path is untouched.
  */
+import { buildFocusedInvestigatorPrompt, buildFocusedSecondLookPrompt } from './investigator-prompts';
 import type { LanguageModel } from 'ai';
 import type {
     AgentRunner,
@@ -475,8 +476,14 @@ const RECOVERY_SCHEMA = z.object({
         z.object({
             relevantFile: z.string(),
             suggestionContent: z.string(),
-            existingCode: z.string(),
-            improvedCode: z.string(),
+            // Nullable, como no schema principal (findings-schema.ts): prosa que
+            // descreve um defeito sem citar o trecho nao traz codigo, e o modelo
+            // devolve null. Exigir string derrubava a recuperacao INTEIRA com
+            // "response did not match schema" — medido no GPT-6.1 (30/09) e a
+            // causa das falhas atribuidas ao `managed-default`, que e so o
+            // rotulo da telemetria quando o eval passa o modelo pronto.
+            existingCode: z.string().nullable(),
+            improvedCode: z.string().nullable(),
             language: z.string().nullable(),
             label: z.string().nullable(),
             oneSentenceSummary: z.string().nullable(),
@@ -508,6 +515,48 @@ export async function extractFindingsWithRecovery(
     return recovered.length > 0
         ? { reasoning: found.reasoning, suggestions: recovered }
         : found;
+}
+
+export function recoverLeniently(err: unknown): FinderSuggestion[] {
+    try {
+        const e = err as { text?: string; value?: unknown; cause?: { value?: unknown } };
+        const bruto =
+            e?.value ?? e?.cause?.value ?? (e?.text ? JSON.parse(extractJsonFromText(e.text) ?? e.text) : undefined);
+        const lista = (bruto as { suggestions?: unknown })?.suggestions;
+        if (!Array.isArray(lista)) return [];
+        return lista
+            .filter(
+                (s): s is Record<string, unknown> =>
+                    !!s &&
+                    typeof (s as Record<string, unknown>).relevantFile === 'string' &&
+                    typeof (s as Record<string, unknown>).suggestionContent === 'string',
+            )
+            .map((s) => ({
+                ...s,
+                existingCode: typeof s.existingCode === 'string' ? s.existingCode : '',
+                improvedCode: typeof s.improvedCode === 'string' ? s.improvedCode : '',
+            })) as unknown as FinderSuggestion[];
+    } catch {
+        // Best-effort: recovery must never break the review.
+        return [];
+    }
+}
+
+function dumpRecoveryFailure(err: unknown): void {
+    const dir = process.env.RECALL_DEBUG_ENVELOPE_DIR;
+    if (!dir) return;
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const fs = require('fs');
+        fs.mkdirSync(dir, { recursive: true });
+        const e = err as { message?: string; text?: string; cause?: unknown };
+        fs.writeFileSync(
+            `${dir}/recovery-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.json`,
+            JSON.stringify({ message: e?.message, text: e?.text, cause: String(e?.cause ?? '') }, null, 1),
+        );
+    } catch {
+        // diagnostics must never break a review
+    }
 }
 
 export async function recoverFindingsFromProse(
@@ -559,10 +608,23 @@ export async function recoverFindingsFromProse(
             // production, where byokConfig is the slot.
             prebuiltModel,
         });
-        return (result.suggestions as unknown as FinderSuggestion[]) ?? [];
-    } catch {
-        // Best-effort: recovery must never break the review.
-        return [];
+        return ((result.suggestions ?? []) as Array<Record<string, unknown>>).map(
+            (s) => ({
+                ...s,
+                existingCode: (s.existingCode as string | null) ?? '',
+                improvedCode: (s.improvedCode as string | null) ?? '',
+            }),
+        ) as unknown as FinderSuggestion[];
+    } catch (err) {
+        // Eval-only (RECALL_DEBUG_ENVELOPE_DIR): keep what the model answered,
+        // so a schema mismatch can be read instead of guessed.
+        dumpRecoveryFailure(err);
+        // Kimi K3 OMITE os campos opcionais em vez de manda-los como null, e a
+        // validacao estrita derruba a recuperacao inteira (smoke de 01/10). O
+        // schema nao pode deixa-los opcionais (o modo estrito da OpenAI exige
+        // todos declarados), entao le o JSON devolvido exigindo so o que o
+        // schema principal exige: arquivo e descricao.
+        return recoverLeniently(err);
     }
 }
 
@@ -581,9 +643,26 @@ export interface RunFinderWithVerifyParams {
      *  challengeDismissals) have nothing to reuse in this mode — don't
      *  combine with those. */
     skipBasePass?: boolean;
+    /** EXPERIMENTO (#1821): as passadas de microagente comecam JUNTO com o
+     *  generalista, numa cadeia propria, em vez de esperar ele terminar. O
+     *  synthesis-rescue continua depois do generalista, porque depende dele. */
+    parallelMicroAgents?: boolean;
+    /** EXPERIMENTO (#1821): o verificador marca em cada achado o tempo e os
+     *  tokens que gastou nele (`verifyCost`). So o eval liga. */
+    recordVerifyCost?: boolean;
     /** Factory for a fresh finder spec (own coverage ledger) per concurrent
      *  heavy resample pass — see RecallPassesParams.makeResampleSpec. */
     makeResampleSpec?: () => AgentSpec;
+    /** EXPERIMENTO (#1821): investigadores reescritos rodando, sobre as MESMAS
+     *  pistas, ao lado do investigador atual (investigator-prompts.ts). */
+    investigatorVariants?: Array<'foco' | 'foco-cat'>;
+    /** Com variantes ligadas, nao roda o investigador atual. */
+    investigatorOnlyVariants?: boolean;
+    /** EXPERIMENTO (#1821): segunda olhada (mesmo arquivo, outro defeito) nos
+     *  investigadores-variante que voltaram sem reportar nada. */
+    investigatorSecondLook?: boolean;
+    investigatorDiff?: string;
+    makeFocusedInvestigatorSpec?: () => AgentSpec;
     /** Factory for critical-file / atomic-hunk passes — same fresh-ledger
      *  contract as makeResampleSpec, but typically built with a lower maxSteps
      *  (these passes see far less content). Falls back to makeResampleSpec when
@@ -862,6 +941,11 @@ export interface RunFinderWithVerifyParams {
      *  decoupled the same way runScout is, since finder.agent.ts doesn't know
      *  about FileChange shapes. Undefined = scout keeps using userPrompt. */
     scoutBasePrompt?: string;
+    /** EXPERIMENTO (#1821): grafo de chamadas so no prompt do scout. */
+    scoutCallGraph?: string;
+    /** EXPERIMENTO (#1821): o scout roda pelo loop de agente com este spec (e
+     *  nao pela chamada estruturada avulsa). Cada achado submetido vira pista. */
+    makeScoutAgentSpec?: () => AgentSpec;
     /** A/B knob: three parallel scouts (bug/performance/security), each with
      *  its OWN base from `scoutCategoryBasePrompts` — see
      *  RunFinderWithVerifyParams (contract copy) in review-agent.contract.ts
@@ -1018,6 +1102,36 @@ export async function runFinderWithVerify(
               )
             : null;
 
+    // parallelMicroAgents: as passadas de microagente nao leem nada do
+    // generalista, entao comecam junto com ele, numa cadeia propria. O
+    // synthesis-rescue fica na cadeia principal, depois do generalista.
+    const microChainPromise =
+        params.parallelMicroAgents && params.microAgentPasses?.length
+            ? runRecallPasses(
+                  { reasoning: '', suggestions: [] },
+                  {
+                      ...params,
+                      finderState: EMPTY_BASE_FINDER_STATE,
+                      userPrompt: input.prompt,
+                      skipSynthesisRescue: true,
+                      scoutInvestigator: false,
+                      runScout: undefined,
+                      skipScoutChain: true,
+                      heavy: false,
+                      freeformPass: false,
+                      criticalFiles: undefined,
+                      expertRoles: undefined,
+                      recognitionPanel: false,
+                      selectorShard: false,
+                      graphSites: undefined,
+                      challengeDismissals: false,
+                      secondLookSameFile: false,
+                  },
+                  ctx,
+              )
+            : null;
+
+    const baseT0 = Date.now();
     const finderState = params.skipBasePass
         ? EMPTY_BASE_FINDER_STATE
         : await params.runner.run(
@@ -1036,6 +1150,7 @@ export async function runFinderWithVerify(
     // Main finder findings — with prose-recovery applied (the same wrapper the
     // recall passes use, so an omission in any pass is caught consistently).
     // skipBasePass: no run happened, nothing to recover from — empty findings.
+    const baseMs = Date.now() - baseT0;
     const base = params.skipBasePass
         ? { reasoning: '', suggestions: [] }
         : await extractFindingsWithRecovery(
@@ -1043,6 +1158,32 @@ export async function runFinderWithVerify(
               params.recoverProse,
               params.telemetryMetadata,
           );
+    // O generalista como uma passada, na mesma regua das outras: sem isto o
+    // custo e o tempo dele so existiam somados ao total da review (#1821).
+    const baseStat: RecallPassStat | null = params.skipBasePass
+        ? null
+        : (() => {
+              const u = usageOf(finderState.usage);
+              const calls = collectToolCalls(finderState);
+              return {
+                  label: 'generalist-base',
+                  added: base.suggestions?.length ?? 0,
+                  ms: baseMs,
+                  startMs: 0,
+                  startEpochMs: baseT0,
+                  steps: finderState.steps.length,
+                  toolCalls: calls.length,
+                  fullFileReads: calls.filter(
+                      (c) =>
+                          c.tool === 'readFile' &&
+                          !(c.args as { startLine?: number })?.startLine,
+                  ).length,
+                  inputTokens: u.inputTokens,
+                  cacheReadTokens: u.cacheReadTokens,
+                  outputTokens: u.outputTokens,
+                  reasoningTokens: u.reasoningTokens,
+              };
+          })();
 
     // RECALL PASS: synthesis rescue — one extra finder run that re-thinks from
     // the evidence already gathered and surfaces concrete MISSED bugs BEFORE
@@ -1055,6 +1196,11 @@ export async function runFinderWithVerify(
             runner: params.runner,
             finderSpec: params.finderSpec,
             makeResampleSpec: params.makeResampleSpec,
+            investigatorVariants: params.investigatorVariants,
+            investigatorOnlyVariants: params.investigatorOnlyVariants,
+            investigatorSecondLook: params.investigatorSecondLook,
+            investigatorDiff: params.investigatorDiff,
+            makeFocusedInvestigatorSpec: params.makeFocusedInvestigatorSpec,
             makeCriticalFileSpec: params.makeCriticalFileSpec,
             finderState,
             userPrompt: input.prompt,
@@ -1081,7 +1227,9 @@ export async function runFinderWithVerify(
             graphSites: params.graphSites,
             shardAltPrompt: params.shardAltPrompt,
             shardBasePrompt: params.shardBasePrompt,
-            microAgentPasses: params.microAgentPasses,
+            // Em paralelo, as passadas de microagente ja estao rodando na
+            // cadeia propria (microChainPromise) — nao rodam de novo aqui.
+            microAgentPasses: params.parallelMicroAgents ? undefined : params.microAgentPasses,
             shardCap: params.shardCap,
             shardPerWorker: params.shardPerWorker,
             graphSitesOnly: params.graphSitesOnly,
@@ -1093,6 +1241,8 @@ export async function runFinderWithVerify(
             freeformPass: params.freeformPass,
             freeformBasePrompt: params.freeformBasePrompt,
             scoutBasePrompt: params.scoutBasePrompt,
+            scoutCallGraph: params.scoutCallGraph,
+            makeScoutAgentSpec: params.makeScoutAgentSpec,
             scoutByCategory: params.scoutByCategory,
             scoutCategoryBasePrompts: params.scoutCategoryBasePrompts,
             runScout: params.runScout,
@@ -1110,6 +1260,12 @@ export async function runFinderWithVerify(
         recall.usage = sumVerifyUsage(recall.usage, scoutChain.usage);
         recall.passStats = [...recall.passStats, ...scoutChain.passStats];
         recall.scoutFlags = [...recall.scoutFlags, ...scoutChain.scoutFlags];
+    }
+    if (microChainPromise) {
+        const microChain = await microChainPromise;
+        recall.findings = mergeSuggestions(recall.findings, microChain.findings);
+        recall.usage = sumVerifyUsage(recall.usage, microChain.usage);
+        recall.passStats = [...recall.passStats, ...microChain.passStats];
     }
     const reasoning = recall.findings.reasoning;
     // HEAVY: collapse near-duplicate candidates BEFORE verify. The resample
@@ -1133,7 +1289,7 @@ export async function runFinderWithVerify(
         }
     }
     const recallUsage = recall.usage;
-    const passStats = recall.passStats;
+    const passStats = baseStat ? [baseStat, ...recall.passStats] : recall.passStats;
     const scoutFlags = recall.scoutFlags;
     const shardPlan = recall.shardPlan;
 
@@ -1158,6 +1314,7 @@ export async function runFinderWithVerify(
     // high-confidence → light depth, low-confidence → full depth.
     const verifyT0 = Date.now();
     const verifier = new LlmVerifier(params.runner, {
+        recordCost: params.recordVerifyCost,
         modelId: params.modelId,
         fallbackModelId: params.fallbackModelId,
         tools: params.tools,
@@ -1192,6 +1349,7 @@ export async function runFinderWithVerify(
     );
     if (unevidenced.length > 0) {
         const fullVerifier = new LlmVerifier(params.runner, {
+            recordCost: params.recordVerifyCost,
             modelId: params.modelId,
             fallbackModelId: params.fallbackModelId,
             tools: params.tools,
@@ -1339,6 +1497,16 @@ interface RecallPassesParams {
      *  would corrupt each pass's coverage/stop decisions. Each parallel pass gets
      *  its own spec via this factory; falls back to `finderSpec` when absent. */
     makeResampleSpec?: () => AgentSpec;
+    /** EXPERIMENTO (#1821): investigadores reescritos rodando, sobre as MESMAS
+     *  pistas, ao lado do investigador atual (investigator-prompts.ts). */
+    investigatorVariants?: Array<'foco' | 'foco-cat'>;
+    /** Com variantes ligadas, nao roda o investigador atual. */
+    investigatorOnlyVariants?: boolean;
+    /** EXPERIMENTO (#1821): segunda olhada (mesmo arquivo, outro defeito) nos
+     *  investigadores-variante que voltaram sem reportar nada. */
+    investigatorSecondLook?: boolean;
+    investigatorDiff?: string;
+    makeFocusedInvestigatorSpec?: () => AgentSpec;
     /** Same fresh-ledger contract as makeResampleSpec, for critical-file /
      *  atomic-hunk passes specifically — lets them run with a different
      *  maxSteps than heavy resample. Falls back to makeResampleSpec when unset. */
@@ -1435,6 +1603,11 @@ interface RecallPassesParams {
     freeformBasePrompt?: string;
     /** See RunFinderWithVerifyParams.scoutBasePrompt. */
     scoutBasePrompt?: string;
+    /** EXPERIMENTO (#1821): grafo de chamadas so no prompt do scout. */
+    scoutCallGraph?: string;
+    /** EXPERIMENTO (#1821): o scout roda pelo loop de agente com este spec (e
+     *  nao pela chamada estruturada avulsa). Cada achado submetido vira pista. */
+    makeScoutAgentSpec?: () => AgentSpec;
     /** See RunFinderWithVerifyParams.scoutByCategory. */
     scoutByCategory?: boolean;
     /** See RunFinderWithVerifyParams.scoutCategoryBasePrompts. */
@@ -1474,6 +1647,12 @@ export interface RecallPassStat {
     /** Relogio de parede da passada. Ausente nas passadas de papel de expert,
      *  que nao passam pelo runPass. */
     ms?: number;
+    /** Tokens de saida e de raciocinio da passada (#1821: custo por tecnica). */
+    outputTokens?: number;
+    reasoningTokens?: number;
+    /** Inicio em epoch ms. `startMs` e relativo ao bloco de passadas; com o
+     *  generalista e as lentes em blocos paralelos so o absoluto os compara. */
+    startEpochMs?: number;
     /** Quando a passada COMECOU, em ms desde o inicio do finder. Com `ms` isto
      *  da a linha do tempo inteira: quais passadas se sobrepoem, quanto tempo a
      *  fase 0 levou de parede (nao a soma das passadas, que roda em paralelo) e
@@ -1548,10 +1727,14 @@ export async function runRecallPasses(
         prompt: string,
         label: string,
         spec: AgentSpec = params.finderSpec,
+        /** false: a passada NAO entra nos achados (o scout-agente devolve pistas,
+         *  nao defeitos). O uso de tokens e o registro da passada continuam. */
+        mesclar = true,
     ): Promise<{
         reasoning: string;
         added: number;
         passToolCalls: Array<{ tool: string; args: unknown }>;
+        extraidos: FinderSuggestion[];
     }> => {
         // Relogio de parede por passada. Tokens nao respondem "por que esta
         // review demorou": uma passada barata que espera 90s no provedor custa
@@ -1595,8 +1778,8 @@ export async function runRecallPasses(
             }
         }
         const before = findings.suggestions.length;
-        findings = mergeSuggestions(findings, extracted);
-        const added = findings.suggestions.length - before;
+        if (mesclar) findings = mergeSuggestions(findings, extracted);
+        const added = mesclar ? findings.suggestions.length - before : (extracted.suggestions ?? []).length;
         const passCalls = collectToolCalls(state);
         passStats.push({
             label,
@@ -1615,8 +1798,16 @@ export async function runRecallPasses(
             ).length,
             inputTokens: passUsage.inputTokens,
             cacheReadTokens: passUsage.cacheReadTokens,
+            outputTokens: passUsage.outputTokens,
+            reasoningTokens: passUsage.reasoningTokens,
+            startEpochMs: t0,
         });
-        return { reasoning: extracted.reasoning ?? '', added, passToolCalls: passCalls };
+        return {
+            reasoning: extracted.reasoning ?? '',
+            added,
+            passToolCalls: passCalls,
+            extraidos: (extracted.suggestions ?? []) as FinderSuggestion[],
+        };
     };
 
     // Synthesis rescue — re-think from the evidence already gathered, surface
@@ -1964,7 +2155,9 @@ export async function runRecallPasses(
         // extra rounds — see runScoutSecondRound's doc. Not yet measured.
         // Precedence when more than one scout-expansion knob is set (checked
         // in this order below): mutually exclusive strategies, not stackable.
-        const scoutBase = params.scoutBasePrompt ?? params.userPrompt;
+        const scoutBase =
+            (params.scoutBasePrompt ?? params.userPrompt) +
+            (params.scoutCallGraph?.trim() ? `\n\n${params.scoutCallGraph.trim()}\n` : '');
         const flags = params.scoutResample
             ? await runScoutResample(params.runScout, scoutBase)
             : params.scoutSecondRound
@@ -1976,6 +2169,30 @@ export async function runRecallPasses(
                       CATEGORY_SCOUT_CAP,
                       params.scoutLineHint,
                   )
+                : params.makeScoutAgentSpec
+                ? await (async () => {
+                      const r = await runPass(
+                          buildScoutPrompt(
+                              scoutBase,
+                              undefined,
+                              params.scoutCap ?? MAX_SCOUT_FLAGS,
+                              params.scoutLineHint,
+                              !!params.scoutBasePrompt,
+                              params.hypothesisDriven,
+                          ) + SCOUT_AGENTE_ENVIO,
+                          'scout-agent',
+                          params.makeScoutAgentSpec!(),
+                          false,
+                      );
+                      return r.extraidos
+                          .filter((s) => s?.relevantFile && (s.suggestionContent || s.oneSentenceSummary))
+                          .map((s) => ({
+                              relevantFile: s.relevantFile,
+                              hint: String(s.suggestionContent || s.oneSentenceSummary),
+                              ...(s.relevantLinesStart != null ? { line: s.relevantLinesStart } : {}),
+                          }))
+                          .slice(0, params.scoutCap ?? MAX_SCOUT_FLAGS);
+                  })()
                 : await params.runScout(
                       buildScoutPrompt(
                           scoutBase,
@@ -1985,6 +2202,11 @@ export async function runRecallPasses(
                           !!params.scoutBasePrompt,
                           params.hypothesisDriven,
                       ),
+                      undefined,
+                      // O mesmo teto que o prompt pediu. Sem ele o runScout cortava
+                      // em MAX_SCOUT_FLAGS (5): um teto maior pedia N pistas e
+                      // jogava fora as que passavam de 5, em silencio.
+                      params.scoutCap ?? MAX_SCOUT_FLAGS,
                   );
         scoutFlags = flags;
         if (flags.length) {
@@ -2008,8 +2230,9 @@ export async function runRecallPasses(
             const groups = params.investigatorGroupByFile
                 ? groupFlagsByFile(flags)
                 : flags.map((flag) => [flag]);
+            const soVariantes = !!(params.investigatorOnlyVariants && params.investigatorVariants?.length);
             const results = await Promise.all(
-                groups.map((group, i) =>
+                (soVariantes ? [] : groups).map((group, i) =>
                     runPass(
                         group.length > 1
                             ? buildMultiFlagInvestigatorPrompt(
@@ -2026,6 +2249,48 @@ export async function runRecallPasses(
                     ),
                 ),
             );
+            // EXPERIMENTO (#1821): as variantes reescritas do investigador, sobre
+            // as mesmas pistas, cada uma com o proprio rotulo (investigator-N-foco,
+            // investigator-N-foco-cat). Independentes do investigador atual: nao
+            // leem o que ele achou.
+            if (
+                params.investigatorVariants?.length &&
+                params.investigatorDiff &&
+                params.makeFocusedInvestigatorSpec
+            ) {
+                const makeFocused = params.makeFocusedInvestigatorSpec;
+                const diff = params.investigatorDiff;
+                const pares = flags.flatMap((flag, i) =>
+                    params.investigatorVariants!.map((v) => ({ flag, i, v })),
+                );
+                const feitos = await Promise.all(
+                    pares.map(({ flag, i, v }) =>
+                        runPass(
+                            buildFocusedInvestigatorPrompt(diff, flag, v),
+                            `investigator-${i + 1}-${v}`,
+                            makeFocused(),
+                        ),
+                    ),
+                );
+                if (params.investigatorSecondLook) {
+                    await Promise.all(
+                        feitos.map((r, k) =>
+                            r.extraidos.length === 0
+                                ? runPass(
+                                      buildFocusedSecondLookPrompt(
+                                          diff,
+                                          pares[k].flag,
+                                          investigationSummary(r.passToolCalls),
+                                          r.reasoning,
+                                      ),
+                                      `investigator-${pares[k].i + 1}-${pares[k].v}-second`,
+                                      makeFocused(),
+                                  )
+                                : Promise.resolve(),
+                        ),
+                    );
+                }
+            }
             // CHALLENGE DISMISSALS. A pass that cleared its flag (0 added) but
             // wrote real reasoning (not a one-line "nothing here") already
             // engaged with a specific concern and talked itself out of it — the
@@ -2142,6 +2407,16 @@ export async function runRecallPasses(
 
 /** Dedup-merge extra findings into the base set (ported from legacy
  *  mergeFindings): key = file::startLine::endLine::content. */
+/** EXPERIMENTO (#1821): como o scout-agente entrega as pistas. Pelo loop, a
+ *  saida e a ferramenta submitResult; cada "suggestion" e uma pista. */
+const SCOUT_AGENTE_ENVIO = `
+
+<HowToSubmit>
+  Submit the flags by calling the submitResult tool: one entry in "suggestions"
+  per flag, with "relevantFile" set to the file and "suggestionContent" set to
+  the one-sentence flag. Nothing else per entry. An empty list is a valid answer.
+</HowToSubmit>`;
+
 function mergeSuggestions(
     baseF: FinderFindings,
     extraF: FinderFindings,

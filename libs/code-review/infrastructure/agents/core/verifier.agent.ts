@@ -384,6 +384,9 @@ function collectVerifierToolCalls(state: RunState): Verdict['toolCalls'] {
 }
 
 export interface LlmVerifierParams {
+    /** EXPERIMENTO (#1821, so o eval): marca em cada candidato o tempo e os
+     *  tokens desta verificacao (`verifyCost`, somado se verificado de novo). */
+    recordCost?: boolean;
     modelId: string;
     /** Failover target model id — threaded to the verifier spec so strict tool
      *  use accounts for it (a Gemini→OpenAI failover must not send strict). */
@@ -523,6 +526,7 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
                 !!decision.relevantFile &&
                 normalizePath(decision.relevantFile) === candidateFile,
         );
+        const verifyT0 = Date.now();
         const state = await this.runner.run(
             spec,
             {
@@ -548,6 +552,19 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
             ctx,
         );
         const u = state.usage;
+        if (this.params.recordCost) {
+            const c = candidate as FinderSuggestion & {
+                verifyCost?: { ms: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; calls: number };
+            };
+            const antes = c.verifyCost ?? { ms: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, calls: 0 };
+            c.verifyCost = {
+                ms: antes.ms + (Date.now() - verifyT0),
+                inputTokens: antes.inputTokens + (u.inputTokens ?? 0),
+                outputTokens: antes.outputTokens + (u.outputTokens ?? 0),
+                cacheReadTokens: antes.cacheReadTokens + (u.cacheReadTokens ?? 0),
+                calls: antes.calls + 1,
+            };
+        }
         this.accUsage.inputTokens += u.inputTokens ?? 0;
         this.accUsage.outputTokens += u.outputTokens ?? 0;
         this.accUsage.reasoningTokens += u.reasoningTokens ?? 0;

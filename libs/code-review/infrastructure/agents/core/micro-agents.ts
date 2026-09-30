@@ -518,6 +518,11 @@ export function buildMicroAgentPrompt(
     /** Claude: `reason` pedido como evidencia, nao como percurso — o texto do
      *  percurso faz o Sonnet 5.5 recusar a chamada (#1821). */
     claudeSafeWording = false,
+    /** EXPERIMENTO (#1821, so o eval liga): saida enxuta, igual a do generalista
+     *  (prompt-builder.ts, leanOutput) — cada achado pede so label, arquivo,
+     *  linhas e descricao; trecho, correcao, severidade, confianca e percurso
+     *  ficam para uma etapa posterior. */
+    enxuto = false,
 ): string {
     // <Diffs> FIRST, and the assignment after it. The twelve agents run under
     // one Promise.all against the same pull request, so the diff is the only
@@ -584,7 +589,11 @@ ${focusBlockFor(group)}
   "reasoning": "REQUIRED, never empty — what you traced and why you reported or dismissed. Example: '${group.reasoningExample}'",
   "suggestions": [
     {
-      "label": "${group.label}",
+${enxuto ? `      "label": "${group.label}",
+      "relevantFile": "path/to/file.ext",
+      "relevantLinesStart": 10,
+      "relevantLinesEnd": 15,
+      "suggestionContent": "what is wrong and why it matters"` : `      "label": "${group.label}",
       "relevantFile": "path/to/file.ext",
       "language": "the file language",
       "suggestionContent": "WHAT: one sentence naming the exact problem. WHY: one sentence on the real impact. HOW: concrete fix if clear from the code — omit if speculative.",
@@ -595,20 +604,20 @@ ${focusBlockFor(group)}
       "relevantLinesStart": 10,
       "relevantLinesEnd": 15,
       "severity": "critical|high|medium|low",
-      "confidence": 8
+      "confidence": 8`}
     }
   ]
 }
 \`\`\`
 
   Anchor relevantLinesStart/End to the lines this PR changed — that is the fix site.
-
+${enxuto ? '' : `
   Assign confidence honestly:
     9-10: you read BOTH the call site AND the definition, and confirmed the mismatch
     7-8:  you read the relevant code and traced the failure path, but not both sides
     5-6:  the pattern looks wrong from the diff, but you only read one side
     1-4:  speculative, or based on experience rather than on evidence in this repo
-
+`}
   "reasoning" is REQUIRED and is never empty, including when you report nothing:
   name what you read, what you checked it against, and why you concluded the
   change is safe for your class. A submission with an empty reasoning is not a

@@ -378,6 +378,78 @@ function withReasoningEffort(model, modelId) {
 }
 
 /**
+ * Limite por chamada ao modelo, com UMA nova tentativa (#1821, smoke de 01/10).
+ * O unico limite do harness e LLM_CALL_TIMEOUT_MS (20 min), alto de proposito
+ * por causa do Gemini em producao. No smoke, DeepSeek (Fireworks) e Kimi K3
+ * (Moonshot) tiveram cada um uma chamada que nunca voltou: a lente ficou 1218 s
+ * com 0 passos e segurou o PR inteiro. A chamada legitima mais lenta medida foi
+ * 546 s (Kimi K3, lente de 1 passo), entao 10 min nao corta ninguem que ia
+ * terminar. RECALL_CALL_TIMEOUT_MS muda o limite; 0 desliga.
+ */
+function withCallTimeout(model) {
+    const ms = Number(process.env.RECALL_CALL_TIMEOUT_MS ?? 10 * 60 * 1000);
+    if (!ms) return model;
+    const tentar = async (target, prop, options, resta) => {
+        const ctrl = new AbortController();
+        const pai = options?.abortSignal;
+        if (pai) {
+            if (pai.aborted) ctrl.abort(pai.reason);
+            else pai.addEventListener('abort', () => ctrl.abort(pai.reason), { once: true });
+        }
+        let expirou = false;
+        const timer = setTimeout(() => { expirou = true; ctrl.abort(new Error(`chamada passou de ${ms} ms`)); }, ms);
+        try {
+            return await target[prop]({ ...options, abortSignal: ctrl.signal });
+        } catch (e) {
+            if (expirou && resta > 0 && !pai?.aborted) {
+                console.warn(`[timeout] chamada passou de ${Math.round(ms / 1000)}s; nova tentativa`);
+                return tentar(target, prop, options, resta - 1);
+            }
+            throw e;
+        } finally {
+            clearTimeout(timer);
+        }
+    };
+    return new Proxy(model, {
+        get(target, prop, receiver) {
+            if (prop === 'doGenerate' || prop === 'doStream') {
+                return async (options) => tentar(target, prop, options, 1);
+            }
+            return Reflect.get(target, prop, receiver);
+        },
+    });
+}
+
+/**
+ * `prompt_cache_key` por PR nas chamadas da OpenAI (#1821, plano de teste de
+ * 30/09: cache entre passadas como a producao faria). As passadas de um PR
+ * mandam o mesmo prefixo (o diff vem primeiro); sem a chave, a OpenAI espalha as
+ * chamadas paralelas por maquinas diferentes e o GPT-6 leu 0% de cache entre
+ * passadas, contra 74-76% no DeepSeek.
+ *
+ * Fica POR DENTRO do withReasoningEffort: aquele troca o bloco `openai` inteiro
+ * das providerOptions, e uma chave posta antes dele sumiria. Aqui a chave e
+ * mesclada no bloco que chegar.
+ */
+function withPromptCacheKey(model, key) {
+    const merge = (options) => ({
+        ...options,
+        providerOptions: {
+            ...(options?.providerOptions || {}),
+            openai: { ...(options?.providerOptions?.openai || {}), promptCacheKey: key },
+        },
+    });
+    return new Proxy(model, {
+        get(target, prop, receiver) {
+            if (prop === 'doGenerate' || prop === 'doStream') {
+                return async (options) => target[prop](merge(options));
+            }
+            return Reflect.get(target, prop, receiver);
+        },
+    });
+}
+
+/**
  * Wrap a model so the run can PROVE which one served it.
  *
  * The eval used to build a model and hand it over in `input.model`, which the
@@ -404,7 +476,7 @@ function withCallCounter(model, label) {
     return proxy;
 }
 
-async function createModel(config) {
+async function createModel(config, caseId) {
     if (config.provider === 'tier0') {
         const modelId = process.env.RECALL_MODEL || config.model;
         const { applyModelEnv, TIER0 } = require('../shared/tier0-models');
@@ -431,13 +503,14 @@ async function createModel(config) {
             if (!apiKey) throw new Error(`no API key for ${modelId} — set one of ${spec.keyEnvs.join('/')}`);
             const id = spec.doModel || modelId;
             const built = REGISTRY.get(spec.provider).build({ provider: spec.provider, model: id, apiKey }, {});
-            return withCallCounter(withReasoningEffort(built, id), modelId);
+            const comCache = spec.provider === 'openai' && caseId ? withPromptCacheKey(built, `kodus-bench:${caseId}`) : built;
+            return withCallCounter(withReasoningEffort(withCallTimeout(comCache), id), modelId);
         }
 
         const { buildEvalModel } = require('../shared/build-model');
         applyModelEnv(modelId);
         return withCallCounter(
-            withReasoningEffort(buildEvalModel({}), modelId),
+            withReasoningEffort(withCallTimeout(buildEvalModel({})), modelId),
             modelId,
         );
     }
@@ -986,7 +1059,7 @@ class InvestigationAgentProvider {
             );
 
             stage = 'create-model';
-            const model = await createModel(this.config);
+            const model = await createModel(this.config, caseData.caseId);
 
             stage = 'build-replay-commands';
             // RECALL_REAL_REPO=1: search a real git worktree (base commit +
@@ -1052,8 +1125,25 @@ class InvestigationAgentProvider {
             }
 
             stage = 'build-prompts';
-            const { input, systemPrompt, userPrompt } =
-                buildCurrentPrompts(caseData);
+            const prompts = buildCurrentPrompts(caseData);
+            const { input, systemPrompt } = prompts;
+            let { userPrompt } = prompts;
+            // RECALL_SCOUT_JSON_PISTAS=1: troca SO o JSON dentro do <OutputFormat>
+            // do generalista pelo JSON de pistas do scout; o resto do prompt fica
+            // igual. So vale quando o scout e a unica passada que le este prompt —
+            // senao a troca contaminaria o generalista, o synthesis ou o
+            // investigador atual, e o erro e alto em vez de calado.
+            if (process.env.RECALL_SCOUT_JSON_PISTAS === '1') {
+                if (process.env.RECALL_SKIP_BASE_PASS !== '1' || process.env.RECALL_SKIP_SYNTHESIS !== '1' || process.env.RECALL_INVESTIGATOR_ONLY_VARIANTS !== '1') {
+                    throw new Error('RECALL_SCOUT_JSON_PISTAS exige SKIP_BASE_PASS, SKIP_SYNTHESIS e INVESTIGATOR_ONLY_VARIANTS');
+                }
+                const antes = userPrompt;
+                userPrompt = userPrompt.replace(
+                    /(<OutputFormat>\s*```json\n)[\s\S]*?(\n```\s*<\/OutputFormat>)/,
+                    '$1' + JSON.stringify({ flags: [{ relevantFile: 'path/to/file.ext', hint: 'WHAT changed and WHY it is worth a deep, focused look — one sentence.' }] }, null, 2) + '$2',
+                );
+                if (antes === userPrompt) throw new Error('RECALL_SCOUT_JSON_PISTAS: JSON do <OutputFormat> nao encontrado');
+            }
 
             // Everything the PR debugger needs to say OK / NOT OK about the
             // steps BEFORE the model was called. Inferring these after the fact
@@ -1195,6 +1285,56 @@ class InvestigationAgentProvider {
                     // knobs above.
                     ...(process.env.RECALL_EXPERT_PANEL_DEDICATED_PROMPT === '1'
                         ? { expertPanelDedicatedPrompt: true }
+                        : {}),
+                    // O eval sempre registra o custo do verificador por achado.
+                    recordVerifyCost: true,
+                    // RECALL_LENTES_LEAN=1: saida enxuta nas lentes, igual a do generalista
+                    // (RECALL_GEN_LEAN). Tira do schema o que so a etapa de enriquecimento usa.
+                    ...(process.env.RECALL_LENTES_LEAN === '1' ? { microAgentLeanOutput: true } : {}),
+                    // RECALL_PARALELO=1: microagentes comecam junto com o generalista.
+                    ...(process.env.RECALL_PARALELO === '1' ? { parallelMicroAgents: true } : {}),
+                    // RECALL_SCOUT_AGENTE=1: o scout roda pelo loop de agente (teto 1).
+                    ...(process.env.RECALL_SCOUT_AGENTE === '1' ? { scoutAgentLoop: true } : {}),
+                    // RECALL_SCOUT_ENXUTO=1: o scout recebe o prompt do generalista SEM
+                    // as secoes de instrucao que ele era mandado ignorar (<Task>,
+                    // <CoverageContract>, <Rules>, <OutputFormat>). Fica o contexto do
+                    // PR e o diff; a tarefa do scout vem depois, sem o "ignore".
+                    ...(process.env.RECALL_SCOUT_ENXUTO === '1'
+                        ? (() => {
+                              let enxuto = userPrompt;
+                              for (const tag of ['Task', 'CoverageContract', 'Rules', 'OutputFormat']) {
+                                  const antes = enxuto;
+                                  enxuto = enxuto.replace(new RegExp(`\\s*<${tag}>[\\s\\S]*?</${tag}>`), '');
+                                  if (antes === enxuto) throw new Error(`RECALL_SCOUT_ENXUTO: secao <${tag}> nao encontrada`);
+                              }
+                              return { scoutBasePromptOverride: enxuto };
+                          })()
+                        : {}),
+                    // RECALL_SCOUT_GRAFO=1 (exige RECALL_GRAFO_EXP=1): o grafo so no
+                    // prompt do scout. RECALL_INVESTIGATOR_STEPS=N: teto de passos
+                    // de cada investigador.
+                    ...(process.env.RECALL_SCOUT_GRAFO === '1'
+                        ? (() => {
+                              if (!xfileCallGraph) throw new Error('RECALL_SCOUT_GRAFO=1 exige RECALL_GRAFO_EXP=1');
+                              return { scoutCallGraph: xfileCallGraph };
+                          })()
+                        : {}),
+                    ...(process.env.RECALL_INVESTIGATOR_STEPS
+                        ? { investigatorMaxSteps: Number(process.env.RECALL_INVESTIGATOR_STEPS) }
+                        : {}),
+                    // RECALL_INVESTIGATOR_VARIANTS=foco,foco-cat: investigadores
+                    // reescritos sobre as mesmas pistas, ao lado do atual.
+                    ...(process.env.RECALL_INVESTIGATOR_VARIANTS
+                        ? { investigatorVariants: process.env.RECALL_INVESTIGATOR_VARIANTS.split(',').map((x) => x.trim()).filter(Boolean) }
+                        : {}),
+                    // RECALL_INVESTIGATOR_ONLY_VARIANTS=1: so as variantes, sem o atual.
+                    ...(process.env.RECALL_INVESTIGATOR_ONLY_VARIANTS === '1' ? { investigatorOnlyVariants: true } : {}),
+                    // RECALL_INVESTIGATOR_SECOND=1: segunda olhada (mesmo arquivo, outro
+                    // defeito) nos investigadores-variante que voltaram sem nada.
+                    ...(process.env.RECALL_INVESTIGATOR_SECOND === '1' ? { investigatorSecondLook: true } : {}),
+                    // O scout roda no mesmo esforco da rodada (GPT: low).
+                    ...(process.env.RECALL_SCOUT_INVESTIGATOR === '1' && process.env.RECALL_REASONING_EFFORT
+                        ? { scoutReasoningEffort: process.env.RECALL_REASONING_EFFORT }
                         : {}),
                     // RECALL_SCOUT_INVESTIGATOR=1: a cheap one-shot scout flags
                     // a few suspicious spots, then one full pass per flag
