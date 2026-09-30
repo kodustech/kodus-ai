@@ -1633,11 +1633,16 @@ metadata: {
                     });
                 } catch (flushErr) {
                     // The publish already happened, so a refused record can
-                    // never cost the review output; but the run must NOT read
-                    // as a clean success when the 'partial' evidence is lost
-                    // (rule 14) — surface it as critical.
+                    // never cost the review output — but losing the 'partial'
+                    // evidence must not read as a clean success (rule 14).
+                    // Try one Immer-free write on the published context first:
+                    // updateContext is produce(), and publish results live only
+                    // on the local publishedContext, so a bare rethrow here
+                    // would land in executeStage's outer catch, which rebuilds
+                    // from the pre-publish context with fileAnalysisResults = []
+                    // and discards the whole review.
                     this.logger.warn({
-                        message: `[AGENT] Failed to record formatter degradation after publishing the review: ${flushErr instanceof Error ? flushErr.message : String(flushErr)}`,
+                        message: `[AGENT] Failed to record formatter degradation via context, rebuilding published context: ${flushErr instanceof Error ? flushErr.message : String(flushErr)}`,
                         context: this.stageName,
                         metadata: {
                             organizationId:
@@ -1646,7 +1651,20 @@ metadata: {
                             bufferedDegradations: 1,
                         },
                     });
-                    throw flushErr;
+                    try {
+                        return {
+                            ...publishedContext,
+                            errors: [
+                                ...(publishedContext.errors ?? []),
+                                degradedEntry,
+                            ],
+                        };
+                    } catch {
+                        // Even the Immer-free rebuild refused: surface the loss
+                        // (the run cannot read as a clean success), accepting
+                        // the stage catch marking it critical.
+                        throw flushErr;
+                    }
                 }
             }
 
