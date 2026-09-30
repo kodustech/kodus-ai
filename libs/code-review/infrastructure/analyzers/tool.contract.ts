@@ -13,7 +13,16 @@ export type AnalyzerToolId = (typeof ANALYZER_TOOL_IDS)[number];
  * when their CI has no equivalent analysis — while `on` is an explicit
  * instruction that outranks that check.
  */
-export type ToolMode = 'off' | 'auto' | 'on';
+/**
+ * Whether a deterministic tool runs. An enabled tool still stands down when
+ * the repository's own CI already covers its category.
+ *
+ * This was `'off' | 'auto' | 'on'`, but the settings UI could only ever write
+ * `off`/`auto` — `on` (force, never stand down) was unreachable and rendered
+ * identically to `auto`, so it was a state we could store and display but
+ * neither produce nor tell apart.
+ */
+export type ToolMode = boolean;
 
 export type ChangedFile = { filename: string; patch?: string };
 

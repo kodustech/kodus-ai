@@ -1,0 +1,165 @@
+import { ANALYZER_SOURCE } from '@libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions';
+import { CodeSuggestion } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+
+import {
+    bothFromAnalyzers,
+    restatesAnalyzerFinding,
+} from './restates-analyzer-finding';
+
+const analyzer = (
+    over: Partial<CodeSuggestion> = {},
+): Partial<CodeSuggestion> => ({
+    relevantFile: 'src/config.ts',
+    relevantLinesStart: 4,
+    relevantLinesEnd: 4,
+    // What analyzerFindingsToSuggestions actually writes.
+    label: 'deterministic',
+    evidence: { source: ANALYZER_SOURCE, ruleId: 'generic-api-key' } as any,
+    ...over,
+});
+
+const agent = (
+    over: Partial<CodeSuggestion> = {},
+): Partial<CodeSuggestion> => ({
+    relevantFile: 'src/config.ts',
+    relevantLinesStart: 3,
+    relevantLinesEnd: 6,
+    label: 'security',
+    ...over,
+});
+
+describe('restatesAnalyzerFinding', () => {
+    /**
+     * The scanner asserts a fact at a location. An agent finding covering that
+     * same span is a restatement of it, and deciding that does not need
+     * semantic similarity — which matters because the embedding tier is
+     * unavailable in some deployments and vetoes every merge when it is.
+     */
+    it('is true when the agent span covers the analyzer line', () => {
+        expect(restatesAnalyzerFinding(agent(), analyzer())).toBe(true);
+    });
+
+    it('is false when the kept finding is not from an analyzer', () => {
+        expect(restatesAnalyzerFinding(agent(), agent())).toBe(false);
+    });
+
+    it('is false in a different file', () => {
+        expect(
+            restatesAnalyzerFinding(
+                agent({ relevantFile: 'src/other.ts' }),
+                analyzer(),
+            ),
+        ).toBe(false);
+    });
+
+    it('is false when the spans do not overlap', () => {
+        expect(
+            restatesAnalyzerFinding(
+                agent({ relevantLinesStart: 40, relevantLinesEnd: 50 }),
+                analyzer(),
+            ),
+        ).toBe(false);
+    });
+
+    it('is true when the analyzer span covers the agent line', () => {
+        expect(
+            restatesAnalyzerFinding(
+                agent({ relevantLinesStart: 10, relevantLinesEnd: 10 }),
+                analyzer({ relevantLinesStart: 4, relevantLinesEnd: 20 }),
+            ),
+        ).toBe(true);
+    });
+
+    /**
+     * A scanner reports a credential; an agent finding on the same lines about
+     * a DIFFERENT kind of defect is not a restatement of it. Measured on a real
+     * PR: a `bug` finding about String.replace semantics spanned the same lines
+     * as the secrets scanner's hit and would have been swallowed.
+     */
+    it('is false when the findings are about different kinds of defect', () => {
+        expect(
+            restatesAnalyzerFinding(agent({ label: 'bug' }), analyzer()),
+        ).toBe(false);
+        expect(
+            restatesAnalyzerFinding(
+                agent({ label: 'performance' }),
+                analyzer(),
+            ),
+        ).toBe(false);
+    });
+
+    /**
+     * Overlap alone put no ceiling on the agent's span, so a finding spanning
+     * a whole file counted as a restatement of a one-line scanner fact. A
+     * restatement of "a credential is on line 4" is itself anchored at line 4;
+     * a 400-line span is a different defect that happens to contain it, and
+     * merging it drops its explanation from the review.
+     */
+    it('is false when the agent span is far wider than the scanner anchor', () => {
+        expect(
+            restatesAnalyzerFinding(
+                agent({ relevantLinesStart: 1, relevantLinesEnd: 400 }),
+                analyzer(),
+            ),
+        ).toBe(false);
+        expect(
+            restatesAnalyzerFinding(
+                agent({ relevantLinesStart: 3, relevantLinesEnd: 29 }),
+                analyzer(),
+            ),
+        ).toBe(false);
+    });
+
+    it('is true for a span tight around the scanner anchor', () => {
+        expect(
+            restatesAnalyzerFinding(
+                agent({ relevantLinesStart: 3, relevantLinesEnd: 6 }),
+                analyzer(),
+            ),
+        ).toBe(true);
+    });
+
+    /** Missing line numbers must not be read as an overlap at line 0. */
+    it('is false when either side has no line range', () => {
+        expect(
+            restatesAnalyzerFinding(
+                agent({
+                    relevantLinesStart: undefined,
+                    relevantLinesEnd: undefined,
+                }),
+                analyzer(),
+            ),
+        ).toBe(false);
+    });
+
+    /**
+     * A scanner dup is not a restatement of another scanner's finding. There is
+     * at most one suggestion per tool, so the only pair possible is secrets vs
+     * dependencies — two categories, published as two comments on purpose.
+     */
+    it('is false when the duplicate is itself a scanner finding', () => {
+        expect(
+            restatesAnalyzerFinding(
+                analyzer({ relevantLinesStart: 3, relevantLinesEnd: 29 }),
+                analyzer(),
+            ),
+        ).toBe(false);
+    });
+});
+
+describe('bothFromAnalyzers', () => {
+    /**
+     * Merging them would not remove a duplicate — the honored-merge path drops
+     * the duplicate's body, so one whole category's comment disappears from the
+     * review. They are never duplicates of each other.
+     */
+    it('is true for two scanner findings', () => {
+        expect(bothFromAnalyzers(analyzer(), analyzer())).toBe(true);
+    });
+
+    it('is false when either side came from the model', () => {
+        expect(bothFromAnalyzers(agent(), analyzer())).toBe(false);
+        expect(bothFromAnalyzers(analyzer(), agent())).toBe(false);
+        expect(bothFromAnalyzers(agent(), agent())).toBe(false);
+    });
+});

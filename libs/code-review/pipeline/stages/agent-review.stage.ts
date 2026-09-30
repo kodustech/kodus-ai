@@ -52,7 +52,16 @@ import {
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import { AgentProgressEvent } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
-import { analyzerFindingsToSuggestions } from '@libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions';
+import {
+    analyzerFindingsToSuggestions,
+    isAnalyzerSuggestion,
+} from '@libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions';
+import { preferAnalyzerKeep } from '@libs/code-review/infrastructure/agents/engine/prefer-analyzer-keep';
+import {
+    bothFromAnalyzers,
+    restatesAnalyzerFinding,
+} from '@libs/code-review/infrastructure/agents/engine/restates-analyzer-finding';
+import { survivesSeverityFilter } from '@libs/code-review/infrastructure/agents/engine/survives-severity-filter';
 import {
     LazyLinkedRepoAccess,
     evaluateCrossRepoBoundaryGate,
@@ -532,8 +541,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // (prod incident, 2026-09-14: "invalid input syntax for type
             // uuid" writing automation_execution whenever lastExecution.uuid
             // was absent and the old `||` fallback poisoned the query).
-            const executionUuid =
-                context.pipelineMetadata?.lastExecution?.uuid;
+            const executionUuid = context.pipelineMetadata?.lastExecution?.uuid;
             const repositoryId = context.repository?.id;
 
             // Shared telemetry metadata for all Langfuse-traced calls in this pipeline run
@@ -1222,14 +1230,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 const accepted =
                     acceptedLevels[severityFilter] || acceptedLevels.low;
                 const before = deduped.length;
-                const keeps = (s: Partial<CodeSuggestion>) => {
-                    if (s.label === 'kody_rules' && !applyFiltersToKodyRules) {
-                        return true; // kody rules bypass by default
-                    }
-                    return accepted.includes(
-                        (s.severity || 'medium').toLowerCase(),
+                const keeps = (s: Partial<CodeSuggestion>) =>
+                    survivesSeverityFilter(
+                        s,
+                        accepted,
+                        applyFiltersToKodyRules,
                     );
-                };
                 const droppedBySeverity = deduped.filter((s) => !keeps(s));
                 deduped = deduped.filter(keeps);
                 for (const s of droppedBySeverity) {
@@ -1252,13 +1258,21 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 const {
                     formatSuggestionContent,
                 } = require('@libs/code-review/infrastructure/agents/engine/format-suggestion-content');
+                // Deterministic findings skip the pass. Their body is already
+                // the structured list the builder produced, and a polish pass
+                // reflowed it into one paragraph — losing the per-package
+                // lines and appending remediation advice the scanner never
+                // said. There is no WHAT/WHY/HOW scaffolding here to strip.
+                const formatTargets = deduped
+                    .map((s, i) => (isAnalyzerSuggestion(s) ? -1 : i))
+                    .filter((i) => i >= 0);
                 const formatted = await formatSuggestionContent(
-                    deduped.map((s) => ({
-                        suggestionContent: s.suggestionContent || '',
-                        existingCode: s.existingCode || '',
-                        improvedCode: s.improvedCode || '',
-                        relevantFile: s.relevantFile || '',
-                        language: s.language || '',
+                    formatTargets.map((i) => ({
+                        suggestionContent: deduped[i].suggestionContent || '',
+                        existingCode: deduped[i].existingCode || '',
+                        improvedCode: deduped[i].improvedCode || '',
+                        relevantFile: deduped[i].relevantFile || '',
+                        language: deduped[i].language || '',
                     })),
                     {
                         customWritingGuidelines:
@@ -1272,19 +1286,21 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     },
                 );
                 for (const [i, fmt] of formatted) {
-                    if (deduped[i]) {
-                        deduped[i].suggestionContent = fmt.suggestionContent;
+                    const target = formatTargets[i];
+                    if (target !== undefined && deduped[target]) {
+                        deduped[target].suggestionContent =
+                            fmt.suggestionContent;
                         // Keep llmPrompt in sync with the formatted prose.
                         // llmPrompt is a snapshot of the RAW suggestionContent
                         // (WHAT/WHY/HOW) taken in finding-mapper before this
                         // pass; the per-comment "Prompt for LLM" copy block and
                         // the consolidated @agentPrompt read it, so without this
                         // the raw scaffolding still leaks there.
-                        deduped[i].llmPrompt = fmt.suggestionContent;
+                        deduped[target].llmPrompt = fmt.suggestionContent;
                     }
                 }
                 this.logger.log({
-                    message: `[AGENT] Formatted ${formatted.size}/${deduped.length} suggestion contents`,
+                    message: `[AGENT] Formatted ${formatted.size}/${formatTargets.length} suggestion contents`,
                     context: this.stageName,
                 });
             } catch (err) {
@@ -1333,8 +1349,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         metadata: {
                             prNumber,
                             organizationId:
-                                context.organizationAndTeamData
-                                    ?.organizationId,
+                                context.organizationAndTeamData?.organizationId,
                             ...badFixCounts,
                         },
                     });
@@ -1874,6 +1889,19 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         opts?: { crossStream?: boolean },
     ): Promise<{ honor: boolean; reason: string; score: number }> {
         const lexical = contentSimilarity(dup, keep);
+
+        // Two scanner findings are never duplicates of each other — there is
+        // one suggestion per tool, so the only pair is secrets vs dependencies.
+        // Honoring it would not drop a duplicate; it would drop a whole
+        // category's comment, because the merge keeps only the representative.
+        if (bothFromAnalyzers(dup, keep)) {
+            return {
+                honor: false,
+                reason: 'distinct-analyzers',
+                score: lexical,
+            };
+        }
+
         if (!opts?.crossStream && lexical >= DEDUP_CONTENT_THRESHOLD) {
             return { honor: true, reason: 'lexical', score: lexical };
         }
@@ -1883,6 +1911,18 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             this.embedDedupSuggestion(keep, keepKey, embedCache),
         ]);
         if (!vecDup || !vecKeep) {
+            // Without embeddings this vetoes EVERY merge, which republishes
+            // the one duplicate we are most sure about: a scanner fact the
+            // model restated. Only that pair overrides the veto — where
+            // embeddings work, the full guard still decides, so a wide agent
+            // finding that merely overlaps a scanner line is not swallowed.
+            if (restatesAnalyzerFinding(dup, keep)) {
+                return {
+                    honor: true,
+                    reason: 'restates-analyzer (no-embed)',
+                    score: lexical,
+                };
+            }
             return {
                 honor: false,
                 reason: 'lexical-veto (no-embed)',
@@ -2138,10 +2178,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 },
             ) as any;
 
+            // The model ranks `keep` by how a finding reads, which always
+            // favours its own prose over a scanner's. Re-seat the roles so a
+            // deterministic finding survives the group it was merged into.
             const groups: Array<{
                 keep: number;
                 duplicates: number[];
-            }> = normalizedDedup?.groups || [];
+            }> = preferAnalyzerKeep(normalizedDedup?.groups || [], suggestions);
             const unique: number[] = normalizedDedup?.unique || [];
 
             // Semantic tier of the content guard (PR #1527): when lexical overlap
@@ -2252,6 +2295,27 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             ) {
                                 classifiedIndices.add(dupIdx);
                                 const dup = suggestions[dupIdx];
+                                // This branch absorbs duplicates without ever
+                                // consulting the content guard, so the invariant
+                                // has to be repeated here: two scanner findings
+                                // are different categories, and absorbing one
+                                // drops a whole category's comment.
+                                if (
+                                    bothFromAnalyzers(dup, suggestions[keepIdx])
+                                ) {
+                                    if (!addedIndices.has(dupIdx)) {
+                                        addedIndices.add(dupIdx);
+                                        indexToResult.set(
+                                            dupIdx,
+                                            result.length,
+                                        );
+                                        result.push(dup);
+                                        uniqueSuggestions.push(
+                                            this.summarizeDedupSuggestion(dup),
+                                        );
+                                    }
+                                    continue;
+                                }
                                 const loc = `${dup.relevantFile}:${dup.relevantLinesStart}-${dup.relevantLinesEnd}`;
                                 const keptLoc = `${suggestions[keepIdx].relevantFile}:${suggestions[keepIdx].relevantLinesStart}-${suggestions[keepIdx].relevantLinesEnd}`;
                                 if (loc !== keptLoc) {

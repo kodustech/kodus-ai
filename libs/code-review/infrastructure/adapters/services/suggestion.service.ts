@@ -1148,6 +1148,8 @@ export class SuggestionService implements ISuggestionService {
 
         const categoryPriority = {
             kody_rules: 1,
+            // A scanner-proved fact outranks anything the model inferred.
+            deterministic: 1,
             breaking_changes: 2,
             security: 3,
             potential_issues: 4,
@@ -1684,6 +1686,7 @@ export class SuggestionService implements ISuggestionService {
     ): Promise<number> {
         const categoryWeights = {
             kody_rules: 100,
+            deterministic: 100,
             breaking_changes: 100,
             security: 50,
             potential_issues: 40,

@@ -118,6 +118,7 @@ export function buildOrchestratorInput(
         // Free-text steering directive from `@kody review <directive>`.
         reviewDirective: context.reviewDirective,
         ciEvidence: context.ciEvidence,
+        analyzerFindings: context.analyzerFindings,
         kodyRules: computed.kodyRules ?? context.codeReviewConfig?.kodyRules,
         reviewOptions: computed.reviewOptions,
         onAgentProgress: computed.onAgentProgress,

@@ -57,7 +57,8 @@ export type DeterministicToolId = "secrets" | "dependencies";
  * `auto` defers to the repository's own CI — the tool runs only when no
  * equivalent check ran there — while `on` runs it regardless.
  */
-export type DeterministicToolMode = "off" | "auto" | "on";
+/** On or off. An enabled tool still stands down when the repo's CI covers it. */
+export type DeterministicToolMode = boolean;
 
 type SuggestionControlConfig = {
     groupingMode: GroupingModeSuggestions;
