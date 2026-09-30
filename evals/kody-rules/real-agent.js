@@ -238,7 +238,51 @@ async function runCase(provider, c, changedFiles, replay) {
     // it failed before starting (e.g. a swallowed quota/rate-limit error that
     // surfaces as finishReason=error/steps=0 rather than a throw). A legitimate
     // "investigated and found nothing" run has turnsUsed > 0.
-    return { suggestions: out.suggestions || [], turnsUsed: out.turnsUsed ?? 0 };
+    return {
+        suggestions: publishedSuggestions(out.suggestions || [], changedFiles, rulesForRun),
+        turnsUsed: out.turnsUsed ?? 0,
+    };
+}
+
+// Score what the review publishes, not the agent's raw output. The agent-review
+// stage snaps every finding onto the diff and drops one that cites no changed
+// line, unless its rule declared it needs more than the diff. Both steps are
+// the stage's own exported functions, so this follows the code if it changes.
+function publishedSuggestions(suggestions, changedFiles, rules) {
+    const {
+        extractValidDiffLines,
+        snapLinesToDiff,
+        fileAnchoredFindingPredicate,
+    } = require(path.join(__dirname, '../../libs/code-review/pipeline/stages/agent-review.stage.ts'));
+    const isFileAnchored = fileAnchoredFindingPredicate(rules);
+    const byName = new Map(changedFiles.map((f) => [normalizePath(f.filename), f]));
+    return suggestions
+        .map((s) => {
+            const file = byName.get(normalizePath(s.relevantFile));
+            if (!file) return s;
+            const snapped = snapLinesToDiff(s, extractValidDiffLines(unifiedPatch(file.patchWithLinesStr)));
+            if (snapped === null) return isFileAnchored(s) ? s : null;
+            return snapped;
+        })
+        .filter(Boolean);
+}
+
+// The dataset stores diffs in the review's numbered form (libs/common/utils/
+// patch.ts): `@@` headers, then `__new hunk__` with "<line> <+| ><code>" and
+// optionally `__old hunk__` with the removed lines. Rebuild the unified diff
+// the stage parses from `file.patch`: headers plus the new side.
+function unifiedPatch(numbered) {
+    const out = [];
+    let side = null;
+    for (const line of String(numbered || '').split('\n')) {
+        if (line.startsWith('@@')) { out.push(line); side = null; continue; }
+        if (line === '__new hunk__') { side = 'new'; continue; }
+        if (line === '__old hunk__') { side = 'old'; continue; }
+        if (side !== 'new') continue;
+        const m = line.match(/^\d+ (.*)$/);
+        if (m) out.push(m[1]);
+    }
+    return out.join('\n');
 }
 
 async function main() {
