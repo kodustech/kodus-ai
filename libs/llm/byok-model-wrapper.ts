@@ -25,7 +25,9 @@ import {
     attachClassification,
     classifyLLMError,
     LlmErrorCategory,
+    type ClassifiedErrorInfo,
 } from '@libs/llm/error-classifier';
+import { extractProviderMessage } from '@libs/llm/review-error-diagnostics';
 
 /**
  * PRE-call token estimate for the tpm reservoir. Serializes the wire prompt the
@@ -80,7 +82,10 @@ export interface WrapByokModelOptions {
     reporter?: (input: {
         organizationId?: string;
         provider: string;
+        /** The provider's own sentence when it gave one, else `err.message`. */
         errorMessage: string;
+        category?: LlmErrorCategory;
+        httpStatus?: number;
     }) => void;
 }
 
@@ -99,8 +104,9 @@ export function wrapByokModel(
                     } catch (err) {
                         // Classify (so downstream can read the canonical category)
                         // and report — never let the reporter mask the LLM error.
+                        let classified: ClassifiedErrorInfo | undefined;
                         if (err && typeof err === 'object') {
-                            const classified = classifyLLMError(
+                            classified = classifyLLMError(
                                 err,
                                 opts.provider,
                             );
@@ -135,10 +141,16 @@ export function wrapByokModel(
                                     opts.provider ??
                                     opts.byokConfig?.provider ??
                                     'unknown',
+                                // For an AI SDK `APICallError` the message
+                                // only restates the status ("Provider returned
+                                // error"); the cause is in the body (#1871).
                                 errorMessage:
-                                    err instanceof Error
+                                    extractProviderMessage(err) ??
+                                    (err instanceof Error
                                         ? err.message
-                                        : String(err ?? 'unknown'),
+                                        : String(err ?? 'unknown')),
+                                category: classified?.category,
+                                httpStatus: classified?.httpStatus,
                             });
                         } catch {
                             /* reporter failures must not surface */

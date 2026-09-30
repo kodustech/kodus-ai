@@ -158,6 +158,35 @@ describe('ByokErrorCounter', () => {
         expect(emitArg.recipients).toBeUndefined();
     });
 
+    // #1871: the banner picks its wording from the category. Without it every
+    // failure read as "insufficient balance or a suspended account", which sent
+    // a customer with credit and a valid key chasing billing.
+    it('carries the category and status of the latest error into the payload', async () => {
+        cache.getFromCache.mockResolvedValueOnce(
+            Array.from({ length: BYOK_ERROR_THRESHOLD - 1 }, () => ({
+                ts: NOW - 1_000,
+                provider: PROVIDER,
+                error: 'earlier',
+            })),
+        );
+
+        await counter.record({
+            organizationId: ORG,
+            provider: PROVIDER,
+            errorMessage: ERROR,
+            category: 'RATE_LIMIT' as any,
+            httpStatus: 429,
+        });
+
+        expect(notifications.emit.mock.calls[0]![0].payload).toEqual(
+            expect.objectContaining({
+                sampleError: ERROR,
+                category: 'RATE_LIMIT',
+                httpStatus: 429,
+            }),
+        );
+    });
+
     it('resets the rolling list after firing so a second emit needs a fresh batch', async () => {
         const existing = Array.from(
             { length: BYOK_ERROR_THRESHOLD - 1 },
