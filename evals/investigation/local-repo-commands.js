@@ -108,13 +108,11 @@ class LocalRepoCommands {
         const lines = content.split('\n');
         const from = Number.isFinite(start) && start > 0 ? start - 1 : 0;
         const to = Number.isFinite(end) && end > 0 ? end : lines.length;
-        // Number the lines the way the sandbox does — findings anchor to these.
-        return this._trim(
-            lines
-                .slice(from, to)
-                .map((l, i) => `${from + i + 1}: ${l}`)
-                .join('\n'),
-        );
+        // Raw lines, like the production sandboxes (e2b/local: `cat`/`sed -n`).
+        // The readFile tool numbers them (addLineNumbers in agent-tools.factory);
+        // numbering here too made every bench read come out as "105: 105: code"
+        // (#1821).
+        return this._trim(lines.slice(from, to).join('\n'));
     }
 
     async listDir(dirPath, maxDepth) {
