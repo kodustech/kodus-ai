@@ -1655,7 +1655,9 @@ metadata: {
                         return {
                             ...publishedContext,
                             errors: [
-                                ...(publishedContext.errors ?? []),
+                                ...(Array.isArray(publishedContext.errors)
+                                    ? publishedContext.errors
+                                    : []),
                                 degradedEntry,
                             ],
                         };
