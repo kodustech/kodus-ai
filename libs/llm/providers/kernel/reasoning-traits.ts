@@ -28,6 +28,14 @@ export interface ModelReasoningTraits {
     /** Sends thinking/reasoning unless explicitly told not to. Drives the UI
      *  `supportsReasoning` flag and whether an omitted config means "off". */
     thinksByDefault: boolean;
+    /** The thinking shape the brand REQUIRES when reasoning is on, when its own
+     *  endpoint refuses to run without one. Unset — the normal case — leaves the
+     *  transport's legacy shape in charge. `'adaptive'` is the Anthropic
+     *  generation form (`thinking:{type:'adaptive'}`): MiniMax M3.1 and up answer
+     *  400 "requires adaptive thinking" when NOTHING is sent, and the legacy
+     *  budget form is a field that brand never documented, so neither omitting
+     *  nor `budget` can serve it. */
+    requiredThinkingShape?: 'adaptive';
     /** Accepts an explicit "off" (e.g. `thinking:{type:'disabled'}`). False for
      *  always-thinking models (Kimi k2.7-code/k3, Claude Fable/Mythos, GLM-5.3)
      *  — sending a disable to them is invalid. */
@@ -279,6 +287,29 @@ export function resolveCompatibleReasoningTraits(
             // Omitting leaves MiniMax's own default (medium) in force — it does
             // NOT turn reasoning off — so no family default is imposed.
             omittingDisablesReasoning: false,
+        };
+    }
+
+    // MiniMax M3.1 and up: the first generation of this brand that REFUSES to run
+    // without a thinking shape. Its endpoint answers 400 "requires adaptive
+    // thinking" for a request that carries none, and it wants the adaptive form —
+    // the legacy `thinking:{type:'enabled',budgetTokens}` shape is a field the
+    // brand never documented, which is why M3 above is deliberately sent neither.
+    // Until this branch existed M3.1 fell to the conservative default below
+    // (`thinksByDefault: false`), which the picker reads as "not a reasoner" and
+    // the emitter reads as "send nothing": the model could not be used at all,
+    // with the Thinking control greyed out on the one page where it could have
+    // been configured. `canDisableThinking: false` states the same fact for the
+    // off path: there is no off, only a shape.
+    if (family === 'minimax' && /minimax[-_.]?m3[-_.]?1/.test(m)) {
+        return {
+            thinksByDefault: true,
+            canDisableThinking: false,
+            supportsForcedToolChoice: true,
+            forcedToolChoiceRejectsThinking: false,
+            reasoningControl: 'effort-only',
+            omittingDisablesReasoning: false,
+            requiredThinkingShape: 'adaptive',
         };
     }
 

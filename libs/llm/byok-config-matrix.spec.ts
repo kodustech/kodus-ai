@@ -464,6 +464,20 @@ const CASES = [
     // is the body itself, which is the half we control and the half that
     // regresses. Every one was READ OFF THE WIRE before being written down.
     {
+        id: 'minimax M3.1 — the Anthropic transport sends the adaptive shape, not nothing',
+        why: 'M3.1 is the first MiniMax generation that REFUSES to run without a thinking shape: its endpoint answers 400 "requires adaptive thinking". Before this entry it fell to the conservative default (thinksByDefault:false), so the picker advertised no scale at all and the emitter returned {} — nothing on the wire, a 400 on every request, and a model the customer picked for its reasoning that could not be used. It wants the adaptive form, not the legacy budget one the compatible transport would otherwise fall through to (a field MiniMax never documented, which is why M3 above is deliberately sent neither)',
+        slot: {
+            provider: 'anthropic_compatible',
+            model: 'MiniMax-M3.1-Flash-Preview',
+            baseURL: 'https://api.minimax.io/anthropic',
+            reasoningEffort: 'high',
+        },
+        wire: {
+            has: { thinking: { type: 'adaptive' } },
+            hasNot: ['budget_tokens'],
+        },
+    },
+    {
         id: 'minimax M3 — the Anthropic transport does not fabricate a budget for it',
         why: 'This case was first written the other way round, asserting the budget as a deliberate transport difference. It was not: M3 was reaching the compatible branch\'s `return budget` fall-through and going out with thinking:{type:enabled,budgetTokens:40000} — a field invented for a brand whose own table validates a toggle for M2 and explicitly declines to for M3, on the transport four production slots use. `budget` belongs to the compatible brands that DO implement the legacy Anthropic thinking shape (Kimi, GLM, DeepSeek all declare it); an id we cannot confirm reasons gets the same treatment the native branch already gives an unidentified one — omit rather than gamble on a 400',
         doc: 'platform.minimax.io — Anthropic SDK endpoint https://api.minimax.io/anthropic',
