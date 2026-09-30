@@ -317,23 +317,36 @@ export class KodyRulesTools {
     }
 
     /**
-     * Whether `teamId` belongs to `organizationId`. The approval setting is
-     * read per team, so a team from another organization must not decide the
-     * status of a rule created here. Same check, and same answer, as
-     * `KodyRulesTenantGuard` on the HTTP side.
+     * Whether `teamId` resolves to a team of another organization. The
+     * approval setting is read per team, so a team confirmed to belong to
+     * another tenant must not decide the status of a rule or memory created
+     * here; the answer is the one `KodyRulesTenantGuard` gives on the HTTP
+     * side. A team that does not resolve at all cannot read any setting, so
+     * the call goes on and the status falls back to active, the way the
+     * sibling rule and memory creators treat an unreadable setting.
      */
-    private async teamBelongsToOrganization(
+    private async teamBelongsToAnotherOrganization(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<boolean> {
         const { organizationId, teamId } = organizationAndTeamData;
-        if (!organizationId || !teamId) {
+        if (!teamId) {
             return false;
         }
 
         const teamOrganizationId =
             await this.teamService.findOneOrganizationIdByTeamId(teamId);
 
-        return !!teamOrganizationId && teamOrganizationId === organizationId;
+        if (!teamOrganizationId) {
+            this.logger.warn({
+                message:
+                    'Team in the MCP call did not resolve; the approval setting cannot be read for it',
+                context: KodyRulesTools.name,
+                metadata: { organizationAndTeamData },
+            });
+            return false;
+        }
+
+        return teamOrganizationId !== organizationId;
     }
 
     /**
@@ -522,9 +535,9 @@ export class KodyRulesTools {
                     };
 
                     if (
-                        !(await this.teamBelongsToOrganization(
+                        await this.teamBelongsToAnotherOrganization(
                             organizationAndTeamData,
-                        ))
+                        )
                     ) {
                         return {
                             success: false,
@@ -1094,6 +1107,25 @@ export class KodyRulesTools {
                             path: args.kodyRule.path || null,
                         },
                     };
+
+                    if (
+                        await this.teamBelongsToAnotherOrganization(
+                            params.organizationAndTeamData,
+                        )
+                    ) {
+                        return {
+                            success: false,
+                            count: 0,
+                            data: {
+                                title: args.kodyRule.title,
+                                action: 'skipped',
+                                requiresApproval: false,
+                                message: 'Team not found.',
+                                link: '',
+                            },
+                            message: 'Team not found.',
+                        };
+                    }
 
                     const result: CreateOrUpdateMemoryResult | null =
                         await this.kodyRulesService.createOrUpdateMemory(
