@@ -315,6 +315,25 @@ ${rendered}
   </Commits>`;
 }
 
+/** Experiment knob `auditorRole` (#1821): reframes the generalist from
+ *  "reviewer" (decides what deserves a comment) to "auditor" (lists every
+ *  defect; severity carries importance, a later stage decides). Only these two
+ *  sentences change — the texts measured in the isolated recognition test. */
+export const AUDITOR_ROLE_SWAPS: ReadonlyArray<readonly [string, string]> = [
+    [
+        'Senior code reviewer specialized in finding correctness, security, and performance issues in one pass.',
+        'a defect auditor. Your job is to list every defect in the changed code (correctness, security, performance), not to decide which ones deserve a review comment.',
+    ],
+    [
+        'Find real, verifiable issues in the changed code in a single pass. You may report bug, security, or performance findings, but only when the evidence is concrete.',
+        'List every real defect you find in the changed code in a single pass, however small. Importance is recorded in severity; another stage decides what gets posted.',
+    ],
+];
+
+function applyAuditorRole(prompt: string): string {
+    return AUDITOR_ROLE_SWAPS.reduce((p, [from, to]) => p.replace(from, to), prompt);
+}
+
 export function buildSystemPrompt(input: ReviewAgentInput, meta: PromptAgentMeta): string {
         const isSelfContained = !input.remoteCommands;
         if (isSelfContained) {
@@ -340,7 +359,7 @@ export function buildSystemPrompt(input: ReviewAgentInput, meta: PromptAgentMeta
             ? `\n  <Language>Write ALL review comments, summaries, and reasoning in ${langLabel}. This is mandatory — do not fall back to English.</Language>`
             : '';
 
-        return `<CodeReviewAgent>
+        const prompt = `<CodeReviewAgent>
   <Date>${new Date().toLocaleDateString('en-GB')}</Date>
   <Role>
     You are ${identity.name}, ${identity.description}
@@ -437,6 +456,7 @@ ${overridesSection}
 ${memoryRulesSection}
 
 </CodeReviewAgent>`;
+        return input.auditorRole ? applyAuditorRole(prompt) : prompt;
     }
 
     /**
@@ -547,6 +567,37 @@ export function buildUserPrompt(input: ReviewAgentInput, meta: PromptAgentMeta):
                 : (taskDescriptions[categoryLabel] ??
                   'issues introduced by these changes');
 
+        // perFileVerdicts: same JSON shape, different instruction for `reasoning`
+        // plus one rule. Off = the production text, word for word.
+        const reasoningInstruction = input.perFileVerdicts
+            ? `One line per changed file, in the order of <Diffs>: '<path>: <each issue you found> | none — <why it is safe>'. Cover every changed file before finalizing. Example: 'impl.go: race in CreateDevice, count check and insert not atomic (reported) | api.go: none — only renames a handler.'`
+            : `For each changed function: what you challenged, what callers you found, why you reported or dismissed. Example: 'Challenged CreateDevice: what if two requests pass count check simultaneously? Grepped TagDevice(, found caller at impl.go:155. No lock or unique constraint — race condition. Reported.'`;
+        const perFileRule = input.perFileVerdicts
+            ? `
+    - Deliver file by file: every changed file gets a verdict in "reasoning", and every issue named in a verdict MUST also be an entry in "suggestions" — an issue that is only in the reasoning is lost.`
+            : '';
+        // leanOutput (#1821): each finding asks only for what finding the bug
+        // needs; fix, snippets, severity and confidence come from a later stage.
+        const suggestionFields = input.leanOutput
+            ? `      ${outputLabelLine}"relevantFile": "path/to/file.ext",
+      "relevantLinesStart": 10,
+      "relevantLinesEnd": 15,
+      "suggestionContent": "what is wrong and why it matters"`
+            : `      ${outputLabelLine}"relevantFile": "path/to/file.ext",
+      "language": "the file language",
+      "suggestionContent": "WHAT: one sentence naming the exact problem. WHY: one sentence on the real impact. HOW: concrete fix if clear from the code — omit if speculative.",
+      "existingCode": "problematic code snippet from the diff",
+      "improvedCode": "fixed code snippet (only if fix is clear from context)",
+      "oneSentenceSummary": "Brief summary",
+      "relevantLinesStart": 10,
+      "relevantLinesEnd": 15,
+      "severity": "critical|high|medium|low",
+      "confidence": 8`;
+        const importanceRule = input.noImportanceFilter
+            ? `
+    - Do not decide on your own that a real defect is too minor to report. If you concluded something is a real defect, it goes in "suggestions" and "severity" says how much it matters (low for minor ones); a later stage decides what is posted. Style and naming issues stay out.`
+            : '';
+
         return (
             `<ReviewTask>${formatReviewFocus(input.reviewDirective)}
   ${prContextSection}${traceDecisionsSection}${previousDecisionsSection}${commitsSection}
@@ -596,7 +647,7 @@ ${coverageTargets ? `${coverageTargets}\n` : ''}
       7-8: You read the relevant code and traced the failure path, but did not verify the callee definition or could not confirm the exact input that triggers it.
       5-6: The code pattern looks wrong based on the diff, but you only read one side (caller OR callee, not both). The bug is plausible but not fully confirmed.
       1-4: Suspicious pattern, speculative concern, or you are reporting based on experience rather than evidence from this codebase.
-    - Return only the JSON object inside markdown fences, no extra text.
+    - Return only the JSON object inside markdown fences, no extra text.${perFileRule}${importanceRule}
   </Rules>
 
   <OutputFormat>
@@ -604,19 +655,10 @@ ${coverageTargets ? `${coverageTargets}\n` : ''}
             '```' +
             `json
 {
-  "reasoning": "For each changed function: what you challenged, what callers you found, why you reported or dismissed. Example: 'Challenged CreateDevice: what if two requests pass count check simultaneously? Grepped TagDevice(, found caller at impl.go:155. No lock or unique constraint — race condition. Reported.'",
+  "reasoning": "${reasoningInstruction}",
   "suggestions": [
     {
-      ${outputLabelLine}"relevantFile": "path/to/file.ext",
-      "language": "the file language",
-      "suggestionContent": "WHAT: one sentence naming the exact problem. WHY: one sentence on the real impact. HOW: concrete fix if clear from the code — omit if speculative.",
-      "existingCode": "problematic code snippet from the diff",
-      "improvedCode": "fixed code snippet (only if fix is clear from context)",
-      "oneSentenceSummary": "Brief summary",
-      "relevantLinesStart": 10,
-      "relevantLinesEnd": 15,
-      "severity": "critical|high|medium|low",
-      "confidence": 8
+${suggestionFields}
     }
   ]
 }

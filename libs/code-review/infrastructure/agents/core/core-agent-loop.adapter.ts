@@ -512,6 +512,7 @@ export async function runAgentLoopViaCore(
             requireFindingReason: input.requireFindingReason,
             claudeSafeWording,
             ...(requireDevLevel ? { requireDevLevel: true } : {}),
+            leanOutput: input.leanOutput,
             modelId: specModelId,
             fallbackModelId,
             usageRunName: input.usageRunName,

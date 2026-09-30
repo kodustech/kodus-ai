@@ -595,6 +595,7 @@ export abstract class BaseCodeReviewAgentProvider {
                     heavy: input.heavy,
                     outlineFirst: input.outlineFirst,
                     requireFindingReason: input.requireFindingReason,
+                    leanOutput: input.leanOutput,
                     // Context window is sized against the resolved model.
                     contextWindowTokens: contextWindow,
                     reasoningEffort: modelParams.reasoningEffort,

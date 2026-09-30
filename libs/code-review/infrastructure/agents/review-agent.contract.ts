@@ -288,6 +288,23 @@ export interface ReviewAgentInput
      *  campo opcional e o filtro de contrato cai para a checagem de severidade
      *  sozinha. */
     requireFindingReason?: boolean;
+    /** Experiment knob (#1821, default off): the generalist gives every changed
+     *  file a verdict in `reasoning` and must list every issue it names there in
+     *  `suggestions`. Targets models that see an issue but leave it out of the
+     *  single end-of-PR submission. Only the output instruction changes. */
+    perFileVerdicts?: boolean;
+    /** Experiment knob (#1821, default off): one extra rule telling the
+     *  generalist not to drop a defect it concluded is real just because it
+     *  judges it minor — severity carries importance, downstream decides.
+     *  Style and naming stay out. */
+    noImportanceFilter?: boolean;
+    /** Experiment knob (#1821, default off): the generalist's role and mission
+     *  read "auditor — list every defect" instead of "reviewer". See
+     *  AUDITOR_ROLE_SWAPS in prompt-builder.ts. */
+    auditorRole?: boolean;
+    /** #1821 experiment (default off): lean output format in the generalist
+     *  prompt and in the submitResult schema. Forwarded to AgentLoopInput. */
+    leanOutput?: boolean;
     /**
      * Commits that make up this PR (SHA + subject line + author date),
      * oldest→newest. Threaded so commit-hygiene rules ("don't mix mechanical
@@ -680,6 +697,9 @@ export interface AgentLoopInput {
      *  conclusao sem o caminho. Opt-in para poder reverter: um campo
      *  obrigatorio a mais pode custar recall. */
     requireFindingReason?: boolean;
+    /** #1821 experiment (default off): the finder's output asks only for file,
+     *  lines, label and description; the other fields become optional. */
+    leanOutput?: boolean;
     /** Findings a previous pass already posted on this PR, handed to the
      *  simulation pass so it does not spend its walks on covered ground. */
     priorFindings?: Array<{ file?: string; line?: number; summary?: string }>;

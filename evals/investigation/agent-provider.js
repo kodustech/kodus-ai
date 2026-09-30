@@ -760,6 +760,20 @@ function buildCurrentPrompts(caseData) {
         // diff puts some PRs over 300k. Without it the window is managed by the
         // provider truncating, not by the harness compacting.
         contextWindowTokens: janelaDoModelo(),
+        // RECALL_GEN_PER_FILE=1: o generalista da um veredito por arquivo no
+        // reasoning e tem de listar em suggestions tudo que citar ali (#1821:
+        // o Sonnet ve o bug e nao entrega). So muda a instrucao de saida.
+        ...(process.env.RECALL_GEN_PER_FILE === '1' ? { perFileVerdicts: true } : {}),
+        // RECALL_GEN_NO_IMPORTANCE_FILTER=1: regra extra — defeito real nao sai
+        // por ser "menor"; a severidade diz o quanto importa (#1821).
+        ...(process.env.RECALL_GEN_NO_IMPORTANCE_FILTER === '1' ? { noImportanceFilter: true } : {}),
+        // RECALL_GEN_AUDITOR=1: papel de auditor no generalista (ganhou no teste
+        // isolado do Sonnet: +6 bugs reconhecidos, 0 perdidos) (#1821).
+        ...(process.env.RECALL_GEN_AUDITOR === '1' ? { auditorRole: true } : {}),
+        // RECALL_GEN_LEAN=1: saida enxuta no prompt do generalista (so arquivo,
+        // linhas, rotulo, descricao) — no agente nativo o formato pesado custou
+        // ~14 goldens ao Sonnet (#1821). O schema vai pelo input do loop, abaixo.
+        ...(process.env.RECALL_GEN_LEAN === '1' ? { leanOutput: true } : {}),
     };
 
     // Priority tiering, mirroring what the provider's execute() does in
@@ -1332,6 +1346,11 @@ class InvestigationAgentProvider {
                     // vale para generalista, microagentes e simulacao.
                     ...(process.env.RECALL_FINDING_REASON === '1'
                         ? { requireFindingReason: true }
+                        : {}),
+                    // RECALL_GEN_LEAN=1: o schema do submitResult exige so
+                    // arquivo e descricao (par do leanOutput do prompt).
+                    ...(process.env.RECALL_GEN_LEAN === '1'
+                        ? { leanOutput: true }
                         : {}),
                     // 'sim' = so a simulacao; '1+sim' = os quinze E a
                     // simulacao, que e o conjunto que se quer medir.

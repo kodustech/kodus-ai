@@ -146,6 +146,7 @@ function buildSubmitResultSchema(
      *  pelo provider antes de qualquer parsing — medido no smoke de 29/09, 1 de
      *  9 achados chegou com o campo. E a mesma armadilha que engoliu o `reason`. */
     requireDevLevel = false,
+    leanOutput = false,
 ): JSONSchema {
     return {
         type: 'object',
@@ -196,11 +197,12 @@ function buildSubmitResultSchema(
                               }
                             : {}),
                     },
+                    // leanOutput (#1821): only what finding the bug needs is
+                    // required; the rest stays optional for a later stage.
                     required: [
                         'relevantFile',
                         'suggestionContent',
-                        'existingCode',
-                        'improvedCode',
+                        ...(leanOutput ? [] : ['existingCode', 'improvedCode']),
                         ...(requireFindingReason ? ['reason'] : []),
                         ...(requireDevLevel ? ['developerLevel'] : []),
                     ],
@@ -233,6 +235,7 @@ export function buildSubmitResultTool(
     requireFindingReason = false,
     claudeSafeWording = false,
     requireDevLevel = false,
+    leanOutput = false,
 ): AgentTool {
     return {
         ...submitResultTool,
@@ -240,6 +243,7 @@ export function buildSubmitResultTool(
             requireFindingReason,
             claudeSafeWording,
             requireDevLevel,
+            leanOutput,
         ),
         description: requireFindingReason && !claudeSafeWording
             ? 'Submit your final findings and end the review. Every finding must carry a `reason`: the walk that produced it, with file:line. A finding you cannot walk is one you should not submit.'
@@ -264,6 +268,8 @@ export interface BuildFinderSpecParams {
     /** Claude: texto de evidencia no lugar do percurso (ver
      *  REASON_DESCRIPTION_EVIDENCE). */
     claudeSafeWording?: boolean;
+    /** #1821 experiment: submitResult requires only file + content. */
+    leanOutput?: boolean;
     /** Investigation tools (grep/readFile/...) from buildFinderToolRegistry. */
     tools: ToolRegistry;
     coverageLedger: ProgressLedger;
@@ -295,6 +301,7 @@ export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
                 params.requireFindingReason,
                 params.claudeSafeWording,
                 params.requireDevLevel,
+                params.leanOutput,
             ),
             strict: supportsStrictToolsForRun(
                 params.modelId,
