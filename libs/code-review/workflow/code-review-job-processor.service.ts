@@ -167,8 +167,13 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                     previousMetadata.byokSlotExhausted?.notifiedAt,
                 );
 
+                // No lease is held on this path: the row is still PENDING
+                // (enqueue writes PENDING, and a BYOK deferral rewrites PENDING),
+                // so an ownership-guarded write matches zero rows and the FAILED
+                // stamp never lands. With no worker owning it, the unguarded
+                // write is the one that stops the redelivery.
                 await this.handleFailure(jobId, error, {
-                    ownedBy: this.instanceId,
+                    organizationId: this.organizationIdFor(job),
                 });
 
                 if (alreadyNotified) {
@@ -436,9 +441,21 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 context: CodeReviewJobProcessorService.name,
             });
 
-            await this.handleFailure(jobId, error, {
+            const owned = await this.handleFailure(jobId, error, {
                 ownedBy: this.instanceId,
+                organizationId: this.organizationIdFor(job),
             });
+
+            // The guarded write reports whether this worker still owned the
+            // row. If it did not, the job belongs to another worker now: there
+            // is nobody left to notify on this run, and rethrowing would make
+            // the catches above stamp FAILED/PERMANENT unguarded over the row
+            // that worker is running — the very state the fence refused to
+            // write (#1830 review).
+            if (!owned) {
+                return;
+            }
+
             // Don't spam the author with a failure notification when we
             // know the job is going to retry on its own (rate-limit will
             // resolve when the GitHub bucket resets). They'd get one
@@ -507,14 +524,28 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
 
         await this.handleFailure(job.id, error, {
             ownedBy: this.instanceId,
+            organizationId: this.organizationIdFor(job),
         });
     }
 
+    private organizationIdFor(job: any): string | undefined {
+        return (
+            (job?.payload as {
+                organizationAndTeamData?: { organizationId?: string };
+            })?.organizationAndTeamData?.organizationId
+        );
+    }
+
+    /**
+     * Marks a job FAILED. Returns whether the write landed, so a caller whose
+     * lease was reclaimed can stop instead of notifying the author and
+     * rethrowing into catches that stamp FAILED unguarded (#1830 review).
+     */
     async handleFailure(
         jobId: string,
         error: Error,
-        options?: { ownedBy?: string },
-    ): Promise<void> {
+        options?: { ownedBy?: string; organizationId?: string },
+    ): Promise<boolean> {
         this.metricsCollector?.recordCounter('code_review_errors_total', 1, {
             errorType: error.name || 'UnknownError',
         });
@@ -540,7 +571,7 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
             // more, and this FAILED status is what stops the job being
             // redelivered forever, so it must land unguarded.
             await this.jobRepository.update(jobId, failurePatch);
-            return;
+            return true;
         }
 
         // Same ownership fence as markCompleted: a worker whose lease lapsed
@@ -561,10 +592,14 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 metadata: {
                     jobId,
                     instanceId: options.ownedBy,
+                    organizationId: options.organizationId,
                     errorClassification: classification,
                 },
             });
+            return false;
         }
+
+        return true;
     }
 
     async markCompleted(jobId: string, result?: unknown): Promise<void> {
