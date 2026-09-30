@@ -1,9 +1,14 @@
 import { createLogger } from '@libs/core/log/logger';
-import { Inject, Injectable } from '@nestjs/common';
+import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
 
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { CentralizedConfigPrService } from '@libs/centralized-config/infrastructure/adapters/services/centralized-config-pr.service';
+import {
+    CODE_BASE_CONFIG_SERVICE_TOKEN,
+    ICodeBaseConfigService,
+} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
+import { requiresKnowledgeApproval } from '@libs/common/utils/kody-rules/knowledge-approval';
 import {
     CreateKodyRuleDto,
     KodyRuleSeverity,
@@ -132,6 +137,8 @@ export class KodyRulesTools {
         private readonly kodyRulesService: IKodyRulesService,
         private readonly centralizedConfigPrService: CentralizedConfigPrService,
         private readonly deleteRuleInOrganizationByIdKodyRulesUseCase: DeleteRuleInOrganizationByIdKodyRulesUseCase,
+        @Inject(forwardRef(() => CODE_BASE_CONFIG_SERVICE_TOKEN))
+        private readonly codeBaseConfigService: ICodeBaseConfigService,
     ) {}
 
     getKodyRules(): McpToolDefinition {
@@ -303,6 +310,54 @@ export class KodyRulesTools {
         };
     }
 
+    /**
+     * Status for a rule this tool creates: active, unless the merged
+     * code-review config of the repository (and directory) has Kody Knowledge
+     * Approval on, in which case it is pending. This is the decision
+     * `createOrUpdateMemory` makes for memories. When the setting cannot be
+     * read (no team in the call, or the config lookup fails) the rule stays
+     * pending, as every rule from this tool did before, so the approval gate
+     * is only relaxed on a setting that was actually read.
+     */
+    private async resolveCreatedRuleStatus(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repositoryId: string,
+        directoryId: string,
+    ): Promise<KodyRulesStatus> {
+        if (!organizationAndTeamData.teamId) {
+            return KodyRulesStatus.PENDING;
+        }
+
+        try {
+            const mergedConfig =
+                await this.codeBaseConfigService.getSimpleConfig(
+                    organizationAndTeamData,
+                    { repositoryId, directoryId },
+                );
+
+            return requiresKnowledgeApproval(
+                mergedConfig.kodyKnowledgeApproval,
+                KodyRulesOrigin.MCP_AGENT,
+            )
+                ? KodyRulesStatus.PENDING
+                : KodyRulesStatus.ACTIVE;
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not resolve kodyKnowledgeApproval for the MCP-created rule; keeping it pending',
+                context: KodyRulesTools.name,
+                error:
+                    error instanceof Error ? error : new Error(String(error)),
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryId,
+                    directoryId,
+                },
+            });
+            return KodyRulesStatus.PENDING;
+        }
+    }
+
     createKodyRule(): McpToolDefinition {
         const inputSchema = z.object({
             organizationId: z
@@ -399,7 +454,7 @@ export class KodyRulesTools {
                         .string()
                         .optional()
                         .describe(
-                            'Team UUID used to evaluate centralized config and repository mappings for PR-based changes',
+                            'Team UUID used to evaluate centralized config and repository mappings for PR-based changes, and to apply the Kody Knowledge Approval setting; without it the rule is created pending',
                         ),
                 })
                 .describe(
@@ -418,7 +473,7 @@ export class KodyRulesTools {
                     'the developer states a standard the team wants enforced from now on, or repeats the same explanation across threads',
             },
             description:
-                'Create a new Kody Rule with custom scope and severity. pull_request scope: analyzes entire PR context for PR-level rules. file scope: analyzes individual files one by one for file-level rules. Rule starts in pending status and must be approved in the UI before it takes effect. After execution, ALWAYS inform the user of: (1) the rule was created and is pending approval, and (2) the provided link to open the pending Kody Rules page to review and approve it. If centralized config is enabled the rule will be published to a pull request pending to be approved instead, and a prUrl is returned.',
+                'Create a new Kody Rule with custom scope and severity. pull_request scope: analyzes entire PR context for PR-level rules. file scope: analyzes individual files one by one for file-level rules. The rule starts active, or pending when the Kody Knowledge Approval setting requires approval in the UI before it takes effect; the returned status and message say which. After execution, ALWAYS inform the user of: (1) whether the rule is active or awaiting approval, and (2) the provided link to open the rule or the pending Kody Rules page. If centralized config is enabled the rule will be published to a pull request pending to be approved instead, and a prUrl is returned.',
             inputSchema,
             outputSchema: z.object({
                 success: z.boolean(),
@@ -435,21 +490,33 @@ export class KodyRulesTools {
                     .string()
                     .optional()
                     .describe(
-                        'Link to the pending Kody Rules page where the rule can be reviewed and approved',
+                        'Link to the rule, or to the pending Kody Rules page when it awaits approval',
                     ),
             }),
             execute: wrapToolHandler(
                 async (args: InputType): Promise<CreateKodyRuleResponse> => {
+                    const organizationAndTeamData: OrganizationAndTeamData = {
+                        organizationId: args.organizationId,
+                        ...(args.kodyRule.teamId
+                            ? { teamId: args.kodyRule.teamId }
+                            : {}),
+                    };
+                    const repositoryId = args.kodyRule.repositoryId || 'global';
+                    const directoryId =
+                        (args.kodyRule.scope === KodyRulesScope.FILE
+                            ? args.kodyRule.directoryId
+                            : '') || '';
+                    const status = await this.resolveCreatedRuleStatus(
+                        organizationAndTeamData,
+                        repositoryId,
+                        directoryId,
+                    );
+
                     const params: {
                         organizationAndTeamData: OrganizationAndTeamData;
                         kodyRule: KodyRuleInput;
                     } = {
-                        organizationAndTeamData: {
-                            organizationId: args.organizationId,
-                            ...(args.kodyRule.teamId
-                                ? { teamId: args.kodyRule.teamId }
-                                : {}),
-                        },
+                        organizationAndTeamData,
                         kodyRule: {
                             title: args.kodyRule.title,
                             type: KodyRulesType.STANDARD,
@@ -459,17 +526,13 @@ export class KodyRulesTools {
                             examples: (args.kodyRule.examples ||
                                 []) as IKodyRulesExample[],
                             origin: KodyRulesOrigin.MCP_AGENT,
-                            status: KodyRulesStatus.PENDING,
-                            repositoryId:
-                                args.kodyRule.repositoryId || 'global',
+                            status,
+                            repositoryId,
                             path:
                                 (args.kodyRule.scope === KodyRulesScope.FILE
                                     ? args.kodyRule.path
                                     : '') || '',
-                            directoryId:
-                                (args.kodyRule.scope === KodyRulesScope.FILE
-                                    ? args.kodyRule.directoryId
-                                    : '') || '',
+                            directoryId,
                             inheritance: {
                                 inheritable:
                                     args.kodyRule.inheritance?.inheritable ??

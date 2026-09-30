@@ -129,7 +129,7 @@ export class KodusMCPClient {
                 slug: 'KODUS_CREATE_KODY_RULE',
                 name: 'KODUS_CREATE_KODY_RULE',
                 description:
-                    'Create a new Kody Rule with custom scope and severity. pull_request scope: analyzes entire PR context for PR-level rules. file scope: analyzes individual files one by one for file-level rules. Rule starts in pending status.',
+                    'Create a new Kody Rule with custom scope and severity. pull_request scope: analyzes entire PR context for PR-level rules. file scope: analyzes individual files one by one for file-level rules. The rule starts active, or pending approval when Kody Knowledge Approval is on.',
                 provider: MCPProviderType.KODUSMCP,
                 warning: false,
             },

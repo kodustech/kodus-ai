@@ -1,3 +1,4 @@
+import { CodebaseModule } from '@libs/code-review/modules/codebase.module';
 import { PullRequestsModule } from '@libs/code-review/modules/pull-requests.module';
 import { IssuesModule } from '@libs/issues/issues.module';
 import { KodyRulesModule } from '@libs/kodyRules/modules/kodyRules.module';
@@ -43,6 +44,8 @@ export class McpModule {
                 forwardRef(() => IssuesModule),
                 forwardRef(() => PullRequestsModule),
                 forwardRef(() => CentralizedConfigModule),
+                // CODE_BASE_CONFIG_SERVICE_TOKEN, read by KodyRulesTools
+                forwardRef(() => CodebaseModule),
             );
 
             controllers.push(McpController);

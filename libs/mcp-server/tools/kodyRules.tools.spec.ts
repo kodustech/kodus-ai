@@ -59,6 +59,14 @@ describe('KodyRulesTools.createKodyRule', () => {
                     provide: DeleteRuleInOrganizationByIdKodyRulesUseCase,
                     useValue: mockDeleteRuleUseCase,
                 },
+                {
+                    provide: CODE_BASE_CONFIG_SERVICE_TOKEN,
+                    useValue: {
+                        getSimpleConfig: jest.fn().mockResolvedValue({
+                            kodyKnowledgeApproval: { enabled: true },
+                        }),
+                    },
+                },
             ],
         }).compile();
 
@@ -157,12 +165,8 @@ describe('KodyRulesTools.createKodyRule', () => {
         const result = await runCreate({ repositoryId: 'repo-1' });
         const structured = (result as any).structuredContent;
 
-        expect(structured.prUrl).toBe(
-            'https://github.com/org/repo/pull/42',
-        );
-        expect(structured.link).toBe(
-            'https://github.com/org/repo/pull/42',
-        );
+        expect(structured.prUrl).toBe('https://github.com/org/repo/pull/42');
+        expect(structured.link).toBe('https://github.com/org/repo/pull/42');
         expect(mockKodyRulesService.createOrUpdate).not.toHaveBeenCalled();
     });
 });
@@ -209,6 +213,14 @@ describe('KodyRulesTools.updateKodyRule', () => {
                     provide: DeleteRuleInOrganizationByIdKodyRulesUseCase,
                     useValue: mockDeleteRuleUseCase,
                 },
+                {
+                    provide: CODE_BASE_CONFIG_SERVICE_TOKEN,
+                    useValue: {
+                        getSimpleConfig: jest.fn().mockResolvedValue({
+                            kodyKnowledgeApproval: { enabled: true },
+                        }),
+                    },
+                },
             ],
         }).compile();
 
@@ -240,7 +252,9 @@ describe('KodyRulesTools.updateKodyRule', () => {
             status: KodyRulesStatus.ACTIVE,
             repositoryId: 'repo-1',
         } as any);
-        (mockKodyRulesService.updateRuleWithLogging as jest.Mock).mockResolvedValue({
+        (
+            mockKodyRulesService.updateRuleWithLogging as jest.Mock
+        ).mockResolvedValue({
             uuid: 'rule-789',
             title: 'Updated title',
             rule: 'Some rule body',
@@ -362,7 +376,7 @@ describe('KodyRulesTools.createKodyRule and Kody Knowledge Approval (#1836)', ()
         tools = module.get<KodyRulesTools>(KodyRulesTools);
     };
 
-    const runCreate = () =>
+    const runCreate = (overrides?: { teamId?: string }) =>
         tools.createKodyRule().execute(
             {
                 organizationId: 'org-1',
@@ -373,6 +387,7 @@ describe('KodyRulesTools.createKodyRule and Kody Knowledge Approval (#1836)', ()
                     scope: KodyRulesScope.PULL_REQUEST,
                     repositoryId: 'repo-1',
                     teamId: 'team-1',
+                    ...overrides,
                 },
             } as any,
             undefined,
@@ -384,6 +399,10 @@ describe('KodyRulesTools.createKodyRule and Kody Knowledge Approval (#1836)', ()
         const result = await runCreate();
         const structured = (result as any).structuredContent;
 
+        expect(mockCodeBaseConfigService.getSimpleConfig).toHaveBeenCalledWith(
+            { organizationId: 'org-1', teamId: 'team-1' },
+            { repositoryId: 'repo-1', directoryId: '' },
+        );
         expect(mockKodyRulesService.createOrUpdate).toHaveBeenCalledWith(
             expect.anything(),
             expect.objectContaining({ status: KodyRulesStatus.PENDING }),
@@ -406,5 +425,39 @@ describe('KodyRulesTools.createKodyRule and Kody Knowledge Approval (#1836)', ()
         );
         expect(structured.data.status).toBe(KodyRulesStatus.ACTIVE);
         expect(structured.message).not.toMatch(/awaiting approval/i);
+    });
+
+    it('keeps the rule PENDING when the config lookup fails', async () => {
+        await build(false);
+        mockCodeBaseConfigService.getSimpleConfig.mockRejectedValueOnce(
+            new Error('parameters unavailable'),
+        );
+
+        const result = await runCreate();
+        const structured = (result as any).structuredContent;
+
+        expect(mockKodyRulesService.createOrUpdate).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ status: KodyRulesStatus.PENDING }),
+            expect.anything(),
+        );
+        expect(structured.data.status).toBe(KodyRulesStatus.PENDING);
+    });
+
+    it('keeps the rule PENDING without a teamId, since the setting cannot be read', async () => {
+        await build(false);
+
+        const result = await runCreate({ teamId: undefined });
+        const structured = (result as any).structuredContent;
+
+        expect(
+            mockCodeBaseConfigService.getSimpleConfig,
+        ).not.toHaveBeenCalled();
+        expect(mockKodyRulesService.createOrUpdate).toHaveBeenCalledWith(
+            { organizationId: 'org-1' },
+            expect.objectContaining({ status: KodyRulesStatus.PENDING }),
+            expect.anything(),
+        );
+        expect(structured.data.status).toBe(KodyRulesStatus.PENDING);
     });
 });
