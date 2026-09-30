@@ -33,11 +33,19 @@ function makeUseCase() {
     };
     const authorization = { ensure: jest.fn(async () => undefined) };
     const request = { user: { organization: { uuid: 'org-1' } } };
+    // The base this branch was cut from predates the telemetry service that
+    // main now injects as the constructor's fourth argument, and the import
+    // calls it fire-and-forget: without a stub every case that imports a rule
+    // throws on `this.telemetry` once the branch is merged with main (which is
+    // what CI runs). The constructor is cast so the same spec runs on both
+    // bases.
+    const telemetry = { kodyRulesImported: jest.fn() };
 
-    const useCase = new AddLibraryKodyRulesUseCase(
+    const useCase = new (AddLibraryKodyRulesUseCase as any)(
         request as any,
         createOrUpdate as any,
         authorization as any,
+        telemetry as any,
     );
 
     return { useCase, created };
