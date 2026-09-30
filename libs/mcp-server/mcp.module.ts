@@ -2,6 +2,7 @@ import { CodebaseModule } from '@libs/code-review/modules/codebase.module';
 import { PullRequestsModule } from '@libs/code-review/modules/pull-requests.module';
 import { IssuesModule } from '@libs/issues/issues.module';
 import { KodyRulesModule } from '@libs/kodyRules/modules/kodyRules.module';
+import { TeamModule } from '@libs/organization/modules/team.module';
 import { PlatformModule } from '@libs/platform/modules/platform.module';
 import { DynamicModule, Module, Provider, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -44,8 +45,9 @@ export class McpModule {
                 forwardRef(() => IssuesModule),
                 forwardRef(() => PullRequestsModule),
                 forwardRef(() => CentralizedConfigModule),
-                // CODE_BASE_CONFIG_SERVICE_TOKEN, read by KodyRulesTools
+                // CODE_BASE_CONFIG_SERVICE_TOKEN and TEAM_SERVICE_TOKEN, read by KodyRulesTools
                 forwardRef(() => CodebaseModule),
+                forwardRef(() => TeamModule),
             );
 
             controllers.push(McpController);

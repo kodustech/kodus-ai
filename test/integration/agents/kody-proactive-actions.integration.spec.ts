@@ -66,7 +66,13 @@ import {
  * tool at the source and these expectations move with it.
  */
 const ORG_MCP_TOOLS = [
-    ...new KodyRulesTools({} as never, {} as never, {} as never).getAllTools(),
+    ...new KodyRulesTools(
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+    ).getAllTools(),
     ...new KodyIssuesTools({} as never, {} as never).getAllTools(),
 ];
 

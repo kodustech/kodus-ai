@@ -10,6 +10,10 @@ import {
 } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import { requiresKnowledgeApproval } from '@libs/common/utils/kody-rules/knowledge-approval';
 import {
+    ITeamService,
+    TEAM_SERVICE_TOKEN,
+} from '@libs/organization/domain/team/contracts/team.service.contract';
+import {
     CreateKodyRuleDto,
     KodyRuleSeverity,
 } from '@libs/ee/kodyRules/dtos/create-kody-rule.dto';
@@ -139,6 +143,8 @@ export class KodyRulesTools {
         private readonly deleteRuleInOrganizationByIdKodyRulesUseCase: DeleteRuleInOrganizationByIdKodyRulesUseCase,
         @Inject(forwardRef(() => CODE_BASE_CONFIG_SERVICE_TOKEN))
         private readonly codeBaseConfigService: ICodeBaseConfigService,
+        @Inject(TEAM_SERVICE_TOKEN)
+        private readonly teamService: ITeamService,
     ) {}
 
     getKodyRules(): McpToolDefinition {
@@ -311,23 +317,39 @@ export class KodyRulesTools {
     }
 
     /**
+     * Whether `teamId` belongs to `organizationId`. The approval setting is
+     * read per team, so a team from another organization must not decide the
+     * status of a rule created here. Same check, and same answer, as
+     * `KodyRulesTenantGuard` on the HTTP side.
+     */
+    private async teamBelongsToOrganization(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<boolean> {
+        const { organizationId, teamId } = organizationAndTeamData;
+        if (!organizationId || !teamId) {
+            return false;
+        }
+
+        const teamOrganizationId =
+            await this.teamService.findOneOrganizationIdByTeamId(teamId);
+
+        return !!teamOrganizationId && teamOrganizationId === organizationId;
+    }
+
+    /**
      * Status for a rule this tool creates: active, unless the merged
      * code-review config of the repository (and directory) has Kody Knowledge
-     * Approval on, in which case it is pending. This is the decision
-     * `createOrUpdateMemory` makes for memories. When the setting cannot be
-     * read (no team in the call, or the config lookup fails) the rule stays
-     * pending, as every rule from this tool did before, so the approval gate
-     * is only relaxed on a setting that was actually read.
+     * Approval on, in which case it is pending. Memories
+     * (`createOrUpdateMemory`), past-review rules (`GenerateKodyRulesUseCase`)
+     * and IDE-synced rules (`KodyRulesSyncService`) make the same lookup, and
+     * like them a lookup that fails defaults to active, which is also what an
+     * unset setting means.
      */
     private async resolveCreatedRuleStatus(
         organizationAndTeamData: OrganizationAndTeamData,
         repositoryId: string,
         directoryId: string,
     ): Promise<KodyRulesStatus> {
-        if (!organizationAndTeamData.teamId) {
-            return KodyRulesStatus.PENDING;
-        }
-
         try {
             const mergedConfig =
                 await this.codeBaseConfigService.getSimpleConfig(
@@ -344,7 +366,7 @@ export class KodyRulesTools {
         } catch (error) {
             this.logger.warn({
                 message:
-                    'Could not resolve kodyKnowledgeApproval for the MCP-created rule; keeping it pending',
+                    'Could not resolve kodyKnowledgeApproval for the MCP-created rule; defaulting to active',
                 context: KodyRulesTools.name,
                 error:
                     error instanceof Error ? error : new Error(String(error)),
@@ -354,7 +376,7 @@ export class KodyRulesTools {
                     directoryId,
                 },
             });
-            return KodyRulesStatus.PENDING;
+            return KodyRulesStatus.ACTIVE;
         }
     }
 
@@ -452,9 +474,8 @@ export class KodyRulesTools {
                         .describe('Rule inheritance settings'),
                     teamId: z
                         .string()
-                        .optional()
                         .describe(
-                            'Team UUID used to evaluate centralized config and repository mappings for PR-based changes, and to apply the Kody Knowledge Approval setting; without it the rule is created pending',
+                            'Team UUID used to evaluate centralized config and repository mappings for PR-based changes, and whose Kody Knowledge Approval setting decides whether the rule starts active or pending',
                         ),
                 })
                 .describe(
@@ -497,10 +518,22 @@ export class KodyRulesTools {
                 async (args: InputType): Promise<CreateKodyRuleResponse> => {
                     const organizationAndTeamData: OrganizationAndTeamData = {
                         organizationId: args.organizationId,
-                        ...(args.kodyRule.teamId
-                            ? { teamId: args.kodyRule.teamId }
-                            : {}),
+                        teamId: args.kodyRule.teamId,
                     };
+
+                    if (
+                        !(await this.teamBelongsToOrganization(
+                            organizationAndTeamData,
+                        ))
+                    ) {
+                        return {
+                            success: false,
+                            count: 0,
+                            data: { title: args.kodyRule.title },
+                            message: 'Team not found.',
+                        };
+                    }
+
                     const repositoryId = args.kodyRule.repositoryId || 'global';
                     const directoryId =
                         (args.kodyRule.scope === KodyRulesScope.FILE

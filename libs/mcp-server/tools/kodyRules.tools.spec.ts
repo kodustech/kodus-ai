@@ -15,6 +15,10 @@ import {
     KodyRulesScope,
     KodyRulesStatus,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import {
+    ITeamService,
+    TEAM_SERVICE_TOKEN,
+} from '@libs/organization/domain/team/contracts/team.service.contract';
 
 import { KodyRulesTools } from './kodyRules.tools';
 
@@ -65,6 +69,14 @@ describe('KodyRulesTools.createKodyRule', () => {
                         getSimpleConfig: jest.fn().mockResolvedValue({
                             kodyKnowledgeApproval: { enabled: true },
                         }),
+                    },
+                },
+                {
+                    provide: TEAM_SERVICE_TOKEN,
+                    useValue: {
+                        findOneOrganizationIdByTeamId: jest
+                            .fn()
+                            .mockResolvedValue('org-1'),
                     },
                 },
             ],
@@ -221,6 +233,14 @@ describe('KodyRulesTools.updateKodyRule', () => {
                         }),
                     },
                 },
+                {
+                    provide: TEAM_SERVICE_TOKEN,
+                    useValue: {
+                        findOneOrganizationIdByTeamId: jest
+                            .fn()
+                            .mockResolvedValue('org-1'),
+                    },
+                },
             ],
         }).compile();
 
@@ -313,6 +333,7 @@ describe('KodyRulesTools.createKodyRule and Kody Knowledge Approval (#1836)', ()
     let tools: KodyRulesTools;
     let mockKodyRulesService: jest.Mocked<IKodyRulesService>;
     let mockCodeBaseConfigService: jest.Mocked<ICodeBaseConfigService>;
+    let mockTeamService: jest.Mocked<ITeamService>;
     let previousBaseUrl: string | undefined;
 
     beforeEach(() => {
@@ -344,6 +365,10 @@ describe('KodyRulesTools.createKodyRule and Kody Knowledge Approval (#1836)', ()
             }),
         } as unknown as jest.Mocked<ICodeBaseConfigService>;
 
+        mockTeamService = {
+            findOneOrganizationIdByTeamId: jest.fn().mockResolvedValue('org-1'),
+        } as unknown as jest.Mocked<ITeamService>;
+
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 KodyRulesTools,
@@ -370,13 +395,17 @@ describe('KodyRulesTools.createKodyRule and Kody Knowledge Approval (#1836)', ()
                     provide: CODE_BASE_CONFIG_SERVICE_TOKEN,
                     useValue: mockCodeBaseConfigService,
                 },
+                {
+                    provide: TEAM_SERVICE_TOKEN,
+                    useValue: mockTeamService,
+                },
             ],
         }).compile();
 
         tools = module.get<KodyRulesTools>(KodyRulesTools);
     };
 
-    const runCreate = (overrides?: { teamId?: string }) =>
+    const runCreate = () =>
         tools.createKodyRule().execute(
             {
                 organizationId: 'org-1',
@@ -387,7 +416,6 @@ describe('KodyRulesTools.createKodyRule and Kody Knowledge Approval (#1836)', ()
                     scope: KodyRulesScope.PULL_REQUEST,
                     repositoryId: 'repo-1',
                     teamId: 'team-1',
-                    ...overrides,
                 },
             } as any,
             undefined,
@@ -427,8 +455,8 @@ describe('KodyRulesTools.createKodyRule and Kody Knowledge Approval (#1836)', ()
         expect(structured.message).not.toMatch(/awaiting approval/i);
     });
 
-    it('keeps the rule PENDING when the config lookup fails', async () => {
-        await build(false);
+    it('defaults to ACTIVE when the config lookup fails, like the other rule creators', async () => {
+        await build(true);
         mockCodeBaseConfigService.getSimpleConfig.mockRejectedValueOnce(
             new Error('parameters unavailable'),
         );
@@ -438,26 +466,26 @@ describe('KodyRulesTools.createKodyRule and Kody Knowledge Approval (#1836)', ()
 
         expect(mockKodyRulesService.createOrUpdate).toHaveBeenCalledWith(
             expect.anything(),
-            expect.objectContaining({ status: KodyRulesStatus.PENDING }),
+            expect.objectContaining({ status: KodyRulesStatus.ACTIVE }),
             expect.anything(),
         );
-        expect(structured.data.status).toBe(KodyRulesStatus.PENDING);
+        expect(structured.data.status).toBe(KodyRulesStatus.ACTIVE);
     });
 
-    it('keeps the rule PENDING without a teamId, since the setting cannot be read', async () => {
+    it('refuses a team that does not belong to the organization before reading the setting', async () => {
         await build(false);
+        mockTeamService.findOneOrganizationIdByTeamId.mockResolvedValueOnce(
+            'org-2',
+        );
 
-        const result = await runCreate({ teamId: undefined });
+        const result = await runCreate();
         const structured = (result as any).structuredContent;
 
+        expect(structured.success).toBe(false);
+        expect(structured.message).toBe('Team not found.');
         expect(
             mockCodeBaseConfigService.getSimpleConfig,
         ).not.toHaveBeenCalled();
-        expect(mockKodyRulesService.createOrUpdate).toHaveBeenCalledWith(
-            { organizationId: 'org-1' },
-            expect.objectContaining({ status: KodyRulesStatus.PENDING }),
-            expect.anything(),
-        );
-        expect(structured.data.status).toBe(KodyRulesStatus.PENDING);
+        expect(mockKodyRulesService.createOrUpdate).not.toHaveBeenCalled();
     });
 });
