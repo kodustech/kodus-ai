@@ -3,6 +3,17 @@ import { isAnalyzerSuggestion } from '@libs/code-review/infrastructure/analyzers
 import { CodeSuggestion } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
 /**
+ * How many lines a restatement may span beyond its start.
+ *
+ * A scanner anchors on one line. The model's version of the same fact is
+ * anchored there too, at most a few lines wide for a multi-line declaration.
+ * Anything broader is a different defect that merely contains the line, and
+ * merging it would drop its explanation from the review — the loss is worse
+ * than the duplicate comment we are trying to avoid, so it keeps the guard.
+ */
+const MAX_RESTATEMENT_SPAN = 5;
+
+/**
  * Whether an agent finding is a restatement of a deterministic one.
  *
  * A scanner asserts a fact at a location — "a credential is on line 4". An
@@ -59,7 +70,15 @@ export function restatesAnalyzerFinding(
         return false;
     }
 
-    return a[0] <= b[1] && b[0] <= a[1];
+    if (a[0] > b[1] || b[0] > a[1]) {
+        return false;
+    }
+
+    // Overlap alone puts no ceiling on the model's span: a finding covering a
+    // whole file contains the scanner's line without being about it. A
+    // restatement of a one-line fact is anchored at that line, so the span has
+    // to stay tight around it — wide findings keep the content guard.
+    return a[1] - a[0] <= MAX_RESTATEMENT_SPAN;
 }
 
 /**

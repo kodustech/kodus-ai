@@ -23,7 +23,7 @@ const agent = (
 ): Partial<CodeSuggestion> => ({
     relevantFile: 'src/config.ts',
     relevantLinesStart: 3,
-    relevantLinesEnd: 29,
+    relevantLinesEnd: 6,
     label: 'security',
     ...over,
 });
@@ -86,6 +86,37 @@ describe('restatesAnalyzerFinding', () => {
                 analyzer(),
             ),
         ).toBe(false);
+    });
+
+    /**
+     * Overlap alone put no ceiling on the agent's span, so a finding spanning
+     * a whole file counted as a restatement of a one-line scanner fact. A
+     * restatement of "a credential is on line 4" is itself anchored at line 4;
+     * a 400-line span is a different defect that happens to contain it, and
+     * merging it drops its explanation from the review.
+     */
+    it('is false when the agent span is far wider than the scanner anchor', () => {
+        expect(
+            restatesAnalyzerFinding(
+                agent({ relevantLinesStart: 1, relevantLinesEnd: 400 }),
+                analyzer(),
+            ),
+        ).toBe(false);
+        expect(
+            restatesAnalyzerFinding(
+                agent({ relevantLinesStart: 3, relevantLinesEnd: 29 }),
+                analyzer(),
+            ),
+        ).toBe(false);
+    });
+
+    it('is true for a span tight around the scanner anchor', () => {
+        expect(
+            restatesAnalyzerFinding(
+                agent({ relevantLinesStart: 3, relevantLinesEnd: 6 }),
+                analyzer(),
+            ),
+        ).toBe(true);
     });
 
     /** Missing line numbers must not be read as an overlap at line 0. */
