@@ -29,6 +29,10 @@ for f in sorted(glob.glob(f'pools/{pool}/*.raw.txt')):
     if por.get('lente-3p') != 9: problemas.append(f"lentes 3p = {por.get('lente-3p', 0)}")
     if any(p['steps'] > 1 for p in ps if p['label'].startswith('micro-exp-p1g-')): problemas.append('lente 1p com >1 passo')
     if any(p['steps'] > 3 for p in ps if p['label'].startswith('micro-exp-p3-')): problemas.append('lente 3p com >3 passos')
+    # 0 passos = a chamada nunca voltou (limite do provedor, conta sem saldo):
+    # a passada nao rodou, e o PR mediria menos do que a arquitetura acha.
+    vazias = [p['label'] for p in ps if p.get('steps', 0) == 0]
+    if vazias: problemas.append(f'{len(vazias)} passada(s) sem nenhum passo: {", ".join(vazias[:3])}')
     if g and lentes:
         ini_l = min(p['startEpochMs'] for p in lentes)
         if abs(ini_l - g['startEpochMs']) > 5000: problemas.append('lentes NAO comecaram junto com o generalista')

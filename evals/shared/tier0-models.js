@@ -59,6 +59,8 @@ const TIER0 = {
     'glm-5.3@together': { provider: 'openai_compatible', doModel: 'zai-org/GLM-5.3', keyEnvs: ['BYOK_TOGETHER_API_KEY'], baseURL: 'https://api.together.xyz/v1' },
     // Kimi K2.7 Code via Together (27/09): mesma chave do DeepSeek@together.
     'kimi-k2.7-code@together': { provider: 'openai_compatible', doModel: 'moonshotai/Kimi-K2.7-Code', keyEnvs: ['BYOK_TOGETHER_API_KEY'], baseURL: 'https://api.together.xyz/v1' },
+    // Kimi K3 via Together (01/10): a Moonshot ficou sem saldo no meio da fase 1.
+    'kimi-k3@together': { provider: 'openai_compatible', doModel: 'moonshotai/Kimi-K3', keyEnvs: ['BYOK_TOGETHER_API_KEY'], baseURL: 'https://api.together.xyz/v1' },
     'deepseek-v4.1-flash@together': { provider: 'openai_compatible', doModel: 'deepseek-ai/DeepSeek-V4.1-Flash', keyEnvs: ['BYOK_TOGETHER_API_KEY'], baseURL: 'https://api.together.xyz/v1' },
     // K3 usa chave própria (KIMI_NEW) — crédito limitado, ver custo antes de
     // disparar passada cheia: $3/$15 por milhão, ~3x o k2.7.

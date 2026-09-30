@@ -503,7 +503,12 @@ async function createModel(config, caseId) {
             if (!apiKey) throw new Error(`no API key for ${modelId} — set one of ${spec.keyEnvs.join('/')}`);
             const id = spec.doModel || modelId;
             const built = REGISTRY.get(spec.provider).build({ provider: spec.provider, model: id, apiKey }, {});
-            const comCache = spec.provider === 'openai' && caseId ? withPromptCacheKey(built, `kodus-bench:${caseId}`) : built;
+            // A OpenAI limita prompt_cache_key a 64 caracteres, e o caseId passa
+            // disso em 22 dos 30 PRs: vai um hash curto e estavel dele.
+            const chave = caseId
+                ? `kb-${require('crypto').createHash('sha256').update(caseId).digest('hex').slice(0, 32)}`
+                : null;
+            const comCache = spec.provider === 'openai' && chave ? withPromptCacheKey(built, chave) : built;
             return withCallCounter(withReasoningEffort(withCallTimeout(comCache), id), modelId);
         }
 
