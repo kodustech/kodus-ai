@@ -1,6 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 
 import { CentralizedConfigPrService } from '@libs/centralized-config/infrastructure/adapters/services/centralized-config-pr.service';
+import {
+    CODE_BASE_CONFIG_SERVICE_TOKEN,
+    ICodeBaseConfigService,
+} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import { KodyRuleSeverity } from '@libs/ee/kodyRules/dtos/create-kody-rule.dto';
 import { DeleteRuleInOrganizationByIdKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/delete-rule-in-organization-by-id.use-case';
 import {
@@ -288,5 +292,119 @@ describe('KodyRulesTools.updateKodyRule', () => {
 
         expect(structured.success).toBe(false);
         expect(structured.message).toMatch(/not found/i);
+    });
+});
+
+describe('KodyRulesTools.createKodyRule and Kody Knowledge Approval (#1836)', () => {
+    let tools: KodyRulesTools;
+    let mockKodyRulesService: jest.Mocked<IKodyRulesService>;
+    let mockCodeBaseConfigService: jest.Mocked<ICodeBaseConfigService>;
+    let previousBaseUrl: string | undefined;
+
+    beforeEach(() => {
+        previousBaseUrl = process.env.API_USER_INVITE_BASE_URL;
+        process.env.API_USER_INVITE_BASE_URL = 'https://app.kodus.io';
+    });
+
+    afterEach(() => {
+        process.env.API_USER_INVITE_BASE_URL = previousBaseUrl;
+    });
+
+    const build = async (approvalEnabled: boolean) => {
+        mockKodyRulesService = {
+            // Like the real service, persist the status the caller asked for.
+            createOrUpdate: jest
+                .fn()
+                .mockImplementation(async (_org, kodyRule) => ({
+                    uuid: 'rule-1',
+                    title: kodyRule.title,
+                    rule: kodyRule.rule,
+                    status: kodyRule.status,
+                    repositoryId: kodyRule.repositoryId,
+                })),
+        } as unknown as jest.Mocked<IKodyRulesService>;
+
+        mockCodeBaseConfigService = {
+            getSimpleConfig: jest.fn().mockResolvedValue({
+                kodyKnowledgeApproval: { enabled: approvalEnabled },
+            }),
+        } as unknown as jest.Mocked<ICodeBaseConfigService>;
+
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                KodyRulesTools,
+                {
+                    provide: KODY_RULES_SERVICE_TOKEN,
+                    useValue: mockKodyRulesService,
+                },
+                {
+                    provide: CentralizedConfigPrService,
+                    useValue: {
+                        createMutationPullRequestIfEnabled: jest
+                            .fn()
+                            .mockResolvedValue({ mode: 'direct' }),
+                        resolveDirectoryGroupFolderName: jest
+                            .fn()
+                            .mockResolvedValue(null),
+                    },
+                },
+                {
+                    provide: DeleteRuleInOrganizationByIdKodyRulesUseCase,
+                    useValue: {},
+                },
+                {
+                    provide: CODE_BASE_CONFIG_SERVICE_TOKEN,
+                    useValue: mockCodeBaseConfigService,
+                },
+            ],
+        }).compile();
+
+        tools = module.get<KodyRulesTools>(KodyRulesTools);
+    };
+
+    const runCreate = () =>
+        tools.createKodyRule().execute(
+            {
+                organizationId: 'org-1',
+                kodyRule: {
+                    title: 'Avoid console.log',
+                    rule: 'Do not commit console.log statements',
+                    severity: KodyRuleSeverity.MEDIUM,
+                    scope: KodyRulesScope.PULL_REQUEST,
+                    repositoryId: 'repo-1',
+                    teamId: 'team-1',
+                },
+            } as any,
+            undefined,
+        );
+
+    it('creates the rule PENDING when approval is enabled', async () => {
+        await build(true);
+
+        const result = await runCreate();
+        const structured = (result as any).structuredContent;
+
+        expect(mockKodyRulesService.createOrUpdate).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ status: KodyRulesStatus.PENDING }),
+            expect.anything(),
+        );
+        expect(structured.data.status).toBe(KodyRulesStatus.PENDING);
+        expect(structured.message).toMatch(/awaiting approval/i);
+    });
+
+    it('creates the rule ACTIVE when approval is disabled, like memories do', async () => {
+        await build(false);
+
+        const result = await runCreate();
+        const structured = (result as any).structuredContent;
+
+        expect(mockKodyRulesService.createOrUpdate).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ status: KodyRulesStatus.ACTIVE }),
+            expect.anything(),
+        );
+        expect(structured.data.status).toBe(KodyRulesStatus.ACTIVE);
+        expect(structured.message).not.toMatch(/awaiting approval/i);
     });
 });
