@@ -202,10 +202,15 @@ describe('CodeReviewJobProcessorService', () => {
             // this job and another worker owns it now.
             jobRepository.update.mockResolvedValueOnce(false);
 
-            await service.handleFailure('job-1', new Error('boom'), {
+            const landed = await service.handleFailure('job-1', new Error('boom'), {
                 ownedBy: 'instance-1',
+                organizationId: 'org-1',
             });
 
+            // The caller needs this answer. Told nothing, it went on to notify
+            // the author and rethrow, and the catches above stamped
+            // FAILED/PERMANENT unguarded over the row the new worker is running.
+            expect(landed).toBe(false);
             expect(jobRepository.update).toHaveBeenCalledWith(
                 'job-1',
                 expect.objectContaining({ status: JobStatus.FAILED }),
@@ -217,17 +222,32 @@ describe('CodeReviewJobProcessorService', () => {
                     metadata: expect.objectContaining({
                         jobId: 'job-1',
                         instanceId: 'instance-1',
+                        organizationId: 'org-1',
                     }),
                 }),
             );
             warn.mockRestore();
         });
 
+        it('reports the failure as landed when the guarded write matched', async () => {
+            jobRepository.update.mockResolvedValueOnce(true);
+
+            await expect(
+                service.handleFailure('job-1', new Error('boom'), {
+                    ownedBy: 'instance-1',
+                }),
+            ).resolves.toBe(true);
+        });
+
         it('still writes the failure unguarded on the exhausted-retry path', async () => {
             // No worker owns the row by then, and this status is what stops the
             // job being redelivered forever.
-            await service.handleFailure('job-1', new Error('boom'));
+            const landed = await service.handleFailure(
+                'job-1',
+                new Error('boom'),
+            );
 
+            expect(landed).toBe(true);
             expect(jobRepository.update).toHaveBeenCalledWith(
                 'job-1',
                 expect.objectContaining({ status: JobStatus.FAILED }),
