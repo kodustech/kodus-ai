@@ -1125,8 +1125,9 @@ function resolveRuleId(
  */
 function proposesAChange(v: ShardViolation): boolean {
     if (!v.improvedCode || !v.existingCode) return true;
-    const flat = (code: string) => code.replace(/\s+/g, ' ').trim();
-    return flat(v.improvedCode) !== flat(v.existingCode);
+    // Byte for byte: a formatting rule's fix changes only whitespace, and the
+    // copies emitted for compliant lines were identical in every measured run.
+    return v.improvedCode !== v.existingCode;
 }
 
 /**

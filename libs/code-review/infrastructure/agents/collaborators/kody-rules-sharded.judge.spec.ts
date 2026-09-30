@@ -2192,16 +2192,19 @@ describe('judgeKodyRulesSharded — findings that propose no change', () => {
         expect(res.violations).toEqual([]);
     });
 
-    it('ignores whitespace when comparing the two', async () => {
+    // A formatting rule's fix changes only whitespace (indentation, trailing
+    // spaces): that is a real change, not a repeat. The copies the model emits
+    // for compliant lines are byte-identical, so nothing is normalized.
+    it('keeps a finding whose fix changes only whitespace', async () => {
         const res = await judgeKodyRulesSharded({
-            changedFiles: [file('src/a.ts', '3 +const a = f(x);')],
+            changedFiles: [file('src/a.ts', '3 +\tconst a = f(x);  ')],
             rules,
             runJudge: judgeReturning({
-                existingCode: 'const a = f(x);',
-                improvedCode: '  const a =  f(x);\n',
+                existingCode: '\tconst a = f(x);  ',
+                improvedCode: '    const a = f(x);',
             }),
         });
-        expect(res.violations).toEqual([]);
+        expect(res.violations).toHaveLength(1);
     });
 
     it('keeps a finding that rewrites the code', async () => {
