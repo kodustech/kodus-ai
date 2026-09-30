@@ -189,6 +189,20 @@ export const anthropicModule: ProviderModule = {
                 resolveCompatibleReasoningTraits(cfg.model)
                     .reasoningControl === 'effort-only'
             ) {
+                // Except a version whose own endpoint REFUSES to run without a
+                // thinking shape: MiniMax M3.1+ answers 400 "requires adaptive
+                // thinking" for a request that carries none, so for it the shape
+                // IS the request and omitting is the failure. "Effort-only"
+                // describes the brand; this version is the exception its table now
+                // states, and `thinksByDefault` keeps the picker offering a scale.
+                if (
+                    resolveCompatibleReasoningTraits(cfg.model)
+                        .requiredThinkingShape === 'adaptive'
+                ) {
+                    return {
+                        anthropic: { thinking: { type: 'adaptive' }, effort },
+                    };
+                }
                 return {};
             }
             // A REAL Claude id proxied over a compatible endpoint is still a
