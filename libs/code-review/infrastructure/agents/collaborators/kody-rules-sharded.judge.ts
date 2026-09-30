@@ -1114,6 +1114,21 @@ function resolveRuleId(
  * don't map to a rule in this shard. `orderedUuids` is index-aligned with the
  * rules as presented to the model.
  */
+/**
+ * False when the finding rewrites its code into the same code. A model that
+ * judged a line compliant sometimes still returns an entry for it ("No
+ * violation: …") with the line copied into improvedCode — published, a comment
+ * telling the author there is nothing to fix. On the kody-rules eval that shape
+ * was most false alarms on clean files and none of the real violations. A
+ * finding with no improvedCode is kept: the prompt asks for null when the fix
+ * is not a replacement of those lines.
+ */
+function proposesAChange(v: ShardViolation): boolean {
+    if (!v.improvedCode || !v.existingCode) return true;
+    const flat = (code: string) => code.replace(/\s+/g, ' ').trim();
+    return flat(v.improvedCode) !== flat(v.existingCode);
+}
+
 function resolveShardViolations(
     vs: RawShardViolation[],
     orderedUuids: string[],
@@ -1231,7 +1246,16 @@ export async function judgeKodyRulesSharded(
                 });
                 // resolve ruleId→uuid (dropping hallucinated indices), then
                 // anchor every violation to this file
-                return resolveShardViolations(vs, ruleUuids).map((v) => ({
+                const resolved = resolveShardViolations(vs, ruleUuids);
+                const proposing = resolved.filter(proposesAChange);
+                if (proposing.length < resolved.length) {
+                    logger?.warn({
+                        message: `[kody-rules-shard] dropped ${resolved.length - proposing.length} finding(s) on ${file.filename} whose improvedCode repeats the existing code`,
+                        context: 'kody-rules-sharded',
+                        metadata: { filename: file.filename },
+                    });
+                }
+                return proposing.map((v) => ({
                     ...v,
                     relevantFile: file.filename,
                 }));

@@ -2156,3 +2156,75 @@ describe('judgeKodyRulesSharded — rule-level fileScope', () => {
         ).toHaveLength(0);
     });
 });
+
+// A model that has judged a line compliant sometimes still returns an entry
+// for it — "No violation: this line does not use `any`" — with the line
+// copied into improvedCode unchanged. Published, that is a comment telling the
+// author there is nothing to fix. Measured on the kody-rules github-cases eval
+// (gpt-5.4-mini): most false alarms on clean files had this shape, and no
+// finding on a real violation did. Null improvedCode stays allowed: the prompt
+// asks for null when the fix is not a replacement of those lines.
+describe('judgeKodyRulesSharded — findings that propose no change', () => {
+    const rules = [
+        { uuid: 'r1', title: 'no any', rule: 'no any', path: '**/*.ts' },
+    ];
+    const judgeReturning = (raw: Partial<RawShardViolation>): RunJudge =>
+        async () => [
+            {
+                ruleId: 1,
+                relevantLinesStart: 3,
+                suggestionContent: 'x',
+                oneSentenceSummary: 's',
+                ...raw,
+            } as RawShardViolation,
+        ];
+
+    it('drops a finding whose improvedCode is the existing code unchanged', async () => {
+        const res = await judgeKodyRulesSharded({
+            changedFiles: [file('src/a.ts', "3 +import type { X } from './x';")],
+            rules,
+            runJudge: judgeReturning({
+                suggestionContent: 'No violation: this is a type-only import.',
+                existingCode: "import type { X } from './x';",
+                improvedCode: "import type { X } from './x';",
+            }),
+        });
+        expect(res.violations).toEqual([]);
+    });
+
+    it('ignores whitespace when comparing the two', async () => {
+        const res = await judgeKodyRulesSharded({
+            changedFiles: [file('src/a.ts', '3 +const a = f(x);')],
+            rules,
+            runJudge: judgeReturning({
+                existingCode: 'const a = f(x);',
+                improvedCode: '  const a =  f(x);\n',
+            }),
+        });
+        expect(res.violations).toEqual([]);
+    });
+
+    it('keeps a finding that rewrites the code', async () => {
+        const res = await judgeKodyRulesSharded({
+            changedFiles: [file('src/a.ts', '3 +const x: any = 1;')],
+            rules,
+            runJudge: judgeReturning({
+                existingCode: 'const x: any = 1;',
+                improvedCode: 'const x: number = 1;',
+            }),
+        });
+        expect(res.violations).toHaveLength(1);
+    });
+
+    it('keeps a finding with no replacement to offer', async () => {
+        const res = await judgeKodyRulesSharded({
+            changedFiles: [file('src/a.ts', '3 +function huge() {')],
+            rules,
+            runJudge: judgeReturning({
+                existingCode: 'function huge() {',
+                improvedCode: null,
+            }),
+        });
+        expect(res.violations).toHaveLength(1);
+    });
+});
