@@ -14,6 +14,13 @@
    </a>
 </p>
 
+<p align="center"><strong>Open source AI code review without vendor lock-in.</strong></p>
+
+<p align="center">
+   Kodus reviews pull requests on GitHub, GitLab, Bitbucket, Azure DevOps, and Forgejo.
+   Run it on your own infrastructure or on Kodus Cloud, with the model you choose.
+</p>
+
 ---
 
 <p align="center">
@@ -41,8 +48,8 @@
 - **Zero Markup on LLM Costs**: You pay model providers directly. No hidden multipliers.
 - **Learns from Your Context**: Kody adapts to your architecture, standards, and workflow.
 - **You Set the Rules**: Define custom review rules in plain language.
-- **Privacy & Security**: Source code is not used to train models, data is encrypted in transit and at rest, and self-hosted runners are supported. Self-hosted instances send one anonymous heartbeat per day (aggregated counters only — no code, names, or identifiers); opt out with `KODUS_TELEMETRY_DISABLED=true`. See [Anonymous Telemetry](https://docs.kodus.io/how_to_deploy/en/deploy_kodus/telemetry).
-- **Native Git Workflow**: Works directly in PRs with GitHub, GitLab, Bitbucket, and Azure Repos.
+- **Privacy & Security**: Source code is not used to train models, data is encrypted in transit and at rest, and self-hosted runners are supported. Self-hosted instances send one anonymous heartbeat per day. It carries aggregated counters and no code, names, or identifiers. Opt out with `KODUS_TELEMETRY_DISABLED=true`. See [Anonymous Telemetry](https://docs.kodus.io/how_to_deploy/en/deploy_kodus/telemetry).
+- **Native Git Workflow**: Works directly in PRs with GitHub, GitLab, Bitbucket, Azure DevOps, and Forgejo.
 - **CLI + CI/CD Ready**: Run reviews locally and in pipelines.
 - **Operational Impact**: Track technical debt and delivery metrics while keeping review quality high.
 
@@ -162,11 +169,15 @@ Choose the workflow that matches how you want to use Kodus.
     <td width="50%">
       <strong>Self-host Kodus</strong>
       <br />
-      Deploy Kodus on your own infrastructure with control over data, models,
-      and runtime configuration.
+      For teams that need reviews to run inside their own infrastructure. It
+      connects to self-managed GitLab and Forgejo, and it can use a model you
+      host yourself. Kodus runs with Docker on a VM you control, with at least
+      2 CPU cores, 8 GB of RAM, and 60 GB of free disk.
       <br />
       <br />
       <a href="https://docs.kodus.io/how_to_deploy/en/deploy_kodus/generic_vm">Installation guide</a>
+      ·
+      <a href="https://tally.so/r/GxED1z">Request a trial license</a>
     </td>
   </tr>
   <tr>
