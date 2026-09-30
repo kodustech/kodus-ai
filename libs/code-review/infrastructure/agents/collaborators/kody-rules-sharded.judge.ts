@@ -1129,6 +1129,42 @@ function proposesAChange(v: ShardViolation): boolean {
     return flat(v.improvedCode) !== flat(v.existingCode);
 }
 
+/**
+ * False when a finding of a diff-only rule cites only lines the PR did not
+ * add. The prompt says unchanged context lines are never flagged, yet models
+ * flag them (pre-existing code), and the review publishes them: a context line
+ * is a valid inline-comment line. On the kody-rules eval no finding on a real
+ * violation cited only context lines. A rule that declared it needs more than
+ * the diff keeps the right to point at unchanged lines, as the review's own
+ * snap allows; a finding without lines is left to the snap.
+ */
+function citesAnAddedLine(
+    file: FileChange,
+    rules: Array<Partial<IKodyRule>>,
+): (v: ShardViolation) => boolean {
+    const added = new Set<number>();
+    const diff = String((file as any).patchWithLinesStr ?? file.patch ?? '');
+    for (const line of diff.split('\n')) {
+        const m = /^(\d+) \+/.exec(line);
+        if (m) added.add(Number(m[1]));
+    }
+    const needsMore = new Set(
+        rules
+            .filter((r) => r.uuid && needOf(r) !== 'diff-only')
+            .map((r) => r.uuid),
+    );
+    return (v) => {
+        if (needsMore.has(v.ruleUuid) || added.size === 0) return true;
+        const start = v.relevantLinesStart;
+        if (!start) return true;
+        const end = Math.max(v.relevantLinesEnd ?? start, start);
+        for (let line = start; line <= end; line++) {
+            if (added.has(line)) return true;
+        }
+        return false;
+    };
+}
+
 function resolveShardViolations(
     vs: RawShardViolation[],
     orderedUuids: string[],
@@ -1248,14 +1284,17 @@ export async function judgeKodyRulesSharded(
                 // anchor every violation to this file
                 const resolved = resolveShardViolations(vs, ruleUuids);
                 const proposing = resolved.filter(proposesAChange);
-                if (proposing.length < resolved.length) {
+                const onAddedLines = proposing.filter(
+                    citesAnAddedLine(file, applicable),
+                );
+                if (onAddedLines.length < resolved.length) {
                     logger?.warn({
-                        message: `[kody-rules-shard] dropped ${resolved.length - proposing.length} finding(s) on ${file.filename} whose improvedCode repeats the existing code`,
+                        message: `[kody-rules-shard] dropped ${resolved.length - proposing.length} finding(s) on ${file.filename} whose improvedCode repeats the existing code, and ${proposing.length - onAddedLines.length} that cite only lines the PR did not add`,
                         context: 'kody-rules-sharded',
                         metadata: { filename: file.filename },
                     });
                 }
-                return proposing.map((v) => ({
+                return onAddedLines.map((v) => ({
                     ...v,
                     relevantFile: file.filename,
                 }));

@@ -2228,3 +2228,70 @@ describe('judgeKodyRulesSharded — findings that propose no change', () => {
         expect(res.violations).toHaveLength(1);
     });
 });
+
+// The shard prompt says unchanged context lines are never flagged, yet models
+// flag them — pre-existing code the PR did not touch. The review publishes
+// those (a context line is a valid inline-comment line), so the guard lives
+// here. Measured on the kody-rules eval: no finding on a real violation cited
+// only context lines. Rules that declared they need more than the diff keep
+// the right to point at unchanged lines ("this function is too long").
+describe('judgeKodyRulesSharded — findings on lines the PR did not add', () => {
+    const patch = ['25  const a = 1;', '26  async load(raw: any[]) {', '27 +  const b = 2;'].join('\n');
+    const judgeAt = (line: number, end?: number): RunJudge => async () => [
+        {
+            ruleId: 1,
+            relevantLinesStart: line,
+            relevantLinesEnd: end ?? line,
+            suggestionContent: 'x',
+            oneSentenceSummary: 's',
+        } as RawShardViolation,
+    ];
+    const diffOnlyRule = { uuid: 'r1', title: 'no any', rule: 'no any', path: '**/*.ts' };
+
+    it('drops a finding that cites only unchanged context lines', async () => {
+        const res = await judgeKodyRulesSharded({
+            changedFiles: [file('src/a.ts', patch)],
+            rules: [diffOnlyRule],
+            runJudge: judgeAt(26),
+        });
+        expect(res.violations).toEqual([]);
+    });
+
+    it('keeps a finding on an added line', async () => {
+        const res = await judgeKodyRulesSharded({
+            changedFiles: [file('src/a.ts', patch)],
+            rules: [diffOnlyRule],
+            runJudge: judgeAt(27),
+        });
+        expect(res.violations).toHaveLength(1);
+    });
+
+    it('keeps a finding whose range reaches an added line', async () => {
+        const res = await judgeKodyRulesSharded({
+            changedFiles: [file('src/a.ts', patch)],
+            rules: [diffOnlyRule],
+            runJudge: judgeAt(25, 27),
+        });
+        expect(res.violations).toHaveLength(1);
+    });
+
+    it('keeps a context-line finding for a rule that needs more than the diff', async () => {
+        const res = await judgeKodyRulesSharded({
+            changedFiles: [file('src/a.ts', patch)],
+            rules: [{ ...diffOnlyRule, contextNeed: { need: 'full-file' } } as any],
+            runJudge: judgeAt(26),
+        });
+        expect(res.violations).toHaveLength(1);
+    });
+
+    it('keeps a finding without lines', async () => {
+        const res = await judgeKodyRulesSharded({
+            changedFiles: [file('src/a.ts', patch)],
+            rules: [diffOnlyRule],
+            runJudge: async () => [
+                { ruleId: 1, suggestionContent: 'x', oneSentenceSummary: 's' } as RawShardViolation,
+            ],
+        });
+        expect(res.violations).toHaveLength(1);
+    });
+});

@@ -75,7 +75,7 @@ describe('sharded kody-rules — judge → mapAgentFindings wiring (#1449)', () 
         const runJudge: RunJudge = async () => [
             {
                 ruleId: 1,
-                relevantLinesStart: 1,
+                relevantLinesStart: 5,
                 suggestionContent: 'x',
             },
         ];
