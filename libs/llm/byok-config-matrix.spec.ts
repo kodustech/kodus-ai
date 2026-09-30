@@ -464,6 +464,20 @@ const CASES = [
     // is the body itself, which is the half we control and the half that
     // regresses. Every one was READ OFF THE WIRE before being written down.
     {
+        id: 'minimax M3.1 — "off" still carries the adaptive shape, because omitting IS the 400',
+        why: 'The first version of this fix only covered a slot that had picked a level. With no effort set, defaultReasoningEffortFor returns undefined, the callers fall back to Off, and the off path returned {} for a model that cannot be disabled — so the same 400 came back for every slot that never set an effort, which is most of them. There is no off for this generation: thinking is mandatory, so Off means "the shape, without asking for a budget" rather than silence',
+        slot: {
+            provider: 'anthropic_compatible',
+            model: 'MiniMax-M3.1-Flash-Preview',
+            baseURL: 'https://api.minimax.io/anthropic',
+            reasoningEffort: 'none',
+        },
+        wire: {
+            has: { thinking: { type: 'adaptive' } },
+            hasNot: ['budget_tokens'],
+        },
+    },
+    {
         id: 'minimax M3.1 — the Anthropic transport sends the adaptive shape, not nothing',
         why: 'M3.1 is the first MiniMax generation that REFUSES to run without a thinking shape: its endpoint answers 400 "requires adaptive thinking". Before this entry it fell to the conservative default (thinksByDefault:false), so the picker advertised no scale at all and the emitter returned {} — nothing on the wire, a 400 on every request, and a model the customer picked for its reasoning that could not be used. It wants the adaptive form, not the legacy budget one the compatible transport would otherwise fall through to (a field MiniMax never documented, which is why M3 above is deliberately sent neither)',
         slot: {

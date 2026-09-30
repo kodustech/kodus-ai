@@ -305,8 +305,15 @@ export function resolveCompatibleReasoningTraits(
         return {
             thinksByDefault: true,
             canDisableThinking: false,
-            supportsForcedToolChoice: true,
-            forcedToolChoiceRejectsThinking: false,
+            // NOT the M2 pair: M2 is served over the OpenAI protocol, where a
+            // forced tool_choice is accepted alongside reasoning. This generation
+            // is served over the Anthropic-compatible endpoint and cannot be
+            // turned off, and that protocol rejects a forced tool_choice issued
+            // while thinking is on — a pair this model has no way to escape, since
+            // the disable that would resolve it is itself rejected. So structured
+            // output must take the reroute, not the forced call.
+            supportsForcedToolChoice: false,
+            forcedToolChoiceRejectsThinking: true,
             reasoningControl: 'effort-only',
             omittingDisablesReasoning: false,
             requiredThinkingShape: 'adaptive',
