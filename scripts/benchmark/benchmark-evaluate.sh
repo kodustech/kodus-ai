@@ -252,16 +252,19 @@ if [ "$EXTRACT_ONLY" = true ]; then
 fi
 
 # ── Judge with Sonnet ────────────────────────────────────────────
-if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+if [ -n "${JUDGE_BASE_URL:-}" ]; then
+  echo ""
+  echo "▸ Judging with ${JUDGE_MODEL:-?} via ${JUDGE_BASE_URL} (single severity pass)..."
+elif [ -z "${ANTHROPIC_API_KEY:-}" ]; then
   echo ""
   echo "  ⚠ ANTHROPIC_API_KEY not set — skipping judge"
   echo "  Set it in .env and re-run"
   exit 0
+else
+  echo ""
+  echo "▸ Judging with Sonnet (single severity pass)..."
+  echo "  Key: ${ANTHROPIC_API_KEY:0:15}... (len=${#ANTHROPIC_API_KEY})"
 fi
-
-echo ""
-echo "▸ Judging with Sonnet (single severity pass)..."
-echo "  Key: ${ANTHROPIC_API_KEY:0:15}... (len=${#ANTHROPIC_API_KEY})"
 
 ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}" node "$SCRIPT_DIR/judge-sonnet.js" \
   "$RESULTS_DIR/golden.json" \

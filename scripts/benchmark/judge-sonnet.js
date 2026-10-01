@@ -31,6 +31,56 @@ Respond with ONLY a JSON object:
 const BATCH_SIZE = 10; // concurrent LLM calls
 
 /**
+ * Sonnet by default. JUDGE_BASE_URL + JUDGE_MODEL + JUDGE_API_KEY route the
+ * judge to an OpenAI-compatible endpoint instead (same convention as
+ * evals/investigation/recall-judge.js).
+ */
+function buildJudgeClient() {
+    const baseURL = process.env.JUDGE_BASE_URL;
+    if (baseURL) {
+        const model = process.env.JUDGE_MODEL;
+        const apiKey = process.env.JUDGE_API_KEY;
+        if (!model || !apiKey) {
+            console.error("JUDGE_BASE_URL needs JUDGE_MODEL and JUDGE_API_KEY");
+            process.exit(1);
+        }
+        return {
+            label: model,
+            async complete(prompt) {
+                const res = await fetch(`${baseURL.replace(/\/$/, "")}/chat/completions`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+                    // Reasoning models spend tokens before the answer.
+                    body: JSON.stringify({ model, max_tokens: 4000, temperature: 0, messages: [{ role: "user", content: prompt }] }),
+                });
+                if (!res.ok) throw new Error(`judge HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
+                const data = await res.json();
+                return data.choices?.[0]?.message?.content || "";
+            },
+        };
+    }
+
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+        console.error("ANTHROPIC_API_KEY not set");
+        process.exit(1);
+    }
+    const anthropic = new Anthropic.default({ apiKey });
+    return {
+        label: "claude-sonnet-4-6",
+        async complete(prompt) {
+            const resp = await anthropic.messages.create({
+                model: "claude-sonnet-4-6",
+                max_tokens: 200,
+                temperature: 0,
+                messages: [{ role: "user", content: prompt }],
+            });
+            return resp.content[0].text;
+        },
+    };
+}
+
+/**
  * Run N×M pairwise comparison and return raw match matrix.
  * matrix[prIdx] = array of { gi, ci, match, confidence, reasoning }
  */
@@ -59,13 +109,7 @@ async function buildMatchMatrix(client, golden, candidates) {
                         .replace("{golden_comment}", pr.golden_comments[gi].comment)
                         .replace("{candidate}", cand.issues[ci].comment);
 
-                    const resp = await client.messages.create({
-                        model: "claude-sonnet-4-6",
-                        max_tokens: 200,
-                        temperature: 0,
-                        messages: [{ role: "user", content: prompt }],
-                    });
-                    const text = resp.content[0].text.trim();
+                    const text = (await client.complete(prompt)).trim();
                     const clean = text.replace(/```json?/g, "").replace(/```/g, "").trim();
                     const json = JSON.parse(clean);
                     return { gi, ci, match: !!json.match, confidence: json.confidence || 0, reasoning: json.reasoning || "" };
@@ -171,13 +215,7 @@ async function main() {
         process.exit(1);
     }
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-        console.error("ANTHROPIC_API_KEY not set");
-        process.exit(1);
-    }
-
-    const client = new Anthropic.default({ apiKey });
+    const client = buildJudgeClient();
     const golden = JSON.parse(fs.readFileSync(goldenFile, "utf8"));
     const candidates = JSON.parse(fs.readFileSync(candidatesFile, "utf8"));
 
