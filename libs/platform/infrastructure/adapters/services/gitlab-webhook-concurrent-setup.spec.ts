@@ -21,6 +21,11 @@ function fakeGitlab() {
     const added: { projectId: number; id: number }[] = [];
     let nextId = 1;
     const tick = () => new Promise((r) => setTimeout(r, 5));
+    // What the real API rejects with for a hook id that no longer exists.
+    const notFound = () =>
+        Object.assign(new Error('404 Not Found'), {
+            cause: { response: { status: 404 } },
+        });
 
     const ProjectHooks = {
         all: jest.fn(async (projectId: number) => {
@@ -36,21 +41,26 @@ function fakeGitlab() {
             return hook;
         }),
         edit: jest.fn(
-            async (projectId: number, hookId: number, _url: string, options) => {
+            async (
+                projectId: number,
+                hookId: number,
+                _url: string,
+                options?: { noteEvents?: boolean; mergeRequestsEvents?: boolean },
+            ) => {
+                await tick();
                 const hook = hooks.get(projectId)?.find((h) => h.id === hookId);
-                if (options.noteEvents) hook.note_events = true;
-                if (options.mergeRequestsEvents) hook.merge_requests_events = true;
+                if (!hook) throw notFound();
+                if (options?.noteEvents) hook.note_events = true;
+                if (options?.mergeRequestsEvents) {
+                    hook.merge_requests_events = true;
+                }
                 return hook;
             },
         ),
         remove: jest.fn(async (projectId: number, hookId: number) => {
             await tick();
             const list = hooks.get(projectId) ?? [];
-            if (!list.some((h) => h.id === hookId)) {
-                throw Object.assign(new Error('404 Not Found'), {
-                    cause: { response: { status: 404 } },
-                });
-            }
+            if (!list.some((h) => h.id === hookId)) throw notFound();
             hooks.set(
                 projectId,
                 list.filter((h) => h.id !== hookId),
@@ -184,6 +194,41 @@ describe('GitlabService.createMergeRequestWebhook — one Kodus hook per project
                 merge_requests_events: true,
             },
         ]);
+    });
+
+    it('keeps an executable hook without events over an older disabled one, and turns its events on', async () => {
+        gitlab.hooks.set(77086088, [
+            { id: 10, url: WEBHOOK_URL, alert_status: 'disabled' },
+            { id: 11, url: WEBHOOK_URL, note_events: false },
+        ]);
+
+        await run();
+
+        expect(gitlab.hooks.get(77086088).map((h) => h.id)).toEqual([11]);
+        expect(gitlab.api.ProjectHooks.edit).toHaveBeenCalledWith(
+            77086088,
+            11,
+            WEBHOOK_URL,
+            { noteEvents: true, mergeRequestsEvents: true },
+        );
+    });
+
+    it('keeps going when the survivor cannot be edited', async () => {
+        gitlab.hooks.set(77086088, [
+            { id: 10, url: WEBHOOK_URL, note_events: false },
+            { id: 11, url: WEBHOOK_URL, note_events: false },
+        ]);
+        // Another pass removed the survivor in between.
+        gitlab.api.ProjectHooks.edit.mockRejectedValueOnce(
+            Object.assign(new Error('404 Not Found'), {
+                cause: { response: { status: 404 } },
+            }),
+        );
+
+        await run();
+
+        expect(gitlab.hooks.get(77086088).map((h) => h.id)).toEqual([10]);
+        expect(gitlab.hooks.get(83192371)).toHaveLength(1);
     });
 
     it('adds nothing and removes nothing when the project already has one Kodus hook', async () => {

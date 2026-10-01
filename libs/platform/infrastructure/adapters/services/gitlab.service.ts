@@ -3054,11 +3054,10 @@ export class GitlabService implements Omit<
      * keeps the same survivor and removes the rest; concurrent passes, on any
      * instance, agree on it. This also clears older duplicates.
      *
-     * The survivor is the oldest hook that can deliver what Kodus consumes
-     * (enabled, with note and merge request events), so a duplicate GitLab
-     * disabled, or one created by hand without those events, is never kept
-     * over a working one. Only when none can is it the lowest id, with its
-     * events turned on.
+     * The survivor is the oldest hook GitLab still calls (not disabled after
+     * failures), preferring one with note and merge request events, so a
+     * disabled duplicate or one created by hand without those events is never
+     * kept over a working one. Missing events on the survivor are turned on.
      */
     private async ensureSingleKodusHook(
         gitlabAPI: any,
@@ -3088,15 +3087,17 @@ export class GitlabService implements Omit<
             return;
         }
 
+        const isExecutable = (hook) =>
+            (hook?.alert_status ?? 'executable') === 'executable';
         const hasEvents = (hook) =>
             hook?.note_events !== false && hook?.merge_requests_events !== false;
-        const canDeliver = (hook) =>
-            (hook?.alert_status ?? 'executable') === 'executable' &&
-            hasEvents(hook);
 
+        // Executable first: GitLab never calls a disabled hook, while missing
+        // events on an executable one are fixed by the edit below.
         const [kept, ...duplicates] = hooks.sort(
             (a, b) =>
-                Number(canDeliver(b)) - Number(canDeliver(a)) ||
+                Number(isExecutable(b)) - Number(isExecutable(a)) ||
+                Number(hasEvents(b)) - Number(hasEvents(a)) ||
                 Number(a.id) - Number(b.id),
         );
 
