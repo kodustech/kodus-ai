@@ -228,7 +228,9 @@ describe('GitlabService.createMergeRequestWebhook — one Kodus hook per project
         await run();
 
         // The duplicate is still removed and the next repository still gets
-        // its hook; the next save retries the edit.
+        // its hook. The survivor keeps its events off: with one hook left the
+        // next save returns before the edit. None of the copies had those
+        // events, so the project receives no less than before.
         expect(gitlab.hooks.get(77086088).map((h) => h.id)).toEqual([10]);
         expect(gitlab.hooks.get(83192371)).toHaveLength(1);
     });
