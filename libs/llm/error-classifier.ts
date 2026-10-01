@@ -210,7 +210,7 @@ export function llmErrorLogLevel(err: unknown): 'warn' | 'error' {
  * `cause` chain. The Vercel AI SDK in particular puts the upstream JSON error
  * body in `responseBody` while leaving `message` as a generic status phrase.
  */
-function extractErrorText(err: unknown, depth = 0): string {
+export function extractErrorText(err: unknown, depth = 0): string {
     if (!err || depth > 3) return '';
     if (typeof err === 'string') return err;
     if (typeof err !== 'object') return String(err);
@@ -238,7 +238,7 @@ function extractErrorText(err: unknown, depth = 0): string {
     return parts.join(' ');
 }
 
-function extractHttpStatus(err: unknown, depth = 0): number | undefined {
+export function extractHttpStatus(err: unknown, depth = 0): number | undefined {
     if (!err || typeof err !== 'object' || depth > 3) return undefined;
     const e = err as {
         status?: number;
