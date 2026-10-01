@@ -42,7 +42,9 @@
  * labels still came off (the '.' of "2." satisfies the punctuation rule) but the
  * list numbers were left stranded mid-sentence — "a 2. b 3. c." Requiring a
  * numbered prefix to FOLLOW keeps it narrow: prose has no number there, so
- * "Here's why:" is still untouched.
+ * "Here's why:" is still untouched. The prefix is only 1-3, the three labels:
+ * any number would also eat a value ending the sentence ("fails with a 500.
+ * HOW:" lost its "500.").
  *
  * TWO deliberate restrictions, both there to protect prose:
  *
@@ -60,7 +62,7 @@
  * that was fine.
  */
 const LABEL_ANYWHERE =
-    /(?:^|\n|(?<=[.!?])[ \t]+|(?<=\S)[ \t]+(?=\d+[.)][ \t]*))(?:\d+[.)][ \t]*)?(?:\*\*|__)?[ \t]*(?:WHAT|WHY|HOW)[ \t]*(?:\*\*|__)?[ \t]*:[ \t]*(?:\*\*|__)?[ \t]*/g;
+    /(?:^|\n|(?<=[.!?])[ \t]+|(?<=\S)[ \t]+(?=[1-3][.)][ \t]*))(?:[1-3][.)][ \t]*)?(?:\*\*|__)?[ \t]*(?:WHAT|WHY|HOW)[ \t]*(?:\*\*|__)?[ \t]*:[ \t]*(?:\*\*|__)?[ \t]*/g;
 
 /** A control character, so it can never collide with the content itself. */
 const SENTINEL = '\u0001';

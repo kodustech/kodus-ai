@@ -114,6 +114,17 @@ describe('stripReviewScaffolding', () => {
         expect(out).toBe('a. b. c.');
     });
 
+    it('keeps a number that ends the sentence before a label', () => {
+        // "a 500. HOW:" is a status code closing a sentence, not list item 500.
+        const out = stripReviewScaffolding(
+            'WHAT: The user can be null. WHY: The request fails with a 500. HOW: Return a 404.',
+        );
+
+        expect(out).toBe(
+            'The user can be null. The request fails with a 500. Return a 404.',
+        );
+    });
+
     it('still ignores a number that is not introducing a label', () => {
         // The narrow part of the rule: the numbered prefix has to be followed by
         // the label. Prose that merely contains a numbered clause is untouched.
