@@ -5,6 +5,8 @@
 import { normalizeEnvelope } from '@libs/llm/structured-output-repair';
 
 export interface SuggestionToFormat {
+    /** Shown above the body in the comment; the body must not repeat it. */
+    title?: string;
     suggestionContent: string;
     existingCode?: string;
     improvedCode?: string;
@@ -25,9 +27,7 @@ export function buildFormatPrompt(
         languageLabel?: string | null;
     },
 ): string {
-    const customGuidelines = options?.customWritingGuidelines
-        ? `\n\nAdditional writing guidelines from the team:\n${options.customWritingGuidelines}`
-        : '';
+    const customGuidelines = options?.customWritingGuidelines?.trim() || '';
 
     const langInstruction = options?.languageLabel
         ? `\nIMPORTANT: Write all output in ${options.languageLabel}. Do not fall back to English.`
@@ -36,23 +36,29 @@ export function buildFormatPrompt(
     const suggestionsText = suggestions
         .map(
             (s, i) =>
-                `[${i}]\nFile: ${s.relevantFile || 'unknown'}\nLanguage: ${s.language || 'unknown'}\nContent: ${s.suggestionContent}\nExisting code:\n\`\`\`\n${s.existingCode || '(none)'}\n\`\`\`\nImproved code:\n\`\`\`\n${s.improvedCode || '(none)'}\n\`\`\``,
+                `[${i}]\nTitle: ${s.title || '(none)'}\nFile: ${s.relevantFile || 'unknown'}\nLanguage: ${s.language || 'unknown'}\nContent: ${s.suggestionContent}\nExisting code:\n\`\`\`\n${s.existingCode || '(none)'}\n\`\`\`\nImproved code:\n\`\`\`\n${s.improvedCode || '(none)'}\n\`\`\``,
         )
         .join('\n\n---\n\n');
 
-    return `You are a code review comment editor. Rewrite each suggestion into clean, natural prose.
+    const shapeRules = `- Do not repeat the title: it already names the problem and is shown right above this text. Open with why it matters.
+- No code blocks: the fix is shown separately. Name identifiers in \`inline code\` only.`;
+
+    const lengthOrTeam = customGuidelines
+        ? `\nThe team has provided custom writing guidelines. Follow them for tone and length — they take priority over the default rules above.\n${customGuidelines}\n\nThese rules apply regardless of the team's guidelines:\n${shapeRules}`
+        : `\n- Write at most 2 sentences: one on the impact, one on what to change.`;
+
+    return `You are a code review comment editor. Each suggestion is shown in the pull request as a title followed by the text you write.
 
 Rules:
-- Remove labels like "WHAT:", "WHY:", "HOW:", "1.", "2.", "3." from the beginning of sentences.
-- Merge the labeled sentences into a single natural paragraph (1-3 SHORT sentences). Aim for 2 sentences max: one describing the problem, one describing the fix.
-- Keep every technical detail: function names, file names, variable names, error types, line numbers.
-- Be concise: the code block already shows the fix, so the text should explain WHY, not repeat WHAT the code does.
-- Do NOT touch existingCode or improvedCode — return them exactly as provided.
-${customGuidelines ? `\nThe team has provided custom writing guidelines. Follow them — they take priority over the default rules above.\n${customGuidelines}` : ''}${langInstruction}
+- Remove labels like "WHAT:", "WHY:", "HOW:", "1.", "2.", "3." from the beginning of sentences and merge what they delimited into natural prose.
+- Keep every technical detail that matters: function names, file names, variable names, error types, line numbers.
+${shapeRules}
+- Do NOT touch existingCode or improvedCode — return them exactly as provided.${lengthOrTeam}${langInstruction}
 
 Example:
+Title: "join() leaves flusher processes running after a timeout"
 Input: "WHAT: The join method breaks out of the loop when the timeout expires. WHY: This leaves subsequent flusher processes running indefinitely as orphans. HOW: Remove the remaining_time check."
-Output: "The join method breaks out of the loop when the timeout expires, leaving subsequent flusher processes running indefinitely as orphans. Remove the remaining_time check."
+Output: "Every process after the deadline keeps running as an orphan. Remove the remaining_time check so each one is joined or terminated."
 
 Respond with ONLY a JSON array:
 \`\`\`json

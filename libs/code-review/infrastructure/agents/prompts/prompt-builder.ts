@@ -12,6 +12,10 @@ import { CheckEvidence } from '@libs/platform/domain/platformIntegrations/types/
 import { AnalyzerFinding } from '@libs/code-review/infrastructure/analyzers/analyzer-finding.type';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { TITLE_PROMPT_SPEC } from '@libs/common/utils/codeManagement/suggestion-title';
+import {
+    currentDefaultWritingGuidelines,
+    isDefaultWritingGuidelines,
+} from '@libs/common/utils/writing-guidelines';
 import { convertTiptapJSONToText } from '@libs/common/utils/tiptap-json';
 
 import type {
@@ -1115,9 +1119,15 @@ function formatOverrides(input: ReviewAgentInput, meta: PromptAgentMeta): string
         // to avoid biasing the agent's investigation. The agent assigns a rough severity but
         // the final classification uses dedicated criteria (default or client-custom).
 
-        const generationMain = resolvePromptOverrideText(
+        const savedGenerationMain = resolvePromptOverrideText(
             input.generationMain ?? input.v2PromptOverrides?.generation?.main,
         );
+        // A saved copy of an old default or preset reads as today's default.
+        const generationMain =
+            savedGenerationMain &&
+            isDefaultWritingGuidelines(savedGenerationMain)
+                ? currentDefaultWritingGuidelines()
+                : savedGenerationMain;
         if (generationMain) {
             parts.push(`## Writing Guidelines\n${generationMain}`);
         }

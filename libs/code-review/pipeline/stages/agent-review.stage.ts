@@ -21,6 +21,7 @@ import {
 import { buildPlatformEmbedder } from '@libs/common/utils/document';
 import { resolveSuggestionTitle } from '@libs/common/utils/codeManagement/suggestion-title';
 import { stripReviewScaffolding } from '@libs/code-review/infrastructure/agents/engine/strip-review-scaffolding';
+import { resolveWritingGuidelines } from '@libs/common/utils/writing-guidelines';
 import {
     dedupReviewWarnings,
     buildBadFixDowngradedWarning,
@@ -1283,11 +1284,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 // reflowed it into one paragraph — losing the per-package
                 // lines and appending remediation advice the scanner never
                 // said. There is no WHAT/WHY/HOW scaffolding here to strip.
+                const writingGuidelines = resolveWritingGuidelines(
+                    context.codeReviewConfig?.v2PromptOverrides?.generation
+                        ?.main,
+                );
                 const formatTargets = deduped
                     .map((s, i) => (isAnalyzerSuggestion(s) ? -1 : i))
                     .filter((i) => i >= 0);
                 const formatted = await formatSuggestionContent(
                     formatTargets.map((i) => ({
+                        title: deduped[i].oneSentenceSummary || '',
                         suggestionContent: deduped[i].suggestionContent || '',
                         existingCode: deduped[i].existingCode || '',
                         improvedCode: deduped[i].improvedCode || '',
@@ -1295,9 +1301,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         language: deduped[i].language || '',
                     })),
                     {
-                        customWritingGuidelines:
-                            context.codeReviewConfig?.v2PromptOverrides
-                                ?.generation?.main,
+                        // A saved copy of a shipped default is not the team's
+                        // own text; only a real edit outranks the formatter's rules.
+                        customWritingGuidelines: writingGuidelines.isCustom
+                            ? writingGuidelines.text
+                            : undefined,
                         byokConfig: context.codeReviewConfig?.byokConfig,
                         languageResultPrompt:
                             context.codeReviewConfig?.languageResultPrompt,

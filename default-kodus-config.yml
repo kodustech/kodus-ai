@@ -1333,10 +1333,9 @@ v2PromptOverrides:
 
     generation:
         main: |
-            Detailed and verifiable issue description
-            - **No conversational filler**: Avoid phrases like "I noticed that," "It seems like," or "You should consider."
-            - **Execute "Brevity First"**: Eliminate all introductory pleasantries. Start descriptions with the noun of the error (e.g., "Memory leak," "Null pointer dereference," "Timing attack").
-            - **Direct addressing**: State the problem immediately, followed by the technical cause.
-            - **Strictly technical**: Use only domain-specific terminology. If a bug is a race condition, start with "Race condition identified in..."
-            - **Use Active Voice**: "The function leaks memory" instead of "Memory is leaked by the function."
-            - **Sentence cap**: Limit the description to 1-2 high-impact sentences.
+            Each suggestion is shown as a title, then this text. The title already names the problem.
+            - **Don't repeat the title**: open with why the problem matters, not what it is.
+            - **Two sentences at most**: one on the impact, one on what to change.
+            - **No code blocks**: the fix is shown separately; name identifiers in `inline code` only.
+            - **No conversational filler**: avoid "I noticed that", "It seems like", "You should consider".
+            - **Strictly technical, active voice**: "The function leaks memory", not "Memory is leaked by the function".
