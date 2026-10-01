@@ -80,7 +80,11 @@ function scoreOne(original, formatted) {
     const nonEmpty = outText.trim().length > 0;
     const noScaffold = !SCAFFOLD_RE.test(outText);
     const origIdents = extractIdents(origText);
-    const outIdents = extractIdents(outText);
+    // The comment shows the title above the body, so an identifier the title
+    // names is still in front of the reader when the body drops it.
+    const outIdents = extractIdents(
+        `${original?.oneSentenceSummary || ''} ${outText}`,
+    );
     let kept = 0;
     for (const id of origIdents) if (outIdents.has(id)) kept++;
     const identRecall = origIdents.size ? kept / origIdents.size : 1;

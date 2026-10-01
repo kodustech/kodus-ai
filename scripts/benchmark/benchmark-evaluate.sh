@@ -188,8 +188,17 @@ for (const entry of manifest.prs) {
       // Skip suggestions discarded by the verifier (safeguard) — these are confirmed FPs
       if (s.priorityStatus === 'discarded-by-safeguard') continue;
       if (!shouldIncludeInBenchmarkEvaluation(s)) continue;
+      // The judge reads what the finding says: its title and full
+      // explanation. BENCHMARK_JUDGE_INPUT=body judges the short comment body
+      // instead, cut at 500 chars, as runs before the title existed did.
+      const judgedText = process.env.BENCHMARK_JUDGE_INPUT === 'body'
+        ? (s.suggestionContent || '').substring(0, 500)
+        : [s.oneSentenceSummary, s.fullExplanation || s.suggestionContent]
+            .filter(Boolean)
+            .join('\n\n')
+            .substring(0, 1500);
       const entry2 = {
-        comment: (s.suggestionContent || '').substring(0, 500),
+        comment: judgedText,
         location: (s.relevantFile || file.filename) + ':' + (s.relevantLinesStart || 'general'),
         severity: s.severity || 'unknown',
         label: s.label || 'unknown',
