@@ -2006,5 +2006,43 @@ describe('CommentManagerService.createLineComments — anchors on the reviewed c
         expect(createReviewComment.mock.calls[0][0].commit).toBe(PUSHED);
         expect(result.lastAnalyzedCommit).toBe(PUSHED);
     });
+
+    it('falls back to the live head when the reviewed commit was force-pushed away', async () => {
+        // A rebase or force-push during the review rewrites the reviewed commit
+        // out of the PR, and both providers reject an anchor that is not part of
+        // it (GitHub commit_id, GitLab position.headSha). Pinning a vanished sha
+        // would lose every inline comment rather than anchor them on a stale
+        // tree, so the pin is conditional on the live list still containing it.
+        const createReviewComment = jest
+            .fn()
+            .mockResolvedValue({ id: 'c-1', pull_request_review_id: 42 });
+        const codeManagementService = {
+            getCommitsForPullRequestForCodeReview: jest
+                .fn()
+                .mockResolvedValue([PUSHED]),
+            createReviewComment,
+        };
+        const svc = new CommentManagerService(
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            codeManagementService as any,
+        );
+
+        const result = await svc.createLineComments(
+            { organizationId: 'o', teamId: 't' } as any,
+            7,
+            { name: 'repo', id: '1', language: 'ts' },
+            lineComments,
+            'en-US',
+            undefined,
+            undefined,
+            REVIEWED.sha, // rewritten away by the force-push
+        );
+
+        expect(createReviewComment.mock.calls[0][0].commit).toBe(PUSHED);
+        expect(result.lastAnalyzedCommit).toBe(PUSHED);
+    });
 });
 
