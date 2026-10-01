@@ -1330,7 +1330,7 @@ export class ForgejoService implements Omit<
                     Array.isArray(repositories) && repositories.length > 0,
                 platformName: PlatformType.FORGEJO,
                 category: IntegrationCategory.CODE_MANAGEMENT,
-                config: { repositories },
+                config: { repositories, host: authDetail.host },
             };
         } catch (error) {
             this.logger.error({
