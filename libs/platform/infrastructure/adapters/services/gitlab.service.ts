@@ -57,6 +57,11 @@ import { getCodeReviewBadge } from '@libs/common/utils/codeManagement/codeReview
 import { getLabelShield } from '@libs/common/utils/codeManagement/labels';
 import { getSeverityLevelShield } from '@libs/common/utils/codeManagement/severityLevel';
 import {
+    formatFixBlock,
+    formatTitleLine,
+    resolveAgentPrompt,
+} from '@libs/common/utils/codeManagement/suggestion-comment-blocks';
+import {
     isFileMatchingGlob,
     isFileMatchingGlobCaseInsensitive,
 } from '@libs/common/utils/glob-utils';
@@ -2397,13 +2402,7 @@ export class GitlabService implements Omit<
         const severityShield = lineComment?.suggestion
             ? getSeverityLevelShield(lineComment.suggestion.severity)
             : '';
-        const codeBlock = lineComment?.body?.improvedCode
-            ? this.formatCodeBlock(
-                  repository?.language?.toLowerCase(),
-                  this.dedentCode(lineComment?.body?.improvedCode),
-              )
-            : '';
-        const suggestionContent = lineComment?.body?.suggestionContent || '';
+        const suggestionContent = `${formatTitleLine(lineComment?.suggestion?.oneSentenceSummary)}${lineComment?.body?.suggestionContent || ''}`;
         const actionStatement = lineComment?.body?.actionStatement
             ? `${lineComment.body.actionStatement}\n\n`
             : '';
@@ -2417,15 +2416,20 @@ export class GitlabService implements Omit<
                 severityShield,
             ].join(' ') + '\n\n';
 
-        const copyPrompt = suggestionCopyPrompt
-            ? this.formatPromptForLLM(lineComment)
-            : '';
+        const copyPrompt = formatFixBlock({
+            copyPrompt: suggestionCopyPrompt ?? true,
+            path: lineComment?.path,
+            startLine: lineComment?.start_line,
+            endLine: lineComment?.line,
+            prompt: resolveAgentPrompt(lineComment?.suggestion),
+            improvedCode: this.dedentCode(lineComment?.body?.improvedCode || ''),
+            language: lineComment?.suggestion?.language || repository?.language,
+        });
 
         return [
             badges,
             suggestionContent,
             actionStatement,
-            codeBlock,
             copyPrompt,
             this.formatSub(translations.talkToKody),
             this.formatSub(translations.feedback) +
@@ -4897,6 +4901,7 @@ export class GitlabService implements Omit<
         }
 
         // BODY - Conteúdo principal
+        commentBody += formatTitleLine(suggestion?.oneSentenceSummary);
         if (suggestion?.suggestionContent) {
             commentBody += `${suggestion.suggestionContent}\n\n`;
         }
@@ -4905,9 +4910,12 @@ export class GitlabService implements Omit<
             commentBody += `${suggestion.clusteringInformation.actionStatement}\n\n`;
         }
 
-        if (suggestionCopyPrompt) {
-            commentBody += this.formatPromptForLLM(suggestion);
-        }
+        commentBody += formatFixBlock({
+            copyPrompt: suggestionCopyPrompt,
+            prompt: resolveAgentPrompt(suggestion),
+            improvedCode: suggestion?.improvedCode,
+            language: suggestion?.language || params.repository?.language,
+        });
 
         // FOOTER - Interação/Feedback
         if (includeFooter) {
@@ -5545,42 +5553,6 @@ export class GitlabService implements Omit<
             });
             return [];
         }
-    }
-
-    private formatPromptForLLM(lineComment: any) {
-        let copyPrompt = '';
-        if (lineComment?.suggestion?.llmPrompt) {
-            if (lineComment.path) {
-                copyPrompt += `File ${lineComment.path}:\n\n`;
-            }
-
-            if (lineComment.start_line && lineComment.line) {
-                copyPrompt += `Line ${lineComment.start_line} to ${lineComment.line}:\n\n`;
-            } else if (lineComment.line) {
-                copyPrompt += `Line ${lineComment.line}:\n\n`;
-            }
-
-            copyPrompt += lineComment?.suggestion?.llmPrompt;
-
-            if (lineComment?.body?.improvedCode) {
-                copyPrompt +=
-                    '\n\nSuggested Code:\n\n' + lineComment?.body?.improvedCode;
-            }
-
-            copyPrompt = `\n\n<details>
-
-<summary>Prompt for LLM</summary>
-
-\`\`\`
-
-${copyPrompt}
-
-\`\`\`
-
-</details>\n\n`;
-        }
-
-        return copyPrompt;
     }
 
     async getRepositoryContentBatch(
