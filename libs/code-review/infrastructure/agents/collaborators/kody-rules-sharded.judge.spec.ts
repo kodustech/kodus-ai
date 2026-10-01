@@ -1,3 +1,4 @@
+import { convertToUnifiedDiffWithLineNumbers } from '@libs/common/utils/patch';
 import {
     judgeKodyRulesSharded,
     shardViolationsSchema,
@@ -2233,68 +2234,117 @@ describe('judgeKodyRulesSharded — findings that propose no change', () => {
 });
 
 // The shard prompt says unchanged context lines are never flagged, yet models
-// flag them — pre-existing code the PR did not touch. The review publishes
-// those (a context line is a valid inline-comment line), so the guard lives
-// here. Measured on the kody-rules eval: no finding on a real violation cited
-// only context lines. Rules that declared they need more than the diff keep
-// the right to point at unchanged lines ("this function is too long").
-describe('judgeKodyRulesSharded — findings on lines the PR did not add', () => {
-    const patch = ['25  const a = 1;', '26  async load(raw: any[]) {', '27 +  const b = 2;'].join('\n');
+// flag them — pre-existing code the PR did not touch. A change can also CREATE
+// a violation on a line it did not touch (the last call to a function removed,
+// so its import is now unused), and that finding cites only the unchanged line.
+// The two cannot be told apart yet, so the shard keeps these findings and logs
+// what it would drop, with the finding text, until production says which kind
+// they are.
+describe('judgeKodyRulesSharded — findings on lines the PR did not add (shadow)', () => {
+    // The diff exactly as production builds it: the number right-aligned to six
+    // columns, which an unpadded fixture never exercised.
+    const productionPatch = convertToUnifiedDiffWithLineNumbers(
+        [
+            '@@ -25,2 +25,3 @@',
+            ' const a = 1;',
+            ' async load(raw: any[]) {',
+            '+  const b = 2;',
+        ].join('\n'),
+        { filename: 'src/a.ts' },
+    );
+    // The dataset form the kody-rules eval feeds.
+    const datasetPatch = ['25  const a = 1;', '26  async load(raw: any[]) {', '27 +  const b = 2;'].join('\n');
+
     const judgeAt = (line: number, end?: number): RunJudge => async () => [
         {
             ruleId: 1,
             relevantLinesStart: line,
             relevantLinesEnd: end ?? line,
-            suggestionContent: 'x',
-            oneSentenceSummary: 's',
+            suggestionContent: 'the import is unused now',
+            oneSentenceSummary: 'unused import',
         } as RawShardViolation,
     ];
     const diffOnlyRule = { uuid: 'r1', title: 'no any', rule: 'no any', path: '**/*.ts' };
-
-    it('drops a finding that cites only unchanged context lines', async () => {
+    const run = async (
+        patch: string,
+        runJudge: RunJudge,
+        rule: any = diffOnlyRule,
+    ) => {
+        const warn = jest.fn();
         const res = await judgeKodyRulesSharded({
             changedFiles: [file('src/a.ts', patch)],
-            rules: [diffOnlyRule],
-            runJudge: judgeAt(26),
+            rules: [rule],
+            runJudge,
+            logger: { warn },
         });
-        expect(res.violations).toEqual([]);
+        const shadow = warn.mock.calls
+            .map(([entry]) => entry)
+            .filter((e) => /shadow/.test(e.message));
+        return { res, shadow };
+    };
+
+    it('the production diff really carries padded line numbers', () => {
+        expect(productionPatch.split('\n')).toContain('    27 +  const b = 2;');
     });
 
-    it('keeps a finding on an added line', async () => {
-        const res = await judgeKodyRulesSharded({
-            changedFiles: [file('src/a.ts', patch)],
-            rules: [diffOnlyRule],
-            runJudge: judgeAt(27),
-        });
+    it.each([
+        ['production', productionPatch],
+        ['dataset', datasetPatch],
+    ])('keeps a finding that cites only unchanged lines, and logs it (%s diff)', async (_name, patch) => {
+        const { res, shadow } = await run(patch, judgeAt(26));
         expect(res.violations).toHaveLength(1);
+        expect(shadow).toHaveLength(1);
+        expect(shadow[0].metadata.findings).toEqual([
+            expect.objectContaining({
+                ruleUuid: 'r1',
+                linesStart: 26,
+                linesEnd: 26,
+                summary: 'unused import',
+                text: 'the import is unused now',
+            }),
+        ]);
     });
 
-    it('keeps a finding whose range reaches an added line', async () => {
-        const res = await judgeKodyRulesSharded({
-            changedFiles: [file('src/a.ts', patch)],
-            rules: [diffOnlyRule],
-            runJudge: judgeAt(25, 27),
-        });
+    it('does not log a finding on an added line', async () => {
+        const { res, shadow } = await run(productionPatch, judgeAt(27));
         expect(res.violations).toHaveLength(1);
+        expect(shadow).toEqual([]);
     });
 
-    it('keeps a context-line finding for a rule that needs more than the diff', async () => {
-        const res = await judgeKodyRulesSharded({
-            changedFiles: [file('src/a.ts', patch)],
-            rules: [{ ...diffOnlyRule, contextNeed: { need: 'full-file' } } as any],
-            runJudge: judgeAt(26),
-        });
+    it('does not log a finding whose range reaches an added line', async () => {
+        const { res, shadow } = await run(productionPatch, judgeAt(25, 27));
         expect(res.violations).toHaveLength(1);
+        expect(shadow).toEqual([]);
     });
 
-    it('keeps a finding without lines', async () => {
-        const res = await judgeKodyRulesSharded({
-            changedFiles: [file('src/a.ts', patch)],
-            rules: [diffOnlyRule],
-            runJudge: async () => [
-                { ruleId: 1, suggestionContent: 'x', oneSentenceSummary: 's' } as RawShardViolation,
-            ],
+    it('does not log a context-line finding of a rule that needs more than the diff', async () => {
+        const { res, shadow } = await run(productionPatch, judgeAt(26), {
+            ...diffOnlyRule,
+            contextNeed: { need: 'full-file' },
         });
         expect(res.violations).toHaveLength(1);
+        expect(shadow).toEqual([]);
+    });
+
+    it('does not log a finding without lines', async () => {
+        const { res, shadow } = await run(productionPatch, async () => [
+            { ruleId: 1, suggestionContent: 'x', oneSentenceSummary: 's' } as RawShardViolation,
+        ]);
+        expect(res.violations).toHaveLength(1);
+        expect(shadow).toEqual([]);
+    });
+
+    it.each([
+        ['a range far beyond the file', 999_999_999],
+        ['a range the JSON made infinite', Number.POSITIVE_INFINITY],
+        ['the largest safe integer', Number.MAX_SAFE_INTEGER],
+    ])('is bounded by the added lines, not by %s', async (_what, end) => {
+        // Starts after the last added line (27), so no line of the range is an
+        // added one and a walk over the range would run to its end.
+        const started = Date.now();
+        const { res, shadow } = await run(productionPatch, judgeAt(28, end));
+        expect(res.violations).toHaveLength(1);
+        expect(shadow).toHaveLength(1);
+        expect(Date.now() - started).toBeLessThan(1000);
     });
 });

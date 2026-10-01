@@ -1134,10 +1134,19 @@ function proposesAChange(v: ShardViolation): boolean {
  * False when a finding of a diff-only rule cites only lines the PR did not
  * add. The prompt says unchanged context lines are never flagged, yet models
  * flag them (pre-existing code), and the review publishes them: a context line
- * is a valid inline-comment line. On the kody-rules eval no finding on a real
- * violation cited only context lines. A rule that declared it needs more than
- * the diff keeps the right to point at unchanged lines, as the review's own
- * snap allows; a finding without lines is left to the snap.
+ * is a valid inline-comment line.
+ *
+ * SHADOW ONLY: the shard logs what this would drop and drops nothing. A change
+ * can create a violation on a line it did not touch (removing the last call to
+ * a function leaves its import unused; changing a body makes the docstring
+ * above it wrong), and the right finding then cites only the unchanged line.
+ * Rules without a `contextNeed` count as diff-only, so this covers nearly every
+ * rule. The eval cannot tell the two apart yet, so the decision to enforce it
+ * waits for the logged findings.
+ *
+ * A rule that declared it needs more than the diff keeps the right to point at
+ * unchanged lines, as the review's own snap allows; a finding without lines is
+ * left to the snap.
  */
 function citesAnAddedLine(
     file: FileChange,
@@ -1146,7 +1155,9 @@ function citesAnAddedLine(
     const added = new Set<number>();
     const diff = String((file as any).patchWithLinesStr ?? file.patch ?? '');
     for (const line of diff.split('\n')) {
-        const m = /^(\d+) \+/.exec(line);
+        // Production right-aligns the number (`    27 +code`, see
+        // convertToUnifiedDiffWithLineNumbers); the dataset form is unpadded.
+        const m = /^\s*(\d+)\s\+/.exec(line);
         if (m) added.add(Number(m[1]));
     }
     const needsMore = new Set(
@@ -1159,8 +1170,10 @@ function citesAnAddedLine(
         const start = v.relevantLinesStart;
         if (!start) return true;
         const end = Math.max(v.relevantLinesEnd ?? start, start);
-        for (let line = start; line <= end; line++) {
-            if (added.has(line)) return true;
+        // Walk the added lines, not the range: the model's end is unbounded
+        // (a hallucinated 999999, or an Infinity from 1e400 in the JSON).
+        for (const line of added) {
+            if (line >= start && line <= end) return true;
         }
         return false;
     };
@@ -1285,17 +1298,32 @@ export async function judgeKodyRulesSharded(
                 // anchor every violation to this file
                 const resolved = resolveShardViolations(vs, ruleUuids);
                 const proposing = resolved.filter(proposesAChange);
-                const onAddedLines = proposing.filter(
-                    citesAnAddedLine(file, applicable),
-                );
-                if (onAddedLines.length < resolved.length) {
+                if (proposing.length < resolved.length) {
                     logger?.warn({
-                        message: `[kody-rules-shard] dropped ${resolved.length - proposing.length} finding(s) on ${file.filename} whose improvedCode repeats the existing code, and ${proposing.length - onAddedLines.length} that cite only lines the PR did not add`,
+                        message: `[kody-rules-shard] dropped ${resolved.length - proposing.length} finding(s) on ${file.filename} whose improvedCode repeats the existing code`,
                         context: 'kody-rules-sharded',
                         metadata: { filename: file.filename },
                     });
                 }
-                return onAddedLines.map((v) => ({
+                const citesAdded = citesAnAddedLine(file, applicable);
+                const onContextOnly = proposing.filter((v) => !citesAdded(v));
+                if (onContextOnly.length > 0) {
+                    logger?.warn({
+                        message: `[kody-rules-shard] shadow: ${onContextOnly.length} finding(s) on ${file.filename} cite only lines the PR did not add; kept`,
+                        context: 'kody-rules-sharded',
+                        metadata: {
+                            filename: file.filename,
+                            findings: onContextOnly.map((v) => ({
+                                ruleUuid: v.ruleUuid,
+                                linesStart: v.relevantLinesStart,
+                                linesEnd: v.relevantLinesEnd,
+                                summary: v.oneSentenceSummary,
+                                text: v.suggestionContent?.slice(0, 400),
+                            })),
+                        },
+                    });
+                }
+                return proposing.map((v) => ({
                     ...v,
                     relevantFile: file.filename,
                 }));

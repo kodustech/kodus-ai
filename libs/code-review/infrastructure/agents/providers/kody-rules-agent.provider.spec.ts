@@ -1857,9 +1857,9 @@ describe('KodyRulesAgentProvider — claim check before publishing (#1826)', () 
         changedFiles: [
             {
                 filename: 'src/a.ts',
-                patch: "3 +import { formatDate } from '../shared/date';\n4 +const y = 1;",
+                patch: "3 +import { formatDate } from '../shared/date';",
                 patchWithLinesStr:
-                    "3 +import { formatDate } from '../shared/date';\n4 +const y = 1;",
+                    "3 +import { formatDate } from '../shared/date';",
             },
         ],
         prTitle: 'p',
@@ -2323,9 +2323,9 @@ describe('KodyRulesAgentProvider — probing the lookup before trusting it (#182
             {
                 filename: 'src/a.ts',
                 status: 'modified',
-                patch: "3 +import { formatDate } from '../shared/date';\n4 +const y = 1;",
+                patch: "3 +import { formatDate } from '../shared/date';",
                 patchWithLinesStr:
-                    "3 +import { formatDate } from '../shared/date';\n4 +const y = 1;",
+                    "3 +import { formatDate } from '../shared/date';",
             },
         ],
         prTitle: 'p',
