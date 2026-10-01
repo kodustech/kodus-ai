@@ -89,6 +89,7 @@ describe('CreatePrLevelCommentsStage — input contract', () => {
             buildContext({
                 validSuggestionsByPR: [{ id: 'a' }],
                 businessLogicResults: [{ id: 'b' }],
+                platformType: 'BITBUCKET',
             } as any),
         );
 
@@ -101,6 +102,7 @@ describe('CreatePrLevelCommentsStage — input contract', () => {
             [{ id: 'a' }, { id: 'b' }], // both sources merged
             undefined, // languageResultPrompt (unset in this context)
             undefined, // suggestionCopyPrompt (unset in this context)
+            'BITBUCKET', // platformType, so Bitbucket can reply with the prompt
         );
     });
 

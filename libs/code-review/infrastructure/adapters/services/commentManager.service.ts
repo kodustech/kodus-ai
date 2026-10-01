@@ -7,6 +7,11 @@ import { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfac
 import { LanguageValue } from '@libs/core/domain/enums/language-parameter.enum';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { formatBitbucketPromptReply } from '@libs/common/utils/codeManagement/bitbucket-suggestion-comment';
+import {
+    buildAgentPromptText,
+    resolveAgentPrompt,
+} from '@libs/common/utils/codeManagement/suggestion-comment-blocks';
 import { getPRDescriptionLimit } from '@libs/code-review/utils/fit-pr-description';
 import { buildCommentFromSuggestion } from '@libs/common/utils/comment-builder.utils';
 import { extractTaskReferenceLines } from '@libs/common/utils/codeManagement/prTaskReferences';
@@ -1190,6 +1195,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         language: string,
         suggestionCopyPrompt?: boolean,
         fallbackSuggestionsBySeverity?: FallbackSuggestionsBySeverity,
+        platformType?: PlatformType,
     ): Promise<{
         lastAnalyzedCommit: any;
         commits: any[];
@@ -1335,6 +1341,22 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                             suggestionId: comment.suggestion.id,
                         },
                     });
+
+                    if (commentId) {
+                        await this.postBitbucketPromptReply({
+                            organizationAndTeamData,
+                            repository,
+                            prNumber,
+                            commentId,
+                            platformType,
+                            suggestionCopyPrompt,
+                            path: comment.path,
+                            startLine: comment.start_line,
+                            endLine: comment.line,
+                            suggestion: comment.suggestion,
+                            improvedCode: comment.body?.improvedCode,
+                        });
+                    }
                 } catch (error) {
                     // Try fallback suggestion of same severity
                     const fallbackResult = await this.tryFallbackSuggestion({
@@ -1403,6 +1425,25 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                                         .id,
                             },
                         });
+
+                        if (fallbackCommentId) {
+                            const fallbackComment =
+                                fallbackResult.fallbackComment;
+                            await this.postBitbucketPromptReply({
+                                organizationAndTeamData,
+                                repository,
+                                prNumber,
+                                commentId: fallbackCommentId,
+                                platformType,
+                                suggestionCopyPrompt,
+                                path: fallbackComment?.path,
+                                startLine: fallbackComment?.start_line,
+                                endLine: fallbackComment?.line,
+                                suggestion: fallbackComment?.suggestion,
+                                improvedCode:
+                                    fallbackComment?.body?.improvedCode,
+                            });
+                        }
                     } else {
                         // No fallback available or all fallbacks failed
                         commentResults.push({
@@ -2396,6 +2437,93 @@ ${reviewOptions}
     /**
      * Creates general comments on the PR for PR-level suggestions
      */
+    /**
+     * Bitbucket escapes HTML, so the collapsed "Prompt for LLM" block cannot
+     * live in the finding comment there. Kody posts it as a reply in the same
+     * thread, only when the team keeps the copyable prompt on. Never throws: a
+     * failed reply is logged and the finding stays delivered.
+     */
+    private async postBitbucketPromptReply(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { name: string; id: string };
+        prNumber: number;
+        commentId: number | string;
+        platformType?: PlatformType;
+        suggestionCopyPrompt?: boolean;
+        path?: string;
+        startLine?: number;
+        endLine?: number;
+        suggestion?: any;
+        improvedCode?: string;
+    }): Promise<void> {
+        if (params.platformType !== PlatformType.BITBUCKET) return;
+        if (params.suggestionCopyPrompt === false) return;
+
+        const metadata = {
+            organizationAndTeamData: params.organizationAndTeamData,
+            prNumber: params.prNumber,
+            repositoryId: params.repository?.id,
+            commentId: params.commentId,
+            suggestionId: params.suggestion?.id,
+        };
+
+        const promptText = buildAgentPromptText({
+            path: params.path,
+            startLine: params.startLine,
+            endLine: params.endLine,
+            prompt: resolveAgentPrompt(params.suggestion),
+            improvedCode: params.improvedCode ?? params.suggestion?.improvedCode,
+        });
+        if (!promptText) {
+            this.logger.warn({
+                message: `No agent prompt to post under Bitbucket comment for PR#${params.prNumber}`,
+                context: CommentManagerService.name,
+                metadata,
+            });
+            return;
+        }
+
+        try {
+            const reply = await this.codeManagementService.createResponseToComment(
+                {
+                    organizationAndTeamData: params.organizationAndTeamData,
+                    repository: {
+                        id: params.repository.id,
+                        name: params.repository.name,
+                    },
+                    prNumber: params.prNumber,
+                    inReplyToId: Number(params.commentId),
+                    body: formatBitbucketPromptReply(promptText),
+                },
+                PlatformType.BITBUCKET,
+            );
+            if (!reply?.id) {
+                this.logger.warn({
+                    message: `Bitbucket prompt reply was not created for PR#${params.prNumber}`,
+                    context: CommentManagerService.name,
+                    metadata,
+                });
+                return;
+            }
+            this.logger.log({
+                message: `Posted the agent prompt as a reply on Bitbucket for PR#${params.prNumber}`,
+                context: CommentManagerService.name,
+                metadata: {
+                    ...metadata,
+                    replyId: reply.id,
+                    promptChars: promptText.length,
+                },
+            });
+        } catch (error) {
+            this.logger.warn({
+                message: `Failed to post the agent prompt reply on Bitbucket for PR#${params.prNumber}`,
+                context: CommentManagerService.name,
+                error,
+                metadata,
+            });
+        }
+    }
+
     async createPrLevelReviewComments(
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
@@ -2403,6 +2531,7 @@ ${reviewOptions}
         prLevelSuggestions: ISuggestionByPR[],
         language: string,
         suggestionCopyPrompt?: boolean,
+        platformType?: PlatformType,
     ): Promise<{ commentResults: Array<CommentResult> }> {
         try {
             if (!prLevelSuggestions?.length) {
@@ -2465,6 +2594,15 @@ ${reviewOptions}
                         );
 
                     if (createdComment?.id) {
+                        await this.postBitbucketPromptReply({
+                            organizationAndTeamData,
+                            repository,
+                            prNumber,
+                            commentId: createdComment.id,
+                            platformType,
+                            suggestionCopyPrompt,
+                            suggestion,
+                        });
                         commentResults.push({
                             comment: {
                                 suggestion,

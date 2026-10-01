@@ -124,6 +124,7 @@ export class CreatePrLevelCommentsStage extends BasePipelineStage<CodeReviewPipe
                             context.codeReviewConfig?.languageResultPrompt,
                             context.pullRequestMessagesConfig?.globalSettings
                                 ?.suggestionCopyPrompt,
+                            context.platformType,
                         );
 
                     commentResults = result?.commentResults || [];

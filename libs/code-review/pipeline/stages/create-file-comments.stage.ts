@@ -502,6 +502,7 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                     codeReviewConfig?.languageResultPrompt,
                     suggestionCopyPrompt,
                     fallbackSuggestionsBySeverity,
+                    platformType,
                 );
 
             return { lastAnalyzedCommit, commentResults };

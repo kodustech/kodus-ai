@@ -121,3 +121,55 @@ describe('Azure Repos feedback footer', () => {
         expect(body).not.toContain('React with');
     });
 });
+
+describe('Bitbucket suggestion bodies', () => {
+    const { BitbucketCloudService } = jest.requireActual(
+        '@libs/platform/infrastructure/adapters/services/bitbucket/bitbucket-cloud.service',
+    );
+    const { BitbucketDataCenterService } = jest.requireActual(
+        '@libs/platform/infrastructure/adapters/services/bitbucket/bitbucket-data-center.service',
+    );
+
+    const expectBitbucketShape = (body: string) => {
+        expect(body.startsWith('`kody|code-review` `bug` `severity-level|high`')).toBe(true);
+        expect(body).toContain('**User can be null when the account was deleted**');
+        expect(body).toContain('Reading name throws a 500. Guard it.');
+        expect(body).toContain('Reply with 👍 or 👎');
+        expect(body).not.toContain('const name = user?.name;');
+        expect(body).not.toMatch(/<\/?(details|summary|sub)>|<!--/);
+    };
+
+    it('Cloud: chips, title, body and a reply footer, no code and no HTML', () => {
+        expectBitbucketShape(
+            Object.create(BitbucketCloudService.prototype).formatBodyForBitbucket(
+                lineComment,
+                'en-US',
+            ),
+        );
+    });
+
+    it('Data Center: posts the same shape instead of the bare body', async () => {
+        const service = Object.create(BitbucketDataCenterService.prototype);
+        const post = jest.fn().mockResolvedValue({ data: { id: 7 } });
+        service.getAuthDetails = jest.fn().mockResolvedValue({ host: 'h' });
+        service.integrationConfigService = {
+            findOne: jest.fn().mockResolvedValue({
+                configValue: [{ id: 'r1', name: 'repo', workspaceId: 'PRJ' }],
+            }),
+        };
+        service.getAxiosInstance = jest.fn(() => ({ post }));
+        service.logger = { error: jest.fn(), log: jest.fn(), warn: jest.fn() };
+
+        const created = await service.createReviewComment({
+            organizationAndTeamData: { organizationId: 'o', teamId: 't' },
+            repository: { id: 'r1', name: 'repo' },
+            prNumber: 3,
+            lineComment,
+            commit: { sha: 'abc' },
+            language: 'en-US',
+        });
+
+        expect(created).toEqual({ id: 7 });
+        expectBitbucketShape(post.mock.calls[0][1].text);
+    });
+});

@@ -101,6 +101,13 @@ import {
     EMPTY_REPO_SEED_CONTENT,
     EMPTY_REPO_SEED_PATH,
 } from '../code-management-defaults.constants';
+import { formatBitbucketSuggestionBody } from '@libs/common/utils/codeManagement/bitbucket-suggestion-comment';
+import { attachRepliesToComments } from './bitbucket-comment-threads';
+import {
+    getTranslationsForLanguageByCategory,
+    TranslationsCategory,
+} from '@libs/common/utils/translations/translations';
+import { LanguageValue } from '@libs/core/domain/enums/language-parameter.enum';
 
 @Injectable()
 export class BitbucketCloudService implements Omit<
@@ -2230,43 +2237,19 @@ export class BitbucketCloudService implements Omit<
         return `\`\`\`${language}\n${code}\n\`\`\``;
     }
 
-    private formatBodyForBitbucket(lineComment: any, repository: any) {
-        const codeBlock = lineComment?.body?.improvedCode
-            ? this.formatCodeBlock(
-                  repository?.language?.toLowerCase(),
-                  this.dedentCode(lineComment?.body?.improvedCode),
-              )
-            : '';
-        const suggestionContent = lineComment?.body?.suggestionContent || '';
-        const actionStatement = lineComment?.body?.actionStatement
-            ? `${lineComment.body.actionStatement}\n\n`
-            : '';
-
-        const severityText = lineComment?.suggestion
-            ? lineComment.suggestion.severity
-            : '';
-        const labelText = lineComment?.suggestion
-            ? lineComment.suggestion.label
-            : '';
-
-        const header = `\`kody|code-review\` \`${labelText}\` \`severity-level|${severityText}\`\n\n`;
-
-        const thumbsUpBlock = `\`\`\`\n👍\n\`\`\`\n`;
-        const thumbsDownBlock = `\`\`\`\n👎\n\`\`\`\n`;
-
-        const footer = `Was this suggestion helpful? reply with 👍 or 👎 to help Kody learn from this interaction.\n`;
-
-        return [
-            header,
-            suggestionContent,
-            actionStatement,
-            codeBlock,
-            footer,
-            thumbsUpBlock,
-            thumbsDownBlock,
-        ]
-            .join('\n')
-            .trim();
+    private formatBodyForBitbucket(lineComment: any, language?: string) {
+        const translations = getTranslationsForLanguageByCategory(
+            language as LanguageValue,
+            TranslationsCategory.ReviewComment,
+        );
+        return formatBitbucketSuggestionBody({
+            label: lineComment?.suggestion?.label,
+            severity: lineComment?.suggestion?.severity,
+            title: lineComment?.suggestion?.oneSentenceSummary,
+            body: lineComment?.body?.suggestionContent,
+            actionStatement: lineComment?.body?.actionStatement,
+            feedback: translations.feedbackReply || translations.feedback,
+        });
     }
 
     async createReviewComment(params: {
@@ -2304,7 +2287,7 @@ export class BitbucketCloudService implements Omit<
 
             const bodyFormatted = this.formatBodyForBitbucket(
                 lineComment,
-                repository,
+                language,
             );
 
             // added ts-ignore because _body expects a type property but Bitbucket rejects it
@@ -2965,24 +2948,10 @@ export class BitbucketCloudService implements Omit<
                 })
                 .then((res) => this.getPaginatedResults(bitbucketAPI, res));
 
-            // Adds a replies field to each comment.
-            const commentMap = comments.reduce((acc, comment) => {
-                // Initialize the replies field and map the comment by ID
-                comment.replies = [];
-                acc[comment.id] = comment;
-
-                // If the comment has a parent, add it to the parent's replies array
-                if (comment.parent) {
-                    const parentId = comment.parent.id;
-                    if (acc[parentId]) {
-                        acc[parentId].replies.push(comment);
-                    }
-                }
-
-                return acc;
-            }, {});
-
-            const organizedComments: any = Object.values(commentMap);
+            // A thread's root lists every reply under it, replies to replies
+            // included, so feedback and conversation under Kody's prompt
+            // reply belong to the finding's thread.
+            const organizedComments: any = attachRepliesToComments(comments);
 
             return organizedComments
                 .map((comment) => ({

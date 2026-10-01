@@ -2,7 +2,6 @@ import { Button } from "@components/ui/button";
 import { CardHeader } from "@components/ui/card";
 import { Heading } from "@components/ui/heading";
 import { Switch } from "@components/ui/switch";
-import { useShouldHideLLMPrompt } from "src/app/(app)/settings/_components/use-code-management-platform";
 
 import { OverrideIndicator } from "../../../_components/override";
 import type { IFormattedConfigProperty } from "../../../_types";
@@ -14,10 +13,6 @@ export const LLMPromptToggle = (props: {
     handleRevert: () => void;
     canEdit: boolean;
 }) => {
-    const shouldHide = useShouldHideLLMPrompt();
-
-    if (shouldHide) return null;
-
     return (
         <div className="flex flex-col gap-4">
             <Button
@@ -35,9 +30,6 @@ export const LLMPromptToggle = (props: {
                         <div className="mb-2 flex flex-row items-center gap-2">
                             <Heading variant="h3">
                                 Add a copyable prompt to each suggestion
-                                <span className="ml-1.5 inline-flex items-center rounded-md bg-red-800 px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-blue-700/10 ring-inset">
-                                    Not available on Bitbucket
-                                </span>
                             </Heading>
                             <OverrideIndicator
                                 currentValue={props.suggestionCopyPrompt?.value}
@@ -48,6 +40,11 @@ export const LLMPromptToggle = (props: {
                         <p className="text-text-secondary">
                             Each suggestion gets a prompt the developer can
                             paste into an AI assistant to apply the fix.
+                        </p>
+                        <p className="text-text-secondary mt-1 text-sm">
+                            On Bitbucket, the prompt is posted as a reply in
+                            the same thread. With this off, Bitbucket comments
+                            show no fix.
                         </p>
                     </div>
                     <Switch
