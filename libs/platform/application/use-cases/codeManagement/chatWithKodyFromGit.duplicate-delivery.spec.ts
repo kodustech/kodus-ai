@@ -202,6 +202,21 @@ describe('ChatWithKodyFromGitUseCase — one reply delivered by several webhooks
         expect(inbox.complete).not.toHaveBeenCalled();
     });
 
+    it('lets a resend answer once the missing integration is set up', async () => {
+        const { useCase, codeManagementService, conversationAgentUseCase, inbox } =
+            setup();
+        codeManagementService.findTeamAndOrganizationIdByConfigKey.mockResolvedValueOnce(
+            null,
+        );
+
+        await useCase.execute(delivery());
+        expect(inbox.release).toHaveBeenCalledTimes(1);
+        expect(conversationAgentUseCase.execute).not.toHaveBeenCalled();
+
+        await useCase.execute(delivery());
+        expect(conversationAgentUseCase.execute).toHaveBeenCalledTimes(1);
+    });
+
     it('answers an edited comment again, as before', async () => {
         const { useCase, conversationAgentUseCase } = setup();
 

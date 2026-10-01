@@ -4,7 +4,7 @@ describe('MessageClaimService', () => {
     let inbox: {
         claim: jest.Mock;
         markAsProcessed: jest.Mock;
-        releaseLock: jest.Mock;
+        releaseIfHeldBy: jest.Mock;
     };
     let service: MessageClaimService;
 
@@ -12,7 +12,7 @@ describe('MessageClaimService', () => {
         inbox = {
             claim: jest.fn().mockResolvedValue({ messageId: 'k' }),
             markAsProcessed: jest.fn().mockResolvedValue(undefined),
-            releaseLock: jest.fn().mockResolvedValue(undefined),
+            releaseIfHeldBy: jest.fn().mockResolvedValue(undefined),
         };
         service = new MessageClaimService(inbox as any);
     });
@@ -55,9 +55,15 @@ describe('MessageClaimService', () => {
         expect(inbox.markAsProcessed).toHaveBeenCalledWith('k', 'consumer-a');
     });
 
-    it('releases the key on release, so a retry can claim it', async () => {
+    it('releases only a claim this instance holds, under the same lockedBy it claimed with', async () => {
+        await service.claim('consumer-a', 'k');
         await service.release('consumer-a', 'k');
 
-        expect(inbox.releaseLock).toHaveBeenCalledWith('k', 'consumer-a');
+        const claimedBy = inbox.claim.mock.calls[0][2];
+        expect(inbox.releaseIfHeldBy).toHaveBeenCalledWith(
+            'k',
+            'consumer-a',
+            claimedBy,
+        );
     });
 });

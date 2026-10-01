@@ -257,7 +257,7 @@ export class ChatWithKodyFromGitUseCase {
         });
 
         let claimedKey: string | undefined;
-        let failed = false;
+        let releaseClaim = false;
 
         try {
             if (!this.isRelevantAction(params)) {
@@ -299,6 +299,9 @@ export class ChatWithKodyFromGitUseCase {
                         integrationConfig,
                     },
                 });
+                // Nothing was decided about the comment; once the integration
+                // is fixed, resending the webhook must still work.
+                releaseClaim = true;
                 return;
             }
 
@@ -376,7 +379,7 @@ export class ChatWithKodyFromGitUseCase {
                 );
             }
         } catch (error) {
-            failed = true;
+            releaseClaim = true;
             this.logger.error({
                 message: 'Error while executing the git comment response agent',
                 context: ChatWithKodyFromGitUseCase.name,
@@ -386,9 +389,9 @@ export class ChatWithKodyFromGitUseCase {
         } finally {
             if (claimedKey) {
                 try {
-                    // A failed run gives the comment back, so resending the
-                    // webhook from the platform retries it.
-                    await (failed
+                    // A run that failed or decided nothing gives the comment
+                    // back, so resending the webhook from the platform retries.
+                    await (releaseClaim
                         ? this.messageClaimService.release(
                               CONVERSATION_CLAIM_CONSUMER,
                               claimedKey,

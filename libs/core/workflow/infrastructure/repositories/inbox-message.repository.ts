@@ -165,6 +165,37 @@ export class InboxMessageRepository implements IInboxMessageRepository {
     }
 
     /**
+     * Like releaseLock, but only while `lockedBy` still holds the message in
+     * PROCESSING: a claim that expired into another holder, or one already
+     * processed, is left as it is.
+     */
+    async releaseIfHeldBy(
+        messageId: string,
+        consumerId: string,
+        lockedBy: string,
+    ): Promise<void> {
+        try {
+            await this.repository.update(
+                {
+                    messageId,
+                    consumerId,
+                    lockedBy,
+                    status: InboxStatus.PROCESSING,
+                },
+                { status: InboxStatus.READY, lockedBy: null, lockedAt: null },
+            );
+        } catch (err) {
+            this.logger.error({
+                message: 'Failed to release inbox lock',
+                context: InboxMessageRepository.name,
+                error: err,
+                metadata: { messageId, consumerId },
+            });
+            throw err;
+        }
+    }
+
+    /**
      * Reclaims messages stuck in PROCESSING status for too long.
      * These messages will be re-processed when RabbitMQ redelivers them.
      */

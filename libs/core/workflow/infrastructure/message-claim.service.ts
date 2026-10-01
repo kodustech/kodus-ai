@@ -39,6 +39,12 @@ export class MessageClaimService implements IMessageClaimService {
     }
 
     async release(consumerId: string, key: string): Promise<void> {
-        await this.inboxRepository.releaseLock(key, consumerId);
+        // A claim that expired into another delivery, or that one already
+        // completed, must not be reopened: a later delivery would answer twice.
+        await this.inboxRepository.releaseIfHeldBy(
+            key,
+            consumerId,
+            hostname(),
+        );
     }
 }
