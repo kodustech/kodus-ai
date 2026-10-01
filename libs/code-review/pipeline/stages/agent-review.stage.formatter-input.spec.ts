@@ -159,3 +159,36 @@ describe('AgentReviewStage — formatter input', () => {
         );
     });
 });
+
+describe('AgentReviewStage — body shape after the formatter', () => {
+    const LONG =
+        'Reading name throws a 500.\n\n```ts\nuser?.name\n```\n\nGuard it. Add a test. Log the miss.';
+
+    it('removes fences and caps the body at two sentences on the default guidelines', async () => {
+        const { stage, reviewOrchestrator } = makeStage();
+        reviewOrchestrator.execute.mockResolvedValue(happyEnvelope([sugg()]));
+        (formatSuggestionContent as jest.Mock).mockResolvedValueOnce(
+            new Map([[0, { suggestionContent: LONG }]]),
+        );
+
+        const [s] = analyzedSuggestions(await run(stage, makeContext()));
+
+        expect(s.suggestionContent).toBe('Reading name throws a 500. Guard it.');
+    });
+
+    it('removes fences but keeps the length a team asked for', async () => {
+        const { stage, reviewOrchestrator } = makeStage();
+        reviewOrchestrator.execute.mockResolvedValue(happyEnvelope([sugg()]));
+        (formatSuggestionContent as jest.Mock).mockResolvedValueOnce(
+            new Map([[0, { suggestionContent: LONG }]]),
+        );
+
+        const [s] = analyzedSuggestions(
+            await run(stage, withGuidelines('Explain in detail, like a mentor.')),
+        );
+
+        expect(s.suggestionContent).toBe(
+            'Reading name throws a 500. Guard it. Add a test. Log the miss.',
+        );
+    });
+});

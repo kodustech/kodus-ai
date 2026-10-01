@@ -22,6 +22,7 @@ import { buildPlatformEmbedder } from '@libs/common/utils/document';
 import { resolveSuggestionTitle } from '@libs/common/utils/codeManagement/suggestion-title';
 import { stripReviewScaffolding } from '@libs/code-review/infrastructure/agents/engine/strip-review-scaffolding';
 import { resolveWritingGuidelines } from '@libs/common/utils/writing-guidelines';
+import { shapeSuggestionBody } from '@libs/common/utils/codeManagement/suggestion-body-shape';
 import {
     dedupReviewWarnings,
     buildBadFixDowngradedWarning,
@@ -1274,6 +1275,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 );
             }
 
+            const writingGuidelines = resolveWritingGuidelines(
+                context.codeReviewConfig?.v2PromptOverrides?.generation?.main,
+            );
+
             // Clean up suggestion text: remove WHAT/WHY/HOW labels, merge into natural prose
             try {
                 const {
@@ -1284,10 +1289,6 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 // reflowed it into one paragraph — losing the per-package
                 // lines and appending remediation advice the scanner never
                 // said. There is no WHAT/WHY/HOW scaffolding here to strip.
-                const writingGuidelines = resolveWritingGuidelines(
-                    context.codeReviewConfig?.v2PromptOverrides?.generation
-                        ?.main,
-                );
                 const formatTargets = deduped
                     .map((s, i) => (isAnalyzerSuggestion(s) ? -1 : i))
                     .filter((i) => i >= 0);
@@ -1328,6 +1329,19 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 this.logger.warn({
                     message: `[AGENT] Content formatting failed, keeping original text: ${err instanceof Error ? err.message : String(err)}`,
                     context: this.stageName,
+                });
+            }
+
+            // The shape the comment needs does not depend on the model
+            // complying: no code blocks, no opening sentence that restates the
+            // title, and two sentences unless the team set its own length.
+            // Deterministic findings keep their structured list.
+            for (const s of deduped) {
+                if (isAnalyzerSuggestion(s)) continue;
+                s.suggestionContent = shapeSuggestionBody({
+                    body: stripReviewScaffolding(s.suggestionContent || ''),
+                    title: s.oneSentenceSummary,
+                    capSentences: !writingGuidelines.isCustom,
                 });
             }
 

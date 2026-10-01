@@ -1,3 +1,5 @@
+import { splitSentences } from './suggestion-body-shape';
+
 /** Hard ceiling for a suggestion title; the prompt asks for 80 or fewer. */
 export const MAX_TITLE_CHARS = 100;
 
@@ -12,29 +14,8 @@ const normalize = (text: string): string =>
         .replace(/[.。]+$/, '')
         .trim();
 
-/**
- * First sentence of a prose body. A sentence ends at `.`, `!` or `?` followed
- * by whitespace or the end of the text; dots inside inline code never end one.
- */
-const firstSentence = (body: string): string => {
-    const text = body.replace(/\s+/g, ' ').trim();
-    let inCode = false;
-    for (let i = 0; i < text.length; i++) {
-        const ch = text[i];
-        if (ch === '`') {
-            inCode = !inCode;
-            continue;
-        }
-        if (
-            !inCode &&
-            (ch === '.' || ch === '!' || ch === '?') &&
-            (i === text.length - 1 || text[i + 1] === ' ')
-        ) {
-            return text.slice(0, i);
-        }
-    }
-    return text;
-};
+const firstSentence = (body: string): string =>
+    (splitSentences(body)[0] ?? '').replace(/[.!?]$/, '');
 
 const cut = (title: string): string => {
     if (title.length <= MAX_TITLE_CHARS) return title;
