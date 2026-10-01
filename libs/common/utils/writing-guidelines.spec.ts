@@ -1,5 +1,7 @@
 import {
     isDefaultWritingGuidelines,
+    knownWritingGuidelines,
+    matchKnownWritingGuidelines,
     resolveWritingGuidelines,
 } from './writing-guidelines';
 
@@ -77,5 +79,32 @@ describe('resolveWritingGuidelines', () => {
             text: 'Current default.\n- **Two sentences at most**.',
             isCustom: false,
         });
+    });
+});
+
+describe('matchKnownWritingGuidelines', () => {
+    it('names the shipped text a value matches', () => {
+        expect(matchKnownWritingGuidelines('Detailed and verifiable issue description')).toBe('default-2025');
+        expect(matchKnownWritingGuidelines('Current default.\n- **Two sentences at most**.')).toBe('default-current');
+        expect(
+            matchKnownWritingGuidelines(
+                'Adopt a coaching tone: - Explain briefly the why behind each issue. - Suggest how to validate (tests/checks). - Prefer concise examples. - Avoid nitpicks and group by priority.',
+            ),
+        ).toBe('preset-coach');
+    });
+
+    it('returns null for a real edit or an empty value', () => {
+        expect(matchKnownWritingGuidelines('Detailed and verifiable issue description. Be friendly.')).toBeNull();
+        expect(matchKnownWritingGuidelines('')).toBeNull();
+        expect(matchKnownWritingGuidelines(undefined)).toBeNull();
+    });
+
+    it('lists the known texts by name, for tools that report on them', () => {
+        expect(knownWritingGuidelines().map((k) => k.name)).toEqual([
+            'default-current',
+            'default-2025',
+            'default-2026-02',
+            'preset-coach',
+        ]);
     });
 });
