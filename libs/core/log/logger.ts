@@ -1230,14 +1230,6 @@ const ERROR_PROP_MAX_STRING_LENGTH = 2_000;
 const UNREPRESENTABLE_PROP_MARKER = '[unserializable value]';
 
 /**
- * How much of a string is scanned for credential patterns before it is clamped.
- * The emitted value never exceeds ERROR_PROP_MAX_STRING_LENGTH, so scanning a
- * multi-megabyte blob in full is wasted work; the lookahead keeps a credential
- * pair that straddles the eventual cut inside the scan window.
- */
-const ERROR_PROP_SCAN_LENGTH = ERROR_PROP_MAX_STRING_LENGTH * 2;
-
-/**
  * The non-content fields kept from an axios-shaped `response`/`config` on the
  * `err.*` path. HTTP status and URL are what operators alert on and neither is
  * response content; everything else those objects carry (data, headers, the
@@ -1481,11 +1473,11 @@ function pickHttpContext(
             continue;
         }
         if (typeof raw === 'string') {
-            const scanned =
-                raw.length > ERROR_PROP_SCAN_LENGTH
-                    ? raw.substring(0, ERROR_PROP_SCAN_LENGTH)
-                    : raw;
-            const sanitized = sanitizeString(scanned);
+            // Sanitize the WHOLE value before clamping, same order (and same
+            // reason) as `boundErrorForLog` below: a pair whose closing
+            // delimiter falls beyond the cut never matches a pattern, so its
+            // opening prefix — the credential — is emitted in the clear.
+            const sanitized = sanitizeString(raw);
             picked[key] =
                 sanitized.length > maxStringLength
                     ? `${sanitized.substring(0, maxStringLength)}…`
@@ -1562,16 +1554,18 @@ export function boundErrorForLog(
             continue;
         }
         if (typeof value === 'string') {
-            // Redact BEFORE clamping: clamping first cuts a credential-shaped
-            // value mid-token, and the later deepSanitize pass cannot redact what
-            // no longer matches a pattern. Same order as extractErrorProps, with
-            // the scan bounded because only the first maxStringLength characters
-            // can ever be emitted.
-            const scanned =
-                value.length > ERROR_PROP_SCAN_LENGTH
-                    ? value.substring(0, ERROR_PROP_SCAN_LENGTH)
-                    : value;
-            const sanitized = sanitizeString(scanned);
+            // Redact BEFORE clamping, and redact the WHOLE value: clamping first
+            // cuts a credential-shaped value mid-token, and a bounded scan is the
+            // same defect one window further out — a pair whose closing delimiter
+            // sits past the window never matches JSON_PAIR_PATTERN or
+            // redactUrlUserinfo, so its opening prefix (the credential itself) is
+            // emitted in the clear. The later deepSanitize pass cannot redact what
+            // no longer matches a pattern, so this ordering is the only place the
+            // leak can be closed. The scan is one linear pass over a value that is
+            // about to be clamped anyway, and `redactEmbeddedSecrets` skips
+            // strings with nothing credential-shaped in them; same order as
+            // extractErrorProps, so the two paths cannot disagree.
+            const sanitized = sanitizeString(value);
             bounded[key] =
                 sanitized.length > maxStringLength
                     ? `${sanitized.substring(0, maxStringLength)}…`

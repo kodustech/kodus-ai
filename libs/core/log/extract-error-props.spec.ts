@@ -466,4 +466,52 @@ describe('boundErrorForLog (#1835 review)', () => {
         expect(JSON.stringify(props)).not.toContain('sk-live-');
         expect(String(bounded.url).length).toBeLessThanOrEqual(2_001);
     });
+
+    it('redacts a pair whose closing delimiter falls PAST the old scan window', () => {
+        // The case above closes its pair at ~3 KB, INSIDE the 4,000-character
+        // window the bounded scan used, which is why it passed while the window
+        // existed. Push the closing quote past it — the pair opens inside the
+        // emitted prefix and closes outside the scan — and the prefix went out in
+        // the clear, because neither JSON_PAIR_PATTERN nor redactUrlUserinfo can
+        // match a pair that never closes. Same shape the review reported
+        // (`err.url = '{"apiKey":"' + 'A'.repeat(4_500) + '"}'`); the scan is the
+        // whole value now, so both paths redact it.
+        const err = new APICallErrorLike(
+            500,
+            '{"error":"boom"}',
+            `{"apiKey":"${'A'.repeat(4_500)}"}`,
+            {},
+            {},
+            {},
+        );
+
+        const bounded = boundErrorForLog(err);
+        const props = extractErrorProps(err);
+
+        expect(String(bounded.url)).not.toContain('AAAA');
+        expect(JSON.stringify(props)).not.toContain('AAAA');
+        // Still clamped to the log-line budget.
+        expect(String(bounded.url).length).toBeLessThanOrEqual(2_001);
+    });
+
+    it('redacts the same far-closing pair on the axios url kept by pickHttpContext', () => {
+        // The second site the review named: the `config.url` that survives the
+        // allowlist is sanitized by `pickHttpContext`, which had the identical
+        // scan-then-clamp order. Fixed in the same place, pinned here so the two
+        // paths cannot drift apart again.
+        const err = Object.assign(new Error('request failed'), {
+            response: { status: 503 },
+            config: {
+                method: 'post',
+                url: `{"apiKey":"${'B'.repeat(4_500)}"}`,
+            },
+        });
+
+        const bounded = boundErrorForLog(err);
+
+        expect(JSON.stringify(bounded)).not.toContain('BBBB');
+        expect(
+            String((bounded.config as Record<string, unknown>).url).length,
+        ).toBeLessThanOrEqual(2_001);
+    });
 });
