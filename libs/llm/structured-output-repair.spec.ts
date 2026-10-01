@@ -98,6 +98,41 @@ describe('extractJsonFromText', () => {
     });
 });
 
+// Production 2026-09-30: MiniMax-M3 wrote its reasoning in the answer, inside
+// <think>…</think>, before the JSON. 1,197 Kody Rules shards failed to parse
+// in a day, and in 950 the JSON right after </think> was valid. The reasoning
+// quotes code, so the first balanced {…} in the text is often not the answer.
+describe('reasoning written before the answer', () => {
+    const answer = '{"violations":[]}';
+    const reasoning =
+        '<think>Rule [1] says no `any`. The line is `const x = { a: 1 }` — typed, so no violation.</think>';
+
+    it('extracts the answer after the reasoning block', () => {
+        expect(extractJsonFromText(`${reasoning}${answer}`)).toBe(answer);
+    });
+
+    it('repairs it too, so a failed structured call is salvaged', () => {
+        expect(repairJsonText(`${reasoning}\n\n${answer}`)).toBe(answer);
+    });
+
+    it('takes a fenced answer after the reasoning', () => {
+        expect(
+            extractJsonFromText(`${reasoning}\n\`\`\`json\n${answer}\n\`\`\``),
+        ).toBe(answer);
+    });
+
+    it('finds nothing when the reasoning never closes (no answer was written)', () => {
+        expect(
+            extractJsonFromText('<think>Rule [1] … `const x = { a: 1 }` … still thinking'),
+        ).toBeNull();
+    });
+
+    it('leaves a <think> tag inside a JSON string alone', () => {
+        const json = '{"violations":[{"suggestionContent":"<think> is not HTML"}]}';
+        expect(extractJsonFromText(json)).toBe(json);
+    });
+});
+
 describe('ajvValidator', () => {
     const schema = {
         type: 'object',
