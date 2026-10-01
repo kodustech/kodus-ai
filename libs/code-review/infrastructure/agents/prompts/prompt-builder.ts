@@ -11,6 +11,7 @@ import { FileChange } from '@libs/core/infrastructure/config/types/general/codeR
 import { CheckEvidence } from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
 import { AnalyzerFinding } from '@libs/code-review/infrastructure/analyzers/analyzer-finding.type';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { TITLE_PROMPT_SPEC } from '@libs/common/utils/codeManagement/suggestion-title';
 import { convertTiptapJSONToText } from '@libs/common/utils/tiptap-json';
 
 import type {
@@ -738,7 +739,7 @@ ${coverageTargets ? `${coverageTargets}\n` : ''}
       "suggestionContent": "WHAT: one sentence naming the exact problem. WHY: one sentence on the real impact. HOW: concrete fix if clear from the code — omit if speculative.",
       "existingCode": "problematic code snippet from the diff",
       "improvedCode": "fixed code snippet (only if fix is clear from context)",
-      "oneSentenceSummary": "Brief summary",
+      "oneSentenceSummary": "${TITLE_PROMPT_SPEC}",
       "relevantLinesStart": 10,
       "relevantLinesEnd": 15,
       "severity": "critical|high|medium|low",
@@ -977,7 +978,7 @@ ${fileContentsSection}
       "suggestionContent": "WHAT: one sentence naming the exact problem. WHY: one sentence on the real impact visible from the diff. HOW: concrete fix if clear.",
       "existingCode": "problematic code snippet from the diff",
       "improvedCode": "fixed code snippet",
-      "oneSentenceSummary": "Brief summary",
+      "oneSentenceSummary": "${TITLE_PROMPT_SPEC}",
       "relevantLinesStart": 10,
       "relevantLinesEnd": 15,
       "severity": "critical|high|medium|low",

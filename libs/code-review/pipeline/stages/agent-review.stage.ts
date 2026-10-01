@@ -19,6 +19,7 @@ import {
     dedupEmbeddingText,
 } from '@libs/code-review/infrastructure/agents/engine/dedup-prompt';
 import { buildPlatformEmbedder } from '@libs/common/utils/document';
+import { resolveSuggestionTitle } from '@libs/common/utils/codeManagement/suggestion-title';
 import {
     dedupReviewWarnings,
     buildBadFixDowngradedWarning,
@@ -1450,6 +1451,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     content += `\n\nKody rule violation: ${markdownLink}`;
                 }
                 s.suggestionContent = content;
+            }
+
+            // Every finding renders under a bounded title: the model's summary,
+            // or the first sentence of the body when the model left it out.
+            for (const s of deduped) {
+                s.oneSentenceSummary = resolveSuggestionTitle({
+                    summary: s.oneSentenceSummary,
+                    body: s.suggestionContent,
+                });
             }
 
             // Separate PR-level kody rules (no anchor) from file-level suggestions.

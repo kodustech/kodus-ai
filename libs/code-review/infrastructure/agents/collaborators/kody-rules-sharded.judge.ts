@@ -20,6 +20,7 @@
  * inlining, hybrid regex+judge, compound-rule decomposition.
  */
 import { jsonSchema, type Schema } from 'ai';
+import { TITLE_PROMPT_SPEC } from '@libs/common/utils/codeManagement/suggestion-title';
 import { z } from 'zod';
 import { recoverRuleUuid } from './finding-mapper';
 import {
@@ -736,7 +737,7 @@ function fileShardUser(
         // finding when the repository says otherwise. Under-claiming is safe —
         // "none" publishes the finding unchanged, exactly as today.
         `State what your finding ASSERTS about the repository in "claimKind": "unused" (this symbol is used nowhere else), "missing" (this file or path does not exist), "duplicate" (this already exists elsewhere), or "none" for everything else. Name the target: "claimSymbol" is the identifier the claim is about, "claimPath" the file path; use null for whichever does not apply. A claim is CHECKED against the repository and the finding is dropped if the repository contradicts it, so claim only what you mean.`,
-        `{"violations":[{"ruleId":<n>,"relevantLinesStart":<line>,"relevantLinesEnd":<line>,"language":"<lang>","existingCode":"<offending code>","improvedCode":"<fixed code or null>","suggestionContent":"WHAT/WHY/HOW","oneSentenceSummary":"<short>","claimKind":"<unused|missing|duplicate|none>","claimSymbol":"<symbol or null>","claimPath":"<path or null>"}]}`,
+        `{"violations":[{"ruleId":<n>,"relevantLinesStart":<line>,"relevantLinesEnd":<line>,"language":"<lang>","existingCode":"<offending code>","improvedCode":"<fixed code or null>","suggestionContent":"WHAT/WHY/HOW","oneSentenceSummary":"<${TITLE_PROMPT_SPEC}>","claimKind":"<unused|missing|duplicate|none>","claimSymbol":"<symbol or null>","claimPath":"<path or null>"}]}`,
     ].join('\n');
 }
 
@@ -802,7 +803,7 @@ function prShardUser(
         ``,
         previousDecisionsSection,
         ...languageInstructionLines(languageLabel),
-        `Return ONLY JSON (ruleId is the rule's [n] number): {"violations":[{"ruleId":<n>,"suggestionContent":"WHAT/WHY","oneSentenceSummary":"<short>"}]}`,
+        `Return ONLY JSON (ruleId is the rule's [n] number): {"violations":[{"ruleId":<n>,"suggestionContent":"WHAT/WHY","oneSentenceSummary":"<${TITLE_PROMPT_SPEC}>"}]}`,
     ].join('\n');
 }
 

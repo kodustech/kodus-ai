@@ -25,7 +25,9 @@ import {
     normalizePath,
     fileWasInvestigated,
     runRecallPasses,
+    submitResultTool,
 } from '@libs/code-review/infrastructure/agents/core/finder.agent';
+import { TITLE_PROMPT_SPEC } from '@libs/common/utils/codeManagement/suggestion-title';
 import { LLM } from '@libs/llm/llm';
 
 const sampleFindings = {
@@ -886,5 +888,20 @@ describe('matrix E — N-model policy (delegated to LLM.run)', () => {
         const s2 = artifactState(D);
         expect(extractFindings(s1)).toEqual(extractFindings(s2));
         expect(s1.__findingsOutcome).toBe(s2.__findingsOutcome);
+    });
+});
+
+describe('submitResult schema — finding title', () => {
+    const items = (submitResultTool.inputSchema as any).properties.suggestions
+        .items;
+
+    it('requires oneSentenceSummary so the model always writes a title', () => {
+        expect(items.required).toContain('oneSentenceSummary');
+    });
+
+    it('describes oneSentenceSummary with the shared title spec', () => {
+        expect(items.properties.oneSentenceSummary.description).toBe(
+            TITLE_PROMPT_SPEC,
+        );
     });
 });
