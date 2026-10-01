@@ -1,4 +1,7 @@
-import { shapeSuggestionBody } from './suggestion-body-shape';
+import {
+    shapeSuggestionBody,
+    shapeSuggestionBodyWithReport,
+} from './suggestion-body-shape';
 
 describe('shapeSuggestionBody', () => {
     it('removes fenced code from the body', () => {
@@ -79,5 +82,37 @@ describe('shapeSuggestionBody', () => {
                 capSentences: true,
             }),
         ).toBe('```ts\nuser?.name\n```');
+    });
+});
+
+describe('shapeSuggestionBodyWithReport', () => {
+    it('reports what it changed, for logging', () => {
+        expect(
+            shapeSuggestionBodyWithReport({
+                body: 'The user can be null when the account was deleted. Reading name throws.\n\n```ts\nuser?.name\n```\n\nGuard it. Add a test.',
+                title: 'User can be null when the account was deleted',
+                capSentences: true,
+            }),
+        ).toEqual({
+            body: 'Reading name throws. Guard it.',
+            removedFences: true,
+            droppedTitleRepeat: true,
+            capped: true,
+        });
+    });
+
+    it('reports nothing changed for a body already in shape', () => {
+        expect(
+            shapeSuggestionBodyWithReport({
+                body: 'Reading name throws. Guard it.',
+                title: 'User can be null',
+                capSentences: true,
+            }),
+        ).toEqual({
+            body: 'Reading name throws. Guard it.',
+            removedFences: false,
+            droppedTitleRepeat: false,
+            capped: false,
+        });
     });
 });

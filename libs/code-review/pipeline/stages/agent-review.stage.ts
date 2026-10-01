@@ -22,7 +22,7 @@ import { buildPlatformEmbedder } from '@libs/common/utils/document';
 import { resolveSuggestionTitle } from '@libs/common/utils/codeManagement/suggestion-title';
 import { stripReviewScaffolding } from '@libs/code-review/infrastructure/agents/engine/strip-review-scaffolding';
 import { resolveWritingGuidelines } from '@libs/common/utils/writing-guidelines';
-import { shapeSuggestionBody } from '@libs/common/utils/codeManagement/suggestion-body-shape';
+import { shapeSuggestionBodyWithReport } from '@libs/common/utils/codeManagement/suggestion-body-shape';
 import {
     dedupReviewWarnings,
     buildBadFixDowngradedWarning,
@@ -1275,9 +1275,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 );
             }
 
-            const writingGuidelines = resolveWritingGuidelines(
-                context.codeReviewConfig?.v2PromptOverrides?.generation?.main,
-            );
+            const savedGenerationMain =
+                context.codeReviewConfig?.v2PromptOverrides?.generation?.main;
+            const writingGuidelines =
+                resolveWritingGuidelines(savedGenerationMain);
 
             // Clean up suggestion text: remove WHAT/WHY/HOW labels, merge into natural prose
             try {
@@ -1336,14 +1337,39 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // complying: no code blocks, no opening sentence that restates the
             // title, and two sentences unless the team set its own length.
             // Deterministic findings keep their structured list.
+            const shapeCounts = {
+                shaped: 0,
+                removedFences: 0,
+                droppedTitleRepeat: 0,
+                capped: 0,
+            };
             for (const s of deduped) {
                 if (isAnalyzerSuggestion(s)) continue;
-                s.suggestionContent = shapeSuggestionBody({
+                const shaped = shapeSuggestionBodyWithReport({
                     body: stripReviewScaffolding(s.suggestionContent || ''),
                     title: s.oneSentenceSummary,
                     capSentences: !writingGuidelines.isCustom,
                 });
+                s.suggestionContent = shaped.body;
+                shapeCounts.shaped++;
+                if (shaped.removedFences) shapeCounts.removedFences++;
+                if (shaped.droppedTitleRepeat) shapeCounts.droppedTitleRepeat++;
+                if (shaped.capped) shapeCounts.capped++;
             }
+            this.logger.log({
+                message: `[AGENT] Shaped ${shapeCounts.shaped} suggestion bodies (fences removed ${shapeCounts.removedFences}, title repeat dropped ${shapeCounts.droppedTitleRepeat}, capped ${shapeCounts.capped})`,
+                context: this.stageName,
+                metadata: {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    prNumber: context.pullRequest?.number,
+                    ...shapeCounts,
+                    writingGuidelines: writingGuidelines.isCustom
+                        ? 'custom'
+                        : savedGenerationMain
+                          ? 'saved-default'
+                          : 'default',
+                },
+            });
 
             // Publication gate (issue #1833): four weeks of production
             // thumbs-down showed 38% had no usable fix — empty, identical to
@@ -1476,17 +1502,32 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // llmPrompt feeds the "Prompt for LLM" block, the consolidated
             // @agentPrompt and validate-suggestions' fixer instruction, so it
             // carries the title and the whole explanation, not the short body.
+            const titleCounts = { fromSummary: 0, fromBody: 0, cut: 0, empty: 0 };
             for (const s of deduped) {
+                const hadSummary = !!s.oneSentenceSummary?.trim();
                 s.oneSentenceSummary = resolveSuggestionTitle({
                     summary: s.oneSentenceSummary,
                     body: s.suggestionContent,
                 });
+                if (!s.oneSentenceSummary) titleCounts.empty++;
+                else if (hadSummary) titleCounts.fromSummary++;
+                else titleCounts.fromBody++;
+                if (s.oneSentenceSummary.endsWith('…')) titleCounts.cut++;
                 if (s.fullExplanation) {
                     s.llmPrompt = s.oneSentenceSummary
                         ? `${s.oneSentenceSummary}\n\n${s.fullExplanation}`
                         : s.fullExplanation;
                 }
             }
+            this.logger.log({
+                message: `[AGENT] Titled ${deduped.length} suggestions (from summary ${titleCounts.fromSummary}, from body ${titleCounts.fromBody}, cut ${titleCounts.cut}, empty ${titleCounts.empty})`,
+                context: this.stageName,
+                metadata: {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    prNumber: context.pullRequest?.number,
+                    ...titleCounts,
+                },
+            });
 
             // Separate PR-level kody rules (no anchor) from file-level suggestions.
             // PR-level suggestions go to validSuggestionsByPR → CreatePrLevelCommentsStage.

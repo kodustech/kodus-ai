@@ -1,4 +1,7 @@
-import { alignPromptOverridesWithParent } from './align-prompt-overrides';
+import { alignPromptOverridesWithParent as alignWithReport } from './align-prompt-overrides';
+
+const alignPromptOverridesWithParent = (incoming: any, parent: any) =>
+    alignWithReport(incoming, parent).config;
 
 const tiptap = (...paragraphs: string[]) =>
     JSON.stringify({
@@ -98,5 +101,21 @@ describe('alignPromptOverridesWithParent', () => {
         );
 
         expect(out.v2PromptOverrides.categories.descriptions.performance).toBe('Perf');
+    });
+});
+
+describe('alignPromptOverridesWithParent — report', () => {
+    it('lists the prompts it replaced with the inherited text, for logging', () => {
+        const { alignedPaths } = alignWithReport(
+            {
+                v2PromptOverrides: {
+                    generation: { main: tiptap('Line one.', 'Line two.') },
+                    categories: { descriptions: { bug: 'A real edit' } },
+                },
+            },
+            parent,
+        );
+
+        expect(alignedPaths).toEqual(['generation.main']);
     });
 });

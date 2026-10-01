@@ -45,33 +45,61 @@ const restatesTitle = (sentence: string, title: string): boolean => {
     return covered / titleWords.size >= 0.8;
 };
 
+export interface ShapedSuggestionBody {
+    body: string;
+    removedFences: boolean;
+    droppedTitleRepeat: boolean;
+    capped: boolean;
+}
+
 /**
  * Deterministic shape of the body shown under a suggestion title: no code
  * blocks (the fix is shown separately), no opening sentence that restates the
  * title, and, unless the team wrote its own guidelines, two sentences at most.
  * The model is asked for the same; this holds when it does not comply or the
- * formatter fell back.
+ * formatter fell back. Reports what it changed so callers can log it.
  */
-export function shapeSuggestionBody(params: {
+export function shapeSuggestionBodyWithReport(params: {
     body: string;
     title?: string | null;
     capSentences: boolean;
-}): string {
+}): ShapedSuggestionBody {
     const original = params.body ?? '';
     const withoutFences = original.replace(/```[\s\S]*?```/g, ' ');
+    const removedFences = withoutFences !== original;
     let sentences = splitSentences(withoutFences);
 
+    let droppedTitleRepeat = false;
     if (
         params.title &&
         sentences.length > 1 &&
         restatesTitle(sentences[0], params.title)
     ) {
         sentences = sentences.slice(1);
+        droppedTitleRepeat = true;
     }
-    if (params.capSentences) {
+    let capped = false;
+    if (params.capSentences && sentences.length > 2) {
         sentences = sentences.slice(0, 2);
+        capped = true;
     }
 
     const shaped = sentences.join(' ').trim();
-    return shaped || original;
+    if (!shaped) {
+        return {
+            body: original,
+            removedFences: false,
+            droppedTitleRepeat: false,
+            capped: false,
+        };
+    }
+    return { body: shaped, removedFences, droppedTitleRepeat, capped };
+}
+
+export function shapeSuggestionBody(params: {
+    body: string;
+    title?: string | null;
+    capSentences: boolean;
+}): string {
+    return shapeSuggestionBodyWithReport(params).body;
 }

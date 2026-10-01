@@ -24,21 +24,30 @@ const get = (obj: any, path: string[]): unknown =>
 export function alignPromptOverridesWithParent<T extends Record<string, any>>(
     incoming: T,
     parent: Record<string, any> | undefined,
-): T {
+): { config: T; alignedPaths: string[] } {
     const overrides = incoming?.v2PromptOverrides;
     const parentOverrides = parent?.v2PromptOverrides;
-    if (!overrides || !parentOverrides) return incoming;
+    if (!overrides || !parentOverrides) {
+        return { config: incoming, alignedPaths: [] };
+    }
 
     const aligned = structuredClone(overrides);
+    const alignedPaths: string[] = [];
     for (const path of PROMPT_PATHS) {
         const value = get(aligned, path);
         const parentValue = get(parentOverrides, path);
         if (value === undefined || parentValue === undefined) continue;
         if (samePromptText(value, parentValue)) {
             const holder = get(aligned, path.slice(0, -1)) as Record<string, unknown>;
+            if (holder[path[path.length - 1]] !== parentValue) {
+                alignedPaths.push(path.join('.'));
+            }
             holder[path[path.length - 1]] = parentValue;
         }
     }
 
-    return { ...incoming, v2PromptOverrides: aligned };
+    return {
+        config: { ...incoming, v2PromptOverrides: aligned },
+        alignedPaths,
+    };
 }

@@ -192,3 +192,28 @@ describe('AgentReviewStage — body shape after the formatter', () => {
         );
     });
 });
+
+describe('AgentReviewStage — logs for QA and prod', () => {
+    const logMessages = (stage: any) =>
+        (stage.logger.log as jest.Mock).mock.calls.map((c: any[]) => c[0]);
+
+    it('logs how titles were built and how bodies were shaped, with the guidelines source', async () => {
+        const { stage, reviewOrchestrator } = makeStage();
+        jest.spyOn((stage as any).logger, 'log');
+        reviewOrchestrator.execute.mockResolvedValue(
+            happyEnvelope([sugg({ oneSentenceSummary: '' })]),
+        );
+
+        await run(stage, withGuidelines('Detailed and verifiable issue description'));
+
+        const logs = logMessages(stage);
+        const titled = logs.find((l: any) => l.message.startsWith('[AGENT] Titled'));
+        const shaped = logs.find((l: any) => l.message.startsWith('[AGENT] Shaped'));
+        expect(titled.metadata).toEqual(
+            expect.objectContaining({ fromBody: 1, fromSummary: 0, prNumber: 7 }),
+        );
+        expect(shaped.metadata).toEqual(
+            expect.objectContaining({ shaped: 1, writingGuidelines: 'saved-default' }),
+        );
+    });
+});
