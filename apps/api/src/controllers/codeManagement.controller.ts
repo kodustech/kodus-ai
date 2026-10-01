@@ -37,6 +37,7 @@ import { DeleteIntegrationAndRepositoriesUseCase } from '@libs/platform/applicat
 import { GetRepositoryTreeByDirectoryUseCase } from '@libs/platform/application/use-cases/codeManagement/get-repository-tree-by-directory.use-case';
 import { GetPRsByRepoUseCase } from '@libs/platform/application/use-cases/codeManagement/get-prs-repo.use-case';
 import { GetWebhookStatusUseCase } from '@libs/platform/application/use-cases/codeManagement/get-webhook-status.use-case';
+import { GetWebhookCreationFailuresUseCase } from '@libs/platform/application/use-cases/codeManagement/get-webhook-creation-failures.use-case';
 import { SearchCodeManagementUsersUseCase } from '@libs/platform/application/use-cases/codeManagement/search-code-management-users.use-case';
 import { GetCurrentCodeManagementUserUseCase } from '@libs/platform/application/use-cases/codeManagement/get-current-code-management-user.use-case';
 import { FinishOnboardingDTO } from '@libs/platform/dtos/finish-onboarding.dto';
@@ -60,6 +61,7 @@ import {
     CodeManagementCurrentUserResponseDto,
     CodeManagementRepositoryTreeResponseDto,
     CodeManagementWebhookStatusResponseDto,
+    CodeManagementWebhookCreationFailuresResponseDto,
 } from '../dtos/code-management.response.dto';
 @ApiTags('Code Management')
 @ApiBearerAuth('jwt')
@@ -79,6 +81,7 @@ export class CodeManagementController {
         private readonly getRepositoryTreeByDirectoryUseCase: GetRepositoryTreeByDirectoryUseCase,
         private readonly getPRsByRepoUseCase: GetPRsByRepoUseCase,
         private readonly getWebhookStatusUseCase: GetWebhookStatusUseCase,
+        private readonly getWebhookCreationFailuresUseCase: GetWebhookCreationFailuresUseCase,
         private readonly searchCodeManagementUsersUseCase: SearchCodeManagementUsersUseCase,
         private readonly getCurrentCodeManagementUserUseCase: GetCurrentCodeManagementUserUseCase,
 
@@ -523,6 +526,34 @@ export class CodeManagementController {
                 teamId: query.teamId,
             },
             repositoryId: query.repositoryId,
+        });
+    }
+
+    @Get('/webhook-failures')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.CodeReviewSettings,
+        }),
+    )
+    @ApiOperation({
+        summary: 'List webhook creation failures',
+        description:
+            'Repositories whose webhook could not be created during the last repository selection save, with the reason returned by the provider.',
+    })
+    @ApiQuery({ name: 'teamId', required: true })
+    @ApiOkResponse({ type: CodeManagementWebhookCreationFailuresResponseDto })
+    public async getWebhookCreationFailures(
+        @Query() query: { teamId: string },
+    ) {
+        const organizationId = this.request?.user?.organization?.uuid;
+
+        return this.getWebhookCreationFailuresUseCase.execute({
+            organizationAndTeamData: {
+                organizationId,
+                teamId: query.teamId,
+            },
         });
     }
 }

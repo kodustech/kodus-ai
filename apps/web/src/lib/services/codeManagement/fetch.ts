@@ -1,3 +1,4 @@
+import { authorizedFetch } from "@services/fetch";
 import {
     AuthMode,
     OrganizationAndTeamData,
@@ -53,6 +54,33 @@ export const createOrUpdateRepositories = (
             ...(options?.deferWebhooks ? { deferWebhooks: true } : {}),
         },
     );
+};
+
+export type WebhookCreationFailure = {
+    reason: string;
+    at: string;
+};
+
+/**
+ * Repositories whose webhook could not be created when the selection was last
+ * saved. Nothing shows them in the UI otherwise: the save succeeds, and the
+ * failure only reaches the server log, so the team keeps waiting for reviews
+ * that never run.
+ */
+export const getWebhookCreationFailures = async (
+    teamId: string,
+): Promise<Record<string, WebhookCreationFailure>> => {
+    // Server components read this through the authorized server-side path:
+    // axiosAuthorized attaches no bearer token, so the API's JWT guard
+    // rejected every call and the alert never rendered (only reaches this
+    // through the /settings/git page today).
+    const response = await authorizedFetch<{
+        failures: Record<string, WebhookCreationFailure>;
+    }>(CODE_MANAGEMENT_API_PATHS.GET_WEBHOOK_CREATION_FAILURES, {
+        params: { teamId },
+    });
+
+    return response?.failures ?? {};
 };
 
 export const createOrUpdateRepositoriesInChunks = async (
