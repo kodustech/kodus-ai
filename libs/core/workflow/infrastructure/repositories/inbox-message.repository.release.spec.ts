@@ -20,3 +20,22 @@ describe('InboxMessageRepository.releaseIfHeldBy', () => {
         );
     });
 });
+
+describe('InboxMessageRepository.completeIfHeldBy', () => {
+    it('completes the message only while the given holder still has it in PROCESSING', async () => {
+        const update = jest.fn().mockResolvedValue({ affected: 0 });
+        const repository = new InboxMessageRepository({ update } as any);
+
+        await repository.completeIfHeldBy('k', 'consumer-a', 'worker-1');
+
+        expect(update).toHaveBeenCalledWith(
+            {
+                messageId: 'k',
+                consumerId: 'consumer-a',
+                lockedBy: 'worker-1',
+                status: InboxStatus.PROCESSING,
+            },
+            expect.objectContaining({ status: InboxStatus.PROCESSED }),
+        );
+    });
+});

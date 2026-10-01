@@ -52,10 +52,14 @@ function fakeInbox() {
                 }
             },
         ),
-        complete: jest.fn(async (consumerId: string, key: string) => {
-            const row = `${consumerId}|${key}`;
-            rows.set(row, { ...rows.get(row), status: 'PROCESSED' });
-        }),
+        complete: jest.fn(
+            async (consumerId: string, key: string, holder: string) => {
+                const row = `${consumerId}|${key}`;
+                if (rows.get(row)?.holder === holder) {
+                    rows.set(row, { holder, status: 'PROCESSED' });
+                }
+            },
+        ),
     };
 }
 

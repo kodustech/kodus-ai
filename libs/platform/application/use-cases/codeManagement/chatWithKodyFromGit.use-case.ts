@@ -416,6 +416,7 @@ export class ChatWithKodyFromGitUseCase {
                         : this.messageClaimService.complete(
                               CONVERSATION_CLAIM_CONSUMER,
                               claim.key,
+                              claim.holder,
                           ));
                 } catch {
                     // Left PROCESSING, the claim still expires on its own.

@@ -37,6 +37,11 @@ export interface IInboxMessageRepository {
         consumerId: string,
         lastError?: string,
     ): Promise<void>;
+    completeIfHeldBy(
+        messageId: string,
+        consumerId: string,
+        lockedBy: string,
+    ): Promise<void>;
     releaseIfHeldBy(
         messageId: string,
         consumerId: string,

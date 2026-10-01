@@ -165,6 +165,42 @@ export class InboxMessageRepository implements IInboxMessageRepository {
     }
 
     /**
+     * Like markAsProcessed, but only while `lockedBy` still holds the message
+     * in PROCESSING, so a holder whose claim expired into another one cannot
+     * finish that other holder's claim.
+     */
+    async completeIfHeldBy(
+        messageId: string,
+        consumerId: string,
+        lockedBy: string,
+    ): Promise<void> {
+        try {
+            await this.repository.update(
+                {
+                    messageId,
+                    consumerId,
+                    lockedBy,
+                    status: InboxStatus.PROCESSING,
+                },
+                {
+                    status: InboxStatus.PROCESSED,
+                    processedAt: new Date(),
+                    lockedBy: null,
+                    lockedAt: null,
+                },
+            );
+        } catch (err) {
+            this.logger.error({
+                message: 'Failed to mark inbox message as processed',
+                context: InboxMessageRepository.name,
+                error: err,
+                metadata: { messageId, consumerId },
+            });
+            throw err;
+        }
+    }
+
+    /**
      * Like releaseLock, but only while `lockedBy` still holds the message in
      * PROCESSING: a claim that expired into another holder, or one already
      * processed, is left as it is.
@@ -362,18 +398,26 @@ export class InboxMessageRepository implements IInboxMessageRepository {
      */
     async releaseAllByInstance(lockedBy: string): Promise<number> {
         try {
-            const result = await this.repository.update(
-                {
-                    status: InboxStatus.PROCESSING,
-                    lockedBy,
-                },
-                {
+            // Also matches per-attempt holders `${instance}:<id>` (see
+            // MessageClaimService), so their claims are released too.
+            const result = await this.repository
+                .createQueryBuilder()
+                .update()
+                .set({
                     status: InboxStatus.READY,
                     lockedBy: null,
                     lockedAt: null,
                     lastError: `Released during shutdown of instance ${lockedBy}`,
-                },
-            );
+                })
+                .where('status = :status', { status: InboxStatus.PROCESSING })
+                .andWhere(
+                    '("lockedBy" = :lockedBy OR "lockedBy" LIKE :attempts ESCAPE \'\\\')',
+                    {
+                        lockedBy,
+                        attempts: `${lockedBy.replace(/[\\%_]/g, '\\$&')}:%`,
+                    },
+                )
+                .execute();
             const affected = result.affected || 0;
             if (affected > 0) {
                 this.logger.log({

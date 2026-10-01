@@ -3,7 +3,7 @@ import { MessageClaimService } from './message-claim.service';
 describe('MessageClaimService', () => {
     let inbox: {
         claim: jest.Mock;
-        markAsProcessed: jest.Mock;
+        completeIfHeldBy: jest.Mock;
         releaseIfHeldBy: jest.Mock;
     };
     let service: MessageClaimService;
@@ -11,7 +11,7 @@ describe('MessageClaimService', () => {
     beforeEach(() => {
         inbox = {
             claim: jest.fn().mockResolvedValue({ messageId: 'k' }),
-            markAsProcessed: jest.fn().mockResolvedValue(undefined),
+            completeIfHeldBy: jest.fn().mockResolvedValue(undefined),
             releaseIfHeldBy: jest.fn().mockResolvedValue(undefined),
         };
         service = new MessageClaimService(inbox as any);
@@ -57,10 +57,15 @@ describe('MessageClaimService', () => {
         );
     });
 
-    it('marks the key processed on complete', async () => {
-        await service.complete('consumer-a', 'k');
+    it('completes only for the holder that claimed', async () => {
+        const holder = await service.claim('consumer-a', 'k');
+        await service.complete('consumer-a', 'k', holder);
 
-        expect(inbox.markAsProcessed).toHaveBeenCalledWith('k', 'consumer-a');
+        expect(inbox.completeIfHeldBy).toHaveBeenCalledWith(
+            'k',
+            'consumer-a',
+            holder,
+        );
     });
 
     it('releases only for the holder that claimed', async () => {

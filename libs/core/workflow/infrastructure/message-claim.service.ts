@@ -24,9 +24,9 @@ export class MessageClaimService implements IMessageClaimService {
         key: string,
         options?: { expiresInMinutes?: number },
     ): Promise<string | null> {
-        // One holder per attempt, not per host: two deliveries handled by the
-        // same instance must not be able to release each other's claim. (So
-        // releaseAllByInstance on shutdown skips these; they just expire.)
+        // One holder per attempt, not per host, so two deliveries handled by
+        // the same instance cannot finish or release each other's claim. The
+        // instance prefix keeps releaseAllByInstance on shutdown matching it.
         const holder = `${hostname()}:${randomUUID()}`;
 
         const claimed = await this.inboxRepository.claim(
@@ -40,8 +40,12 @@ export class MessageClaimService implements IMessageClaimService {
         return claimed ? holder : null;
     }
 
-    async complete(consumerId: string, key: string): Promise<void> {
-        await this.inboxRepository.markAsProcessed(key, consumerId);
+    async complete(
+        consumerId: string,
+        key: string,
+        holder: string,
+    ): Promise<void> {
+        await this.inboxRepository.completeIfHeldBy(key, consumerId, holder);
     }
 
     async release(

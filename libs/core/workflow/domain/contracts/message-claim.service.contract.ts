@@ -19,8 +19,11 @@ export interface IMessageClaimService {
         options?: { expiresInMinutes?: number },
     ): Promise<string | null>;
 
-    /** Marks the claim done, so it never expires into a second run. */
-    complete(consumerId: string, key: string): Promise<void>;
+    /**
+     * Marks the claim done, so it never expires into a second run. A no-op
+     * unless `holder` (from claim) still holds it.
+     */
+    complete(consumerId: string, key: string, holder: string): Promise<void>;
 
     /**
      * Gives the claim up after a failure, so a retry can claim it again. A
