@@ -3,11 +3,11 @@
  * has drifted. Run with `pnpm run env:check`.
  */
 
-import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { regenerateEnvArtefacts } from './regenerate';
 
 const REPO_ROOT = join(__dirname, '..', '..');
 
@@ -15,11 +15,7 @@ type Target = { name: string; generated: string; committed: string };
 
 const tmp = mkdtempSync(join(tmpdir(), 'kodus-env-drift-'));
 
-execSync(`ts-node ${join(__dirname, 'generate.ts')}`, {
-    cwd: REPO_ROOT,
-    env: { ...process.env, KODUS_ENV_OUT_DIR: tmp },
-    stdio: 'inherit',
-});
+regenerateEnvArtefacts(tmp);
 
 // Local drift check — only repos that live inside kodus-ai are checked here.
 // The kodus-installer drift check runs in CI (env-sync-release.yml) against
