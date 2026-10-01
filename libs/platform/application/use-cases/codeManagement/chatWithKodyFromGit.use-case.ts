@@ -35,6 +35,10 @@ import {
     PULL_REQUESTS_SERVICE_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 
+import {
+    IMessageClaimService,
+    MESSAGE_CLAIM_SERVICE_TOKEN,
+} from '@libs/core/workflow/domain/contracts/message-claim.service.contract';
 import { LLM_TASK } from '@libs/llm/byok-config';
 import { llmErrorLogLevel } from '@libs/llm/error-classifier';
 
@@ -72,6 +76,8 @@ const ACKNOWLEDGMENT_MESSAGES = {
         'rules validation has nothing to compare the PR against. Connect ' +
         'one in the Kodus settings to use this command.',
 } as const;
+
+const CONVERSATION_CLAIM_CONSUMER = 'chat-with-kody-from-git';
 
 const KODY_CONVERSATION_MARKER =
     '<!-- kody-codereview -->\n<!-- kody-conversation -->';
@@ -236,6 +242,11 @@ export class ChatWithKodyFromGitUseCase {
         @Optional()
         @Inject(PULL_REQUESTS_SERVICE_TOKEN)
         private readonly pullRequestsService?: IPullRequestsService,
+
+        // Optional so lean wirings and specs still construct the use case.
+        @Optional()
+        @Inject(MESSAGE_CLAIM_SERVICE_TOKEN)
+        private readonly messageClaimService?: IMessageClaimService,
     ) {}
 
     async execute(params: WebhookParams): Promise<void> {
@@ -245,10 +256,19 @@ export class ChatWithKodyFromGitUseCase {
             metadata: { eventName: params.event },
         });
 
+        let claimedKey: string | undefined;
+        let failed = false;
+
         try {
             if (!this.isRelevantAction(params)) {
                 return;
             }
+
+            const claim = await this.claimDelivery(params);
+            if (claim.duplicate) {
+                return;
+            }
+            claimedKey = claim.claimedKey;
 
             const repository = this.getRepository(params);
             const integrationConfig = await this.getIntegrationConfig(
@@ -356,12 +376,100 @@ export class ChatWithKodyFromGitUseCase {
                 );
             }
         } catch (error) {
+            failed = true;
             this.logger.error({
                 message: 'Error while executing the git comment response agent',
                 context: ChatWithKodyFromGitUseCase.name,
                 serviceName: ChatWithKodyFromGitUseCase.name,
                 error,
             });
+        } finally {
+            if (claimedKey) {
+                try {
+                    // A failed run gives the comment back, so resending the
+                    // webhook from the platform retries it.
+                    await (failed
+                        ? this.messageClaimService.release(
+                              CONVERSATION_CLAIM_CONSUMER,
+                              claimedKey,
+                          )
+                        : this.messageClaimService.complete(
+                              CONVERSATION_CLAIM_CONSUMER,
+                              claimedKey,
+                          ));
+                } catch {
+                    // Left PROCESSING, the claim still expires on its own.
+                }
+            }
+        }
+    }
+
+    /**
+     * One key per comment version: every hook delivers the same id and
+     * update time, while an edit changes the time and is answered again.
+     * The thread is in the key because Azure numbers comments per thread.
+     */
+    private getDeliveryKey(params: WebhookParams): string | undefined {
+        const commentId = this.getCommentId(params);
+        if (!commentId) {
+            return undefined;
+        }
+
+        const payload = params.payload;
+        const version =
+            payload?.comment?.updated_at ??
+            payload?.comment?.updated_on ??
+            payload?.object_attributes?.updated_at ??
+            payload?.resource?.comment?.lastContentUpdatedDate ??
+            '';
+
+        return [
+            params.platformType,
+            this.getRepository(params)?.id,
+            this.getPullRequestNumber(params),
+            this.getThreadIdFromAzurePayload(params) ?? '',
+            commentId,
+            version,
+        ].join(':');
+    }
+
+    /**
+     * Each webhook pointing at Kodus delivers the comment as its own job, so
+     * the first delivery claims it and the rest stop here. When the claim
+     * cannot be made the job answers anyway: a duplicate beats silence.
+     */
+    private async claimDelivery(
+        params: WebhookParams,
+    ): Promise<{ duplicate: boolean; claimedKey?: string }> {
+        const key = this.getDeliveryKey(params);
+        if (!key || !this.messageClaimService) {
+            return { duplicate: false };
+        }
+
+        try {
+            if (
+                await this.messageClaimService.claim(
+                    CONVERSATION_CLAIM_CONSUMER,
+                    key,
+                )
+            ) {
+                return { duplicate: false, claimedKey: key };
+            }
+
+            this.logger.log({
+                message: 'Comment already claimed by another delivery; skipping',
+                context: ChatWithKodyFromGitUseCase.name,
+                metadata: { deliveryKey: key },
+            });
+            return { duplicate: true };
+        } catch (error) {
+            this.logger.warn({
+                message: 'Could not claim comment delivery; answering anyway',
+                context: ChatWithKodyFromGitUseCase.name,
+                metadata: { deliveryKey: key },
+                error,
+            });
+            return { duplicate: false };
         }
     }
 
@@ -1110,6 +1218,9 @@ export class ChatWithKodyFromGitUseCase {
                     organizationAndTeamData,
                 },
             });
+            // The person saw no answer: fail the run so the comment can be
+            // retried (see execute).
+            throw error;
         }
     }
 

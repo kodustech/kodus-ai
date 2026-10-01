@@ -1,0 +1,44 @@
+import { hostname } from 'node:os';
+
+import { Inject, Injectable } from '@nestjs/common';
+
+import {
+    IInboxMessageRepository,
+    INBOX_MESSAGE_REPOSITORY_TOKEN,
+} from '../domain/contracts/inbox-message.repository.contract';
+import { IMessageClaimService } from '../domain/contracts/message-claim.service.contract';
+
+/** How long a claim whose holder died blocks a new attempt. */
+const DEFAULT_EXPIRES_IN_MINUTES = 15;
+
+@Injectable()
+export class MessageClaimService implements IMessageClaimService {
+    constructor(
+        @Inject(INBOX_MESSAGE_REPOSITORY_TOKEN)
+        private readonly inboxRepository: IInboxMessageRepository,
+    ) {}
+
+    async claim(
+        consumerId: string,
+        key: string,
+        options?: { expiresInMinutes?: number },
+    ): Promise<boolean> {
+        const claimed = await this.inboxRepository.claim(
+            key,
+            consumerId,
+            hostname(),
+            undefined,
+            options?.expiresInMinutes ?? DEFAULT_EXPIRES_IN_MINUTES,
+        );
+
+        return !!claimed;
+    }
+
+    async complete(consumerId: string, key: string): Promise<void> {
+        await this.inboxRepository.markAsProcessed(key, consumerId);
+    }
+
+    async release(consumerId: string, key: string): Promise<void> {
+        await this.inboxRepository.releaseLock(key, consumerId);
+    }
+}
