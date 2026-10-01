@@ -320,10 +320,15 @@ export class KodyRulesTools {
      * Whether `teamId` resolves to a team of another organization. The
      * approval setting is read per team, so a team confirmed to belong to
      * another tenant must not decide the status of a rule or memory created
-     * here; the answer is the one `KodyRulesTenantGuard` gives on the HTTP
-     * side. A team that does not resolve at all cannot read any setting, so
-     * the call goes on and the status falls back to active, the way the
-     * sibling rule and memory creators treat an unreadable setting.
+     * here. The callers answer `Team not found.` for it on purpose, the same
+     * wording `KodyRulesTenantGuard` uses on the HTTP side, so the caller
+     * learns nothing about whether the team exists elsewhere.
+     *
+     * Only a positive answer blocks. A team that does not resolve at all
+     * cannot read any setting, so the call goes on and the status falls back
+     * to active, the way the sibling rule and memory creators treat an
+     * unreadable setting. A lookup that throws is not caught here: the tool
+     * wrapper turns it into an error response and nothing is written.
      */
     private async teamBelongsToAnotherOrganization(
         organizationAndTeamData: OrganizationAndTeamData,
@@ -534,6 +539,8 @@ export class KodyRulesTools {
                         teamId: args.kodyRule.teamId,
                     };
 
+                    // Blocks only a team confirmed to belong to another
+                    // organization; see teamBelongsToAnotherOrganization.
                     if (
                         await this.teamBelongsToAnotherOrganization(
                             organizationAndTeamData,
@@ -1108,6 +1115,8 @@ export class KodyRulesTools {
                         },
                     };
 
+                    // Blocks only a team confirmed to belong to another
+                    // organization; see teamBelongsToAnotherOrganization.
                     if (
                         await this.teamBelongsToAnotherOrganization(
                             params.organizationAndTeamData,
