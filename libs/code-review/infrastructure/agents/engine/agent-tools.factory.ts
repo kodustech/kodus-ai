@@ -1283,10 +1283,23 @@ fi
                         // truncate or overwrite the log while `head` reads it,
                         // and this run reports another file's diagnostics.
                         // `rc` is read before the file is removed.
+                        //
+                        // A per-invocation name also means a run that never
+                        // reaches its own `rm` leaves the file behind: e2b kills a
+                        // foreground command at COMMAND_LONG_MS (30s) and the
+                        // resulting error is swallowed by the catch below, so a
+                        // timed-out compile — the very case this staging exists
+                        // for — would pile untruncated dumps up in the shared
+                        // sandbox instead of overwriting one fixed path. So the
+                        // stale ones are swept first, with an age filter no live
+                        // run can match (every run is capped well under 2 minutes).
+                        // A shell `trap` cannot cover this: the timeout kill is a
+                        // hard termination, not a signal the shell handles.
+                        const sweepStaleLogs = `find /tmp -maxdepth 1 -name 'tsc.*.log' -mmin +2 -delete 2>/dev/null; `;
                         const { stdout, exitCode } = await exec(
                             tsconfig
-                                ? `log=$(mktemp /tmp/tsc.XXXXXX.log); npx tsc --noEmit -p ${shellQuote(tsconfig)} > "$log" 2>&1; rc=$?; head -200 "$log"; rm -f "$log"; exit $rc`
-                                : `log=$(mktemp /tmp/tsc.XXXXXX.log); npx tsc --noEmit --pretty false ${safeTarget} > "$log" 2>&1; rc=$?; head -200 "$log"; rm -f "$log"; exit $rc`,
+                                ? `${sweepStaleLogs}log=$(mktemp /tmp/tsc.XXXXXX.log); npx tsc --noEmit -p ${shellQuote(tsconfig)} > "$log" 2>&1; rc=$?; head -200 "$log"; rm -f "$log"; exit $rc`
+                                : `${sweepStaleLogs}log=$(mktemp /tmp/tsc.XXXXXX.log); npx tsc --noEmit --pretty false ${safeTarget} > "$log" 2>&1; rc=$?; head -200 "$log"; rm -f "$log"; exit $rc`,
                         );
                         pushScopedResult(
                             'TypeScript',

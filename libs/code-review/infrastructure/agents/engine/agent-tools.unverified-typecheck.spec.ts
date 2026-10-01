@@ -277,8 +277,30 @@ describe('checkTypes — a compiler that could not check the project', () => {
         });
 
         expect(sandbox.commands.find((cmd) => cmd.includes('npx tsc'))).toBe(
-            `log=$(mktemp /tmp/tsc.XXXXXX.log); npx tsc --noEmit -p '${SCOPE}' > "$log" 2>&1; rc=$?; head -200 "$log"; rm -f "$log"; exit $rc`,
+            `find /tmp -maxdepth 1 -name 'tsc.*.log' -mmin +2 -delete 2>/dev/null; log=$(mktemp /tmp/tsc.XXXXXX.log); npx tsc --noEmit -p '${SCOPE}' > "$log" 2>&1; rc=$?; head -200 "$log"; rm -f "$log"; exit $rc`,
         );
+    });
+
+    it('sweeps the staged logs a killed run left behind, without touching its own', async () => {
+        // The staged name is per invocation, and a run killed at the sandbox's
+        // command cap never reaches its own `rm` — the kill is a hard
+        // termination, so no shell trap runs and the error is swallowed by the
+        // catch below it. Without a sweep, those untruncated dumps accumulate in
+        // the sandbox shared by every concurrent checkTypes run. The age filter
+        // is what makes it safe: every run is capped well under two minutes, so
+        // it can only match files no live run owns.
+        const sandbox = makeSandbox(SCOPE_MATCHING_OUTPUT, 2);
+        await buildAgentTools(sandbox.remote).checkTypes.execute({
+            path: TARGET,
+        });
+
+        const cmd =
+            sandbox.commands.find((c) => c.includes('npx tsc')) ?? '';
+        const sweep =
+            "find /tmp -maxdepth 1 -name 'tsc.*.log' -mmin +2 -delete 2>/dev/null; ";
+        expect(cmd.startsWith(sweep)).toBe(true);
+        // Swept BEFORE this run stages its own log, never after.
+        expect(cmd.indexOf('mktemp')).toBeGreaterThan(cmd.indexOf(sweep));
     });
 
     it('keeps a non-zero exit report when the path contains a space', async () => {
