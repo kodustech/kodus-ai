@@ -44,6 +44,7 @@ import {
     normalizeSdkResult,
     normalizeSdkUsage,
 } from '../kernel/usage';
+import { reasoningEffortFromWire } from '../kernel/override-wire-spelling';
 
 /**
  * Native OpenAI model families that honor strict `response_format: json_schema`
@@ -384,6 +385,10 @@ export const openaiModule: ProviderModule = {
     ],
     providerOptionsNamespace: (id) =>
         id === 'openai_compatible' ? 'openaiCompatible' : 'openai',
+    // Both adapters render `reasoning_effort` from `reasoningEffort` and strip
+    // the snake_case spelling users copy from the vendor docs.
+    normalizeReasoningOverride: (_ns, options) =>
+        reasoningEffortFromWire(options),
     // Native OpenAI takes `reasoningEffort` (+ optional serviceTier); an
     // openai_compatible upstream takes the standard `thinking` toggle — so the
     // Custom-override example differs per served id. Mirrors reasoning() above.

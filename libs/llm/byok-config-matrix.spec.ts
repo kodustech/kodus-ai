@@ -701,6 +701,65 @@ const CASES = [
         },
     },
     {
+        id: 'deepseek — `reasoning_effort` pasted as the API spells it reaches the request',
+        why: 'The DeepSeek docs spell the field `reasoning_effort`, so that is what two production orgs pasted. @ai-sdk/openai-compatible reads `reasoningEffort`, strips the snake_case key, and the "max" they asked for never left: they got thinking at the default effort. The override is copied verbatim from the stored config',
+        doc: 'api-docs.deepseek.com/guides/thinking_mode',
+        slot: {
+            provider: 'openai_compatible',
+            model: 'deepseek-v4-flash',
+            baseURL: 'https://api.deepseek.com/v1',
+            reasoningConfigOverride:
+                '{\n  "reasoning_effort": "max",\n  "thinking": { "type": "enabled" }\n}',
+        },
+        wire: {
+            has: { thinking: { type: 'enabled' }, reasoning_effort: 'max' },
+        },
+    },
+    {
+        id: 'deepseek — the adapter spelling still wins when both are pasted',
+        why: 'A user who wrote the adapter name has said exactly what they want; the docs spelling next to it must not overwrite it',
+        slot: {
+            provider: 'openai_compatible',
+            model: 'deepseek-v4-flash',
+            baseURL: 'https://api.deepseek.com/v1',
+            reasoningConfigOverride: JSON.stringify({
+                thinking: { type: 'enabled' },
+                reasoningEffort: 'high',
+                reasoning_effort: 'max',
+            }),
+        },
+        wire: {
+            has: { thinking: { type: 'enabled' }, reasoning_effort: 'high' },
+        },
+    },
+    {
+        id: 'native OpenAI — `reasoning_effort` as the API spells it reaches the request',
+        why: 'Same adapter family, same stripped spelling: the Responses API carries it as `reasoning.effort`, and it only gets there from `reasoningEffort`',
+        slot: {
+            provider: 'openai',
+            model: 'gpt-5.4',
+            reasoningConfigOverride: JSON.stringify({ reasoning_effort: 'low' }),
+        },
+        wire: { has: { reasoning: { effort: 'low' } } },
+    },
+    {
+        id: 'claude — `output_config.effort` pasted as the API spells it reaches the request',
+        why: "Anthropic's API docs show `output_config: { effort }`, which is what a production org running claude-sonnet-5 pasted. @ai-sdk/anthropic reads `effort`, renders `output_config` itself, and stripped theirs: adaptive thinking at the default effort. The override is copied verbatim from the stored config",
+        doc: 'platform.claude.com — effort',
+        slot: {
+            provider: 'anthropic',
+            model: 'claude-sonnet-5',
+            reasoningConfigOverride:
+                '{"thinking":{"type":"adaptive"},"output_config":{"effort":"high"}}',
+        },
+        wire: {
+            has: {
+                thinking: { type: 'adaptive' },
+                output_config: { effort: 'high' },
+            },
+        },
+    },
+    {
         id: 'bedrock — the vendor-documented `bedrock` key is not wrapped a second time',
         why: 'The AI SDK docs for this provider show `providerOptions: { bedrock: ... }`, so that is what a customer copying from them pastes. The auto-wrapper only leaves a paste alone when it recognises the key as a namespace; an unrecognised alias gets wrapped AGAIN into {amazonBedrock:{bedrock:{...}}}, which parses to nothing. A correct paste doing nothing is worse than a wrong one erroring',
         slot: {
@@ -1079,29 +1138,11 @@ describe('production config shapes — invariants', () => {
             }
         }
 
-        // NOT an assertion that the list is empty — it is not, and pretending
-        // otherwise is how this stayed invisible. It pins the exact set, so the
-        // day a config is fixed or a new one goes silent, this test says so and
-        // names it. The one entry is a real org running Claude with Anthropic's
-        // documented wire spelling (`output_config`) where the adapter declares
-        // `effort`; they get adaptive thinking at the default effort.
-        expect(findings).toEqual([
-            {
-                provider: 'anthropic',
-                model: 'claude-sonnet-5',
-                keys: ['output_config'],
-            },
-            {
-                // The same mistake on the other transport: nested inside
-                // `thinking` this word rides along as an opaque sub-object and
-                // reaches the upstream, but at the TOP level it is a key the
-                // OpenAI-compatible schema does not declare, so it is stripped.
-                // The org has both spellings on two slots and only one works.
-                provider: 'openai_compatible',
-                model: 'deepseek-v4-flash',
-                keys: ['reasoning_effort'],
-            },
-        ]);
+        // Empty since the providers rename the vendors' wire spellings
+        // (`reasoning_effort`, `output_config.effort`) to their adapters' option
+        // names: the two stored overrides this used to pin now reach the wire.
+        // A new entry is an override going silent again, named here.
+        expect(findings).toEqual([]);
     }, 180000);
 
     it('pins every slot whose configured reasoning effort reaches nothing', async () => {
@@ -1169,10 +1210,19 @@ describe('production config shapes — invariants', () => {
             // Proxy aliases and custom names: the family resolver cannot name
             // the model, so it withholds rather than guesses.
             'openai_compatible | MiniMax-M3 | high',
+            // Kimi k3 and k2.7-code think whatever is sent and Moonshot has no
+            // effort level, so the effort has nothing to reach. The `thinking`
+            // toggle they used to get changed nothing and is not sent.
+            'openai_compatible | accounts/fireworks/models/kimi-k3 | high',
             'openai_compatible | auto | medium',
             'openai_compatible | cc/claude-opus-5 | high',
             'openai_compatible | claude-opus-4.8 | high',
             'openai_compatible | code-review | high',
+            'openai_compatible | k3 | high',
+            'openai_compatible | k3-256k | medium',
+            'openai_compatible | kimi-k2.7-code | high',
+            'openai_compatible | kimi-k2.7-code | medium',
+            'openai_compatible | kimi-k3 | high',
             'openai_compatible | kodus-review | high',
             'openai_compatible | kodus-review-fallback | high',
             'openai_compatible | mimo-v2.5 | high',
@@ -1210,19 +1260,10 @@ describe('production config shapes — invariants', () => {
             { provider: 'anthropic', model: 'claude-2.1' },
             { provider: 'openai', model: 'gpt-4o' },
             { provider: 'openai', model: 'gpt-4o-mini' },
-            // Kimi k3 and k2.7-code think whatever is sent and Moonshot has no
-            // effort level, so the effort has nothing to reach. The `thinking`
-            // toggle they used to get changed nothing and is not sent.
-            'openai_compatible | accounts/fireworks/models/kimi-k3 | high',
             { provider: 'google_gemini', model: 'gemini-2.0-flash' },
         ];
 
         // ...and then the same question over the WHOLE corpus, so the list above
-            'openai_compatible | k3 | high',
-            'openai_compatible | k3-256k | medium',
-            'openai_compatible | kimi-k2.7-code | high',
-            'openai_compatible | kimi-k2.7-code | medium',
-            'openai_compatible | kimi-k3 | high',
         // is a floor rather than the extent of the check. Every stored model the
         // capability table calls non-reasoning must also arrive clean.
         //
