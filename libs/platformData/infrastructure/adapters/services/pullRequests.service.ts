@@ -461,6 +461,10 @@ export class PullRequestsService implements IPullRequestsService {
         return this.pullRequestsRepository.newSubDocumentId();
     }
 
+    newSuggestionId(): string {
+        return this.pullRequestsRepository.newSuggestionId();
+    }
+
     async findRecentByRepositoryId(
         organizationId: string,
         repositoryId: string,
@@ -1317,7 +1321,7 @@ export class PullRequestsService implements IPullRequestsService {
                     unusedSuggestions,
                 ).map((s) => ({
                     ...s,
-                    id: s.id || this.pullRequestsRepository.newSubDocumentId(),
+                    id: s.id || this.pullRequestsRepository.newSuggestionId(),
                 }));
 
                 const existing = existingByPath.get(filename);
