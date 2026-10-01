@@ -147,10 +147,19 @@ export function extractJsonFromText(text: string): string | null {
     // production) put <think>…</think> before the JSON, and the reasoning
     // quotes code, so the first balanced {…} below would be a quote, not the
     // answer. A reasoning block that never closes carries no answer at all.
-    if (s.startsWith('<think>')) {
-        const end = s.lastIndexOf('</think>');
-        if (end < 0) return null;
-        s = s.slice(end + '</think>'.length).trim();
+    //
+    // Only a block that opens BEFORE the JSON starts is reasoning: past that
+    // point a <think> or </think> is text inside the answer (a finding about a
+    // prompt file quotes both), and each block ends at its FIRST closing tag so
+    // an answer that quotes the tag, or is followed by another block, survives.
+    for (;;) {
+        const open = s.indexOf('<think>');
+        if (open < 0) break;
+        const braces = [s.indexOf('{'), s.indexOf('[')].filter((i) => i >= 0);
+        if (braces.length && Math.min(...braces) < open) break;
+        const close = s.indexOf('</think>', open);
+        if (close < 0) return null;
+        s = (s.slice(0, open) + s.slice(close + '</think>'.length)).trim();
     }
 
     // 1. Unwrap a markdown code fence.

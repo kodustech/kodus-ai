@@ -127,6 +127,34 @@ describe('reasoning written before the answer', () => {
         ).toBeNull();
     });
 
+    it('keeps the answer when another reasoning block follows it', () => {
+        expect(
+            extractJsonFromText(`${reasoning}${answer}<think>checking { x }</think>`),
+        ).toBe(answer);
+    });
+
+    it('keeps an answer whose text quotes the closing tag', () => {
+        const quoting =
+            '{"violations":[{"suggestionContent":"a prompt file closes with </think> early"}]}';
+        expect(extractJsonFromText(`${reasoning}${quoting}`)).toBe(quoting);
+    });
+
+    it('skips several reasoning blocks in a row', () => {
+        expect(
+            extractJsonFromText(`${reasoning}<think>again { "a": 1 }</think>${answer}`),
+        ).toBe(answer);
+    });
+
+    it('skips reasoning that follows a line of prose, before the answer starts', () => {
+        expect(extractJsonFromText(`Sure.\n${reasoning}\n${answer}`)).toBe(answer);
+    });
+
+    it('leaves reasoning after the answer alone', () => {
+        expect(extractJsonFromText(`${answer}\n<think>${'{ not the answer }'}</think>`)).toBe(
+            answer,
+        );
+    });
+
     it('leaves a <think> tag inside a JSON string alone', () => {
         const json = '{"violations":[{"suggestionContent":"<think> is not HTML"}]}';
         expect(extractJsonFromText(json)).toBe(json);
