@@ -150,6 +150,8 @@ export type CodeSuggestion = {
     existingCode?: string;
     improvedCode: string;
     oneSentenceSummary?: string;
+    /** The finder's whole explanation, labels stripped; `suggestionContent` is the short body shown to people. */
+    fullExplanation?: string;
     relevantLinesStart?: number;
     relevantLinesEnd?: number;
     label: string;

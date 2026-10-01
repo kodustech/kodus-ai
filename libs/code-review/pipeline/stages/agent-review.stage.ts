@@ -20,6 +20,7 @@ import {
 } from '@libs/code-review/infrastructure/agents/engine/dedup-prompt';
 import { buildPlatformEmbedder } from '@libs/common/utils/document';
 import { resolveSuggestionTitle } from '@libs/common/utils/codeManagement/suggestion-title';
+import { stripReviewScaffolding } from '@libs/code-review/infrastructure/agents/engine/strip-review-scaffolding';
 import {
     dedupReviewWarnings,
     buildBadFixDowngradedWarning,
@@ -1264,6 +1265,14 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 }
             }
 
+            // The formatter shortens the body for people reading the PR; the
+            // whole explanation is kept for the agent prompt and agent surfaces.
+            for (const s of deduped) {
+                s.fullExplanation = stripReviewScaffolding(
+                    s.suggestionContent || '',
+                );
+            }
+
             // Clean up suggestion text: remove WHAT/WHY/HOW labels, merge into natural prose
             try {
                 const {
@@ -1301,13 +1310,6 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     if (target !== undefined && deduped[target]) {
                         deduped[target].suggestionContent =
                             fmt.suggestionContent;
-                        // Keep llmPrompt in sync with the formatted prose.
-                        // llmPrompt is a snapshot of the RAW suggestionContent
-                        // (WHAT/WHY/HOW) taken in finding-mapper before this
-                        // pass; the per-comment "Prompt for LLM" copy block and
-                        // the consolidated @agentPrompt read it, so without this
-                        // the raw scaffolding still leaks there.
-                        deduped[target].llmPrompt = fmt.suggestionContent;
                     }
                 }
                 this.logger.log({
@@ -1395,16 +1397,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     .join('\n');
                 const otherLocationsSection = `\n\n**Also found in:**\n${locationsList}`;
                 s.suggestionContent = `${s.suggestionContent}${otherLocationsSection}`;
-                // llmPrompt is assigned from the formatter output above, before
-                // this loop, and is read by the per-comment "Prompt for LLM"
-                // copy block and the consolidated @agentPrompt
-                // (messageTemplateProcessor), and passed to the fixer agent as
-                // its instruction by validate-suggestions. Left alone it names
-                // only the kept location, so an agent working from the prompt
-                // fixes that one and misses the rest.
-                if (s.llmPrompt) {
-                    s.llmPrompt = `${s.llmPrompt}${otherLocationsSection}`;
-                }
+                // llmPrompt is built from fullExplanation below; without the
+                // list an agent working from the prompt fixes only the kept
+                // location.
+                s.fullExplanation = `${s.fullExplanation || ''}${otherLocationsSection}`;
             }
 
             // Enrich kody_rules suggestions with markdown links to the rule
@@ -1455,11 +1451,19 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
 
             // Every finding renders under a bounded title: the model's summary,
             // or the first sentence of the body when the model left it out.
+            // llmPrompt feeds the "Prompt for LLM" block, the consolidated
+            // @agentPrompt and validate-suggestions' fixer instruction, so it
+            // carries the title and the whole explanation, not the short body.
             for (const s of deduped) {
                 s.oneSentenceSummary = resolveSuggestionTitle({
                     summary: s.oneSentenceSummary,
                     body: s.suggestionContent,
                 });
+                if (s.fullExplanation) {
+                    s.llmPrompt = s.oneSentenceSummary
+                        ? `${s.oneSentenceSummary}\n\n${s.fullExplanation}`
+                        : s.fullExplanation;
+                }
             }
 
             // Separate PR-level kody rules (no anchor) from file-level suggestions.
@@ -1646,6 +1650,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                                     : `\`${s.relevantFile}\` — ${s.suggestionContent || ''}`
                                 : s.suggestionContent || '',
                             oneSentenceSummary: s.oneSentenceSummary || '',
+                            fullExplanation: s.fullExplanation,
                             label: (s.label as any) || 'kody_rules',
                             severity: this.normalizeSeverity(
                                 s.severity,

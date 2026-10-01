@@ -1896,6 +1896,7 @@ export class SuggestionService implements ISuggestionService {
                     return {
                         id: suggestion.id,
                         suggestionContent: suggestion.suggestionContent,
+                        fullExplanation: suggestion.fullExplanation,
                         oneSentenceSummary: suggestion.oneSentenceSummary,
                         label: suggestion.label as LabelType,
                         severity: suggestion.severity as SeverityLevel,
