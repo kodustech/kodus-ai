@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
 
 import { Inject, Injectable } from '@nestjs/common';
@@ -22,29 +23,34 @@ export class MessageClaimService implements IMessageClaimService {
         consumerId: string,
         key: string,
         options?: { expiresInMinutes?: number },
-    ): Promise<boolean> {
+    ): Promise<string | null> {
+        // One holder per attempt, not per host: two deliveries handled by the
+        // same instance must not be able to release each other's claim. (So
+        // releaseAllByInstance on shutdown skips these; they just expire.)
+        const holder = `${hostname()}:${randomUUID()}`;
+
         const claimed = await this.inboxRepository.claim(
             key,
             consumerId,
-            hostname(),
+            holder,
             undefined,
             options?.expiresInMinutes ?? DEFAULT_EXPIRES_IN_MINUTES,
         );
 
-        return !!claimed;
+        return claimed ? holder : null;
     }
 
     async complete(consumerId: string, key: string): Promise<void> {
         await this.inboxRepository.markAsProcessed(key, consumerId);
     }
 
-    async release(consumerId: string, key: string): Promise<void> {
+    async release(
+        consumerId: string,
+        key: string,
+        holder: string,
+    ): Promise<void> {
         // A claim that expired into another delivery, or that one already
         // completed, must not be reopened: a later delivery would answer twice.
-        await this.inboxRepository.releaseIfHeldBy(
-            key,
-            consumerId,
-            hostname(),
-        );
+        await this.inboxRepository.releaseIfHeldBy(key, consumerId, holder);
     }
 }

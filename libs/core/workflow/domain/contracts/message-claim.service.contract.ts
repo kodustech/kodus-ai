@@ -8,23 +8,23 @@ export const MESSAGE_CLAIM_SERVICE_TOKEN = Symbol.for('MessageClaimService');
  */
 export interface IMessageClaimService {
     /**
-     * True when this caller is the first to claim `key` for `consumerId`;
-     * false when another caller already holds or completed it. A claim left
-     * unfinished (the holder died) can be taken again after
+     * Returns a holder token when this caller is the first to claim `key` for
+     * `consumerId`, or null when another caller already holds or completed
+     * it. A claim left unfinished (the holder died) can be taken again after
      * `expiresInMinutes`. Throws when the claim cannot be made at all.
      */
     claim(
         consumerId: string,
         key: string,
         options?: { expiresInMinutes?: number },
-    ): Promise<boolean>;
+    ): Promise<string | null>;
 
     /** Marks the claim done, so it never expires into a second run. */
     complete(consumerId: string, key: string): Promise<void>;
 
     /**
      * Gives the claim up after a failure, so a retry can claim it again. A
-     * no-op unless this instance still holds it.
+     * no-op unless `holder` (from claim) still holds it.
      */
-    release(consumerId: string, key: string): Promise<void>;
+    release(consumerId: string, key: string, holder: string): Promise<void>;
 }

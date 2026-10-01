@@ -10,6 +10,9 @@ jest.mock('./implicit-reply', () => ({
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 
 import { ChatWithKodyFromGitUseCase } from './chatWithKodyFromGit.use-case';
+import { classifyReplyAddressedToKody } from './implicit-reply';
+
+const classify = classifyReplyAddressedToKody as jest.Mock;
 
 /**
  * With several webhooks pointing at Kodus, the platform delivers the same
@@ -21,24 +24,37 @@ const TEAM = '22222222-2222-4222-8222-222222222222';
 const MARKER = '<!-- kody-codereview -->';
 
 /**
- * Same contract as MessageClaimService: the first caller for a key gets true,
- * later callers get false while it is held or done.
+ * Same contract as MessageClaimService: the first caller for a key gets a
+ * holder token, later callers get null while it is held or done, and release
+ * only reopens a claim its holder still has.
  */
 function fakeInbox() {
-    const rows = new Map<string, string>();
+    const rows = new Map<string, { status: string; holder: string }>();
+    let attempt = 0;
     return {
         rows,
+        statuses: () => [...rows.values()].map((row) => row.status),
         claim: jest.fn(async (consumerId: string, key: string) => {
             const row = `${consumerId}|${key}`;
-            if (rows.has(row)) return false;
-            rows.set(row, 'PROCESSING');
-            return true;
+            if (rows.has(row)) return null;
+            const holder = `holder-${++attempt}`;
+            rows.set(row, { status: 'PROCESSING', holder });
+            return holder;
         }),
-        release: jest.fn(async (consumerId: string, key: string) => {
-            rows.delete(`${consumerId}|${key}`);
-        }),
+        release: jest.fn(
+            async (consumerId: string, key: string, holder: string) => {
+                const row = `${consumerId}|${key}`;
+                if (
+                    rows.get(row)?.status === 'PROCESSING' &&
+                    rows.get(row)?.holder === holder
+                ) {
+                    rows.delete(row);
+                }
+            },
+        ),
         complete: jest.fn(async (consumerId: string, key: string) => {
-            rows.set(`${consumerId}|${key}`, 'PROCESSED');
+            const row = `${consumerId}|${key}`;
+            rows.set(row, { ...rows.get(row), status: 'PROCESSED' });
         }),
     };
 }
@@ -171,7 +187,7 @@ describe('ChatWithKodyFromGitUseCase — one reply delivered by several webhooks
 
         await useCase.execute(delivery());
 
-        expect([...inbox.rows.values()]).toEqual(['PROCESSED']);
+        expect(inbox.statuses()).toEqual(['PROCESSED']);
     });
 
     it('lets a resent delivery retry a comment whose answer failed', async () => {
@@ -187,7 +203,7 @@ describe('ChatWithKodyFromGitUseCase — one reply delivered by several webhooks
         // The admin resends the webhook from the platform.
         await useCase.execute(delivery());
         expect(conversationAgentUseCase.execute).toHaveBeenCalledTimes(2);
-        expect([...inbox.rows.values()]).toEqual(['PROCESSED']);
+        expect(inbox.statuses()).toEqual(['PROCESSED']);
     });
 
     it('gives the comment back when the answer could not be posted', async () => {
@@ -215,6 +231,48 @@ describe('ChatWithKodyFromGitUseCase — one reply delivered by several webhooks
 
         await useCase.execute(delivery());
         expect(conversationAgentUseCase.execute).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+        [
+            'the comment is not in the fetched list yet',
+            (s: ReturnType<typeof setup>) =>
+                s.codeManagementService.getPullRequestReviewComment.mockResolvedValueOnce(
+                    [],
+                ),
+        ],
+        [
+            'the agent produced no answer',
+            (s: ReturnType<typeof setup>) =>
+                s.conversationAgentUseCase.execute.mockResolvedValueOnce(''),
+        ],
+    ])(
+        'gives the comment back when %s, releasing with the holder it claimed with',
+        async (_, breakIt) => {
+            const s = setup();
+            breakIt(s);
+
+            await s.useCase.execute(delivery());
+
+            expect(s.inbox.release).toHaveBeenCalledWith(
+                'chat-with-kody-from-git',
+                expect.any(String),
+                'holder-1',
+            );
+            expect(s.inbox.complete).not.toHaveBeenCalled();
+        },
+    );
+
+    it('completes the claim when Kody decides to stay quiet', async () => {
+        classify.mockResolvedValueOnce(false);
+        const { useCase, conversationAgentUseCase, inbox } = setup();
+
+        await useCase.execute(delivery());
+
+        // A late duplicate must not re-run the classifier and answer.
+        expect(conversationAgentUseCase.execute).not.toHaveBeenCalled();
+        expect(inbox.statuses()).toEqual(['PROCESSED']);
+        expect(inbox.release).not.toHaveBeenCalled();
     });
 
     it('answers an edited comment again, as before', async () => {
@@ -260,7 +318,10 @@ describe('ChatWithKodyFromGitUseCase — one reply delivered by several webhooks
             'GITHUB:4242:7::900:2026-09-28T19:01:00Z',
             'GITHUB:4242:7::900:2026-09-28T19:01:00Z',
         ]);
-        expect([...inbox.rows.keys()]).toHaveLength(1);
+        const holders = await Promise.all(
+            inbox.claim.mock.results.map((result) => result.value),
+        );
+        expect(holders.filter(Boolean)).toHaveLength(1);
     });
 
     it('does not mix up Azure comments that share an id in different threads', async () => {

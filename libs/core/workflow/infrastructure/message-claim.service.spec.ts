@@ -18,12 +18,13 @@ describe('MessageClaimService', () => {
     });
 
     it('claims the key on the inbox under the consumer, expiring after 15 minutes by default', async () => {
-        await expect(service.claim('consumer-a', 'k')).resolves.toBe(true);
+        const holder = await service.claim('consumer-a', 'k');
 
+        expect(holder).toEqual(expect.any(String));
         expect(inbox.claim).toHaveBeenCalledWith(
             'k',
             'consumer-a',
-            expect.any(String),
+            holder,
             undefined,
             15,
         );
@@ -35,10 +36,17 @@ describe('MessageClaimService', () => {
         expect(inbox.claim.mock.calls[0][4]).toBe(5);
     });
 
-    it('is refused when the inbox already has the key', async () => {
+    it('gives every attempt its own holder, even on the same instance', async () => {
+        const first = await service.claim('consumer-a', 'k');
+        const second = await service.claim('consumer-a', 'k');
+
+        expect(first).not.toEqual(second);
+    });
+
+    it('returns null when the inbox already has the key', async () => {
         inbox.claim.mockResolvedValue(null);
 
-        await expect(service.claim('consumer-a', 'k')).resolves.toBe(false);
+        await expect(service.claim('consumer-a', 'k')).resolves.toBeNull();
     });
 
     it('lets a failed claim surface to the caller', async () => {
@@ -55,15 +63,14 @@ describe('MessageClaimService', () => {
         expect(inbox.markAsProcessed).toHaveBeenCalledWith('k', 'consumer-a');
     });
 
-    it('releases only a claim this instance holds, under the same lockedBy it claimed with', async () => {
-        await service.claim('consumer-a', 'k');
-        await service.release('consumer-a', 'k');
+    it('releases only for the holder that claimed', async () => {
+        const holder = await service.claim('consumer-a', 'k');
+        await service.release('consumer-a', 'k', holder);
 
-        const claimedBy = inbox.claim.mock.calls[0][2];
         expect(inbox.releaseIfHeldBy).toHaveBeenCalledWith(
             'k',
             'consumer-a',
-            claimedBy,
+            holder,
         );
     });
 });
