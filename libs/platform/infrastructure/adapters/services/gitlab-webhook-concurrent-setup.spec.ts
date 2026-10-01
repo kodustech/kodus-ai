@@ -8,8 +8,16 @@ import { GitlabService } from './gitlab.service';
 
 const WEBHOOK_URL = 'https://api.kodus.io/gitlab/webhook';
 
+type FakeHook = {
+    id: number;
+    url: string;
+    alert_status?: string;
+    note_events?: boolean;
+    merge_requests_events?: boolean;
+};
+
 function fakeGitlab() {
-    const hooks = new Map<number, { id: number; url: string }[]>();
+    const hooks = new Map<number, FakeHook[]>();
     const added: { projectId: number; id: number }[] = [];
     let nextId = 1;
     const tick = () => new Promise((r) => setTimeout(r, 5));
@@ -27,6 +35,14 @@ function fakeGitlab() {
             added.push({ projectId, id: hook.id });
             return hook;
         }),
+        edit: jest.fn(
+            async (projectId: number, hookId: number, _url: string, options) => {
+                const hook = hooks.get(projectId)?.find((h) => h.id === hookId);
+                if (options.noteEvents) hook.note_events = true;
+                if (options.mergeRequestsEvents) hook.merge_requests_events = true;
+                return hook;
+            },
+        ),
         remove: jest.fn(async (projectId: number, hookId: number) => {
             await tick();
             const list = hooks.get(projectId) ?? [];
@@ -127,6 +143,47 @@ describe('GitlabService.createMergeRequestWebhook — one Kodus hook per project
         // The first project keeps its duplicate, the second still gets a hook.
         expect(gitlab.hooks.get(77086088)).toHaveLength(2);
         expect(gitlab.hooks.get(83192371)).toHaveLength(1);
+    });
+
+    it('keeps a working hook over an older one GitLab disabled', async () => {
+        gitlab.hooks.set(77086088, [
+            { id: 10, url: WEBHOOK_URL, alert_status: 'disabled' },
+            { id: 11, url: WEBHOOK_URL, alert_status: 'executable' },
+        ]);
+
+        await run();
+
+        expect(gitlab.hooks.get(77086088).map((h) => h.id)).toEqual([11]);
+    });
+
+    it('keeps a hook with note and merge request events over an older one created without them', async () => {
+        gitlab.hooks.set(77086088, [
+            { id: 10, url: WEBHOOK_URL, note_events: false },
+            { id: 11, url: WEBHOOK_URL, note_events: true, merge_requests_events: true },
+        ]);
+
+        await run();
+
+        expect(gitlab.hooks.get(77086088).map((h) => h.id)).toEqual([11]);
+        expect(gitlab.api.ProjectHooks.edit).not.toHaveBeenCalled();
+    });
+
+    it('keeps the lowest id and turns its events on when no duplicate can deliver', async () => {
+        gitlab.hooks.set(77086088, [
+            { id: 10, url: WEBHOOK_URL, note_events: false },
+            { id: 11, url: WEBHOOK_URL, merge_requests_events: false },
+        ]);
+
+        await run();
+
+        expect(gitlab.hooks.get(77086088)).toEqual([
+            {
+                id: 10,
+                url: WEBHOOK_URL,
+                note_events: true,
+                merge_requests_events: true,
+            },
+        ]);
     });
 
     it('adds nothing and removes nothing when the project already has one Kodus hook', async () => {

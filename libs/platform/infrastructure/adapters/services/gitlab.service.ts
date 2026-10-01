@@ -3051,8 +3051,14 @@ export class GitlabService implements Omit<
     /**
      * Leaves one Kodus hook on the project: GitLab delivers every event once
      * per hook. Passes running at once can each add a hook, so every pass
-     * keeps the lowest id and removes the rest; concurrent passes, on any
-     * instance, agree on the survivor. This also clears older duplicates.
+     * keeps the same survivor and removes the rest; concurrent passes, on any
+     * instance, agree on it. This also clears older duplicates.
+     *
+     * The survivor is the oldest hook that can deliver what Kodus consumes
+     * (enabled, with note and merge request events), so a duplicate GitLab
+     * disabled, or one created by hand without those events, is never kept
+     * over a working one. Only when none can is it the lowest id, with its
+     * events turned on.
      */
     private async ensureSingleKodusHook(
         gitlabAPI: any,
@@ -3082,9 +3088,33 @@ export class GitlabService implements Omit<
             return;
         }
 
+        const hasEvents = (hook) =>
+            hook?.note_events !== false && hook?.merge_requests_events !== false;
+        const canDeliver = (hook) =>
+            (hook?.alert_status ?? 'executable') === 'executable' &&
+            hasEvents(hook);
+
         const [kept, ...duplicates] = hooks.sort(
-            (a, b) => Number(a.id) - Number(b.id),
+            (a, b) =>
+                Number(canDeliver(b)) - Number(canDeliver(a)) ||
+                Number(a.id) - Number(b.id),
         );
+
+        if (!hasEvents(kept)) {
+            try {
+                await gitlabAPI.ProjectHooks.edit(projectId, kept.id, webhookUrl, {
+                    noteEvents: true,
+                    mergeRequestsEvents: true,
+                });
+            } catch (error) {
+                this.logger.warn({
+                    message: `Could not enable events on Kodus webhook ${kept.id} in GitLab project ${projectId}`,
+                    context: GitlabService.name,
+                    error,
+                    metadata: { organizationAndTeamData, projectId },
+                });
+            }
+        }
 
         // Best effort: a failed removal must not stop the pass from setting
         // up the hooks of the repositories that come after this one.
