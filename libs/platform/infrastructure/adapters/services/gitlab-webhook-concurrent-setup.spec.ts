@@ -213,20 +213,22 @@ describe('GitlabService.createMergeRequestWebhook — one Kodus hook per project
         );
     });
 
-    it('keeps going when the survivor cannot be edited', async () => {
+    it('keeps going when turning the survivor\'s events on fails', async () => {
         gitlab.hooks.set(77086088, [
             { id: 10, url: WEBHOOK_URL, note_events: false },
             { id: 11, url: WEBHOOK_URL, note_events: false },
         ]);
-        // Another pass removed the survivor in between.
+        // A transient provider failure on the edit, with the hook still there.
         gitlab.api.ProjectHooks.edit.mockRejectedValueOnce(
-            Object.assign(new Error('404 Not Found'), {
-                cause: { response: { status: 404 } },
+            Object.assign(new Error('500 Internal Server Error'), {
+                cause: { response: { status: 500 } },
             }),
         );
 
         await run();
 
+        // The duplicate is still removed and the next repository still gets
+        // its hook; the next save retries the edit.
         expect(gitlab.hooks.get(77086088).map((h) => h.id)).toEqual([10]);
         expect(gitlab.hooks.get(83192371)).toHaveLength(1);
     });

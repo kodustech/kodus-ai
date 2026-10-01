@@ -3054,10 +3054,11 @@ export class GitlabService implements Omit<
      * keeps the same survivor and removes the rest; concurrent passes, on any
      * instance, agree on it. This also clears older duplicates.
      *
-     * The survivor is the oldest hook GitLab still calls (not disabled after
-     * failures), preferring one with note and merge request events, so a
-     * disabled duplicate or one created by hand without those events is never
-     * kept over a working one. Missing events on the survivor are turned on.
+     * Among duplicates, the survivor is the oldest hook GitLab still calls
+     * (not disabled after failures), preferring one with note and merge
+     * request events, so a disabled copy or one created by hand without those
+     * events is never kept over a working one; if the survivor lacks those
+     * events they are turned on. A single hook is left as it is.
      */
     private async ensureSingleKodusHook(
         gitlabAPI: any,
