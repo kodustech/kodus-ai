@@ -1205,7 +1205,20 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
             // The providers read `commit?.sha` (GitHub commit_id, GitLab
             // position.headSha), so the reviewed commit is carried in the same
             // shape as the commits read from the provider.
-            const lastAnalyzedCommit = reviewedCommit
+            //
+            // Only while the PR still CONTAINS it, though: a force-push or a
+            // rebase during the review rewrites the reviewed commit away, and
+            // both providers then reject an anchor that is not part of the PR
+            // (GitHub validates `commit_id`, GitLab matches `position.headSha`
+            // against a diff version) — which loses the whole inline review
+            // instead of merely anchoring it on a stale tree. The live list
+            // read above is the source of truth for "is it still part of the
+            // PR", so the pin is conditional on it.
+            const reviewedCommitBelongsToPr = reviewedCommit
+                ? commits.some((commit) => commit?.sha === reviewedCommit)
+                : false;
+
+            const lastAnalyzedCommit = reviewedCommitBelongsToPr
                 ? { sha: reviewedCommit }
                 : commits[commits.length - 1];
             const commentResults = [];
