@@ -164,11 +164,19 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
      * whose lease was reclaimed can stop instead of overwriting the state of
      * whoever took the job over. Without a guard it keeps the old contract and
      * returns the refreshed job.
+     *
+     * `{ noLiveOwner: true }` is the other side of the same coin, for a caller
+     * that holds NO lease: the write only lands when no worker is running the
+     * job (`status <> PROCESSING`, or a lease that has already expired). Used
+     * by the failure path reached without a lease, which must still stop a
+     * redelivery without stamping over a live worker's row.
      */
     async update(
         id: string,
         data: Partial<IWorkflowJob>,
-        guard?: { leaseOwner: string; requireProcessing?: boolean },
+        guard?:
+            | { leaseOwner: string; requireProcessing?: boolean }
+            | { noLiveOwner: true },
     ): Promise<any> {
         try {
             const updateData: Partial<WorkflowJobModel> = {};
@@ -216,6 +224,37 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
             if (data.pipelineState !== undefined)
                 updateData.pipelineState = patch.pipelineState;
             if (data.payload !== undefined) updateData.payload = patch.payload;
+
+            if (guard && 'noLiveOwner' in guard) {
+                // No-live-owner mode (#1830 review): the caller holds no lease
+                // of its own and wants to stamp a terminal status only if no
+                // worker is running the job. Two deliveries of the same jobId
+                // can be consumed concurrently — process() does not check the
+                // row status on entry, the inbox dedupes on
+                // (consumerId, messageId) rather than jobId, and the reaper
+                // republishes a reclaimed job with a fresh messageId — so an
+                // unguarded write here can land FAILED over a row another
+                // worker has already claimed PROCESSING. That worker's own
+                // guarded completion then matches no row, its review result is
+                // dropped, and the author gets a failure notice for a review
+                // that is still running: the #1830 symptom the lease fence
+                // exists to prevent. The condition is part of the UPDATE, not a
+                // read before it, for the same reason as the lease guard below.
+                const qb = this.repository
+                    .createQueryBuilder()
+                    .update(WorkflowJobModel)
+                    .set(updateData)
+                    .where('uuid = :uuid', { uuid: id })
+                    .andWhere(
+                        '(status <> :processing OR leaseExpiresAt IS NULL OR leaseExpiresAt < :now)',
+                        {
+                            processing: JobStatus.PROCESSING,
+                            now: new Date(),
+                        },
+                    );
+                const result = await qb.execute();
+                return (result.affected ?? 0) > 0;
+            }
 
             if (guard) {
                 // Ownership-conditional write. The row may have been reclaimed
