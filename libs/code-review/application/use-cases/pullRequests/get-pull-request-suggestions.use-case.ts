@@ -169,7 +169,7 @@ export class GetPullRequestSuggestionsUseCase {
             ? payload.suggestions.files
                   .map(
                       (suggestion) =>
-                          `- [File] ${suggestion.filePath} — ${suggestion.oneSentenceSummary || suggestion.label || ''}\n  - Severity: ${suggestion.severity || ''}\n  - Category: ${suggestion.label || ''}\n  - Status: ${suggestion.deliveryStatus || ''}\n  - Lines: ${suggestion.relevantLinesStart ?? ''}-${suggestion.relevantLinesEnd ?? ''}\n  - Content:\n\n${'```'}\n${suggestion.suggestionContent || suggestion.improvedCode || ''}\n${'```'}`,
+                          `- [File] ${suggestion.filePath} — ${suggestion.oneSentenceSummary || suggestion.label || ''}\n  - Severity: ${suggestion.severity || ''}\n  - Category: ${suggestion.label || ''}\n  - Status: ${suggestion.deliveryStatus || ''}\n  - Lines: ${suggestion.relevantLinesStart ?? ''}-${suggestion.relevantLinesEnd ?? ''}\n  - Content:\n\n${'```'}\n${suggestion.fullExplanation || suggestion.suggestionContent || suggestion.improvedCode || ''}\n${'```'}`,
                   )
                   .join('\n\n')
             : '_No file-level suggestions sent_';
@@ -178,7 +178,7 @@ export class GetPullRequestSuggestionsUseCase {
             ? payload.suggestions.prLevel
                   .map(
                       (suggestion) =>
-                          `- [PR] ${suggestion.oneSentenceSummary || suggestion.label || ''}\n  - Severity: ${suggestion.severity || ''}\n  - Category: ${suggestion.label || ''}\n  - Status: ${suggestion.deliveryStatus || ''}\n  - Content:\n\n${'```'}\n${suggestion.suggestionContent || ''}\n${'```'}`,
+                          `- [PR] ${suggestion.oneSentenceSummary || suggestion.label || ''}\n  - Severity: ${suggestion.severity || ''}\n  - Category: ${suggestion.label || ''}\n  - Status: ${suggestion.deliveryStatus || ''}\n  - Content:\n\n${'```'}\n${suggestion.fullExplanation || suggestion.suggestionContent || ''}\n${'```'}`,
                   )
                   .join('\n\n')
             : '_No PR-level suggestions sent_';

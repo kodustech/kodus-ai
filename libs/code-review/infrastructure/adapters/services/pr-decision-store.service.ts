@@ -44,7 +44,8 @@ export function toRecord(suggestion: ISuggestion): PrDecisionRecord {
         relevantFile: suggestion.relevantFile,
         relevantLinesStart: suggestion.relevantLinesStart,
         relevantLinesEnd: suggestion.relevantLinesEnd,
-        suggestionContent: suggestion.suggestionContent,
+        suggestionContent:
+            suggestion.fullExplanation || suggestion.suggestionContent,
         label: suggestion.label,
         brokenKodyRulesIds: suggestion.brokenKodyRulesIds,
         outcome: toOutcome(suggestion.implementationStatus),
@@ -62,7 +63,8 @@ export function toRecordFromPrLevel(
 ): PrDecisionRecord {
     return {
         suggestionId: suggestion.id,
-        suggestionContent: suggestion.suggestionContent,
+        suggestionContent:
+            suggestion.fullExplanation || suggestion.suggestionContent,
         label: suggestion.label,
         brokenKodyRulesIds: suggestion.brokenKodyRulesIds,
         outcome: 'pending',
