@@ -492,6 +492,38 @@ const CASES = [
         },
     },
     {
+        id: 'minimax M3.1 — a stored temperature is WITHHELD, because the protocol drops it',
+        why: 'M3.1 thinking is on in every state, and the Anthropic protocol carries no sampling temperature while thinking is enabled: the adapter warns "temperature is not supported when thinking is enabled" and removes the field. Captured here on the effort path AND on the off path (effort none), which is the one a reader would expect to keep its temperature — the same 400-vs-silence split as the adaptive-shape entries above. Pinning to 1 (what the always-thinking Kimi/GLM rows do) would be inventing a constraint MiniMax never states — its own parameter table lists temperature as "Fully supported", range [0, 2] — and would not reach the wire either; withholding is what the request actually does, and the connect form now says so instead of promising a value the SDK discards',
+        doc: 'platform.minimax.io/docs/api-reference/text-anthropic-api',
+        slot: {
+            provider: 'anthropic_compatible',
+            model: 'MiniMax-M3.1-Flash-Preview',
+            baseURL: 'https://api.minimax.io/anthropic',
+            reasoningEffort: 'high',
+            temperature: 0.7,
+        },
+        wire: {
+            has: { thinking: { type: 'adaptive' } },
+            hasNot: ['temperature'],
+        },
+    },
+    {
+        id: 'minimax M3.1 — the OFF path withholds it too, because off is not off',
+        why: 'The counterweight to the row above: `effort: none` looks like the state where a temperature is allowed, and on a disable-able model it is (DeepSeek keeps its temperature at none, and only there). This generation has no off switch — the shape is still adaptive on the wire — so the while-thinking rule applies here as well. Without the model-can-be-disabled guard on that rule, this row is exactly where the field would leak back in',
+        doc: 'platform.minimax.io/docs/api-reference/text-anthropic-api',
+        slot: {
+            provider: 'anthropic_compatible',
+            model: 'MiniMax-M3.1-Flash-Preview',
+            baseURL: 'https://api.minimax.io/anthropic',
+            reasoningEffort: 'none',
+            temperature: 0.7,
+        },
+        wire: {
+            has: { thinking: { type: 'adaptive' } },
+            hasNot: ['temperature'],
+        },
+    },
+    {
         id: 'minimax M3 — the Anthropic transport does not fabricate a budget for it',
         why: 'This case was first written the other way round, asserting the budget as a deliberate transport difference. It was not: M3 was reaching the compatible branch\'s `return budget` fall-through and going out with thinking:{type:enabled,budgetTokens:40000} — a field invented for a brand whose own table validates a toggle for M2 and explicitly declines to for M3, on the transport four production slots use. `budget` belongs to the compatible brands that DO implement the legacy Anthropic thinking shape (Kimi, GLM, DeepSeek all declare it); an id we cannot confirm reasons gets the same treatment the native branch already gives an unidentified one — omit rather than gamble on a 400',
         doc: 'platform.minimax.io — Anthropic SDK endpoint https://api.minimax.io/anthropic',

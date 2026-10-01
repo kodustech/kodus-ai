@@ -202,6 +202,51 @@ describe('MiniMax — platform.minimax.io/docs/api-reference/text-anthropic-api'
         // shape is the failure this file exists to prevent.
         expect(resolveCompatibleReasoningTraits('MiniMax-M3').reasoningControl).toBeUndefined();
     });
+
+    it('M3.1 cannot disable thinking in ANY state — including `none`', () => {
+        // Same page, "Thinking Control": `thinking` omitted → "Thinking on",
+        // `{"type":"adaptive"}` → "Thinking on", `{"type":"disabled"}` →
+        // "Returns 400 — thinking cannot be disabled". That is why the OFF path
+        // still carries the adaptive shape (byok-config-matrix.spec.ts) and why
+        // `effort === 'none'` must NOT be read as "thinking is off" here: on
+        // this model there is no state in which it is.
+        expect(
+            resolveCompatibleReasoningTraits('MiniMax-M3.1-Flash-Preview'),
+        ).toMatchObject({
+            thinksByDefault: true,
+            canDisableThinking: false,
+            requiredThinkingShape: 'adaptive',
+        });
+    });
+
+    it('M3.1 documents `temperature` as FULLY SUPPORTED, and the PROTOCOL still drops it', () => {
+        // platform.minimax.io/docs/api-reference/text-anthropic-api, "Supported
+        // Parameters": `temperature` — "Fully supported. Range [0, 2], controls
+        // output randomness, recommended value: 1", repeated in the page's note
+        // list ("values outside this range will return an error"). So the vendor
+        // ACCEPTS the field, and pinning it to 1 (as the always-thinking Kimi/GLM
+        // rows do) would be inventing a constraint MiniMax never states.
+        //
+        // What decides the policy is not the vendor's parameter table but the
+        // protocol we speak to it: M3.1 thinking is ON in every state (Thinking
+        // Control table above — omitted/adaptive/enabled are all "Thinking on",
+        // `disabled` is a 400), and the Anthropic protocol carries no sampling
+        // temperature while thinking is enabled. The adapter says so out loud and
+        // drops the field:
+        //   AI SDK Warning (anthropic.messages / MiniMax-M3.1-Flash-Preview):
+        //   The feature "temperature" is not supported. temperature is not
+        //   supported when thinking is enabled
+        // Captured through the wire harness on all three paths (high / medium /
+        // none) — the body carries `thinking:{type:'adaptive'}` and no
+        // `temperature` in each. A stored value can therefore never take effect,
+        // and the honest policy is `unsupported` on EVERY path, not `adjustable`
+        // (which promises the user a setting the request will discard).
+        for (const effort of ['none', 'medium', 'high']) {
+            expect(
+                compatibleTemperaturePolicy('MiniMax-M3.1-Flash-Preview', effort),
+            ).toEqual({ kind: 'unsupported' });
+        }
+    });
 });
 
 describe('the advertised picker matches the family that owns the model', () => {
