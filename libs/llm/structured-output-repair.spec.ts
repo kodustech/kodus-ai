@@ -155,6 +155,23 @@ describe('reasoning written before the answer', () => {
         );
     });
 
+    it('finds the answer after an unclosed block that is not at the start', () => {
+        // The block never closes, but it did not open the response, so the
+        // answer behind it is still there to be found.
+        expect(
+            extractJsonFromText(`Let me think. <think>no any here. ${answer}`),
+        ).toBe(answer);
+    });
+
+    it('does not rescan the whole text once per block', () => {
+        // Cost grows with the blocks, not with blocks times length: a payload of
+        // thousands of blocks must not turn into thousands of full scans.
+        const many = '<think>x</think>'.repeat(200_000);
+        const started = Date.now();
+        expect(extractJsonFromText(`${many}${answer}`)).toBe(answer);
+        expect(Date.now() - started).toBeLessThan(1000);
+    });
+
     it('leaves a <think> tag inside a JSON string alone', () => {
         const json = '{"violations":[{"suggestionContent":"<think> is not HTML"}]}';
         expect(extractJsonFromText(json)).toBe(json);
