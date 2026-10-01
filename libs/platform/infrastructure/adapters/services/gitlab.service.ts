@@ -3027,23 +3027,12 @@ export class GitlabService implements Omit<
 
         try {
             for (const repo of repositories) {
-                const existingHooks = await gitlabAPI.ProjectHooks.all(repo.id);
-
-                const hookExists = existingHooks.some(
-                    (hook) => hook?.url === webhookUrl,
+                await this.ensureSingleKodusHook(
+                    gitlabAPI,
+                    repo.id,
+                    webhookUrl,
+                    organizationAndTeamData,
                 );
-
-                if (!hookExists) {
-                    await gitlabAPI.ProjectHooks.add(repo.id, webhookUrl, {
-                        mergeRequestsEvents: true,
-                        enableSslVerification: true,
-                        noteEvents: true,
-                        issuesEvents: true,
-                    });
-                    console.log(`Webhook added to project ${repo.id}`);
-                } else {
-                    console.log(`Webhook already exists in project ${repo.id}`);
-                }
             }
         } catch (error) {
             this.logger.error({
@@ -3056,6 +3045,78 @@ export class GitlabService implements Omit<
                 },
             });
             throw error;
+        }
+    }
+
+    /**
+     * Leaves one Kodus hook on the project: GitLab delivers every event once
+     * per hook. Passes running at once can each add a hook, so every pass
+     * keeps the lowest id and removes the rest; concurrent passes, on any
+     * instance, agree on the survivor. This also clears older duplicates.
+     */
+    private async ensureSingleKodusHook(
+        gitlabAPI: any,
+        projectId: string | number,
+        webhookUrl: string,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<void> {
+        const listKodusHooks = async () =>
+            ((await gitlabAPI.ProjectHooks.all(projectId)) ?? []).filter(
+                (hook) => hook?.url === webhookUrl,
+            );
+
+        let hooks = await listKodusHooks();
+
+        if (hooks.length === 0) {
+            await gitlabAPI.ProjectHooks.add(projectId, webhookUrl, {
+                mergeRequestsEvents: true,
+                enableSslVerification: true,
+                noteEvents: true,
+                issuesEvents: true,
+            });
+            // Another pass may have added its own hook in the meantime.
+            hooks = await listKodusHooks();
+        }
+
+        if (hooks.length <= 1) {
+            return;
+        }
+
+        const [kept, ...duplicates] = hooks.sort(
+            (a, b) => Number(a.id) - Number(b.id),
+        );
+
+        // Best effort: a failed removal must not stop the pass from setting
+        // up the hooks of the repositories that come after this one.
+        const removedHookIds = [];
+        for (const hook of duplicates) {
+            try {
+                await gitlabAPI.ProjectHooks.remove(projectId, hook.id);
+                removedHookIds.push(hook.id);
+            } catch (error) {
+                // 404: a concurrent pass removed it first.
+                if (!this.isGitlabNotFoundError(error)) {
+                    this.logger.warn({
+                        message: `Could not remove duplicate Kodus webhook ${hook.id} from GitLab project ${projectId}`,
+                        context: GitlabService.name,
+                        error,
+                        metadata: { organizationAndTeamData, projectId },
+                    });
+                }
+            }
+        }
+
+        if (removedHookIds.length > 0) {
+            this.logger.warn({
+                message: `Removed ${removedHookIds.length} duplicate Kodus webhook(s) from GitLab project ${projectId}`,
+                context: GitlabService.name,
+                metadata: {
+                    organizationAndTeamData,
+                    projectId,
+                    keptHookId: kept.id,
+                    removedHookIds,
+                },
+            });
         }
     }
 
