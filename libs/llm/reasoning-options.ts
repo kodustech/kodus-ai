@@ -88,8 +88,12 @@ export function buildProviderOptions(
     if (input?.reasoningConfigOverride) {
         try {
             const parsed = JSON.parse(input.reasoningConfigOverride);
-            const override = autoWrapProviderOverride(
-                parsed,
+            const override = normalizeOverrideSpelling(
+                autoWrapProviderOverride(
+                    parsed,
+                    input?.byokProvider,
+                    input?.modelName,
+                ),
                 input?.byokProvider,
                 input?.modelName,
             );
@@ -302,6 +306,32 @@ function autoWrapProviderOverride(
     if (!ns) return obj; // Unknown provider — pass through and let the SDK decide.
 
     return { [ns]: obj };
+}
+
+/**
+ * The override with the provider's wire spellings renamed to its adapter's
+ * option names, under the namespace this slot's adapter reads (see
+ * `normalizeReasoningOverride`). Other namespaces are left as pasted.
+ */
+function normalizeOverrideSpelling(
+    override: Record<string, any>,
+    provider?: BYOKProvider | string,
+    model?: string,
+): Record<string, any> {
+    if (!provider) return override;
+    const id = String(provider);
+    const mod = REGISTRY.has(id) ? REGISTRY.get(id) : undefined;
+    const ns = providerOptionsNamespace(provider, model);
+    const options = ns ? override[ns] : undefined;
+    if (
+        !mod?.normalizeReasoningOverride ||
+        !options ||
+        typeof options !== 'object' ||
+        Array.isArray(options)
+    ) {
+        return override;
+    }
+    return { ...override, [ns]: mod.normalizeReasoningOverride(ns, options) };
 }
 
 /** Deep-merge the openrouter namespace so reasoning + routing co-exist. */

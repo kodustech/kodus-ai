@@ -215,6 +215,8 @@ export class ReviewOrchestratorService {
                     metadata: {
                         agent: task.name,
                         prNumber: agentInput.prNumber,
+                        organizationAndTeamData:
+                            agentInput.organizationAndTeamData,
                         durationMs: Date.now() - agentStart,
                     },
                 });
@@ -289,6 +291,12 @@ export class ReviewOrchestratorService {
                     message: `[AGENT] ${agentName} failed: ${err.message || 'Unknown error'}`,
                     context: ReviewOrchestratorService.name,
                     error: err,
+                    metadata: {
+                        agent: agentName,
+                        prNumber: agentInput.prNumber,
+                        organizationAndTeamData:
+                            agentInput.organizationAndTeamData,
+                    },
                 });
             }
         }

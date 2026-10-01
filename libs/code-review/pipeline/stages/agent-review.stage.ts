@@ -170,6 +170,36 @@ export function extractValidDiffLines(patch?: string): Array<[number, number]> {
 }
 
 /**
+ * Which out-of-hunk findings survive the snap as file-anchored PR comments.
+ *
+ * Rules that declared they need more than the diff (issue #1826). Only such a
+ * rule has earned the right to point at a line this PR did not change: "this
+ * function is too long" is true of the whole function, most of which is
+ * unchanged. Every other out-of-hunk finding is dropped — nothing else in the
+ * pipeline can tell the two apart. Exported so the kody-rules eval scores what
+ * this stage publishes, not the agent's raw output.
+ */
+export function fileAnchoredFindingPredicate(
+    rules: Array<Partial<IKodyRule>>,
+): (s: Partial<CodeSuggestion>) => boolean {
+    const contextNeedingRuleUuids = new Set(
+        rules
+            .filter(
+                (rule) =>
+                    !!rule.uuid &&
+                    !!rule.contextNeed?.need &&
+                    rule.contextNeed.need !== 'diff-only',
+            )
+            .map((rule) => rule.uuid!),
+    );
+    return (s) =>
+        s.label === 'kody_rules' &&
+        (s.brokenKodyRulesIds ?? []).some((uuid) =>
+            contextNeedingRuleUuids.has(uuid),
+        );
+}
+
+/**
  * Snap suggestion line numbers to the closest valid diff range.
  *
  * Returns the suggestion clamped to the overlapping hunk when its lines
@@ -935,29 +965,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             const changedFilesByName = new Map(
                 changedFiles.map((f) => [f.filename, f]),
             );
-            // Rules that declared they need more than the diff (issue #1826).
-            // Only such a rule has earned the right to point at a line this PR
-            // did not change: "this function is too long" is true of the whole
-            // function, most of which is unchanged. Every other out-of-hunk
-            // finding is still dropped, exactly as before — nothing else in the
-            // pipeline can tell the two apart, which is why the snap drops both
-            // today.
-            const contextNeedingRuleUuids = new Set(
-                (context.codeReviewConfig?.kodyRules ?? [])
-                    .filter(
-                        (rule) =>
-                            !!rule.uuid &&
-                            !!(rule as Partial<IKodyRule>).contextNeed?.need &&
-                            (rule as Partial<IKodyRule>).contextNeed!.need !==
-                                'diff-only',
-                    )
-                    .map((rule) => rule.uuid!),
+            const isFileAnchored = fileAnchoredFindingPredicate(
+                context.codeReviewConfig?.kodyRules ?? [],
             );
-            const isFileAnchored = (s: Partial<CodeSuggestion>): boolean =>
-                s.label === 'kody_rules' &&
-                (s.brokenKodyRulesIds ?? []).some((uuid) =>
-                    contextNeedingRuleUuids.has(uuid),
-                );
             const validatedSuggestions = result.suggestions
                 .map((s) => {
                     const file = changedFilesByName.get(s.relevantFile);

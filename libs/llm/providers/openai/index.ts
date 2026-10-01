@@ -44,6 +44,7 @@ import {
     normalizeSdkResult,
     normalizeSdkUsage,
 } from '../kernel/usage';
+import { reasoningEffortFromWire } from '../kernel/override-wire-spelling';
 
 /**
  * Native OpenAI model families that honor strict `response_format: json_schema`
@@ -275,9 +276,14 @@ export const openaiModule: ProviderModule = {
                         ? { openaiCompatible: { reasoningEffort: value } }
                         : {};
                 }
-                const payload: Record<string, any> = {
-                    thinking: { type: 'enabled' },
-                };
+                // A model that always thinks (GLM-5.3, Kimi k3 / k2.7-code) is
+                // not told to: the toggle changes nothing for it, and a strict
+                // gateway upstream rejects the field (OpenCode Go's glm-5.3-flash,
+                // 2026-09-30: `json: unknown field "thinking"`). OpenCode's own
+                // client sends no reasoning options to GLM-5.3 either.
+                const payload: Record<string, any> = traits.canDisableThinking
+                    ? { thinking: { type: 'enabled' } }
+                    : {};
                 // Only brands documented to accept the PAIR get an effort.
                 // DeepSeek REQUIRES `thinking` + `reasoning_effort` together and
                 // Z.ai accepts both, but Moonshot 400s on the pair ("cannot
@@ -287,7 +293,9 @@ export const openaiModule: ProviderModule = {
                     const value = compatibleEffortValue(effort, traits);
                     if (value) payload.reasoningEffort = value;
                 }
-                return { openaiCompatible: payload };
+                return Object.keys(payload).length
+                    ? { openaiCompatible: payload }
+                    : {};
             }
             if (isNativeOpenAiModel(cfg.model)) {
                 // `reasoningEffort` (camelCase) is the SDK's OWN option name; it
@@ -377,6 +385,10 @@ export const openaiModule: ProviderModule = {
     ],
     providerOptionsNamespace: (id) =>
         id === 'openai_compatible' ? 'openaiCompatible' : 'openai',
+    // Both adapters render `reasoning_effort` from `reasoningEffort` and strip
+    // the snake_case spelling users copy from the vendor docs.
+    normalizeReasoningOverride: (_ns, options) =>
+        reasoningEffortFromWire(options),
     // Native OpenAI takes `reasoningEffort` (+ optional serviceTier); an
     // openai_compatible upstream takes the standard `thinking` toggle — so the
     // Custom-override example differs per served id. Mirrors reasoning() above.

@@ -744,11 +744,14 @@ export class CreateOrUpdateKodyRulesUseCase {
                             },
                         );
 
+                    // No id means the rule references nothing: clear the
+                    // pointer. Null, not undefined — the repository skips
+                    // undefined fields, which would keep a stale pointer.
                     await this.kodyRulesService.updateRuleReferences(
                         organizationAndTeamData.organizationId,
                         ruleId,
                         {
-                            contextReferenceId,
+                            contextReferenceId: contextReferenceId ?? null,
                         },
                     );
 

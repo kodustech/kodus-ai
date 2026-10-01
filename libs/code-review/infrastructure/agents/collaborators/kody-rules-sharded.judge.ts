@@ -1114,6 +1114,71 @@ function resolveRuleId(
  * don't map to a rule in this shard. `orderedUuids` is index-aligned with the
  * rules as presented to the model.
  */
+/**
+ * False when the finding rewrites its code into the same code. A model that
+ * judged a line compliant sometimes still returns an entry for it ("No
+ * violation: …") with the line copied into improvedCode — published, a comment
+ * telling the author there is nothing to fix. On the kody-rules eval that shape
+ * was most false alarms on clean files and none of the real violations. A
+ * finding with no improvedCode is kept: the prompt asks for null when the fix
+ * is not a replacement of those lines.
+ */
+function proposesAChange(v: ShardViolation): boolean {
+    if (!v.improvedCode || !v.existingCode) return true;
+    // Byte for byte: a formatting rule's fix changes only whitespace, and the
+    // copies emitted for compliant lines were identical in every measured run.
+    return v.improvedCode !== v.existingCode;
+}
+
+/**
+ * False when a finding of a diff-only rule cites only lines the PR did not
+ * add. The prompt says unchanged context lines are never flagged, yet models
+ * flag them (pre-existing code), and the review publishes them: a context line
+ * is a valid inline-comment line.
+ *
+ * SHADOW ONLY: the shard logs what this would drop and drops nothing. A change
+ * can create a violation on a line it did not touch (removing the last call to
+ * a function leaves its import unused; changing a body makes the docstring
+ * above it wrong), and the right finding then cites only the unchanged line.
+ * Rules without a `contextNeed` count as diff-only, so this covers nearly every
+ * rule. The eval cannot tell the two apart yet, so the decision to enforce it
+ * waits for the logged findings.
+ *
+ * A rule that declared it needs more than the diff keeps the right to point at
+ * unchanged lines, as the review's own snap allows; a finding without lines is
+ * left to the snap.
+ */
+function citesAnAddedLine(
+    file: FileChange,
+    rules: Array<Partial<IKodyRule>>,
+): (v: ShardViolation) => boolean {
+    const added = new Set<number>();
+    const diff = String((file as any).patchWithLinesStr ?? file.patch ?? '');
+    for (const line of diff.split('\n')) {
+        // Production right-aligns the number (`    27 +code`, see
+        // convertToUnifiedDiffWithLineNumbers); the dataset form is unpadded.
+        const m = /^\s*(\d+)\s\+/.exec(line);
+        if (m) added.add(Number(m[1]));
+    }
+    const needsMore = new Set(
+        rules
+            .filter((r) => r.uuid && needOf(r) !== 'diff-only')
+            .map((r) => r.uuid),
+    );
+    return (v) => {
+        if (needsMore.has(v.ruleUuid) || added.size === 0) return true;
+        const start = v.relevantLinesStart;
+        if (!start) return true;
+        const end = Math.max(v.relevantLinesEnd ?? start, start);
+        // Walk the added lines, not the range: the model's end is unbounded
+        // (a hallucinated 999999, or an Infinity from 1e400 in the JSON).
+        for (const line of added) {
+            if (line >= start && line <= end) return true;
+        }
+        return false;
+    };
+}
+
 function resolveShardViolations(
     vs: RawShardViolation[],
     orderedUuids: string[],
@@ -1231,7 +1296,34 @@ export async function judgeKodyRulesSharded(
                 });
                 // resolve ruleId→uuid (dropping hallucinated indices), then
                 // anchor every violation to this file
-                return resolveShardViolations(vs, ruleUuids).map((v) => ({
+                const resolved = resolveShardViolations(vs, ruleUuids);
+                const proposing = resolved.filter(proposesAChange);
+                if (proposing.length < resolved.length) {
+                    logger?.warn({
+                        message: `[kody-rules-shard] dropped ${resolved.length - proposing.length} finding(s) on ${file.filename} whose improvedCode repeats the existing code`,
+                        context: 'kody-rules-sharded',
+                        metadata: { filename: file.filename },
+                    });
+                }
+                const citesAdded = citesAnAddedLine(file, applicable);
+                const onContextOnly = proposing.filter((v) => !citesAdded(v));
+                if (onContextOnly.length > 0) {
+                    logger?.warn({
+                        message: `[kody-rules-shard] shadow: ${onContextOnly.length} finding(s) on ${file.filename} cite only lines the PR did not add; kept`,
+                        context: 'kody-rules-sharded',
+                        metadata: {
+                            filename: file.filename,
+                            findings: onContextOnly.map((v) => ({
+                                ruleUuid: v.ruleUuid,
+                                linesStart: v.relevantLinesStart,
+                                linesEnd: v.relevantLinesEnd,
+                                summary: v.oneSentenceSummary,
+                                text: v.suggestionContent?.slice(0, 400),
+                            })),
+                        },
+                    });
+                }
+                return proposing.map((v) => ({
                     ...v,
                     relevantFile: file.filename,
                 }));

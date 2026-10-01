@@ -91,3 +91,35 @@ describe('KodyRulesRepository.updateRulesStatusByFilter', () => {
         );
     });
 });
+
+describe('KodyRulesRepository.updateRule — clearing a field', () => {
+    function build() {
+        const exec = jest.fn().mockResolvedValue(null);
+        const findOneAndUpdate = jest.fn().mockReturnValue({ exec });
+        const findOne = jest.fn().mockReturnValue({ exec });
+        const repo = new KodyRulesRepository(
+            { findOneAndUpdate, findOne } as any,
+            {} as any,
+        );
+        return { repo, findOneAndUpdate };
+    }
+
+    it('writes null, which clears the stored value', async () => {
+        const { repo, findOneAndUpdate } = build();
+
+        await repo.updateRule('doc-1', 'rule-1', { contextReferenceId: null });
+
+        const [, update] = findOneAndUpdate.mock.calls[0];
+        expect(update.$set).toEqual({ 'rules.$.contextReferenceId': null });
+    });
+
+    it('skips undefined, which leaves the stored value in place', async () => {
+        const { repo, findOneAndUpdate } = build();
+
+        await repo.updateRule('doc-1', 'rule-1', {
+            contextReferenceId: undefined,
+        });
+
+        expect(findOneAndUpdate).not.toHaveBeenCalled();
+    });
+});

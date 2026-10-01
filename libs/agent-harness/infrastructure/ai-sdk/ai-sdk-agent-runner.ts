@@ -290,7 +290,14 @@ export class AiSdkAgentRunner implements AgentRunner {
                     : {}),
                 // Cancellation / timeout composed by the caller (parent + hard timeout).
                 signal: ctx.signal,
-                telemetryMetadata: input.telemetryMetadata as any,
+                // Callers that pre-build the SDK payload (the code-review finder,
+                // its recall passes, every verify) put the Langfuse metadata in
+                // `runtimeContext`, not `telemetryMetadata`. LLM.run builds the
+                // telemetry from the latter only, so read both — or those runs
+                // reach Langfuse with no name, org or PR (lost in 9f634e93e).
+                telemetryMetadata: (input.telemetryMetadata ??
+                    input.runtimeContext ??
+                    (input.telemetry ? {} : undefined)) as any,
                 loop: {
                     tools: toolMap,
                     maxSteps: spec.maxSteps,
@@ -311,7 +318,14 @@ export class AiSdkAgentRunner implements AgentRunner {
             // actionable detail in the body, so a {message, name} trace is not
             // enough for the caller to classify the failure — it degrades to
             // "Unexpected error" in the PR comment and the UI (#1568).
-            const detail = err as Record<string, unknown> | undefined;
+            // When the SDK's own retries run out it throws a RetryError that
+            // has neither: both are on the attempt that ended the retries.
+            const outer = err as Record<string, unknown> | undefined;
+            const detail = (
+                outer?.lastError && typeof outer.lastError === 'object'
+                    ? outer.lastError
+                    : outer
+            ) as Record<string, unknown> | undefined;
             const status =
                 typeof detail?.statusCode === 'number'
                     ? detail.statusCode

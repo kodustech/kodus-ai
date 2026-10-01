@@ -246,10 +246,24 @@ describe('describeProviderId - listsModelsLive', () => {
         expect(describeProviderId(m, m.id).listsModelsLive).toBe(false);
     });
 
-    it('is false for a custom endpoint even with a resolvable http listing', () => {
+    // A custom endpoint lists live once the user has typed its base URL: the
+    // backend runs the same http listing against it (SSRF-guarded, and a key
+    // only goes to its own host). autoListModels stays false — nothing can be
+    // listed BEFORE the URL is known.
+    it('is true for a custom endpoint with an http listing', () => {
         const m = makeModule({
-            modelListing: () => httpListing({ requiresBaseURL: false }),
+            modelListing: () => httpListing({ requiresBaseURL: true }),
         });
+        expect(
+            describeProviderId(m, 'openai_compatible').listsModelsLive,
+        ).toBe(true);
+        expect(
+            describeProviderId(m, 'openai_compatible').autoListModels,
+        ).toBe(false);
+    });
+
+    it('is false for a custom endpoint whose listing is manual', () => {
+        const m = makeModule({ modelListing: () => ({ kind: 'manual' }) as any });
         expect(
             describeProviderId(m, 'openai_compatible').listsModelsLive,
         ).toBe(false);
@@ -292,7 +306,8 @@ describe('describeProviderId - doc passthrough and full shape', () => {
             label: 'OpenAI',
             doc: 'https://docs/openai',
             uiFields: [{ key: 'apiKey', required: true }],
-            // Even a resolvable http listing is ignored for custom endpoints.
+            // A custom endpoint is never auto-listed, but lists live once
+            // its base URL is typed.
             modelListing: () => httpListing({ requiresBaseURL: false }),
         });
         expect(describeProviderId(m, 'openai_compatible')).toEqual({
@@ -301,7 +316,7 @@ describe('describeProviderId - doc passthrough and full shape', () => {
             requiresApiKey: true,
             requiresBaseUrl: true,
             autoListModels: false,
-            listsModelsLive: false,
+            listsModelsLive: true,
             doc: 'https://docs/openai',
         });
     });

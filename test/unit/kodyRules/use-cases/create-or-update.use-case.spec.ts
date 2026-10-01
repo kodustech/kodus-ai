@@ -119,6 +119,7 @@ describe('CreateOrUpdateKodyRulesUseCase (centralized pending states)', () => {
                     provide: PermissionValidationService,
                     useValue: {
                         getBYOKConfig: jest.fn().mockResolvedValue(null),
+                        resolveTaskSlot: jest.fn().mockResolvedValue(null),
                         getSubscriptionStatus: jest
                             .fn()
                             .mockResolvedValue(undefined),
@@ -147,6 +148,45 @@ describe('CreateOrUpdateKodyRulesUseCase (centralized pending states)', () => {
         }).compile();
 
         useCase = module.get(CreateOrUpdateKodyRulesUseCase);
+    });
+
+    // The repository drops undefined fields from its $set, so only an explicit
+    // null clears the pointer of a rule that references nothing — else the
+    // review keeps loading an empty revision for it.
+    it('clears the context reference pointer with null when detection returns no id', async () => {
+        const detection = (useCase as any).contextReferenceDetectionService;
+        detection.detectAndSaveReferences.mockResolvedValue(undefined);
+
+        await (useCase as any).detectAndSaveReferencesAsync(
+            'rule-1',
+            'Every defensive branch needs a test',
+            'repo-1',
+            { organizationId: 'org-1', teamId: 'team-1' },
+        );
+
+        expect(kodyRulesServiceMock.updateRuleReferences).toHaveBeenCalledWith(
+            'org-1',
+            'rule-1',
+            { contextReferenceId: null },
+        );
+    });
+
+    it('persists the context reference id when detection returns one', async () => {
+        const detection = (useCase as any).contextReferenceDetectionService;
+        detection.detectAndSaveReferences.mockResolvedValue('revision-9');
+
+        await (useCase as any).detectAndSaveReferencesAsync(
+            'rule-1',
+            'Follow the conventions in docs/style.md',
+            'repo-1',
+            { organizationId: 'org-1', teamId: 'team-1' },
+        );
+
+        expect(kodyRulesServiceMock.updateRuleReferences).toHaveBeenCalledWith(
+            'org-1',
+            'rule-1',
+            { contextReferenceId: 'revision-9' },
+        );
     });
 
     it('persists create flow as pending_add when centralized PR mode is active', async () => {
