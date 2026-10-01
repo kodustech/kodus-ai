@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { z } from 'zod';
 
 import { CentralizedConfigPrService } from '@libs/centralized-config/infrastructure/adapters/services/centralized-config-pr.service';
 import {
@@ -487,9 +488,12 @@ describe('KodyRulesTools.createKodyRule and Kody Knowledge Approval (#1836)', ()
             mockCodeBaseConfigService.getSimpleConfig,
         ).not.toHaveBeenCalled();
         expect(mockKodyRulesService.createOrUpdate).not.toHaveBeenCalled();
+        const outputSchema = tools.createKodyRule()
+            .outputSchema as unknown as z.ZodTypeAny;
+        expect(() => outputSchema.parse(structured)).not.toThrow();
     });
 
-    it('lets a team that does not resolve fall through to the setting read', async () => {
+    it('refuses a team that does not resolve, since its setting cannot be read', async () => {
         await build(false);
         mockTeamService.findOneOrganizationIdByTeamId.mockResolvedValueOnce(
             undefined,
@@ -498,13 +502,12 @@ describe('KodyRulesTools.createKodyRule and Kody Knowledge Approval (#1836)', ()
         const result = await runCreate();
         const structured = (result as any).structuredContent;
 
-        expect(mockCodeBaseConfigService.getSimpleConfig).toHaveBeenCalled();
-        expect(mockKodyRulesService.createOrUpdate).toHaveBeenCalledWith(
-            expect.anything(),
-            expect.objectContaining({ status: KodyRulesStatus.ACTIVE }),
-            expect.anything(),
-        );
-        expect(structured.success).toBe(true);
+        expect(structured.success).toBe(false);
+        expect(structured.message).toBe('Team not found.');
+        expect(
+            mockCodeBaseConfigService.getSimpleConfig,
+        ).not.toHaveBeenCalled();
+        expect(mockKodyRulesService.createOrUpdate).not.toHaveBeenCalled();
     });
 });
 
@@ -579,7 +582,7 @@ describe('KodyRulesTools.createMemoryRule and the team check', () => {
         expect(structured.data.uuid).toBe('memory-1');
     });
 
-    it('creates the memory when the team does not resolve', async () => {
+    it('refuses a team that does not resolve before writing', async () => {
         mockTeamService.findOneOrganizationIdByTeamId.mockResolvedValueOnce(
             undefined,
         );
@@ -587,11 +590,14 @@ describe('KodyRulesTools.createMemoryRule and the team check', () => {
         const result = await runCreateMemory();
         const structured = (result as any).structuredContent;
 
-        expect(mockKodyRulesService.createOrUpdateMemory).toHaveBeenCalled();
-        expect(structured.success).toBe(true);
+        expect(structured.success).toBe(false);
+        expect(structured.message).toBe('Team not found.');
+        expect(
+            mockKodyRulesService.createOrUpdateMemory,
+        ).not.toHaveBeenCalled();
     });
 
-    it('refuses a team of another organization before writing', async () => {
+    it('refuses a team of another organization before writing, with a payload the output schema accepts', async () => {
         mockTeamService.findOneOrganizationIdByTeamId.mockResolvedValueOnce(
             'org-2',
         );
@@ -604,5 +610,8 @@ describe('KodyRulesTools.createMemoryRule and the team check', () => {
         expect(
             mockKodyRulesService.createOrUpdateMemory,
         ).not.toHaveBeenCalled();
+        const outputSchema = tools.createMemoryRule()
+            .outputSchema as unknown as z.ZodTypeAny;
+        expect(() => outputSchema.parse(structured)).not.toThrow();
     });
 });

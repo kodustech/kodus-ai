@@ -317,25 +317,22 @@ export class KodyRulesTools {
     }
 
     /**
-     * Whether `teamId` resolves to a team of another organization. The
-     * approval setting is read per team, so a team confirmed to belong to
-     * another tenant must not decide the status of a rule or memory created
-     * here. The callers answer `Team not found.` for it on purpose, the same
-     * wording `KodyRulesTenantGuard` uses on the HTTP side, so the caller
-     * learns nothing about whether the team exists elsewhere.
-     *
-     * Only a positive answer blocks. A team that does not resolve at all
-     * cannot read any setting, so the call goes on and the status falls back
-     * to active, the way the sibling rule and memory creators treat an
-     * unreadable setting. A lookup that throws is not caught here: the tool
-     * wrapper turns it into an error response and nothing is written.
+     * Whether `teamId` fails to resolve to a team of `organizationId`. The
+     * approval setting is read per team, and a missing or unknown team would
+     * read the default config instead of the organization's, so a rule or
+     * memory is only created for a team that resolves to this organization.
+     * Every other case gets `Team not found.`, the wording
+     * `KodyRulesTenantGuard` uses on the HTTP side, on purpose: the caller
+     * learns nothing about whether the team exists elsewhere. A lookup that
+     * throws is not caught here; the tool wrapper turns it into an error
+     * response and nothing is written.
      */
-    private async teamBelongsToAnotherOrganization(
+    private async teamOutsideOrganization(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<boolean> {
         const { organizationId, teamId } = organizationAndTeamData;
-        if (!teamId) {
-            return false;
+        if (!organizationId || !teamId) {
+            return true;
         }
 
         const teamOrganizationId =
@@ -344,11 +341,11 @@ export class KodyRulesTools {
         if (!teamOrganizationId) {
             this.logger.warn({
                 message:
-                    'Team in the MCP call did not resolve; the approval setting cannot be read for it',
+                    'Team in the MCP call did not resolve; refusing to create knowledge without its approval setting',
                 context: KodyRulesTools.name,
                 metadata: { organizationAndTeamData },
             });
-            return false;
+            return true;
         }
 
         return teamOrganizationId !== organizationId;
@@ -492,6 +489,7 @@ export class KodyRulesTools {
                         .describe('Rule inheritance settings'),
                     teamId: z
                         .string()
+                        .min(1)
                         .describe(
                             'Team UUID used to evaluate centralized config and repository mappings for PR-based changes, and whose Kody Knowledge Approval setting decides whether the rule starts active or pending',
                         ),
@@ -539,10 +537,10 @@ export class KodyRulesTools {
                         teamId: args.kodyRule.teamId,
                     };
 
-                    // Blocks only a team confirmed to belong to another
-                    // organization; see teamBelongsToAnotherOrganization.
+                    // Refuses a missing, unknown or foreign team; see
+                    // teamOutsideOrganization.
                     if (
-                        await this.teamBelongsToAnotherOrganization(
+                        await this.teamOutsideOrganization(
                             organizationAndTeamData,
                         )
                     ) {
@@ -1022,6 +1020,7 @@ export class KodyRulesTools {
                 ),
             teamId: z
                 .string()
+                .min(1)
                 .describe(
                     'Team UUID used to resolve repository code-review settings that control generated-memory activation behavior',
                 ),
@@ -1078,10 +1077,10 @@ export class KodyRulesTools {
                 success: z.boolean(),
                 count: z.number(),
                 data: z.looseObject({
-                    uuid: z.string(),
-                    title: z.string(),
-                    rule: z.string(),
-                    status: z.enum(KodyRulesStatus),
+                    uuid: z.string().optional(),
+                    title: z.string().optional(),
+                    rule: z.string().optional(),
+                    status: z.enum(KodyRulesStatus).optional(),
                     action: z.enum(['created', 'updated', 'skipped']),
                     requiresApproval: z.boolean(),
                     message: z.string().optional(),
@@ -1115,10 +1114,10 @@ export class KodyRulesTools {
                         },
                     };
 
-                    // Blocks only a team confirmed to belong to another
-                    // organization; see teamBelongsToAnotherOrganization.
+                    // Refuses a missing, unknown or foreign team; see
+                    // teamOutsideOrganization.
                     if (
-                        await this.teamBelongsToAnotherOrganization(
+                        await this.teamOutsideOrganization(
                             params.organizationAndTeamData,
                         )
                     ) {
