@@ -526,16 +526,28 @@ const CASES = [
     },
     {
         id: 'ollama cloud — the same holds for a Kimi behind the suffix',
-        why: 'The other family that appears with `:cloud`. Kimi takes the toggle and no effort level, and the suffix does not change that either',
+        why: 'The other family that appears with `:cloud`. k2.7-code always thinks and Moonshot has no effort level, so nothing is sent: the toggle would change nothing, and the suffix does not change that either',
         slot: {
             provider: 'openai_compatible',
             model: 'kimi-k2.7-code:cloud',
             baseURL: 'https://ollama.com/v1',
             reasoningEffort: 'high',
         },
+        wire: { hasNot: ['thinking', 'reasoning_effort'] },
+    },
+    {
+        id: 'an always-thinking GLM is not told to think',
+        why: 'GLM-5.3 always thinks, so `thinking: enabled` changes nothing for it, and a strict upstream rejects the field: OpenCode Go served glm-5.3-flash from one that answered `[unknown_parameter] invalid request body: json: unknown field "thinking"` to every call of one org for two hours (2026-09-30). The effort level Z.ai documents still goes out',
+        doc: 'docs.z.ai — thinking mode; sst/opencode provider/transform.ts sends no reasoning options to GLM-5.3',
+        slot: {
+            provider: 'openai_compatible',
+            model: 'glm-5.3-flash',
+            baseURL: 'https://opencode.ai/zen/go/v1',
+            maxConcurrentRequests: 1,
+        },
         wire: {
-            has: { thinking: { type: 'enabled' } },
-            hasNot: ['reasoning_effort'],
+            has: { reasoning_effort: 'high' },
+            hasNot: ['thinking'],
         },
     },
     {
@@ -1198,10 +1210,19 @@ describe('production config shapes — invariants', () => {
             { provider: 'anthropic', model: 'claude-2.1' },
             { provider: 'openai', model: 'gpt-4o' },
             { provider: 'openai', model: 'gpt-4o-mini' },
+            // Kimi k3 and k2.7-code think whatever is sent and Moonshot has no
+            // effort level, so the effort has nothing to reach. The `thinking`
+            // toggle they used to get changed nothing and is not sent.
+            'openai_compatible | accounts/fireworks/models/kimi-k3 | high',
             { provider: 'google_gemini', model: 'gemini-2.0-flash' },
         ];
 
         // ...and then the same question over the WHOLE corpus, so the list above
+            'openai_compatible | k3 | high',
+            'openai_compatible | k3-256k | medium',
+            'openai_compatible | kimi-k2.7-code | high',
+            'openai_compatible | kimi-k2.7-code | medium',
+            'openai_compatible | kimi-k3 | high',
         // is a floor rather than the extent of the check. Every stored model the
         // capability table calls non-reasoning must also arrive clean.
         //
