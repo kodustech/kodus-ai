@@ -45,7 +45,10 @@ const makeService = (persistedJob: Record<string, unknown>) => {
     ) as CodeReviewJobProcessorService;
 
     const notifyReviewFailed = jest.fn().mockResolvedValue(undefined);
-    const handleFailure = jest.fn().mockResolvedValue(undefined);
+    // The real `handleFailure` answers whether the write landed; `true` is the
+    // ordinary outcome (no live worker owns the row), and the branch stops
+    // without notifying when it is false.
+    const handleFailure = jest.fn().mockResolvedValue(true);
 
     Object.assign(service, {
         jobRepository,
@@ -138,5 +141,32 @@ describe('CodeReviewJobProcessorService — reporting an exhausted BYOK slot', (
             metadata: Record<string, any>;
         };
         expect(marker.metadata.byokSlotExhausted.deferredCount).toBe(452);
+    });
+
+    it('leaves the job to the worker that owns it, and says nothing to the author', async () => {
+        // This branch holds no lease, but a redelivery can reach it while
+        // another worker is running the same jobId (the inbox dedupes on
+        // (consumerId, messageId), not jobId, and the reaper republishes with a
+        // fresh messageId). Stamping FAILED there would block that worker's own
+        // completion, drop its review, and send the author a failure notice for
+        // a review that is still running — the #1830 symptom.
+        const { service, notifyReviewFailed, jobRepository, handleFailure } =
+            makeService(jobRow({}));
+        handleFailure.mockResolvedValueOnce(false);
+
+        await run(service);
+
+        expect(handleFailure).toHaveBeenCalledWith(
+            'job-1',
+            expect.anything(),
+            expect.objectContaining({ requireNoLiveOwner: true }),
+        );
+        expect(notifyReviewFailed).not.toHaveBeenCalled();
+        // No "notified" marker either: nothing was notified.
+        expect(
+            jobRepository.update.mock.calls.some(
+                ([, data]) => data?.metadata?.byokSlotExhausted,
+            ),
+        ).toBe(false);
     });
 });
