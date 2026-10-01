@@ -163,6 +163,24 @@ describe('CreateOrUpdateKodyRulesUseCase (centralized pending states)', () => {
         );
     });
 
+    it('persists the context reference id when detection returns one', async () => {
+        const detection = (useCase as any).contextReferenceDetectionService;
+        detection.detectAndSaveReferences.mockResolvedValue('revision-9');
+
+        await (useCase as any).detectAndSaveReferencesAsync(
+            'rule-1',
+            'Follow the conventions in docs/style.md',
+            'repo-1',
+            { organizationId: 'org-1', teamId: 'team-1' },
+        );
+
+        expect(kodyRulesServiceMock.updateRuleReferences).toHaveBeenCalledWith(
+            'org-1',
+            'rule-1',
+            { contextReferenceId: 'revision-9' },
+        );
+    });
+
     it('persists create flow as pending_add when centralized PR mode is active', async () => {
         centralizedConfigPrServiceMock.createMutationPullRequestIfEnabled.mockResolvedValue(
             {
