@@ -32,6 +32,7 @@ import {
 } from '@libs/ai-engine/infrastructure/adapters/services/context/context-reference-detection.service';
 import { deepDifference, deepMerge } from '@libs/common/utils/deep';
 import { convertTiptapJSONToText } from '@libs/common/utils/tiptap-json';
+import { alignPromptOverridesWithParent } from './align-prompt-overrides';
 import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
 import { IntegrationConfigKey, ParametersKey } from '@libs/core/domain/enums';
 import {
@@ -657,8 +658,10 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
     ) {
         const defaultConfig: ConfigDelta = getDefaultKodusConfigFile();
 
-        const sanitizedConfigValue =
-            this.stripCustomMessagesFromConfig(configValue);
+        const sanitizedConfigValue = alignPromptOverridesWithParent(
+            this.stripCustomMessagesFromConfig(configValue),
+            defaultConfig,
+        );
 
         const updatedConfigValue = this.stripCustomMessagesFromConfig(
             deepDifference(defaultConfig, sanitizedConfigValue),
@@ -741,8 +744,10 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             await resolver.getResolvedParentConfig(repositoryId, directoryId),
         );
 
-        const sanitizedIncomingConfig =
-            this.stripCustomMessagesFromConfig(newConfigValue);
+        const sanitizedIncomingConfig = alignPromptOverridesWithParent(
+            this.stripCustomMessagesFromConfig(newConfigValue),
+            parentConfig,
+        );
 
         let oldConfig: ConfigDelta;
         let level: ConfigLevel;
