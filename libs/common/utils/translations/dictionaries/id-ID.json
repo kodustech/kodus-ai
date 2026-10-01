@@ -1,7 +1,8 @@
 {
     "reviewComment": {
         "talkToKody": "Bicaralah dengan Kody dengan menyebut @kody",
-        "feedback": "Apakah saran ini membantu? Beri reaksi dengan 👍 atau 👎 untuk membantu Kody belajar dari interaksi ini."
+        "feedback": "Apakah saran ini membantu? Beri reaksi dengan 👍 atau 👎 untuk membantu Kody belajar dari interaksi ini.",
+        "feedbackReply": "Apakah saran ini membantu? Balas dengan 👍 atau 👎 untuk membantu Kody belajar dari interaksi ini."
     },
     "pullRequestFinishSummaryMarkdown": {
         "withComments": "## Tinjauan Kode Selesai! 🔥\n\nTinjauan kode berhasil diselesaikan berdasarkan konfigurasi Anda saat ini.\n\n",

@@ -1,7 +1,8 @@
 {
     "reviewComment": {
         "talkToKody": "Kody ile @kody'yi mention ederek konuşun",
-        "feedback": "Bu öneri yararlı oldu mu? Kody'nin bu etkileşimden öğrenmesine yardımcı olmak için 👍 veya 👎 ile tepki verin."
+        "feedback": "Bu öneri yararlı oldu mu? Kody'nin bu etkileşimden öğrenmesine yardımcı olmak için 👍 veya 👎 ile tepki verin.",
+        "feedbackReply": "Bu öneri yararlı oldu mu? Kody'nin bu etkileşimden öğrenmesine yardımcı olmak için 👍 veya 👎 ile yanıt verin."
     },
     "pullRequestFinishSummaryMarkdown": {
         "withComments": "## Kod İncelemesi Tamamlandı! 🔥\n\nKod incelemesi, mevcut yapılandırmalarınıza göre başarıyla tamamlandı.\n\n",

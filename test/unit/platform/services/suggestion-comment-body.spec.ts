@@ -14,6 +14,7 @@ jest.mock('@libs/mcp-server/services/mcp-manager.service', () => ({
 const translations = {
     talkToKody: 'Talk to Kody by mentioning @kody',
     feedback: 'Was this suggestion helpful? React with 👍 or 👎',
+    feedbackReply: 'Was this suggestion helpful? Reply with 👍 or 👎',
 };
 
 const lineComment = {
@@ -104,5 +105,19 @@ describe.each([
         expect(body).toContain(
             'PR description has no ticket reference\n\nThe rule requires a ticket ID like ABC-123.',
         );
+    });
+});
+
+describe('Azure Repos feedback footer', () => {
+    it('asks for a reply, since Azure has no 👎 reaction and feedback is counted from replies', () => {
+        const body: string = Object.create(AzureReposService.prototype).formatBodyForAzure(
+            lineComment,
+            { language: 'typescript' },
+            translations,
+            true,
+        );
+
+        expect(body).toContain('Reply with 👍 or 👎');
+        expect(body).not.toContain('React with');
     });
 });

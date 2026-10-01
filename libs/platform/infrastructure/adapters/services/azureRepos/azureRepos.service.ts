@@ -4936,8 +4936,9 @@ export class AzureReposService implements Omit<
             actionStatement,
             copyPrompt,
             this.formatSub(translations.talkToKody),
-            this.formatSub(translations.feedback) +
-                '<!-- kody-codereview -->&#8203;\n&#8203;',
+            this.formatSub(
+                translations.feedbackReply || translations.feedback,
+            ) + '<!-- kody-codereview -->&#8203;\n&#8203;',
             thumbsUpBlock,
             thumbsDownBlock,
         ]
@@ -5340,7 +5341,10 @@ export class AzureReposService implements Omit<
             );
 
             commentBody += this.formatSub(translations.talkToKody) + '\n';
-            commentBody += this.formatSub(translations.feedback) + '\n\n';
+            commentBody +=
+                this.formatSub(
+                    translations.feedbackReply || translations.feedback,
+                ) + '\n\n';
 
             const thumbsUpBlock = `\`\`\`\n👍\n\`\`\`\n`;
             const thumbsDownBlock = `\`\`\`\n👎\n\`\`\`\n`;
