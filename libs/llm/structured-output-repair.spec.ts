@@ -163,6 +163,12 @@ describe('reasoning written before the answer', () => {
         ).toBe(answer);
     });
 
+    it('finds the answer behind an unclosed block that follows a closed one', () => {
+        // Only a block that is the first thing in the response means "no answer";
+        // after a block that did close, the answer may still be there.
+        expect(extractJsonFromText(`<think>x</think><think>y ${answer}`)).toBe(answer);
+    });
+
     it('does not rescan the whole text once per block', () => {
         // Cost grows with the blocks, not with blocks times length: a payload of
         // thousands of blocks must not turn into thousands of full scans.

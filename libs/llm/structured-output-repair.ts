@@ -163,9 +163,10 @@ export function extractJsonFromText(text: string): string | null {
         if (/[{[]/.test(gap)) break;
         const close = s.indexOf('</think>', open);
         if (close < 0) {
-            // A block that never closes and opens the response carries no
-            // answer at all. Mid-text, the scan below may still find one.
-            if (!kept && !gap.trim()) return null;
+            // A block that never closes and is the first thing in the response
+            // carries no answer at all. Anywhere else, including right after a
+            // block that did close, the scan below may still find one.
+            if (pos === 0 && !gap.trim()) return null;
             break;
         }
         kept += gap;
