@@ -35,6 +35,10 @@ import {
     PULL_REQUESTS_SERVICE_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 
+import {
+    IMessageClaimService,
+    MESSAGE_CLAIM_SERVICE_TOKEN,
+} from '@libs/core/workflow/domain/contracts/message-claim.service.contract';
 import { LLM_TASK } from '@libs/llm/byok-config';
 import { llmErrorLogLevel } from '@libs/llm/error-classifier';
 
@@ -72,6 +76,21 @@ const ACKNOWLEDGMENT_MESSAGES = {
         'rules validation has nothing to compare the PR against. Connect ' +
         'one in the Kodus settings to use this command.',
 } as const;
+
+const CONVERSATION_CLAIM_CONSUMER = 'chat-with-kody-from-git';
+
+/**
+ * Returned by a flow that stopped without delivering anything because
+ * something failed (as opposed to deciding to stay quiet), so the comment's
+ * claim is released and a resent webhook can retry it.
+ */
+const RETRY = 'retry' as const;
+type FlowOutcome = typeof RETRY | void;
+
+interface CommentClaim {
+    key: string;
+    holder: string;
+}
 
 const KODY_CONVERSATION_MARKER =
     '<!-- kody-codereview -->\n<!-- kody-conversation -->';
@@ -236,6 +255,11 @@ export class ChatWithKodyFromGitUseCase {
         @Optional()
         @Inject(PULL_REQUESTS_SERVICE_TOKEN)
         private readonly pullRequestsService?: IPullRequestsService,
+
+        // Optional so lean wirings and specs still construct the use case.
+        @Optional()
+        @Inject(MESSAGE_CLAIM_SERVICE_TOKEN)
+        private readonly messageClaimService?: IMessageClaimService,
     ) {}
 
     async execute(params: WebhookParams): Promise<void> {
@@ -245,10 +269,19 @@ export class ChatWithKodyFromGitUseCase {
             metadata: { eventName: params.event },
         });
 
+        let claim: CommentClaim | undefined;
+        let releaseClaim = false;
+
         try {
             if (!this.isRelevantAction(params)) {
                 return;
             }
+
+            const delivery = await this.claimDelivery(params);
+            if (delivery.duplicate) {
+                return;
+            }
+            claim = delivery.claim;
 
             const repository = this.getRepository(params);
             const integrationConfig = await this.getIntegrationConfig(
@@ -279,6 +312,9 @@ export class ChatWithKodyFromGitUseCase {
                         integrationConfig,
                     },
                 });
+                // Nothing was decided about the comment; once the integration
+                // is fixed, resending the webhook must still work.
+                releaseClaim = true;
                 return;
             }
 
@@ -304,9 +340,10 @@ export class ChatWithKodyFromGitUseCase {
 
             this.commandManager = new CommandManager();
             const commandType = this.detectCommandType(params);
+            let outcome: FlowOutcome;
 
             if (commandType === CommandType.BUSINESS_LOGIC_VALIDATION) {
-                await this.handleBusinessLogicFlow(
+                outcome = await this.handleBusinessLogicFlow(
                     params,
                     repository,
                     pullRequestNumber,
@@ -318,7 +355,7 @@ export class ChatWithKodyFromGitUseCase {
             }
 
             if (commandType === CommandType.BUSINESS_LOGIC_INVALID_CONTEXT) {
-                await this.handleBusinessLogicInvalidContextFlow(
+                outcome = await this.handleBusinessLogicInvalidContextFlow(
                     params,
                     repository,
                     pullRequestNumber,
@@ -327,7 +364,7 @@ export class ChatWithKodyFromGitUseCase {
             }
 
             if (commandType === CommandType.CONVERSATION) {
-                await this.handleConversationFlow(
+                outcome = await this.handleConversationFlow(
                     params,
                     repository,
                     pullRequestNumber,
@@ -343,7 +380,7 @@ export class ChatWithKodyFromGitUseCase {
             // an existing thread (#1946). Kody answers only when it started
             // that thread and the reply is directed at it.
             if (commandType === CommandType.UNKNOWN) {
-                await this.handleConversationFlow(
+                outcome = await this.handleConversationFlow(
                     params,
                     repository,
                     pullRequestNumber,
@@ -355,13 +392,104 @@ export class ChatWithKodyFromGitUseCase {
                     true,
                 );
             }
+
+            releaseClaim = outcome === RETRY;
         } catch (error) {
+            releaseClaim = true;
             this.logger.error({
                 message: 'Error while executing the git comment response agent',
                 context: ChatWithKodyFromGitUseCase.name,
                 serviceName: ChatWithKodyFromGitUseCase.name,
                 error,
             });
+        } finally {
+            if (claim) {
+                try {
+                    // A run that failed or decided nothing gives the comment
+                    // back, so resending the webhook from the platform retries.
+                    await (releaseClaim
+                        ? this.messageClaimService.release(
+                              CONVERSATION_CLAIM_CONSUMER,
+                              claim.key,
+                              claim.holder,
+                          )
+                        : this.messageClaimService.complete(
+                              CONVERSATION_CLAIM_CONSUMER,
+                              claim.key,
+                              claim.holder,
+                          ));
+                } catch {
+                    // Left PROCESSING, the claim still expires on its own.
+                }
+            }
+        }
+    }
+
+    /**
+     * One key per comment version: every hook delivers the same id and
+     * update time, while an edit changes the time and is answered again.
+     * The thread is in the key because Azure numbers comments per thread.
+     */
+    private getDeliveryKey(params: WebhookParams): string | undefined {
+        const commentId = this.getCommentId(params);
+        if (!commentId) {
+            return undefined;
+        }
+
+        const payload = params.payload;
+        const version =
+            payload?.comment?.updated_at ??
+            payload?.comment?.updated_on ??
+            payload?.object_attributes?.updated_at ??
+            payload?.resource?.comment?.lastContentUpdatedDate ??
+            '';
+
+        return [
+            params.platformType,
+            this.getRepository(params)?.id,
+            this.getPullRequestNumber(params),
+            this.getThreadIdFromAzurePayload(params) ?? '',
+            commentId,
+            version,
+        ].join(':');
+    }
+
+    /**
+     * Each webhook pointing at Kodus delivers the comment as its own job, so
+     * the first delivery claims it and the rest stop here. When the claim
+     * cannot be made the job answers anyway: a duplicate beats silence.
+     */
+    private async claimDelivery(
+        params: WebhookParams,
+    ): Promise<{ duplicate: boolean; claim?: CommentClaim }> {
+        const key = this.getDeliveryKey(params);
+        if (!key || !this.messageClaimService) {
+            return { duplicate: false };
+        }
+
+        try {
+            const holder = await this.messageClaimService.claim(
+                CONVERSATION_CLAIM_CONSUMER,
+                key,
+            );
+            if (holder) {
+                return { duplicate: false, claim: { key, holder } };
+            }
+
+            this.logger.log({
+                message: 'Comment already claimed by another delivery; skipping',
+                context: ChatWithKodyFromGitUseCase.name,
+                metadata: { deliveryKey: key },
+            });
+            return { duplicate: true };
+        } catch (error) {
+            this.logger.warn({
+                message: 'Could not claim comment delivery; answering anyway',
+                context: ChatWithKodyFromGitUseCase.name,
+                metadata: { deliveryKey: key },
+                error,
+            });
+            return { duplicate: false };
         }
     }
 
@@ -474,7 +602,7 @@ export class ChatWithKodyFromGitUseCase {
         organizationAndTeamData: OrganizationAndTeamData,
         headRef?: string,
         baseRef?: string,
-    ): Promise<void> {
+    ): Promise<FlowOutcome> {
         const sender = this.getSender(params);
         const commentBody =
             params.platformType === PlatformType.GITLAB
@@ -542,7 +670,7 @@ export class ChatWithKodyFromGitUseCase {
                         pullRequestNumber,
                     },
                 });
-                return;
+                return RETRY;
             }
 
             [ackResponseId, parentId] = this.getBusinessLogicAcknowledgmentIds(
@@ -561,7 +689,7 @@ export class ChatWithKodyFromGitUseCase {
                         platformType: params.platformType,
                     },
                 });
-                return;
+                return RETRY;
             }
         }
 
@@ -596,7 +724,7 @@ export class ChatWithKodyFromGitUseCase {
                     pullRequestNumber,
                 },
             });
-            return;
+            return RETRY;
         }
 
         try {
@@ -702,7 +830,7 @@ export class ChatWithKodyFromGitUseCase {
                     pullRequestNumber,
                 },
             });
-            return;
+            return RETRY;
         }
 
         this.logger.log({
@@ -725,7 +853,7 @@ export class ChatWithKodyFromGitUseCase {
         baseRef?: string,
         defaultBranch?: string,
         implicit = false,
-    ): Promise<void> {
+    ): Promise<FlowOutcome> {
         const allComments =
             await this.codeManagementService.getPullRequestReviewComment({
                 organizationAndTeamData,
@@ -772,7 +900,7 @@ export class ChatWithKodyFromGitUseCase {
                   );
 
         if (!comment) {
-            return;
+            return RETRY;
         }
 
         const silenceContext = {
@@ -931,7 +1059,7 @@ export class ChatWithKodyFromGitUseCase {
                         commentId: comment.id,
                     },
                 });
-                return;
+                return RETRY;
             }
 
             [ackResponseId, parentId] = this.getAcknowledgmentIds(
@@ -952,7 +1080,7 @@ export class ChatWithKodyFromGitUseCase {
                         commentId: comment.id,
                     },
                 });
-                return;
+                return RETRY;
             }
         }
 
@@ -1014,7 +1142,7 @@ export class ChatWithKodyFromGitUseCase {
                     commentId: comment.id,
                 },
             });
-            return;
+            return RETRY;
         }
 
         try {
@@ -1110,6 +1238,7 @@ export class ChatWithKodyFromGitUseCase {
                     organizationAndTeamData,
                 },
             });
+            return RETRY;
         }
     }
 
@@ -1118,7 +1247,7 @@ export class ChatWithKodyFromGitUseCase {
         repository: Repository,
         pullRequestNumber: number,
         organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<void> {
+    ): Promise<FlowOutcome> {
         const allComments =
             await this.codeManagementService.getPullRequestReviewComment({
                 organizationAndTeamData,
@@ -1175,7 +1304,7 @@ export class ChatWithKodyFromGitUseCase {
                     organizationAndTeamData,
                 },
             });
-            return;
+            return RETRY;
         }
 
         const response =
@@ -1203,7 +1332,7 @@ export class ChatWithKodyFromGitUseCase {
                     organizationAndTeamData,
                 },
             });
-            return;
+            return RETRY;
         }
 
         this.logger.log({
