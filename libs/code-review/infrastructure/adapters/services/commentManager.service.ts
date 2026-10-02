@@ -2404,6 +2404,7 @@ ${reviewOptions}
         prLevelSuggestions: ISuggestionByPR[],
         language: string,
         suggestionCopyPrompt?: boolean,
+        platformType?: PlatformType,
     ): Promise<{ commentResults: Array<CommentResult> }> {
         try {
             if (!prLevelSuggestions?.length) {
@@ -2454,9 +2455,13 @@ ${reviewOptions}
                     // comment, so webhook consumers can tell them apart. The
                     // inline marker lives in the interaction footer, which is
                     // intentionally omitted here (includeFooter: false), so it
-                    // is appended to the body directly (#2050).
+                    // is appended to the body directly (#2050). Bitbucket
+                    // escapes raw HTML and already injects a visible
+                    // "kody|code-review" chip in the header, so the raw marker
+                    // is skipped there.
                     if (
                         commentBody &&
+                        platformType !== PlatformType.BITBUCKET &&
                         !commentBody.includes('<!-- kody-codereview -->')
                     ) {
                         commentBody = `${commentBody}\n\n<!-- kody-codereview -->\n&#8203;`;

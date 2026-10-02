@@ -1969,4 +1969,27 @@ describe('CommentManagerService.createPrLevelReviewComments carries the kody-cod
         const body = commentResults[0].comment.body;
         expect(body.split('<!-- kody-codereview -->').length - 1).toBe(1);
     });
+
+    it('skips the raw marker on Bitbucket, which escapes it', async () => {
+        // Bitbucket renders raw HTML as visible text, so the raw
+        // `<!-- kody-codereview -->` marker must not be appended there; the
+        // platform already injects a visible "kody|code-review" chip in the
+        // header instead (#2050).
+        const { commentResults } = await service.createPrLevelReviewComments(
+            { organizationId: 'org-1', teamId: 'team-1' } as never,
+            7,
+            { name: 'sample', id: 'repo-id', language: 'typescript' } as never,
+            [suggestion()] as never,
+            'typescript',
+            undefined,
+            PlatformType.BITBUCKET,
+        );
+
+        expect(commentResults[0].comment.body).not.toContain(
+            '<!-- kody-codereview -->',
+        );
+        expect(
+            codeManagementService.createIssueComment.mock.calls[0][0].body,
+        ).not.toContain('<!-- kody-codereview -->');
+    });
 });
