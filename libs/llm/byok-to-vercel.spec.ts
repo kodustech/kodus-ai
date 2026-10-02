@@ -247,6 +247,32 @@ describe('buildModelFromSlot — OpenAI registry routing (resolved slot)', () =>
             expect.objectContaining({ supportsStructuredOutputs: false }),
         );
     });
+
+    it('openai_compatible: a saved Fireworks id the upstream retired runs as its replacement', () => {
+        const result: any = buildModelFromSlot({
+            provider: BYOKProvider.OPENAI_COMPATIBLE,
+            apiKey: 'fw-key',
+            model: 'accounts/fireworks/models/deepseek-v4-flash-0731',
+            baseURL: 'https://api.fireworks.ai/inference/v1',
+        } as NormalizedModel);
+
+        expect(result.modelId).toBe(
+            'accounts/fireworks/models/deepseek-v4p1-flash',
+        );
+    });
+
+    it('openai_compatible: a live id is sent verbatim', () => {
+        const result: any = buildModelFromSlot({
+            provider: BYOKProvider.OPENAI_COMPATIBLE,
+            apiKey: 'fw-key',
+            model: 'accounts/fireworks/models/deepseek-v4p1-flash',
+            baseURL: 'https://api.fireworks.ai/inference/v1',
+        } as NormalizedModel);
+
+        expect(result.modelId).toBe(
+            'accounts/fireworks/models/deepseek-v4p1-flash',
+        );
+    });
 });
 
 // native env/managed default path: a `undefined` slot is the no-BYOK path
