@@ -190,9 +190,12 @@ for (const entry of manifest.prs) {
       if (!shouldIncludeInBenchmarkEvaluation(s)) continue;
       // The judge reads what the finding says: its title and full
       // explanation. BENCHMARK_JUDGE_INPUT=body judges the short comment body
-      // instead, cut at 500 chars, as runs before the title existed did.
+      // instead, cut at 500 chars, as runs before the title existed did;
+      // BENCHMARK_JUDGE_INPUT=shown judges the title and body a reader sees.
       const judgedText = process.env.BENCHMARK_JUDGE_INPUT === 'body'
         ? (s.suggestionContent || '').substring(0, 500)
+        : process.env.BENCHMARK_JUDGE_INPUT === 'shown'
+        ? [s.oneSentenceSummary, s.suggestionContent].filter(Boolean).join('\n\n').substring(0, 600)
         : [s.oneSentenceSummary, s.fullExplanation || s.suggestionContent]
             .filter(Boolean)
             .join('\n\n')
