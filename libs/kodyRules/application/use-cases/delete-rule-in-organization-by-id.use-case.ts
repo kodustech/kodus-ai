@@ -1,5 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 
 import {
     CentralizedConfigPrService,
@@ -59,7 +59,13 @@ export class DeleteRuleInOrganizationByIdKodyRulesUseCase {
                 actor?.organizationId || ru?.organization?.uuid;
             const teamId = actor?.teamId || ru?.team?.uuid || ru?.teamId;
 
-            const existingRule = await this.kodyRulesService.findById(ruleId);
+            const existingRule = await this.kodyRulesService.findById(
+                ruleId,
+                organizationId,
+            );
+            if (!existingRule && requestUser) {
+                throw new NotFoundException('Rule not found');
+            }
 
             // The controller guard is type-level only — it cannot see which
             // repository the rule belongs to. Enforce repo scope here (same

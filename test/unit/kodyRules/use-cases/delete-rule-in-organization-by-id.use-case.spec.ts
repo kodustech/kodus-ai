@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { Test, TestingModule } from '@nestjs/testing';
 
@@ -79,7 +79,9 @@ describe('DeleteRuleInOrganizationByIdKodyRulesUseCase', () => {
                 },
                 {
                     provide: AuthorizationService,
-                    useValue: { ensure: jest.fn().mockResolvedValue(undefined) },
+                    useValue: {
+                        ensure: jest.fn().mockResolvedValue(undefined),
+                    },
                 },
                 {
                     provide: REQUEST,
@@ -95,6 +97,41 @@ describe('DeleteRuleInOrganizationByIdKodyRulesUseCase', () => {
         }).compile();
 
         useCase = module.get(DeleteRuleInOrganizationByIdKodyRulesUseCase);
+    });
+
+    it('rejects a foreign rule before creating a centralized delete PR', async () => {
+        kodyRulesServiceMock.findById.mockImplementation(
+            async (...args: unknown[]) =>
+                args[1] === 'org-1'
+                    ? null
+                    : ({
+                          uuid: 'foreign-rule',
+                          title: 'Private rule',
+                          repositoryId: 'global',
+                          type: KodyRulesType.STANDARD,
+                      } as any),
+        );
+        centralizedConfigPrServiceMock.createMutationPullRequestIfEnabled.mockResolvedValue(
+            { mode: 'centralized-pr' },
+        );
+
+        await expect(
+            useCase.execute(
+                'foreign-rule',
+                {
+                    source: 'web',
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                { uuid: 'owner-1', organization: { uuid: 'org-1' } } as any,
+            ),
+        ).rejects.toBeInstanceOf(NotFoundException);
+        expect(
+            centralizedConfigPrServiceMock.createMutationPullRequestIfEnabled,
+        ).not.toHaveBeenCalled();
+        expect(
+            kodyRulesServiceMock.deleteRuleWithLogging,
+        ).not.toHaveBeenCalled();
     });
 
     it('routes delete through centralized PR when actor provides teamId', async () => {

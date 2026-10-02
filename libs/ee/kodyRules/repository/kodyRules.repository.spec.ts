@@ -1,6 +1,38 @@
 import { KodyRulesRepository } from './kodyRules.repository';
 import { KodyRulesStatus } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
+describe('KodyRulesRepository.findById organization isolation', () => {
+    it('restricts the document match to the requested organization', async () => {
+        const aggregate = jest
+            .fn()
+            .mockReturnValue({ exec: jest.fn().mockResolvedValue([]) });
+        const repo = new KodyRulesRepository({ aggregate } as any, {} as any);
+
+        await expect(
+            repo.findById('foreign-rule', 'org-own'),
+        ).resolves.toBeNull();
+        expect(aggregate.mock.calls[0][0][0]).toEqual({
+            $match: {
+                'organizationId': 'org-own',
+                'rules.uuid': 'foreign-rule',
+            },
+        });
+    });
+
+    it('preserves unscoped lookups for internal callers', async () => {
+        const rule = { uuid: 'rule-own' };
+        const aggregate = jest
+            .fn()
+            .mockReturnValue({ exec: jest.fn().mockResolvedValue([rule]) });
+        const repo = new KodyRulesRepository({ aggregate } as any, {} as any);
+
+        await expect(repo.findById('rule-own')).resolves.toEqual(rule);
+        expect(aggregate.mock.calls[0][0][0]).toEqual({
+            $match: { 'rules.uuid': 'rule-own' },
+        });
+    });
+});
+
 /**
  * Regression coverage for the bulk-cleanup bug: the "Reset integration and
  * remove repositories config" flow used to leave directory-scoped and

@@ -43,9 +43,17 @@ export class KodyRulesRepository implements IKodyRulesRepository {
     //#endregion
 
     //#region Get/Find
-    async findById(uuid: string): Promise<IKodyRule | null> {
+    async findById(
+        uuid: string,
+        organizationId?: string,
+    ): Promise<IKodyRule | null> {
         const pipeline = [
-            { $match: { 'rules.uuid': uuid } },
+            {
+                $match: {
+                    'rules.uuid': uuid,
+                    ...(organizationId ? { organizationId } : {}),
+                },
+            },
             { $unwind: '$rules' },
             { $match: { 'rules.uuid': uuid } },
             { $replaceRoot: { newRoot: '$rules' } },

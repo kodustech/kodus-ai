@@ -1,5 +1,10 @@
 import { createLogger } from '@libs/core/log/logger';
-import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
+import {
+    ForbiddenException,
+    Inject,
+    Injectable,
+    NotFoundException,
+} from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
 import { DeleteUserUseCase } from '@libs/identity/application/use-cases/user/delete.use-case';
@@ -40,7 +45,22 @@ export class DeleteTeamMembersUseCase implements IUseCase {
         uuid: string,
         removeAll: boolean = false,
     ): Promise<string[] | void> {
-        const memberToRemove = await this.teamMembersService.findOne({ uuid });
+        // Scoped to the caller's organization: the route guard only checks
+        // the caller's role, so an unscoped lookup let an owner remove (and,
+        // for a single-team member, delete the user of) a member of any
+        // other organization. A member outside the org answers like a
+        // missing one.
+        const organizationId = this.request.user?.organization?.uuid;
+        const memberToRemove = organizationId
+            ? await this.teamMembersService.findOne({
+                  uuid,
+                  organization: { uuid: organizationId },
+              })
+            : undefined;
+
+        if (!memberToRemove?.user?.uuid) {
+            throw new NotFoundException('Team member not found');
+        }
 
         // A user must not be able to remove their own account: it would
         // orphan the org and, for a single-team user, cascade into
@@ -101,18 +121,18 @@ export class DeleteTeamMembersUseCase implements IUseCase {
     ): Promise<void> {
         try {
             const removedUser = memberToRemove.user as
-                | { uuid?: string; name?: string; email?: string }
-                | undefined;
+                { uuid?: string; name?: string; email?: string } | undefined;
             const organization = memberToRemove.organization as
-                | { uuid?: string; name?: string }
-                | undefined;
+                { uuid?: string; name?: string } | undefined;
             const organizationId =
                 organization?.uuid ?? this.request.user?.organization?.uuid;
 
             if (!organizationId || !removedUser?.email) return;
 
             const removedBy =
-                this.request.user?.email ?? this.request.user?.uuid ?? 'an admin';
+                this.request.user?.email ??
+                this.request.user?.uuid ??
+                'an admin';
             const organizationName =
                 organization?.name ??
                 this.request.user?.organization?.name ??
@@ -148,7 +168,8 @@ export class DeleteTeamMembersUseCase implements IUseCase {
         } catch (error) {
             this.logger.error({
                 message: 'Failed to emit org.member_removed notification',
-                error: error instanceof Error ? error : new Error(String(error)),
+                error:
+                    error instanceof Error ? error : new Error(String(error)),
                 context: DeleteTeamMembersUseCase.name,
             });
         }

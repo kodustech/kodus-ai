@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { Test, TestingModule } from '@nestjs/testing';
 
@@ -60,9 +61,7 @@ describe('CreateOrUpdateKodyRulesUseCase (centralized pending states)', () => {
             createMutationPullRequestIfEnabled: jest.fn(),
             getCentralizedRepositoryIfEnabled: jest.fn(),
             resolveRepositoryFolderName: jest.fn(),
-            resolveDirectoryGroupFolderName: jest
-                .fn()
-                .mockResolvedValue(null),
+            resolveDirectoryGroupFolderName: jest.fn().mockResolvedValue(null),
             buildCentralizedPath: jest.fn(),
             sanitizeFileName: jest.fn(),
             buildRuleFileName: jest.fn(
@@ -128,9 +127,7 @@ describe('CreateOrUpdateKodyRulesUseCase (centralized pending states)', () => {
                 {
                     provide: KODY_RULE_DETECTOR_COMPILER_TOKEN,
                     useValue: {
-                        compileAndSave: jest
-                            .fn()
-                            .mockResolvedValue(undefined),
+                        compileAndSave: jest.fn().mockResolvedValue(undefined),
                     },
                 },
                 {
@@ -148,6 +145,55 @@ describe('CreateOrUpdateKodyRulesUseCase (centralized pending states)', () => {
         }).compile();
 
         useCase = module.get(CreateOrUpdateKodyRulesUseCase);
+    });
+
+    it('rejects a foreign rule before creating a centralized PR', async () => {
+        kodyRulesServiceMock.findById.mockImplementation(
+            async (...args: unknown[]) =>
+                args[1] === 'org-1'
+                    ? null
+                    : ({
+                          uuid: 'foreign-rule',
+                          title: 'Private rule',
+                          rule: 'Private content',
+                          repositoryId: 'foreign-repo',
+                          type: KodyRulesType.STANDARD,
+                          examples: [
+                              {
+                                  snippet: 'private source code',
+                                  isCorrect: true,
+                              },
+                          ],
+                      } as any),
+        );
+        centralizedConfigPrServiceMock.createMutationPullRequestIfEnabled.mockResolvedValue(
+            { mode: 'centralized-pr' },
+        );
+
+        await expect(
+            useCase.execute(
+                {
+                    uuid: 'foreign-rule',
+                    title: 'Requested title',
+                    rule: 'Requested text',
+                    repositoryId: 'repo-1',
+                    type: KodyRulesType.STANDARD,
+                } as any,
+                'org-1',
+                undefined,
+                false,
+                'team-1',
+                {
+                    uuid: 'owner-1',
+                    email: 'owner@example.com',
+                    organization: { uuid: 'org-1' },
+                } as any,
+            ),
+        ).rejects.toBeInstanceOf(NotFoundException);
+        expect(
+            centralizedConfigPrServiceMock.createMutationPullRequestIfEnabled,
+        ).not.toHaveBeenCalled();
+        expect(kodyRulesServiceMock.createOrUpdate).not.toHaveBeenCalled();
     });
 
     // The repository drops undefined fields from its $set, so only an explicit

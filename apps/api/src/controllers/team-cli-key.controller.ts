@@ -39,6 +39,10 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AuditLogEvents } from '@libs/ee/codeReviewSettingsLog/events/audit-log.events';
 import { ActionType } from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
 import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
+import {
+    ITeamService,
+    TEAM_SERVICE_TOKEN,
+} from '@libs/organization/domain/team/contracts/team.service.contract';
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
 import {
     TeamCliKeyCreatedResponseDto,
@@ -64,7 +68,28 @@ export class TeamCliKeyController {
         private readonly request: UserRequest,
         private readonly eventEmitter: EventEmitter2,
         private readonly telemetry: TelemetryService,
+        @Inject(TEAM_SERVICE_TOKEN)
+        private readonly teamService: ITeamService,
     ) {}
+
+    /**
+     * `teamId` comes from the path and the policy only checks the caller's
+     * role, so every route must confirm the team is in the caller's
+     * organization. Without it an owner could mint a key for another
+     * organization's team — and the key authenticates as that team's
+     * organization — or list, edit and revoke its keys.
+     */
+    private async assertTeamInCallerOrganization(teamId: string) {
+        const teamOrganizationId =
+            await this.teamService.findOneOrganizationIdByTeamId(teamId);
+
+        if (
+            !teamOrganizationId ||
+            teamOrganizationId !== this.request.user?.organization?.uuid
+        ) {
+            throw new HttpException('Team not found', HttpStatus.NOT_FOUND);
+        }
+    }
 
     /**
      * Generate a new CLI key for the team
@@ -84,6 +109,8 @@ export class TeamCliKeyController {
         @Param('teamId') teamId: string,
         @Body() body: { name: string; config?: ITeamCliKeyConfig },
     ) {
+        await this.assertTeamInCallerOrganization(teamId);
+
         const userId = this.request.user?.uuid;
 
         if (!userId) {
@@ -148,6 +175,8 @@ export class TeamCliKeyController {
     })
     @ApiOkResponse({ type: TeamCliKeyListResponseDto })
     async listKeys(@Param('teamId') teamId: string) {
+        await this.assertTeamInCallerOrganization(teamId);
+
         const keys = await this.teamCliKeyService.findByTeamId(teamId);
 
         // Don't return the actual key hash, only metadata
@@ -183,6 +212,8 @@ export class TeamCliKeyController {
         @Param('keyId') keyId: string,
         @Body() body: { config?: ITeamCliKeyConfig },
     ) {
+        await this.assertTeamInCallerOrganization(teamId);
+
         const key = await this.teamCliKeyService.findById(keyId);
 
         if (!key || key.team?.uuid !== teamId) {
@@ -241,6 +272,8 @@ export class TeamCliKeyController {
         @Param('teamId') teamId: string,
         @Param('keyId') keyId: string,
     ) {
+        await this.assertTeamInCallerOrganization(teamId);
+
         // Verify key belongs to this team
         const key = await this.teamCliKeyService.findById(keyId);
 
