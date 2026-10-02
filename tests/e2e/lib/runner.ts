@@ -246,10 +246,36 @@ async function applyByokToTenant(
  * local/private http endpoints fail here, loudly, instead of becoming a hidden
  * 400 on the server.
  */
+/** Endpoint paths the provider SDK appends to the base URL itself. */
+const APPENDED_ENDPOINT_PATHS = [
+    '/chat/completions',
+    '/v1/messages',
+    '/messages',
+    '/v1/responses',
+    '/responses',
+    '/completions',
+    '/v1/chat/completions',
+];
+
+/**
+ * Fail fast if the configured BYOK baseURL would be rejected by the server's
+ * save-time SSRF gate. A rejected write is currently only logged as a warning,
+ * so the tenant silently keeps its stale config and the matrix dies later with
+ * "model not available". Public https upstreams (Fireworks, OpenAI, etc.) pass;
+ * local/private http endpoints and doubled endpoint paths fail here, loudly,
+ * instead of becoming a hidden 400 on the server.
+ */
 function assertWritableBaseURL(baseURL: string): void {
+    const raw = baseURL.trim();
+    // The server treats a blank baseURL as "use the provider's default".
+    // Nothing to validate in that case.
+    if (!raw) {
+        return;
+    }
+
     let url: URL;
     try {
-        url = new URL(baseURL);
+        url = new URL(raw);
     } catch {
         throw new Error(`BYOK baseURL is not a valid URL: ${baseURL}`);
     }
@@ -257,6 +283,18 @@ function assertWritableBaseURL(baseURL: string): void {
     if (url.protocol !== 'https:') {
         throw new Error(
             `BYOK baseURL must use https (server SSRF gate rejects ${url.protocol}): ${baseURL}`,
+        );
+    }
+
+    // Reject a base URL that already carries the provider's endpoint path.
+    // The SDK appends it a second time and every LLM call 404s.
+    const pathname = url.pathname.replace(/\/+$/, '');
+    const doubled = APPENDED_ENDPOINT_PATHS.find((p) =>
+        pathname.toLowerCase().endsWith(p),
+    );
+    if (doubled) {
+        throw new Error(
+            `BYOK baseURL must not include the "${doubled}" endpoint — the provider appends it (server hygiene gate): ${baseURL}`,
         );
     }
 
@@ -273,8 +311,8 @@ function assertWritableBaseURL(baseURL: string): void {
         );
     }
 
-    // Reject IPv4 private/reserved/link-local ranges that the server also
-    // refuses for openai_compatible credentials.
+    // Reject IPv4 private/reserved/link-local/CGNAT ranges that the server
+    // also refuses for openai_compatible credentials.
     const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
     if (ipv4) {
         const a = Number(ipv4[1]);
@@ -285,12 +323,20 @@ function assertWritableBaseURL(baseURL: string): void {
             a === 0 ||
             (a === 169 && b === 254) ||
             (a === 172 && b >= 16 && b <= 31) ||
-            (a === 192 && b === 168)
+            (a === 192 && b === 168) ||
+            (a === 100 && b >= 64 && b <= 127)
         ) {
             throw new Error(
                 `BYOK baseURL must not point to a private/reserved IP (server SSRF gate): ${baseURL}`,
             );
         }
+    }
+
+    // Reject IPv6 ULA (fc00::/7) and link-local (fe80::/10).
+    if (/^f[cd][0-9a-f]{2}:/i.test(host) || /^fe[89ab][0-9a-f]:/i.test(host)) {
+        throw new Error(
+            `BYOK baseURL must not point to a private/reserved IPv6 address (server SSRF gate): ${baseURL}`,
+        );
     }
 }
 
@@ -326,9 +372,12 @@ function byokFromEnv(): {
 } {
     const provider = process.env.API_LLM_PROVIDER ?? 'openai';
     const apiKey = process.env.API_OPEN_AI_API_KEY ?? '';
+    // A blank baseURL means "use the provider's default" on the server side.
+    // Normalize it here so the runner always passes an explicit, valid URL to
+    // the tenant and to the startup SSRF/hygiene guard.
     const baseURL =
-        process.env.API_OPENAI_FORCE_BASE_URL ?? 'https://api.openai.com/v1';
-    assertWritableBaseURL(baseURL);
+        process.env.API_OPENAI_FORCE_BASE_URL?.trim() ||
+        'https://api.openai.com/v1';
     const model = process.env.API_LLM_PROVIDER_MODEL ?? 'gpt-5.4-mini';
     return {
         version: 2,
@@ -764,7 +813,16 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
     // dies with `partial_error: Incorrect API key` (observed 2026-07-28,
     // every paid cell red since the 07-24 rotation). Re-apply the CURRENT
     // env key to each registry tenant at run start: one login + one POST per
-    // tenant, idempotent, skipped entirely when the env key is absent.
+    // idempotent, skipped entirely when the env key is absent.
+    //
+    // Fail fast first: if the env-supplied BYOK base URL would be rejected by
+    // the server's SSRF/hygiene gate, abort the whole run here instead of
+    // letting each per-tenant write fail silently and leaving every cell on
+    // stale config.
+    if (!opts.dryRun && process.env.API_OPEN_AI_API_KEY) {
+        assertWritableBaseURL(byokFromEnv().credentials[0]?.settings.baseURL ?? '');
+    }
+
     if (!opts.dryRun && opts.target === 'cloud') {
         await refreshCloudTenantByok(log);
     }
