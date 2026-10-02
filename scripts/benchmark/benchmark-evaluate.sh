@@ -275,7 +275,7 @@ elif [ -z "${ANTHROPIC_API_KEY:-}" ]; then
 else
   echo ""
   echo "▸ Judging with Sonnet (single severity pass)..."
-  echo "  Key: ${ANTHROPIC_API_KEY:0:15}... (len=${#ANTHROPIC_API_KEY})"
+  echo "  Using ANTHROPIC_API_KEY from environment"
 fi
 
 ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}" node "$SCRIPT_DIR/judge-sonnet.js" \
