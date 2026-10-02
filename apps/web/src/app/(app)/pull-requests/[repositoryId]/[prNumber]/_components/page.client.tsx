@@ -20,6 +20,7 @@ import { ErrorBoundary, type FallbackProps } from "react-error-boundary";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 
 import { DiffViewer } from "./diff-viewer";
+import { emptyFindingsLabel, type ReviewRunStatus } from "./review-run-status";
 import { ReviewStateProvider, useReviewStore } from "./review-store";
 import { adaptForTryDiffViewer, buildHeaderPrInfo } from "./try-port/adapt";
 import { CommitsList } from "./try-port/CommitsList";
@@ -59,23 +60,37 @@ function ReviewProgressBar({
     total,
     bugs,
     flags,
+    reviewStatus,
 }: {
     viewed: number;
     total: number;
     bugs: number;
     flags: number;
+    reviewStatus?: ReviewRunStatus;
 }) {
     const pct = total > 0 ? Math.round((100 * viewed) / total) : 0;
     // Mirror the rail buckets exactly so the two summaries always agree:
     // "N potential bugs · M flags · X/Y viewed".
     const clean = bugs + flags === 0;
+    const empty = emptyFindingsLabel(reviewStatus);
+    const emptyColor = {
+        clean: "var(--green)",
+        danger: "var(--color-danger)",
+        warning: "var(--color-warning)",
+        muted: "var(--text-dim)",
+    }[empty.tone];
     return (
         <div className="mt-2 mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-2)]/70 px-4 py-2.5">
             <div className="flex items-center gap-2.5 text-sm">
                 {clean ? (
-                    <span className="inline-flex items-center gap-1.5 font-medium text-[var(--green)]">
-                        <span className="size-1.5 rounded-full bg-[var(--green)]" />
-                        Nothing to flag.
+                    <span
+                        className="inline-flex items-center gap-1.5 font-medium"
+                        style={{ color: emptyColor }}>
+                        <span
+                            className="size-1.5 rounded-full"
+                            style={{ backgroundColor: emptyColor }}
+                        />
+                        {empty.text}
                     </span>
                 ) : (
                     <>
@@ -551,6 +566,9 @@ function ReviewLayout({
                                     total={treeFiles.length}
                                     bugs={bugCount}
                                     flags={flagCount}
+                                    reviewStatus={
+                                        execution?.automationExecution?.status
+                                    }
                                 />
                             )}
 
@@ -587,6 +605,10 @@ function ReviewLayout({
                                         pr={pr}
                                         issues={treeIssues}
                                         isCompleted
+                                        reviewStatus={
+                                            execution?.automationExecution
+                                                ?.status
+                                        }
                                         onJumpToIssue={jumpToIssue}
                                         activeIssueId={activeIssueId}
                                     />
