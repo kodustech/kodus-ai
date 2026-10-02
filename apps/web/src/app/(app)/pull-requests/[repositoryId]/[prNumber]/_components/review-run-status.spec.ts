@@ -8,10 +8,10 @@ describe("emptyFindingsLabel", () => {
         });
     });
 
-    it("keeps the old wording when the run status is unknown", () => {
+    it("claims nothing while the run status is unknown", () => {
         expect(emptyFindingsLabel(undefined)).toEqual({
-            text: "Nothing to flag.",
-            tone: "clean",
+            text: "No findings.",
+            tone: "muted",
         });
     });
 

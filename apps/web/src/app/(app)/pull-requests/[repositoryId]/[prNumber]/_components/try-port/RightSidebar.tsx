@@ -6,8 +6,6 @@ import {
     normalizeSeverity,
 } from "@components/system/issue-severity-level-badge";
 import type { SeverityLevel } from "src/core/types";
-
-import { emptyFindingsLabel, type ReviewRunStatus } from "../review-run-status";
 import type { PrInfo, ReviewIssue } from "./types";
 
 // Explicit tier groups so the implicit "bugs vs flags" sort becomes visible,
@@ -23,15 +21,12 @@ export function RightSidebar({
     pr,
     issues,
     isCompleted,
-    reviewStatus,
     onJumpToIssue,
     activeIssueId,
 }: {
     pr?: PrInfo;
     issues: ReviewIssue[];
     isCompleted: boolean;
-    /** Latest review run; a failed/skipped run is not "Nothing to flag." */
-    reviewStatus?: ReviewRunStatus;
     onJumpToIssue: (issue: ReviewIssue) => void;
     /** Id of the finding whose inline card is open/active — the matching rail
      *  row shows a persistent selected state. */
@@ -74,17 +69,15 @@ export function RightSidebar({
                 <LabelsCard labels={pr.labels} />
             )}
 
-            {isCompleted &&
-                !hasFindings &&
-                emptyFindingsLabel(reviewStatus).tone === "clean" && (
-                    <section
-                        className="rounded-xl border border-[var(--green)]/25 bg-[var(--green)]/[0.05] px-3.5 py-4 text-center"
-                        style={{ boxShadow: "var(--shadow-card)" }}>
-                        <p className="text-review font-medium text-[var(--green)]">
-                            Nothing to flag.
-                        </p>
-                    </section>
-                )}
+            {isCompleted && !hasFindings && (
+                <section
+                    className="rounded-xl border border-[var(--green)]/25 bg-[var(--green)]/[0.05] px-3.5 py-4 text-center"
+                    style={{ boxShadow: "var(--shadow-card)" }}>
+                    <p className="text-review font-medium text-[var(--green)]">
+                        Nothing to flag.
+                    </p>
+                </section>
+            )}
         </aside>
     );
 }

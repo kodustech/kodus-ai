@@ -7,8 +7,8 @@ export type ReviewRunStatus = NonNullable<
 /**
  * What to say when the PR has no findings. "Nothing to flag." is only true
  * when the review actually ran: a failed or skipped run also has zero
- * findings, and must not read as a clean pass. Unknown status (no execution
- * record) keeps the old behaviour.
+ * findings, and must not read as a clean pass. An unknown status (the
+ * executions query still loading, failed, or no record) claims nothing.
  */
 export function emptyFindingsLabel(status?: ReviewRunStatus): {
     text: string;
@@ -27,7 +27,9 @@ export function emptyFindingsLabel(status?: ReviewRunStatus): {
         case "pending":
         case "in_progress":
             return { text: "Review in progress…", tone: "muted" };
-        default:
+        case "success":
             return { text: "Nothing to flag.", tone: "clean" };
+        default:
+            return { text: "No findings.", tone: "muted" };
     }
 }

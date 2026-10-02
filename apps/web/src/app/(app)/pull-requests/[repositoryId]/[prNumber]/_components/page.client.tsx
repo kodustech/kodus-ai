@@ -605,10 +605,6 @@ function ReviewLayout({
                                         pr={pr}
                                         issues={treeIssues}
                                         isCompleted
-                                        reviewStatus={
-                                            execution?.automationExecution
-                                                ?.status
-                                        }
                                         onJumpToIssue={jumpToIssue}
                                         activeIssueId={activeIssueId}
                                     />
