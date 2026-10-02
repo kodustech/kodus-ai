@@ -9,18 +9,26 @@ describe("emptyFindingsLabel", () => {
     });
 
     it("keeps the old wording when the run status is unknown", () => {
-        expect(emptyFindingsLabel(undefined).tone).toBe("clean");
+        expect(emptyFindingsLabel(undefined)).toEqual({
+            text: "Nothing to flag.",
+            tone: "clean",
+        });
     });
 
     it.each([
-        ["error", "danger"],
-        ["partial_error", "warning"],
-        ["skipped", "muted"],
-        ["pending", "muted"],
-        ["in_progress", "muted"],
-    ] as const)("does not read a %s run as a clean pass", (status, tone) => {
-        const label = emptyFindingsLabel(status);
-        expect(label.tone).toBe(tone);
-        expect(label.text).not.toBe("Nothing to flag.");
-    });
+        ["error", "Review failed — nothing to show.", "danger"],
+        [
+            "partial_error",
+            "Review finished with errors — no findings in what it covered.",
+            "warning",
+        ],
+        ["skipped", "Review skipped.", "muted"],
+        ["pending", "Review in progress…", "muted"],
+        ["in_progress", "Review in progress…", "muted"],
+    ] as const)(
+        "does not read a %s run as a clean pass",
+        (status, text, tone) => {
+            expect(emptyFindingsLabel(status)).toEqual({ text, tone });
+        },
+    );
 });
