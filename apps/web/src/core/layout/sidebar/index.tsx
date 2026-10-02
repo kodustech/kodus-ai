@@ -171,28 +171,36 @@ export const AppSidebar = ({
     // Peek: hovering the expand control shows the full rail over the page,
     // without reflowing it, until the pointer leaves the rail. Clicking the
     // control while peeking keeps it open, as before.
-    const [peeking, setPeeking] = useState(false);
+    const [peekOpen, setPeeking] = useState(false);
+    // Only while folded: a peek timer that fires after the rail was opened
+    // must not lay the open rail over the page.
+    const peeking = collapsed && peekOpen;
     const showRail = collapsed && !peeking;
+    const peekTimer = useRef<number | undefined>(undefined);
+    const pointerOnRail = useRef(false);
+    // Escape folds the rail, and the footer's layout changes with it, so the
+    // control can slide back under a resting pointer: the browser reports
+    // that as a fresh hover ~100ms later. Ignore hovers for a short moment
+    // after Escape instead of reopening on that.
+    const peekHoldUntil = useRef(0);
     const toggle = () => {
         const next = !collapsed;
+        // A click within the intent delay (a tap fires hover and click
+        // together) must not leave the timer to peek after the toggle.
+        window.clearTimeout(peekTimer.current);
         setCollapsed(next);
         setPeeking(false);
         document.cookie = `${SIDEBAR_COLLAPSED_COOKIE}=${next ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
     };
 
-    const peekTimer = useRef<number | undefined>(undefined);
-    const pointerOnRail = useRef(false);
-    // Set by Escape until the pointer leaves the control: closing re-renders
-    // the control under a resting pointer, which reads as a fresh hover.
-    const peekDismissed = useRef(false);
     const startPeek = () => {
-        if (!collapsed || isNarrow || peekDismissed.current) return;
+        if (!collapsed || isNarrow || Date.now() < peekHoldUntil.current)
+            return;
         window.clearTimeout(peekTimer.current);
         // A short intent delay, so crossing the button doesn't flash it open.
         peekTimer.current = window.setTimeout(() => setPeeking(true), 150);
     };
     const cancelPeek = () => {
-        peekDismissed.current = false;
         if (!peeking) window.clearTimeout(peekTimer.current);
     };
     const endPeek = () => {
@@ -213,7 +221,7 @@ export const AppSidebar = ({
         if (!peeking) return;
         const onKey = (e: KeyboardEvent) => {
             if (e.key !== "Escape") return;
-            peekDismissed.current = true;
+            peekHoldUntil.current = Date.now() + 600;
             window.clearTimeout(peekTimer.current);
             setPeeking(false);
         };
