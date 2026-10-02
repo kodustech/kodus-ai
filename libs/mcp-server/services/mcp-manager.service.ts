@@ -380,6 +380,7 @@ export class MCPManagerService {
     ): Promise<MCPServerConfig> {
         let headers: Record<string, string> = {};
         let type: string = 'http';
+        let url = connection.mcpUrl;
         if (connection.provider === 'custom') {
             const integration =
                 await this.fetchCustomIntegrationConfig(connection);
@@ -436,13 +437,28 @@ export class MCPManagerService {
             }
         }
 
-        // Only send a Kodus service credential to the configured first-party endpoint.
-        if (
-            connection.integrationId === KODUS_MCP_INTEGRATION_ID &&
-            connection.mcpUrl === process.env.API_KODUS_MCP_SERVER_URL
-        ) {
+        // Stored URLs can predate an endpoint change. Route the first-party
+        // integration to the trusted configuration before attaching credentials.
+        if (connection.integrationId === KODUS_MCP_INTEGRATION_ID) {
             if (connection.organizationId !== callerOrganizationId)
                 throw new Error('Kodus MCP connection organization mismatch');
+            const configuredUrl = process.env.API_KODUS_MCP_SERVER_URL;
+            if (!configuredUrl)
+                throw new Error('Kodus MCP endpoint is missing');
+            let endpoint: URL;
+            try {
+                endpoint = new URL(configuredUrl);
+            } catch {
+                throw new Error('Kodus MCP endpoint is invalid');
+            }
+            if (
+                !['http:', 'https:'].includes(endpoint.protocol) ||
+                endpoint.username ||
+                endpoint.password
+            ) {
+                throw new Error('Kodus MCP endpoint is invalid');
+            }
+            url = endpoint.toString();
             const secret = process.env.API_JWT_SECRET;
             if (!secret) throw new Error('Kodus MCP signing secret is missing');
             headers.Authorization = `Bearer ${this.jwt.sign(
@@ -461,7 +477,7 @@ export class MCPManagerService {
             name: connection.appName,
             provider: connection.provider,
             type: type as TransportType,
-            url: connection.mcpUrl,
+            url,
             headers,
             retries: 1,
             timeout: 60_000,

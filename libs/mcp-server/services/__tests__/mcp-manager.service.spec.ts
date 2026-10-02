@@ -36,12 +36,12 @@ describe('MCPManagerService', () => {
                     provider: 'kodus',
                     status: 'ACTIVE',
                     appName: 'kodus-code-management',
-                    mcpUrl: 'https://api.kodus.io/mcp',
+                    mcpUrl: 'https://legacy.kodus.io/mcp/',
                     allowedTools: ['KODUS_LIST_REPOSITORIES'],
                     metadata: {
                         connection: {
                             id: 'connection-1',
-                            mcpUrl: 'https://api.kodus.io/mcp',
+                            mcpUrl: 'https://legacy.kodus.io/mcp/',
                             status: 'ACTIVE',
                             appName: 'kodus-code-management',
                             authUrl: '',
@@ -251,19 +251,56 @@ describe('Kodus MCP credential destination', () => {
         else process.env.API_JWT_SECRET = previousSecret;
     });
 
-    it('never sends the service credential to another endpoint', async () => {
-        const result = await (service as any).formatConnection(
-            { ...connection, mcpUrl: 'https://other.example/mcp' },
-            'org-1',
-        );
-        expect(result.headers).toEqual({});
-        expect(sign).not.toHaveBeenCalled();
-    });
+    it.each([
+        'https://api.kodus.io/mcp/',
+        'HTTPS://API.KODUS.IO/mcp',
+        'https://legacy.kodus.io/mcp',
+        'https://other.example/mcp',
+    ])(
+        'routes stored URL %s to the configured endpoint before attaching credentials',
+        async (storedUrl) => {
+            const result = await (service as any).formatConnection(
+                { ...connection, mcpUrl: storedUrl },
+                'org-1',
+            );
+            expect(result.url).toBe('https://api.kodus.io/mcp');
+            expect(result.headers).toEqual({
+                Authorization: 'Bearer signed-token',
+            });
+            expect(sign).toHaveBeenCalledWith(
+                { organizationId: 'org-1' },
+                expect.objectContaining({ audience: 'kodus-mcp-server' }),
+            );
+        },
+    );
+
+    it.each([
+        undefined,
+        '',
+        'not-a-url',
+        'file:///tmp/mcp',
+        'https://user:password@api.kodus.io/mcp',
+    ])(
+        'refuses to mint credentials with an invalid configured endpoint (%s)',
+        async (configuredUrl) => {
+            if (configuredUrl === undefined)
+                delete process.env.API_KODUS_MCP_SERVER_URL;
+            else process.env.API_KODUS_MCP_SERVER_URL = configuredUrl;
+            await expect(
+                (service as any).formatConnection(connection, 'org-1'),
+            ).rejects.toThrow('Kodus MCP endpoint');
+            expect(sign).not.toHaveBeenCalled();
+        },
+    );
 
     it('refuses to mint a credential for a foreign organization in connection metadata', async () => {
         await expect(
             (service as any).formatConnection(
-                { ...connection, organizationId: 'victim' },
+                {
+                    ...connection,
+                    organizationId: 'victim',
+                    mcpUrl: 'https://other.example/mcp',
+                },
                 'org-1',
             ),
         ).rejects.toThrow('organization mismatch');
