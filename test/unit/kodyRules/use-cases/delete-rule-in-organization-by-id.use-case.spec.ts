@@ -134,6 +134,49 @@ describe('DeleteRuleInOrganizationByIdKodyRulesUseCase', () => {
         ).not.toHaveBeenCalled();
     });
 
+    it.each([
+        undefined,
+        { source: 'cli' },
+        { source: 'sync', organizationId: '' },
+    ])(
+        'rejects missing organization before any lookup or mutation (%j)',
+        async (actor) => {
+            await expect(
+                useCase.execute('rule-1', actor as any),
+            ).rejects.toBeInstanceOf(NotFoundException);
+            expect(kodyRulesServiceMock.findById).not.toHaveBeenCalled();
+            expect(
+                kodyRulesServiceMock.deleteRuleWithLogging,
+            ).not.toHaveBeenCalled();
+            expect(
+                centralizedConfigPrServiceMock.createMutationPullRequestIfEnabled,
+            ).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each(['cli', 'sync', 'web'] as const)(
+        'rejects a missing or foreign rule for a %s actor without a request user',
+        async (source) => {
+            kodyRulesServiceMock.findById.mockResolvedValue(null);
+            await expect(
+                useCase.execute('foreign-rule', {
+                    source,
+                    organizationId: 'org-1',
+                }),
+            ).rejects.toBeInstanceOf(NotFoundException);
+            expect(kodyRulesServiceMock.findById).toHaveBeenCalledWith(
+                'foreign-rule',
+                'org-1',
+            );
+            expect(
+                kodyRulesServiceMock.deleteRuleWithLogging,
+            ).not.toHaveBeenCalled();
+            expect(
+                centralizedConfigPrServiceMock.createMutationPullRequestIfEnabled,
+            ).not.toHaveBeenCalled();
+        },
+    );
+
     it('routes delete through centralized PR when actor provides teamId', async () => {
         kodyRulesServiceMock.findById.mockResolvedValue({
             uuid: 'rule-1',

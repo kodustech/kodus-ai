@@ -59,11 +59,15 @@ export class DeleteRuleInOrganizationByIdKodyRulesUseCase {
                 actor?.organizationId || ru?.organization?.uuid;
             const teamId = actor?.teamId || ru?.team?.uuid || ru?.teamId;
 
+            if (!organizationId) {
+                throw new NotFoundException('Rule not found');
+            }
+
             const existingRule = await this.kodyRulesService.findById(
                 ruleId,
                 organizationId,
             );
-            if (!existingRule && requestUser) {
+            if (!existingRule) {
                 throw new NotFoundException('Rule not found');
             }
 

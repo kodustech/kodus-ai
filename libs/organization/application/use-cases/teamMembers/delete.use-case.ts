@@ -171,6 +171,11 @@ export class DeleteTeamMembersUseCase implements IUseCase {
                 error:
                     error instanceof Error ? error : new Error(String(error)),
                 context: DeleteTeamMembersUseCase.name,
+                metadata: {
+                    organizationId:
+                        memberToRemove.organization?.uuid ??
+                        this.request.user?.organization?.uuid,
+                },
             });
         }
     }

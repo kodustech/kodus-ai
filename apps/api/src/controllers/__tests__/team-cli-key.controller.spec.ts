@@ -2,6 +2,7 @@ import { HttpStatus } from '@nestjs/common';
 
 import { ITeamCliKeyConfig } from '@libs/organization/domain/team-cli-key/interfaces/team-cli-key.interface';
 
+import { ManageTeamCliKeysUseCase } from '@libs/organization/application/use-cases/team-cli-key/manage.use-case';
 import { TeamCliKeyController } from '../team-cli-key.controller';
 
 describe('TeamCliKeyController', () => {
@@ -69,11 +70,13 @@ describe('TeamCliKeyController', () => {
         };
 
         controller = new TeamCliKeyController(
-            teamCliKeyService as any,
-            request as any,
-            eventEmitter as any,
-            { cliKeyChanged: jest.fn() } as any,
-            teamService as any,
+            new ManageTeamCliKeysUseCase(
+                teamCliKeyService as any,
+                request as any,
+                eventEmitter as any,
+                { cliKeyChanged: jest.fn() } as any,
+                teamService as any,
+            ),
         );
     });
 
