@@ -12,6 +12,7 @@ import {
     useEffect,
     useId,
     useMemo,
+    useRef,
     useState,
     useSyncExternalStore,
 } from "react";
@@ -115,8 +116,28 @@ import { useScopeTools, type ScopeTarget } from "./scope-tools";
  * Folds down to an icon rail (labels move into tooltips) and remembers that
  * in a cookie, so the server renders the chosen width on the first paint.
  */
-const RailContext = createContext(false);
-const useRail = () => useContext(RailContext);
+const RailContext = createContext({ collapsed: false, serverCollapsed: false });
+const unsubscribeNothing = () => undefined;
+const subscribeNever = () => unsubscribeNothing;
+/**
+ * Whether the rail is folded, as this component may render it right now.
+ *
+ * The code review group sits in a Suspense boundary (it reads search params)
+ * that hydrates after the rail. On a phone the rail has already folded by
+ * then, so the group hydrated with a value the server never rendered and
+ * React threw the tree away (#418). While a component hydrates, React reads
+ * the server snapshot below, so it gets what the server rendered; right after,
+ * the real value.
+ */
+const useRail = () => {
+    const { collapsed, serverCollapsed } = useContext(RailContext);
+    const hydrated = useSyncExternalStore(
+        subscribeNever,
+        () => true,
+        () => false,
+    );
+    return hydrated ? collapsed : serverCollapsed;
+};
 
 // Every control in the rail: an instant keyboard ring (never faded in) and a
 // pressed step one surface up. Links drop the DS link's focus underline for it.
@@ -158,8 +179,23 @@ export const AppSidebar = ({
         ResourceType.CodeReviewSettings,
     );
 
+    // The server renders the saved choice only: it cannot know the viewport.
+    const railValue = useMemo(
+        () => ({ collapsed, serverCollapsed: initialCollapsed }),
+        [collapsed, initialCollapsed],
+    );
+
+    // The nav scrolls once the groups are open; keep the current page's item
+    // in view instead of leaving it cut off under the plan panel.
+    const navRef = useRef<HTMLElement>(null);
+    useEffect(() => {
+        navRef.current
+            ?.querySelector<HTMLElement>('a[aria-current="page"]')
+            ?.scrollIntoView({ block: "nearest" });
+    }, [pathname]);
+
     return (
-        <RailContext.Provider value={collapsed}>
+        <RailContext.Provider value={railValue}>
             <aside
                 data-collapsed={collapsed}
                 className={cn(
@@ -203,6 +239,7 @@ export const AppSidebar = ({
                 </div>
 
                 <nav
+                    ref={navRef}
                     aria-label="Main"
                     className={cn(
                         "flex min-h-0 flex-1 [scrollbar-width:thin] flex-col overflow-x-hidden overflow-y-auto pt-1 pb-4",
