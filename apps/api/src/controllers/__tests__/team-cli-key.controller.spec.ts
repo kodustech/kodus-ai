@@ -72,11 +72,11 @@ describe('TeamCliKeyController', () => {
         controller = new TeamCliKeyController(
             new ManageTeamCliKeysUseCase(
                 teamCliKeyService as any,
-                request as any,
                 eventEmitter as any,
                 { cliKeyChanged: jest.fn() } as any,
                 teamService as any,
             ),
+            request as any,
         );
     });
 

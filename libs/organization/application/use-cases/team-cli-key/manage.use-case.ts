@@ -1,5 +1,4 @@
 import { Injectable, Inject, HttpException, HttpStatus } from '@nestjs/common';
-import { REQUEST } from '@nestjs/core';
 
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
 import {
@@ -39,19 +38,17 @@ export class ManageTeamCliKeysUseCase {
     constructor(
         @Inject(TEAM_CLI_KEY_SERVICE_TOKEN)
         private readonly teamCliKeyService: ITeamCliKeyService,
-        @Inject(REQUEST)
-        private readonly request: UserRequest,
         private readonly eventEmitter: EventEmitter2,
         private readonly telemetry: TelemetryService,
         @Inject(TEAM_SERVICE_TOKEN)
         private readonly teamService: ITeamService,
     ) {}
 
-    async execute(input: ManageTeamCliKeysInput) {
-        await this.assertTeamInCallerOrganization(input.teamId);
+    async execute(input: ManageTeamCliKeysInput, actor: UserRequest['user']) {
+        await this.assertTeamInCallerOrganization(input.teamId, actor);
         switch (input.action) {
             case 'generate':
-                return this.generateKey(input.teamId, input.body);
+                return this.generateKey(input.teamId, input.body, actor);
             case 'list':
                 return this.listKeys(input.teamId);
             case 'update':
@@ -61,7 +58,7 @@ export class ManageTeamCliKeysUseCase {
                     input.body,
                 );
             case 'revoke':
-                return this.revokeKey(input.teamId, input.keyId);
+                return this.revokeKey(input.teamId, input.keyId, actor);
         }
     }
 
@@ -72,13 +69,16 @@ export class ManageTeamCliKeysUseCase {
      * organization's team — and the key authenticates as that team's
      * organization — or list, edit and revoke its keys.
      */
-    private async assertTeamInCallerOrganization(teamId: string) {
+    private async assertTeamInCallerOrganization(
+        teamId: string,
+        actor: UserRequest['user'],
+    ) {
         const teamOrganizationId =
             await this.teamService.findOneOrganizationIdByTeamId(teamId);
 
         if (
             !teamOrganizationId ||
-            teamOrganizationId !== this.request.user?.organization?.uuid
+            teamOrganizationId !== actor?.organization?.uuid
         ) {
             throw new HttpException('Team not found', HttpStatus.NOT_FOUND);
         }
@@ -90,8 +90,9 @@ export class ManageTeamCliKeysUseCase {
     private async generateKey(
         teamId: string,
         body: { name: string; config?: ITeamCliKeyConfig },
+        actor: UserRequest['user'],
     ) {
-        const userId = this.request.user?.uuid;
+        const userId = actor?.uuid;
 
         if (!userId) {
             throw new HttpException(
@@ -116,19 +117,19 @@ export class ManageTeamCliKeysUseCase {
 
         this.eventEmitter.emit(AuditLogEvents.CLI_KEY, {
             organizationAndTeamData: {
-                organizationId: this.request.user?.organization?.uuid,
+                organizationId: actor?.organization?.uuid,
                 teamId,
             },
             userInfo: {
-                userId: this.request.user?.uuid,
-                userEmail: this.request.user?.email,
+                userId: actor?.uuid,
+                userEmail: actor?.email,
             },
             actionType: ActionType.CREATE,
             keyName: body.name,
         });
 
         void this.telemetry.cliKeyChanged({
-            organizationId: this.request.user?.organization?.uuid,
+            organizationId: actor?.organization?.uuid,
             teamId,
             actorUserId: userId,
             created: true,
@@ -210,7 +211,11 @@ export class ManageTeamCliKeysUseCase {
     /**
      * Revoke a CLI key
      */
-    private async revokeKey(teamId: string, keyId: string) {
+    private async revokeKey(
+        teamId: string,
+        keyId: string,
+        actor: UserRequest['user'],
+    ) {
         // Verify key belongs to this team
         const key = await this.teamCliKeyService.findById(keyId);
 
@@ -222,21 +227,21 @@ export class ManageTeamCliKeysUseCase {
 
         this.eventEmitter.emit(AuditLogEvents.CLI_KEY, {
             organizationAndTeamData: {
-                organizationId: this.request.user?.organization?.uuid,
+                organizationId: actor?.organization?.uuid,
                 teamId,
             },
             userInfo: {
-                userId: this.request.user?.uuid,
-                userEmail: this.request.user?.email,
+                userId: actor?.uuid,
+                userEmail: actor?.email,
             },
             actionType: ActionType.DELETE,
             keyName: key.name,
         });
 
         void this.telemetry.cliKeyChanged({
-            organizationId: this.request.user?.organization?.uuid,
+            organizationId: actor?.organization?.uuid,
             teamId,
-            actorUserId: this.request.user?.uuid,
+            actorUserId: actor?.uuid,
             created: false,
         });
 

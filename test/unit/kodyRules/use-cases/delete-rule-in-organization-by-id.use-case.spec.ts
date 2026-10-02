@@ -177,6 +177,22 @@ describe('DeleteRuleInOrganizationByIdKodyRulesUseCase', () => {
         },
     );
 
+    it('uses the authenticated organization when an actor claims another organization', async () => {
+        kodyRulesServiceMock.findById.mockResolvedValue(null);
+        await expect(
+            useCase.execute('foreign-rule', { organizationId: 'victim-org' }, {
+                organization: { uuid: 'org-1' },
+            } as any),
+        ).rejects.toBeInstanceOf(NotFoundException);
+        expect(kodyRulesServiceMock.findById).toHaveBeenCalledWith(
+            'foreign-rule',
+            'org-1',
+        );
+        expect(
+            kodyRulesServiceMock.deleteRuleWithLogging,
+        ).not.toHaveBeenCalled();
+    });
+
     it('routes delete through centralized PR when actor provides teamId', async () => {
         kodyRulesServiceMock.findById.mockResolvedValue({
             uuid: 'rule-1',

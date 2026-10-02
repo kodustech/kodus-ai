@@ -1,4 +1,5 @@
 import { MCPServerConfig } from '../mcp-adapter';
+import { KODUS_MCP_TOKEN_AUDIENCE } from '../utils/mcp-auth.constants';
 import { createLogger } from '@libs/core/log/logger';
 import { TransportType } from '../mcp-adapter';
 import { Injectable } from '@nestjs/common';
@@ -213,7 +214,10 @@ export class MCPManagerService {
             if (format) {
                 const results = await Promise.allSettled(
                     limitedData.map((connection) =>
-                        this.formatConnection(connection),
+                        this.formatConnection(
+                            connection,
+                            organizationAndTeamData.organizationId,
+                        ),
                     ),
                 );
 
@@ -372,6 +376,7 @@ export class MCPManagerService {
 
     private async formatConnection(
         connection: MCPItem,
+        callerOrganizationId: string,
     ): Promise<MCPServerConfig> {
         let headers: Record<string, string> = {};
         let type: string = 'http';
@@ -429,6 +434,27 @@ export class MCPManagerService {
             if (config?.headers) {
                 headers = { ...headers, ...config.headers };
             }
+        }
+
+        // Only send a Kodus service credential to the configured first-party endpoint.
+        if (
+            connection.integrationId === KODUS_MCP_INTEGRATION_ID &&
+            connection.mcpUrl === process.env.API_KODUS_MCP_SERVER_URL
+        ) {
+            if (connection.organizationId !== callerOrganizationId)
+                throw new Error('Kodus MCP connection organization mismatch');
+            const secret = process.env.API_JWT_SECRET;
+            if (!secret) throw new Error('Kodus MCP signing secret is missing');
+            headers.Authorization = `Bearer ${this.jwt.sign(
+                { organizationId: callerOrganizationId },
+                {
+                    secret,
+                    algorithm: 'HS256',
+                    expiresIn: '1h',
+                    issuer: KODUS_MCP_TOKEN_AUDIENCE,
+                    audience: KODUS_MCP_TOKEN_AUDIENCE,
+                },
+            )}`;
         }
 
         return {

@@ -1,3 +1,6 @@
+import { JwtModule } from '@nestjs/jwt';
+import { TeamModule } from '@libs/organization/modules/team.module';
+import { DeleteKodyRuleFromMcpUseCase } from './application/use-cases/delete-kody-rule.use-case';
 import { PullRequestsModule } from '@libs/code-review/modules/pull-requests.module';
 import { IssuesModule } from '@libs/issues/issues.module';
 import { KodyRulesModule } from '@libs/kodyRules/modules/kodyRules.module';
@@ -38,6 +41,8 @@ export class McpModule {
 
         if (isEnabled) {
             imports.push(
+                JwtModule,
+                forwardRef(() => TeamModule),
                 forwardRef(() => PlatformModule),
                 forwardRef(() => KodyRulesModule),
                 forwardRef(() => IssuesModule),
@@ -53,6 +58,7 @@ export class McpModule {
                 McpEnabledGuard,
                 CodeManagementTools,
                 KodyRulesTools,
+                DeleteKodyRuleFromMcpUseCase,
                 KodyIssuesTools,
             );
 

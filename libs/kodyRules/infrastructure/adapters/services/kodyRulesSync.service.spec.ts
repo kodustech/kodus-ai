@@ -1238,3 +1238,56 @@ describe('KodyRulesSyncService — deleteRuleBySourcePath / depinRuleBySourcePat
         expect(written.every((d) => d.pinnedSync === false)).toBe(true);
     });
 });
+
+describe('KodyRulesSyncService — stale deletion snapshots', () => {
+    const org = { organizationId: 'org-1', teamId: 'team-1' };
+    const deletion = { execute: jest.fn() };
+    const rules = { findByOrganizationId: jest.fn() };
+    const deps: any[] = new Array(11).fill({});
+    deps[0] = rules;
+    deps[6] = deletion;
+    const service = new (KodyRulesSyncService as any)(...deps);
+
+    beforeEach(() => jest.clearAllMocks());
+
+    it.each(['ide', 'global'])(
+        'continues the %s purge after a concurrent deletion without counting the missing rule',
+        async (kind) => {
+            const { NotFoundException } = await import('@nestjs/common');
+            rules.findByOrganizationId.mockResolvedValue({
+                rules: ['first', 'second'].map((uuid) => ({
+                    uuid,
+                    status: KodyRulesStatus.ACTIVE,
+                    repositoryId: kind === 'ide' ? 'repo-1' : 'global',
+                    sourcePath: '.cursor/rules/test.mdc',
+                    origin: KodyRulesOrigin.GLOBAL_REPO_FILE_SYNC,
+                    sourceRepositoryId: 'repo-1',
+                })),
+            });
+            deletion.execute
+                .mockRejectedValueOnce(new NotFoundException())
+                .mockResolvedValueOnce(true);
+            const result =
+                kind === 'ide'
+                    ? await service.transitionIdeSyncRulesStatus({
+                          organizationAndTeamData: org,
+                          repositoryId: 'repo-1',
+                          targetStatus: KodyRulesStatus.DELETED,
+                      })
+                    : await service.purgeGlobalRulesForSourceRepository({
+                          organizationAndTeamData: org,
+                          sourceRepositoryId: 'repo-1',
+                      });
+            expect(deletion.execute).toHaveBeenCalledTimes(2);
+            expect(result).toBe(1);
+        },
+    );
+
+    it('does not swallow a storage failure as a missing rule', async () => {
+        const error = new Error('storage unavailable');
+        deletion.execute.mockRejectedValueOnce(error);
+        await expect(
+            service.deleteSyncedRuleIfPresent(org, 'rule-1'),
+        ).rejects.toBe(error);
+    });
+});

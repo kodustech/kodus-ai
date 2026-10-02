@@ -56,7 +56,7 @@ export class DeleteRuleInOrganizationByIdKodyRulesUseCase {
         try {
             const ru: any = requestUser;
             const organizationId =
-                actor?.organizationId || ru?.organization?.uuid;
+                ru?.organization?.uuid || actor?.organizationId;
             const teamId = actor?.teamId || ru?.team?.uuid || ru?.teamId;
 
             if (!organizationId) {
@@ -209,8 +209,8 @@ export class DeleteRuleInOrganizationByIdKodyRulesUseCase {
                 error: error,
                 metadata: {
                     organizationId:
-                        actor?.organizationId ||
-                        (requestUser as any)?.organization?.uuid,
+                        (requestUser as any)?.organization?.uuid ||
+                        actor?.organizationId,
                     ruleId,
                 },
             });

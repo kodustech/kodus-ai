@@ -14,7 +14,7 @@ import {
     IKodyRulesService,
     KODY_RULES_SERVICE_TOKEN,
 } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
-import { DeleteRuleInOrganizationByIdKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/delete-rule-in-organization-by-id.use-case';
+import { DeleteKodyRuleFromMcpUseCase } from '../application/use-cases/delete-kody-rule.use-case';
 import {
     FindMemoriesResult,
     IKodyRule,
@@ -131,7 +131,7 @@ export class KodyRulesTools {
         @Inject(KODY_RULES_SERVICE_TOKEN)
         private readonly kodyRulesService: IKodyRulesService,
         private readonly centralizedConfigPrService: CentralizedConfigPrService,
-        private readonly deleteRuleInOrganizationByIdKodyRulesUseCase: DeleteRuleInOrganizationByIdKodyRulesUseCase,
+        private readonly deleteKodyRuleFromMcpUseCase: DeleteKodyRuleFromMcpUseCase,
     ) {}
 
     getKodyRules(): McpToolDefinition {
@@ -865,18 +865,22 @@ export class KodyRulesTools {
                 prUrl: z.string().optional(),
             }),
             execute: wrapToolHandler(
-                async (args: InputType): Promise<DeleteKodyRuleResponse> => {
+                async (
+                    args: InputType,
+                    extra,
+                ): Promise<DeleteKodyRuleResponse> => {
+                    const authorization =
+                        extra?.requestInfo?.headers?.authorization;
                     const result =
-                        await this.deleteRuleInOrganizationByIdKodyRulesUseCase.execute(
-                            args.ruleId,
-                            {
-                                source: 'cli',
-                                organizationId: args.organizationId,
-                                teamId: args.teamId,
-                                userId: 'kody-delete-mcp-tool',
-                                userEmail: 'kody@kodus.io',
-                            },
-                        );
+                        await this.deleteKodyRuleFromMcpUseCase.execute({
+                            ruleId: args.ruleId,
+                            organizationId: args.organizationId,
+                            teamId: args.teamId,
+                            authorization:
+                                typeof authorization === 'string'
+                                    ? authorization
+                                    : undefined,
+                        });
 
                     if (typeof result !== 'boolean') {
                         return {

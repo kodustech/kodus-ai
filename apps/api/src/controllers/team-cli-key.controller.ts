@@ -7,8 +7,11 @@ import {
     Param,
     Body,
     UseGuards,
+    Inject,
 } from '@nestjs/common';
 
+import { REQUEST } from '@nestjs/core';
+import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
 import {
     CheckPolicies,
     PolicyGuard,
@@ -44,6 +47,7 @@ import {
 export class TeamCliKeyController {
     constructor(
         private readonly manageTeamCliKeysUseCase: ManageTeamCliKeysUseCase,
+        @Inject(REQUEST) private readonly request: UserRequest,
     ) {}
 
     @Post()
@@ -61,11 +65,14 @@ export class TeamCliKeyController {
         @Param('teamId') teamId: string,
         @Body() body: { name: string; config?: ITeamCliKeyConfig },
     ) {
-        return this.manageTeamCliKeysUseCase.execute({
-            action: 'generate',
-            teamId,
-            body,
-        });
+        return this.manageTeamCliKeysUseCase.execute(
+            {
+                action: 'generate',
+                teamId,
+                body,
+            },
+            this.request.user,
+        );
     }
 
     @Get()
@@ -80,10 +87,13 @@ export class TeamCliKeyController {
     })
     @ApiOkResponse({ type: TeamCliKeyListResponseDto })
     async listKeys(@Param('teamId') teamId: string) {
-        return this.manageTeamCliKeysUseCase.execute({
-            action: 'list',
-            teamId,
-        });
+        return this.manageTeamCliKeysUseCase.execute(
+            {
+                action: 'list',
+                teamId,
+            },
+            this.request.user,
+        );
     }
 
     @Patch(':keyId/config')
@@ -103,12 +113,15 @@ export class TeamCliKeyController {
         @Param('keyId') keyId: string,
         @Body() body: { config?: ITeamCliKeyConfig },
     ) {
-        return this.manageTeamCliKeysUseCase.execute({
-            action: 'update',
-            teamId,
-            keyId,
-            body,
-        });
+        return this.manageTeamCliKeysUseCase.execute(
+            {
+                action: 'update',
+                teamId,
+                keyId,
+                body,
+            },
+            this.request.user,
+        );
     }
 
     @Delete(':keyId')
@@ -126,10 +139,13 @@ export class TeamCliKeyController {
         @Param('teamId') teamId: string,
         @Param('keyId') keyId: string,
     ) {
-        return this.manageTeamCliKeysUseCase.execute({
-            action: 'revoke',
-            teamId,
-            keyId,
-        });
+        return this.manageTeamCliKeysUseCase.execute(
+            {
+                action: 'revoke',
+                teamId,
+                keyId,
+            },
+            this.request.user,
+        );
     }
 }
