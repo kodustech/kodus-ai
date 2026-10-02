@@ -205,14 +205,19 @@ export const AppSidebar = ({
     };
     const endPeek = () => {
         window.clearTimeout(peekTimer.current);
+        let waitedForMenu = false;
         const close = () => {
             if (pointerOnRail.current) return;
             // A menu opened from the rail (workspace, settings scope) renders
             // in a portal, outside it: wait for it to close first.
             if (document.querySelector("[data-radix-popper-content-wrapper]")) {
+                waitedForMenu = true;
                 peekTimer.current = window.setTimeout(close, 300);
                 return;
             }
+            // The menu just closed under the pointer, and folding can slide
+            // the control under it: hold off that synthetic re-hover.
+            if (waitedForMenu) peekHoldUntil.current = Date.now() + 600;
             setPeeking(false);
         };
         peekTimer.current = window.setTimeout(close, 200);
@@ -222,8 +227,13 @@ export const AppSidebar = ({
         const onKey = (e: KeyboardEvent) => {
             if (e.key !== "Escape") return;
             // A menu opened from the rail (it renders in a portal) is the
-            // top layer: this Escape closes it, not the peek.
-            if (document.querySelector("[data-radix-popper-content-wrapper]"))
+            // top layer: this Escape closes it, not the peek. Tooltips share
+            // the popper wrapper, so only menu-like content counts.
+            if (
+                document.querySelector(
+                    "[data-radix-popper-content-wrapper] :is([role='menu'], [role='listbox'], [role='dialog'])",
+                )
+            )
                 return;
             // Only a pointer already on the rail can be re-hovered by the
             // control moving under it; a hover from the page is genuine.
