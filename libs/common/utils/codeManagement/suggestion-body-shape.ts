@@ -1,34 +1,74 @@
-const NON_TERMINAL_ABBREVIATION = /(?:^|[^\p{L}])(?:e\.g|i\.e|cf|vs)\.$/iu;
+/** Abbreviations that never end a sentence, whatever follows them. */
+const NEVER_TERMINAL =
+    /(?:^|[^\p{L}.])(?:e\.g|i\.e|cf|vs|approx|incl|esp|resp|viz|et al|a\.k\.a|w\.r\.t)\.$/iu;
 
 /**
- * Sentences of a prose body, each with its closing punctuation. A sentence
- * ends at `.`, `!` or `?` followed by the end of the text, or by a space and
- * something other than a lowercase letter ("Use ?? instead", "e.g. this" stay
- * whole); punctuation inside inline code never ends one, and neither does
- * "e.g.", "i.e.", "cf." or "vs.", whatever follows them.
+ * Endings that end a sentence only when what follows is not lower case:
+ * "etc. and", "Wait... then", "1. open the file" and "U.S. users" continue,
+ * "etc. The" starts a new sentence.
+ */
+const TERMINAL_UNLESS_LOWER_CASE_FOLLOWS =
+    /(?:\betc\.|\.\.\.|(?:^|[\s:(])\d{1,3}\.|(?:^|\s)(?:\p{L}\.){2,})$/iu;
+
+/** What a sentence can start with; a dash, arrow or bracket continues the previous one. */
+const SENTENCE_START = /[\p{L}\p{N}`"'\u201c\u2018*_\[#@$~]/u;
+
+/** Characters that may close a sentence after its stop: quotes, brackets, emphasis. */
+const CLOSERS = new Set(['"', "'", '\u201d', '\u2019', ')', ']', '*', '_']);
+
+/** Indexes covered by inline code, from paired backticks; an unmatched one is literal. */
+const inlineCodeIndexes = (text: string): Set<number> => {
+    const ticks: number[] = [];
+    for (let i = 0; i < text.length; i++) if (text[i] === '`') ticks.push(i);
+    const covered = new Set<number>();
+    for (let t = 0; t + 1 < ticks.length; t += 2) {
+        for (let i = ticks[t]; i <= ticks[t + 1]; i++) covered.add(i);
+    }
+    return covered;
+};
+
+/**
+ * Sentences of a prose body, each with its closing punctuation (and any
+ * closing quote, bracket or emphasis right after it). A sentence ends at `.`,
+ * `!` or `?` followed by the end of the text or a space, except:
+ * - inside inline code, or when the punctuation stands alone ("Use ?? here");
+ * - after "e.g.", "i.e.", "cf.", "vs." and similar, whatever follows;
+ * - when what follows cannot start a sentence (a dash, an arrow, a bracket);
+ * - when a lower-case word follows `?`, `!`, a closing quote or bracket
+ *   ("expired? and"), or follows "etc.", an ellipsis, a list number or
+ *   initials.
+ * Otherwise a full stop before a lower-case word does end a sentence, because
+ * a body that fell back to the finder's own text keeps lower-case starts.
  */
 export function splitSentences(body: string): string[] {
     const text = body.replace(/\s+/g, ' ').trim();
+    const code = inlineCodeIndexes(text);
     const sentences: string[] = [];
     let start = 0;
-    let inCode = false;
     for (let i = 0; i < text.length; i++) {
         const ch = text[i];
-        if (ch === '`') {
-            inCode = !inCode;
-            continue;
+        if (code.has(i) || (ch !== '.' && ch !== '!' && ch !== '?')) continue;
+
+        let end = i + 1;
+        while (end < text.length && CLOSERS.has(text[end])) end++;
+        if (end < text.length && text[end] !== ' ') continue;
+
+        const piece = text.slice(start, i + 1);
+        // A bare "??", "!" or "." is an operator being named, not a stop.
+        if (/(?:^|\s)[.!?]+$/.test(piece)) continue;
+        if (NEVER_TERMINAL.test(piece)) continue;
+        const next = text[end + 1] ?? '';
+        if (next && !SENTENCE_START.test(next)) continue;
+        if (/\p{Ll}/u.test(next)) {
+            // Only a plain full stop ends a sentence before a lower-case word:
+            // "expired? and", "'done!' then" and 'said "ok." to' continue.
+            if (ch !== '.' || end > i + 1) continue;
+            if (TERMINAL_UNLESS_LOWER_CASE_FOLLOWS.test(piece)) continue;
         }
-        if (
-            !inCode &&
-            (ch === '.' || ch === '!' || ch === '?') &&
-            (i === text.length - 1 ||
-                (text[i + 1] === ' ' &&
-                    !/\p{Ll}/u.test(text[i + 2] ?? '') &&
-                    !NON_TERMINAL_ABBREVIATION.test(text.slice(start, i + 1))))
-        ) {
-            sentences.push(text.slice(start, i + 1).trim());
-            start = i + 1;
-        }
+
+        sentences.push(text.slice(start, end).trim());
+        start = end;
+        i = end - 1;
     }
     const rest = text.slice(start).trim();
     if (rest) sentences.push(rest);
