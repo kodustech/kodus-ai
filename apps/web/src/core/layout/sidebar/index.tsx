@@ -147,6 +147,10 @@ const CONTROL_STATES =
 // Below a tablet width a 240px rail would take most of the screen, so the
 // sidebar stays an icon rail there whatever the saved preference.
 const NARROW_QUERY = "(max-width: 767px)";
+// A menu opened from the rail renders in a Radix portal. Tooltips share the
+// same popper wrapper, so only menu-like content counts as a layer.
+const RAIL_MENU_SELECTOR =
+    "[data-radix-popper-content-wrapper] :is([role='menu'], [role='listbox'], [role='dialog'])";
 const useIsNarrow = () =>
     useSyncExternalStore(
         (onChange) => {
@@ -211,7 +215,9 @@ export const AppSidebar = ({
             // A menu opened from the rail (workspace, settings scope) renders
             // in a portal, outside it: wait for it to close first.
             if (document.querySelector("[data-radix-popper-content-wrapper]")) {
-                waitedForMenu = true;
+                // A tooltip must not arm the hold below; only a menu can
+                // leave the control under the resting pointer.
+                waitedForMenu ||= !!document.querySelector(RAIL_MENU_SELECTOR);
                 peekTimer.current = window.setTimeout(close, 300);
                 return;
             }
@@ -226,15 +232,9 @@ export const AppSidebar = ({
         if (!peeking) return;
         const onKey = (e: KeyboardEvent) => {
             if (e.key !== "Escape") return;
-            // A menu opened from the rail (it renders in a portal) is the
-            // top layer: this Escape closes it, not the peek. Tooltips share
-            // the popper wrapper, so only menu-like content counts.
-            if (
-                document.querySelector(
-                    "[data-radix-popper-content-wrapper] :is([role='menu'], [role='listbox'], [role='dialog'])",
-                )
-            )
-                return;
+            // A menu opened from the rail is the top layer: this Escape
+            // closes it, not the peek.
+            if (document.querySelector(RAIL_MENU_SELECTOR)) return;
             // Only a pointer already on the rail can be re-hovered by the
             // control moving under it; a hover from the page is genuine.
             if (pointerOnRail.current) peekHoldUntil.current = Date.now() + 600;
