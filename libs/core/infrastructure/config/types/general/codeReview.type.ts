@@ -211,6 +211,8 @@ export type CodeSuggestion = {
      * list, so executeStage renders it after the formatter runs.
      */
     kodyRuleOtherLocations?: string[];
+    /** Merged finding locations, rendered after the content formatter. */
+    alsoFoundIn?: string[];
 
     isCommittable?: boolean;
     validatedData?: {

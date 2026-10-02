@@ -1429,14 +1429,14 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 }
             }
 
-            // Location lists for merged Kody Rule findings (#2015). Runs AFTER
-            // the content formatter, like the rule-link enrichment below and
-            // for the same reason: while this list was appended at dedup time
-            // the formatter rewrote it into prose or dropped it, so the posted
-            // comment named only the kept location. Same rendered form as
-            // before the move.
+            // Render merged locations after formatting so rewrites cannot drop them.
             for (const s of deduped) {
-                const otherLocations = s.kodyRuleOtherLocations;
+                const otherLocations = [
+                    ...new Set([
+                        ...(s.alsoFoundIn || []),
+                        ...(s.kodyRuleOtherLocations || []),
+                    ]),
+                ];
                 if (!otherLocations?.length) {
                     continue;
                 }
@@ -1449,6 +1449,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 // list an agent working from the prompt fixes only the kept
                 // location.
                 s.fullExplanation = `${s.fullExplanation || ''}${otherLocationsSection}`;
+                this.logger.log({
+                    message: '[AGENT] Rendered merged finding locations',
+                    context: this.stageName,
+                    metadata: {
+                        prNumber,
+                        organizationId:
+                            context.organizationAndTeamData?.organizationId,
+                        locationCount: otherLocations.length,
+                        isKodyRule: s.label === 'kody_rules',
+                    },
+                });
             }
 
             // Enrich kody_rules suggestions with markdown links to the rule
@@ -2413,10 +2424,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         }
                         if (locations.length > 0) {
                             const existing = result[existingIdx];
-                            const locList = locations
-                                .map((l) => `- \`${l}\``)
-                                .join('\n');
-                            existing.suggestionContent = `${existing.suggestionContent}\n\n**Also found in:**\n${locList}`;
+                            existing.alsoFoundIn = [
+                                ...new Set([
+                                    ...(existing.alsoFoundIn || []),
+                                    ...locations,
+                                ]),
+                            ];
                         }
                     } else {
                         for (const dupIdx of dupIndices) {
@@ -2497,12 +2510,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     });
                 }
 
-                // Append other locations to the suggestion content
                 if (otherLocations.length > 0) {
-                    const locationsList = otherLocations
-                        .map((loc) => `- \`${loc}\``)
-                        .join('\n');
-                    kept.suggestionContent = `${kept.suggestionContent}\n\n**Also found in:**\n${locationsList}`;
+                    kept.alsoFoundIn = [
+                        ...new Set([
+                            ...(kept.alsoFoundIn || []),
+                            ...otherLocations,
+                        ]),
+                    ];
                 }
 
                 groupSummaries.push({

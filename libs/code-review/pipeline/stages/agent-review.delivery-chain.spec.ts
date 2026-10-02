@@ -376,7 +376,7 @@ describe('delivery chain: a merged Kody Rule comment keeps its other locations (
     });
 
     const formatter = formatSuggestionContent as unknown as jest.Mock;
-    const body = (comment: any) =>
+    const body = (comment: { body?: { suggestionContent?: string } }) =>
         String(comment?.body?.suggestionContent ?? '');
     const countOf = (text: string, needle: string) =>
         text.split(needle).length - 1;
@@ -428,7 +428,9 @@ describe('delivery chain: a merged Kody Rule comment keeps its other locations (
 
         // Ordering the fix establishes: the list is not part of what the
         // formatter sees, so nothing can rewrite it away.
-        const formatterInput = formatter.mock.calls[0][0] as any[];
+        const formatterInput = formatter.mock.calls[0][0] as Array<{
+            suggestionContent?: string;
+        }>;
         expect(formatterInput).toHaveLength(1);
         expect(
             formatterInput.filter((s) =>
@@ -460,4 +462,131 @@ describe('delivery chain: a merged Kody Rule comment keeps its other locations (
         // The prompt copy carries the list in this shape too.
         expect(String(comment.suggestion?.llmPrompt ?? '')).toContain(':27-27');
     });
+});
+
+describe('delivery chain: a merged finding keeps its other locations', () => {
+    const DUP_FILE = 'src/discount.ts';
+    const WHOLE_FILE_PATCH = [
+        '@@ -0,0 +1,29 @@',
+        ...Array.from({ length: 29 }, (_, i) => `+ line ${i + 1}`),
+    ].join('\n');
+
+    // The same bug found twice; lexically close enough for the dedup guard to
+    // honor the LLM's grouping without embeddings.
+    const duplicateFindings = () => [
+        {
+            relevantFile: DUP_FILE,
+            relevantLinesStart: 19,
+            relevantLinesEnd: 19,
+            label: 'bug',
+            severity: 'high',
+            oneSentenceSummary: 'coupon is dereferenced without a null guard',
+            suggestionContent:
+                'WHAT: coupon is dereferenced without a null guard. WHY: findCoupon returns undefined when no coupon matches, so applyCoupon throws. HOW: return the subtotal when coupon is undefined.',
+            existingCode: '',
+            improvedCode: '',
+        },
+        {
+            relevantFile: DUP_FILE,
+            relevantLinesStart: 23,
+            relevantLinesEnd: 23,
+            label: 'bug',
+            severity: 'high',
+            oneSentenceSummary: 'coupon is dereferenced without a null guard',
+            suggestionContent:
+                'WHAT: coupon is dereferenced without a null guard. WHY: findCoupon returns undefined, so applyCoupon throws.',
+            existingCode: '',
+            improvedCode: '',
+        },
+    ];
+
+    const over = () => ({
+        changedFiles: [{ filename: DUP_FILE, patch: WHOLE_FILE_PATCH }],
+        kodyRules: [],
+    });
+
+    const formatter = formatSuggestionContent as unknown as jest.Mock;
+    const body = (comment: { body?: { suggestionContent?: string } }) =>
+        String(comment?.body?.suggestionContent ?? '');
+    const countOf = (text: string, needle: string) =>
+        text.split(needle).length - 1;
+
+    let runSpy: jest.SpyInstance;
+    beforeEach(() => {
+        runSpy = jest.spyOn(LLM, 'run').mockImplementation(
+            async () =>
+                ({
+                    groups: [{ keep: 0, duplicates: [1] }],
+                    unique: [],
+                }) as any,
+        );
+    });
+    afterEach(() => {
+        runSpy.mockRestore();
+        formatter.mockReset();
+        formatter.mockResolvedValue(new Map());
+        jest.clearAllMocks();
+    });
+
+    it.each([
+        {
+            name: 'normal group',
+            groups: [{ keep: 0, duplicates: [1] }],
+            unique: [],
+        },
+        {
+            name: 'keep also listed as unique',
+            groups: [{ keep: 0, duplicates: [1] }],
+            unique: [0],
+        },
+        {
+            name: 'overlapping groups',
+            unique: [],
+            groups: [
+                { keep: 0, duplicates: [] },
+                { keep: 0, duplicates: [1, 1] },
+            ],
+        },
+    ])(
+        'preserves other locations once after formatting ($name)',
+        async ({ groups, unique }) => {
+            runSpy.mockResolvedValue({ groups, unique });
+            // A rewrite of two full sentences: the cap leaves nothing room for an
+            // appended list, which is how the list was lost.
+            formatter.mockResolvedValue(
+                new Map([
+                    [
+                        0,
+                        {
+                            suggestionContent:
+                                'findCoupon returns undefined when nothing matches, so applyCoupon throws. Return the subtotal when coupon is undefined.',
+                        },
+                    ],
+                ]),
+            );
+
+            const { posted } = await runChain(duplicateFindings(), over());
+
+            expect(posted.inline).toHaveLength(1);
+            const [comment] = posted.inline;
+            expect(comment.line).toBe(19);
+
+            expect(body(comment)).toContain('Also found in');
+            expect(body(comment)).toContain(':23-23');
+            expect(countOf(body(comment), 'Also found in')).toBe(1);
+
+            const prompt = String(comment.suggestion?.llmPrompt ?? '');
+            expect(prompt).toContain(':23-23');
+            expect(countOf(prompt, 'Also found in')).toBe(1);
+
+            const formatterInput = formatter.mock.calls[0][0] as Array<{
+                suggestionContent?: string;
+            }>;
+            expect(
+                formatterInput.filter((s) =>
+                    String(s.suggestionContent).includes('Also found in'),
+                ),
+            ).toEqual([]);
+        },
+    );
 });
