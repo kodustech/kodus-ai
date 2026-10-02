@@ -221,6 +221,10 @@ export const AppSidebar = ({
         if (!peeking) return;
         const onKey = (e: KeyboardEvent) => {
             if (e.key !== "Escape") return;
+            // A menu opened from the rail (it renders in a portal) is the
+            // top layer: this Escape closes it, not the peek.
+            if (document.querySelector("[data-radix-popper-content-wrapper]"))
+                return;
             // Only a pointer already on the rail can be re-hovered by the
             // control moving under it; a hover from the page is genuine.
             if (pointerOnRail.current) peekHoldUntil.current = Date.now() + 600;
