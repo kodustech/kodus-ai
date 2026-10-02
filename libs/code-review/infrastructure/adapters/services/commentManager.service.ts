@@ -247,7 +247,8 @@ export class CommentManagerService implements ICommentManagerService {
         // entirely. Worst offenders first; the rest acknowledged as a count.
         const MAX_LISTED_FINDINGS = 25;
         const sorted = [...suggestions].sort(
-            (a, b) => order.indexOf(severityOf(a)) - order.indexOf(severityOf(b)),
+            (a, b) =>
+                order.indexOf(severityOf(a)) - order.indexOf(severityOf(b)),
         );
         const omitted = Math.max(0, sorted.length - MAX_LISTED_FINDINGS);
 
@@ -2434,7 +2435,7 @@ ${reviewOptions}
             for (const suggestion of prLevelSuggestions) {
                 try {
                     // Use standardized formatting method
-                    const commentBody =
+                    let commentBody =
                         await this.codeManagementService.formatReviewCommentBody(
                             {
                                 suggestion,
@@ -2447,6 +2448,19 @@ ${reviewOptions}
                             },
                             undefined,
                         );
+
+                    // PR-level comments carry the same recognition marker as
+                    // inline review comments and the "Code Review Completed"
+                    // comment, so webhook consumers can tell them apart. The
+                    // inline marker lives in the interaction footer, which is
+                    // intentionally omitted here (includeFooter: false), so it
+                    // is appended to the body directly (#2050).
+                    if (
+                        commentBody &&
+                        !commentBody.includes('<!-- kody-codereview -->')
+                    ) {
+                        commentBody = `${commentBody}\n\n<!-- kody-codereview -->\n&#8203;`;
+                    }
 
                     // Create general comment
                     const createdComment =

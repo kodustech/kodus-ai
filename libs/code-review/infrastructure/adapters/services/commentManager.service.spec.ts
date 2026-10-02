@@ -1899,3 +1899,74 @@ describe('CommentManagerService.createReviewCommentWithRetry — line mismatch',
         expect(createReviewComment.mock.calls[2][0].lineComment.line).toBe(5);
     });
 });
+
+describe('CommentManagerService.createPrLevelReviewComments carries the kody-codereview marker (#2050)', () => {
+    let service: CommentManagerService;
+    const codeManagementService = {
+        getPullRequestByNumber: jest.fn(),
+        formatReviewCommentBody: jest.fn(),
+        createIssueComment: jest.fn(),
+    } as any;
+
+    const suggestion = () => ({
+        id: 'uuid-1',
+        oneSentenceSummary: 'PR description must reference a tracking ticket',
+        suggestionContent:
+            '![kody code-review](https://img.shields.io/badge/...)\n' +
+            'PR description must reference a tracking ticket.\n\n' +
+            'Kody rule violation: [PR description must reference a ticket](https://rules/1)',
+    });
+
+    beforeEach(() => {
+        codeManagementService.formatReviewCommentBody.mockReset();
+        codeManagementService.createIssueComment.mockReset();
+        codeManagementService.formatReviewCommentBody.mockResolvedValue(
+            '![badge](https://img.shields.io/badge/...)\n\nrule body',
+        );
+        codeManagementService.createIssueComment.mockResolvedValue({ id: 101 });
+        service = new CommentManagerService(
+            {} as never,
+            {} as never,
+            {} as never,
+            {} as never,
+            codeManagementService,
+        );
+    });
+
+    const call = () =>
+        service.createPrLevelReviewComments(
+            { organizationId: 'org-1', teamId: 'team-1' } as never,
+            7,
+            { name: 'sample', id: 'repo-id', language: 'typescript' } as never,
+            [suggestion()] as never,
+            'typescript',
+        );
+
+    it('appends the marker to a PR-level comment body that lacks it', async () => {
+        const { commentResults } = await call();
+
+        expect(commentResults[0].comment.body).toContain(
+            '<!-- kody-codereview -->',
+        );
+        // The body that is actually posted is the marked one.
+        expect(codeManagementService.createIssueComment).toHaveBeenCalledWith(
+            expect.objectContaining({
+                prNumber: 7,
+                body: expect.stringContaining('<!-- kody-codereview -->'),
+            }),
+            undefined,
+        );
+    });
+
+    it('does not duplicate the marker when the formatted body already carries it', async () => {
+        codeManagementService.formatReviewCommentBody.mockResolvedValue(
+            '![badge](https://img.shields.io/badge/...)\n\nrule body\n\n' +
+                '<!-- kody-codereview -->\n&#8203;',
+        );
+
+        const { commentResults } = await call();
+
+        const body = commentResults[0].comment.body;
+        expect(body.split('<!-- kody-codereview -->').length - 1).toBe(1);
+    });
+});
