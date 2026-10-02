@@ -3,12 +3,15 @@ import {
     knownWritingGuidelines,
     matchKnownWritingGuidelines,
     resolveWritingGuidelines,
+    samePromptText,
 } from './writing-guidelines';
 
 jest.mock('./validateCodeReviewConfigFile', () => ({
     getDefaultKodusConfigFile: () => ({
         v2PromptOverrides: {
-            generation: { main: 'Current default.\n- **Two sentences at most**.' },
+            generation: {
+                main: 'Current default.\n- **Two sentences at most**.',
+            },
         },
     }),
 }));
@@ -24,14 +27,24 @@ const tiptap = (...paragraphs: string[]) =>
 
 describe('isDefaultWritingGuidelines', () => {
     it('recognises the current default however it was serialised', () => {
-        expect(isDefaultWritingGuidelines('Current default.\n- **Two sentences at most**.')).toBe(true);
         expect(
-            isDefaultWritingGuidelines(tiptap('Current default.', 'Two sentences at most.')),
+            isDefaultWritingGuidelines(
+                'Current default.\n- **Two sentences at most**.',
+            ),
+        ).toBe(true);
+        expect(
+            isDefaultWritingGuidelines(
+                tiptap('Current default.', 'Two sentences at most.'),
+            ),
         ).toBe(true);
     });
 
     it('recognises the 2025 default, the 2026-02 default and the onboarding coach preset', () => {
-        expect(isDefaultWritingGuidelines('Detailed and verifiable issue description')).toBe(true);
+        expect(
+            isDefaultWritingGuidelines(
+                'Detailed and verifiable issue description',
+            ),
+        ).toBe(true);
         expect(
             isDefaultWritingGuidelines(
                 tiptap(
@@ -54,21 +67,29 @@ describe('isDefaultWritingGuidelines', () => {
 
     it('treats an edited text as custom', () => {
         expect(
-            isDefaultWritingGuidelines('Detailed and verifiable issue description. Always reply in a friendly tone.'),
+            isDefaultWritingGuidelines(
+                'Detailed and verifiable issue description. Always reply in a friendly tone.',
+            ),
         ).toBe(false);
     });
 });
 
 describe('resolveWritingGuidelines', () => {
     it('replaces any known default with the current default and marks it not custom', () => {
-        expect(resolveWritingGuidelines('Detailed and verifiable issue description')).toEqual({
+        expect(
+            resolveWritingGuidelines(
+                'Detailed and verifiable issue description',
+            ),
+        ).toEqual({
             text: 'Current default.\n- **Two sentences at most**.',
             isCustom: false,
         });
     });
 
     it('keeps a real edit as custom text', () => {
-        expect(resolveWritingGuidelines(tiptap('Write like a senior reviewer.'))).toEqual({
+        expect(
+            resolveWritingGuidelines(tiptap('Write like a senior reviewer.')),
+        ).toEqual({
             text: 'Write like a senior reviewer.',
             isCustom: true,
         });
@@ -84,8 +105,16 @@ describe('resolveWritingGuidelines', () => {
 
 describe('matchKnownWritingGuidelines', () => {
     it('names the shipped text a value matches', () => {
-        expect(matchKnownWritingGuidelines('Detailed and verifiable issue description')).toBe('default-2025');
-        expect(matchKnownWritingGuidelines('Current default.\n- **Two sentences at most**.')).toBe('default-current');
+        expect(
+            matchKnownWritingGuidelines(
+                'Detailed and verifiable issue description',
+            ),
+        ).toBe('default-2025');
+        expect(
+            matchKnownWritingGuidelines(
+                'Current default.\n- **Two sentences at most**.',
+            ),
+        ).toBe('default-current');
         expect(
             matchKnownWritingGuidelines(
                 'Adopt a coaching tone: - Explain briefly the why behind each issue. - Suggest how to validate (tests/checks). - Prefer concise examples. - Avoid nitpicks and group by priority.',
@@ -94,7 +123,11 @@ describe('matchKnownWritingGuidelines', () => {
     });
 
     it('returns null for a real edit or an empty value', () => {
-        expect(matchKnownWritingGuidelines('Detailed and verifiable issue description. Be friendly.')).toBeNull();
+        expect(
+            matchKnownWritingGuidelines(
+                'Detailed and verifiable issue description. Be friendly.',
+            ),
+        ).toBeNull();
         expect(matchKnownWritingGuidelines('')).toBeNull();
         expect(matchKnownWritingGuidelines(undefined)).toBeNull();
     });
@@ -106,5 +139,25 @@ describe('matchKnownWritingGuidelines', () => {
             'default-2026-02',
             'preset-coach',
         ]);
+    });
+});
+
+describe('prompt comparison preserves technical edits', () => {
+    it.each([
+        ['Flag count > 10.', 'Flag count < 10.'],
+        ['Use UserID.', 'Use userId.'],
+        ['Use a_b.', 'Use ab.'],
+        ['Use a * b.', 'Use a b.'],
+        ['Use a**b**c.', 'Use abc.'],
+        ['Use a__b__c.', 'Use abc.'],
+    ])('distinguishes %s from %s', (parent, edited) => {
+        expect(samePromptText(parent, tiptap(edited))).toBe(false);
+    });
+    it('keeps casing edits to shipped defaults custom', () => {
+        expect(
+            resolveWritingGuidelines(
+                'DETAILED AND VERIFIABLE ISSUE DESCRIPTION',
+            ).isCustom,
+        ).toBe(true);
     });
 });

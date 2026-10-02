@@ -114,7 +114,8 @@ afterEach(() => {
     (hasManagedModelKey as jest.Mock).mockReturnValue(false);
 });
 
-const RAW = 'WHAT: The user object can be null when the account was deleted. WHY: Reading name throws and the request fails with a 500. HOW: Guard with optional chaining and return a 404.';
+const RAW =
+    'WHAT: The user object can be null when the account was deleted. WHY: Reading name throws and the request fails with a 500. HOW: Guard with optional chaining and return a 404.';
 const STRIPPED =
     'The user object can be null when the account was deleted. Reading name throws and the request fails with a 500. Guard with optional chaining and return a 404.';
 
@@ -125,7 +126,9 @@ describe('AgentReviewStage — full explanation', () => {
             happyEnvelope([sugg({ suggestionContent: RAW })]),
         );
         (formatSuggestionContent as jest.Mock).mockResolvedValueOnce(
-            new Map([[0, { suggestionContent: 'The user can be null. Guard it.' }]]),
+            new Map([
+                [0, { suggestionContent: 'The user can be null. Guard it.' }],
+            ]),
         );
 
         const [s] = analyzedSuggestions(await run(stage, makeContext()));
@@ -140,7 +143,9 @@ describe('AgentReviewStage — full explanation', () => {
             happyEnvelope([sugg({ suggestionContent: RAW })]),
         );
         (formatSuggestionContent as jest.Mock).mockResolvedValueOnce(
-            new Map([[0, { suggestionContent: 'The user can be null. Guard it.' }]]),
+            new Map([
+                [0, { suggestionContent: 'The user can be null. Guard it.' }],
+            ]),
         );
 
         const [s] = analyzedSuggestions(await run(stage, makeContext()));
@@ -170,5 +175,74 @@ describe('AgentReviewStage — full explanation', () => {
         const result = await run(stage, makeContext());
 
         expect(result.validSuggestionsByPR[0].fullExplanation).toBe(STRIPPED);
+    });
+});
+
+describe('formatter fallback preserves impact and action', () => {
+    it.each(['empty', 'throws'])(
+        '%s formatter preserves WHY and HOW',
+        async (mode) => {
+            const { stage, reviewOrchestrator } = makeStage();
+            reviewOrchestrator.execute.mockResolvedValue(
+                happyEnvelope([sugg({ suggestionContent: RAW })]),
+            );
+            if (mode === 'throws')
+                (formatSuggestionContent as jest.Mock).mockRejectedValueOnce(
+                    new Error('formatter failed'),
+                );
+            else
+                (formatSuggestionContent as jest.Mock).mockResolvedValueOnce(
+                    new Map(),
+                );
+            const [s] = analyzedSuggestions(await run(stage, makeContext()));
+            expect(s.suggestionContent).toBe(
+                'Reading name throws and the request fails with a 500. Guard with optional chaining and return a 404.',
+            );
+            expect(s.fullExplanation).toBe(STRIPPED);
+        },
+    );
+    it('cites the file in agent-facing promoted findings', async () => {
+        const { stage, reviewOrchestrator } = makeStage();
+        reviewOrchestrator.execute.mockResolvedValue(
+            happyEnvelope([
+                sugg({
+                    label: 'kody_rules',
+                    relevantLinesStart: undefined,
+                    relevantLinesEnd: undefined,
+                    existingCode: '',
+                    improvedCode: '',
+                    brokenKodyRulesIds: ['rule-1'],
+                    suggestionContent: RAW,
+                }),
+            ]),
+        );
+        const result = await run(stage, makeContext());
+        expect(result.validSuggestionsByPR[0].fullExplanation).toBe(
+            '`src/user.ts` — ' + STRIPPED,
+        );
+    });
+});
+
+describe('custom guideline fallback', () => {
+    it('keeps the full body for real custom guidelines', async () => {
+        const { stage, reviewOrchestrator } = makeStage();
+        reviewOrchestrator.execute.mockResolvedValue(
+            happyEnvelope([sugg({ suggestionContent: RAW })]),
+        );
+        (formatSuggestionContent as jest.Mock).mockResolvedValueOnce(new Map());
+        const ctx = makeContext();
+        const custom = frozenContext({
+            ...ctx,
+            codeReviewConfig: {
+                ...ctx.codeReviewConfig,
+                v2PromptOverrides: {
+                    generation: {
+                        main: 'Explain all details in three sentences.',
+                    },
+                },
+            },
+        }) as unknown as CodeReviewPipelineContext;
+        const [s] = analyzedSuggestions(await run(stage, custom));
+        expect(s.suggestionContent).toBe(STRIPPED);
     });
 });

@@ -20,7 +20,10 @@ import {
 } from '@libs/code-review/infrastructure/agents/engine/dedup-prompt';
 import { buildPlatformEmbedder } from '@libs/common/utils/document';
 import { resolveSuggestionTitle } from '@libs/common/utils/codeManagement/suggestion-title';
-import { stripReviewScaffolding } from '@libs/code-review/infrastructure/agents/engine/strip-review-scaffolding';
+import {
+    impactAndActionFallback,
+    stripReviewScaffolding,
+} from '@libs/code-review/infrastructure/agents/engine/strip-review-scaffolding';
 import { resolveWritingGuidelines } from '@libs/common/utils/writing-guidelines';
 import { shapeSuggestionBodyWithReport } from '@libs/common/utils/codeManagement/suggestion-body-shape';
 import {
@@ -1280,6 +1283,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             const writingGuidelines =
                 resolveWritingGuidelines(savedGenerationMain);
 
+            const formattedTargets = new Set<(typeof deduped)[number]>();
             // Clean up suggestion text: remove WHAT/WHY/HOW labels, merge into natural prose
             try {
                 const {
@@ -1317,7 +1321,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 );
                 for (const [i, fmt] of formatted) {
                     const target = formatTargets[i];
-                    if (target !== undefined && deduped[target]) {
+                    if (
+                        target !== undefined &&
+                        deduped[target] &&
+                        fmt.suggestionContent?.trim()
+                    ) {
+                        formattedTargets.add(deduped[target]);
                         deduped[target].suggestionContent =
                             fmt.suggestionContent;
                     }
@@ -1342,11 +1351,19 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 removedFences: 0,
                 droppedTitleRepeat: 0,
                 capped: 0,
+                impactActionFallback: 0,
             };
             for (const s of deduped) {
                 if (isAnalyzerSuggestion(s)) continue;
+                const fallback =
+                    !writingGuidelines.isCustom && !formattedTargets.has(s)
+                        ? impactAndActionFallback(s.suggestionContent || '')
+                        : undefined;
+                if (fallback) shapeCounts.impactActionFallback++;
                 const shaped = shapeSuggestionBodyWithReport({
-                    body: stripReviewScaffolding(s.suggestionContent || ''),
+                    body: stripReviewScaffolding(
+                        fallback || s.suggestionContent || '',
+                    ),
                     title: s.oneSentenceSummary,
                     capSentences: !writingGuidelines.isCustom,
                 });
@@ -1513,7 +1530,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // llmPrompt feeds the "Prompt for LLM" block, the consolidated
             // @agentPrompt and validate-suggestions' fixer instruction, so it
             // carries the title and the whole explanation, not the short body.
-            const titleCounts = { fromSummary: 0, fromBody: 0, cut: 0, empty: 0 };
+            const titleCounts = {
+                fromSummary: 0,
+                fromBody: 0,
+                cut: 0,
+                empty: 0,
+            };
             for (const s of deduped) {
                 const hadSummary = !!s.oneSentenceSummary?.trim();
                 s.oneSentenceSummary = resolveSuggestionTitle({
@@ -1724,7 +1746,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                                     : `\`${s.relevantFile}\` — ${s.suggestionContent || ''}`
                                 : s.suggestionContent || '',
                             oneSentenceSummary: s.oneSentenceSummary || '',
-                            fullExplanation: s.fullExplanation,
+                            fullExplanation: s.relevantFile
+                                ? s.relevantLinesStart
+                                    ? `\`${s.relevantFile}:${s.relevantLinesStart}\` — ${s.fullExplanation || s.suggestionContent || ''}`
+                                    : `\`${s.relevantFile}\` — ${s.fullExplanation || s.suggestionContent || ''}`
+                                : s.fullExplanation,
                             label: (s.label as any) || 'kody_rules',
                             severity: this.normalizeSeverity(
                                 s.severity,

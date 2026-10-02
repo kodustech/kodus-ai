@@ -1,5 +1,6 @@
 import {
     looksLikeReviewScaffolding,
+    impactAndActionFallback,
     stripReviewScaffolding,
 } from './strip-review-scaffolding';
 
@@ -41,7 +42,8 @@ describe('stripReviewScaffolding', () => {
     });
 
     it('does not rewrite a label that lives inside a code fence', () => {
-        const src = 'WHAT: the log is wrong\n```ts\nlog("WHY: not a label");\n```';
+        const src =
+            'WHAT: the log is wrong\n```ts\nlog("WHY: not a label");\n```';
 
         expect(stripReviewScaffolding(src)).toContain('WHY: not a label');
     });
@@ -146,9 +148,9 @@ describe('stripReviewScaffolding', () => {
     it('fires on WHAT alone, because HOW is optional by design', () => {
         // The prompt says to omit HOW when the fix is speculative, so a
         // two-part leak is as real as a three-part one.
-        expect(
-            looksLikeReviewScaffolding('WHAT: the ref is undefined'),
-        ).toBe(true);
+        expect(looksLikeReviewScaffolding('WHAT: the ref is undefined')).toBe(
+            true,
+        );
     });
 
     it('does not swallow a code block between labels', () => {
@@ -176,5 +178,34 @@ describe('stripReviewScaffolding', () => {
     it('is safe on empty and undefined-ish input', () => {
         expect(stripReviewScaffolding('')).toBe('');
         expect(looksLikeReviewScaffolding('')).toBe(false);
+    });
+});
+
+describe('impact and action fallback', () => {
+    it.each([
+        'WHAT: Missing guard. WHY: Requests fail. HOW: Add a guard.',
+        '1. WHAT: Missing guard 2. WHY: Requests fail 3. HOW: Add a guard',
+        '**WHAT:** Missing guard.\n**WHY:** Requests fail.\n**HOW:** Add a guard.',
+        'WHAT: Missing guard. WHY: Requests fail. Users retry. HOW: Add a guard. Add tests.',
+    ])('preserves impact and action in %s', (raw) => {
+        expect(impactAndActionFallback(raw)).toBe(
+            'Requests fail. Add a guard.',
+        );
+    });
+    it.each([
+        'Requests fail. Add a guard.',
+        'WHAT: Missing guard. WHY: Requests fail.',
+        'WHAT: Missing guard. WHY: Requests fail. HOW:',
+        'WHAT: Missing guard. WHY: Requests fail. HOW: ```ts\nHOW: source\n```',
+        'WHAT: Missing guard. WHY: Requests fail. WHY: Different impact. HOW: Add a guard.',
+    ])('does not infer an action for %s', (raw) => {
+        expect(impactAndActionFallback(raw)).toBeUndefined();
+    });
+    it('ignores labels in quoted code', () => {
+        expect(
+            impactAndActionFallback(
+                'WHAT: Missing guard.\n```ts\nWHY: source\n```\nWHY: Requests fail. HOW: Add a guard.',
+            ),
+        ).toBe('Requests fail. Add a guard.');
     });
 });

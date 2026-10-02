@@ -27,9 +27,14 @@ const PREVIOUS_DEFAULTS: Array<{ name: string; text: string }> = [
     },
 ];
 
-/** Letters and digits only: markup, bullets and spacing differ between the yml and the editor's JSON. */
+/** Normalize editor presentation while preserving technical punctuation and casing. */
 const fingerprint = (text: string): string =>
-    text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+    text
+        .replace(/^[ \t]{0,3}[-+*][ \t]+/gm, '')
+        .replace(/(?<![\p{L}\p{N}_])\*\*([^\n]+?)\*\*(?![\p{L}\p{N}_])/gu, '$1')
+        .replace(/(?<![\p{L}\p{N}_])__([^\n]+?)__(?![\p{L}\p{N}_])/gu, '$1')
+        .replace(/\s+/g, ' ')
+        .trim();
 
 /** The plain text of a stored prompt value: a string, editor (Tiptap) JSON, or a `{ value }` form wrapper. */
 export const promptText = (value: unknown): string => {
@@ -40,7 +45,7 @@ export const promptText = (value: unknown): string => {
     return convertTiptapJSONToText(value as string | object).trim();
 };
 
-/** True when two prompt values carry the same words, whatever markup or serialisation each uses. */
+/** True when two prompt values carry the same text, whatever presentation markup or serialisation each uses. */
 export function samePromptText(a: unknown, b: unknown): boolean {
     return fingerprint(promptText(a)) === fingerprint(promptText(b));
 }
@@ -58,7 +63,10 @@ export function currentDefaultWritingGuidelines(): string {
 }
 
 /** Every text Kody has shipped as a default or preset, current default first. */
-export function knownWritingGuidelines(): Array<{ name: string; text: string }> {
+export function knownWritingGuidelines(): Array<{
+    name: string;
+    text: string;
+}> {
     return [
         { name: 'default-current', text: currentDefaultWritingGuidelines() },
         ...PREVIOUS_DEFAULTS,
@@ -70,8 +78,9 @@ export function matchKnownWritingGuidelines(value: unknown): string | null {
     const print = fingerprint(promptText(value));
     if (!print) return null;
     return (
-        knownWritingGuidelines().find((known) => fingerprint(known.text) === print)
-            ?.name ?? null
+        knownWritingGuidelines().find(
+            (known) => fingerprint(known.text) === print,
+        )?.name ?? null
     );
 }
 

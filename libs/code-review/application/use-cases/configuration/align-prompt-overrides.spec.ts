@@ -34,8 +34,12 @@ describe('alignPromptOverridesWithParent', () => {
             parent,
         );
 
-        expect(out.v2PromptOverrides.generation.main).toBe('Line one.\nLine two.');
-        expect(out.v2PromptOverrides.categories.descriptions.bug).toBe('Bug text');
+        expect(out.v2PromptOverrides.generation.main).toBe(
+            'Line one.\nLine two.',
+        );
+        expect(out.v2PromptOverrides.categories.descriptions.bug).toBe(
+            'Bug text',
+        );
         expect(out.v2PromptOverrides.severity.flags.critical).toBe('Crit text');
         expect(out.summary).toEqual({ generatePRSummary: false });
     });
@@ -44,7 +48,10 @@ describe('alignPromptOverridesWithParent', () => {
         const editorJson = JSON.stringify({
             type: 'doc',
             content: [
-                { type: 'paragraph', content: [{ type: 'text', text: 'Intro line' }] },
+                {
+                    type: 'paragraph',
+                    content: [{ type: 'text', text: 'Intro line' }],
+                },
                 {
                     type: 'bulletList',
                     content: [
@@ -54,7 +61,11 @@ describe('alignPromptOverridesWithParent', () => {
                                 {
                                     type: 'paragraph',
                                     content: [
-                                        { type: 'text', marks: [{ type: 'bold' }], text: 'Bold part' },
+                                        {
+                                            type: 'text',
+                                            marks: [{ type: 'bold' }],
+                                            text: 'Bold part',
+                                        },
                                         { type: 'text', text: ': rest.' },
                                     ],
                                 },
@@ -65,7 +76,9 @@ describe('alignPromptOverridesWithParent', () => {
             ],
         });
         const markdownParent = {
-            v2PromptOverrides: { generation: { main: 'Intro line\n- **Bold part**: rest.' } },
+            v2PromptOverrides: {
+                generation: { main: 'Intro line\n- **Bold part**: rest.' },
+            },
         };
 
         const out = alignPromptOverridesWithParent(
@@ -91,16 +104,24 @@ describe('alignPromptOverridesWithParent', () => {
     it('leaves configs without prompt overrides untouched', () => {
         const incoming = { summary: { generatePRSummary: true } };
 
-        expect(alignPromptOverridesWithParent(incoming, parent)).toEqual(incoming);
+        expect(alignPromptOverridesWithParent(incoming, parent)).toEqual(
+            incoming,
+        );
     });
 
     it('does not invent a parent value the parent does not have', () => {
         const out = alignPromptOverridesWithParent(
-            { v2PromptOverrides: { categories: { descriptions: { performance: 'Perf' } } } },
+            {
+                v2PromptOverrides: {
+                    categories: { descriptions: { performance: 'Perf' } },
+                },
+            },
             parent,
         );
 
-        expect(out.v2PromptOverrides.categories.descriptions.performance).toBe('Perf');
+        expect(out.v2PromptOverrides.categories.descriptions.performance).toBe(
+            'Perf',
+        );
     });
 });
 
@@ -117,5 +138,20 @@ describe('alignPromptOverridesWithParent — report', () => {
         );
 
         expect(alignedPaths).toEqual(['generation.main']);
+    });
+});
+
+describe('technical prompt edits survive saving', () => {
+    it.each([
+        ['Flag retries when count > 10.', 'Flag retries when count < 10.'],
+        ['Check UserID.', 'Check userId.'],
+    ])('preserves %s edited to %s', (inherited, edited) => {
+        const value = tiptap(edited);
+        const out = alignWithReport(
+            { v2PromptOverrides: { severity: { flags: { high: value } } } },
+            { v2PromptOverrides: { severity: { flags: { high: inherited } } } },
+        );
+        expect(out.config.v2PromptOverrides.severity.flags.high).toBe(value);
+        expect(out.alignedPaths).toEqual([]);
     });
 });
