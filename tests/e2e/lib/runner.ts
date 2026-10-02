@@ -265,7 +265,7 @@ const APPENDED_ENDPOINT_PATHS = [
  * local/private http endpoints and doubled endpoint paths fail here, loudly,
  * instead of becoming a hidden 400 on the server.
  */
-function assertWritableBaseURL(baseURL: string): void {
+function assertWritableBaseURL(provider: string, baseURL: string): void {
     const raw = baseURL.trim();
     // The server treats a blank baseURL as "use the provider's default".
     // Nothing to validate in that case.
@@ -294,7 +294,18 @@ function assertWritableBaseURL(baseURL: string): void {
     );
     if (doubled) {
         throw new Error(
-            `BYOK baseURL must not include the "${doubled}" endpoint — the provider appends it (server hygiene gate): ${baseURL}`,
+            `BYOK baseURL must not include the "${doubled}" endpoint \u2014 the provider appends it (server hygiene gate): ${baseURL}`,
+        );
+    }
+
+    // OpenAI-compatible brand pointed at an Anthropic-protocol endpoint.
+    // The SDK will dial `<...>/anthropic/chat/completions`, which does not exist.
+    if (
+        provider === 'openai_compatible' &&
+        pathname.toLowerCase().endsWith('/anthropic')
+    ) {
+        throw new Error(
+            `BYOK baseURL ends in "/anthropic" but provider is openai_compatible (server protocol-mismatch gate): ${baseURL}`,
         );
     }
 
@@ -333,10 +344,31 @@ function assertWritableBaseURL(baseURL: string): void {
     }
 
     // Reject IPv6 ULA (fc00::/7) and link-local (fe80::/10).
-    if (/^f[cd][0-9a-f]{2}:/i.test(host) || /^fe[89ab][0-9a-f]:/i.test(host)) {
+    // WHATWG URL returns bracketed IPv6 literals from hostname, so strip them.
+    const unbracketed = host.replace(/^\[(.*)\]$/, '$1');
+    if (/^f[cd][0-9a-f]{2}:/i.test(unbracketed) || /^fe[89ab][0-9a-f]:/i.test(unbracketed)) {
         throw new Error(
             `BYOK baseURL must not point to a private/reserved IPv6 address (server SSRF gate): ${baseURL}`,
         );
+    }
+}
+
+/**
+ * Provider-specific default base URL used by the server when the env leaves
+ * `API_OPENAI_FORCE_BASE_URL` blank. Mirror that here so the runner does not
+ * silently point an Anthropic brand at api.openai.com.
+ */
+function defaultBaseURLForProvider(provider: string): string {
+    switch (provider) {
+        case 'anthropic':
+            return 'https://api.anthropic.com';
+        case 'openai':
+        case 'openai_compatible':
+            return 'https://api.openai.com/v1';
+        default:
+            // Gemini and Vertex do not use this setting; keep it blank so the
+            // server applies its own provider default.
+            return '';
     }
 }
 
@@ -373,11 +405,11 @@ function byokFromEnv(): {
     const provider = process.env.API_LLM_PROVIDER ?? 'openai';
     const apiKey = process.env.API_OPEN_AI_API_KEY ?? '';
     // A blank baseURL means "use the provider's default" on the server side.
-    // Normalize it here so the runner always passes an explicit, valid URL to
-    // the tenant and to the startup SSRF/hygiene guard.
+    // Normalize it here to the provider-specific default so the runner always
+    // passes an explicit, valid URL to the tenant and to the startup guard.
     const baseURL =
         process.env.API_OPENAI_FORCE_BASE_URL?.trim() ||
-        'https://api.openai.com/v1';
+        defaultBaseURLForProvider(provider);
     const model = process.env.API_LLM_PROVIDER_MODEL ?? 'gpt-5.4-mini';
     return {
         version: 2,
@@ -820,7 +852,11 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
     // letting each per-tenant write fail silently and leaving every cell on
     // stale config.
     if (!opts.dryRun && process.env.API_OPEN_AI_API_KEY) {
-        assertWritableBaseURL(byokFromEnv().credentials[0]?.settings.baseURL ?? '');
+        const cfg = byokFromEnv();
+        assertWritableBaseURL(
+            cfg.credentials[0]?.provider ?? 'openai_compatible',
+            cfg.credentials[0]?.settings.baseURL ?? '',
+        );
     }
 
     if (!opts.dryRun && opts.target === 'cloud') {
