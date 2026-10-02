@@ -74,6 +74,41 @@ describe('shapeSuggestionBody', () => {
         ).toBe('`config.retries` is ignored in client.ts. Use ?? instead.');
     });
 
+    it('does not end a sentence at e.g. or i.e. before inline code', () => {
+        // Seen on 11 of 112 sent bodies: the cap cut "e.g. `fix`" after the
+        // "e.g.", so the comment ended in a dangling lead-in.
+        expect(
+            shapeSuggestionBody({
+                body: 'A negative offset turns into a 500. Clamp it the same way, e.g. `max(0, cursor.offset)`. Add a test.',
+                title: 'Negative cursor offset is not clamped',
+                capSentences: true,
+            }),
+        ).toBe(
+            'A negative offset turns into a 500. Clamp it the same way, e.g. `max(0, cursor.offset)`.',
+        );
+        expect(
+            shapeSuggestionBody({
+                body: 'The flag is read twice. Read it once, i.e. `const on = isEnabled()`.',
+                title: 'Feature check repeated per request',
+                capSentences: true,
+            }),
+        ).toBe(
+            'The flag is read twice. Read it once, i.e. `const on = isEnabled()`.',
+        );
+    });
+
+    it('does not end a sentence at e.g. before a capital letter or a number', () => {
+        expect(
+            shapeSuggestionBody({
+                body: 'The non-FIPS provider can win the tie. Give the providers distinct orders (e.g. FIPS 300, default 200) or fail loudly.',
+                title: 'Providers share the top order',
+                capSentences: true,
+            }),
+        ).toBe(
+            'The non-FIPS provider can win the tie. Give the providers distinct orders (e.g. FIPS 300, default 200) or fail loudly.',
+        );
+    });
+
     it('returns the original when shaping would leave nothing', () => {
         expect(
             shapeSuggestionBody({

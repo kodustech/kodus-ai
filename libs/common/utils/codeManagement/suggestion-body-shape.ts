@@ -1,8 +1,11 @@
+const NON_TERMINAL_ABBREVIATION = /(?:^|[^\p{L}])(?:e\.g|i\.e|cf|vs)\.$/iu;
+
 /**
  * Sentences of a prose body, each with its closing punctuation. A sentence
  * ends at `.`, `!` or `?` followed by the end of the text, or by a space and
  * something other than a lowercase letter ("Use ?? instead", "e.g. this" stay
- * whole); punctuation inside inline code never ends one.
+ * whole); punctuation inside inline code never ends one, and neither does
+ * "e.g.", "i.e.", "cf." or "vs.", whatever follows them.
  */
 export function splitSentences(body: string): string[] {
     const text = body.replace(/\s+/g, ' ').trim();
@@ -19,7 +22,9 @@ export function splitSentences(body: string): string[] {
             !inCode &&
             (ch === '.' || ch === '!' || ch === '?') &&
             (i === text.length - 1 ||
-                (text[i + 1] === ' ' && !/\p{Ll}/u.test(text[i + 2] ?? '')))
+                (text[i + 1] === ' ' &&
+                    !/\p{Ll}/u.test(text[i + 2] ?? '') &&
+                    !NON_TERMINAL_ABBREVIATION.test(text.slice(start, i + 1))))
         ) {
             sentences.push(text.slice(start, i + 1).trim());
             start = i + 1;
