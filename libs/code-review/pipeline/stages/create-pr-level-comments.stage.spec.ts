@@ -101,7 +101,6 @@ describe('CreatePrLevelCommentsStage — input contract', () => {
             [{ id: 'a' }, { id: 'b' }], // both sources merged
             undefined, // languageResultPrompt (unset in this context)
             undefined, // suggestionCopyPrompt (unset in this context)
-            undefined, // platformType (unset in this context)
         );
     });
 

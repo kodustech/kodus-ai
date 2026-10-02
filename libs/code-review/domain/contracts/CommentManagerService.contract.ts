@@ -114,7 +114,6 @@ export interface ICommentManagerService {
         prLevelSuggestions: ISuggestionByPR[],
         language: string,
         suggestionCopyPrompt?: boolean,
-        platformType?: PlatformType,
     ): Promise<{ commentResults: Array<CommentResult> }>;
 
     findLastReviewComment(

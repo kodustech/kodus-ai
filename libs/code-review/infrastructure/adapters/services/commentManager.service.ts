@@ -2404,7 +2404,6 @@ ${reviewOptions}
         prLevelSuggestions: ISuggestionByPR[],
         language: string,
         suggestionCopyPrompt?: boolean,
-        platformType?: PlatformType,
     ): Promise<{ commentResults: Array<CommentResult> }> {
         try {
             if (!prLevelSuggestions?.length) {
@@ -2430,6 +2429,16 @@ ${reviewOptions}
                     suggestionsCount: prLevelSuggestions.length,
                 },
             });
+
+            // Which platform the PR lives on decides whether the raw marker may
+            // be added: Bitbucket escapes raw HTML, so the comment body skips
+            // it there. Resolved here (from the org/team integration) rather
+            // than threaded per call, mirroring the other Bitbucket-aware
+            // helpers in this file.
+            const platformType =
+                await this.codeManagementService.getTypeIntegration(
+                    organizationAndTeamData,
+                );
 
             const commentResults = [];
 

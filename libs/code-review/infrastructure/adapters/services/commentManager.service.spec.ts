@@ -1906,6 +1906,7 @@ describe('CommentManagerService.createPrLevelReviewComments carries the kody-cod
         getPullRequestByNumber: jest.fn(),
         formatReviewCommentBody: jest.fn(),
         createIssueComment: jest.fn(),
+        getTypeIntegration: jest.fn(),
     } as any;
 
     const suggestion = () => ({
@@ -1920,10 +1921,13 @@ describe('CommentManagerService.createPrLevelReviewComments carries the kody-cod
     beforeEach(() => {
         codeManagementService.formatReviewCommentBody.mockReset();
         codeManagementService.createIssueComment.mockReset();
+        codeManagementService.getTypeIntegration.mockReset();
         codeManagementService.formatReviewCommentBody.mockResolvedValue(
             '![badge](https://img.shields.io/badge/...)\n\nrule body',
         );
         codeManagementService.createIssueComment.mockResolvedValue({ id: 101 });
+        // Non-Bitbucket by default: the raw marker is appended.
+        codeManagementService.getTypeIntegration.mockResolvedValue(undefined);
         service = new CommentManagerService(
             {} as never,
             {} as never,
@@ -1975,15 +1979,11 @@ describe('CommentManagerService.createPrLevelReviewComments carries the kody-cod
         // `<!-- kody-codereview -->` marker must not be appended there; the
         // platform already injects a visible "kody|code-review" chip in the
         // header instead (#2050).
-        const { commentResults } = await service.createPrLevelReviewComments(
-            { organizationId: 'org-1', teamId: 'team-1' } as never,
-            7,
-            { name: 'sample', id: 'repo-id', language: 'typescript' } as never,
-            [suggestion()] as never,
-            'typescript',
-            undefined,
+        codeManagementService.getTypeIntegration.mockResolvedValue(
             PlatformType.BITBUCKET,
         );
+
+        const { commentResults } = await call();
 
         expect(commentResults[0].comment.body).not.toContain(
             '<!-- kody-codereview -->',
@@ -1991,5 +1991,17 @@ describe('CommentManagerService.createPrLevelReviewComments carries the kody-cod
         expect(
             codeManagementService.createIssueComment.mock.calls[0][0].body,
         ).not.toContain('<!-- kody-codereview -->');
+    });
+
+    it('keeps the marker on another platform', async () => {
+        codeManagementService.getTypeIntegration.mockResolvedValue(
+            PlatformType.GITHUB,
+        );
+
+        const { commentResults } = await call();
+
+        expect(commentResults[0].comment.body).toContain(
+            '<!-- kody-codereview -->',
+        );
     });
 });
