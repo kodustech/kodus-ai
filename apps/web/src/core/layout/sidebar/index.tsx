@@ -168,11 +168,59 @@ export const AppSidebar = ({
     const [collapsedByChoice, setCollapsed] = useState(initialCollapsed);
     const isNarrow = useIsNarrow();
     const collapsed = collapsedByChoice || isNarrow;
+    // Peek: hovering the expand control shows the full rail over the page,
+    // without reflowing it, until the pointer leaves the rail. Clicking the
+    // control while peeking keeps it open, as before.
+    const [peeking, setPeeking] = useState(false);
+    const showRail = collapsed && !peeking;
     const toggle = () => {
         const next = !collapsed;
         setCollapsed(next);
+        setPeeking(false);
         document.cookie = `${SIDEBAR_COLLAPSED_COOKIE}=${next ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
     };
+
+    const peekTimer = useRef<number | undefined>(undefined);
+    const pointerOnRail = useRef(false);
+    // Set by Escape until the pointer leaves the control: closing re-renders
+    // the control under a resting pointer, which reads as a fresh hover.
+    const peekDismissed = useRef(false);
+    const startPeek = () => {
+        if (!collapsed || isNarrow || peekDismissed.current) return;
+        window.clearTimeout(peekTimer.current);
+        // A short intent delay, so crossing the button doesn't flash it open.
+        peekTimer.current = window.setTimeout(() => setPeeking(true), 150);
+    };
+    const cancelPeek = () => {
+        peekDismissed.current = false;
+        if (!peeking) window.clearTimeout(peekTimer.current);
+    };
+    const endPeek = () => {
+        window.clearTimeout(peekTimer.current);
+        const close = () => {
+            if (pointerOnRail.current) return;
+            // A menu opened from the rail (workspace, settings scope) renders
+            // in a portal, outside it: wait for it to close first.
+            if (document.querySelector("[data-radix-popper-content-wrapper]")) {
+                peekTimer.current = window.setTimeout(close, 300);
+                return;
+            }
+            setPeeking(false);
+        };
+        peekTimer.current = window.setTimeout(close, 200);
+    };
+    useEffect(() => {
+        if (!peeking) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key !== "Escape") return;
+            peekDismissed.current = true;
+            window.clearTimeout(peekTimer.current);
+            setPeeking(false);
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [peeking]);
+    useEffect(() => () => window.clearTimeout(peekTimer.current), []);
 
     const canReadCodeReviewSettings = usePermission(
         Action.Read,
@@ -181,8 +229,8 @@ export const AppSidebar = ({
 
     // The server renders the saved choice only: it cannot know the viewport.
     const railValue = useMemo(
-        () => ({ collapsed, serverCollapsed: initialCollapsed }),
-        [collapsed, initialCollapsed],
+        () => ({ collapsed: showRail, serverCollapsed: initialCollapsed }),
+        [showRail, initialCollapsed],
     );
 
     // The nav scrolls once the groups are open; keep the current page's item
@@ -198,18 +246,40 @@ export const AppSidebar = ({
         <RailContext.Provider value={railValue}>
             <aside
                 data-collapsed={collapsed}
+                data-peeking={peeking || undefined}
+                onMouseEnter={() => {
+                    pointerOnRail.current = true;
+                    if (peeking) window.clearTimeout(peekTimer.current);
+                }}
+                onMouseLeave={() => {
+                    pointerOnRail.current = false;
+                    if (peeking) endPeek();
+                }}
+                // Picking a destination from the peeked rail closes it.
+                onClickCapture={(e) => {
+                    if (
+                        peeking &&
+                        (e.target as HTMLElement).closest("a[href]")
+                    ) {
+                        window.clearTimeout(peekTimer.current);
+                        setPeeking(false);
+                    }
+                }}
                 className={cn(
                     // Width snaps, never animates: a width transition reflows
                     // the whole page on every frame.
                     "bg-card-lv1 border-card-lv3/60 z-40 flex h-full shrink-0 flex-col overflow-hidden border-r",
                     collapsed ? "w-14" : "w-60",
+                    // A peek keeps the rail's 56px in the row and lays the
+                    // rest over the page, so the page doesn't reflow.
+                    peeking && "relative z-50 -mr-[184px] w-60 shadow-2xl",
                 )}>
                 <div
                     className={cn(
                         "flex flex-col gap-3 pt-4 pb-3",
-                        collapsed ? "items-center px-2" : "px-3",
+                        showRail ? "items-center px-2" : "px-3",
                     )}>
-                    {collapsed ? (
+                    {showRail ? (
                         <NextLink
                             href="/"
                             aria-label="Kodus home"
@@ -227,7 +297,7 @@ export const AppSidebar = ({
                         </NextLink>
                     )}
                     <WorkspaceSwitcher />
-                    {collapsed ? (
+                    {showRail ? (
                         <RailTooltip label="Search (⌘K)">
                             <span>
                                 <CommandPalette variant="rail" />
@@ -243,7 +313,7 @@ export const AppSidebar = ({
                     aria-label="Main"
                     className={cn(
                         "flex min-h-0 flex-1 [scrollbar-width:thin] flex-col overflow-x-hidden overflow-y-auto pt-1 pb-4",
-                        collapsed ? "gap-3 px-2" : "gap-5 px-3",
+                        showRail ? "gap-3 px-2" : "gap-5 px-3",
                     )}>
                     <ul className="flex flex-col gap-0.5">
                         {mainItems
@@ -277,38 +347,47 @@ export const AppSidebar = ({
                 <div
                     className={cn(
                         "flex flex-col gap-1 px-2 pt-2 pb-1",
-                        collapsed && "items-center",
+                        showRail && "items-center",
                     )}>
                     {/* Too wide for the rail, like it was for phones in
                         the top bar. */}
-                    {!collapsed && (
+                    {!showRail && (
                         <ErrorBoundary fallback={null}>
                             <div className="flex px-1 pb-1">
                                 <GithubStars />
                             </div>
                         </ErrorBoundary>
                     )}
-                    <SidebarPlanStatus collapsed={collapsed} />
+                    <SidebarPlanStatus collapsed={showRail} />
                     {!isNarrow && (
                         <RailTooltip label="Expand sidebar">
                             <button
                                 type="button"
                                 onClick={toggle}
+                                onMouseEnter={startPeek}
+                                onMouseLeave={cancelPeek}
                                 aria-label={
-                                    collapsed
-                                        ? "Expand sidebar"
-                                        : "Collapse sidebar"
+                                    peeking
+                                        ? "Keep sidebar open"
+                                        : collapsed
+                                          ? "Expand sidebar"
+                                          : "Collapse sidebar"
                                 }
                                 aria-expanded={!collapsed}
                                 className={cn(
                                     "text-text-tertiary hover:bg-card-lv2 hover:text-text-primary flex h-8 items-center gap-2.5 rounded-lg text-sm transition-colors",
                                     CONTROL_STATES,
-                                    collapsed
+                                    showRail
                                         ? "w-9 justify-center"
                                         : "w-full px-2.5",
                                 )}>
-                                {collapsed ? (
+                                {showRail ? (
                                     <PanelLeftOpenIcon className="size-4" />
+                                ) : peeking ? (
+                                    <>
+                                        <PanelLeftOpenIcon className="size-4" />
+                                        Keep open
+                                    </>
                                 ) : (
                                     <>
                                         <PanelLeftCloseIcon className="size-4" />
@@ -323,10 +402,10 @@ export const AppSidebar = ({
                 <div
                     className={cn(
                         "border-card-lv3/60 flex gap-1 border-t px-2 py-2",
-                        collapsed ? "flex-col items-center" : "items-center",
+                        showRail ? "flex-col items-center" : "items-center",
                     )}>
-                    <div className={cn(!collapsed && "min-w-0 flex-1")}>
-                        <UserNav variant={collapsed ? "rail" : "sidebar"} />
+                    <div className={cn(!showRail && "min-w-0 flex-1")}>
+                        <UserNav variant={showRail ? "rail" : "sidebar"} />
                     </div>
                     <NotificationBell />
                 </div>
