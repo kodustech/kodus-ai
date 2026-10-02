@@ -1177,7 +1177,7 @@ kodyKnowledgeApproval:
 customMessages:
     globalSettings:
         hideComments: false # github only
-        suggestionCopyPrompt: true # not available for bitbucket
+        suggestionCopyPrompt: true # bitbucket posts it as a reply to the comment
 
     # Optional team-authored text appended below Kody's default error comment
     # when a review fails (e.g. no BYOK provider configured). Empty content
