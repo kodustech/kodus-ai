@@ -239,6 +239,62 @@ async function applyByokToTenant(
 }
 
 /**
+ * Fail fast if the configured BYOK baseURL would be rejected by the server's
+ * save-time SSRF gate. A rejected write is currently only logged as a warning,
+ * so the tenant silently keeps its stale config and the matrix dies later with
+ * "model not available". Public https upstreams (Fireworks, OpenAI, etc.) pass;
+ * local/private http endpoints fail here, loudly, instead of becoming a hidden
+ * 400 on the server.
+ */
+function assertWritableBaseURL(baseURL: string): void {
+    let url: URL;
+    try {
+        url = new URL(baseURL);
+    } catch {
+        throw new Error(`BYOK baseURL is not a valid URL: ${baseURL}`);
+    }
+
+    if (url.protocol !== 'https:') {
+        throw new Error(
+            `BYOK baseURL must use https (server SSRF gate rejects ${url.protocol}): ${baseURL}`,
+        );
+    }
+
+    const host = url.hostname.toLowerCase();
+
+    if (
+        host === 'localhost' ||
+        host === '127.0.0.1' ||
+        host === '[::1]' ||
+        host === '::1'
+    ) {
+        throw new Error(
+            `BYOK baseURL must not point to localhost (server SSRF gate): ${baseURL}`,
+        );
+    }
+
+    // Reject IPv4 private/reserved/link-local ranges that the server also
+    // refuses for openai_compatible credentials.
+    const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (ipv4) {
+        const a = Number(ipv4[1]);
+        const b = Number(ipv4[2]);
+        if (
+            a === 127 ||
+            a === 10 ||
+            a === 0 ||
+            (a === 169 && b === 254) ||
+            (a === 172 && b >= 16 && b <= 31) ||
+            (a === 192 && b === 168)
+        ) {
+            throw new Error(
+                `BYOK baseURL must not point to a private/reserved IP (server SSRF gate): ${baseURL}`,
+            );
+        }
+    }
+}
+
+/**
  * The BYOK config the matrix wants every tenant to use. `API_LLM_PROVIDER`
  * defaults to `openai`; point it (with `API_OPENAI_FORCE_BASE_URL`) at any
  * OpenAI- or Anthropic-compatible vendor to run the matrix on a different
@@ -272,6 +328,7 @@ function byokFromEnv(): {
     const apiKey = process.env.API_OPEN_AI_API_KEY ?? '';
     const baseURL =
         process.env.API_OPENAI_FORCE_BASE_URL ?? 'https://api.openai.com/v1';
+    assertWritableBaseURL(baseURL);
     const model = process.env.API_LLM_PROVIDER_MODEL ?? 'gpt-5.4-mini';
     return {
         version: 2,
