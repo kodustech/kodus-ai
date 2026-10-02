@@ -240,6 +240,7 @@ export class MCPManagerService {
                                 organizationId:
                                     limitedData[index]?.organizationId,
                                 connection: limitedData[index]?.appName,
+                                connectionId: limitedData[index]?.id,
                             },
                         });
                     }
@@ -296,7 +297,7 @@ export class MCPManagerService {
                 `mcp/integration/kodusmcp`,
                 {
                     integrationId: KODUS_MCP_INTEGRATION_ID,
-                    baseUrl: process.env.API_KODUS_MCP_SERVER_URL ?? '',
+                    baseUrl: this.getKodusMcpEndpoint(),
                 },
                 {
                     headers: this.getAuthHeaders(organizationAndTeamData),
@@ -442,23 +443,7 @@ export class MCPManagerService {
         if (connection.integrationId === KODUS_MCP_INTEGRATION_ID) {
             if (connection.organizationId !== callerOrganizationId)
                 throw new Error('Kodus MCP connection organization mismatch');
-            const configuredUrl = process.env.API_KODUS_MCP_SERVER_URL;
-            if (!configuredUrl)
-                throw new Error('Kodus MCP endpoint is missing');
-            let endpoint: URL;
-            try {
-                endpoint = new URL(configuredUrl);
-            } catch {
-                throw new Error('Kodus MCP endpoint is invalid');
-            }
-            if (
-                !['http:', 'https:'].includes(endpoint.protocol) ||
-                endpoint.username ||
-                endpoint.password
-            ) {
-                throw new Error('Kodus MCP endpoint is invalid');
-            }
-            url = endpoint.toString();
+            url = this.getKodusMcpEndpoint();
             const secret = process.env.API_JWT_SECRET;
             if (!secret) throw new Error('Kodus MCP signing secret is missing');
             headers.Authorization = `Bearer ${this.jwt.sign(
@@ -486,6 +471,25 @@ export class MCPManagerService {
             // by skills to match required MCPs by capability (not display name).
             category: connection.category ?? null,
         };
+    }
+
+    private getKodusMcpEndpoint(): string {
+        const configuredUrl = process.env.API_KODUS_MCP_SERVER_URL;
+        if (!configuredUrl) throw new Error('Kodus MCP endpoint is missing');
+        let endpoint: URL;
+        try {
+            endpoint = new URL(configuredUrl);
+        } catch {
+            throw new Error('Kodus MCP endpoint is invalid');
+        }
+        if (
+            !['http:', 'https:'].includes(endpoint.protocol) ||
+            endpoint.username ||
+            endpoint.password
+        ) {
+            throw new Error('Kodus MCP endpoint is invalid');
+        }
+        return endpoint.toString();
     }
 
     /**

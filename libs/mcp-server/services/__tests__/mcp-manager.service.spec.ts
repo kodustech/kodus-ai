@@ -222,10 +222,13 @@ describe('MCPManagerService', () => {
 
 describe('Kodus MCP credential destination', () => {
     const sign = jest.fn().mockReturnValue('signed-token');
+    const post = jest.fn().mockResolvedValue(undefined);
+    const get = jest.fn();
+    const pluginChanged = jest.fn().mockResolvedValue(undefined);
     const service = new MCPManagerService(
         { sign } as any,
-        {} as any,
-        {} as any,
+        { shouldLimitResources: jest.fn().mockResolvedValue(false) } as any,
+        { pluginChanged } as any,
     );
     const connection = {
         integrationId: KODUS_MCP_INTEGRATION_ID,
@@ -238,6 +241,7 @@ describe('Kodus MCP credential destination', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        (service as any).axiosMCPManagerService = { post, get };
         previousUrl = process.env.API_KODUS_MCP_SERVER_URL;
         previousSecret = process.env.API_JWT_SECRET;
         process.env.API_KODUS_MCP_SERVER_URL = connection.mcpUrl;
@@ -313,5 +317,75 @@ describe('Kodus MCP credential destination', () => {
             (service as any).formatConnection(connection, 'org-1'),
         ).rejects.toThrow('signing secret is missing');
         expect(sign).not.toHaveBeenCalled();
+    });
+
+    it.each([undefined, '', 'not-a-url', 'file:///tmp/mcp'])(
+        'does not create a connection with an invalid endpoint (%s)',
+        async (configuredUrl) => {
+            if (configuredUrl === undefined)
+                delete process.env.API_KODUS_MCP_SERVER_URL;
+            else process.env.API_KODUS_MCP_SERVER_URL = configuredUrl;
+            await service.createKodusMCPIntegration('org-1');
+            expect(post).not.toHaveBeenCalled();
+            expect(sign).not.toHaveBeenCalled();
+            expect(pluginChanged).not.toHaveBeenCalled();
+            expect((service as any).logger.error).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    error: expect.any(Error),
+                    metadata: { organizationId: 'org-1' },
+                }),
+            );
+        },
+    );
+
+    it('creates a connection using the validated canonical endpoint', async () => {
+        process.env.API_KODUS_MCP_SERVER_URL = 'HTTPS://API.KODUS.IO/mcp';
+        await service.createKodusMCPIntegration('org-1');
+        expect(post).toHaveBeenCalledWith(
+            'mcp/integration/kodusmcp',
+            {
+                integrationId: KODUS_MCP_INTEGRATION_ID,
+                baseUrl: connection.mcpUrl,
+            },
+            expect.any(Object),
+        );
+        expect(pluginChanged).toHaveBeenCalledWith(
+            expect.objectContaining({
+                organizationId: 'org-1',
+                installed: true,
+            }),
+        );
+    });
+
+    it('logs the identity of an omitted connection and preserves other connections', async () => {
+        delete process.env.API_KODUS_MCP_SERVER_URL;
+        get.mockResolvedValue({
+            items: [
+                { ...connection, id: 'connection-1', appName: 'Kodus MCP' },
+                {
+                    ...connection,
+                    id: 'connection-2',
+                    appName: 'Other MCP',
+                    integrationId: 'other-integration',
+                },
+            ],
+        });
+        const result = await service.getConnections({
+            organizationId: 'org-1',
+        });
+        expect(result).toEqual([
+            expect.objectContaining({ name: 'Other MCP', headers: {} }),
+        ]);
+        expect(sign).toHaveBeenCalledTimes(1); // MCP manager request only.
+        expect((service as any).logger.error).toHaveBeenCalledWith(
+            expect.objectContaining({
+                error: expect.any(Error),
+                metadata: {
+                    organizationId: 'org-1',
+                    connection: 'Kodus MCP',
+                    connectionId: 'connection-1',
+                },
+            }),
+        );
     });
 });
