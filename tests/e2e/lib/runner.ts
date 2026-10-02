@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { lookup } from 'node:dns/promises';
 import type {
     LicenseMode,
     MatrixCell,
@@ -265,7 +266,7 @@ const APPENDED_ENDPOINT_PATHS = [
  * local/private http endpoints and doubled endpoint paths fail here, loudly,
  * instead of becoming a hidden 400 on the server.
  */
-function assertWritableBaseURL(provider: string, baseURL: string): void {
+async function assertWritableBaseURL(provider: string, baseURL: string): Promise<void> {
     const raw = baseURL.trim();
     // The server treats a blank baseURL as "use the provider's default".
     // Nothing to validate in that case.
@@ -307,6 +308,26 @@ function assertWritableBaseURL(provider: string, baseURL: string): void {
         throw new Error(
             `BYOK baseURL ends in "/anthropic" but provider is openai_compatible (server protocol-mismatch gate): ${baseURL}`,
         );
+    }
+
+    // Mirror the server's DNS-resolution step so that typo'd/unreachable hosts
+    // and hosts that resolve to private/reserved addresses fail here, loudly,
+    // instead of leaving every tenant on stale config.
+    const lookupHost = url.hostname.replace(/^\[(.*)\]$/, '$1');
+    let addresses: Array<{ address: string; family: number }>;
+    try {
+        addresses = await lookup(lookupHost, { all: true });
+    } catch {
+        throw new Error(
+            `BYOK baseURL host could not be resolved (server SSRF gate): ${baseURL}`,
+        );
+    }
+    for (const { address } of addresses) {
+        if (isPrivateOrReservedIp(address)) {
+            throw new Error(
+                `BYOK baseURL resolves to private/reserved address ${address} (server SSRF gate): ${baseURL}`,
+            );
+        }
     }
 
     const host = url.hostname.toLowerCase();
@@ -351,6 +372,24 @@ function assertWritableBaseURL(provider: string, baseURL: string): void {
             `BYOK baseURL must not point to a private/reserved IPv6 address (server SSRF gate): ${baseURL}`,
         );
     }
+}
+
+function isPrivateOrReservedIp(ip: string): boolean {
+    if (ip === '0.0.0.0' || ip.startsWith('127.')) return true;
+    if (ip.startsWith('10.')) return true;
+    if (ip.startsWith('192.168.')) return true;
+    if (ip.startsWith('169.254.')) return true;
+    if (ip.startsWith('100.64.')) return true;
+    const m172 = ip.match(/^172\.(\d+)\./);
+    if (m172) {
+        const n = parseInt(m172[1], 10);
+        if (n >= 16 && n <= 31) return true;
+    }
+    const lower = ip.toLowerCase();
+    if (lower === '::1' || lower === '::') return true;
+    if (/^f[cd][0-9a-f]{2}:/i.test(lower)) return true;
+    if (/^fe[89ab][0-9a-f]:/i.test(lower)) return true;
+    return false;
 }
 
 /**
@@ -853,7 +892,7 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
     // stale config.
     if (!opts.dryRun && process.env.API_OPEN_AI_API_KEY) {
         const cfg = byokFromEnv();
-        assertWritableBaseURL(
+        await assertWritableBaseURL(
             cfg.credentials[0]?.provider ?? 'openai_compatible',
             cfg.credentials[0]?.settings.baseURL ?? '',
         );
