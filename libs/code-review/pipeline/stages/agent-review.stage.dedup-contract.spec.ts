@@ -220,6 +220,37 @@ describe('AgentReviewStage — dedup LLM.run contract (#1786)', () => {
             expect(out.trace.nonKodyOutputCount).toBe(1);
         });
 
+        it('carries the lost locations on the keeper, not in its content', async () => {
+            // A duplicate merged from a DIFFERENT line: its location is the
+            // thing that must survive, but writing it into suggestionContent at
+            // dedup time is the trap (#2015) — formatSuggestionContent rewrites
+            // that field from scratch afterwards, so the list would fold into
+            // prose or vanish. Same reason kodyRuleOtherLocations is carried on
+            // the suggestion; executeStage renders it post-formatter.
+            const atLine80 = () => ({
+                ...dupA(),
+                relevantLinesStart: 80,
+                relevantLinesEnd: 82,
+            });
+            runSpy = jest.spyOn(LLM, 'run').mockResolvedValue({
+                groups: [{ keep: 0, duplicates: [1] }],
+                unique: [],
+            } as any);
+            const stage = makeStage();
+
+            const out = await callDedup(stage, [dupA(), atLine80()]);
+
+            expect(out.suggestions).toHaveLength(1);
+            const kept = out.suggestions[0];
+            // The list is not baked into the content the formatter will see...
+            expect(String(kept.suggestionContent ?? '')).not.toContain(
+                'Also found in',
+            );
+            // ...it travels on the suggestion so the stage can render it once,
+            // after the formatter has run.
+            expect(kept.dedupOtherLocations).toEqual(['src/user.ts:80-82']);
+        });
+
         it('keeps both when the model marks them unique', async () => {
             runSpy = jest.spyOn(LLM, 'run').mockResolvedValue({
                 groups: [],
@@ -1331,7 +1362,10 @@ describe('AgentReviewStage — dedup survives a keyword-enforcing provider (#191
                     ],
                     usage: { prompt_tokens: 1, completion_tokens: 1 },
                 }),
-                { status: 200, headers: { 'content-type': 'application/json' } },
+                {
+                    status: 200,
+                    headers: { 'content-type': 'application/json' },
+                },
             );
         }) as typeof fetch;
     });

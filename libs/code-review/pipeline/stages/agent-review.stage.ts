@@ -1509,13 +1509,19 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
 
             // Render merged locations after formatting so rewrites cannot drop them.
             for (const s of deduped) {
-                const otherLocations = [
-                    ...new Set([
-                        ...(s.alsoFoundIn || []),
-                        ...(s.kodyRuleOtherLocations || []),
+                // Both dedup paths carry their "also found at" list on the
+                // suggestion: the Kody rule merge (kodyRuleOtherLocations) and
+                // the LLM dedup on non-Kody findings (dedupOtherLocations).
+                // alsoFoundIn is the same contract introduced by the parallel
+                // main fix (f2dbb8e07); unioned here so neither path is lost.
+                const otherLocations = Array.from(
+                    new Set([
+                        ...(s.alsoFoundIn ?? []),
+                        ...(s.kodyRuleOtherLocations ?? []),
+                        ...(s.dedupOtherLocations ?? []),
                     ]),
-                ];
-                if (!otherLocations?.length) {
+                );
+                if (!otherLocations.length) {
                     continue;
                 }
                 const locationsList = otherLocations
@@ -2491,6 +2497,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                                     ...locations,
                                 ]),
                             ];
+                            // Carried on the suggestion, not baked into
+                            // suggestionContent: formatSuggestionContent
+                            // rewrites that field after this merge and folds or
+                            // drops an appended list (#2015). executeStage
+                            // renders dedupOtherLocations post-formatter, once.
+                            existing.dedupOtherLocations = Array.from(
+                                new Set([
+                                    ...(existing.dedupOtherLocations ?? []),
+                                    ...locations,
+                                ]),
+                            );
                         }
                     } else {
                         for (const dupIdx of dupIndices) {
@@ -2571,6 +2588,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     });
                 }
 
+                // The other locations move on the suggestion, not into
+                // suggestionContent, so the content formatter (which runs after
+                // this merge) cannot fold or drop them (#2015). executeStage
+                // renders them post-formatter, once.
                 if (otherLocations.length > 0) {
                     kept.alsoFoundIn = [
                         ...new Set([
@@ -2578,6 +2599,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             ...otherLocations,
                         ]),
                     ];
+                    kept.dedupOtherLocations = otherLocations;
                 }
 
                 groupSummaries.push({
