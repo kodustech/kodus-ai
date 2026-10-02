@@ -34,8 +34,16 @@ export const RepositoriesHealthTable = ({
     const focusRepository = (row: RepositoryHealthRow) => {
         const params = new URLSearchParams(searchParams.toString());
         params.set(COCKPIT_PARAM.repository, row.repository);
+        if (row.repositoryId) {
+            params.set(COCKPIT_PARAM.repositoryId, row.repositoryId);
+        } else {
+            params.delete(COCKPIT_PARAM.repositoryId);
+        }
         startTransition(async () => {
-            await setCockpitRepositoryCookie(row.repository);
+            await setCockpitRepositoryCookie(
+                row.repository,
+                row.repositoryId ?? undefined,
+            );
             router.push(`${pathname}?${params.toString()}`);
         });
     };
@@ -50,7 +58,9 @@ export const RepositoriesHealthTable = ({
                 searchValue={search}
                 onSearchChange={setSearch}
                 pageSize={10}
-                getRowId={(row) => row.repository}
+                getRowId={(row) =>
+                    `${row.repositoryId ?? ''}:${row.repository}`
+                }
                 onRowClick={focusRepository}
             />
             <p className="text-text-tertiary mt-3 text-[11px]">

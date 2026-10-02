@@ -57,7 +57,7 @@ export const analyticsFetch = async <Data>(
     url: `/${string}`,
     options: Parameters<typeof typedFetch>['1'] = {},
 ) => {
-    const [organizationId, selectedRepository] = await Promise.all([
+    const [organizationId, repositorySelection] = await Promise.all([
         getOrganizationId(),
         getSelectedRepository(),
     ]);
@@ -67,7 +67,12 @@ export const analyticsFetch = async <Data>(
     const params = {
         ...options.params,
         organizationId,
-        ...(selectedRepository && { repository: selectedRepository }),
+        ...(repositorySelection.repository && {
+            repository: repositorySelection.repository,
+        }),
+        ...(repositorySelection.repositoryId && {
+            repositoryId: repositorySelection.repositoryId,
+        }),
     };
 
     if (source === 'internal') {
