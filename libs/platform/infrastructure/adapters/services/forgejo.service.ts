@@ -3084,7 +3084,38 @@ export class ForgejoService implements Omit<
                 },
             });
             const review = result.data;
-            const createdComment = review?.comments?.[0];
+            // The SDK's PullReview type does not model `comments`, which the
+            // create response carries only on some Forgejo versions, so the
+            // field is narrowed here.
+            const createdReview = review as ForgejoPullReview & {
+                comments?: Array<{
+                    id?: number;
+                    body?: string;
+                    created_at?: string;
+                    updated_at?: string;
+                }>;
+            };
+            let createdComment = createdReview?.comments?.[0];
+
+            // Forgejo (16.x) answers the create-review request with the review,
+            // `comments_count`, but no `comments` array, so the id of the
+            // created comment is not in the response — reaching it means
+            // listing the review's comments (#2051). That review was created by
+            // this very call, so its newest comment is the one we just posted.
+            if (!createdComment && review?.id != null) {
+                const commentsResult = await repoGetPullReviewComments({
+                    client,
+                    path: {
+                        owner: repoInfo.owner,
+                        repo: repoInfo.repo,
+                        index: params.prNumber,
+                        id: review.id,
+                    },
+                });
+                createdComment = [...(commentsResult.data ?? [])].sort(
+                    (a, b) => (b.id ?? 0) - (a.id ?? 0),
+                )[0];
+            }
 
             this.logger.log({
                 message: `Created review comment for PR#${params.prNumber}`,
