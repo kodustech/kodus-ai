@@ -246,3 +246,34 @@ describe('custom guideline fallback', () => {
         expect(s.suggestionContent).toBe(STRIPPED);
     });
 });
+
+describe('summary-less fallback title', () => {
+    it.each(['empty', 'throws'])(
+        'uses the original problem when formatting %s',
+        async (mode) => {
+            const { stage, reviewOrchestrator } = makeStage();
+            reviewOrchestrator.execute.mockResolvedValue(
+                happyEnvelope([
+                    sugg({ oneSentenceSummary: '', suggestionContent: RAW }),
+                ]),
+            );
+            if (mode === 'throws')
+                (formatSuggestionContent as jest.Mock).mockRejectedValueOnce(
+                    new Error('formatter failed'),
+                );
+            else
+                (formatSuggestionContent as jest.Mock).mockResolvedValueOnce(
+                    new Map(),
+                );
+            const [s] = analyzedSuggestions(await run(stage, makeContext()));
+            expect(s.oneSentenceSummary).toBe(
+                'The user object can be null when the account was deleted',
+            );
+            expect(s.suggestionContent).toBe(
+                'Reading name throws and the request fails with a 500. Guard with optional chaining and return a 404.',
+            );
+            expect(s.fullExplanation).toBe(STRIPPED);
+            expect(s.llmPrompt).toBe(s.oneSentenceSummary + '\n\n' + STRIPPED);
+        },
+    );
+});

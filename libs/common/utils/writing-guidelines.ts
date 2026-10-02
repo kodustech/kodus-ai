@@ -33,6 +33,7 @@ const fingerprint = (text: string): string =>
         .replace(/^[ \t]{0,3}[-+*][ \t]+/gm, '')
         .replace(/(?<![\p{L}\p{N}_])\*\*([^\n]+?)\*\*(?![\p{L}\p{N}_])/gu, '$1')
         .replace(/(?<![\p{L}\p{N}_])__([^\n]+?)__(?![\p{L}\p{N}_])/gu, '$1')
+        .replace(/`([^`\n]+)`/g, '$1')
         .replace(/\s+/g, ' ')
         .trim();
 

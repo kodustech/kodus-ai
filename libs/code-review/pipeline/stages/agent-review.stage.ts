@@ -1540,7 +1540,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 const hadSummary = !!s.oneSentenceSummary?.trim();
                 s.oneSentenceSummary = resolveSuggestionTitle({
                     summary: s.oneSentenceSummary,
-                    body: s.suggestionContent,
+                    body: s.fullExplanation || s.suggestionContent,
                 });
                 if (!s.oneSentenceSummary) titleCounts.empty++;
                 else if (hadSummary) titleCounts.fromSummary++;
