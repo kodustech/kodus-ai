@@ -1,4 +1,4 @@
-import { emptyFindingsLabel } from "./review-run-status";
+import { effectiveReviewStatus, emptyFindingsLabel } from "./review-run-status";
 
 describe("emptyFindingsLabel", () => {
     it("only calls a PR clean when the review actually ran", () => {
@@ -31,4 +31,20 @@ describe("emptyFindingsLabel", () => {
             expect(emptyFindingsLabel(status)).toEqual({ text, tone });
         },
     );
+});
+
+describe("effectiveReviewStatus", () => {
+    it.each([
+        [["skipped", "success"], "success"],
+        [["error", "success"], "success"],
+        [["error", "skipped", "success"], "success"],
+        [["success", "error"], "success"],
+        [["error"], "error"],
+        [["skipped", "error"], "skipped"],
+        [["in_progress", "success"], "in_progress"],
+        [["partial_error", "success"], "partial_error"],
+        [[], undefined],
+    ] as const)("runs %j read as %s", (runs, expected) => {
+        expect(effectiveReviewStatus([...runs])).toBe(expected);
+    });
 });

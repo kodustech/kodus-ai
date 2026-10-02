@@ -20,7 +20,11 @@ import { ErrorBoundary, type FallbackProps } from "react-error-boundary";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 
 import { DiffViewer } from "./diff-viewer";
-import { emptyFindingsLabel, type ReviewRunStatus } from "./review-run-status";
+import {
+    effectiveReviewStatus,
+    emptyFindingsLabel,
+    type ReviewRunStatus,
+} from "./review-run-status";
 import { ReviewStateProvider, useReviewStore } from "./review-store";
 import { adaptForTryDiffViewer, buildHeaderPrInfo } from "./try-port/adapt";
 import { CommitsList } from "./try-port/CommitsList";
@@ -136,6 +140,16 @@ function ReviewProgressBar({
     );
 }
 
+// Newest first, the same order the PR list uses for a PR's runs.
+const runTime = (run: PullRequestExecution) =>
+    Date.parse(
+        run.automationExecution?.createdAt ||
+            run.automationExecution?.updatedAt ||
+            run.updatedAt ||
+            run.createdAt ||
+            "",
+    ) || 0;
+
 interface ReviewPageClientProps {
     repositoryId: string;
     prNumber: number;
@@ -160,12 +174,21 @@ export function ReviewPageClient({
             repositoryId,
             pullRequestNumber: prNumber.toString(),
         },
-        { pageSize: 1 },
+        // Every run of the PR, not just the latest: the empty state needs to
+        // know whether any of them finished clean (see effectiveReviewStatus).
+        { pageSize: 20 },
     );
 
-    const prExecution = useMemo(
-        () => executions.find((e) => e.prNumber === prNumber),
+    const prRuns = useMemo(
+        () =>
+            executions
+                .filter((e) => e.prNumber === prNumber)
+                .sort((a, b) => runTime(b) - runTime(a)),
         [executions, prNumber],
+    );
+    const prExecution = prRuns[0];
+    const reviewStatus = effectiveReviewStatus(
+        prRuns.map((run) => run.automationExecution?.status),
     );
 
     // Extract repo name from suggestions or execution data
@@ -235,6 +258,7 @@ export function ReviewPageClient({
             patchFilenames={patchFilenames}>
             <ReviewLayout
                 execution={prExecution}
+                reviewStatus={reviewStatus}
                 fileSuggestions={fileSuggestions}
                 prLevelSuggestions={prLevelSuggestions}
                 patchFiles={patchFiles}
@@ -284,6 +308,7 @@ export function ReviewPageSkeleton() {
 
 function ReviewLayout({
     execution,
+    reviewStatus,
     fileSuggestions,
     prLevelSuggestions,
     patchFiles,
@@ -295,6 +320,7 @@ function ReviewLayout({
     repositoryName,
 }: {
     execution?: PullRequestExecution;
+    reviewStatus?: ReviewRunStatus;
     fileSuggestions: any[];
     prLevelSuggestions: any[];
     patchFiles: PullRequestFile[];
@@ -566,9 +592,7 @@ function ReviewLayout({
                                     total={treeFiles.length}
                                     bugs={bugCount}
                                     flags={flagCount}
-                                    reviewStatus={
-                                        execution?.automationExecution?.status
-                                    }
+                                    reviewStatus={reviewStatus}
                                 />
                             )}
 
