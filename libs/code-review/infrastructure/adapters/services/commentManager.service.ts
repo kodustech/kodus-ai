@@ -252,7 +252,8 @@ export class CommentManagerService implements ICommentManagerService {
         // entirely. Worst offenders first; the rest acknowledged as a count.
         const MAX_LISTED_FINDINGS = 25;
         const sorted = [...suggestions].sort(
-            (a, b) => order.indexOf(severityOf(a)) - order.indexOf(severityOf(b)),
+            (a, b) =>
+                order.indexOf(severityOf(a)) - order.indexOf(severityOf(b)),
         );
         const omitted = Math.max(0, sorted.length - MAX_LISTED_FINDINGS);
 
@@ -1196,6 +1197,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         suggestionCopyPrompt?: boolean,
         fallbackSuggestionsBySeverity?: FallbackSuggestionsBySeverity,
         platformType?: PlatformType,
+        onPromptReplyError?: (error: Error) => void,
     ): Promise<{
         lastAnalyzedCommit: any;
         commits: any[];
@@ -1344,6 +1346,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
 
                     if (commentId) {
                         await this.postBitbucketPromptReply({
+                            onPromptReplyError,
                             organizationAndTeamData,
                             repository,
                             prNumber,
@@ -1430,6 +1433,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                             const fallbackComment =
                                 fallbackResult.fallbackComment;
                             await this.postBitbucketPromptReply({
+                                onPromptReplyError,
                                 organizationAndTeamData,
                                 repository,
                                 prNumber,
@@ -2455,6 +2459,7 @@ ${reviewOptions}
         endLine?: number;
         suggestion?: any;
         improvedCode?: string;
+        onPromptReplyError?: (error: Error) => void;
     }): Promise<void> {
         if (params.platformType !== PlatformType.BITBUCKET) return;
         if (params.suggestionCopyPrompt === false) return;
@@ -2472,7 +2477,8 @@ ${reviewOptions}
             startLine: params.startLine,
             endLine: params.endLine,
             prompt: resolveAgentPrompt(params.suggestion),
-            improvedCode: params.improvedCode ?? params.suggestion?.improvedCode,
+            improvedCode:
+                params.improvedCode ?? params.suggestion?.improvedCode,
         });
         if (!promptText) {
             this.logger.warn({
@@ -2480,29 +2486,36 @@ ${reviewOptions}
                 context: CommentManagerService.name,
                 metadata,
             });
+            params.onPromptReplyError?.(
+                new Error('Bitbucket agent prompt is empty'),
+            );
             return;
         }
 
         try {
-            const reply = await this.codeManagementService.createResponseToComment(
-                {
-                    organizationAndTeamData: params.organizationAndTeamData,
-                    repository: {
-                        id: params.repository.id,
-                        name: params.repository.name,
+            const reply =
+                await this.codeManagementService.createResponseToComment(
+                    {
+                        organizationAndTeamData: params.organizationAndTeamData,
+                        repository: {
+                            id: params.repository.id,
+                            name: params.repository.name,
+                        },
+                        prNumber: params.prNumber,
+                        inReplyToId: Number(params.commentId),
+                        body: formatBitbucketPromptReply(promptText),
                     },
-                    prNumber: params.prNumber,
-                    inReplyToId: Number(params.commentId),
-                    body: formatBitbucketPromptReply(promptText),
-                },
-                PlatformType.BITBUCKET,
-            );
+                    PlatformType.BITBUCKET,
+                );
             if (!reply?.id) {
                 this.logger.warn({
                     message: `Bitbucket prompt reply was not created for PR#${params.prNumber}`,
                     context: CommentManagerService.name,
                     metadata,
                 });
+                params.onPromptReplyError?.(
+                    new Error('Bitbucket prompt reply was not created'),
+                );
                 return;
             }
             this.logger.log({
@@ -2521,6 +2534,9 @@ ${reviewOptions}
                 error,
                 metadata,
             });
+            params.onPromptReplyError?.(
+                error instanceof Error ? error : new Error(String(error)),
+            );
         }
     }
 
@@ -2532,6 +2548,7 @@ ${reviewOptions}
         language: string,
         suggestionCopyPrompt?: boolean,
         platformType?: PlatformType,
+        onPromptReplyError?: (error: Error) => void,
     ): Promise<{ commentResults: Array<CommentResult> }> {
         try {
             if (!prLevelSuggestions?.length) {
@@ -2595,6 +2612,7 @@ ${reviewOptions}
 
                     if (createdComment?.id) {
                         await this.postBitbucketPromptReply({
+                            onPromptReplyError,
                             organizationAndTeamData,
                             repository,
                             prNumber,

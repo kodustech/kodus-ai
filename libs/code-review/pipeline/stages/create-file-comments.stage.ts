@@ -186,7 +186,7 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                 },
             });
 
-            const { lineComments, lastAnalyzedCommit } =
+            const { lineComments, lastAnalyzedCommit, promptReplyErrors } =
                 await this.finalizeReviewProcessing(
                     context,
                     changedFiles,
@@ -205,6 +205,15 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
             });
 
             return this.updateContext(context, (draft) => {
+                draft.errors ??= [];
+                for (const error of promptReplyErrors) {
+                    draft.errors.push({
+                        stage: this.stageName,
+                        substage: 'bitbucket-prompt-reply',
+                        severity: 'partial',
+                        error,
+                    });
+                }
                 draft.lineComments = lineComments;
                 draft.lastAnalyzedCommit = lastAnalyzedCommit;
             });
@@ -243,6 +252,7 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
     ): Promise<{
         lineComments: Array<CommentResult>;
         lastAnalyzedCommit: any;
+        promptReplyErrors: Error[];
     }> {
         const {
             organizationAndTeamData,
@@ -263,21 +273,23 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
             medium: 2,
             low: 1,
         };
-        const sortedPrioritizedSuggestions = [...validSuggestionsToAnalyze].sort(
-            (a, b) => {
-                const fileA = a.relevantFile || '';
-                const fileB = b.relevantFile || '';
-                if (fileA < fileB) return -1;
-                if (fileA > fileB) return 1;
-                const rankA = severityOrder[(a.severity || '').toLowerCase()] ?? 0;
-                const rankB = severityOrder[(b.severity || '').toLowerCase()] ?? 0;
-                return rankB - rankA;
-            },
-        );
+        const sortedPrioritizedSuggestions = [
+            ...validSuggestionsToAnalyze,
+        ].sort((a, b) => {
+            const fileA = a.relevantFile || '';
+            const fileB = b.relevantFile || '';
+            if (fileA < fileB) return -1;
+            if (fileA > fileB) return 1;
+            const rankA = severityOrder[(a.severity || '').toLowerCase()] ?? 0;
+            const rankB = severityOrder[(b.severity || '').toLowerCase()] ?? 0;
+            return rankB - rankA;
+        });
         const allDiscardedSuggestions = [...discardedSuggestionsBySafeGuard];
 
         const fallbackSuggestionsBySeverity =
             this.groupDiscardedByQuantitySuggestions(allDiscardedSuggestions);
+
+        const promptReplyErrors: Error[] = [];
 
         // Create line comments
         const { commentResults, lastAnalyzedCommit } =
@@ -295,6 +307,7 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                 allDiscardedSuggestions,
                 changedFiles,
                 platformType,
+                (error) => promptReplyErrors.push(error),
             );
 
         // Save pull request suggestions — comments already posted at this point
@@ -328,6 +341,7 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
         return {
             lineComments: commentResults,
             lastAnalyzedCommit,
+            promptReplyErrors,
         };
     }
 
@@ -370,6 +384,7 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
         allDiscardedSuggestions?: Partial<CodeSuggestion>[],
         changedFiles: FileChange[] = [],
         platformType?: PlatformType,
+        onPromptReplyError?: (error: Error) => void,
     ) {
         try {
             // Children in a cluster are merged into their parent's
@@ -378,15 +393,13 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
             // so they still reach Mongo instead of vanishing silently
             // — helps reconcile when a cluster link gets orphaned.
             const relatedOrphans = sortedPrioritizedSuggestions.filter(
-                (s) =>
-                    s.clusteringInformation?.type === ClusteringType.RELATED,
+                (s) => s.clusteringInformation?.type === ClusteringType.RELATED,
             );
             if (relatedOrphans.length > 0 && allDiscardedSuggestions) {
                 for (const orphan of relatedOrphans) {
                     allDiscardedSuggestions.push({
                         ...orphan,
-                        priorityStatus:
-                            PriorityStatus.DISCARDED_BY_CLUSTERING,
+                        priorityStatus: PriorityStatus.DISCARDED_BY_CLUSTERING,
                         deliveryStatus: DeliveryStatus.NOT_SENT,
                     });
                 }
@@ -457,7 +470,9 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                             // is a fresh copy built in finalizeReviewProcessing; we
                             // drop the entry, we don't mutate the frozen suggestion.
                             const prioritizedIndex =
-                                sortedPrioritizedSuggestions.indexOf(suggestion);
+                                sortedPrioritizedSuggestions.indexOf(
+                                    suggestion,
+                                );
                             if (prioritizedIndex !== -1) {
                                 sortedPrioritizedSuggestions.splice(
                                     prioritizedIndex,
@@ -479,8 +494,8 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                         improvedCode: suggestion?.improvedCode,
                         suggestionContent: suggestion?.suggestionContent,
                         actionStatement:
-                            suggestion?.clusteringInformation?.actionStatement ||
-                            '',
+                            suggestion?.clusteringInformation
+                                ?.actionStatement || '',
                     },
                     start_line: startLine,
                     line,
@@ -503,6 +518,7 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                     suggestionCopyPrompt,
                     fallbackSuggestionsBySeverity,
                     platformType,
+                    onPromptReplyError,
                 );
 
             return { lastAnalyzedCommit, commentResults };

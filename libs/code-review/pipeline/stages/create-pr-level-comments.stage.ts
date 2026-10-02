@@ -108,6 +108,7 @@ export class CreatePrLevelCommentsStage extends BasePipelineStage<CodeReviewPipe
                 });
 
                 let commentResults: any[] = [];
+                const promptReplyErrors: Error[] = [];
 
                 try {
                     // Criar comentários para cada sugestão de nível de PR usando o commentManagerService
@@ -125,6 +126,7 @@ export class CreatePrLevelCommentsStage extends BasePipelineStage<CodeReviewPipe
                             context.pullRequestMessagesConfig?.globalSettings
                                 ?.suggestionCopyPrompt,
                             context.platformType,
+                            (error) => promptReplyErrors.push(error),
                         );
 
                     commentResults = result?.commentResults || [];
@@ -248,6 +250,15 @@ export class CreatePrLevelCommentsStage extends BasePipelineStage<CodeReviewPipe
 
                 // Adicionar os resultados dos comentários ao contexto
                 const finalContext = this.updateContext(context, (draft) => {
+                    for (const error of promptReplyErrors) {
+                        draft.errors ??= [];
+                        draft.errors.push({
+                            stage: this.stageName,
+                            substage: 'bitbucket-prompt-reply',
+                            severity: 'partial',
+                            error,
+                        });
+                    }
                     // Armazenar os resultados dos comentários de nível de PR
                     if (!draft.prLevelCommentResults) {
                         draft.prLevelCommentResults = [];
