@@ -277,3 +277,33 @@ describe('summary-less fallback title', () => {
         },
     );
 });
+
+describe('fallback title excludes fenced source', () => {
+    it.each([
+        [
+            '```ts\nconst name = user.name;\n```\nThe user can be null. Guard it.',
+            'The user can be null',
+        ],
+        [
+            'The user ```ts\nuser.name;\n``` can be null. Guard it.',
+            'The user can be null',
+        ],
+        [
+            '```ts\nuser.name;\n```\n' + RAW,
+            'The user object can be null when the account was deleted',
+        ],
+    ])('derives prose from %s', async (raw, title) => {
+        const { stage, reviewOrchestrator } = makeStage();
+        reviewOrchestrator.execute.mockResolvedValue(
+            happyEnvelope([
+                sugg({ oneSentenceSummary: '', suggestionContent: raw }),
+            ]),
+        );
+        (formatSuggestionContent as jest.Mock).mockResolvedValueOnce(new Map());
+        const [s] = analyzedSuggestions(await run(stage, makeContext()));
+        expect(s.oneSentenceSummary).toBe(title);
+        expect(s.oneSentenceSummary).not.toContain('```');
+        expect(s.fullExplanation).toContain('```ts');
+        expect(s.llmPrompt).toContain('```ts');
+    });
+});
