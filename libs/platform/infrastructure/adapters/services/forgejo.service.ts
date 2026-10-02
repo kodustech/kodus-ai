@@ -104,6 +104,7 @@ import {
     type Organization as ForgejoOrganization,
     type PullRequest as ForgejoPullRequest,
     type PullReview as ForgejoPullReview,
+    type PullReviewComment as ForgejoPullReviewComment,
     type Repository as ForgejoRepository,
     type User as ForgejoUser,
     getTree,
@@ -3086,16 +3087,13 @@ export class ForgejoService implements Omit<
             const review = result.data;
             // The SDK's PullReview type does not model `comments`, which the
             // create response carries only on some Forgejo versions, so the
-            // field is narrowed here.
-            const createdReview = review as ForgejoPullReview & {
-                comments?: Array<{
-                    id?: number;
-                    body?: string;
-                    created_at?: string;
-                    updated_at?: string;
-                }>;
-            };
-            let createdComment = createdReview?.comments?.[0];
+            // field is read with a runtime guard and typed from the SDK's own
+            // comment type rather than asserted with an unchecked cast.
+            const rawComments = (review as { comments?: unknown })?.comments;
+            let createdComment: ForgejoPullReviewComment | undefined;
+            if (Array.isArray(rawComments)) {
+                createdComment = rawComments[0] as ForgejoPullReviewComment;
+            }
 
             // Forgejo (16.x) answers the create-review request with the review,
             // `comments_count`, but no `comments` array, so the id of the
@@ -3103,18 +3101,33 @@ export class ForgejoService implements Omit<
             // listing the review's comments (#2051). That review was created by
             // this very call, so its newest comment is the one we just posted.
             if (!createdComment && review?.id != null) {
-                const commentsResult = await repoGetPullReviewComments({
-                    client,
-                    path: {
-                        owner: repoInfo.owner,
-                        repo: repoInfo.repo,
-                        index: params.prNumber,
-                        id: review.id,
-                    },
-                });
-                createdComment = [...(commentsResult.data ?? [])].sort(
-                    (a, b) => (b.id ?? 0) - (a.id ?? 0),
-                )[0];
+                try {
+                    const commentsResult = await repoGetPullReviewComments({
+                        client,
+                        path: {
+                            owner: repoInfo.owner,
+                            repo: repoInfo.repo,
+                            index: params.prNumber,
+                            id: review.id,
+                        },
+                    });
+                    createdComment = [...(commentsResult.data ?? [])].sort(
+                        (a, b) => (b.id ?? 0) - (a.id ?? 0),
+                    )[0];
+                } catch (lookupError) {
+                    // The comment is already posted — never fail the create
+                    // because the id lookup did: the caller's retry logic
+                    // would post it a second time under the same review id,
+                    // and a message containing "line"/"position" would be
+                    // misread as a line mismatch. Best-effort, like the other
+                    // SDK call sites in this file.
+                    this.logger.warn({
+                        message: `Could not resolve the created comment id for PR#${params.prNumber}`,
+                        context: ForgejoService.name,
+                        error: lookupError,
+                        metadata: { reviewId: review.id },
+                    });
+                }
             }
 
             this.logger.log({

@@ -94,6 +94,23 @@ describe('ForgejoService — createReviewComment returns the comment id (#2051)'
         expect(out?.id).toBe(1);
     });
 
+    it('degrades to the review id without retrying when the lookup fails', async () => {
+        // A transient failure on the post-create lookup must not fail the
+        // create: the comment is already posted, and the caller's retry logic
+        // would post it a second time. The other SDK call sites in this file
+        // catch and degrade, so this one does too.
+        repoCreatePullReview.mockResolvedValue({
+            data: { id: 1, comments_count: 1 },
+        });
+        repoGetPullReviewComments.mockRejectedValue(new Error('ECONNRESET'));
+
+        const out = await makeService().createReviewComment(params());
+
+        expect(out?.id).toBe(1);
+        expect(repoCreatePullReview).toHaveBeenCalledTimes(1);
+        expect(repoGetPullReviewComments).toHaveBeenCalledTimes(1);
+    });
+
     it('passes through the comment from the response when it does carry one', async () => {
         repoCreatePullReview.mockResolvedValue({
             data: {
