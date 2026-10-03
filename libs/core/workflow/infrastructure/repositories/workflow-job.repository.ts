@@ -154,7 +154,30 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
         }
     }
 
-    async update(id: string, data: Partial<IWorkflowJob>): Promise<any> {
+    /**
+     * Update a job.
+     *
+     * `guard` (#1830 review) makes the write conditional on the caller still
+     * owning the job: it only lands when the row's `leaseOwner` still matches
+     * (and, unless `requireProcessing` is false, when it is still PROCESSING).
+     * In that mode the method returns whether the write landed, so a worker
+     * whose lease was reclaimed can stop instead of overwriting the state of
+     * whoever took the job over. Without a guard it keeps the old contract and
+     * returns the refreshed job.
+     *
+     * `{ noLiveOwner: true }` is the other side of the same coin, for a caller
+     * that holds NO lease: the write only lands when no worker is running the
+     * job (`status <> PROCESSING`, or a lease that has already expired). Used
+     * by the failure path reached without a lease, which must still stop a
+     * redelivery without stamping over a live worker's row.
+     */
+    async update(
+        id: string,
+        data: Partial<IWorkflowJob>,
+        guard?:
+            | { leaseOwner: string; requireProcessing?: boolean }
+            | { noLiveOwner: true },
+    ): Promise<any> {
         try {
             const updateData: Partial<WorkflowJobModel> = {};
 
@@ -173,6 +196,10 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                 updateData.scheduledAt = data.scheduledAt;
             if (data.startedAt !== undefined)
                 updateData.startedAt = data.startedAt;
+            if (data.leaseOwner !== undefined)
+                updateData.leaseOwner = data.leaseOwner;
+            if (data.leaseExpiresAt !== undefined)
+                updateData.leaseExpiresAt = data.leaseExpiresAt;
             if (data.completedAt !== undefined)
                 updateData.completedAt = data.completedAt;
             if (data.currentStage !== undefined)
@@ -190,12 +217,66 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                 { operation: 'update', jobId: id },
             );
 
-            if (data.metadata !== undefined) updateData.metadata = patch.metadata;
+            if (data.metadata !== undefined)
+                updateData.metadata = patch.metadata;
             if (data.waitingForEvent !== undefined)
                 updateData.waitingForEvent = patch.waitingForEvent;
             if (data.pipelineState !== undefined)
                 updateData.pipelineState = patch.pipelineState;
             if (data.payload !== undefined) updateData.payload = patch.payload;
+
+            if (guard && 'noLiveOwner' in guard) {
+                // No-live-owner mode (#1830 review): the caller holds no lease
+                // of its own and wants to stamp a terminal status only if no
+                // worker is running the job. Two deliveries of the same jobId
+                // can be consumed concurrently — process() does not check the
+                // row status on entry, the inbox dedupes on
+                // (consumerId, messageId) rather than jobId, and the reaper
+                // republishes a reclaimed job with a fresh messageId — so an
+                // unguarded write here can land FAILED over a row another
+                // worker has already claimed PROCESSING. That worker's own
+                // guarded completion then matches no row, its review result is
+                // dropped, and the author gets a failure notice for a review
+                // that is still running: the #1830 symptom the lease fence
+                // exists to prevent. The condition is part of the UPDATE, not a
+                // read before it, for the same reason as the lease guard below.
+                const qb = this.repository
+                    .createQueryBuilder()
+                    .update(WorkflowJobModel)
+                    .set(updateData)
+                    .where('uuid = :uuid', { uuid: id })
+                    .andWhere(
+                        '(status <> :processing OR leaseExpiresAt IS NULL OR leaseExpiresAt < :now)',
+                        {
+                            processing: JobStatus.PROCESSING,
+                            now: new Date(),
+                        },
+                    );
+                const result = await qb.execute();
+                return (result.affected ?? 0) > 0;
+            }
+
+            if (guard) {
+                // Ownership-conditional write. The row may have been reclaimed
+                // by the reaper (leaseOwner replaced, status back to PENDING)
+                // between this worker's last renewal and now, so the condition
+                // has to be part of the UPDATE itself, not of a read before it.
+                const qb = this.repository
+                    .createQueryBuilder()
+                    .update(WorkflowJobModel)
+                    .set(updateData)
+                    .where('uuid = :uuid', { uuid: id })
+                    .andWhere('leaseOwner = :leaseOwner', {
+                        leaseOwner: guard.leaseOwner,
+                    });
+                if (guard.requireProcessing !== false) {
+                    qb.andWhere('status = :status', {
+                        status: JobStatus.PROCESSING,
+                    });
+                }
+                const result = await qb.execute();
+                return (result.affected ?? 0) > 0;
+            }
 
             await this.repository.update({ uuid: id }, updateData);
 
@@ -313,6 +394,183 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                 context: WorkflowJobRepository.name,
                 error,
                 metadata: { olderThan: params.olderThan },
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Lists PROCESSING jobs owned by a dead/slow worker (issue #1830): a job
+     * with a lease whose `leaseExpiresAt` is in the past, or (for legacy rows
+     * that pre-date the lease) a job whose `updatedAt` is older than
+     * `olderThan`. A live worker renews the lease every ~30s, so an expired
+     * lease is evidence of death — recovery drops from 180 min to ~90 s.
+     */
+    async findStaleProcessing(params: {
+        now: Date;
+        olderThan: Date;
+    }): Promise<StaleWorkflowJobReapResult[]> {
+        try {
+            // The entity is aliased here, in the builder itself: a bare
+            // `createQueryBuilder()` leaves `WorkflowJobModel` in FROM under its
+            // default alias, so a following `.from(WorkflowJobModel, 'job')`
+            // adds a SECOND entry and cross-joins the table with itself. Every
+            // stale job then came back once per row in `workflow_jobs`, the uuid
+            // list blew past Postgres' 65,535 bind-parameter limit and nothing
+            // was ever reclaimed — the exact failure this reaper exists to fix
+            // (#1830 review).
+            const result = await this.repository
+                .createQueryBuilder('job')
+                // Columns are quoted and alias-qualified: unquoted mixed-case
+                // identifiers are folded to lowercase by Postgres, so a bare
+                // `workflowType` selects `workflowtype` and errors out.
+                .select([
+                    'job."uuid"',
+                    'job."workflowType"',
+                    'job."organizationId"',
+                    'job."startedAt"',
+                    'job."leaseExpiresAt"',
+                    'job."retryCount"',
+                    'job."maxRetries"',
+                ])
+                .where('job.status = :status', { status: JobStatus.PROCESSING })
+                // The whole disjunction is wrapped in its own parens so the
+                // `status = PROCESSING` guard applies to BOTH branches. Emitted
+                // bare, SQL precedence would parse this as
+                // `(status AND lease-expired) OR (legacy)` and the legacy branch
+                // would match every old row — including COMPLETED/FAILED ones —
+                // on every run.
+                .andWhere(
+                    '((job."leaseExpiresAt" IS NOT NULL AND job."leaseExpiresAt" < :now)' +
+                        ' OR ' +
+                        '(job."leaseExpiresAt" IS NULL AND job."updatedAt" < :olderThan))',
+                    { now: params.now, olderThan: params.olderThan },
+                )
+                .getRawMany();
+
+            return (result ?? []) as StaleWorkflowJobReapResult[];
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to find stale PROCESSING workflow jobs',
+                context: WorkflowJobRepository.name,
+                error,
+                metadata: {
+                    now: params.now.toISOString(),
+                    olderThan: params.olderThan.toISOString(),
+                },
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Returns a reclaimed job to PENDING with retryCount + 1 and clears its
+     * lease + run state, so a fresh trigger re-processes it instead of the job
+     * being permanently failed and reported forever as PROCESSING.
+     */
+    async requeueStaleJobs(params: {
+        uuids: string[];
+        lastError: string;
+        requeuedBy: string;
+        // Tenant(s) the batch belongs to. Logged next to the uuids so a reclaim
+        // can be traced back to an organization: a bare uuid list cannot be
+        // filtered per customer in the log system.
+        organizationIds?: string[];
+    }): Promise<string[]> {
+        if (params.uuids.length === 0) {
+            return [];
+        }
+        try {
+            const result = await this.repository
+                .createQueryBuilder()
+                .update(WorkflowJobModel)
+                .set({
+                    status: JobStatus.PENDING,
+                    retryCount: () => '"retryCount" + 1',
+                    lastError: params.lastError,
+                    errorClassification: null,
+                    startedAt: null,
+                    completedAt: null,
+                    leaseOwner: null,
+                    leaseExpiresAt: null,
+                    currentStage: null,
+                })
+                .whereInIds(params.uuids)
+                // Re-assert PROCESSING in the UPDATE: a job can complete (or be
+                // permanently failed) between the SELECT that listed it as stale
+                // and this write. Without the guard the UPDATE clears a newer
+                // terminal state to PENDING and the job re-runs.
+                .andWhere('status = :status', { status: JobStatus.PROCESSING })
+                // PostgreSQL RETURNING tells us exactly which rows we flipped —
+                // the watchdog republishes only these, never the full candidate
+                // batch, so a job that finished between the SELECT and this
+                // UPDATE is not re-driven (#1902).
+                .returning('uuid')
+                .execute();
+            const rows = (result.raw ?? []) as Array<{ uuid?: string }>;
+            const requeuedUuids = rows
+                .map((r) => r.uuid)
+                .filter((u): u is string => typeof u === 'string');
+            if (requeuedUuids.length > 0) {
+                this.logger.log({
+                    message: `Requeued ${requeuedUuids.length} stale PROCESSING workflow job(s) to PENDING`,
+                    context: WorkflowJobRepository.name,
+                    metadata: {
+                        organizationIds: params.organizationIds ?? [],
+                        requested: params.uuids.length,
+                        requeued: requeuedUuids.length,
+                        requeuedUuids,
+                    },
+                });
+            }
+            return requeuedUuids;
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to requeue stale PROCESSING workflow jobs',
+                context: WorkflowJobRepository.name,
+                error,
+                metadata: { uuids: params.uuids },
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Terminally fails reclaimed jobs whose retry budget is exhausted.
+     */
+    async failStaleJobs(params: {
+        uuids: string[];
+        lastError: string;
+        errorClassification: ErrorClassification;
+    }): Promise<number> {
+        if (params.uuids.length === 0) {
+            return 0;
+        }
+        try {
+            const result = await this.repository
+                .createQueryBuilder()
+                .update(WorkflowJobModel)
+                .set({
+                    status: JobStatus.FAILED,
+                    errorClassification: params.errorClassification,
+                    lastError: params.lastError,
+                    completedAt: () => 'NOW()',
+                    leaseOwner: null,
+                    leaseExpiresAt: null,
+                })
+                .whereInIds(params.uuids)
+                // Same re-check as requeueStaleJobs: only a still-PROCESSING row
+                // may be terminally failed, so a job that completed between the
+                // SELECT and this UPDATE is never clobbered to FAILED.
+                .andWhere('status = :status', { status: JobStatus.PROCESSING })
+                .execute();
+            return result.affected ?? 0;
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to permanently fail stale workflow jobs',
+                context: WorkflowJobRepository.name,
+                error,
+                metadata: { uuids: params.uuids },
             });
             throw error;
         }
