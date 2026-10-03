@@ -461,3 +461,113 @@ describe('delivery chain: a merged Kody Rule comment keeps its other locations (
         expect(String(comment.suggestion?.llmPrompt ?? '')).toContain(':27-27');
     });
 });
+
+/**
+ * The other dedup path (#2030 follow-up): the LLM dedup on NON-Kody
+ * suggestions wrote the same "Also found in" list into suggestionContent at
+ * merge time, before formatSuggestionContent rewrote that field from scratch.
+ * The list has to travel on the suggestion (dedupOtherLocations) and be
+ * rendered once, from the same post-formatter loop that renders the Kody
+ * list.
+ */
+describe('delivery chain: a merged non-Kody comment keeps its other locations', () => {
+    const LLM_FILE = 'src/user.ts';
+    const LLM_PATCH = Array.from(
+        { length: 30 },
+        (_, i) => `+ line ${i + 1}`,
+    ).join('\n');
+
+    // Two findings about the same bug, identical prose, different lines. The
+    // dedup model groups them and the content guard honours identical text.
+    const llmFindings = () => [
+        {
+            relevantFile: LLM_FILE,
+            relevantLinesStart: 10,
+            relevantLinesEnd: 12,
+            label: 'bug',
+            severity: 'high',
+            oneSentenceSummary: 'retries the handler on transient failures',
+            suggestionContent:
+                'retry the handler instead of failing the request on a transient error',
+            existingCode: '',
+            improvedCode: 'withRetry(() => handler(req))',
+        },
+        {
+            relevantFile: LLM_FILE,
+            relevantLinesStart: 80,
+            relevantLinesEnd: 82,
+            label: 'bug',
+            severity: 'high',
+            oneSentenceSummary: 'retries the handler on transient failures',
+            suggestionContent:
+                'retry the handler instead of failing the request on a transient error',
+            existingCode: '',
+            improvedCode: 'withRetry(() => handler(req))',
+        },
+    ];
+
+    const over = () => ({
+        changedFiles: [{ filename: LLM_FILE, patch: LLM_PATCH }],
+    });
+
+    const formatter = formatSuggestionContent as unknown as jest.Mock;
+    const body = (comment: any) =>
+        String(comment?.body?.suggestionContent ?? '');
+    const countOf = (text: string, needle: string) =>
+        text.split(needle).length - 1;
+
+    let runSpy: jest.SpyInstance;
+    beforeEach(() => {
+        runSpy = jest.spyOn(LLM, 'run').mockResolvedValue({
+            groups: [{ keep: 0, duplicates: [1] }],
+        } as any);
+    });
+    afterEach(() => {
+        runSpy.mockRestore();
+        formatter.mockReset();
+        formatter.mockResolvedValue(new Map());
+        jest.clearAllMocks();
+    });
+
+    it('names the merged location after the formatter rewrote the prose', async () => {
+        // The dedup merged finding 1 (10-12) into finding 0 (10-12): only the
+        // kept anchor is in the patch hunk, so it is the inline comment; the
+        // removed duplicate's location (80-82) must still be named in it.
+        formatter.mockResolvedValue(
+            new Map([
+                [
+                    0,
+                    {
+                        suggestionContent:
+                            'The request should be retried on a transient failure before surfacing an error.',
+                    },
+                ],
+            ]),
+        );
+
+        const { posted } = await runChain(llmFindings(), over());
+
+        expect(posted.inline).toHaveLength(1);
+        const [comment] = posted.inline;
+        expect(comment.start_line).toBe(10);
+        expect(comment.line).toBe(12);
+        expect(body(comment)).toContain('Also found in');
+        expect(body(comment)).toContain(':80-82');
+        expect(countOf(body(comment), 'Also found in')).toBe(1);
+
+        // The prompt copy reaches the fixer agent, so it must carry the list.
+        const prompt = String(comment.suggestion?.llmPrompt ?? '');
+        expect(prompt).toContain('Also found in');
+        expect(prompt).toContain(':80-82');
+        expect(countOf(prompt, 'Also found in')).toBe(1);
+
+        // Ordering: the list is not what the formatter saw, so nothing can
+        // rewrite it away.
+        const formatterInput = formatter.mock.calls[0][0] as any[];
+        expect(
+            formatterInput.filter((s) =>
+                String(s.suggestionContent).includes('Also found in'),
+            ),
+        ).toEqual([]);
+    });
+});
