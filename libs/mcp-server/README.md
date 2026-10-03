@@ -8,9 +8,11 @@ O endpoint HTTP MCP do Kodus roda em modo `Streamable HTTP` stateless.
 
 ## Contrato atual
 
-- `initialize`, `ping`, `tools/list` e demais chamadas de descoberta podem ser feitas diretamente no endpoint MCP.
-- O endpoint HTTP em si não mantém sessão entre requests e não aplica autenticação própria neste momento.
-- A execução real continua dependendo das validações de domínio já existentes nos serviços e tools, incluindo contexto de organização, time e integrações ativas.
+- `initialize`, `notifications/initialized`, `ping` e `tools/list` funcionam sem credencial: devolvem o mesmo catálogo estático para qualquer um (o mcp-manager lista as tools de `/mcp/issues` assim).
+- Todo o resto (`tools/call` acima de tudo) exige credencial, validada pelo `McpAuthGuard` (`guards/mcp-auth.guard.ts`). Uma credencial enviada é sempre validada, mesmo em descoberta.
+- Credenciais aceitas: o token de serviço que o `MCPManagerService` assina para a integração first-party (JWT `iss`/`aud` `kodus-mcp-server`), ou uma Team API key (`x-team-key: kodus_…` ou `Authorization: Bearer kodus_…`) para clientes externos.
+- A organização vem da credencial, não dos argumentos: o `McpToolAuthorizer` substitui `organizationId`, rejeita `teamId` de outra organização (uma team key só alcança o próprio time) e exige a capability `kodyRules:manage` para criar, editar e apagar regras ou memórias.
+- O endpoint HTTP não mantém sessão entre requests.
 - `GET` e `DELETE` não fazem parte do contrato exposto neste deployment; o endpoint é `POST`-only.
 - O objetivo atual é previsibilidade operacional atrás de load balancer, sem reintroduzir estado local por instância.
 
@@ -24,10 +26,10 @@ O endpoint HTTP MCP do Kodus roda em modo `Streamable HTTP` stateless.
 - Cada `POST /mcp` cria um `McpServer` e um `StreamableHTTPServerTransport` novos, válidos apenas durante aquela requisição.
 - O servidor não mantém `Mcp-Session-Id` em memória entre requests.
 - `GET /mcp` e `DELETE /mcp` retornam `405 Method Not Allowed`.
-- Todas as operações MCP neste endpoint seguem públicas no nível HTTP. Validações de tenant e integração continuam no fluxo de domínio e nos próprios tools.
+- As rotas são `@Public()` em relação ao guard de sessão de usuário; a autenticação delas é o `McpAuthGuard`.
 - Esse desenho evita afinidade de sessão no load balancer e funciona corretamente com múltiplas instâncias ECS/EC2 atrás de ALB.
 
-Esse comportamento é intencional. No fluxo interno do Kodus, contexto de tenant, autenticação e autorização já trafegam no request e nos argumentos dos tools. Não há dependência funcional de sessão MCP para executar `initialize`, `tools/list`, `tool/call` e `ping`.
+Esse comportamento é intencional. No fluxo interno do Kodus, contexto de tenant e autenticação trafegam na credencial do request. Não há dependência funcional de sessão MCP para executar `initialize`, `tools/list`, `tool/call` e `ping`.
 
 ## Funcionalidades Disponíveis
 
@@ -72,11 +74,14 @@ const mcpAdapter = createMCPAdapter({
     {
       name: 'kodus-code-management',
       type: 'http',
-      url: 'https://api.kodus.io/mcp'
+      url: 'https://api.kodus.io/mcp',
+      headers: { 'x-team-key': 'kodus_...' }
     }
   ]
 });
 ```
+
+Clientes externos (Cursor, Claude Desktop etc.) usam o mesmo header com uma Team API key gerada em *Organization → CLI keys*. Para as tools que escrevem Kody Rules, a key precisa da capability `kodyRules:manage`. Sem credencial, `tools/call` responde `401`.
 
 O client `StreamableHTTPClientTransport` do SDK funciona com esse modelo porque:
 
@@ -85,6 +90,8 @@ O client `StreamableHTTPClientTransport` do SDK funciona com esse modelo porque:
 - em modo stateless, como o servidor não devolve `Mcp-Session-Id`, não há afinidade entre requests.
 
 ### Exemplos de Uso dos Tools
+
+`organizationId` nos exemplos é opcional: o servidor usa o da credencial e rejeita um valor diferente.
 
 #### 1. Listar Repositórios
 

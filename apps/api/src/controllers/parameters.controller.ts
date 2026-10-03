@@ -72,10 +72,12 @@ import { CreateOrUpdateCodeReviewParameterDto } from '@libs/organization/dtos/cr
 import { DeleteRepositoryCodeReviewParameterDto } from '@libs/organization/dtos/delete-repository-code-review-parameter.dto';
 import { PreviewPrSummaryDto } from '@libs/organization/dtos/preview-pr-summary.dto';
 import { finished } from 'stream/promises';
+import { TenantScopeGuard } from '../guards/tenant-scope.guard';
 
 @ApiTags('Parameters')
 @ApiBearerAuth('jwt')
 @ApiStandardResponses()
+@UseGuards(TenantScopeGuard)
 @Controller('parameters')
 export class ParametersController {
     constructor(

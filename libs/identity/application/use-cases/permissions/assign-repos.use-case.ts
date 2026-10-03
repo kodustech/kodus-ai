@@ -1,5 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -46,9 +46,19 @@ export class AssignReposUseCase implements IUseCase {
         try {
             const { userId, repoIds, teamId } = params;
 
-            const user = await this.userService.findOne({ uuid: userId });
+            // Scoped to the caller's organization: the route guard only checks
+            // the caller's role, and the integration below was resolved from
+            // the target user's organization, so an owner could rewrite the
+            // repository access of a user in any other organization.
+            const organizationId = this.request.user?.organization?.uuid;
+            const user = organizationId
+                ? await this.userService.findOne({
+                      uuid: userId,
+                      organization: { uuid: organizationId },
+                  })
+                : undefined;
             if (!user) {
-                throw new Error('User not found');
+                throw new NotFoundException('User not found');
             }
 
             const integrationConfigs =
@@ -56,7 +66,7 @@ export class AssignReposUseCase implements IUseCase {
                     configKey: IntegrationConfigKey.REPOSITORIES,
                     integration: {
                         organization: {
-                            uuid: user.organization?.uuid,
+                            uuid: organizationId,
                         },
                         team: {
                             uuid: teamId,

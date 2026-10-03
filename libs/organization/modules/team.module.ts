@@ -6,6 +6,7 @@ import { UserModule } from '@libs/identity/modules/user.module';
 import { IntegrationModule } from '@libs/integrations/modules/integrations.module';
 import { IntegrationConfigModule } from '@libs/integrations/modules/config.module';
 
+import { ManageTeamCliKeysUseCase } from '../application/use-cases/team-cli-key/manage.use-case';
 import { CreateTeamUseCase } from '../application/use-cases/team/create.use-case';
 import { ListTeamsWithIntegrationsUseCase } from '../application/use-cases/team/list-with-integrations.use-case';
 import { ListTeamsUseCase } from '../application/use-cases/team/list.use-case';
@@ -45,6 +46,7 @@ import { CLI_DEVICE_REPOSITORY_TOKEN } from '../domain/cli-device/contracts/cli-
         forwardRef(() => OrganizationParametersModule),
     ],
     providers: [
+        ManageTeamCliKeysUseCase,
         CreateTeamUseCase,
         ListTeamsUseCase,
         ListTeamsWithIntegrationsUseCase,
@@ -80,6 +82,7 @@ import { CLI_DEVICE_REPOSITORY_TOKEN } from '../domain/cli-device/contracts/cli-
         TEAM_CLI_KEY_REPOSITORY_TOKEN,
         CLI_DEVICE_SERVICE_TOKEN,
         CLI_DEVICE_REPOSITORY_TOKEN,
+        ManageTeamCliKeysUseCase,
         CreateTeamUseCase,
         ListTeamsUseCase,
         ListTeamsWithIntegrationsUseCase,

@@ -6,7 +6,12 @@ import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
 import { redactSecrets } from '@libs/llm/review-error-diagnostics';
 import type { BYOKConfig, NormalizedModel } from '@libs/llm/byok-config';
 
-import { DoctorCheck, DoctorContext, DoctorResult } from '../doctor.types';
+import {
+    DoctorCheck,
+    DoctorContext,
+    DoctorResult,
+    reviewableTeams,
+} from '../doctor.types';
 
 export const MIN_CONTEXT_WINDOW = 64_000;
 const PROBE_TIMEOUT_MS = 60_000;
@@ -75,8 +80,13 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
             const now = deps.now ?? Date.now;
             const deadline = now() + LLM_BUDGET_MS;
 
+            // Only organizations that review: a sign-up that created its own
+            // empty organization would otherwise fail the probe for a model no
+            // review calls. With nothing to review yet, every organization
+            // still says which model its first review will use.
+            const reviewing = reviewableTeams(ctx);
             const orgs = new Map<string, string>();
-            for (const team of ctx.teams) {
+            for (const team of reviewing.length ? reviewing : ctx.teams) {
                 orgs.set(team.organizationId, team.organizationName);
             }
             // Before any org exists the env model is still what reviews use.

@@ -27,6 +27,7 @@ import {
 } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
 import { resolveContextWindow } from '@libs/llm/model-context-window';
 import {
+    buildPathMismatchWarning,
     type ReviewWarning,
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import { resolveAdaptiveProfile } from '@libs/code-review/infrastructure/agents/engine/adaptive-fit';
@@ -349,6 +350,17 @@ export abstract class BaseCodeReviewAgentProvider {
                         'LOW_SIGNAL_FILES_DROPPED',
                         `${filesBefore - filteredFiles.length} files dropped (tests/md/css)`,
                     );
+                } else {
+                    // Full-size model, large PR: the same files are dropped, so
+                    // the run records it too, with its own cause.
+                    agentWarnings.push({
+                        kind: 'LOW_SIGNAL_FILES_DROPPED',
+                        reason: 'large_pr',
+                        contextWindowTokens: contextWindow,
+                        modelName,
+                        detail: `${filesBefore - filteredFiles.length} files dropped (tests/md/css) to fit a large pull request`,
+                        agentName: identity.name,
+                    });
                 }
             }
 
@@ -699,6 +711,15 @@ export abstract class BaseCodeReviewAgentProvider {
                 logger: this.agentLogger,
             });
             const suggestions = mapped.suggestions;
+            if (mapped.droppedForPath > 0) {
+                agentWarnings.push(
+                    buildPathMismatchWarning({
+                        count: mapped.droppedForPath,
+                        modelName,
+                        agentName: this.getIdentity().name,
+                    }),
+                );
+            }
 
             // Emit progress: agent completed
             // Only mark as error if the agent hit a hard limit (timeout or MAX_STEPS with tool-calls finish).

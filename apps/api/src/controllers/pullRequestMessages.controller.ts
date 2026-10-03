@@ -38,10 +38,12 @@ import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
 import { PullRequestMessagesOverrideCountsResponseDto } from '../dtos/pull-request-messages-override-counts-response.dto';
 import { PullRequestMessagesResponseDto } from '../dtos/pull-request-messages-response.dto';
 import { PullRequestMessagesUpsertDto } from '../dtos/pull-request-messages-upsert.dto';
+import { TenantScopeGuard } from '../guards/tenant-scope.guard';
 
 @ApiTags('Pull Request Messages')
 @ApiBearerAuth('jwt')
 @ApiStandardResponses()
+@UseGuards(TenantScopeGuard)
 @Controller('pull-request-messages')
 export class PullRequestMessagesController {
     constructor(
