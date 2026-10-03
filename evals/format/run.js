@@ -139,6 +139,12 @@ async function main() {
     console.log(`ident_recall_mean:  ${identMean.toFixed(3)}`);
     console.log(`no_scaffold_rate:   ${(sum('no_scaffold_rate') / (rows.length || 1)).toFixed(3)} (avg of PR rates)`);
     console.log(`parse_fails (PRs):  ${parseFails}`);
+    const wmean = (k) =>
+        rows.reduce((a, r) => a + (r[k] || 0) * r.n, 0) / totalN;
+    console.log(`body_chars_mean:    ${wmean('body_chars_mean').toFixed(1)}`);
+    console.log(`body_sentences:     ${wmean('body_sentences_mean').toFixed(2)}`);
+    console.log(`fenced_code_rate:   ${wmean('fenced_code_rate').toFixed(3)}`);
+    console.log(`title_overlap_mean: ${wmean('title_overlap_mean').toFixed(3)}`);
 
     fs.writeFileSync(
         path.join(

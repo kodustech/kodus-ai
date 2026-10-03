@@ -67,13 +67,10 @@ describe('formatSuggestionContent — prompt composition', () => {
 
             const prompt = captureLastPrompt();
             expect(prompt).toContain(
-                'Additional writing guidelines from the team:',
-            );
-            expect(prompt).toContain(
                 'Always begin findings with a verb in the imperative.',
             );
             expect(prompt).toContain(
-                'The team has provided custom writing guidelines. Follow them — they take priority over the default rules above.',
+                'The team has provided custom writing guidelines. Follow them for tone and length — they take priority over the default rules above.',
             );
         });
 

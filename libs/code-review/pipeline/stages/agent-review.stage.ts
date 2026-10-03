@@ -19,6 +19,13 @@ import {
     dedupEmbeddingText,
 } from '@libs/code-review/infrastructure/agents/engine/dedup-prompt';
 import { buildPlatformEmbedder } from '@libs/common/utils/document';
+import { resolveSuggestionTitle } from '@libs/common/utils/codeManagement/suggestion-title';
+import {
+    impactAndActionFallback,
+    stripReviewScaffolding,
+} from '@libs/code-review/infrastructure/agents/engine/strip-review-scaffolding';
+import { resolveWritingGuidelines } from '@libs/common/utils/writing-guidelines';
+import { shapeSuggestionBodyWithReport } from '@libs/common/utils/codeManagement/suggestion-body-shape';
 import {
     dedupReviewWarnings,
     buildBadFixDowngradedWarning,
@@ -1263,6 +1270,20 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 }
             }
 
+            // The formatter shortens the body for people reading the PR; the
+            // whole explanation is kept for the agent prompt and agent surfaces.
+            for (const s of deduped) {
+                s.fullExplanation = stripReviewScaffolding(
+                    s.suggestionContent || '',
+                );
+            }
+
+            const savedGenerationMain =
+                context.codeReviewConfig?.v2PromptOverrides?.generation?.main;
+            const writingGuidelines =
+                resolveWritingGuidelines(savedGenerationMain);
+
+            const formattedTargets = new Set<(typeof deduped)[number]>();
             // Clean up suggestion text: remove WHAT/WHY/HOW labels, merge into natural prose
             try {
                 const {
@@ -1278,6 +1299,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     .filter((i) => i >= 0);
                 const formatted = await formatSuggestionContent(
                     formatTargets.map((i) => ({
+                        title: deduped[i].oneSentenceSummary || '',
                         suggestionContent: deduped[i].suggestionContent || '',
                         existingCode: deduped[i].existingCode || '',
                         improvedCode: deduped[i].improvedCode || '',
@@ -1285,9 +1307,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         language: deduped[i].language || '',
                     })),
                     {
-                        customWritingGuidelines:
-                            context.codeReviewConfig?.v2PromptOverrides
-                                ?.generation?.main,
+                        // A saved copy of a shipped default is not the team's
+                        // own text; only a real edit outranks the formatter's rules.
+                        customWritingGuidelines: writingGuidelines.isCustom
+                            ? writingGuidelines.text
+                            : undefined,
                         byokConfig: context.codeReviewConfig?.byokConfig,
                         languageResultPrompt:
                             context.codeReviewConfig?.languageResultPrompt,
@@ -1297,16 +1321,14 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 );
                 for (const [i, fmt] of formatted) {
                     const target = formatTargets[i];
-                    if (target !== undefined && deduped[target]) {
+                    if (
+                        target !== undefined &&
+                        deduped[target] &&
+                        fmt.suggestionContent?.trim()
+                    ) {
+                        formattedTargets.add(deduped[target]);
                         deduped[target].suggestionContent =
                             fmt.suggestionContent;
-                        // Keep llmPrompt in sync with the formatted prose.
-                        // llmPrompt is a snapshot of the RAW suggestionContent
-                        // (WHAT/WHY/HOW) taken in finding-mapper before this
-                        // pass; the per-comment "Prompt for LLM" copy block and
-                        // the consolidated @agentPrompt read it, so without this
-                        // the raw scaffolding still leaks there.
-                        deduped[target].llmPrompt = fmt.suggestionContent;
                     }
                 }
                 this.logger.log({
@@ -1319,6 +1341,52 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     context: this.stageName,
                 });
             }
+
+            // The shape the comment needs does not depend on the model
+            // complying: no code blocks, no opening sentence that restates the
+            // title, and two sentences unless the team set its own length.
+            // Deterministic findings keep their structured list.
+            const shapeCounts = {
+                shaped: 0,
+                removedFences: 0,
+                droppedTitleRepeat: 0,
+                capped: 0,
+                impactActionFallback: 0,
+            };
+            for (const s of deduped) {
+                if (isAnalyzerSuggestion(s)) continue;
+                const fallback =
+                    !writingGuidelines.isCustom && !formattedTargets.has(s)
+                        ? impactAndActionFallback(s.suggestionContent || '')
+                        : undefined;
+                if (fallback) shapeCounts.impactActionFallback++;
+                const shaped = shapeSuggestionBodyWithReport({
+                    body: stripReviewScaffolding(
+                        fallback || s.suggestionContent || '',
+                    ),
+                    title: s.oneSentenceSummary,
+                    capSentences: !writingGuidelines.isCustom,
+                });
+                s.suggestionContent = shaped.body;
+                shapeCounts.shaped++;
+                if (shaped.removedFences) shapeCounts.removedFences++;
+                if (shaped.droppedTitleRepeat) shapeCounts.droppedTitleRepeat++;
+                if (shaped.capped) shapeCounts.capped++;
+            }
+            this.logger.log({
+                message: `[AGENT] Shaped ${shapeCounts.shaped} suggestion bodies (fences removed ${shapeCounts.removedFences}, title repeat dropped ${shapeCounts.droppedTitleRepeat}, capped ${shapeCounts.capped})`,
+                context: this.stageName,
+                metadata: {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    prNumber: context.pullRequest?.number,
+                    ...shapeCounts,
+                    writingGuidelines: writingGuidelines.isCustom
+                        ? 'custom'
+                        : savedGenerationMain
+                          ? 'saved-default'
+                          : 'default',
+                },
+            });
 
             // Publication gate (issue #1833): four weeks of production
             // thumbs-down showed 38% had no usable fix — empty, identical to
@@ -1378,14 +1446,14 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 }
             }
 
-            // Location lists for merged Kody Rule findings (#2015). Runs AFTER
-            // the content formatter, like the rule-link enrichment below and
-            // for the same reason: while this list was appended at dedup time
-            // the formatter rewrote it into prose or dropped it, so the posted
-            // comment named only the kept location. Same rendered form as
-            // before the move.
+            // Render merged locations after formatting so rewrites cannot drop them.
             for (const s of deduped) {
-                const otherLocations = s.kodyRuleOtherLocations;
+                const otherLocations = [
+                    ...new Set([
+                        ...(s.alsoFoundIn || []),
+                        ...(s.kodyRuleOtherLocations || []),
+                    ]),
+                ];
                 if (!otherLocations?.length) {
                     continue;
                 }
@@ -1394,16 +1462,21 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     .join('\n');
                 const otherLocationsSection = `\n\n**Also found in:**\n${locationsList}`;
                 s.suggestionContent = `${s.suggestionContent}${otherLocationsSection}`;
-                // llmPrompt is assigned from the formatter output above, before
-                // this loop, and is read by the per-comment "Prompt for LLM"
-                // copy block and the consolidated @agentPrompt
-                // (messageTemplateProcessor), and passed to the fixer agent as
-                // its instruction by validate-suggestions. Left alone it names
-                // only the kept location, so an agent working from the prompt
-                // fixes that one and misses the rest.
-                if (s.llmPrompt) {
-                    s.llmPrompt = `${s.llmPrompt}${otherLocationsSection}`;
-                }
+                // llmPrompt is built from fullExplanation below; without the
+                // list an agent working from the prompt fixes only the kept
+                // location.
+                s.fullExplanation = `${s.fullExplanation || ''}${otherLocationsSection}`;
+                this.logger.log({
+                    message: '[AGENT] Rendered merged finding locations',
+                    context: this.stageName,
+                    metadata: {
+                        prNumber,
+                        organizationId:
+                            context.organizationAndTeamData?.organizationId,
+                        locationCount: otherLocations.length,
+                        isKodyRule: s.label === 'kody_rules',
+                    },
+                });
             }
 
             // Enrich kody_rules suggestions with markdown links to the rule
@@ -1451,6 +1524,47 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 }
                 s.suggestionContent = content;
             }
+
+            // Every finding renders under a bounded title: the model's summary,
+            // or the first sentence of the body when the model left it out.
+            // llmPrompt feeds the "Prompt for LLM" block, the consolidated
+            // @agentPrompt and validate-suggestions' fixer instruction, so it
+            // carries the title and the whole explanation, not the short body.
+            const titleCounts = {
+                fromSummary: 0,
+                fromBody: 0,
+                cut: 0,
+                empty: 0,
+            };
+            for (const s of deduped) {
+                const hadSummary = !!s.oneSentenceSummary?.trim();
+                s.oneSentenceSummary = resolveSuggestionTitle({
+                    summary: s.oneSentenceSummary,
+                    body: (
+                        s.fullExplanation ||
+                        s.suggestionContent ||
+                        ''
+                    ).replace(/```[\s\S]*?```/g, ' '),
+                });
+                if (!s.oneSentenceSummary) titleCounts.empty++;
+                else if (hadSummary) titleCounts.fromSummary++;
+                else titleCounts.fromBody++;
+                if (s.oneSentenceSummary.endsWith('…')) titleCounts.cut++;
+                if (s.fullExplanation) {
+                    s.llmPrompt = s.oneSentenceSummary
+                        ? `${s.oneSentenceSummary}\n\n${s.fullExplanation}`
+                        : s.fullExplanation;
+                }
+            }
+            this.logger.log({
+                message: `[AGENT] Titled ${deduped.length} suggestions (from summary ${titleCounts.fromSummary}, from body ${titleCounts.fromBody}, cut ${titleCounts.cut}, empty ${titleCounts.empty})`,
+                context: this.stageName,
+                metadata: {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    prNumber: context.pullRequest?.number,
+                    ...titleCounts,
+                },
+            });
 
             // Separate PR-level kody rules (no anchor) from file-level suggestions.
             // PR-level suggestions go to validSuggestionsByPR → CreatePrLevelCommentsStage.
@@ -1636,6 +1750,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                                     : `\`${s.relevantFile}\` — ${s.suggestionContent || ''}`
                                 : s.suggestionContent || '',
                             oneSentenceSummary: s.oneSentenceSummary || '',
+                            fullExplanation: s.relevantFile
+                                ? s.relevantLinesStart
+                                    ? `\`${s.relevantFile}:${s.relevantLinesStart}\` — ${s.fullExplanation || s.suggestionContent || ''}`
+                                    : `\`${s.relevantFile}\` — ${s.fullExplanation || s.suggestionContent || ''}`
+                                : s.fullExplanation,
                             label: (s.label as any) || 'kody_rules',
                             severity: this.normalizeSeverity(
                                 s.severity,
@@ -2335,10 +2454,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         }
                         if (locations.length > 0) {
                             const existing = result[existingIdx];
-                            const locList = locations
-                                .map((l) => `- \`${l}\``)
-                                .join('\n');
-                            existing.suggestionContent = `${existing.suggestionContent}\n\n**Also found in:**\n${locList}`;
+                            existing.alsoFoundIn = [
+                                ...new Set([
+                                    ...(existing.alsoFoundIn || []),
+                                    ...locations,
+                                ]),
+                            ];
                         }
                     } else {
                         for (const dupIdx of dupIndices) {
@@ -2419,12 +2540,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     });
                 }
 
-                // Append other locations to the suggestion content
                 if (otherLocations.length > 0) {
-                    const locationsList = otherLocations
-                        .map((loc) => `- \`${loc}\``)
-                        .join('\n');
-                    kept.suggestionContent = `${kept.suggestionContent}\n\n**Also found in:**\n${locationsList}`;
+                    kept.alsoFoundIn = [
+                        ...new Set([
+                            ...(kept.alsoFoundIn || []),
+                            ...otherLocations,
+                        ]),
+                    ];
                 }
 
                 groupSummaries.push({

@@ -123,7 +123,7 @@ describe('ForgejoService review comment formatting', () => {
             'Explain why sanitization is required here.',
         );
         expect(body).toContain(
-            'Suggested Code:\n\nconst value = sanitize(input);',
+            'Suggested code:\n\nconst value = sanitize(input);',
         );
     });
 

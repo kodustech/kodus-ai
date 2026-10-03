@@ -1,7 +1,8 @@
 {
     "reviewComment": {
         "talkToKody": "Parla con Kody menzionando @kody",
-        "feedback": "Questo suggerimento è stato utile? Reagisci con 👍 o 👎 per aiutare Kody a imparare da questa interazione."
+        "feedback": "Questo suggerimento è stato utile? Reagisci con 👍 o 👎 per aiutare Kody a imparare da questa interazione.",
+        "feedbackReply": "Questo suggerimento è stato utile? Rispondi con 👍 o 👎 per aiutare Kody a imparare da questa interazione."
     },
     "pullRequestFinishSummaryMarkdown": {
         "withComments": "## Revisione del codice completata! 🔥\n\nLa revisione del codice è stata completata con successo in base alle tue configurazioni attuali.\n\n",

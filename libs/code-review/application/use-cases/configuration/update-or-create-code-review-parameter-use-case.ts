@@ -32,6 +32,7 @@ import {
 } from '@libs/ai-engine/infrastructure/adapters/services/context/context-reference-detection.service';
 import { deepDifference, deepMerge } from '@libs/common/utils/deep';
 import { convertTiptapJSONToText } from '@libs/common/utils/tiptap-json';
+import { alignPromptOverridesWithParent } from './align-prompt-overrides';
 import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
 import { IntegrationConfigKey, ParametersKey } from '@libs/core/domain/enums';
 import {
@@ -657,8 +658,16 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
     ) {
         const defaultConfig: ConfigDelta = getDefaultKodusConfigFile();
 
-        const sanitizedConfigValue =
-            this.stripCustomMessagesFromConfig(configValue);
+        const { config: sanitizedConfigValue, alignedPaths } =
+            alignPromptOverridesWithParent(
+                this.stripCustomMessagesFromConfig(configValue),
+                defaultConfig,
+            );
+        this.logAlignedPromptOverrides(
+            alignedPaths,
+            organizationAndTeamData,
+            'global',
+        );
 
         const updatedConfigValue = this.stripCustomMessagesFromConfig(
             deepDifference(defaultConfig, sanitizedConfigValue),
@@ -716,6 +725,26 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         codeReviewConfigs.repositories = updatedRepositories;
     }
 
+    /** A prompt sent back unchanged is not stored as the team's own text; record when that happens. */
+    private logAlignedPromptOverrides(
+        alignedPaths: string[],
+        organizationAndTeamData: OrganizationAndTeamData,
+        level: 'global' | 'repository' | 'directory',
+        repositoryId?: string,
+    ) {
+        if (!alignedPaths.length) return;
+        this.logger.log({
+            message: `Not storing ${alignedPaths.length} prompt override(s) identical to the inherited text`,
+            context: UpdateOrCreateCodeReviewParameterUseCase.name,
+            metadata: {
+                organizationAndTeamData,
+                level,
+                repositoryId,
+                alignedPaths,
+            },
+        });
+    }
+
     private async handleConfigUpdate(
         organizationAndTeamData: OrganizationAndTeamData,
         codeReviewConfigs: CodeReviewParameter,
@@ -741,8 +770,17 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             await resolver.getResolvedParentConfig(repositoryId, directoryId),
         );
 
-        const sanitizedIncomingConfig =
-            this.stripCustomMessagesFromConfig(newConfigValue);
+        const { config: sanitizedIncomingConfig, alignedPaths } =
+            alignPromptOverridesWithParent(
+                this.stripCustomMessagesFromConfig(newConfigValue),
+                parentConfig,
+            );
+        this.logAlignedPromptOverrides(
+            alignedPaths,
+            organizationAndTeamData,
+            directoryId ? 'directory' : repositoryId ? 'repository' : 'global',
+            repositoryId,
+        );
 
         let oldConfig: ConfigDelta;
         let level: ConfigLevel;

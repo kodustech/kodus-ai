@@ -20,6 +20,44 @@ function extractIdents(text) {
     return s;
 }
 
+const FENCE_RE = /```/;
+const WORD_RE = /[\p{L}\p{N}_]{4,}/gu;
+
+function countSentences(text) {
+    const prose = String(text || '')
+        .replace(/```[\s\S]*?```/g, ' ')
+        .replace(/`[^`]*`/g, 'x');
+    return prose
+        .split(/[.!?](?:\s|$)/)
+        .filter((s) => s.trim().length > 0).length;
+}
+
+/** Share of the title's words (4+ chars) that the body repeats. */
+function titleOverlap(title, body) {
+    const words = (s) =>
+        new Set(
+            Array.from(String(s || '').toLowerCase().matchAll(WORD_RE)).map(
+                (m) => m[0],
+            ),
+        );
+    const t = words(title);
+    if (!t.size) return 0;
+    const b = words(body);
+    let hit = 0;
+    for (const w of t) if (b.has(w)) hit++;
+    return hit / t.size;
+}
+
+/** Shape of the visible body: length, sentences, fences, title repetition. */
+function styleOf(original, outText) {
+    return {
+        body_chars: outText.length,
+        body_sentences: countSentences(outText),
+        has_fence: FENCE_RE.test(outText),
+        title_overlap: titleOverlap(original?.oneSentenceSummary, outText),
+    };
+}
+
 /**
  * Score one formatted suggestion against its original.
  * @returns {{ parse_ok, non_empty, no_scaffold, ident_recall, length_ok, auto_pass }}
@@ -42,7 +80,11 @@ function scoreOne(original, formatted) {
     const nonEmpty = outText.trim().length > 0;
     const noScaffold = !SCAFFOLD_RE.test(outText);
     const origIdents = extractIdents(origText);
-    const outIdents = extractIdents(outText);
+    // The comment shows the title above the body, so an identifier the title
+    // names is still in front of the reader when the body drops it.
+    const outIdents = extractIdents(
+        `${original?.oneSentenceSummary || ''} ${outText}`,
+    );
     let kept = 0;
     for (const id of origIdents) if (outIdents.has(id)) kept++;
     const identRecall = origIdents.size ? kept / origIdents.size : 1;
@@ -60,6 +102,7 @@ function scoreOne(original, formatted) {
         ident_recall: identRecall,
         length_ok: lengthOk,
         auto_pass: autoPass,
+        ...styleOf(original, outText),
     };
 }
 
@@ -93,6 +136,13 @@ function computeMetrics(findings, formattedMap, meta = {}) {
     let noScaf = 0;
     let nonEmpty = 0;
     let scored = 0;
+    const style = { chars: 0, sentences: 0, fences: 0, overlap: 0 };
+    const addStyle = (s) => {
+        style.chars += s.body_chars || 0;
+        style.sentences += s.body_sentences || 0;
+        style.fences += s.has_fence ? 1 : 0;
+        style.overlap += s.title_overlap || 0;
+    };
 
     for (let i = 0; i < findings.length; i++) {
         const fmt = get(i);
@@ -106,12 +156,14 @@ function computeMetrics(findings, formattedMap, meta = {}) {
             identSum += s.ident_recall;
             if (s.no_scaffold) noScaf++;
             if (s.non_empty) nonEmpty++;
+            addStyle(s);
             // Missing format: not an auto pass of the formatter
             continue;
         }
         const s = scoreOne(findings[i], fmt);
         scored++;
         identSum += s.ident_recall;
+        addStyle(s);
         if (s.auto_pass) auto++;
         if (s.no_scaffold) noScaf++;
         if (s.non_empty) nonEmpty++;
@@ -127,12 +179,18 @@ function computeMetrics(findings, formattedMap, meta = {}) {
         ident_recall_mean: identSum / n,
         no_scaffold_rate: noScaf / n,
         non_empty_rate: nonEmpty / n,
+        body_chars_mean: style.chars / n,
+        body_sentences_mean: style.sentences / n,
+        fenced_code_rate: style.fences / n,
+        title_overlap_mean: style.overlap / n,
         scored,
     };
 }
 
 module.exports = {
     SCAFFOLD_RE,
+    countSentences,
+    titleOverlap,
     extractIdents,
     scoreOne,
     computeMetrics,

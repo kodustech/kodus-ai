@@ -8,6 +8,11 @@ import { hasKodyMarker } from '@libs/common/utils/codeManagement/codeCommentMark
 import { getCodeReviewBadge } from '@libs/common/utils/codeManagement/codeReviewBadge';
 import { getLabelShield } from '@libs/common/utils/codeManagement/labels';
 import { getSeverityLevelShield } from '@libs/common/utils/codeManagement/severityLevel';
+import {
+    formatFixBlock,
+    formatTitleLine,
+    resolveAgentPrompt,
+} from '@libs/common/utils/codeManagement/suggestion-comment-blocks';
 import { decrypt, encrypt } from '@libs/common/utils/crypto';
 import { IntegrationServiceDecorator } from '@libs/common/utils/decorators/integration-service.decorator';
 import {
@@ -3128,21 +3133,12 @@ export class ForgejoService implements Omit<
         translations: any,
         suggestionCopyPrompt: boolean,
     ): string {
-        const improvedCode = lineComment?.body?.improvedCode;
-        const language =
-            lineComment?.suggestion?.language?.toLowerCase() ||
-            repository?.language?.toLowerCase() ||
-            '';
-
         const severityShield = lineComment?.suggestion
             ? getSeverityLevelShield(lineComment.suggestion.severity)
             : '';
 
-        const codeBlock = improvedCode
-            ? `\n\`\`\`${language}\n${improvedCode}\n\`\`\`\n`
-            : '';
 
-        const suggestionContent = lineComment?.body?.suggestionContent || '';
+        const suggestionContent = `${formatTitleLine(lineComment?.suggestion?.oneSentenceSummary)}${lineComment?.body?.suggestionContent || ''}`;
         const actionStatement = lineComment?.body?.actionStatement
             ? `${lineComment.body.actionStatement}\n\n`
             : '';
@@ -3156,9 +3152,15 @@ export class ForgejoService implements Omit<
                 severityShield,
             ].join(' ') + '\n\n';
 
-        const copyPrompt = suggestionCopyPrompt
-            ? this.formatPromptForLLM(lineComment)
-            : '';
+        const copyPrompt = formatFixBlock({
+            copyPrompt: suggestionCopyPrompt ?? true,
+            path: lineComment?.path,
+            startLine: lineComment?.start_line,
+            endLine: lineComment?.line,
+            prompt: resolveAgentPrompt(lineComment?.suggestion),
+            improvedCode: lineComment?.body?.improvedCode,
+            language: lineComment?.suggestion?.language || repository?.language,
+        });
 
         const formatSub = (text: string) =>
             text ? `<sub>${text}</sub>\n` : '';
@@ -3167,7 +3169,6 @@ export class ForgejoService implements Omit<
             badges,
             suggestionContent,
             actionStatement,
-            codeBlock,
             copyPrompt,
             formatSub(translations?.talkToKody || ''),
             formatSub(translations?.feedback || '') +
@@ -3176,32 +3177,6 @@ export class ForgejoService implements Omit<
             .filter(Boolean)
             .join('\n')
             .trim();
-    }
-
-    private formatPromptForLLM(lineComment: any): string {
-        let copyPrompt = '';
-        if (lineComment?.suggestion?.llmPrompt) {
-            if (lineComment.path) {
-                copyPrompt += `File ${lineComment.path}:\n\n`;
-            }
-
-            if (lineComment.start_line && lineComment.line) {
-                copyPrompt += `Line ${lineComment.start_line} to ${lineComment.line}:\n\n`;
-            } else if (lineComment.line) {
-                copyPrompt += `Line ${lineComment.line}:\n\n`;
-            }
-
-            copyPrompt += lineComment?.suggestion?.llmPrompt;
-
-            if (lineComment?.body?.improvedCode) {
-                copyPrompt +=
-                    '\n\nSuggested Code:\n\n' + lineComment?.body?.improvedCode;
-            }
-
-            copyPrompt = `\n<details>\n<summary>Prompt for LLM</summary>\n\n\`\`\`\n${copyPrompt}\n\`\`\`\n</details>\n`;
-        }
-
-        return copyPrompt;
     }
 
     async formatReviewCommentBody(params: {

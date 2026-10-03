@@ -1,7 +1,8 @@
 {
     "reviewComment": {
         "talkToKody": "Promluvte si s Kody zmíněním @kody",
-        "feedback": "Byl tento návrh užitečný? Reagujte s 👍 nebo 👎, aby se Kody mohl z této interakce učit."
+        "feedback": "Byl tento návrh užitečný? Reagujte s 👍 nebo 👎, aby se Kody mohl z této interakce učit.",
+        "feedbackReply": "Byl tento návrh užitečný? Odpovězte 👍 nebo 👎, aby se Kody mohl z této interakce učit."
     },
     "pullRequestFinishSummaryMarkdown": {
         "withComments": "## Kontrola kódu dokončena! 🔥\n\nKontrola kódu byla úspěšně dokončena na základě vašich aktuálních konfigurací.\n\n",
