@@ -104,11 +104,23 @@ describe('ForgejoService — createReviewComment returns the comment id (#2051)'
         });
         repoGetPullReviewComments.mockRejectedValue(new Error('ECONNRESET'));
 
-        const out = await makeService().createReviewComment(params());
+        const service = makeService();
+        const out = await service.createReviewComment(params());
 
         expect(out?.id).toBe(1);
         expect(repoCreatePullReview).toHaveBeenCalledTimes(1);
         expect(repoGetPullReviewComments).toHaveBeenCalledTimes(1);
+
+        // The degradation must stay traceable to the tenant: the warn carries
+        // the org metadata, not only the review id.
+        const warnCall = (service.logger as unknown as { warn: jest.Mock })
+            .warn.mock.calls.find((c) =>
+                String(c[0]?.message).includes('Could not resolve'),
+            );
+        expect(warnCall?.[0].metadata).toEqual({
+            reviewId: 1,
+            organizationAndTeamData: expect.any(Object),
+        });
     });
 
     it('passes through the comment from the response when it does carry one', async () => {

@@ -3125,7 +3125,11 @@ export class ForgejoService implements Omit<
                         message: `Could not resolve the created comment id for PR#${params.prNumber}`,
                         context: ForgejoService.name,
                         error: lookupError,
-                        metadata: { reviewId: review.id },
+                        metadata: {
+                            reviewId: review.id,
+                            organizationAndTeamData:
+                                params.organizationAndTeamData,
+                        },
                     });
                 }
             }
