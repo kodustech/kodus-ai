@@ -22,6 +22,8 @@ import { buildPlatformEmbedder } from '@libs/common/utils/document';
 import {
     dedupReviewWarnings,
     buildBadFixDowngradedWarning,
+    buildCallGraphFailedWarning,
+    buildSandboxUnavailableWarning,
     type ReviewWarning,
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import {
@@ -604,6 +606,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 emitStageWarning('CALLGRAPH_DROPPED');
             }
 
+            if (
+                !context.sandboxHandle?.remoteCommands &&
+                !context.sandboxSuperseded
+            ) {
+                stageWarnings.push(
+                    buildSandboxUnavailableWarning({
+                        modelName: effectiveModelName || 'unknown',
+                    }),
+                );
+            }
+
             if (shouldBuildCallGraph) {
                 try {
                     if (context.sandboxHandle?.run) {
@@ -631,6 +644,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         }
                     }
                 } catch (err) {
+                    stageWarnings.push(
+                        buildCallGraphFailedWarning({
+                            modelName: effectiveModelName || 'unknown',
+                        }),
+                    );
                     this.logger.warn({
                         message: `[AGENT] Call graph failed for PR#${prNumber}, proceeding without it`,
                         context: this.stageName,
