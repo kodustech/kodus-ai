@@ -2,7 +2,9 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 
 import { Inject, Injectable } from '@nestjs/common';
+import { InjectConnection } from '@nestjs/mongoose';
 import { InjectDataSource } from '@nestjs/typeorm';
+import { Connection } from 'mongoose';
 import { DataSource } from 'typeorm';
 
 import { createLogger } from '@libs/core/log/logger';
@@ -33,6 +35,12 @@ import {
     webhookUrlCheck,
 } from './checks/git.checks';
 import { liveLlmComplete, llmCheck } from './checks/llm.checks';
+import {
+    FeedbackCounts,
+    recentReviewsCheck,
+    ReviewRun,
+    SuggestionCounts,
+} from './checks/reviews.checks';
 import {
     analyticsCheck,
     astGraphCheck,
@@ -97,6 +105,8 @@ export class SelfHostedDoctorService {
     constructor(
         @InjectDataSource()
         private readonly dataSource: DataSource,
+        @InjectConnection()
+        private readonly mongo: Connection,
         private readonly codeManagementService: CodeManagementService,
         private readonly permissionValidationService: PermissionValidationService,
         @Inject(LICENSE_SERVICE_TOKEN)
@@ -178,6 +188,13 @@ export class SelfHostedDoctorService {
             ),
             editionCheck,
             analyticsCheck(() => this.lastAnalyticsRun()),
+            recentReviewsCheck({
+                runs: (team) => this.recentReviewRuns(team),
+                suggestions: (organizationId) =>
+                    this.recentSuggestions(organizationId),
+                feedback: (organizationId) =>
+                    this.recentFeedback(organizationId),
+            }),
         ];
     }
 
@@ -377,6 +394,130 @@ export class SelfHostedDoctorService {
         return {
             count: row?.count ?? 0,
             last: row?.last ? new Date(row.last) : null,
+        };
+    }
+
+    /**
+     * Finished code review runs of the window, each with the losses it recorded
+     * (dataExecution.reviewWarnings) and whether an agent stopped early (its
+     * `AgentReview::*` stage label, agent-review.stage.ts:2636-2653).
+     */
+    private async recentReviewRuns(team: DoctorTeam): Promise<ReviewRun[]> {
+        const rows: Array<{
+            status: ReviewRun['status'];
+            errorMessage: string | null;
+            warningKinds: string[] | null;
+            agentCutShort: boolean;
+        }> = await this.dataSource.query(
+            `SELECT ae.status::text AS status,
+                    left(ae."errorMessage", 300) AS "errorMessage",
+                    ARRAY(SELECT DISTINCT w->>'kind'
+                            FROM jsonb_array_elements(
+                                   CASE WHEN jsonb_typeof(ae."dataExecution"->'reviewWarnings') = 'array'
+                                        THEN ae."dataExecution"->'reviewWarnings'
+                                        ELSE '[]'::jsonb END) w) AS "warningKinds",
+                    EXISTS (SELECT 1 FROM code_review_execution cre
+                             WHERE cre.automation_execution_id = ae.uuid
+                               AND cre.stage_name LIKE 'AgentReview::%'
+                               AND (cre.message LIKE '% — timed out after %'
+                                    OR cre.message LIKE '% — hit step limit %'
+                                    OR cre.message LIKE '% — failed %')) AS "agentCutShort"
+               FROM automation_execution ae
+               JOIN team_automations ta ON ta.uuid = ae.team_automation_id
+               JOIN automation a ON a.uuid = ta."automationUuid"
+              WHERE ta."teamUuid" = $1
+                AND a."automationType" = 'AutomationCodeReview'
+                AND ae.status::text IN ('success', 'partial_error', 'error', 'skipped')
+                AND ae."createdAt" > now() - make_interval(days => $2)`,
+            [team.teamId, RECENT_DAYS],
+        );
+        return rows.map((r) => ({
+            status: r.status,
+            errorMessage: r.errorMessage,
+            warningKinds: r.warningKinds ?? [],
+            agentCutShort: r.agentCutShort === true,
+        }));
+    }
+
+    /** Suggestions created in the window, by what happened to them. */
+    private async recentSuggestions(
+        organizationId: string,
+    ): Promise<SuggestionCounts> {
+        const since = new Date(Date.now() - RECENT_DAYS * 86_400_000);
+        const rows: Array<{
+            _id: { delivery: string | null; implementation: string | null };
+            count: number;
+        }> = (await this.mongo
+            .collection('pullRequests')
+            .aggregate([
+                { $match: { organizationId, updatedAt: { $gte: since } } },
+                { $unwind: '$files' },
+                { $unwind: '$files.suggestions' },
+                {
+                    // Suggestion timestamps are ISO strings (pullRequests.service.ts:845).
+                    $match: {
+                        'files.suggestions.createdAt': {
+                            $gte: since.toISOString(),
+                        },
+                    },
+                },
+                {
+                    $group: {
+                        _id: {
+                            delivery: '$files.suggestions.deliveryStatus',
+                            implementation:
+                                '$files.suggestions.implementationStatus',
+                        },
+                        count: { $sum: 1 },
+                    },
+                },
+            ])
+            .toArray()) as any;
+
+        const counts: SuggestionCounts = {
+            sent: 0,
+            deliveryFailed: 0,
+            heldBack: 0,
+            implemented: 0,
+        };
+        for (const { _id, count } of rows) {
+            if (_id.delivery === 'sent') counts.sent += count;
+            else if (
+                _id.delivery === 'failed' ||
+                _id.delivery === 'failed_lines_mismatch'
+            )
+                counts.deliveryFailed += count;
+            else if (_id.delivery === 'not_sent') counts.heldBack += count;
+            if (
+                _id.implementation === 'implemented' ||
+                _id.implementation === 'partially_implemented'
+            )
+                counts.implemented += count;
+        }
+        return counts;
+    }
+
+    /** Reaction snapshots the reactions cron refreshed in the window. */
+    private async recentFeedback(
+        organizationId: string,
+    ): Promise<FeedbackCounts> {
+        const since = new Date(Date.now() - RECENT_DAYS * 86_400_000);
+        const [row] = (await this.mongo
+            .collection('codeReviewFeedback')
+            .aggregate([
+                { $match: { organizationId, updatedAt: { $gte: since } } },
+                {
+                    $group: {
+                        _id: null,
+                        thumbsUp: { $sum: '$reactions.thumbsUp' },
+                        thumbsDown: { $sum: '$reactions.thumbsDown' },
+                    },
+                },
+            ])
+            .toArray()) as Array<{ thumbsUp: number; thumbsDown: number }>;
+        return {
+            thumbsUp: row?.thumbsUp ?? 0,
+            thumbsDown: row?.thumbsDown ?? 0,
         };
     }
 
