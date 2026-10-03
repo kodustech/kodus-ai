@@ -1,7 +1,8 @@
 /** @jest-environment jsdom */
 import "@testing-library/jest-dom";
-import { render, screen } from "@testing-library/react";
+
 import { MCP_CONNECTION_STATUS } from "@services/mcp-manager/types";
+import { render, screen } from "@testing-library/react";
 import { SubscriptionProvider } from "src/features/ee/subscription/_providers/subscription-context";
 
 import { PluginsGrid } from "./plugins-grid";
@@ -10,8 +11,9 @@ jest.mock("src/core/utils/gate-hit", () => ({
     captureGateHit: jest.fn(),
 }));
 
+const mockCanOpenBilling = { value: true };
 jest.mock("@services/permissions/hooks", () => ({
-    usePermission: () => true,
+    usePermission: () => mockCanOpenBilling.value,
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -107,6 +109,34 @@ describe("PluginsGrid — free plan cap", () => {
         ).toBeInTheDocument();
         expect(screen.getAllByText("Locked")).toHaveLength(1);
         expect(screen.getAllByText("Installed")).toHaveLength(3);
+    });
+
+    it("sends a viewer without billing access to an admin, not to plans", () => {
+        const plugins = ["exa", "osv", "docs", "issues"].map((id) =>
+            plugin(id, {
+                isConnected: true,
+                connectionStatus: MCP_CONNECTION_STATUS.ACTIVE,
+            }),
+        );
+
+        mockCanOpenBilling.value = false;
+        try {
+            renderOnFreePlan(plugins, ["exa", "osv", "docs", "issues"]);
+
+            expect(
+                screen.getByText(/issues is installed, but never runs/i),
+            ).toBeInTheDocument();
+            expect(
+                screen.queryByRole("link", { name: /see plans/i }),
+            ).not.toBeInTheDocument();
+            expect(
+                screen.getByText(
+                    "Ask an organization admin to upgrade the plan.",
+                ),
+            ).toBeInTheDocument();
+        } finally {
+            mockCanOpenBilling.value = true;
+        }
     });
 
     it("does not lock or show the banner when connected count is within the cap", () => {
