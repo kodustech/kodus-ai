@@ -279,6 +279,13 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     /** Sandbox handle kept alive for safeguard agent verification */
     sandboxHandle?: SandboxInstance;
 
+    /**
+     * The sandbox lease was superseded (PR closed or force-pushed) while it was
+     * being acquired. The review runs without a sandbox, but it is moot, so it
+     * is not reported as a review that lost its checkout.
+     */
+    sandboxSuperseded?: boolean;
+
     /** Parameters used to create the sandbox — kept for renewal if it expires */
     getFreshCloneParams?: () => Promise<CreateSandboxParams>;
 

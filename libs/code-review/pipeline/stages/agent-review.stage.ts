@@ -22,6 +22,8 @@ import { buildPlatformEmbedder } from '@libs/common/utils/document';
 import {
     dedupReviewWarnings,
     buildBadFixDowngradedWarning,
+    buildCallGraphFailedWarning,
+    buildSandboxUnavailableWarning,
     type ReviewWarning,
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import {
@@ -604,6 +606,20 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 emitStageWarning('CALLGRAPH_DROPPED');
             }
 
+            // The null sandbox (no provider, or no clone params) carries
+            // remoteCommands that only throw, so the checkout is told by its
+            // type, as null-sandbox.service.ts asks callers to.
+            const hasCheckout =
+                !!context.sandboxHandle?.remoteCommands &&
+                context.sandboxHandle.type !== 'null';
+            if (!hasCheckout && !context.sandboxSuperseded) {
+                stageWarnings.push(
+                    buildSandboxUnavailableWarning({
+                        modelName: effectiveModelName || 'unknown',
+                    }),
+                );
+            }
+
             if (shouldBuildCallGraph) {
                 try {
                     if (context.sandboxHandle?.run) {
@@ -631,6 +647,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         }
                     }
                 } catch (err) {
+                    // Without a checkout the graph cannot build; that loss is
+                    // already SANDBOX_UNAVAILABLE.
+                    if (hasCheckout) {
+                        stageWarnings.push(
+                            buildCallGraphFailedWarning({
+                                modelName: effectiveModelName || 'unknown',
+                            }),
+                        );
+                    }
                     this.logger.warn({
                         message: `[AGENT] Call graph failed for PR#${prNumber}, proceeding without it`,
                         context: this.stageName,

@@ -49,6 +49,7 @@ jest.mock('@libs/llm/error-classifier', () => {
 
 import {
     readAttemptedSlot,
+    recordModelFailovers,
     runWithModelFailover,
     shouldFailoverToNextModel,
     type FailoverAttemptControl,
@@ -227,6 +228,92 @@ describe('runWithModelFailover', () => {
         ).rejects.toThrow();
         expect(runOne).toHaveBeenCalledTimes(1);
         expect(runOne.mock.calls[0][0]).toMatchObject({ model: 'A' });
+    });
+});
+
+describe('recordModelFailovers (#2066)', () => {
+    const opts = { runName: 'code-review-bug' };
+
+    it('records a call that only succeeded on the fallback', async () => {
+        const { value, failovers } = await recordModelFailovers(() =>
+            runWithModelFailover(
+                [slot('A'), slot('B')],
+                jest
+                    .fn()
+                    .mockRejectedValueOnce(err('AUTH_INVALID'))
+                    .mockResolvedValueOnce('from-fallback'),
+                opts,
+            ),
+        );
+
+        expect(value).toBe('from-fallback');
+        expect(failovers).toEqual([
+            { runName: 'code-review-bug', failedModel: 'A', usedModel: 'B' },
+        ]);
+    });
+
+    it('records nothing when the primary answered', async () => {
+        const { failovers } = await recordModelFailovers(() =>
+            runWithModelFailover(
+                [slot('A'), slot('B')],
+                jest.fn().mockResolvedValue('ok'),
+                opts,
+            ),
+        );
+
+        expect(failovers).toEqual([]);
+    });
+
+    it('records nothing when both models failed (the call threw)', async () => {
+        const { failovers } = await recordModelFailovers(() =>
+            runWithModelFailover(
+                [slot('A'), slot('B')],
+                jest.fn().mockRejectedValue(err('AUTH_INVALID')),
+                opts,
+            ).catch(() => 'handled'),
+        );
+
+        expect(failovers).toEqual([]);
+    });
+
+    it('keeps concurrent runs apart', async () => {
+        const failingThenOk = () =>
+            jest
+                .fn()
+                .mockRejectedValueOnce(err('AUTH_INVALID'))
+                .mockResolvedValueOnce('ok');
+        const [a, b] = await Promise.all([
+            recordModelFailovers(() =>
+                runWithModelFailover(
+                    [slot('A'), slot('B')],
+                    failingThenOk(),
+                    opts,
+                ),
+            ),
+            recordModelFailovers(() =>
+                runWithModelFailover(
+                    [slot('C'), slot('D')],
+                    jest.fn().mockResolvedValue('ok'),
+                    opts,
+                ),
+            ),
+        ]);
+
+        expect(a.failovers).toHaveLength(1);
+        expect(b.failovers).toEqual([]);
+    });
+
+    it('is a no-op outside a recording scope', async () => {
+        await expect(
+            runWithModelFailover(
+                [slot('A'), slot('B')],
+                jest
+                    .fn()
+                    .mockRejectedValueOnce(err('AUTH_INVALID'))
+                    .mockResolvedValueOnce('ok'),
+                opts,
+            ),
+        ).resolves.toBe('ok');
     });
 });
 

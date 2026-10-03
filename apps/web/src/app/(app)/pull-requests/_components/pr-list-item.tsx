@@ -1224,6 +1224,14 @@ const WARNING_KIND_LABEL: Record<ReviewWarningKind, string> = {
     // Rendered by ProviderFallbackNotice, not the fidelity list — label kept
     // for exhaustiveness.
     PROVIDER_FALLBACK: "Main provider failed; ran on fallback",
+    RULE_CONTEXT_UNAVAILABLE:
+        "Kody Rules not evaluated (repository context unavailable)",
+    BAD_FIX_DOWNGRADED: "Unusable fixes posted as plain comments",
+    SANDBOX_UNAVAILABLE: "Reviewed the diff only (repository not checked out)",
+    CALLGRAPH_FAILED: "Call graph unavailable",
+    SUGGESTIONS_DROPPED_PATH_MISMATCH:
+        "Findings dropped (file not in the pull request)",
+    KODY_RULES_PARTIAL: "Some Kody Rules checks failed to run",
 };
 
 /**
@@ -1237,12 +1245,21 @@ const WARNING_KIND_LABEL: Record<ReviewWarningKind, string> = {
  * the BYOK fallback because main failed) isn't mislabeled as a context-window
  * "fidelity reduced" degradation. Renders each category with its own framing.
  */
-const ReviewNotices = ({ warnings }: { warnings: ReviewWarning[] }) => {
+export const ReviewNotices = ({ warnings }: { warnings: ReviewWarning[] }) => {
     const fallbackWarnings = warnings.filter(
         (w) => w.kind === "PROVIDER_FALLBACK",
     );
+    // Only a small context window is a "fidelity" counter-measure; the other
+    // causes would otherwise render under "has a context window of 0 tokens".
     const fidelityWarnings = warnings.filter(
-        (w) => w.kind !== "PROVIDER_FALLBACK",
+        (w) =>
+            w.kind !== "PROVIDER_FALLBACK" &&
+            w.reason === "small_context_window",
+    );
+    const degradedWarnings = warnings.filter(
+        (w) =>
+            w.kind !== "PROVIDER_FALLBACK" &&
+            w.reason !== "small_context_window",
     );
     return (
         <>
@@ -1252,7 +1269,51 @@ const ReviewNotices = ({ warnings }: { warnings: ReviewWarning[] }) => {
             {fidelityWarnings.length > 0 && (
                 <ReviewFidelityNotice warnings={fidelityWarnings} />
             )}
+            {degradedWarnings.length > 0 && (
+                <ReviewDegradedNotice warnings={degradedWarnings} />
+            )}
         </>
+    );
+};
+
+/**
+ * The review succeeded but worked with less than it should have: no
+ * repository checkout, no call graph, findings or rules that were dropped.
+ * Each line names what was lost; none of it is shown on the pull request.
+ */
+const ReviewDegradedNotice = ({ warnings }: { warnings: ReviewWarning[] }) => {
+    const seen = new Set<string>();
+    const unique = warnings.filter((w) => {
+        const key = `${w.kind}::${w.detail ?? ""}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+    return (
+        <div className="border-warning/30 bg-warning/5 mb-4 rounded-lg border p-3">
+            <div className="mb-2 flex items-center gap-2">
+                <AlertTriangleIcon className="text-warning size-4 shrink-0" />
+                <span className="text-text-primary text-sm font-medium">
+                    Review ran with less context
+                </span>
+            </div>
+            <ul className="text-text-secondary space-y-1 text-xs">
+                {unique.map((w, idx) => (
+                    <li key={`${w.kind}-${idx}`} className="flex gap-1.5">
+                        <span className="text-text-tertiary">•</span>
+                        <span>
+                            {WARNING_KIND_LABEL[w.kind] ?? w.kind}
+                            {w.detail && (
+                                <span className="text-text-tertiary">
+                                    {" "}
+                                    ({w.detail})
+                                </span>
+                            )}
+                        </span>
+                    </li>
+                ))}
+            </ul>
+        </div>
     );
 };
 

@@ -37,6 +37,8 @@ import {
 } from '@libs/code-review/infrastructure/agents/collaborators/rule-context.retriever';
 import {
     AgentDegradedError,
+    buildKodyRulesPartialWarning,
+    buildPathMismatchWarning,
     buildRuleContextUnavailableWarning,
     type ReviewWarning,
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
@@ -240,6 +242,7 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
         let shardsRun = 0;
         let shardsErrored = 0;
         const contextWarnings: ReviewWarning[] = [];
+        let judgeModelName = 'unknown';
         if (judgeRules.length > 0) {
             const { byokConfig, main } = await resolveReviewAgentModel(
                 input,
@@ -248,6 +251,7 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                 // to the org's codeReview model when no override is set.
                 LLM_TASK.kodyRulesReview,
             );
+            judgeModelName = main.modelName;
 
             // Resolve the org's Kody Language into a human-readable label
             // (e.g. "pt-BR" -> "Portuguese (Brazil)") via the SAME helper
@@ -646,6 +650,14 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             // alertable). Emit a structured WARN with the counts so the
             // partial degrade is greppable/alertable per-execution.
             if (shardsErrored > 0 && shardsErrored < shardsRun) {
+                contextWarnings.push(
+                    buildKodyRulesPartialWarning({
+                        failed: shardsErrored,
+                        total: shardsRun,
+                        modelName: main.modelName,
+                        agentName: this.getIdentity().name,
+                    }),
+                );
                 this.shardLogger.warn({
                     message: `[kody-rules] PARTIAL judge-shard failure for PR#${input.prNumber}: ${shardsErrored}/${shardsRun} shard(s) errored — the surviving ${shardsRun - shardsErrored} shard(s) posted, but the semantic kody-rules on the failed shard(s) were NOT evaluated. Review degraded (not failed). Check the shard warn logs for the cause (wire-schema 400 / provider blip / model unavailability).`,
                     context: this.getIdentity().name,
@@ -718,6 +730,16 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                 logger: this.shardLogger,
             },
         );
+
+        if (mapped.droppedForPath > 0) {
+            contextWarnings.push(
+                buildPathMismatchWarning({
+                    count: mapped.droppedForPath,
+                    modelName: judgeModelName,
+                    agentName: this.getIdentity().name,
+                }),
+            );
+        }
 
         const durationMs = Date.now() - startTime;
         // How hard the repository was actually consulted. A review that
