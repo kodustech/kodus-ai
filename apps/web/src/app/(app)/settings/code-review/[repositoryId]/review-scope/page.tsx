@@ -154,12 +154,16 @@ function ReviewScopeContent() {
         id: "review-scope-instructions",
         isDirty: promptsDirty || formIsSubmitting,
         onBlock: () => {
-            const target =
-                (dirtyPromptField &&
-                    document.querySelector(
-                        `[data-field-name="${dirtyPromptField}"]`,
-                    )) ||
-                document.querySelector("[data-header-actions]");
+            // Field names end in `.value`; the row marks its unsuffixed
+            // name, so walk the prefixes like the layout does.
+            const segments = dirtyPromptField?.split(".") ?? [];
+            let target: Element | null = null;
+            for (let i = segments.length; i > 0 && !target; i--) {
+                target = document.querySelector(
+                    `[data-field-name="${segments.slice(0, i).join(".")}"]`,
+                );
+            }
+            target ??= document.querySelector("[data-header-actions]");
             if (!target) return;
             target.scrollIntoView({ behavior: "smooth", block: "center" });
             target.classList.add("field-highlight");

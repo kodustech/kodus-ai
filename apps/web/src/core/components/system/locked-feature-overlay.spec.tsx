@@ -5,8 +5,9 @@ import { fireEvent, render, screen } from "@testing-library/react";
 
 import { LockedFeatureOverlay } from "./locked-feature-overlay";
 
+const mockCanOpenBilling = { value: true };
 jest.mock("@services/permissions/hooks", () => ({
-    usePermission: () => true,
+    usePermission: () => mockCanOpenBilling.value,
 }));
 
 jest.mock("src/core/utils/gate-hit", () => ({
@@ -65,6 +66,33 @@ describe("LockedFeatureOverlay", () => {
 
         const link = screen.getByRole("link", { name: /upgrade plan/i });
         expect(link).toHaveAttribute("href", "/settings/subscription");
+    });
+
+    it("tells a viewer without billing access to ask an admin instead of linking to plans", () => {
+        mockCanOpenBilling.value = false;
+        try {
+            render(
+                <LockedFeatureOverlay
+                    title="Locked"
+                    description="desc"
+                    cta={{
+                        label: "See plans",
+                        href: "/choose-plan",
+                        feature: "cockpit",
+                    }}>
+                    <span>content</span>
+                </LockedFeatureOverlay>,
+            );
+
+            expect(screen.queryByRole("link")).not.toBeInTheDocument();
+            expect(
+                screen.getByText(
+                    "Ask an organization admin to upgrade the plan.",
+                ),
+            ).toBeInTheDocument();
+        } finally {
+            mockCanOpenBilling.value = true;
+        }
     });
 
     it("tracks a gate_cta_click when the CTA is clicked", () => {
