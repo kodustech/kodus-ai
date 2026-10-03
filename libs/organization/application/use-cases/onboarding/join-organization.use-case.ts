@@ -88,7 +88,10 @@ export class JoinOrganizationUseCase implements IUseCase {
         const domain = actor?.email?.split('@')[1];
         const joinable =
             userId && userId === actor?.uuid && domain
-                ? await this.getOrganizationsByDomainUseCase.execute(domain)
+                ? await this.getOrganizationsByDomainUseCase.execute(
+                      domain,
+                      actor.email,
+                  )
                 : [];
         if (!joinable.some((org) => org.uuid === organizationId)) {
             throw new ForbiddenException('Organization not available to join');

@@ -279,6 +279,18 @@ describe('Kodus MCP credential destination', () => {
         },
     );
 
+    it.each(['https://api.kodus.io', 'https://api.kodus.io/'])(
+        'points a bare-origin configuration (%s) at the MCP controller path',
+        async (configuredUrl) => {
+            process.env.API_KODUS_MCP_SERVER_URL = configuredUrl;
+            const result = await (service as any).formatConnection(
+                connection,
+                'org-1',
+            );
+            expect(result.url).toBe('https://api.kodus.io/mcp');
+        },
+    );
+
     it.each([
         undefined,
         '',

@@ -108,14 +108,10 @@ export class OrganizationController {
         @Query('domain')
         domain: string,
     ) {
-        // The result carries each organization's owner email, so a caller may
-        // only look up the domain of their own email (the only one the web
-        // asks for on choose-workspace), not enumerate arbitrary domains.
-        const ownDomain = this.request.user?.email?.split('@')[1];
-        if (!ownDomain || domain?.toLowerCase() !== ownDomain.toLowerCase()) {
-            return [];
-        }
-        return await this.getOrganizationsByDomainUseCase.execute(ownDomain);
+        return await this.getOrganizationsByDomainUseCase.execute(
+            domain,
+            this.request.user?.email,
+        );
     }
 
     @Get('/language')

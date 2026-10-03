@@ -584,4 +584,27 @@ describe('TeamMemberService — deterministic logic', () => {
             );
         });
     });
+
+    describe('updateOrCreateMembers — entries without an email', () => {
+        it('ignores them instead of creating a user for an undefined email', async () => {
+            const usersService = { find: jest.fn(), findOne: jest.fn() };
+            const service = makeService({}, usersService, {});
+            jest.spyOn(
+                service as any,
+                'checkExistingUsersInOtherOrganizations',
+            ).mockResolvedValue({ success: true, problematicUserIds: [] });
+            jest.spyOn(service, 'findManyByOrganizationId').mockResolvedValue(
+                [],
+            );
+            const createNewUser = jest.spyOn(service as any, 'createNewUser');
+
+            const response = await service.updateOrCreateMembers(
+                [{ uuid: 'tm-1', name: 'No email' }] as any,
+                { organizationId: 'org-1', teamId: 'team-1' },
+            );
+
+            expect(createNewUser).not.toHaveBeenCalled();
+            expect(response.results).toEqual([]);
+        });
+    });
 });

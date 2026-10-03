@@ -197,6 +197,13 @@ export class TeamMemberService implements ITeamMemberService {
         inviterEmail?: string,
     ): Promise<IUpdateOrCreateMembersResponse> {
         try {
+            // Members are identified by email only (client ids are dropped in
+            // getUserIdFromMembers); an entry without one cannot be resolved
+            // and would reach the create path with an undefined email.
+            members = members.filter(
+                (member) =>
+                    typeof member?.email === 'string' && member.email.trim(),
+            );
             const emails = members.map((member) => member.email);
             const usersToSendInvite = [];
             const results: IInviteResult[] = [];

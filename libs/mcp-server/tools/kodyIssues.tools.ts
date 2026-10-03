@@ -280,7 +280,9 @@ export class KodyIssuesTools {
                 data: z.looseObject({}).nullable(),
             }),
             execute: wrapToolHandler(async (args: InputType) => {
-                const issue = await this.findOwnIssue(args);
+                const issue = args.organizationId
+                    ? await this.findOwnIssue(args.issueId, args.organizationId)
+                    : null;
                 return {
                     success: !!issue,
                     data: issue,
@@ -312,7 +314,10 @@ export class KodyIssuesTools {
                 data: z.looseObject({}).nullable(),
             }),
             execute: wrapToolHandler(async (args: InputType) => {
-                if (!(await this.ownsIssue(args))) {
+                if (
+                    !args.organizationId ||
+                    !(await this.ownsIssue(args.issueId, args.organizationId))
+                ) {
                     return { success: false, data: null };
                 }
                 const updated = await this.issuesService.updateStatus(
@@ -350,7 +355,10 @@ export class KodyIssuesTools {
                 data: z.looseObject({}).nullable(),
             }),
             execute: wrapToolHandler(async (args: InputType) => {
-                if (!(await this.ownsIssue(args))) {
+                if (
+                    !args.organizationId ||
+                    !(await this.ownsIssue(args.issueId, args.organizationId))
+                ) {
                     return { success: false, data: null };
                 }
                 const updated = await this.issuesService.updateLabel(
@@ -385,7 +393,10 @@ export class KodyIssuesTools {
                 data: z.looseObject({}).nullable(),
             }),
             execute: wrapToolHandler(async (args: InputType) => {
-                if (!(await this.ownsIssue(args))) {
+                if (
+                    !args.organizationId ||
+                    !(await this.ownsIssue(args.issueId, args.organizationId))
+                ) {
                     return { success: false, data: null };
                 }
                 const updated = await this.issuesService.updateStatus(
@@ -404,27 +415,27 @@ export class KodyIssuesTools {
     // findByIdAndUpdate), and an issue of another organization answers like a
     // missing one. Do not filter with findOne({ uuid }): the schema has no
     // uuid field, so that lookup never matches. An absent organizationId never
-    // reaches here (McpToolAuthorizer sets it), but it must not widen the
-    // lookup either.
-    private async findOwnIssue(args: {
-        issueId: string;
-        organizationId?: string;
-    }): Promise<IIssue | null> {
-        if (!args.organizationId) return null;
+    // reaches here (McpToolAuthorizer sets it); callers narrow it first, and
+    // the check below keeps an empty value from widening the lookup.
+    private async findOwnIssue(
+        issueId: string,
+        organizationId: string,
+    ): Promise<IIssue | null> {
+        if (!organizationId) return null;
         let issue: IIssue | null;
         try {
-            issue = await this.issuesService.findById(args.issueId);
+            issue = await this.issuesService.findById(issueId);
         } catch {
             return null; // malformed id
         }
-        return issue?.organizationId === args.organizationId ? issue : null;
+        return issue?.organizationId === organizationId ? issue : null;
     }
 
-    private async ownsIssue(args: {
-        issueId: string;
-        organizationId?: string;
-    }): Promise<boolean> {
-        return !!(await this.findOwnIssue(args));
+    private async ownsIssue(
+        issueId: string,
+        organizationId: string,
+    ): Promise<boolean> {
+        return !!(await this.findOwnIssue(issueId, organizationId));
     }
 
     getAllTools(): McpToolDefinition[] {

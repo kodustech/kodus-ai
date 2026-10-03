@@ -247,7 +247,10 @@ describe('JoinOrganizationUseCase', () => {
                     { uuid: 'user-1', email: 'dev@acme.dev' },
                 ),
             ).rejects.toBeInstanceOf(ForbiddenException);
-            expect(joinable.execute).toHaveBeenCalledWith('acme.dev');
+            expect(joinable.execute).toHaveBeenCalledWith(
+                'acme.dev',
+                'dev@acme.dev',
+            );
         });
     });
 });

@@ -503,6 +503,11 @@ export class MCPManagerService {
         ) {
             throw new Error('Kodus MCP endpoint is invalid');
         }
+        // A bare origin (`https://api.example.com`) would send every tool call
+        // to `/`, which 404s; the MCP controller lives at `/mcp`.
+        if (endpoint.pathname === '/') {
+            endpoint.pathname = '/mcp';
+        }
         return endpoint.toString();
     }
 
