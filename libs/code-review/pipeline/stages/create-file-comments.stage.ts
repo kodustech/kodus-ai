@@ -295,6 +295,7 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                 allDiscardedSuggestions,
                 changedFiles,
                 platformType,
+                pullRequest?.head?.sha,
             );
 
         // Save pull request suggestions — comments already posted at this point
@@ -370,6 +371,7 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
         allDiscardedSuggestions?: Partial<CodeSuggestion>[],
         changedFiles: FileChange[] = [],
         platformType?: PlatformType,
+        reviewedCommit?: string,
     ) {
         try {
             // Children in a cluster are merged into their parent's
@@ -502,6 +504,7 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                     codeReviewConfig?.languageResultPrompt,
                     suggestionCopyPrompt,
                     fallbackSuggestionsBySeverity,
+                    reviewedCommit,
                 );
 
             return { lastAnalyzedCommit, commentResults };
