@@ -3,7 +3,7 @@ import "@testing-library/jest-dom";
 
 import { fireEvent, render, screen } from "@testing-library/react";
 
-import { GateCtaLink } from "./gate-cta-link";
+import { GateAltLink, GateCtaLink } from "./gate-cta-link";
 
 jest.mock("src/core/utils/gate-hit", () => ({
     captureGateCtaClick: jest.fn(),
@@ -136,5 +136,43 @@ describe("GateCtaLink", () => {
                 screen.getByRole("link", { name: /open/i }),
             ).toBeInTheDocument();
         });
+    });
+});
+
+describe("GateAltLink", () => {
+    beforeEach(() => {
+        mockCanOpenBilling.value = true;
+    });
+
+    it("links to its target", () => {
+        render(
+            <GateAltLink href="/settings/git" label="Connect a repository" />,
+        );
+
+        expect(
+            screen.getByRole("link", { name: /connect a repository/i }),
+        ).toHaveAttribute("href", "/settings/git");
+    });
+
+    it("is not offered when it leads to billing the viewer cannot open", () => {
+        mockCanOpenBilling.value = false;
+
+        const { container } = render(
+            <GateAltLink href="/choose-plan" label="Compare plans" />,
+        );
+
+        expect(container).toBeEmptyDOMElement();
+    });
+
+    it("stays for anyone when it leads elsewhere", () => {
+        mockCanOpenBilling.value = false;
+
+        render(
+            <GateAltLink href="/settings/git" label="Connect a repository" />,
+        );
+
+        expect(
+            screen.getByRole("link", { name: /connect a repository/i }),
+        ).toBeInTheDocument();
     });
 });

@@ -26,6 +26,39 @@ const leadsToBilling = (href: string) =>
     );
 
 /**
+ * Whether a gate may offer a link to `href`: plans and the license key live
+ * behind Billing, so a viewer without it would only reach "You don't have
+ * access to Billing & Subscription".
+ */
+export const useCanFollowGateLink = (href: string) => {
+    const canOpenBilling = usePermission(Action.Read, ResourceType.Billing);
+    return canOpenBilling || !leadsToBilling(href);
+};
+
+/**
+ * A gate's other way forward (e.g. "Connect a repository"), held to the same
+ * rule as the CTA: a target the viewer cannot open is not offered. Not
+ * tracked as a plan click.
+ */
+export const GateAltLink = ({
+    href,
+    label,
+}: {
+    href: string;
+    label: string;
+}) => {
+    if (!useCanFollowGateLink(href)) return null;
+
+    return (
+        <Link href={href}>
+            <Button decorative size="md" variant="primary">
+                {label}
+            </Button>
+        </Link>
+    );
+};
+
+/**
  * The "Upgrade plan" CTA every gate surface (Cockpit overlay, Plugins/Kody
  * Rules locked banners, both limit popovers) renders. Centralizing it means
  * every gate's click is tracked the same way — without this, `gate_hit`
@@ -58,12 +91,10 @@ export const GateCtaLink = ({
     className?: string;
     buttonClassName?: string;
 }) => {
-    const canOpenBilling = usePermission(Action.Read, ResourceType.Billing);
-
     // A contributor or repo admin can see a locked feature but not the page
     // that unlocks it: the button only led to "You don't have access to
     // Billing & Subscription". Tell them who can act instead.
-    if (leadsToBilling(href) && !canOpenBilling) {
+    if (!useCanFollowGateLink(href)) {
         return (
             <p
                 className={cn(
