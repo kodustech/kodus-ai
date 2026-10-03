@@ -11,6 +11,10 @@ import {
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { AcceptUserInvitationDto } from '@libs/identity/dtos/accept-user-invitation.dto';
 import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
+import {
+    IProfileService,
+    PROFILE_SERVICE_TOKEN,
+} from '@libs/identity/domain/profile/contracts/profile.service.contract';
 
 @Injectable()
 export class AcceptUserInvitationUseCase implements IUseCase {
@@ -22,11 +26,35 @@ export class AcceptUserInvitationUseCase implements IUseCase {
 
         private readonly createProfileUseCase: CreateProfileUseCase,
         private readonly telemetry: TelemetryService,
+
+        @Inject(PROFILE_SERVICE_TOKEN)
+        private readonly profileService: IProfileService,
     ) {}
     public async execute(user: AcceptUserInvitationDto): Promise<any> {
+        // This route is public and the uuid is the only input that names the
+        // account, so it may only finish an invitation that is still open: a
+        // PENDING user created by an invite, who has no profile yet (the
+        // profile is created below, and self sign-ups create one at sign-up).
+        // Anything else would let anyone set the password of any account.
+        const invited = user?.uuid
+            ? await this.usersService.findOne({
+                  uuid: user.uuid,
+                  status: STATUS.PENDING,
+              })
+            : null;
+        const alreadyAccepted =
+            invited &&
+            (await this.profileService.findOne({
+                user: { uuid: user.uuid },
+            }));
+        if (!invited || alreadyAccepted) {
+            throw new NotFoundException('User could not be found');
+        }
+
         const userUpdated = await this.usersService.update(
             {
                 uuid: user.uuid,
+                status: STATUS.PENDING,
             },
             {
                 status: STATUS.ACTIVE,

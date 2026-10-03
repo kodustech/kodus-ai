@@ -346,6 +346,16 @@ export class TeamMemberService implements ITeamMemberService {
     ): Promise<IMembers[]> {
         const membersWithUserId: IMembers[] = [];
 
+        // `uuid` (team member) and `userId` arrive in the request body. They
+        // are resolved here only from members of the caller's organization,
+        // matched by email; a client value would otherwise attach another
+        // organization's user (and expose their email) or rewrite another
+        // organization's team member row.
+        for (const member of members) {
+            delete member.uuid;
+            delete member.userId;
+        }
+
         const membersOfOrganization = await this.findManyByOrganizationId(
             organizationAndTeamData.organizationId,
             [STATUS.ACTIVE, STATUS.PENDING],

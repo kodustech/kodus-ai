@@ -492,4 +492,58 @@ describe('TeamMemberService — deterministic logic', () => {
             expect(a).not.toBe(b);
         });
     });
+
+    describe('getUserIdFromMembers — ids come from the caller organization only', () => {
+        const orgTeam = { organizationId: 'org-1', teamId: 'team-1' };
+        const ownMember = {
+            uuid: 'tm-own',
+            team: { uuid: 'team-1' },
+            user: { uuid: 'user-own', email: 'own@acme.dev' },
+        };
+        const resolve = async (members: any[], orgMembers: any[] | null) => {
+            const service = makeService();
+            jest.spyOn(service, 'findManyByOrganizationId').mockResolvedValue(
+                orgMembers as any,
+            );
+            return (service as any).getUserIdFromMembers(members, orgTeam);
+        };
+
+        it('drops a userId and uuid the client sent for a new email', async () => {
+            const [member] = await resolve(
+                [
+                    {
+                        email: 'ghost@acme.dev',
+                        userId: 'victim-user',
+                        uuid: 'victim-team-member',
+                    },
+                ],
+                [ownMember],
+            );
+            expect(member.userId).toBeUndefined();
+            expect(member.uuid).toBeUndefined();
+        });
+
+        it('drops client ids even when the organization has no members yet', async () => {
+            const [member] = await resolve(
+                [{ email: 'ghost@acme.dev', userId: 'victim-user' }],
+                null,
+            );
+            expect(member.userId).toBeUndefined();
+        });
+
+        it('replaces client ids with the matching member of the organization', async () => {
+            const [member] = await resolve(
+                [
+                    {
+                        email: 'own@acme.dev',
+                        userId: 'victim-user',
+                        uuid: 'victim-team-member',
+                    },
+                ],
+                [ownMember],
+            );
+            expect(member.userId).toBe('user-own');
+            expect(member.uuid).toBe('tm-own');
+        });
+    });
 });
