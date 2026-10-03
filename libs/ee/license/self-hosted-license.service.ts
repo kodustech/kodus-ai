@@ -43,10 +43,17 @@ function isLegacyFormat(
 export class SelfHostedLicenseService implements ILicenseService {
     private readonly logger = createLogger(SelfHostedLicenseService.name);
 
-    private cache: {
-        result: OrganizationLicenseValidationResult;
-        expiresAt: number;
-    } | null = null;
+    /**
+     * Keyed by organization: the key is stored per organization, so one
+     * organization's result says nothing about another's.
+     */
+    private readonly cache = new Map<
+        string,
+        {
+            result: OrganizationLicenseValidationResult;
+            expiresAt: number;
+        }
+    >();
 
     constructor(
         @Inject(ORGANIZATION_PARAMETERS_SERVICE_TOKEN)
@@ -56,9 +63,10 @@ export class SelfHostedLicenseService implements ILicenseService {
     async validateOrganizationLicense(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<OrganizationLicenseValidationResult> {
-        // Return cached result if still valid
-        if (this.cache && Date.now() < this.cache.expiresAt) {
-            return this.cache.result;
+        const cacheKey = organizationAndTeamData?.organizationId ?? '';
+        const cached = this.cache.get(cacheKey);
+        if (cached && Date.now() < cached.expiresAt) {
+            return cached.result;
         }
 
         try {
@@ -98,10 +106,10 @@ export class SelfHostedLicenseService implements ILicenseService {
                 expiresAt: new Date(payload.exp * 1000).toISOString(),
             };
 
-            this.cache = {
+            this.cache.set(cacheKey, {
                 result,
                 expiresAt: Date.now() + CACHE_TTL_MS,
-            };
+            });
 
             return result;
         } catch (error) {
@@ -421,7 +429,7 @@ export class SelfHostedLicenseService implements ILicenseService {
      * Clear the in-memory cache (e.g., after activating a new key).
      */
     clearCache(): void {
-        this.cache = null;
+        this.cache.clear();
     }
 
     private async getLicenseKey(

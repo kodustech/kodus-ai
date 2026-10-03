@@ -68,6 +68,38 @@ export interface DoctorCheck {
     run(ctx: DoctorContext): Promise<DoctorResult[]>;
 }
 
+/**
+ * How far back the doctor looks at what already happened (jobs, Git events).
+ * Older history no longer says anything about whether reviews run now.
+ */
+export const RECENT_DAYS = 7;
+
+/** Teams a pull request can be reviewed for: connected, active, repos selected. */
+export function reviewableTeams(
+    ctx: Pick<DoctorContext, 'teams'>,
+): DoctorTeam[] {
+    return ctx.teams.filter(
+        (t) => t.platform && t.integrationActive && t.repositories.length,
+    );
+}
+
+/**
+ * One team per organization whose license decides the edition: the license key
+ * is stored per organization, so it is read from the organizations that
+ * review, not from whichever sorts first by name. With nothing to review yet,
+ * every organization counts.
+ */
+export function licenseCandidates(teams: DoctorTeam[]): DoctorTeam[] {
+    const reviewing = reviewableTeams({ teams });
+    const byOrganization = new Map<string, DoctorTeam>();
+    for (const team of reviewing.length ? reviewing : teams) {
+        if (!byOrganization.has(team.organizationId)) {
+            byOrganization.set(team.organizationId, team);
+        }
+    }
+    return [...byOrganization.values()];
+}
+
 export function teamScope(team: DoctorTeam, repo?: string): string {
     const base = `${team.organizationName}/${team.teamName}`;
     return repo ? `${base}/${repo}` : base;
