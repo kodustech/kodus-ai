@@ -1,10 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 
-import type {
-    LoadPrDecisionsParams,
-    PrDecisionOutcome,
-    PrDecisionRecord,
-    PrDecisionStore,
+import {
+    MAX_PR_DECISIONS,
+    type LoadPrDecisionsParams,
+    type PrDecisionOutcome,
+    type PrDecisionRecord,
+    type PrDecisionStore,
 } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 import { createLogger } from '@libs/core/log/logger';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
@@ -95,17 +96,13 @@ export class PrDecisionStoreService implements PrDecisionStore {
     async load(
         params: LoadPrDecisionsParams,
     ): Promise<readonly PrDecisionRecord[]> {
-        if (!params.filePaths.length) {
-            return [];
-        }
-
         const [fileScoped, prLevel] = await Promise.allSettled([
-            this.pullRequestsRepository.findSuggestionsByPRAndFilenames(
+            this.pullRequestsRepository.findSuggestionsOnPR(
                 params.prNumber,
                 params.repositoryFullName,
-                params.filePaths,
                 params.organizationId,
                 DeliveryStatus.SENT,
+                MAX_PR_DECISIONS,
             ),
             this.pullRequestsRepository.findPrLevelSuggestionsByPR(
                 params.prNumber,

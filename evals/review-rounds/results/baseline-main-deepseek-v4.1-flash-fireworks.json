@@ -1,0 +1,3256 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "judge": "gpt-5.6-luna",
+  "judgeReasoningEffort": "low",
+  "reps": 3,
+  "note": "merged from 4 parallel groups on the same commit",
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "U1-premise-unread",
+      "family": "unread-premise",
+      "sandbox": "dead",
+      "ms": 116210,
+      "sandboxCalls": 13,
+      "sandboxFailed": 13,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 7,
+          "severity": "critical",
+          "marked": false,
+          "text": "Removing the `if (!job) { return { status: 'missing' as const }; }` guard while `job.amount` is still dereferenced means `computeFee(job.amount)` throws a null/undefined dereference when `claim(id)` returns null, and `settle` can no longer return the 'missing' status its callers may switch on, breaking the return-union contract. Re-introduce the guard before computing the fee and keep the 'missing' branch in the return union."
+        },
+        {
+          "file": "src/payments/settle.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "Flipping the debit operand from `job.amount + fee` to `job.amount - fee` reverses the fee direction, debiting the account `fee` less instead of `fee` more and silently under-charging every settlement if the fee is intended to be charged on top of the amount. Confirm the intended fee direction and restore `job.amount + fee` if the fee is a charge added to the amount."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver_normal",
+          "proposed": false,
+          "truth": "false",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "U1-premise-unread",
+      "family": "unread-premise",
+      "sandbox": "dead",
+      "ms": 127232,
+      "sandboxCalls": 20,
+      "sandboxFailed": 20,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 7,
+          "severity": "critical",
+          "marked": false,
+          "text": "claim(id) can return null, so dereferencing job.amount and job.account now throws a TypeError and silently drops the 'missing' status from the function's return contract. Restore the guard before dereferencing job, e.g. `if (!job) return { status: 'missing' as const };`, and keep 'missing' in the return type."
+        },
+        {
+          "file": "src/payments/settle.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "Changing the debit from `job.amount + fee` to `job.amount - fee` silently debits the account by `2 * fee` less and can push the balance negative for small amounts. Restore `job.amount + fee` unless the fee is intentionally deducted from the amount, in which case confirm the ledger semantics."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver_normal",
+          "proposed": false,
+          "truth": "false",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "U1-premise-unread",
+      "family": "unread-premise",
+      "sandbox": "dead",
+      "ms": 122144,
+      "sandboxCalls": 15,
+      "sandboxFailed": 15,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 6,
+          "severity": "critical",
+          "marked": false,
+          "text": "The null-check on the result of `claim(id)` was removed, but `job.amount` and `job.account` are still dereferenced unconditionally, so if `claim` returns null/undefined, `computeFee(job.amount)` throws a TypeError and the previous `{ status: 'missing' }` return contract is dropped. Restore the guard before dereferencing `job`."
+        },
+        {
+          "file": "src/payments/settle.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "The debit amount was changed from `job.amount + fee` to `job.amount - fee`, inverting the fee's effect and silently changing the monetary value moved on the ledger. Confirm the fee semantics, and if the original gross-up was correct, restore `job.amount + fee`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver_normal",
+          "proposed": false,
+          "truth": "false",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "U2-premise-readable",
+      "family": "unread-premise",
+      "sandbox": "alive",
+      "ms": 147613,
+      "sandboxCalls": 23,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "The debit amount was changed from `job.amount + fee` to `job.amount - fee`, inverting the fee sign even though computeFee's contract in src/payments/fees.ts specifies a fee charged on top of the job amount, so subtracting it under-charges the account, drops the processing fee, and debits less than the job amount. Restore the addition with `await ledger.debit(job.account, job.amount + fee);`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "false",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "U2-premise-readable",
+      "family": "unread-premise",
+      "sandbox": "alive",
+      "ms": 92063,
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "The settlement debit in src/payments/settle.ts was changed from `job.amount + fee` to `job.amount - fee`, but `computeFee` is documented in fees.ts as a fee charged on top of the job amount, so the account is under-debited by 2*fee and for small amounts the fixed +30 floor can make `amount - fee` negative, turning the debit into a credit and corrupting balances. Restore the addition."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "false",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "U2-premise-readable",
+      "family": "unread-premise",
+      "sandbox": "alive",
+      "ms": 103242,
+      "sandboxCalls": 24,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "In src/payments/settle.ts, the debit amount sign was flipped from `job.amount + fee` to `job.amount - fee` even though computeFee (src/payments/fees.ts) is documented as a fee charged ON TOP of the job amount, so every settlement under-collects and the processing fee is effectively credited back to the payer; for small amounts (amount < round(amount*0.029)+30, i.e. below ~31) the difference becomes negative and ledger.debit credits the account instead of debiting it. Restore the addition with `await ledger.debit(job.account, job.amount + fee);`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "false",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "U3-cross-file-dies-in-verify",
+      "family": "unread-premise",
+      "sandbox": "dies-in-verify",
+      "ms": 115624,
+      "sandboxCalls": 32,
+      "sandboxFailed": 12,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "Re-throwing NotReadyError makes pollCharge's resubmit branch (poller.ts:13-16) newly reachable, calling the non-idempotent gw.submit(charge.payload) for a charge the gateway already holds; since errors.ts:1 documents NotReadyError as \"the gateway has the charge but has not settled it yet (transient)\" while poller.ts:7 treats it as \"the gateway never received it: resubmit\" and gateway.ts:3 documents submit() as NOT idempotent, an unsettled-but-received charge now produces a duplicate charge / double billing. Propagate the transient 'not settled' state without resubmitting — e.g. have pollCharge"
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "U3-cross-file-dies-in-verify",
+      "family": "unread-premise",
+      "sandbox": "dies-in-verify",
+      "ms": 174019,
+      "sandboxCalls": 27,
+      "sandboxFailed": 6,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "The new re-throw of `NotReadyError` makes `pollCharge`'s resubmit branch reachable, and that branch calls `gw.submit`, which gateway.ts:3 documents as NOT idempotent (\"every call creates a new charge\"); since errors.ts:2 documents `NotReadyError` as a transient state where the gateway already HAS the charge but has not settled it, re-invoking a non-idempotent `submit` creates a duplicate charge / double billing, whereas before this change the error was wrapped in `FailedError` so the caller never resubmitted. Keep `NotReadyError` distinguishable for a later retry but do NOT let it trigger `gw."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "U3-cross-file-dies-in-verify",
+      "family": "unread-premise",
+      "sandbox": "dies-in-verify",
+      "ms": 187602,
+      "sandboxCalls": 21,
+      "sandboxFailed": 2,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "fetchStatus now rethrows NotReadyError verbatim, making pollCharge's resubmit branch (poller.ts:13-15) newly reachable, which calls the non-idempotent gw.submit; since errors.ts:1 defines NotReadyError as the transient \"gateway has the charge but has not settled it yet\" state and gateway.ts:3 says submit creates a new charge on every call, this path can resubmit (and re-charge) on each poll tick, producing duplicate charges. Resolve the semantic conflict: if NotReadyError means \"not settled yet\", do not resubmit; either keep translating it so pollCharge retries status on the next tick or have "
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "U4-cross-file-dead",
+      "family": "unread-premise",
+      "sandbox": "dead",
+      "ms": 180907,
+      "sandboxCalls": 22,
+      "sandboxFailed": 22,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 3,
+        "after": 3
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "The changed catch block references `NotReadyError`, but the diff adds no import for it (lines 1-3 are unchanged), so the symbol is likely undefined in this module and will fail as TS2304 \"Cannot find name 'NotReadyError'\", breaking `fetchStatus` entirely. Add `import { NotReadyError } from '<errors module>'` alongside the existing `FailedError` import."
+        },
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "high",
+          "marked": false,
+          "text": "`fetchStatus` no longer normalizes all failures to `FailedError` because a `NotReadyError` now propagates to callers unchanged, so any caller relying on `instanceof FailedError` to detect a fetch failure will receive an unhandled type. Verify each caller handles `NotReadyError` or document the new contract explicitly; if the intent is only to signal retryability, expose it via a field on `FailedError` instead of a distinct thrown type."
+        },
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "medium",
+          "marked": false,
+          "text": "`err instanceof NotReadyError` may silently never match if `NotReadyError` is a custom `Error` subclass compiled to ES5/ES2015 without fixing the prototype chain, so genuine NotReadyError instances are still wrapped in `FailedError` and the new branch has no effect. Ensure the error class restores the prototype (e.g. `Object.setPrototypeOf(this, new.target.prototype)`), or use a discriminant such as `err.name === 'NotReadyError'` or a static `isNotReady()` guard."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "not_deliver_normal",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "U4-cross-file-dead",
+      "family": "unread-premise",
+      "sandbox": "dead",
+      "ms": 180397,
+      "sandboxCalls": 15,
+      "sandboxFailed": 15,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "The catch block references `NotReadyError`, but no value import or definition for it is present in the diff, so if it is missing from value scope or imported as a type-only `import type`, `err instanceof NotReadyError` throws a runtime `ReferenceError` on every error path — including non-NotReady errors — crashing gateway failures instead of wrapping them in `FailedError` (transpile-only TS builds won't catch this at compile time). Ensure a value (non-type) import of `NotReadyError` from its defining module, e.g. `import { NotReadyError } from './errors';`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "not_deliver_normal",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "U4-cross-file-dead",
+      "family": "unread-premise",
+      "sandbox": "dead",
+      "ms": 155767,
+      "sandboxCalls": 21,
+      "sandboxFailed": 21,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "high",
+          "marked": false,
+          "text": "The catch block now rethrows a `NotReadyError` unwrapped (`throw err`) instead of normalizing every failure to `FailedError`, so `fetchStatus` can reject with a new type that bypasses callers' `FailedError` branch and surfaces as an unhandled rejection or unexpected terminal state. Verify every caller of `fetchStatus` (grep `fetchStatus(`) handles `NotReadyError`, or keep the contract stable by wrapping it in a `FailedError` with a `notReady` flag or the original error as `cause`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "not_deliver_normal",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "U5-premise-read-then-dies",
+      "family": "unread-premise",
+      "sandbox": "dies-after-reading:src/payments/queue.ts",
+      "ms": 177211,
+      "sandboxCalls": 27,
+      "sandboxFailed": 23,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "Changing the settled debit from `job.amount + fee` to `job.amount - fee` inverts the fee's sign, shifting the money debited to `job.account` by `2*fee` on every settlement and under-charging the account by the fee amount. Restore the gross charge (`job.amount + fee`) unless `ledger.debit`/`computeFee` semantics explicitly define a net-of-fee debit, verifying against the `Ledger.debit` and `computeFee` definitions before merging."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "false",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "U5-premise-read-then-dies",
+      "family": "unread-premise",
+      "sandbox": "dies-after-reading:src/payments/queue.ts",
+      "ms": 198130,
+      "sandboxCalls": 19,
+      "sandboxFailed": 12,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "The ledger debit now uses `job.amount - fee` instead of `job.amount + fee`, flipping the fee's sign and shifting every settled job's debited amount by 2*fee, which corrupts the account balance. Confirm `computeFee`'s contract in src/payments/fees.ts and restore `job.amount + fee` if the fee is a surcharge, keeping `- fee` only if it is explicitly netted out of settlement."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "false",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "U5-premise-read-then-dies",
+      "family": "unread-premise",
+      "sandbox": "dies-after-reading:src/payments/queue.ts",
+      "ms": 216902,
+      "sandboxCalls": 27,
+      "sandboxFailed": 22,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "The debit formula was inverted from `job.amount + fee` to `job.amount - fee`, so the fee is now subtracted from the amount charged to `job.account`, changing the settled debit by 2×fee versus the previous behavior and posting an incorrect amount to the ledger on every settlement. Restore the fee to the correct side of the formula per `computeFee`/`ledger.debit` semantics, e.g. `await ledger.debit(job.account, job.amount + fee);`, confirming the intended sign against src/payments/fees.ts and src/payments/ledger.ts."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "false",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 89248,
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 134474,
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/poller.ts",
+          "line": 15,
+          "severity": "critical",
+          "marked": false,
+          "text": "The new metric on line 15 instruments a resubmit path that calls the non-idempotent `gw.submit` even though `NotReadyError` means the gateway already holds the charge; errors.ts:1 documents `NotReadyError` as 'The gateway has the charge but has not settled it yet' and gateway.ts:3 documents `submit` as 'NOT idempotent: every call creates a new charge', so each poller tick on a NotReady charge creates an additional duplicate charge and now also increments `billing.resubmit` for every duplicate. Do not resubmit on `NotReadyError`; treat it as transient and wait/return a pending state instead, e."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 216065,
+      "sandboxCalls": 26,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "poller.ts",
+          "line": 16,
+          "severity": "critical",
+          "marked": false,
+          "text": "The resubmit path is non-idempotent because `await gw.submit(charge.payload)` is called unconditionally, so a poller retry or re-processing of the charge can submit the same payload to the gateway twice and produce a duplicate charge. This is an unchanged context line and the exact subject of PreviousDecision #1, and since the added `metrics.increment('billing.resubmit')` on line 15 is a synchronous no-op stub with no control-flow or return-value impact, it is not re-reported as a new finding for this diff."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "U6-premise-file-unreachable",
+      "family": "unread-premise",
+      "sandbox": "dead-for:src/payments/queue.ts",
+      "ms": 153305,
+      "sandboxCalls": 41,
+      "sandboxFailed": 2,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 6,
+          "severity": "high",
+          "marked": false,
+          "text": "The `if (!job) return { status: 'missing' }` guard was removed, so `job.amount` and `job.account` are dereferenced unconditionally; if `claim` returns a falsy value, this throws a TypeError that is not a `JobNotFoundError`, so handler.ts:9 does not map it to `{ status: 'missing' }` and the request fails as an unhandled 500 instead of the intended missing-job result. Restore the guard before dereferencing `job`, or guarantee `claim` throws `JobNotFoundError` and confirm the handler still maps it."
+        },
+        {
+          "file": "src/payments/settle.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "The debit amount changed from `job.amount + fee` to `job.amount - fee`, inverting the fee, but `computeFee` is documented (fees.ts:1) as a fee \"charged ON TOP of the job amount\", so subtracting it debits the account less than the job amount and misstates the money moved per settlement. Debit `job.amount + fee` to match the documented fee contract."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver_normal",
+          "proposed": false,
+          "truth": "false",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "U6-premise-file-unreachable",
+      "family": "unread-premise",
+      "sandbox": "dead-for:src/payments/queue.ts",
+      "ms": 224521,
+      "sandboxCalls": 42,
+      "sandboxFailed": 4,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 6,
+          "severity": "critical",
+          "marked": false,
+          "text": "Removing the `if (!job)` guard means `job.amount` on line 7 is dereferenced unconditionally, so a falsy job from `claim(id)` throws a TypeError that isn't a `JobNotFoundError` and won't be converted by the catch in handler.ts:9, giving the caller an unhandled exception instead of the documented missing status. Restore the null guard before accessing `job.amount`."
+        },
+        {
+          "file": "src/payments/settle.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "Changing the debit from `job.amount + fee` to `job.amount - fee` contradicts fees.ts, which documents the fee as charged on top of the job amount; subtracting under-charges by `2*fee` and, since `computeFee` is at least 30, makes the debit negative for any amount below ~31, corrupting the ledger. Add the fee back instead of subtracting it."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver_normal",
+          "proposed": false,
+          "truth": "false",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "U6-premise-file-unreachable",
+      "family": "unread-premise",
+      "sandbox": "dead-for:src/payments/queue.ts",
+      "ms": 342987,
+      "sandboxCalls": 48,
+      "sandboxFailed": 5,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "The settlement debit was changed from `job.amount + fee` to `job.amount - fee`, contradicting the documented fee contract in fees.ts (\"Processing fee charged ON TOP of the job amount\") and silently under-charging users by `2 * fee` while losing fee revenue on each job. Restore the addition so the on-top fee is collected: `await ledger.debit(job.account, job.amount + fee);`."
+        },
+        {
+          "file": "src/payments/settle.ts",
+          "line": 6,
+          "severity": "high",
+          "marked": false,
+          "text": "The `if (!job) { return { status: 'missing' } }` guard was removed, so `job.amount` is now dereferenced at line 7 without a null/undefined check on the result of `claim(id)`; if `claim(id)` returns a falsy job, `computeFee(job.amount)` throws a TypeError, and `onSettleRequest` (handler.ts:9) only catches `JobNotFoundError` and rethrows everything else, causing the request to crash instead of returning `{ status: 'missing' }` — a regression from the previous behavior. Restore the guard before computing the fee."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver_normal",
+          "proposed": false,
+          "truth": "false",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "U7-sandbox-recovers",
+      "family": "unread-premise",
+      "sandbox": "flaky:3",
+      "ms": 102536,
+      "sandboxCalls": 27,
+      "sandboxFailed": 3,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "The settlement debit was changed from `job.amount + fee` to `job.amount - fee`, but `computeFee` (fees.ts:1-3) is documented as a fee charged on top of the job amount, so the ledger must debit `amount + fee`; subtracting it undercharges every account by `2 * fee`, producing a financial discrepancy on every settlement. Restore the addition with `await ledger.debit(job.account, job.amount + fee);`"
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "false",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "U7-sandbox-recovers",
+      "family": "unread-premise",
+      "sandbox": "flaky:3",
+      "ms": 509442,
+      "sandboxCalls": 41,
+      "sandboxFailed": 3,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "The ledger debit now uses `job.amount - fee`, subtracting the processing fee instead of adding it, but `computeFee` is documented as 'charged ON TOP of the job amount' (src/payments/fees.ts:1), so this undercharges every account by 2×fee and can produce zero/negative debits for small amounts. Restore the addition."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "false",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "U7-sandbox-recovers",
+      "family": "unread-premise",
+      "sandbox": "flaky:3",
+      "ms": 118527,
+      "sandboxCalls": 24,
+      "sandboxFailed": 3,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "The debit amount changed from `job.amount + fee` to `job.amount - fee`, subtracting the processing fee instead of adding it, and since fees.ts:1 documents the fee as 'Processing fee charged ON TOP of the job amount', the account is under-debited by 2*fee and ledger balances are wrong. Restore the addition with `await ledger.debit(job.account, job.amount + fee);`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "false",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "U8-self-contained",
+      "family": "unread-premise",
+      "sandbox": "none",
+      "ms": 59108,
+      "sandboxCalls": 0,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": true,
+        "zeroStrongEvidenceFiles": true,
+        "zeroCoverage": true,
+        "lowCoverage": true,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 6,
+          "severity": "critical",
+          "marked": false,
+          "text": "The null/undefined guard on the result of claim(id) was removed, so the new code dereferences job.amount (line 7) and job.account (line 8) unconditionally. The previous version explicitly checked `if (!job)` and returned `{ status: 'missing' }`, proving claim can return a falsy value; without the guard, a missing job now throws a TypeError instead of returning the 'missing' status. Restore the guard before computing the fee and debiting."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        },
+        {
+          "id": "null-crash",
+          "expect": "observe",
+          "proposed": false,
+          "truth": "false",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "U8-self-contained",
+      "family": "unread-premise",
+      "sandbox": "none",
+      "ms": 89304,
+      "sandboxCalls": 0,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": true,
+        "zeroCoverage": true,
+        "lowCoverage": true,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 6,
+          "severity": "high",
+          "marked": false,
+          "text": "Removing the null check on the result of `await claim(id)` means `job.amount` is dereferenced without verifying `job` is non-null, so a missing job now throws a TypeError instead of returning the previous `{ status: 'missing' }` result. Restore the guard before using `job`: `if (!job) { return { status: 'missing' as const }; }`."
+        },
+        {
+          "file": "src/payments/settle.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "The debit amount changed from `job.amount + fee` to `job.amount - fee`, inverting the sign of the fee applied to the ledger debit and causing every settled job to be under-debited if `+ fee` was the intended settlement math. Confirm the intended fee direction and restore `job.amount + fee` if the fee should be added to the debited amount."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "observe",
+          "proposed": false,
+          "truth": "false",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "U8-self-contained",
+      "family": "unread-premise",
+      "sandbox": "none",
+      "ms": 56914,
+      "sandboxCalls": 0,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": true,
+        "zeroCoverage": true,
+        "lowCoverage": true,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 6,
+          "severity": "critical",
+          "marked": false,
+          "text": "In src/payments/settle.ts, removing the `if (!job) { return { status: 'missing' } }` guard on `claim(id)` leaves `job.amount` and `job.account` dereferenced unconditionally, so this path can throw a TypeError instead of returning the `missing` status because `claim()` can return no job. Restore the guard before using the job, e.g. `const job = await claim(id); if (!job) { return { status: 'missing' as const }; }`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        },
+        {
+          "id": "null-crash",
+          "expect": "observe",
+          "proposed": false,
+          "truth": "false",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "U9-missing-module-is-evidence",
+      "family": "unread-premise",
+      "sandbox": "alive",
+      "ms": 63492,
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/jobs/runner.ts",
+          "line": 1,
+          "severity": "high",
+          "marked": false,
+          "text": "The import now points to `./retry-policy`, a module that does not exist (only `src/jobs/retry.ts` does), breaking module resolution at build time and runtime with \"Cannot find module './retry-policy'\" and preventing the job runner from loading. Revert to `import { retryPolicy } from './retry';`, or create/rename the file to retry-policy.ts if the rename was intended."
+        }
+      ],
+      "claims": [
+        {
+          "id": "missing-module",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "U9-missing-module-is-evidence",
+      "family": "unread-premise",
+      "sandbox": "alive",
+      "ms": 74812,
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/jobs/runner.ts",
+          "line": 1,
+          "severity": "high",
+          "marked": false,
+          "text": "The import now points to `./retry-policy`, but `src/jobs/retry-policy.ts` does not exist (only retry.ts, runner.ts, and types.ts are present), so the module cannot be resolved, the build/typecheck fails, and `retryPolicy.wrap` in `run()` is undefined at runtime, breaking the job runner. Revert the import to `import { retryPolicy } from './retry';`, or create/rename the file to `retry-policy.ts` if the rename was intended."
+        }
+      ],
+      "claims": [
+        {
+          "id": "missing-module",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "U9-missing-module-is-evidence",
+      "family": "unread-premise",
+      "sandbox": "alive",
+      "ms": 58517,
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/jobs/runner.ts",
+          "line": 1,
+          "severity": "critical",
+          "marked": false,
+          "text": "The import specifier './retry-policy' points to a module that doesn't exist — the only retry module in src/jobs is retry.ts, which is where retryPolicy is exported — so module resolution fails at build/startup with 'Cannot find module ./retry-policy' (TS2307) and runner.ts cannot be compiled, making run(job) unusable. Revert the import to './retry', or rename retry.ts to retry-policy.ts in the same PR so the specifier resolves."
+        }
+      ],
+      "claims": [
+        {
+          "id": "missing-module",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 217852,
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "Rethrowing NotReadyError makes pollCharge's `err instanceof NotReadyError` branch reachable, and that branch calls the non-idempotent `gw.submit(charge.payload)`; because errors.ts:1 defines NotReadyError as transient (\"the gateway has the charge but has not settled it yet\") and gateway.ts:3 documents Gateway.submit as creating a new charge on every call, each poll tick resubmits and creates a duplicate charge, causing double billing (previously fetchStatus wrapped all errors in FailedError, leaving this branch dead). Have pollCharge return a pending state (or poll again) instead of calling gw"
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 230693,
+      "sandboxCalls": 25,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "Re-throwing NotReadyError from fetchStatus makes the resubmit branch at poller.ts:13-15 reachable, and since errors.ts:2 defines NotReadyError as a transient \"charge not settled\" state while gateway.ts:3 documents gw.submit(charge.payload) as non-idempotent, an unsettled charge now triggers a duplicate charge (previously fetchStatus wrapped it in FailedError, keeping that branch dead). Either have the poller retry the status check instead of resubmitting (e.g. return { state: 'pending' } on NotReadyError rather than calling gw.submit), or restrict NotReadyError to the \"never received\" case so "
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 186908,
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "fetchStatus now propagates NotReadyError from gw.status to pollCharge, which calls gw.submit(charge.payload); since gw.submit is \"NOT idempotent: every call creates a new charge\" (gateway.ts:3) and NotReadyError means \"The gateway has the charge but has not settled it yet\" (errors.ts:1), this newly reachable path (previously fetchStatus wrapped every error in FailedError, making poller.ts:13 dead code) resubmits a charge the gateway already holds, causing duplicate charges / double-billing. Keep propagating NotReadyError, but change the poller's recovery to re-poll gw.status instead of resubmi"
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R3-consequence-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 298174,
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "Propagating NotReadyError in status.ts makes the previously-dead resubmit branch in pollCharge (poller.ts:13-15) reachable, but errors.ts:1 defines NotReadyError as 'the gateway has the charge but has not settled it yet (transient)', so pollCharge calls gw.submit(charge.payload) for a charge the gateway already holds; resubmitting a transient/unsettled charge can create a duplicate charge (double billing), the correct reaction is to wait and retry on the next tick, and the poller's own comment (poller.ts:7) contradicts errors.ts about what NotReadyError means. Align the two definitions and mak"
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R3-consequence-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 251728,
+      "sandboxCalls": 25,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "The unchanged rethrow of NotReadyError now makes pollCharge's NotReadyError branch reachable, which calls the non-idempotent gw.submit; pollCharge runs for charges the gateway has ACCEPTED (poller.ts:6) and NotReadyError means the gateway has the charge but has not settled it yet (errors.ts:1), while gw.submit is documented as NOT idempotent: every call creates a new charge (gateway.ts:3), so an accepted-but-unsettled charge produces a duplicate charge. At the caller, retry by re-polling status instead of resubmitting the payload (or pass an idempotency key to submit) and do not resubmit a cha"
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R3-consequence-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 164641,
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "In src/billing/status.ts, propagating NotReadyError out of fetchStatus (lines 8-10) newly activates the `err instanceof NotReadyError` branch in pollCharge (src/billing/poller.ts:13-16), which calls the non-idempotent `gw.submit(charge.payload)`; because errors.ts:1-2 defines NotReadyError as 'the gateway HAS the charge but has not settled it yet (transient)' and gateway.ts:3 documents submit as 'NOT idempotent: every call creates a new charge', every tick where the charge simply hasn't settled now resubmits and creates a duplicate charge (double billing), whereas before this PR fetchStatus wr"
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R4a-kodus2011-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 809429,
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R4a-kodus2011-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 393749,
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R4a-kodus2011-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 211509,
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R4b-kodus2011-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 557601,
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R4b-kodus2011-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 1327444,
+      "sandboxCalls": 23,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "libs/common/utils/prompts/replyAddressedToKody.ts",
+          "line": 124,
+          "severity": "critical",
+          "marked": false,
+          "text": "Because the new single-pass decode in `libs/common/utils/prompts/replyAddressedToKody.ts` never rescans its own output, an encoded ampersand followed by a markup reference (`&#38;lt;/NEWEST MESSAGE&#38;gt;` or `&amp;lt;/NEWEST MESSAGE&amp;gt;`) now survives as the literal string `&lt;/NEWEST MESSAGE&gt;` instead of being neutralized, and since `ANGLE_BRACKET` only turns every `<` into `‹`, a classifier LLM that interprets HTML entities as markup can read it as a real closing tag and let a PR participant break out of the `<NEWEST MESSAGE>` element and inject content (the previous chained decode"
+        }
+      ],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R4b-kodus2011-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 766918,
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R5-unrelated-same-area",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 139519,
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "medium",
+          "marked": false,
+          "text": "The FailedError constructor arguments are swapped: `new FailedError(String(err), chargeId)` passes the stringified gateway error as `chargeId` and the real chargeId as `cause`, so `err.chargeId` and the `super(chargeId)` message now hold raw error text instead of the charge identifier — a regression from `new FailedError(chargeId, err)`. Restore the correct order with `throw new FailedError(chargeId, err)`, keeping `String(err)` only if a string cause is required."
+        }
+      ],
+      "claims": [
+        {
+          "id": "swapped-args",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R5-unrelated-same-area",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 142642,
+      "sandboxCalls": 22,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "medium",
+          "marked": false,
+          "text": "The two arguments to FailedError are swapped: `new FailedError(String(err), chargeId)` passes the stringified error as `chargeId` and the charge id as `cause`, but the constructor is `constructor(readonly chargeId: string, readonly cause?: unknown)` (errors.ts:4), so `super(chargeId)` makes the message the raw error string and callers reading `err.chargeId` get the wrong value. Restore the correct argument order with `throw new FailedError(chargeId, err);`."
+        },
+        {
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "medium",
+          "marked": false,
+          "text": "The new call `throw new FailedError(String(err), chargeId);` swaps the arguments relative to the FailedError constructor signature `(chargeId: string, cause?: unknown)` in errors.ts:4, corrupting the error identity (chargeId) and losing the original error object as the cause compared to the prior `(chargeId, err)` ordering. Restore the correct order by passing `chargeId` first and the error second."
+        }
+      ],
+      "claims": [
+        {
+          "id": "swapped-args",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R5-unrelated-same-area",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 130861,
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "medium",
+          "marked": false,
+          "text": "The arguments to FailedError are swapped: new FailedError(String(err), chargeId) makes String(err) the chargeId and the real chargeId the cause, so message (from super(chargeId)) becomes the error string instead of the charge ID, corrupting any error handling, logging, or matching that relies on these fields. Restore the correct order, e.g. throw new FailedError(chargeId, err);"
+        }
+      ],
+      "claims": [
+        {
+          "id": "swapped-args",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R6-incomplete-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 79641,
+      "sandboxCalls": 5,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/ledger/ledger.ts",
+          "line": 5,
+          "severity": "critical",
+          "marked": false,
+          "text": "The new positive-amount guard was added only to `debit`, so `credit(account, -amount)` still accepts zero/negative amounts, silently debits, and bypasses the validation, leaving the invariant only half-enforced. Apply the same guard to `credit` (or centralize the validation) so both directions reject non-positive amounts."
+        }
+      ],
+      "claims": [
+        {
+          "id": "credit-negative",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R6-incomplete-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 110244,
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/ledger/ledger.ts",
+          "line": 5,
+          "severity": "critical",
+          "marked": false,
+          "text": "In src/ledger/ledger.ts, the new positivity guard was added only to debit (line 5), so credit (line 10) still accepts zero or negative amounts; a negative amount passed to credit is added and silently subtracts from the balance, leaving the sign-inversion bug reachable through credit. Apply the same guard in credit so non-positive amounts throw a RangeError('amount must be positive')."
+        }
+      ],
+      "claims": [
+        {
+          "id": "credit-negative",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R6-incomplete-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 101492,
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/ledger/ledger.ts",
+          "line": 5,
+          "severity": "high",
+          "marked": false,
+          "text": "The positivity guard added to `debit` was not applied to `credit`, so `credit` still accepts zero or negative amounts, where a negative `credit(account, -amount)` silently debits the account and a zero credit is a silent no-op. Add the same guard to `credit`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "credit-negative",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R7-refines-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 74136,
+      "sandboxCalls": 6,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/http/client.ts",
+          "line": 5,
+          "severity": "high",
+          "marked": false,
+          "text": "The AbortController's signal is never passed to fetch, so the 5-second timer aborts a controller that nothing listens to and getJson still hangs forever when the server never responds. Pass controller.signal into fetch via `{ signal: controller.signal }` so that controller.abort() actually takes effect."
+        }
+      ],
+      "claims": [
+        {
+          "id": "signal-not-passed",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R7-refines-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 43650,
+      "sandboxCalls": 3,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/http/client.ts",
+          "line": 2,
+          "severity": "high",
+          "marked": false,
+          "text": "The AbortController's signal is never passed to fetch, so controller.abort() at line 3 has no effect and the request is never actually cancelled, meaning a server that accepts the connection but never responds still hangs getJson forever despite the 5000ms timer. Pass the signal to fetch: `const res = await fetch(url, { signal: controller.signal });`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "signal-not-passed",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R7-refines-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 68725,
+      "sandboxCalls": 6,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/http/client.ts",
+          "line": 2,
+          "severity": "high",
+          "marked": false,
+          "text": "The AbortController created on lines 2-3 is never passed to fetch, so controller.abort() after 5s aborts a controller that no request is listening to and the timeout has no effect, leaving getJson hanging forever against a server that accepts the connection but never responds. Pass the signal to fetch with `{ signal: controller.signal }`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "signal-not-passed",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 202999,
+      "sandboxCalls": 22,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "Propagating NotReadyError unchanged from fetchStatus (lines 8-10) makes pollCharge's NotReadyError branch reachable, where it calls the non-idempotent gw.submit(charge.payload) (gateway.ts:3-4) even though NotReadyError means the gateway already holds the charge but has not settled it yet (transient) (errors.ts:1), causing a second charge and double-billing; previously fetchStatus wrapped NotReadyError into FailedError, so this path was dead code. To avoid resubmitting an accepted charge, either make Gateway.submit idempotent (accept a client idempotency key / charge id) before resubmitting, o"
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 179550,
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "Throwing NotReadyError makes the `err instanceof NotReadyError` branch in pollCharge reachable, and since NotReadyError means the gateway already holds the charge (errors.ts:1), calling the non-idempotent `gw.submit(charge.payload)` (gateway.ts:3) creates a duplicate charge and double-bills the customer — previously fetchStatus wrapped NotReadyError in FailedError, leaving the resubmit branch (poller.ts:13-16) dead code. Do not resubmit on NotReadyError; retry the status poll instead, or make submit idempotent with a dedupe/idempotency key."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 215522,
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "Rethrowing NotReadyError at status.ts:8-9 makes poller.ts's previously-dead resubmit branch (poller.ts:13-15) live, and that branch calls gw.submit, which gateway.ts:3 documents as NOT idempotent ('every call creates a new charge'); because errors.ts:1-2 defines NotReadyError as 'the gateway has the charge but has not settled it yet (transient)' — a condition where a charge already exists — resubmitting can create a duplicate charge and double billing, while poller.ts:7 claims the opposite ('never received it'), leaving the resubmit decision on conflicting semantics. Reconcile the semantics so"
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R9-repeat-after-dev-rejected",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 147230,
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/poller.ts",
+          "line": 15,
+          "severity": "critical",
+          "marked": false,
+          "text": "The branch instrumented by the new metric resubmits the charge via `gw.submit(charge.payload)`, but `Gateway.submit` is documented as non-idempotent (gateway.ts:3 'every call creates a new charge') while `NotReadyError` means the gateway already has the charge (errors.ts:1 'the gateway has the charge but has not settled it yet'), so every poll tick returning NotReadyError issues another `submit`, creating a duplicate charge each time. The new `billing.resubmit` metric counts these duplicates but does not prevent them; on NotReadyError, return without resubmitting (e.g. `return { state: 'not_re"
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-repeat-after-rejection",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R9-repeat-after-dev-rejected",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 278989,
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/poller.ts",
+          "line": 15,
+          "severity": "critical",
+          "marked": false,
+          "text": "The newly added `metrics.increment('billing.resubmit')` sits inside the `NotReadyError` branch that calls `gw.submit(charge.payload)`, but `Gateway.submit` is not idempotent (gateway.ts:3) and `NotReadyError` means the gateway already holds the charge (errors.ts:1), so every poll tick for an unsettled charge creates an additional charge and duplicate billing; the in-file comment at poller.ts:7-8 claiming the gateway never received it is wrong. Treat `NotReadyError` as transient and do not resubmit—wait/return and let the next tick re-check, or make submission idempotent with a client idempoten"
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-repeat-after-rejection",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R9-repeat-after-dev-rejected",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 383539,
+      "sandboxCalls": 26,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "file": "src/billing/poller.ts",
+          "line": 15,
+          "severity": "critical",
+          "marked": false,
+          "text": "`pollCharge` calls `gw.submit(charge.payload)` (line 16) whenever `fetchStatus` throws `NotReadyError`, but `Gateway.submit` is non-idempotent (src/billing/gateway.ts:3) while `NotReadyError` means the gateway already holds the charge (src/billing/errors.ts:1), so each tick issues another submit and creates a duplicate charge at the gateway. Treat `NotReadyError` as a wait/retry-later signal and return without calling `gw.submit` (e.g. `return { state: 'notReady' as const }`), or make submission idempotent via an idempotency key."
+        },
+        {
+          "file": "src/billing/poller.ts",
+          "line": 15,
+          "severity": "low",
+          "marked": false,
+          "text": "`metrics.increment('billing.resubmit')` (line 15) runs before `await gw.submit(...)` (line 16), so a rejected submit still reports a resubmit that never occurred, inflating the counter and masking submit failures. Increment the metric after the `await gw.submit(...)` completes."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-repeat-after-rejection",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R10-kodus2044-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 339157,
+      "sandboxCalls": 45,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "line": 1116,
+          "severity": "medium",
+          "marked": false,
+          "text": "The new refusal return in createMemoryRule (data: { title, action, requiresApproval, message, link }) omits uuid, rule and status, which the tool's own outputSchema declares as required (uuid: z.string(), rule: z.string(), status: z.enum(KodyRulesStatus) at lines 1074-1077) while the sibling createRule schema marks those same fields optional, so if the MCP layer validates structuredContent against outputSchema the refusal fails validation and the caller never receives the intended 'Team not found.' message. Either make those three keys optional in the createMemoryRule outputSchema (matching Cr"
+        }
+      ],
+      "claims": [
+        {
+          "id": "unresolved-team-bypass",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R10-kodus2044-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 444686,
+      "sandboxCalls": 63,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "line": 1111,
+          "severity": "medium",
+          "marked": false,
+          "text": "The refusal path in createMemoryRule returns a data object with only title, action, requiresApproval, message and link, but the tool's outputSchema (lines 1070-1087) declares uuid, rule and status as required (z.string() / z.enum(KodyRulesStatus)), so any MCP client/server validating structuredContent against outputSchema rejects this call and consumers reading data.uuid/data.rule/data.status get undefined, while the success path supplies all three. Relax the memory outputSchema to make uuid, rule and status optional (as createKodyRule's schema already does for its refusal path) or populate th"
+        },
+        {
+          "file": "kodyRules.tools.ts",
+          "line": 1111,
+          "severity": "medium",
+          "marked": false,
+          "text": "The createMemoryRule refusal path (lines 1111-1128) returns a data object containing only title/action/requiresApproval/message/link, omitting uuid, rule and status, which the z.looseObject output schema declares as required, so the payload fails output-schema validation at runtime even though it compiles because the CreateMemoryRuleResponse interface marks those three fields optional. Make the missing fields optional in the output schema or populate them in the refusal response."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unresolved-team-bypass",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R10-kodus2044-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 506266,
+      "sandboxCalls": 43,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "line": 1116,
+          "severity": "medium",
+          "marked": false,
+          "text": "The new refusal early-return in createMemoryRule returns a data object containing only title/action/requiresApproval/message/link, but the tool's outputSchema (lines 1073-1084) defines data as z.looseObject with required uuid: z.string(), rule: z.string(), and status: z.enum(KodyRulesStatus), all three missing, breaking the output contract for the refused-team path so any consumer or transport that validates structuredContent against outputSchema rejects the response and a refused team gets a malformed result instead of a clean failure. Either add the required fields to the refusal payload (e."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unresolved-team-bypass",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R11-kodus1902-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 1185581,
+      "sandboxCalls": 66,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "line": 474,
+          "severity": "high",
+          "marked": false,
+          "text": "When the failure is raised before the lease is claimed (leaseClaimed === false), the catch passes ownedBy: undefined, so handleFailure takes the unguarded path and stamps FAILED on the job row unconditionally, even if another worker has already claimed that same jobId. Since a redelivery of the same jobId can be consumed while another worker holds the row (workflow-job.repository.ts:231-242), an unguarded FAILED kills that worker's completion and sends a failure notice for a review still running, and the subsequent throw (L506) makes the consumer stamp FAILED unguarded (workflow-job-consumer.s"
+        }
+      ],
+      "claims": [
+        {
+          "id": "unclaimed-path-unfenced",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R11-kodus1902-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 805475,
+      "sandboxCalls": 61,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 3,
+        "after": 3
+      },
+      "delivered": [
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "line": 474,
+          "severity": "critical",
+          "marked": false,
+          "text": "A failure raised before the lease is claimed (payload validation, rateLimitGate.check, tryEnter — all before line 272) resolves `ownedBy` to `undefined`, so `handleFailure` takes the `if (!options?.ownedBy)` branch and performs an unguarded `jobRepository.update(jobId, failurePatch)` with no WHERE condition, letting the FAILED write overwrite a live worker's PROCESSING row and drop its review — the exact #1830 symptom the sibling BYOK branch guards against via `requireNoLiveOwner`, and a regression from the previously always-guarded write. Pass `requireNoLiveOwner: true` when `!leaseClaimed` s"
+        },
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "line": 559,
+          "severity": "low",
+          "marked": false,
+          "text": "`abandonBusyReview` now awaits `this.handleFailure(...)` (line 559) before the `notifyCommandReviewRefused` block, and since `handleFailure` isn't wrapped in try/catch, a rethrow from its underlying `jobRepository.update` aborts the method before the user-facing refusal notice is sent, silently dropping the 'your review request was dropped' notification on a transient DB error. Wrap the write (or the notify) so a write exception still reaches the notification, e.g. run the notify in a `finally`/`catch` around the recorded check."
+        },
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "line": 649,
+          "severity": "critical",
+          "marked": false,
+          "text": "The new `this.jobRepository.update(jobId, failurePatch, { noLiveOwner: true })` call passes a guard shape the injected abstraction `IWorkflowJobRepository` does not declare — only the concrete `WorkflowJobRepository` was widened — so because `jobRepository` is typed as the contract interface (line 47), the object literal fails compilation with unknown property `noLiveOwner` and missing required `leaseOwner`. Add `| { noLiveOwner: true }` to the `update` guard parameter in `IWorkflowJobRepository` (workflow-job.repository.contract.ts)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unclaimed-path-unfenced",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R11-kodus1902-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 1034691,
+      "sandboxCalls": 78,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 3,
+        "after": 3
+      },
+      "delivered": [
+        {
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "line": 248,
+          "severity": "critical",
+          "marked": false,
+          "text": "The `noLiveOwner` guard treats `leaseExpiresAt IS NULL` as unowned, so a row with `status = PROCESSING` and a NULL lease passes the fence and is stamped FAILED, even though `findStaleProcessing` (lines 443-448) treats that same row as a live worker; the disagreement lets a concurrent redelivery on the BYOK-exhausted branch overwrite a worker the reaper still considers alive, which is the #1830 symptom this fence exists to prevent. Drop the `IS NULL` escape hatch so the write only proceeds when the row is genuinely unowned: `(status <> :processing OR (leaseExpiresAt IS NOT NULL AND leaseExpires"
+        },
+        {
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "line": 249,
+          "severity": "high",
+          "marked": false,
+          "text": "The guard's raw SQL references `leaseExpiresAt` unquoted, but this file quotes it as `\"leaseExpiresAt\"` (lines 432, 444-446) and documents at lines 424-426 that Postgres folds unquoted mixed-case identifiers to lowercase, so a stored `\"leaseExpiresAt\"` column raises `column \"leaseexpiresat\" does not exist`, causing `handleFailure({requireNoLiveOwner:true})` to throw and the entire BYOK-exhausted failure/notice path (code-review-job-processor.service.ts:190-203) to fail instead of recording the failure. Quote the identifiers to match findStaleProcessing: `(status <> :processing OR \"leaseExpires"
+        },
+        {
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "line": 177,
+          "severity": "critical",
+          "marked": false,
+          "text": "The `{ noLiveOwner: true }` guard was added to the repository implementation's `update` signature and used at `code-review-job-processor.service.ts:649`, but the `IWorkflowJobRepository` contract interface the processor is typed against (line 47) was not updated, so `this.jobRepository.update(jobId, failurePatch, { noLiveOwner: true })` fails excess-property checking and the build breaks (or the option is silently dropped at the boundary and the guarded write degrades to an unguarded one). Add `| { noLiveOwner: true }` to the `guard` parameter of `update` in `libs/core/workflow/domain/contract"
+        }
+      ],
+      "claims": [
+        {
+          "id": "unclaimed-path-unfenced",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "measured": 63,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 9,
+        "violations": 6,
+        "rate": 0.667
+      },
+      "repeat-of-open (no issue)": {
+        "n": 6,
+        "violations": 5,
+        "rate": 0.833
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 18,
+        "violations": 18,
+        "rate": 1
+      },
+      "refuted-shipped (control)": {
+        "n": 9,
+        "violations": 0,
+        "rate": 0
+      },
+      "true-bug-missed (guard)": {
+        "n": 42,
+        "violations": 2,
+        "rate": 0.048
+      }
+    },
+    "byCase": {
+      "U1-premise-unread · fee-sign [deliver]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 3
+      },
+      "U1-premise-unread · null-crash [not_deliver_normal]": {
+        "pass": 0,
+        "n": 3,
+        "delivered": 3
+      },
+      "U2-premise-readable · fee-sign [deliver]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 3
+      },
+      "U2-premise-readable · null-crash [not_deliver]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 0
+      },
+      "U3-cross-file-dies-in-verify · resubmit-double-charge [deliver]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 3
+      },
+      "U4-cross-file-dead · resubmit-double-charge [not_deliver_normal, proposed]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 0
+      },
+      "U5-premise-read-then-dies · fee-sign [deliver]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 3
+      },
+      "U5-premise-read-then-dies · null-crash [not_deliver]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 0
+      },
+      "R1-repeat-open · resubmit-repeat [not_deliver, proposed]": {
+        "pass": 1,
+        "n": 3,
+        "delivered": 2
+      },
+      "U6-premise-file-unreachable · fee-sign [deliver]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 3
+      },
+      "U6-premise-file-unreachable · null-crash [not_deliver_normal]": {
+        "pass": 0,
+        "n": 3,
+        "delivered": 3
+      },
+      "U7-sandbox-recovers · fee-sign [deliver]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 3
+      },
+      "U7-sandbox-recovers · null-crash [not_deliver]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 0
+      },
+      "U8-self-contained · fee-sign [deliver]": {
+        "pass": 1,
+        "n": 3,
+        "delivered": 1
+      },
+      "U8-self-contained · null-crash [observe]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 3
+      },
+      "U9-missing-module-is-evidence · missing-module [deliver]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 3
+      },
+      "R2-consequence-status-implemented · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 0,
+        "n": 3,
+        "delivered": 3
+      },
+      "R3-consequence-status-stale · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 0,
+        "n": 3,
+        "delivered": 3
+      },
+      "R4a-kodus2011-status-implemented · entity-not-neutralized [if_delivered_linked, proposed]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 0
+      },
+      "R4b-kodus2011-status-stale · entity-not-neutralized [if_delivered_linked, proposed]": {
+        "pass": 2,
+        "n": 3,
+        "delivered": 1
+      },
+      "R5-unrelated-same-area · swapped-args [deliver]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 3
+      },
+      "R6-incomplete-fix · credit-negative [deliver_linked, proposed]": {
+        "pass": 0,
+        "n": 3,
+        "delivered": 3
+      },
+      "R7-refines-prior · signal-not-passed [deliver_linked, proposed]": {
+        "pass": 0,
+        "n": 3,
+        "delivered": 3
+      },
+      "R8-consequence-kody-rule-prior · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 0,
+        "n": 3,
+        "delivered": 3
+      },
+      "R9-repeat-after-dev-rejected · resubmit-repeat-after-rejection [not_deliver, proposed]": {
+        "pass": 0,
+        "n": 3,
+        "delivered": 3
+      },
+      "R10-kodus2044-reversal · unresolved-team-bypass [if_delivered_linked, proposed]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 0
+      },
+      "R11-kodus1902-reversal · unclaimed-path-unfenced [if_delivered_linked, proposed]": {
+        "pass": 1,
+        "n": 3,
+        "delivered": 2
+      }
+    }
+  }
+}

@@ -65,9 +65,16 @@ export interface LoadPrDecisionsParams {
     readonly organizationId: string;
     readonly prNumber: number;
     readonly repositoryFullName: string;
-    /** Only decisions touching one of these files are relevant to the current run. */
-    readonly filePaths: readonly string[];
 }
+
+/**
+ * How many earlier suggestions a review is shown — the most recent, across
+ * the WHOLE PR. Not scoped to the files of the current diff: a finding can
+ * repeat one anchored on another file once the code moves (#2020, and a
+ * production report of a declined suggestion reposted on another file). One
+ * cap for the whole history keeps every prompt that renders it bounded.
+ */
+export const MAX_PR_DECISIONS = 40;
 
 /**
  * Read port for prior-round decisions on a PR. Implementations are infra

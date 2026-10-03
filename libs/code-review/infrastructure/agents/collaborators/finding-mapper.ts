@@ -117,6 +117,7 @@ export function resolveSuggestionLabel(
 export interface RawFinding {
     suggestionContent?: string;
     ruleUuid?: string;
+    revisesSuggestionId?: string;
     relevantFile?: string;
     oneSentenceSummary?: string;
     language?: string;
@@ -320,6 +321,9 @@ export function mapAgentFindings(
                 : s.severity || 'medium',
             llmPrompt: s.suggestionContent,
             ...(s.ruleUuid && { brokenKodyRulesIds: [s.ruleUuid] }),
+            ...(s.revisesSuggestionId && {
+                revisesSuggestionId: s.revisesSuggestionId,
+            }),
         } as Partial<CodeSuggestion>;
     });
 

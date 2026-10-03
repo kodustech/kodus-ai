@@ -308,6 +308,22 @@ export class PullRequestsService implements IPullRequestsService {
         );
     }
 
+    async findSuggestionsOnPR(
+        prNumber: number,
+        repoFullName: string,
+        organizationId: string,
+        deliveryStatus: DeliveryStatus,
+        limit: number,
+    ): Promise<ISuggestion[]> {
+        return this.pullRequestsRepository.findSuggestionsOnPR(
+            prNumber,
+            repoFullName,
+            organizationId,
+            deliveryStatus,
+            limit,
+        );
+    }
+
     async findPrLevelSuggestionsByPR(
         prNumber: number,
         repoFullName: string,

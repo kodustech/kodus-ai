@@ -6,6 +6,7 @@ import {
 } from './pr-decision-store.service';
 import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enums/implementationStatus.enum';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
+import { MAX_PR_DECISIONS } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 import type {
     ISuggestion,
     ISuggestionByPR,
@@ -145,12 +146,12 @@ describe('toRecordFromPrLevel (issue #1313 Fase 1b)', () => {
 
 describe('PrDecisionStoreService.load', () => {
     function makeService(over: {
-        findSuggestionsByPRAndFilenames?: jest.Mock;
+        findSuggestionsOnPR?: jest.Mock;
         findPrLevelSuggestionsByPR?: jest.Mock;
     } = {}) {
         const repo = {
-            findSuggestionsByPRAndFilenames:
-                over.findSuggestionsByPRAndFilenames ??
+            findSuggestionsOnPR:
+                over.findSuggestionsOnPR ??
                 jest.fn().mockResolvedValue([]),
             findPrLevelSuggestionsByPR:
                 over.findPrLevelSuggestionsByPR ??
@@ -159,24 +160,11 @@ describe('PrDecisionStoreService.load', () => {
         return { service: new PrDecisionStoreService(repo as any), repo };
     }
 
-    it('returns an empty array without querying when filePaths is empty', async () => {
-        const { service, repo } = makeService();
-
-        const result = await service.load({
-            organizationId: 'org-1',
-            prNumber: 42,
-            repositoryFullName: 'kodustech/kodus-ai',
-            filePaths: [],
-        });
-
-        expect(result).toEqual([]);
-        expect(repo.findSuggestionsByPRAndFilenames).not.toHaveBeenCalled();
-        expect(repo.findPrLevelSuggestionsByPR).not.toHaveBeenCalled();
-    });
-
-    it('queries only SENT suggestions scoped to org + PR + repo fullName + filePaths', async () => {
+    // The whole PR, not the files of the current diff (#2020): a finding can
+    // repeat a suggestion anchored on a file the code moved out of.
+    it('queries the most recent SENT suggestions on the whole PR, scoped to org + PR + repo fullName', async () => {
         const { service, repo } = makeService({
-            findSuggestionsByPRAndFilenames: jest
+            findSuggestionsOnPR: jest
                 .fn()
                 .mockResolvedValue([makeSuggestion()]),
         });
@@ -185,15 +173,14 @@ describe('PrDecisionStoreService.load', () => {
             organizationId: 'org-1',
             prNumber: 42,
             repositoryFullName: 'kodustech/kodus-ai',
-            filePaths: ['src/foo.ts'],
         });
 
-        expect(repo.findSuggestionsByPRAndFilenames).toHaveBeenCalledWith(
+        expect(repo.findSuggestionsOnPR).toHaveBeenCalledWith(
             42,
             'kodustech/kodus-ai',
-            ['src/foo.ts'],
             'org-1',
             DeliveryStatus.SENT,
+            MAX_PR_DECISIONS,
         );
         expect(result).toHaveLength(1);
     });
@@ -209,7 +196,6 @@ describe('PrDecisionStoreService.load', () => {
             organizationId: 'org-1',
             prNumber: 42,
             repositoryFullName: 'kodustech/kodus-ai',
-            filePaths: ['src/foo.ts'],
         });
 
         expect(repo.findPrLevelSuggestionsByPR).toHaveBeenCalledWith(
@@ -224,7 +210,7 @@ describe('PrDecisionStoreService.load', () => {
 
     it('merges file-scoped and PR-level results together', async () => {
         const { service } = makeService({
-            findSuggestionsByPRAndFilenames: jest
+            findSuggestionsOnPR: jest
                 .fn()
                 .mockResolvedValue([makeSuggestion()]),
             findPrLevelSuggestionsByPR: jest
@@ -236,7 +222,6 @@ describe('PrDecisionStoreService.load', () => {
             organizationId: 'org-1',
             prNumber: 42,
             repositoryFullName: 'kodustech/kodus-ai',
-            filePaths: ['src/foo.ts'],
         });
 
         expect(result).toHaveLength(2);
@@ -244,7 +229,7 @@ describe('PrDecisionStoreService.load', () => {
 
     it('fails open PER SOURCE: a file-scoped error still returns the PR-level results', async () => {
         const { service } = makeService({
-            findSuggestionsByPRAndFilenames: jest
+            findSuggestionsOnPR: jest
                 .fn()
                 .mockRejectedValue(new Error('Mongo unavailable')),
             findPrLevelSuggestionsByPR: jest
@@ -256,7 +241,6 @@ describe('PrDecisionStoreService.load', () => {
             organizationId: 'org-1',
             prNumber: 42,
             repositoryFullName: 'kodustech/kodus-ai',
-            filePaths: ['src/foo.ts'],
         });
 
         expect(result).toHaveLength(1);
@@ -265,7 +249,7 @@ describe('PrDecisionStoreService.load', () => {
 
     it('fails open PER SOURCE: a PR-level error still returns the file-scoped results', async () => {
         const { service } = makeService({
-            findSuggestionsByPRAndFilenames: jest
+            findSuggestionsOnPR: jest
                 .fn()
                 .mockResolvedValue([makeSuggestion()]),
             findPrLevelSuggestionsByPR: jest
@@ -277,7 +261,6 @@ describe('PrDecisionStoreService.load', () => {
             organizationId: 'org-1',
             prNumber: 42,
             repositoryFullName: 'kodustech/kodus-ai',
-            filePaths: ['src/foo.ts'],
         });
 
         expect(result).toHaveLength(1);
@@ -286,7 +269,7 @@ describe('PrDecisionStoreService.load', () => {
 
     it('fails open entirely: both sources erroring returns an empty list, never throws', async () => {
         const { service } = makeService({
-            findSuggestionsByPRAndFilenames: jest
+            findSuggestionsOnPR: jest
                 .fn()
                 .mockRejectedValue(new Error('Mongo unavailable')),
             findPrLevelSuggestionsByPR: jest
@@ -299,8 +282,7 @@ describe('PrDecisionStoreService.load', () => {
                 organizationId: 'org-1',
                 prNumber: 42,
                 repositoryFullName: 'kodustech/kodus-ai',
-                filePaths: ['src/foo.ts'],
-            }),
+                }),
         ).resolves.toEqual([]);
     });
 });
