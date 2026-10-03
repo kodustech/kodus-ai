@@ -168,7 +168,12 @@ export function ReviewPageClient({
     } = usePullRequestSuggestions(repositoryId, prNumber);
 
     // Get PR metadata from executions
-    const { items: executions } = useInfinitePullRequestExecutions(
+    const {
+        items: executions,
+        hasNextPage,
+        fetchNextPage,
+        isFetchingNextPage,
+    } = useInfinitePullRequestExecutions(
         {
             teamId,
             repositoryId,
@@ -178,6 +183,12 @@ export function ReviewPageClient({
         // know whether any of them finished clean (see effectiveReviewStatus).
         { pageSize: 20 },
     );
+
+    // A clean run can sit past the first page on a PR with many pushes, and
+    // effectiveReviewStatus needs to see it: page through every run.
+    useEffect(() => {
+        if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+    }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
     const prRuns = useMemo(
         () =>
