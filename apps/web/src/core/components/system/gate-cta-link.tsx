@@ -164,10 +164,7 @@ export const GateCtaArea = ({
             ) : (
                 cta && <GateCtaLink {...cta} />
             )}
-            {alt && cta && (
-                <GateCtaLink {...cta} size="sm" variant="cancel" />
-            )}
+            {alt && cta && <GateCtaLink {...cta} size="sm" variant="cancel" />}
         </div>
     );
 };
-
