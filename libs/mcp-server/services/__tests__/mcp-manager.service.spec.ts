@@ -342,6 +342,20 @@ describe('Kodus MCP credential destination', () => {
         },
     );
 
+    it('keeps a proxy prefix on the Git Issues MCP endpoint', async () => {
+        process.env.API_KODUS_MCP_SERVER_URL = 'https://kodus.example/api/mcp/';
+        const result = await (service as any).formatConnection(
+            {
+                integrationId: KODUS_ISSUES_INTEGRATION_ID,
+                provider: 'kodusmcp',
+                organizationId: 'org-1',
+                mcpUrl: 'https://kodus.example/mcp/issues',
+            },
+            'org-1',
+        );
+        expect(result.url).toBe('https://kodus.example/api/mcp/issues');
+    });
+
     it('refuses to sign the Git Issues MCP for another organization', async () => {
         await expect(
             (service as any).formatConnection(

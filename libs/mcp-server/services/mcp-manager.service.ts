@@ -480,11 +480,13 @@ export class MCPManagerService {
         };
     }
 
-    // Same resolution the mcp-manager applies to the managed `/mcp/issues`
-    // entry (kodus-mcp.provider.ts resolveManagedBaseUrl): the origin of the
-    // configured MCP server.
+    // The issues controller sits under the MCP controller (`/mcp/issues`), so
+    // it is derived from the resolved MCP path, keeping a proxy prefix
+    // (`/api/mcp` → `/api/mcp/issues`) instead of resolving against the origin.
     private getKodusIssuesMcpEndpoint(): string {
-        return new URL('/mcp/issues', this.getKodusMcpEndpoint()).toString();
+        const endpoint = new URL(this.getKodusMcpEndpoint());
+        endpoint.pathname = `${endpoint.pathname}/issues`;
+        return endpoint.toString();
     }
 
     private getKodusMcpEndpoint(): string {
