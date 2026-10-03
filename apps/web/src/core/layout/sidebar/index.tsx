@@ -176,9 +176,10 @@ export const AppSidebar = ({
     // without reflowing it, until the pointer leaves the rail. Clicking the
     // control while peeking keeps it open, as before.
     const [peekOpen, setPeeking] = useState(false);
-    // Only while folded: a peek timer that fires after the rail was opened
-    // must not lay the open rail over the page.
-    const peeking = collapsed && peekOpen;
+    // Only while folded by choice: a peek timer that fires after the rail was
+    // opened must not lay the open rail over the page, and a peek must not
+    // survive the viewport going narrow, where the rail is forced.
+    const peeking = collapsed && peekOpen && !isNarrow;
     const showRail = collapsed && !peeking;
     const peekTimer = useRef<number | undefined>(undefined);
     const pointerOnRail = useRef(false);
@@ -192,6 +193,9 @@ export const AppSidebar = ({
         // A click within the intent delay (a tap fires hover and click
         // together) must not leave the timer to peek after the toggle.
         window.clearTimeout(peekTimer.current);
+        // Folding can leave the control under the resting pointer, which the
+        // browser reports as a fresh hover: don't peek straight back open.
+        if (next) peekHoldUntil.current = Date.now() + 600;
         setCollapsed(next);
         setPeeking(false);
         document.cookie = `${SIDEBAR_COLLAPSED_COOKIE}=${next ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
