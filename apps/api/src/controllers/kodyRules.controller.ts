@@ -101,9 +101,11 @@ import {
     KodyRulesLimitResponseDto,
     KodyRulesSyncStatusResponseDto,
 } from '../dtos/kody-rules-response.dto';
+import { TenantScopeGuard } from '../guards/tenant-scope.guard';
 
 @ApiTags('Kody Rules')
 @ApiStandardResponses()
+@UseGuards(TenantScopeGuard)
 @Controller('kody-rules')
 export class KodyRulesController {
     constructor(

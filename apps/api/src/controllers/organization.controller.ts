@@ -108,7 +108,10 @@ export class OrganizationController {
         @Query('domain')
         domain: string,
     ) {
-        return await this.getOrganizationsByDomainUseCase.execute(domain);
+        return await this.getOrganizationsByDomainUseCase.execute(
+            domain,
+            this.request.user?.email,
+        );
     }
 
     @Get('/language')

@@ -5,6 +5,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
 import { CodeManagementTools, KodyIssuesTools, KodyRulesTools } from '../tools';
+import { McpToolAuthorizer } from '../auth/mcp-tool-authorizer.service';
 import { toShape } from '../types/mcp-tool.interface';
 import { executeLoggedTool } from '../utils/mcp-protocol.utils';
 
@@ -36,6 +37,7 @@ export class McpServerFactory {
         private readonly codeManagementTools: CodeManagementTools,
         private readonly kodyRulesTools: KodyRulesTools,
         private readonly kodyIssuesTools: KodyIssuesTools,
+        private readonly authorizer: McpToolAuthorizer,
     ) {}
 
     async create(): Promise<StatelessMcpRequestHandler> {
@@ -108,7 +110,7 @@ export class McpServerFactory {
                             toolArgs: Record<string, unknown>,
                             toolExtra: unknown,
                         ) => Promise<CallToolResult>,
-                        args,
+                        await this.authorizer.authorize(tool.name, args, extra),
                         extra,
                         this.logger,
                     ),
