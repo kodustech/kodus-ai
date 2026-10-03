@@ -279,15 +279,20 @@ describe('Kodus MCP credential destination', () => {
         },
     );
 
-    it.each(['https://api.kodus.io', 'https://api.kodus.io/'])(
-        'points a bare-origin configuration (%s) at the MCP controller path',
-        async (configuredUrl) => {
+    it.each([
+        ['https://api.kodus.io', 'https://api.kodus.io/mcp'],
+        ['https://api.kodus.io/', 'https://api.kodus.io/mcp'],
+        ['https://api.kodus.io/mcp/', 'https://api.kodus.io/mcp'],
+        ['https://kodus.example/api/mcp', 'https://kodus.example/api/mcp'],
+    ])(
+        'resolves the configured endpoint %s to the MCP controller path',
+        async (configuredUrl, expected) => {
             process.env.API_KODUS_MCP_SERVER_URL = configuredUrl;
             const result = await (service as any).formatConnection(
                 connection,
                 'org-1',
             );
-            expect(result.url).toBe('https://api.kodus.io/mcp');
+            expect(result.url).toBe(expected);
         },
     );
 
@@ -297,6 +302,8 @@ describe('Kodus MCP credential destination', () => {
         'not-a-url',
         'file:///tmp/mcp',
         'https://user:password@api.kodus.io/mcp',
+        'https://api.kodus.io/api',
+        'https://api.kodus.io/mcp/issues',
     ])(
         'refuses to mint credentials with an invalid configured endpoint (%s)',
         async (configuredUrl) => {
