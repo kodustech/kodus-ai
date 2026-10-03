@@ -258,6 +258,28 @@ export function envManagedReasoningDescriptor():
 }
 
 /**
+ * The CLOUD/managed default (no BYOK slot AND no self-hosted env model) as a
+ * `{ provider, model }` descriptor — the SAME provider+model `resolveManagedSlot`
+ * builds for the no-BYOK flow (`DEFAULT_MODEL` = the Fireworks-hosted
+ * deepseek-v4-flash trial model). `resolveModelConfig` uses it ONLY for a
+ * SUPPRESSED call on that path, where the funnel has neither a slot nor an env
+ * descriptor to derive reasoning from: without it a `suppressReasoning: true`
+ * call (the suggestion formatter, the structured suppress-thinking plan) resolved
+ * to `{}` provider options and the managed DeepSeek — which thinks BY DEFAULT —
+ * spent its whole budget reasoning instead of honouring the off switch. The
+ * provider+model must mirror the model actually built, or the `openaiCompatible`
+ * payload would target a wire namespace nothing carries (issue #1851).
+ */
+export function managedDefaultReasoningDescriptor():
+    | { provider: BYOKProvider; model: string }
+    | undefined {
+    return {
+        provider: DEFAULT_MODEL.provider,
+        model: DEFAULT_MODEL.model,
+    };
+}
+
+/**
  * Managed/env-default resolution result (Wave 3).
  *
  * The env-default path used to hand-roll every SDK factory inline. It now
@@ -346,19 +368,27 @@ export function resolveManagedSlot(
                     },
                 );
             case 'openai_compat':
-                // INLINE EXCEPTION (self-hosted OpenAI-compatible): name
-                // 'self-hosted', default baseURL api.openai.com, raw
-                // structuredOutputs opt-in — the openai_compatible provider
-                // module can't reproduce this without changing its BYOK behavior.
-                // This is also the ONE config shape with no BYOK ids at all
-                // (no byokModelId, no credentialId), so a self-hosted install
-                // pointed at OpenCode Go (issue #1880) needs the same
-                // x-opencode-session header attached here — the provider
-                // module's build() never runs on this inline path.
+                // INLINE EXCEPTION (self-hosted OpenAI-compatible): default
+                // baseURL api.openai.com, raw structuredOutputs opt-in — the
+                // openai_compatible provider module can't reproduce this without
+                // changing its BYOK behavior. This is also the ONE config shape
+                // with no BYOK ids at all (no byokModelId, no credentialId), so
+                // a self-hosted install pointed at OpenCode Go (issue #1880)
+                // needs the same x-opencode-session header attached here — the
+                // provider module's build() never runs on this inline path.
+                //
+                // The client NAME is load-bearing: @ai-sdk/openai-compatible
+                // reads `providerOptions` under its own instance name (camel-
+                // cased), and our reasoning payloads are emitted under the
+                // `openaiCompatible` namespace (the openai module). A different
+                // name (the old 'self-hosted') silently DROPS the
+                // `thinking: { type: 'disabled' }` a suppressed call sends —
+                // self-hosted DeepSeek/Kimi/GLM keep thinking and blow the
+                // formatter budget (issue #1851). Keep it 'openai-compatible'.
                 return {
                     kind: 'inline',
                     model: createOpenAICompatible({
-                        name: 'self-hosted',
+                        name: 'openai-compatible',
                         apiKey: env.apiKey,
                         baseURL: env.baseURL,
                         supportsStructuredOutputs:
@@ -408,7 +438,13 @@ export function resolveManagedSlot(
         return {
             kind: 'inline',
             model: createOpenAICompatible({
-                name: 'fireworks',
+                // Same rule as the self-hosted inline above (it IS one): the
+                // SDK reads providerOptions under the instance name, and the
+                // reasoning namespace for this slot is `openaiCompatible` — the
+                // old 'fireworks' name silently dropped the formatter's
+                // `thinking: { type: 'disabled' }`, so the managed DeepSeek
+                // reasoned anyway (issue #1851).
+                name: 'openai-compatible',
                 apiKey: fireworksKey,
                 baseURL:
                     process.env.API_FIREWORKS_BASE_URL ||

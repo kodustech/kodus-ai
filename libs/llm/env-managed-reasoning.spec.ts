@@ -20,7 +20,10 @@ jest.mock('./byok-to-vercel', () => ({
 }));
 
 import { resolveModelConfig } from './model-invocation';
-import { envManagedReasoningDescriptor } from './managed-slot';
+import {
+    envManagedReasoningDescriptor,
+    managedDefaultReasoningDescriptor,
+} from './managed-slot';
 
 const ENV_KEYS = [
     'API_LLM_PROVIDER_MODEL',
@@ -129,5 +132,24 @@ describe('resolveModelConfig — env reasoning reaches the funnel (uniform with 
             reasoningEffortDefault: 'none',
         });
         expect(inv.providerOptions).toEqual({});
+    });
+
+    it('cloud + suppressReasoning (no env, undefined slot) → MANAGED default off payload, NOT {} (issue #1851)', () => {
+        // The suggestion formatter / suppress-thinking plan in the cloud no-BYOK
+        // path has no slot AND no env config: before the fix `reasoningSlot` was
+        // undefined and buildProviderOptions produced `{}` on a model that
+        // REASONS BY DEFAULT. The managed default descriptor now stands in, so
+        // the off switch reaches the wire exactly where it must.
+        expect(managedDefaultReasoningDescriptor()).toEqual({
+            provider: 'openai_compatible',
+            model: 'accounts/fireworks/models/deepseek-v4-flash-0731',
+        });
+        const inv = resolveModelConfig(undefined, {
+            runName: 'suggestion-formatter',
+            suppressReasoning: true,
+        });
+        expect(inv.providerOptions).toEqual({
+            openaiCompatible: { thinking: { type: 'disabled' } },
+        });
     });
 });

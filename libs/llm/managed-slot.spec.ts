@@ -240,7 +240,7 @@ describe('resolveManagedSlot — env → managed slot / inline exception', () =>
         expect(r.kind).toBe('inline');
         expect(createOpenAICompatible).toHaveBeenCalledWith(
             expect.objectContaining({
-                name: 'self-hosted',
+                name: 'openai-compatible',
                 apiKey: 'sk-x',
                 baseURL: 'https://api.openai.com/v1',
                 supportsStructuredOutputs: true,
@@ -278,7 +278,7 @@ describe('resolveManagedSlot — env → managed slot / inline exception', () =>
         expect(r.kind).toBe('inline');
         expect(createOpenAICompatible).toHaveBeenCalledWith(
             expect.objectContaining({
-                name: 'fireworks',
+                name: 'openai-compatible',
                 apiKey: 'fw-key',
                 baseURL: 'https://api.fireworks.ai/inference/v1',
                 supportsStructuredOutputs: true,
