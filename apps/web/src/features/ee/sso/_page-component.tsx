@@ -45,6 +45,11 @@ import {
     fetchAndParseMetadata,
     parseMetadataFromFile,
 } from "./_components/metadata";
+import {
+    SAML_EMAIL_IDENTIFIER_FORMAT,
+    savedSsoFormValues,
+    toSamlProviderConfig,
+} from "./_utils/saved-form-values";
 
 const createSsoSchema = (userDomain: string) =>
     z
@@ -128,9 +133,6 @@ const createSsoSchema = (userDomain: string) =>
 
 type SsoFormData = z.input<ReturnType<typeof createSsoSchema>>;
 
-const SAML_EMAIL_IDENTIFIER_FORMAT =
-    "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress";
-
 interface SSOTestDraftStorage {
     active?: boolean;
     providerConfig?: SsoFormData["providerConfig"];
@@ -139,14 +141,6 @@ interface SSOTestDraftStorage {
 
 const buildSSOTestDraftKey = (organizationId?: string) =>
     `sso-test-draft:${organizationId || "unknown"}`;
-
-const toSamlProviderConfig = (config?: SsoFormData["providerConfig"]) => ({
-    idpIssuer: config?.idpIssuer || "",
-    entryPoint: config?.entryPoint || "",
-    cert: config?.cert || "",
-    identifierFormat: config?.identifierFormat,
-    issuer: config?.issuer,
-});
 
 export const ClientSsoOrganizationSettingsPage = (props: {
     email: string;
@@ -190,27 +184,14 @@ export const ClientSsoOrganizationSettingsPage = (props: {
             : "";
 
     const userDomain = props.email.split("@")[1];
+    const savedValues = useMemo(
+        () => savedSsoFormValues(props.ssoConfig, userDomain),
+        [props.ssoConfig, userDomain],
+    );
     const form = useForm<SsoFormData>({
         mode: "onChange",
         resolver: zodResolver(createSsoSchema(userDomain)),
-        defaultValues: {
-            active: props.ssoConfig.active,
-            providerConfig: {
-                idpIssuer: props.ssoConfig.providerConfig?.idpIssuer || "",
-                entryPoint: props.ssoConfig.providerConfig?.entryPoint || "",
-                cert: props.ssoConfig.providerConfig?.cert || "",
-                identifierFormat:
-                    props.ssoConfig.providerConfig?.identifierFormat ||
-                    SAML_EMAIL_IDENTIFIER_FORMAT,
-                issuer:
-                    props.ssoConfig.providerConfig.issuer ||
-                    "kodus-orchestrator",
-            },
-            domains:
-                props.ssoConfig.domains.length > 0
-                    ? props.ssoConfig.domains
-                    : [userDomain],
-        },
+        defaultValues: savedValues,
     });
 
     const {
@@ -242,19 +223,14 @@ export const ClientSsoOrganizationSettingsPage = (props: {
     const persistedFingerprint = useMemo(() => {
         return buildSSOConfigFingerprint({
             protocol: SSOProtocol.SAML,
-            providerConfig: toSamlProviderConfig(
-                props.ssoConfig.providerConfig,
-            ),
-            domains:
-                props.ssoConfig.domains.length > 0
-                    ? props.ssoConfig.domains
-                    : [userDomain],
+            providerConfig: toSamlProviderConfig(savedValues.providerConfig),
+            domains: savedValues.domains,
         });
-    }, [props.ssoConfig.domains, props.ssoConfig.providerConfig, userDomain]);
+    }, [savedValues]);
 
     const hasUnsavedChangesComparedToPersistedConfig =
         currentFingerprint !== persistedFingerprint ||
-        Boolean(isEnabled) !== Boolean(props.ssoConfig.active);
+        Boolean(isEnabled) !== Boolean(savedValues.active);
 
     const needsConnectionRetest =
         Boolean(isEnabled) && currentFingerprint !== validatedFingerprint;
