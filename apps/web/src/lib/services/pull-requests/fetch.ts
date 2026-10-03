@@ -179,10 +179,13 @@ export const PULL_REQUEST_API = {
 export const getReviewedPullRequestCount = async ({
     teamId,
     windowDays,
+    status,
 }: {
     teamId?: string;
     /** Look back this many days; omit to count every review ever run. */
     windowDays?: number;
+    /** Only runs that ended in this status; omit to count every run. */
+    status?: PullRequestStatusFilter;
 }): Promise<number | null> => {
     if (!teamId) return null;
 
@@ -196,6 +199,7 @@ export const getReviewedPullRequestCount = async ({
                 teamId,
                 limit: 1,
                 createdAtFrom: since?.toISOString(),
+                status,
             }),
             { cache: "no-store" },
         );
