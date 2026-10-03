@@ -546,4 +546,42 @@ describe('TeamMemberService — deterministic logic', () => {
             expect(member.uuid).toBe('tm-own');
         });
     });
+
+    describe('sendInvitations — only to members of the inviting organization', () => {
+        const orgTeam = { organizationId: 'org-1', teamId: 'team-1' };
+        const userIn = (uuid: string, organizationId: string) => ({
+            uuid,
+            email: `${uuid}@acme.dev`,
+            teamMember: [{ organization: { uuid: organizationId } }],
+        });
+
+        it('skips a user outside the organization and still invites the rest', async () => {
+            const users: Record<string, any> = {
+                outsider: userIn('outsider', 'org-other'),
+                insider: userIn('insider', 'org-1'),
+            };
+            const usersService = {
+                findOne: jest.fn(async ({ uuid }) => users[uuid] ?? null),
+            };
+            const notificationService = { emit: jest.fn() };
+            const service = makeService({}, usersService, notificationService);
+
+            await service.sendInvitations(
+                [
+                    { uuid: 'outsider' },
+                    { uuid: 'missing' },
+                    { uuid: 'insider' },
+                ] as any,
+                orgTeam,
+                'admin@acme.dev',
+            );
+
+            expect(notificationService.emit).toHaveBeenCalledTimes(1);
+            expect(notificationService.emit).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    recipients: { kind: 'user', userId: 'insider' },
+                }),
+            );
+        });
+    });
 });

@@ -196,7 +196,7 @@ export class KodyRulesTools {
                             params.organizationAndTeamData.organizationId,
                         );
 
-                    const allRules: Partial<IKodyRule>[] = entity.rules || [];
+                    const allRules: Partial<IKodyRule>[] = entity?.rules || [];
 
                     const rules: Partial<IKodyRule>[] = allRules.filter(
                         (rule: Partial<IKodyRule>) =>
@@ -282,7 +282,7 @@ export class KodyRulesTools {
                             params.organizationAndTeamData.organizationId,
                         );
 
-                    const allRules: Partial<IKodyRule>[] = entity.rules || [];
+                    const allRules: Partial<IKodyRule>[] = entity?.rules || [];
 
                     const repositoryRules: Partial<IKodyRule>[] =
                         allRules.filter(

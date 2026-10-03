@@ -492,17 +492,17 @@ export class TeamMemberService implements ITeamMemberService {
                 uuid: userToSendInvitation.uuid,
             });
 
-            const inviteLink = `${process.env.API_USER_INVITE_BASE_URL}/invite/${user.uuid}`;
-
-            const filteredMembers = user?.teamMember?.filter(
+            const isMemberOfThisOrganization = user?.teamMember?.some(
                 (member) =>
-                    member.organization.uuid ===
+                    member.organization?.uuid ===
                     organizationAndTeamData.organizationId,
             );
 
-            if (!filteredMembers && filteredMembers.length <= 0) {
-                return;
+            if (!isMemberOfThisOrganization) {
+                continue;
             }
+
+            const inviteLink = `${process.env.API_USER_INVITE_BASE_URL}/invite/${user.uuid}`;
 
             await this.notificationService.emit({
                 event: NotificationEvent.TEAM_MEMBER_INVITED,

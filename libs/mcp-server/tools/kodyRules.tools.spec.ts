@@ -300,3 +300,53 @@ describe('KodyRulesTools.updateKodyRule', () => {
         ).not.toHaveBeenCalled();
     });
 });
+
+describe('KodyRulesTools rule listings', () => {
+    let tools: KodyRulesTools;
+    const findByOrganizationId = jest.fn();
+
+    beforeEach(async () => {
+        findByOrganizationId.mockReset();
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                KodyRulesTools,
+                {
+                    provide: KODY_RULES_SERVICE_TOKEN,
+                    useValue: { findByOrganizationId },
+                },
+                { provide: CentralizedConfigPrService, useValue: {} },
+                {
+                    provide: DeleteRuleInOrganizationByIdKodyRulesUseCase,
+                    useValue: {},
+                },
+            ],
+        }).compile();
+        tools = module.get(KodyRulesTools);
+    });
+
+    it.each([
+        ['KODUS_GET_KODY_RULES', () => tools.getKodyRules(), {}],
+        [
+            'KODUS_GET_KODY_RULES_REPOSITORY',
+            () => tools.getKodyRulesRepository(),
+            { repositoryId: 'repo-1' },
+        ],
+    ])(
+        '%s answers an organization that never saved a rule with an empty list',
+        async (_name, tool, args) => {
+            findByOrganizationId.mockResolvedValue(null);
+
+            const result: any = await tool().execute(
+                { organizationId: 'org-1', ...args } as any,
+                undefined,
+            );
+
+            expect(result.isError).toBeFalsy();
+            expect(result.structuredContent).toEqual({
+                success: true,
+                count: 0,
+                data: [],
+            });
+        },
+    );
+});
