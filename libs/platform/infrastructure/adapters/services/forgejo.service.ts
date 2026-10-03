@@ -4506,6 +4506,18 @@ export class ForgejoService implements Omit<
                                         'Failed to fetch reactions for comment',
                                     context: ForgejoService.name,
                                     error,
+                                    metadata: {
+                                        organizationId:
+                                            params.organizationAndTeamData
+                                                ?.organizationId,
+                                        teamId:
+                                            params.organizationAndTeamData
+                                                ?.teamId,
+                                        commentId: comment.id,
+                                        prNumber: params.pr?.pull_number,
+                                        repository:
+                                            params.pr?.repository?.name,
+                                    },
                                 });
                                 return null;
                             }

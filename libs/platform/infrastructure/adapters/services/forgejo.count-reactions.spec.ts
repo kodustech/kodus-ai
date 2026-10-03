@@ -119,7 +119,22 @@ describe('ForgejoService — countReactions aligns with the shared reaction cont
             }),
         ]);
         expect(issueGetCommentReactions).toHaveBeenCalledTimes(2);
-        expect(service.logger.warn).toHaveBeenCalled();
+
+        // The degradation must stay traceable to the tenant: the warn carries
+        // the org/PR/comment metadata, not only the error.
+        const warnCall = (service.logger as unknown as { warn: jest.Mock })
+            .warn.mock.calls.find((c) =>
+                String(c[0]?.message).includes(
+                    'Failed to fetch reactions for comment',
+                ),
+            );
+        expect(warnCall?.[0].metadata).toEqual({
+            organizationId: 'org-1',
+            teamId: 'team-1',
+            commentId: 5,
+            prNumber: 7,
+            repository: 'acme/widget-api',
+        });
     });
 
     it('caps per-comment reaction requests to the concurrency bound', async () => {
