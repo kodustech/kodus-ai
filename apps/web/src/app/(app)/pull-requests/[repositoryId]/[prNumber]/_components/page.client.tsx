@@ -23,6 +23,7 @@ import { DiffViewer } from "./diff-viewer";
 import {
     effectiveReviewStatus,
     emptyFindingsLabel,
+    shouldLoadMoreRuns,
     type ReviewRunStatus,
 } from "./review-run-status";
 import { ReviewStateProvider, useReviewStore } from "./review-store";
@@ -140,10 +141,6 @@ function ReviewProgressBar({
     );
 }
 
-// Pages of 20 runs: enough history for any realistic PR, bounded for one with
-// hundreds of failed pushes.
-const MAX_RUN_PAGES = 5;
-
 // Newest first, the same order the PR list uses for a PR's runs.
 const runTime = (run: PullRequestExecution) =>
     Date.parse(
@@ -202,22 +199,21 @@ export function ReviewPageClient({
         prRuns.map((run) => run.automationExecution?.status),
     );
 
-    // A clean run can sit past the first page on a PR with many pushes, and
-    // effectiveReviewStatus only needs to know whether one exists. Page on
-    // just until one shows up: the hook's 30s poll re-fetches every loaded
-    // page, a failed page keeps hasNextPage true (re-firing would retry with
-    // no backoff), and MAX_RUN_PAGES bounds a PR that never reviewed clean.
+    // A clean run can sit past the first page on a PR with many pushes; page
+    // on just until one shows up (see shouldLoadMoreRuns).
     const hasCleanRun = prRuns.some(
         (run) => run.automationExecution?.status === "success",
     );
     const pagesLoaded = runPages?.pages.length ?? 0;
     useEffect(() => {
         if (
-            hasNextPage &&
-            !hasCleanRun &&
-            !isFetching &&
-            !isFetchNextPageError &&
-            pagesLoaded < MAX_RUN_PAGES
+            shouldLoadMoreRuns({
+                hasNextPage,
+                hasCleanRun,
+                isFetching,
+                lastPageFailed: isFetchNextPageError,
+                pagesLoaded,
+            })
         ) {
             fetchNextPage();
         }

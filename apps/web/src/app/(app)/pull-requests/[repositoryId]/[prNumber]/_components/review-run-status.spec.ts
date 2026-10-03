@@ -1,4 +1,9 @@
-import { effectiveReviewStatus, emptyFindingsLabel } from "./review-run-status";
+import {
+    effectiveReviewStatus,
+    emptyFindingsLabel,
+    MAX_RUN_PAGES,
+    shouldLoadMoreRuns,
+} from "./review-run-status";
 
 describe("emptyFindingsLabel", () => {
     it("only calls a PR clean when the review actually ran", () => {
@@ -46,5 +51,41 @@ describe("effectiveReviewStatus", () => {
         [[], undefined],
     ] as const)("runs %j read as %s", (runs, expected) => {
         expect(effectiveReviewStatus([...runs])).toBe(expected);
+    });
+});
+
+describe("shouldLoadMoreRuns", () => {
+    const base = {
+        hasNextPage: true,
+        hasCleanRun: false,
+        isFetching: false,
+        lastPageFailed: false,
+        pagesLoaded: 1,
+    };
+
+    it("loads the next page while no clean run is loaded", () => {
+        expect(shouldLoadMoreRuns(base)).toBe(true);
+    });
+
+    it.each([
+        ["there is no next page", { hasNextPage: false }],
+        [
+            "a clean run turned up (e.g. on page 2)",
+            { hasCleanRun: true, pagesLoaded: 2 },
+        ],
+        ["a fetch is in flight", { isFetching: true }],
+        ["the last page failed", { lastPageFailed: true }],
+        ["the page cap is reached", { pagesLoaded: MAX_RUN_PAGES }],
+    ])("stops when %s", (_, override) => {
+        expect(shouldLoadMoreRuns({ ...base, ...override })).toBe(false);
+    });
+
+    it("resumes once the failed page is cleared by a successful refetch", () => {
+        expect(shouldLoadMoreRuns({ ...base, lastPageFailed: true })).toBe(
+            false,
+        );
+        expect(shouldLoadMoreRuns({ ...base, lastPageFailed: false })).toBe(
+            true,
+        );
     });
 });

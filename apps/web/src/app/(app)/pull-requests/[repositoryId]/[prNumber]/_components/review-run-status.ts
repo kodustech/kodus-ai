@@ -23,6 +23,33 @@ export function effectiveReviewStatus(
     return latest;
 }
 
+/** Pages of 20 runs: plenty for any realistic PR, bounded for one with
+ *  hundreds of failed pushes. */
+export const MAX_RUN_PAGES = 5;
+
+/**
+ * Whether to load another page of the PR's runs. effectiveReviewStatus only
+ * needs to know whether a clean run exists, so stop as soon as one is loaded.
+ * Also stop while a fetch is in flight, after a failed page (hasNextPage stays
+ * true after an error, so re-firing would retry with no backoff; the hook's
+ * poll clears the error and lets paging resume), and at MAX_RUN_PAGES.
+ */
+export function shouldLoadMoreRuns(state: {
+    hasNextPage: boolean;
+    hasCleanRun: boolean;
+    isFetching: boolean;
+    lastPageFailed: boolean;
+    pagesLoaded: number;
+}): boolean {
+    return (
+        state.hasNextPage &&
+        !state.hasCleanRun &&
+        !state.isFetching &&
+        !state.lastPageFailed &&
+        state.pagesLoaded < MAX_RUN_PAGES
+    );
+}
+
 /**
  * What to say when the PR has no findings. "Nothing to flag." is only true
  * when the review actually ran: a failed or skipped run also has zero
