@@ -176,9 +176,12 @@ export const AppSidebar = ({
     // without reflowing it, until the pointer leaves the rail. Clicking the
     // control while peeking keeps it open, as before.
     const [peekOpen, setPeeking] = useState(false);
+    // A peek must not survive the viewport going narrow, where the rail is
+    // forced: drop it (or one a pending timer plants) instead of hiding it,
+    // or it lays the open rail over the page again when the viewport widens.
+    if (isNarrow && peekOpen) setPeeking(false);
     // Only while folded by choice: a peek timer that fires after the rail was
-    // opened must not lay the open rail over the page, and a peek must not
-    // survive the viewport going narrow, where the rail is forced.
+    // opened must not lay the open rail over the page.
     const peeking = collapsed && peekOpen && !isNarrow;
     const showRail = collapsed && !peeking;
     const peekTimer = useRef<number | undefined>(undefined);
