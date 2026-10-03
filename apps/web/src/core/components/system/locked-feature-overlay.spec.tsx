@@ -1,8 +1,13 @@
 /** @jest-environment jsdom */
 import "@testing-library/jest-dom";
+
 import { fireEvent, render, screen } from "@testing-library/react";
 
 import { LockedFeatureOverlay } from "./locked-feature-overlay";
+
+jest.mock("@services/permissions/hooks", () => ({
+    usePermission: () => true,
+}));
 
 jest.mock("src/core/utils/gate-hit", () => ({
     captureGateCtaClick: jest.fn(),
