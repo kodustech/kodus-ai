@@ -8,6 +8,8 @@ import {
     DoctorResult,
     DoctorTeam,
     platformLabel,
+    RECENT_DAYS,
+    reviewableTeams,
     teamScope,
 } from '../doctor.types';
 
@@ -57,15 +59,16 @@ export interface GitDeps {
     reach(url: string): Promise<number>;
 }
 
+export interface WebhookDeps extends Pick<GitDeps, 'reach'> {
+    /** Git events this install received from `platform` in the last RECENT_DAYS. */
+    recentEvents(
+        platform: string,
+    ): Promise<{ count: number; last: Date | null }>;
+}
+
 function names(repos: string[]): string {
     const shown = repos.slice(0, 5).join(', ');
     return repos.length > 5 ? `${shown} and ${repos.length - 5} more` : shown;
-}
-
-function reviewableTeams(ctx: DoctorContext): DoctorTeam[] {
-    return ctx.teams.filter(
-        (t) => t.platform && t.integrationActive && t.repositories.length,
-    );
 }
 
 /** Token can read, can write, and a hook delivers events, per selected repo. */
@@ -258,8 +261,12 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
     };
 }
 
-/** The webhook URL is configured and answers from here. */
-export function webhookUrlCheck(deps: Pick<GitDeps, 'reach'>): DoctorCheck {
+/**
+ * The webhook URL is configured and Git events reach it. A recent event is the
+ * proof; DNS and TLS from here are judged only without one, because this
+ * container's resolver is not the one the Git host uses.
+ */
+export function webhookUrlCheck(deps: WebhookDeps): DoctorCheck {
     return {
         id: 'git.webhook_url',
         async run(ctx: DoctorContext): Promise<DoctorResult[]> {
@@ -282,6 +289,16 @@ export function webhookUrlCheck(deps: Pick<GitDeps, 'reach'>): DoctorCheck {
                         title: `The ${platform} webhook address is not set.`,
                         impact: `${platform} has nowhere to send pull request events, so nothing is reviewed.`,
                         fix: `Set ${envVar} to https://<your API host>/<provider>/webhook and restart the api.`,
+                    });
+                    continue;
+                }
+
+                const events = await deps.recentEvents(platformId);
+                if (events.count > 0) {
+                    results.push({
+                        check: 'git.webhook_url',
+                        status: 'ok',
+                        title: `Kodus received ${events.count} ${platform} event(s) in the last ${RECENT_DAYS} days (latest ${events.last ? events.last.toISOString() : 'unknown'}).`,
                     });
                     continue;
                 }

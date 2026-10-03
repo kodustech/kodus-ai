@@ -3,6 +3,7 @@ jest.mock('@libs/llm/llm', () => ({ LLM: { run: jest.fn() } }));
 import {
     BrokerProbe,
     brokerCheck,
+    STALE_JOB_MINUTES,
     staleJobsCheck,
 } from '../checks/broker.checks';
 import { bootEnvCheck, configEnvCheck } from '../checks/env.checks';
@@ -18,7 +19,13 @@ import {
     skipSettingsCheck,
     versionCheck,
 } from '../checks/setup.checks';
-import { DoctorContext, DoctorResult, DoctorTeam } from '../doctor.types';
+import {
+    DoctorContext,
+    DoctorResult,
+    DoctorTeam,
+    licenseCandidates,
+    RECENT_DAYS,
+} from '../doctor.types';
 
 const HEX = 'a'.repeat(64);
 
@@ -123,7 +130,25 @@ const healthyGit = (
         ...over,
     })) as any,
     reach: jest.fn(async () => 404),
+    recentEvents: jest.fn(
+        async (): Promise<{ count: number; last: Date | null }> => ({
+            count: 0,
+            last: null,
+        }),
+    ),
 });
+
+/** An organization a sign-up created for itself: no Git, nothing to review. */
+const emptyOrganizationTeam = (over: Partial<DoctorTeam> = {}) =>
+    team({
+        organizationId: '33333333-3333-3333-3333-333333333333',
+        organizationName: 'a-signup-Xy12',
+        teamId: '44444444-4444-4444-4444-444444444444',
+        platform: undefined,
+        integrationActive: false,
+        repositories: [],
+        ...over,
+    });
 
 describe('doctor checks — each condition in scope, one at a time', () => {
     describe('clean install', () => {
@@ -251,6 +276,54 @@ describe('doctor checks — each condition in scope, one at a time', () => {
                 status: 'fail',
                 check: 'jobs.outbox',
             });
+        });
+
+        it('job and outbox failures older than the window are not counted', async () => {
+            // FAILED outbox rows are never cleaned and PENDING jobs never reaped:
+            // an incident from months ago must not read as a failure today.
+            const ds = dataSource();
+            await staleJobsCheck(ds).run(ctx());
+
+            expect(ds.query).toHaveBeenCalledTimes(2);
+            for (const [sql, params] of ds.query.mock.calls) {
+                expect(sql).toContain(
+                    '"createdAt" > now() - make_interval(days => $2)',
+                );
+                expect(params).toEqual([STALE_JOB_MINUTES, RECENT_DAYS]);
+            }
+        });
+
+        it('LLM: an organization with nothing to review is not probed', async () => {
+            const deps = {
+                getBYOKConfig: jest.fn(async () => null),
+                complete: jest.fn(
+                    async ({ organizationId }: { organizationId?: string }) => {
+                        if (organizationId !== team().organizationId) {
+                            throw new Error('Bad Request');
+                        }
+                    },
+                ),
+            };
+            const results = await llmCheck(deps).run(
+                ctx({ teams: [emptyOrganizationTeam(), team()] }),
+            );
+
+            expect(problems(results)).toEqual([]);
+            expect(deps.getBYOKConfig).not.toHaveBeenCalledWith(
+                emptyOrganizationTeam().organizationId,
+            );
+        });
+
+        it('LLM: with nothing to review yet, the model is still probed', async () => {
+            const deps = llmDeps({ fail: new Error('401 invalid key') });
+            const results = await llmCheck(deps).run(
+                ctx({ teams: [team({ repositories: [] })] }),
+            );
+
+            expect(deps.complete).toHaveBeenCalledTimes(1);
+            expect(
+                results.find((r) => r.check === 'llm.completion')?.status,
+            ).toBe('fail');
         });
 
         it('LLM completion fails (env model)', async () => {
@@ -409,6 +482,25 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             );
             const results = await webhookUrlCheck(git).run(ctx());
             expect(statuses(results)).toEqual(['fail']);
+        });
+
+        it('webhook host does not resolve from here, but events arrive: delivered', async () => {
+            const git = healthyGit();
+            git.reach.mockRejectedValue(
+                Object.assign(new Error('fetch failed'), {
+                    cause: { code: 'ENOTFOUND' },
+                }),
+            );
+            git.recentEvents.mockResolvedValue({
+                count: 12,
+                last: new Date('2026-10-02T10:00:00Z'),
+            });
+            const results = await webhookUrlCheck(git).run(ctx());
+
+            expect(statuses(results)).toEqual(['ok']);
+            expect(results[0].title).toContain('12 GitHub event(s)');
+            expect(git.recentEvents).toHaveBeenCalledWith('GITHUB');
+            expect(git.reach).not.toHaveBeenCalled();
         });
 
         it('webhook URL times out from inside (NAT) is unverified, not failed', async () => {
@@ -733,6 +825,21 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             expect(statuses(results)).toEqual(['info']);
         });
 
+        it('the edition is read from the organization that reviews, not the first by name', () => {
+            const reviewing = team({ organizationName: 'licensed-org' });
+            expect(
+                licenseCandidates([emptyOrganizationTeam(), reviewing]),
+            ).toEqual([reviewing]);
+        });
+
+        it('with nothing to review yet, every organization is a license candidate', () => {
+            const other = emptyOrganizationTeam();
+            const first = team({ repositories: [] });
+            expect(
+                licenseCandidates([first, team({ repositories: [] }), other]),
+            ).toEqual([first, other]);
+        });
+
         it('showStatusFeedback=false', async () => {
             const c = ctx();
             const results = await skipSettingsCheck(async () => [
@@ -779,6 +886,43 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             ]).run(c);
             expect(statuses(results)).toEqual(['skip']);
             expect(results[0].scope).toBe('acme/core/api');
+        });
+
+        it("the default ignore list is not counted as the team's choice", async () => {
+            const c = ctx();
+            const results = await skipSettingsCheck(
+                async () => [
+                    {
+                        team: c.teams[0],
+                        repository: 'api',
+                        config: {
+                            ignorePaths: ['yarn.lock', 'dist/**', 'docs/**'],
+                        },
+                    },
+                ],
+                () => ['yarn.lock', 'dist/**'],
+            ).run(c);
+
+            expect(statuses(results)).toEqual(['skip']);
+            expect(results[0].title).toBe(
+                '1 path pattern(s) beyond the default list are ignored (docs/**).',
+            );
+        });
+
+        it('a config that carries only the default ignore list skips nothing', async () => {
+            const c = ctx();
+            const results = await skipSettingsCheck(
+                async () => [
+                    {
+                        team: c.teams[0],
+                        repository: 'api',
+                        config: { ignorePaths: ['yarn.lock', 'dist/**'] },
+                    },
+                ],
+                () => ['yarn.lock', 'dist/**'],
+            ).run(c);
+
+            expect(results).toEqual([]);
         });
     });
 });
