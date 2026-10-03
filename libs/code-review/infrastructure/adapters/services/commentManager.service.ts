@@ -247,7 +247,8 @@ export class CommentManagerService implements ICommentManagerService {
         // entirely. Worst offenders first; the rest acknowledged as a count.
         const MAX_LISTED_FINDINGS = 25;
         const sorted = [...suggestions].sort(
-            (a, b) => order.indexOf(severityOf(a)) - order.indexOf(severityOf(b)),
+            (a, b) =>
+                order.indexOf(severityOf(a)) - order.indexOf(severityOf(b)),
         );
         const omitted = Math.max(0, sorted.length - MAX_LISTED_FINDINGS);
 
@@ -2429,12 +2430,22 @@ ${reviewOptions}
                 },
             });
 
+            // Which platform the PR lives on decides whether the raw marker may
+            // be added: Bitbucket escapes raw HTML, so the comment body skips
+            // it there. Resolved here (from the org/team integration) rather
+            // than threaded per call, mirroring the other Bitbucket-aware
+            // helpers in this file.
+            const platformType =
+                await this.codeManagementService.getTypeIntegration(
+                    organizationAndTeamData,
+                );
+
             const commentResults = [];
 
             for (const suggestion of prLevelSuggestions) {
                 try {
                     // Use standardized formatting method
-                    const commentBody =
+                    let commentBody =
                         await this.codeManagementService.formatReviewCommentBody(
                             {
                                 suggestion,
@@ -2447,6 +2458,23 @@ ${reviewOptions}
                             },
                             undefined,
                         );
+
+                    // PR-level comments carry the same recognition marker as
+                    // inline review comments and the "Code Review Completed"
+                    // comment, so webhook consumers can tell them apart. The
+                    // inline marker lives in the interaction footer, which is
+                    // intentionally omitted here (includeFooter: false), so it
+                    // is appended to the body directly (#2050). Bitbucket
+                    // escapes raw HTML and already injects a visible
+                    // "kody|code-review" chip in the header, so the raw marker
+                    // is skipped there.
+                    if (
+                        commentBody &&
+                        platformType !== PlatformType.BITBUCKET &&
+                        !commentBody.includes('<!-- kody-codereview -->')
+                    ) {
+                        commentBody = `${commentBody}\n\n<!-- kody-codereview -->\n&#8203;`;
+                    }
 
                     // Create general comment
                     const createdComment =
