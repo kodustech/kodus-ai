@@ -95,6 +95,24 @@ describe("LockedFeatureOverlay", () => {
         }
     });
 
+    it("drops an alternative that leads to billing for a viewer without access", () => {
+        mockCanOpenBilling.value = false;
+        try {
+            render(
+                <LockedFeatureOverlay
+                    title="Locked"
+                    description="desc"
+                    altCta={{ label: "Compare plans", href: "/choose-plan" }}>
+                    <span>content</span>
+                </LockedFeatureOverlay>,
+            );
+
+            expect(screen.queryByRole("link")).not.toBeInTheDocument();
+        } finally {
+            mockCanOpenBilling.value = true;
+        }
+    });
+
     it("tracks a gate_cta_click when the CTA is clicked", () => {
         render(
             <LockedFeatureOverlay
