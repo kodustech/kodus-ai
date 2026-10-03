@@ -52,6 +52,21 @@ describe("effectiveReviewStatus", () => {
     ] as const)("runs %j read as %s", (runs, expected) => {
         expect(effectiveReviewStatus([...runs])).toBe(expected);
     });
+
+    it.each([
+        [["error"], undefined],
+        [["skipped", "error"], undefined],
+        [["error", "success"], "success"],
+        [["success"], "success"],
+        [["in_progress"], "in_progress"],
+        [["partial_error"], "partial_error"],
+        [[], undefined],
+    ] as const)(
+        "runs %j with older runs unread read as %s",
+        (runs, expected) => {
+            expect(effectiveReviewStatus([...runs], true)).toBe(expected);
+        },
+    );
 });
 
 describe("shouldLoadMoreRuns", () => {
@@ -59,7 +74,7 @@ describe("shouldLoadMoreRuns", () => {
         hasNextPage: true,
         hasCleanRun: false,
         isFetching: false,
-        lastPageFailed: false,
+        lastFetchFailed: false,
         pagesLoaded: 1,
     };
 
@@ -74,17 +89,20 @@ describe("shouldLoadMoreRuns", () => {
             { hasCleanRun: true, pagesLoaded: 2 },
         ],
         ["a fetch is in flight", { isFetching: true }],
-        ["the last page failed", { lastPageFailed: true }],
+        [
+            "the last fetch failed (a page or a poll refetch)",
+            { lastFetchFailed: true },
+        ],
         ["the page cap is reached", { pagesLoaded: MAX_RUN_PAGES }],
     ])("stops when %s", (_, override) => {
         expect(shouldLoadMoreRuns({ ...base, ...override })).toBe(false);
     });
 
-    it("resumes once the failed page is cleared by a successful refetch", () => {
-        expect(shouldLoadMoreRuns({ ...base, lastPageFailed: true })).toBe(
+    it("resumes once the failed fetch is cleared by a successful refetch", () => {
+        expect(shouldLoadMoreRuns({ ...base, lastFetchFailed: true })).toBe(
             false,
         );
-        expect(shouldLoadMoreRuns({ ...base, lastPageFailed: false })).toBe(
+        expect(shouldLoadMoreRuns({ ...base, lastFetchFailed: false })).toBe(
             true,
         );
     });

@@ -175,7 +175,7 @@ export function ReviewPageClient({
         hasNextPage,
         fetchNextPage,
         isFetching,
-        isFetchNextPageError,
+        isError: lastFetchFailed,
     } = useInfinitePullRequestExecutions(
         {
             teamId,
@@ -197,6 +197,7 @@ export function ReviewPageClient({
     const prExecution = prRuns[0];
     const reviewStatus = effectiveReviewStatus(
         prRuns.map((run) => run.automationExecution?.status),
+        hasNextPage,
     );
 
     // A clean run can sit past the first page on a PR with many pushes; page
@@ -211,7 +212,7 @@ export function ReviewPageClient({
                 hasNextPage,
                 hasCleanRun,
                 isFetching,
-                lastPageFailed: isFetchNextPageError,
+                lastFetchFailed,
                 pagesLoaded,
             })
         ) {
@@ -221,7 +222,7 @@ export function ReviewPageClient({
         hasNextPage,
         hasCleanRun,
         isFetching,
-        isFetchNextPageError,
+        lastFetchFailed,
         pagesLoaded,
         fetchNextPage,
     ]);
