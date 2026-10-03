@@ -127,7 +127,16 @@ async function main() {
         jestArgs.push(`--changedSince=${base}`, '--passWithNoTests');
     }
 
-    const env = { ...process.env };
+    // git exports GIT_DIR and friends to the hook it runs. Any spec that spawns
+    // git with the inherited env then works on this repository instead of its
+    // temp repos: commits land in its history, and `init`/`config` set
+    // core.bare=true and core.hooksPath=/dev/null for every worktree.
+    // GIT_EXEC_PATH stays: specs use it to find git-http-backend.
+    const env = Object.fromEntries(
+        Object.entries(process.env).filter(
+            ([key]) => !key.startsWith('GIT_') || key === 'GIT_EXEC_PATH',
+        ),
+    );
     if (env.SKIP_INTEGRATION !== 'true' && !(await isPostgresReachable())) {
         console.warn(
             '[pre-push] Postgres not reachable, skipping integration specs (CI runs them). ' +
