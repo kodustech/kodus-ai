@@ -130,3 +130,44 @@ export const GateCtaLink = ({
         </Link>
     );
 };
+
+/**
+ * A locked screen's actions. The alternative leads when the viewer can
+ * follow it, with the plan CTA demoted under it; when the alternative is not
+ * offered (see GateAltLink), the plan CTA takes the primary slot instead of
+ * staying demoted under nothing.
+ */
+export const GateCtaArea = ({
+    cta,
+    altCta,
+}: {
+    cta?: {
+        label: string;
+        href: string;
+        feature: GateFeature;
+        surface?: GateSurface;
+        planType?: string;
+        subscriptionStatus?: string;
+        metadata?: Record<string, unknown>;
+    };
+    altCta?: { label: string; href: string };
+}) => {
+    const canFollowAlt = useCanFollowGateLink(altCta?.href ?? "");
+    const alt = altCta && canFollowAlt ? altCta : undefined;
+
+    if (!alt && !cta) return null;
+
+    return (
+        <div className="flex flex-col items-center gap-3">
+            {alt ? (
+                <GateAltLink href={alt.href} label={alt.label} />
+            ) : (
+                cta && <GateCtaLink {...cta} />
+            )}
+            {alt && cta && (
+                <GateCtaLink {...cta} size="sm" variant="cancel" />
+            )}
+        </div>
+    );
+};
+

@@ -154,6 +154,14 @@ describe("GateAltLink", () => {
         ).toHaveAttribute("href", "/settings/git");
     });
 
+    it("is offered when it leads to billing the viewer can open", () => {
+        render(<GateAltLink href="/choose-plan" label="Compare plans" />);
+
+        expect(
+            screen.getByRole("link", { name: /compare plans/i }),
+        ).toHaveAttribute("href", "/choose-plan");
+    });
+
     it("is not offered when it leads to billing the viewer cannot open", () => {
         mockCanOpenBilling.value = false;
 

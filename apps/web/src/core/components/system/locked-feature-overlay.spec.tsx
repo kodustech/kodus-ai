@@ -113,6 +113,35 @@ describe("LockedFeatureOverlay", () => {
         }
     });
 
+    it("promotes the plan CTA when the alternative is not offered", () => {
+        mockCanOpenBilling.value = false;
+        try {
+            render(
+                <LockedFeatureOverlay
+                    title="Locked"
+                    description="desc"
+                    altCta={{ label: "Compare plans", href: "/choose-plan" }}
+                    cta={{
+                        label: "Bring your own key",
+                        href: "/byok",
+                        feature: "cockpit",
+                    }}>
+                    <span>content</span>
+                </LockedFeatureOverlay>,
+            );
+
+            const links = screen.getAllByRole("link");
+            expect(links).toHaveLength(1);
+            expect(links[0]).toHaveAttribute("href", "/byok");
+            // Primary, not the demoted "cancel" look it had under the alt.
+            expect(links[0].querySelector("[data-decorative]")).toHaveClass(
+                "[--button-background:var(--color-primary-light)]",
+            );
+        } finally {
+            mockCanOpenBilling.value = true;
+        }
+    });
+
     it("tracks a gate_cta_click when the CTA is clicked", () => {
         render(
             <LockedFeatureOverlay

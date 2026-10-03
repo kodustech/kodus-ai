@@ -4,7 +4,7 @@ import { LockIcon } from "lucide-react";
 import { cn } from "src/core/utils/components";
 import type { GateFeature, GateSurface } from "src/core/utils/gate-hit";
 
-import { GateAltLink, GateCtaLink } from "./gate-cta-link";
+import { GateCtaArea } from "./gate-cta-link";
 
 /**
  * Renders the real (or mocked) screen behind a blur with a centered
@@ -70,44 +70,7 @@ export const LockedFeatureOverlay = ({
 
                     {details}
 
-                    {(cta || altCta) && (
-                        <div className="flex flex-col items-center gap-3">
-                            {altCta ? (
-                                <GateAltLink
-                                    href={altCta.href}
-                                    label={altCta.label}
-                                />
-                            ) : (
-                                cta && (
-                                    <GateCtaLink
-                                        href={cta.href}
-                                        label={cta.label}
-                                        feature={cta.feature}
-                                        surface={cta.surface}
-                                        planType={cta.planType}
-                                        subscriptionStatus={
-                                            cta.subscriptionStatus
-                                        }
-                                        metadata={cta.metadata}
-                                    />
-                                )
-                            )}
-
-                            {altCta && cta && (
-                                <GateCtaLink
-                                    href={cta.href}
-                                    label={cta.label}
-                                    feature={cta.feature}
-                                    surface={cta.surface}
-                                    planType={cta.planType}
-                                    subscriptionStatus={cta.subscriptionStatus}
-                                    metadata={cta.metadata}
-                                    size="sm"
-                                    variant="cancel"
-                                />
-                            )}
-                        </div>
-                    )}
+                    <GateCtaArea cta={cta} altCta={altCta} />
                 </Card>
             </div>
         </div>
