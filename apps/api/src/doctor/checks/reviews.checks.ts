@@ -40,8 +40,12 @@ export interface FeedbackCounts {
     thumbsDown: number;
 }
 
-export interface ReviewsDeps {
+export interface ReviewRunsDeps {
     runs(team: DoctorTeam): Promise<ReviewRun[]>;
+}
+
+/** Read from Mongo, so a slow aggregation only costs these lines. */
+export interface SuggestionsDeps {
     suggestions(organizationId: string): Promise<SuggestionCounts>;
     feedback(organizationId: string): Promise<FeedbackCounts>;
 }
@@ -117,6 +121,13 @@ const LOSSES: Record<string, Loss> = {
         impact: 'Those findings never reached the pull request.',
         fix: 'Not a setting: report it to Kodus with the pull request numbers.',
     },
+    'reviews.partial': {
+        matches: (run) => run.status === 'partial_error',
+        title: (n, t) =>
+            `${n} of ${t} reviews finished with issues: a step around the review failed.`,
+        impact: 'Part of those reviews may be missing, for example the summary or the pull-request-level comments.',
+        fix: 'Open the review timeline of those pull requests in the dashboard to see which step failed.',
+    },
     'reviews.cut_short': {
         matches: (run) => run.agentCutShort,
         title: (n, t) =>
@@ -144,15 +155,13 @@ export function isDegraded(count: number, total: number): boolean {
  * Whether the reviews of the last RECENT_DAYS ran in full (#2066). Read from
  * what each run recorded; it never judges whether a finding was right.
  */
-export function recentReviewsCheck(deps: ReviewsDeps): DoctorCheck {
+export function recentReviewsCheck(deps: ReviewRunsDeps): DoctorCheck {
     return {
         id: 'reviews.recent',
         async run(ctx: DoctorContext): Promise<DoctorResult[]> {
             const results: DoctorResult[] = [];
-            const organizations = new Map<string, string>();
 
             for (const team of reviewableTeams(ctx)) {
-                organizations.set(team.organizationId, team.organizationName);
                 const scope = teamScope(team);
                 const runs = await deps.runs(team);
                 const reviewed = runs.filter((r) => r.status !== 'skipped');
@@ -200,13 +209,20 @@ export function recentReviewsCheck(deps: ReviewsDeps): DoctorCheck {
                 }
 
                 const completed = reviewed.filter((r) => r.status !== 'error');
-                let lossLines = 0;
+                const lossCounts = new Map<string, number>();
+                for (const run of completed) {
+                    for (const [check, loss] of Object.entries(LOSSES)) {
+                        if (loss.matches(run)) {
+                            lossCounts.set(
+                                check,
+                                (lossCounts.get(check) ?? 0) + 1,
+                            );
+                        }
+                    }
+                }
                 for (const [check, loss] of Object.entries(LOSSES)) {
-                    const count = completed.filter((r) =>
-                        loss.matches(r),
-                    ).length;
+                    const count = lossCounts.get(check) ?? 0;
                     if (!count) continue;
-                    lossLines++;
                     results.push({
                         check,
                         status: isDegraded(count, completed.length)
@@ -218,7 +234,7 @@ export function recentReviewsCheck(deps: ReviewsDeps): DoctorCheck {
                         fix: loss.fix,
                     });
                 }
-                if (!lossLines && completed.length) {
+                if (!lossCounts.size && completed.length) {
                     results.push({
                         check: 'reviews.full',
                         status: 'ok',
@@ -226,6 +242,22 @@ export function recentReviewsCheck(deps: ReviewsDeps): DoctorCheck {
                         title: `${completed.length} review(s) in the last ${RECENT_DAYS} days ran in full.`,
                     });
                 }
+            }
+
+            return results;
+        },
+    };
+}
+
+/** What happened to the findings, per organization that reviews. */
+export function recentSuggestionsCheck(deps: SuggestionsDeps): DoctorCheck {
+    return {
+        id: 'suggestions.recent',
+        async run(ctx: DoctorContext): Promise<DoctorResult[]> {
+            const results: DoctorResult[] = [];
+            const organizations = new Map<string, string>();
+            for (const team of reviewableTeams(ctx)) {
+                organizations.set(team.organizationId, team.organizationName);
             }
 
             for (const [organizationId, organizationName] of organizations) {
@@ -261,12 +293,15 @@ export function recentReviewsCheck(deps: ReviewsDeps): DoctorCheck {
                         fix: 'Optional: set API_CRON_SYNC_CODE_REVIEW_REACTIONS (for example "0 0 * * *").',
                     });
                 } else {
+                    // The cron stores each comment's running total, so this is the
+                    // total of the comments it refreshed, not the reactions given
+                    // in the window.
                     const f = await deps.feedback(organizationId);
                     results.push({
                         check: 'feedback.reactions',
                         status: 'info',
                         scope: organizationName,
-                        title: `Last ${RECENT_DAYS} days: ${f.thumbsUp} 👍 and ${f.thumbsDown} 👎 on Kody's comments.`,
+                        title: `Kody's comments whose reactions were synced in the last ${RECENT_DAYS} days have ${f.thumbsUp} 👍 and ${f.thumbsDown} 👎 in total.`,
                     });
                 }
             }

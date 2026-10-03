@@ -38,6 +38,7 @@ import { liveLlmComplete, llmCheck } from './checks/llm.checks';
 import {
     FeedbackCounts,
     recentReviewsCheck,
+    recentSuggestionsCheck,
     ReviewRun,
     SuggestionCounts,
 } from './checks/reviews.checks';
@@ -68,6 +69,8 @@ const execFileAsync = promisify(execFile);
 /** A check that hangs must not hang the report. */
 export const CHECK_TIMEOUT_MS = 90_000;
 const SEAT_LOOKBACK_DAYS = 14;
+/** Under CHECK_TIMEOUT_MS, so a slow aggregation fails alone, as "?". */
+const MONGO_QUERY_TIMEOUT_MS = 30_000;
 
 /**
  * Pull requests of a team ($1) whose latest run since $2 was skipped for a
@@ -190,6 +193,8 @@ export class SelfHostedDoctorService {
             analyticsCheck(() => this.lastAnalyticsRun()),
             recentReviewsCheck({
                 runs: (team) => this.recentReviewRuns(team),
+            }),
+            recentSuggestionsCheck({
                 suggestions: (organizationId) =>
                     this.recentSuggestions(organizationId),
                 feedback: (organizationId) =>
@@ -439,40 +444,73 @@ export class SelfHostedDoctorService {
         }));
     }
 
-    /** Suggestions created in the window, by what happened to them. */
+    /**
+     * Suggestions created in the window, file-level and pull-request-level, by
+     * what happened to them. The `updatedAt` bound keeps the scan to the pull
+     * requests touched in the window; `maxTimeMS` stops it on an install whose
+     * planner picks a wider index.
+     */
     private async recentSuggestions(
         organizationId: string,
     ): Promise<SuggestionCounts> {
         const since = new Date(Date.now() - RECENT_DAYS * 86_400_000);
-        const rows: Array<{
+        const rows = (await this.mongo
+            .collection('pullRequests')
+            .aggregate(
+                [
+                    { $match: { organizationId, updatedAt: { $gte: since } } },
+                    {
+                        $project: {
+                            suggestion: {
+                                $concatArrays: [
+                                    {
+                                        $reduce: {
+                                            input: { $ifNull: ['$files', []] },
+                                            initialValue: [],
+                                            in: {
+                                                $concatArrays: [
+                                                    '$$value',
+                                                    {
+                                                        $ifNull: [
+                                                            '$$this.suggestions',
+                                                            [],
+                                                        ],
+                                                    },
+                                                ],
+                                            },
+                                        },
+                                    },
+                                    { $ifNull: ['$prLevelSuggestions', []] },
+                                ],
+                            },
+                        },
+                    },
+                    { $unwind: '$suggestion' },
+                    {
+                        // Suggestion timestamps are ISO strings (PullRequestsService).
+                        $match: {
+                            'suggestion.createdAt': {
+                                $gte: since.toISOString(),
+                            },
+                        },
+                    },
+                    {
+                        $group: {
+                            _id: {
+                                delivery: '$suggestion.deliveryStatus',
+                                implementation:
+                                    '$suggestion.implementationStatus',
+                            },
+                            count: { $sum: 1 },
+                        },
+                    },
+                ],
+                { maxTimeMS: MONGO_QUERY_TIMEOUT_MS },
+            )
+            .toArray()) as Array<{
             _id: { delivery: string | null; implementation: string | null };
             count: number;
-        }> = (await this.mongo
-            .collection('pullRequests')
-            .aggregate([
-                { $match: { organizationId, updatedAt: { $gte: since } } },
-                { $unwind: '$files' },
-                { $unwind: '$files.suggestions' },
-                {
-                    // Suggestion timestamps are ISO strings (PullRequestsService).
-                    $match: {
-                        'files.suggestions.createdAt': {
-                            $gte: since.toISOString(),
-                        },
-                    },
-                },
-                {
-                    $group: {
-                        _id: {
-                            delivery: '$files.suggestions.deliveryStatus',
-                            implementation:
-                                '$files.suggestions.implementationStatus',
-                        },
-                        count: { $sum: 1 },
-                    },
-                },
-            ])
-            .toArray()) as any;
+        }>;
 
         const counts: SuggestionCounts = {
             sent: 0,
@@ -481,7 +519,9 @@ export class SelfHostedDoctorService {
             implemented: 0,
         };
         for (const { _id, count } of rows) {
-            if (_id.delivery === 'sent') counts.sent += count;
+            // A replaced comment was posted, then superseded by a newer one.
+            if (_id.delivery === 'sent' || _id.delivery === 'replaced')
+                counts.sent += count;
             else if (
                 _id.delivery === 'failed' ||
                 _id.delivery === 'failed_lines_mismatch'
@@ -504,16 +544,19 @@ export class SelfHostedDoctorService {
         const since = new Date(Date.now() - RECENT_DAYS * 86_400_000);
         const [row] = (await this.mongo
             .collection('codeReviewFeedback')
-            .aggregate([
-                { $match: { organizationId, updatedAt: { $gte: since } } },
-                {
-                    $group: {
-                        _id: null,
-                        thumbsUp: { $sum: '$reactions.thumbsUp' },
-                        thumbsDown: { $sum: '$reactions.thumbsDown' },
+            .aggregate(
+                [
+                    { $match: { organizationId, updatedAt: { $gte: since } } },
+                    {
+                        $group: {
+                            _id: null,
+                            thumbsUp: { $sum: '$reactions.thumbsUp' },
+                            thumbsDown: { $sum: '$reactions.thumbsDown' },
+                        },
                     },
-                },
-            ])
+                ],
+                { maxTimeMS: MONGO_QUERY_TIMEOUT_MS },
+            )
             .toArray()) as Array<{ thumbsUp: number; thumbsDown: number }>;
         return {
             thumbsUp: row?.thumbsUp ?? 0,

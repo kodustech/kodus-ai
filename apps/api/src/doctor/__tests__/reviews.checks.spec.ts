@@ -1,8 +1,9 @@
 import {
     MIN_DEGRADED_RUNS,
     recentReviewsCheck,
+    recentSuggestionsCheck,
     ReviewRun,
-    ReviewsDeps,
+    SuggestionsDeps,
 } from '../checks/reviews.checks';
 import { DoctorContext, DoctorResult, DoctorTeam } from '../doctor.types';
 
@@ -42,7 +43,9 @@ const full = (): ReviewRun => ({
 const runs = (n: number, run: () => ReviewRun = full) =>
     Array.from({ length: n }, run);
 
-const deps = (over: Partial<ReviewsDeps> & { list?: ReviewRun[] } = {}) => ({
+const deps = (
+    over: Partial<SuggestionsDeps> & { list?: ReviewRun[] } = {},
+) => ({
     runs: jest.fn(async () => over.list ?? runs(10)),
     suggestions: jest.fn(
         over.suggestions ??
@@ -162,6 +165,22 @@ describe('recent reviews (#2066)', () => {
         );
     });
 
+    it('a review that finished with issues is not reported as ran in full', async () => {
+        const partial = (): ReviewRun => ({
+            ...full(),
+            status: 'partial_error',
+        });
+        const results = await recentReviewsCheck(
+            deps({ list: [...runs(7), ...runs(3, partial)] }),
+        ).run(ctx());
+
+        expect(line(results, 'reviews.partial')).toMatchObject({
+            status: 'warn',
+            title: '3 of 10 reviews finished with issues: a step around the review failed.',
+        });
+        expect(line(results, 'reviews.full')).toBeUndefined();
+    });
+
     it('counts reviews where an agent stopped early', async () => {
         const cut = (): ReviewRun => ({ ...full(), agentCutShort: true });
         const results = await recentReviewsCheck(
@@ -205,12 +224,28 @@ describe('recent reviews (#2066)', () => {
         );
 
         expect(d.runs).toHaveBeenCalledTimes(1);
-        expect(d.suggestions).toHaveBeenCalledWith('org-1');
-        expect(d.suggestions).not.toHaveBeenCalledWith('empty');
+
+        const s = deps();
+        await recentSuggestionsCheck(s).run(
+            ctx({
+                teams: [
+                    team({
+                        organizationId: 'empty',
+                        teamId: 'empty-team',
+                        platform: undefined,
+                        integrationActive: false,
+                        repositories: [],
+                    }),
+                    team(),
+                ],
+            }),
+        );
+        expect(s.suggestions).toHaveBeenCalledWith('org-1');
+        expect(s.suggestions).not.toHaveBeenCalledWith('empty');
     });
 
     it('findings that could not be posted are degraded at 10% and at least 3', async () => {
-        const results = await recentReviewsCheck(
+        const results = await recentSuggestionsCheck(
             deps({
                 suggestions: async () => ({
                     sent: 27,
@@ -228,14 +263,16 @@ describe('recent reviews (#2066)', () => {
     });
 
     it('feedback is a count only, and says when reactions are not collected', async () => {
-        const collected = await recentReviewsCheck(deps()).run(ctx());
-        const notCollected = await recentReviewsCheck(deps()).run(
+        const collected = await recentSuggestionsCheck(deps()).run(ctx());
+        const notCollected = await recentSuggestionsCheck(deps()).run(
             ctx({ env: {} }),
         );
 
+        // The cron stores each comment's running total, not the reactions of
+        // the window, and the title says so.
         expect(line(collected, 'feedback.reactions')).toMatchObject({
             status: 'info',
-            title: "Last 7 days: 3 👍 and 1 👎 on Kody's comments.",
+            title: "Kody's comments whose reactions were synced in the last 7 days have 3 👍 and 1 👎 in total.",
         });
         expect(line(notCollected, 'feedback.reactions')).toMatchObject({
             status: 'info',
