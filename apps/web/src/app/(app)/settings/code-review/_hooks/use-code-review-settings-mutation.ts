@@ -19,6 +19,7 @@ import {
     type FormattedGlobalCodeReviewConfig,
 } from "../_types";
 import { mergeFormattedCodeReviewConfigForScope } from "../_utils/settings-shell";
+import { withoutUntouchedModelOverride } from "../[repositoryId]/_utils/model-override-field";
 
 type SavePreparationResult = {
     savedFormData: CodeReviewFormType;
@@ -128,7 +129,11 @@ export const useCodeReviewSettingsMutation = (params: {
         const prepared = await (options?.prepare ?? defaultPrepare)(formData);
 
         const result = await createOrUpdateCodeReviewParameter(
-            prepared.codeReviewConfig,
+            withoutUntouchedModelOverride(
+                prepared.codeReviewConfig,
+                formData.byokModelId?.value,
+                form.formState.defaultValues?.byokModelId?.value,
+            ),
             teamId,
             repositoryId,
             directoryId,
