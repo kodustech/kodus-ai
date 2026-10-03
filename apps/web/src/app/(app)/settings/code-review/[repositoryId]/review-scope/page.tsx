@@ -11,6 +11,7 @@ import { KodyLearningStatus } from "@services/parameters/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { useFormContext, useFormState, useWatch } from "react-hook-form";
+import { useUnsavedChangesGuard } from "src/core/hooks/use-unsaved-changes-guard";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { unformatConfig } from "src/core/utils/helpers";
 
@@ -129,7 +130,7 @@ function ReviewScopeContent() {
         control: form.control,
         name: PROMPT_FIELDS as never,
     }) as unknown[];
-    const promptsDirty = PROMPT_FIELDS.some((fieldName, index) => {
+    const dirtyPromptField = PROMPT_FIELDS.find((fieldName, index) => {
         const current = getPromptFieldText(
             parsePromptFieldValue(promptValues?.[index]),
         );
@@ -140,10 +141,38 @@ function ReviewScopeContent() {
         );
         return current !== saved;
     });
+    const promptsDirty = dirtyPromptField !== undefined;
     const othersDirty = Object.keys(dirtyFields ?? {}).some(
         (key) => key !== "v2PromptOverrides",
     );
     const formIsDirty = promptsDirty || othersDirty;
+
+    // The layout's guard leaves prompt fields out (see above), so an edited
+    // category instruction showed "Unsaved changes" yet let the sidebar
+    // navigate away and drop it. Guard it here, as the Prompts page does.
+    useUnsavedChangesGuard({
+        id: "review-scope-instructions",
+        isDirty: promptsDirty || formIsSubmitting,
+        onBlock: () => {
+            // Field names end in `.value`; the row marks its unsuffixed
+            // name, so walk the prefixes like the layout does.
+            const segments = dirtyPromptField?.split(".") ?? [];
+            let target: Element | null = null;
+            for (let i = segments.length; i > 0 && !target; i--) {
+                target = document.querySelector(
+                    `[data-field-name="${segments.slice(0, i).join(".")}"]`,
+                );
+            }
+            target ??= document.querySelector("[data-header-actions]");
+            if (!target) return;
+            target.scrollIntoView({ behavior: "smooth", block: "center" });
+            target.classList.add("field-highlight");
+            window.setTimeout(
+                () => target.classList.remove("field-highlight"),
+                1800,
+            );
+        },
+    });
 
     if (
         platformConfig.kodyLearningStatus ===

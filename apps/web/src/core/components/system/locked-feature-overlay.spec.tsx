@@ -1,8 +1,14 @@
 /** @jest-environment jsdom */
 import "@testing-library/jest-dom";
+
 import { fireEvent, render, screen } from "@testing-library/react";
 
 import { LockedFeatureOverlay } from "./locked-feature-overlay";
+
+const mockCanOpenBilling = { value: true };
+jest.mock("@services/permissions/hooks", () => ({
+    usePermission: () => mockCanOpenBilling.value,
+}));
 
 jest.mock("src/core/utils/gate-hit", () => ({
     captureGateCtaClick: jest.fn(),
@@ -60,6 +66,111 @@ describe("LockedFeatureOverlay", () => {
 
         const link = screen.getByRole("link", { name: /upgrade plan/i });
         expect(link).toHaveAttribute("href", "/settings/subscription");
+    });
+
+    it("tells a viewer without billing access to ask an admin instead of linking to plans", () => {
+        mockCanOpenBilling.value = false;
+        try {
+            render(
+                <LockedFeatureOverlay
+                    title="Locked"
+                    description="desc"
+                    cta={{
+                        label: "See plans",
+                        href: "/choose-plan",
+                        feature: "cockpit",
+                    }}>
+                    <span>content</span>
+                </LockedFeatureOverlay>,
+            );
+
+            expect(screen.queryByRole("link")).not.toBeInTheDocument();
+            expect(
+                screen.getByText(
+                    "Ask an organization admin to upgrade the plan.",
+                ),
+            ).toBeInTheDocument();
+        } finally {
+            mockCanOpenBilling.value = true;
+        }
+    });
+
+    it("drops an alternative that leads to billing for a viewer without access", () => {
+        mockCanOpenBilling.value = false;
+        try {
+            render(
+                <LockedFeatureOverlay
+                    title="Locked"
+                    description="desc"
+                    altCta={{ label: "Compare plans", href: "/choose-plan" }}>
+                    <span>content</span>
+                </LockedFeatureOverlay>,
+            );
+
+            expect(screen.queryByRole("link")).not.toBeInTheDocument();
+        } finally {
+            mockCanOpenBilling.value = true;
+        }
+    });
+
+    it("leads with the alternative and demotes the plan CTA under it", () => {
+        render(
+            <LockedFeatureOverlay
+                title="Locked"
+                description="desc"
+                altCta={{
+                    label: "Connect a repository",
+                    href: "/settings/git",
+                }}
+                cta={{
+                    label: "See plans",
+                    href: "/choose-plan",
+                    feature: "cockpit",
+                }}>
+                <span>content</span>
+            </LockedFeatureOverlay>,
+        );
+
+        const links = screen.getAllByRole("link");
+        expect(links.map((link) => link.getAttribute("href"))).toEqual([
+            "/settings/git",
+            "/choose-plan",
+        ]);
+        expect(links[0].querySelector("[data-decorative]")).toHaveClass(
+            "[--button-background:var(--color-primary-light)]",
+        );
+        expect(links[1].querySelector("[data-decorative]")).not.toHaveClass(
+            "[--button-background:var(--color-primary-light)]",
+        );
+    });
+
+    it("promotes the plan CTA when the alternative is not offered", () => {
+        mockCanOpenBilling.value = false;
+        try {
+            render(
+                <LockedFeatureOverlay
+                    title="Locked"
+                    description="desc"
+                    altCta={{ label: "Compare plans", href: "/choose-plan" }}
+                    cta={{
+                        label: "Bring your own key",
+                        href: "/byok",
+                        feature: "cockpit",
+                    }}>
+                    <span>content</span>
+                </LockedFeatureOverlay>,
+            );
+
+            const links = screen.getAllByRole("link");
+            expect(links).toHaveLength(1);
+            expect(links[0]).toHaveAttribute("href", "/byok");
+            // Primary, not the demoted "cancel" look it had under the alt.
+            expect(links[0].querySelector("[data-decorative]")).toHaveClass(
+                "[--button-background:var(--color-primary-light)]",
+            );
+        } finally {
+            mockCanOpenBilling.value = true;
+        }
     });
 
     it("tracks a gate_cta_click when the CTA is clicked", () => {
