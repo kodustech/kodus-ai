@@ -21,6 +21,10 @@ import {
     KodyRulesStatus,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import {
+    ITeamService,
+    TEAM_SERVICE_TOKEN,
+} from '@libs/organization/domain/team/contracts/team.service.contract';
 import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 @Injectable()
@@ -37,6 +41,9 @@ export class DeleteRuleInOrganizationByIdKodyRulesUseCase {
         private readonly authorizationService: AuthorizationService,
 
         private readonly telemetry: TelemetryService,
+
+        @Inject(TEAM_SERVICE_TOKEN)
+        private readonly teamService: ITeamService,
     ) {}
 
     async execute(
@@ -61,6 +68,19 @@ export class DeleteRuleInOrganizationByIdKodyRulesUseCase {
 
             if (!organizationId) {
                 throw new NotFoundException('Rule not found');
+            }
+
+            // A caller-supplied team (the web route takes it as a query param)
+            // feeds the centralized-config lookups below, so it must belong
+            // to the same organization as the rule being deleted.
+            if (actor?.teamId) {
+                const teamOrganizationId =
+                    await this.teamService.findOneOrganizationIdByTeamId(
+                        actor.teamId,
+                    );
+                if (teamOrganizationId !== organizationId) {
+                    throw new NotFoundException('Team not found');
+                }
             }
 
             const existingRule = await this.kodyRulesService.findById(

@@ -45,13 +45,13 @@ export class KodyRulesRepository implements IKodyRulesRepository {
     //#region Get/Find
     async findById(
         uuid: string,
-        organizationId?: string,
+        organizationId: string,
     ): Promise<IKodyRule | null> {
         const pipeline = [
             {
                 $match: {
                     'rules.uuid': uuid,
-                    ...(organizationId ? { organizationId } : {}),
+                    organizationId,
                 },
             },
             { $unwind: '$rules' },

@@ -1265,7 +1265,7 @@ describe('KodyRulesSyncService — stale deletion snapshots', () => {
                 })),
             });
             deletion.execute
-                .mockRejectedValueOnce(new NotFoundException())
+                .mockRejectedValueOnce(new NotFoundException('Rule not found'))
                 .mockResolvedValueOnce(true);
             const result =
                 kind === 'ide'
@@ -1282,6 +1282,15 @@ describe('KodyRulesSyncService — stale deletion snapshots', () => {
             expect(result).toBe(1);
         },
     );
+
+    it('does not swallow a team outside the organization as a missing rule', async () => {
+        const { NotFoundException } = await import('@nestjs/common');
+        const error = new NotFoundException('Team not found');
+        deletion.execute.mockRejectedValueOnce(error);
+        await expect(
+            service.deleteSyncedRuleIfPresent(org, 'rule-1'),
+        ).rejects.toBe(error);
+    });
 
     it('does not swallow a storage failure as a missing rule', async () => {
         const error = new Error('storage unavailable');

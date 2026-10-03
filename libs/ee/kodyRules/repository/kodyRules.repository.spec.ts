@@ -19,16 +19,15 @@ describe('KodyRulesRepository.findById organization isolation', () => {
         });
     });
 
-    it('preserves unscoped lookups for internal callers', async () => {
-        const rule = { uuid: 'rule-own' };
+    it('never drops the organization filter, even for an empty id', async () => {
         const aggregate = jest
             .fn()
-            .mockReturnValue({ exec: jest.fn().mockResolvedValue([rule]) });
+            .mockReturnValue({ exec: jest.fn().mockResolvedValue([]) });
         const repo = new KodyRulesRepository({ aggregate } as any, {} as any);
 
-        await expect(repo.findById('rule-own')).resolves.toEqual(rule);
+        await expect(repo.findById('rule-own', '')).resolves.toBeNull();
         expect(aggregate.mock.calls[0][0][0]).toEqual({
-            $match: { 'rules.uuid': 'rule-own' },
+            $match: { 'organizationId': '', 'rules.uuid': 'rule-own' },
         });
     });
 });

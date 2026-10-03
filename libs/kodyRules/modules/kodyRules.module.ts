@@ -72,6 +72,7 @@ import { KodyRuleSummaryService } from '../infrastructure/adapters/services/kody
 import { RuleLikeModule } from './ruleLike.module';
 
 import { PermissionsModule } from '@libs/identity/modules/permissions.module';
+import { TeamModule } from '@libs/organization/modules/team.module';
 import { McpCoreModule } from '@libs/mcp-server/mcp-core.module';
 import { KodyRulesSyncListener } from '../infrastructure/adapters/listeners/kody-rules-sync.listener';
 import { CodeReviewConfigurationModule } from '@libs/code-review/modules/code-review-configuration.module';
@@ -93,6 +94,7 @@ import { NotificationModule } from '@libs/notifications/modules/notification.mod
         forwardRef(() => ParametersModule),
         forwardRef(() => UserModule),
         forwardRef(() => OrganizationModule),
+        forwardRef(() => TeamModule),
         forwardRef(() => OrganizationParametersModule),
         forwardRef(() => RuleLikeModule),
         forwardRef(() => LicenseModule),

@@ -3691,7 +3691,14 @@ export class KodyRulesSyncService {
                 );
             return result !== false;
         } catch (error) {
-            if (error instanceof NotFoundException) return false;
+            // Only a rule that is already gone is skipped; a team outside the
+            // organization (also a NotFoundException) must still surface.
+            if (
+                error instanceof NotFoundException &&
+                error.message === 'Rule not found'
+            ) {
+                return false;
+            }
             throw error;
         }
     }

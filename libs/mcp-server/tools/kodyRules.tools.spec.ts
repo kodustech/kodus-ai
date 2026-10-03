@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 
 import { CentralizedConfigPrService } from '@libs/centralized-config/infrastructure/adapters/services/centralized-config-pr.service';
 import { KodyRuleSeverity } from '@libs/ee/kodyRules/dtos/create-kody-rule.dto';
-import { DeleteKodyRuleFromMcpUseCase } from '../application/use-cases/delete-kody-rule.use-case';
+import { DeleteRuleInOrganizationByIdKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/delete-rule-in-organization-by-id.use-case';
 import {
     IKodyRulesService,
     KODY_RULES_SERVICE_TOKEN,
@@ -19,7 +19,7 @@ describe('KodyRulesTools.createKodyRule', () => {
     let tools: KodyRulesTools;
     let mockKodyRulesService: jest.Mocked<IKodyRulesService>;
     let mockCentralizedConfigPrService: jest.Mocked<CentralizedConfigPrService>;
-    let mockDeleteRuleUseCase: jest.Mocked<DeleteKodyRuleFromMcpUseCase>;
+    let mockDeleteRuleUseCase: jest.Mocked<DeleteRuleInOrganizationByIdKodyRulesUseCase>;
     let previousBaseUrl: string | undefined;
 
     beforeEach(async () => {
@@ -38,7 +38,7 @@ describe('KodyRulesTools.createKodyRule', () => {
         } as unknown as jest.Mocked<CentralizedConfigPrService>;
 
         mockDeleteRuleUseCase =
-            {} as unknown as jest.Mocked<DeleteKodyRuleFromMcpUseCase>;
+            {} as unknown as jest.Mocked<DeleteRuleInOrganizationByIdKodyRulesUseCase>;
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -52,7 +52,7 @@ describe('KodyRulesTools.createKodyRule', () => {
                     useValue: mockCentralizedConfigPrService,
                 },
                 {
-                    provide: DeleteKodyRuleFromMcpUseCase,
+                    provide: DeleteRuleInOrganizationByIdKodyRulesUseCase,
                     useValue: mockDeleteRuleUseCase,
                 },
             ],
@@ -164,7 +164,7 @@ describe('KodyRulesTools.updateKodyRule', () => {
     let tools: KodyRulesTools;
     let mockKodyRulesService: jest.Mocked<IKodyRulesService>;
     let mockCentralizedConfigPrService: jest.Mocked<CentralizedConfigPrService>;
-    let mockDeleteRuleUseCase: jest.Mocked<DeleteKodyRuleFromMcpUseCase>;
+    let mockDeleteRuleUseCase: jest.Mocked<DeleteRuleInOrganizationByIdKodyRulesUseCase>;
     let previousBaseUrl: string | undefined;
 
     beforeEach(async () => {
@@ -184,7 +184,7 @@ describe('KodyRulesTools.updateKodyRule', () => {
         } as unknown as jest.Mocked<CentralizedConfigPrService>;
 
         mockDeleteRuleUseCase =
-            {} as unknown as jest.Mocked<DeleteKodyRuleFromMcpUseCase>;
+            {} as unknown as jest.Mocked<DeleteRuleInOrganizationByIdKodyRulesUseCase>;
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -198,7 +198,7 @@ describe('KodyRulesTools.updateKodyRule', () => {
                     useValue: mockCentralizedConfigPrService,
                 },
                 {
-                    provide: DeleteKodyRuleFromMcpUseCase,
+                    provide: DeleteRuleInOrganizationByIdKodyRulesUseCase,
                     useValue: mockDeleteRuleUseCase,
                 },
             ],
@@ -284,5 +284,19 @@ describe('KodyRulesTools.updateKodyRule', () => {
 
         expect(structured.success).toBe(false);
         expect(structured.message).toMatch(/not found/i);
+    });
+
+    it('looks the rule up inside the requested organization only', async () => {
+        (mockKodyRulesService.findById as jest.Mock).mockResolvedValue(null);
+
+        await runUpdate();
+
+        expect(mockKodyRulesService.findById).toHaveBeenCalledWith(
+            'rule-789',
+            'org-1',
+        );
+        expect(
+            mockKodyRulesService.updateRuleWithLogging,
+        ).not.toHaveBeenCalled();
     });
 });

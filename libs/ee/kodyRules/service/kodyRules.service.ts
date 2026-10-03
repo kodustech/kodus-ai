@@ -216,7 +216,7 @@ export class KodyRulesService implements IKodyRulesService {
 
     async findById(
         uuid: string,
-        organizationId?: string,
+        organizationId: string,
     ): Promise<IKodyRule | null> {
         return this.kodyRulesRepository.findById(uuid, organizationId);
     }

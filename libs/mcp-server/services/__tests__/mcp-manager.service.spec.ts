@@ -1,6 +1,7 @@
 import { JwtService } from '@nestjs/jwt';
 
 import {
+    KODUS_ISSUES_INTEGRATION_ID,
     KODUS_MCP_INTEGRATION_ID,
     MCPManagerService,
 } from '../mcp-manager.service';
@@ -296,6 +297,49 @@ describe('Kodus MCP credential destination', () => {
             expect(sign).not.toHaveBeenCalled();
         },
     );
+
+    it.each([
+        'https://api.kodus.io/mcp/issues',
+        'http://kodus-api:3001/mcp/issues',
+        'https://other.example/mcp/issues',
+    ])(
+        'signs the Git Issues MCP (%s) for the issues path of the configured origin',
+        async (storedUrl) => {
+            const result = await (service as any).formatConnection(
+                {
+                    integrationId: KODUS_ISSUES_INTEGRATION_ID,
+                    provider: 'kodusmcp',
+                    organizationId: 'org-1',
+                    mcpUrl: storedUrl,
+                },
+                'org-1',
+            );
+            expect(result.url).toBe('https://api.kodus.io/mcp/issues');
+            expect(result.headers.Authorization).toBe('Bearer signed-token');
+            expect(sign).toHaveBeenCalledWith(
+                { organizationId: 'org-1' },
+                expect.objectContaining({ audience: 'kodus-mcp-server' }),
+            );
+        },
+    );
+
+    it('refuses to sign the Git Issues MCP for another organization', async () => {
+        await expect(
+            (service as any).formatConnection(
+                {
+                    integrationId: KODUS_ISSUES_INTEGRATION_ID,
+                    provider: 'kodusmcp',
+                    organizationId: 'victim-org',
+                    mcpUrl: 'https://api.kodus.io/mcp/issues',
+                },
+                'org-1',
+            ),
+        ).rejects.toThrow('organization mismatch');
+        expect(sign).not.toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ audience: 'kodus-mcp-server' }),
+        );
+    });
 
     it('refuses to mint a credential for a foreign organization in connection metadata', async () => {
         await expect(

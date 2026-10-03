@@ -439,11 +439,18 @@ export class MCPManagerService {
         }
 
         // Stored URLs can predate an endpoint change. Route the first-party
-        // integration to the trusted configuration before attaching credentials.
-        if (connection.integrationId === KODUS_MCP_INTEGRATION_ID) {
+        // integrations to the trusted configuration before attaching
+        // credentials: both MCP controllers reject calls without one.
+        const firstPartyUrl =
+            connection.integrationId === KODUS_MCP_INTEGRATION_ID
+                ? () => this.getKodusMcpEndpoint()
+                : connection.integrationId === KODUS_ISSUES_INTEGRATION_ID
+                  ? () => this.getKodusIssuesMcpEndpoint()
+                  : undefined;
+        if (firstPartyUrl) {
             if (connection.organizationId !== callerOrganizationId)
                 throw new Error('Kodus MCP connection organization mismatch');
-            url = this.getKodusMcpEndpoint();
+            url = firstPartyUrl();
             const secret = process.env.API_JWT_SECRET;
             if (!secret) throw new Error('Kodus MCP signing secret is missing');
             headers.Authorization = `Bearer ${this.jwt.sign(
@@ -471,6 +478,13 @@ export class MCPManagerService {
             // by skills to match required MCPs by capability (not display name).
             category: connection.category ?? null,
         };
+    }
+
+    // Same resolution the mcp-manager applies to the managed `/mcp/issues`
+    // entry (kodus-mcp.provider.ts resolveManagedBaseUrl): the origin of the
+    // configured MCP server.
+    private getKodusIssuesMcpEndpoint(): string {
+        return new URL('/mcp/issues', this.getKodusMcpEndpoint()).toString();
     }
 
     private getKodusMcpEndpoint(): string {
