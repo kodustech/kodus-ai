@@ -1,6 +1,7 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { v4 as uuidv4 } from 'uuid';
+import pLimit from 'p-limit';
 
 import { createLogger } from '@libs/core/log/logger';
 import { fitPRDescription } from '@libs/code-review/utils/fit-pr-description';
@@ -147,6 +148,8 @@ import {
     repoCreatePullRequest,
 } from '@llamaduck/forgejo-ts';
 import { Client, createClient } from '@llamaduck/forgejo-ts/client';
+
+const FORGEJO_REACTIONS_CONCURRENCY = 5;
 
 @Injectable()
 @IntegrationServiceDecorator(PlatformType.FORGEJO, 'codeManagement')
@@ -3372,20 +3375,24 @@ export class ForgejoService implements Omit<
         }
     }
 
-    async getPullRequestReviewComment(params: {
-        organizationAndTeamData: OrganizationAndTeamData;
-        repository: { name: string };
-        prNumber: number;
-        commentId: number;
-    }): Promise<any | null> {
+    async getPullRequestReviewComment(params: any): Promise<any | null> {
+        const { organizationAndTeamData, filters } = params;
+
         try {
+            // The shared code-management contract fetches all review comments
+            // for a PR via `{ organizationAndTeamData, filters: { repository,
+            // pullRequestNumber } }` (the shape every other adapter consumes).
+            // The previous Forgejo-only `{ repository, prNumber, commentId }`
+            // signature never matched any caller, so for the reaction use-case
+            // it threw on undefined params and returned null, leaving
+            // countReactions with an empty comments array on Forgejo (#2061).
             const comments = await this.getPullRequestReviewComments({
-                organizationAndTeamData: params.organizationAndTeamData,
-                repository: params.repository,
-                prNumber: params.prNumber,
+                organizationAndTeamData,
+                repository: filters.repository,
+                prNumber: filters.pullRequestNumber,
             });
 
-            return comments?.find((c) => c.id === params.commentId) || null;
+            return comments ?? null;
         } catch (error) {
             return null;
         }
@@ -4470,58 +4477,86 @@ export class ForgejoService implements Omit<
             // Forgejo review comments do not carry their reactions in the
             // comment payload, so each linked comment is queried for its
             // reactions and the thumbs feedback is tallied per comment — the
-            // same shape GitLab's implementation returns.
+            // same shape the other adapters return. The fetch is bounded like
+            // GitLab's award-emoji calls so that 10 concurrent PRs cannot
+            // burst 10 x N requests at a self-hosted instance.
+            const limit = pLimit(FORGEJO_REACTIONS_CONCURRENCY);
+
             const results = await Promise.all(
                 params.comments
                     .filter((comment) => comment?.id != null)
-                    .map(async (comment) => {
-                        const result = await issueGetCommentReactions({
-                            client,
-                            path: {
-                                owner: repoInfo.owner,
-                                repo: repoInfo.repo,
-                                id: comment.id!,
-                            },
-                        });
-
-                        const reactions = result.data ?? [];
-                        let thumbsUp = 0;
-                        let thumbsDown = 0;
-                        for (const reaction of reactions) {
-                            if (
-                                reaction.content === '+1' ||
-                                reaction.content === 'thumbs_up'
-                            ) {
-                                thumbsUp++;
-                            } else if (
-                                reaction.content === '-1' ||
-                                reaction.content === 'thumbs_down'
-                            ) {
-                                thumbsDown++;
+                    .map((comment) =>
+                        limit(async () => {
+                            // A transient failure on one comment must not
+                            // discard the reactions already counted for the
+                            // others (GitLab isolates each note the same way).
+                            let result;
+                            try {
+                                result = await issueGetCommentReactions({
+                                    client,
+                                    path: {
+                                        owner: repoInfo.owner,
+                                        repo: repoInfo.repo,
+                                        id: comment.id!,
+                                    },
+                                });
+                            } catch (error) {
+                                this.logger.warn({
+                                    message:
+                                        'Failed to fetch reactions for comment',
+                                    context: ForgejoService.name,
+                                    error,
+                                });
+                                return null;
                             }
-                        }
 
-                        if (thumbsUp === 0 && thumbsDown === 0) {
-                            return null;
-                        }
+                            const reactions = result.data ?? [];
+                            let thumbsUp = 0;
+                            let thumbsDown = 0;
+                            for (const reaction of reactions) {
+                                if (
+                                    reaction.content === '+1' ||
+                                    reaction.content === 'thumbs_up'
+                                ) {
+                                    thumbsUp++;
+                                } else if (
+                                    reaction.content === '-1' ||
+                                    reaction.content === 'thumbs_down'
+                                ) {
+                                    thumbsDown++;
+                                }
+                            }
 
-                        return {
-                            reactions: { thumbsUp, thumbsDown },
-                            comment: {
-                                id: comment.id,
-                                pull_request_review_id:
-                                    comment.pull_request_review_id,
-                            },
-                            pullRequest: {
-                                id: params.pr.id,
-                                number: params.pr.pull_number,
-                                repository: {
-                                    id: params.pr.repository.id,
-                                    fullName: params.pr.repository.name,
+                            if (thumbsUp === 0 && thumbsDown === 0) {
+                                return null;
+                            }
+
+                            return {
+                                reactions: { thumbsUp, thumbsDown },
+                                comment: {
+                                    id: comment.id,
+                                    pull_request_review_id:
+                                        comment.pull_request_review_id,
                                 },
-                            },
-                        };
-                    }),
+                                pullRequest: {
+                                    // The reaction use-case builds the pr as
+                                    // { pull_number, repository } without a PR
+                                    // id, so derive a stable identifier from
+                                    // the repository id the caller does pass
+                                    // rather than emitting an undefined id that
+                                    // the downstream forwards unchanged.
+                                    id:
+                                        params.pr.id ??
+                                        params.pr.repository.id,
+                                    number: params.pr.pull_number,
+                                    repository: {
+                                        id: params.pr.repository.id,
+                                        fullName: params.pr.repository.name,
+                                    },
+                                },
+                            };
+                        }),
+                    ),
             );
 
             return results.filter(Boolean);

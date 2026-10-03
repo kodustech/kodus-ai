@@ -29,8 +29,8 @@ describe('ForgejoService — countReactions aligns with the shared reaction cont
     };
 
     // The exact shape the reaction use-case passes to the shared
-    // codeManagementService.countReactions contract. Forgejo must consume it
-    // rather than its own old { repository, prNumber } shape.
+    // codeManagementService.countReactions contract: it builds the pr WITHOUT
+    // an id ({ pull_number, repository }) and the comments it already fetched.
     const params = () =>
         ({
             organizationAndTeamData: {
@@ -45,7 +45,6 @@ describe('ForgejoService — countReactions aligns with the shared reaction cont
                 },
             ],
             pr: {
-                id: 3,
                 pull_number: 7,
                 repository: { id: 'repo-1', name: 'acme/widget-api' },
             },
@@ -71,7 +70,9 @@ describe('ForgejoService — countReactions aligns with the shared reaction cont
                 reactions: { thumbsUp: 2, thumbsDown: 1 },
                 comment: { id: 2, pull_request_review_id: 9 },
                 pullRequest: {
-                    id: 3,
+                    // The caller omits pr.id, so the stable identifier is
+                    // derived from the repository id — not an undefined id.
+                    id: 'repo-1',
                     number: 7,
                     repository: { id: 'repo-1', fullName: 'acme/widget-api' },
                 },
@@ -92,5 +93,108 @@ describe('ForgejoService — countReactions aligns with the shared reaction cont
 
         expect(out).toEqual([]);
         expect(issueGetCommentReactions).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the counted reactions when another comment lookup fails', async () => {
+        const service = makeService();
+        const twoComments = {
+            ...params(),
+            comments: [
+                { id: 2, pull_request_review_id: 9 },
+                { id: 5, pull_request_review_id: 9 },
+            ],
+        };
+
+        issueGetCommentReactions
+            .mockResolvedValueOnce({ data: [{ content: '+1' }] })
+            .mockRejectedValueOnce(new Error('ECONNRESET'));
+
+        const out = await service.countReactions(twoComments);
+
+        // The failed comment is isolated; the succeeded one is still counted.
+        expect(out).toEqual([
+            expect.objectContaining({
+                reactions: { thumbsUp: 1, thumbsDown: 0 },
+                comment: { id: 2, pull_request_review_id: 9 },
+            }),
+        ]);
+        expect(issueGetCommentReactions).toHaveBeenCalledTimes(2);
+        expect(service.logger.warn).toHaveBeenCalled();
+    });
+
+    it('caps per-comment reaction requests to the concurrency bound', async () => {
+        // The use-case runs many PRs concurrently, so an unbounded burst of
+        // per-comment calls would hammer a self-hosted Forgejo. GitLab caps
+        // its equivalent with a concurrency limiter; Forgejo must too.
+        let inFlight = 0;
+        let maxInFlight = 0;
+
+        issueGetCommentReactions.mockImplementation(() => {
+            inFlight++;
+            maxInFlight = Math.max(maxInFlight, inFlight);
+            return new Promise((resolve) =>
+                setTimeout(() => {
+                    inFlight--;
+                    resolve({ data: [{ content: '+1' }] });
+                }, 5),
+            );
+        });
+
+        const manyComments = {
+            ...params(),
+            comments: Array.from({ length: 12 }, (_, i) => ({ id: i + 1 })),
+        };
+
+        await makeService().countReactions(manyComments);
+
+        expect(maxInFlight).toBeLessThanOrEqual(5);
+        expect(issueGetCommentReactions).toHaveBeenCalledTimes(12);
+    });
+});
+
+describe('ForgejoService — getPullRequestReviewComment uses the shared filters contract (#2061)', () => {
+    const makeService = () => {
+        const service = Object.create(
+            ForgejoService.prototype,
+        ) as ForgejoService;
+
+        Object.defineProperty(service, 'logger', {
+            value: { warn: jest.fn(), error: jest.fn(), log: jest.fn() },
+        });
+
+        jest.spyOn(
+            service as unknown as { getAuthDetails: () => Promise<unknown> },
+            'getAuthDetails',
+        ).mockResolvedValue({ host: 'https://git.test' });
+
+        return service;
+    };
+
+    it('fetches all review comments from the reaction use-case filters', async () => {
+        const service = makeService();
+        const plural = jest
+            .spyOn(service as any, 'getPullRequestReviewComments')
+            .mockResolvedValue([{ id: 2 }, { id: 5 }]);
+
+        const out = await (service as any).getPullRequestReviewComment({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            filters: {
+                repository: { name: 'acme/widget-api' },
+                pullRequestNumber: 7,
+            },
+        });
+
+        expect(out).toEqual([{ id: 2 }, { id: 5 }]);
+        expect(plural).toHaveBeenCalledWith({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            repository: { name: 'acme/widget-api' },
+            prNumber: 7,
+        });
     });
 });
