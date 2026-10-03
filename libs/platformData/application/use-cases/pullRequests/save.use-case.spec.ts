@@ -96,6 +96,13 @@ describe('SavePullRequestUseCase deterministic predicates', () => {
                     PlatformType.GITHUB,
                 ),
             ).toBe(true);
+            // Azure abandons a PR with resource.status 'abandoned' (#2060).
+            expect(
+                isValid(
+                    { resource: { status: 'abandoned' } },
+                    PlatformType.AZURE_REPOS,
+                ),
+            ).toBe(true);
             // A status not in validActions must not pass.
             expect(
                 isValid(
