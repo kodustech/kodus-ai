@@ -131,10 +131,14 @@ async function main() {
     // git with the inherited env then works on this repository instead of its
     // temp repos: commits land in its history, and `init`/`config` set
     // core.bare=true and core.hooksPath=/dev/null for every worktree.
-    // GIT_EXEC_PATH stays: specs use it to find git-http-backend.
+    // Only what points git at a repository or injects config entries is
+    // dropped; the developer's config sources and trust settings
+    // (GIT_CONFIG_GLOBAL, GIT_SSL_*, GIT_SSH_COMMAND, GIT_EXEC_PATH) stay.
+    const GIT_REDIRECT_ENV =
+        /^GIT_(DIR|WORK_TREE|INDEX_FILE|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|COMMON_DIR|NAMESPACE|QUARANTINE_PATH|SHALLOW_FILE|PREFIX|CONFIG_(COUNT|PARAMETERS|KEY_\d+|VALUE_\d+))$/;
     const env = Object.fromEntries(
         Object.entries(process.env).filter(
-            ([key]) => !key.startsWith('GIT_') || key === 'GIT_EXEC_PATH',
+            ([key]) => !GIT_REDIRECT_ENV.test(key),
         ),
     );
     if (env.SKIP_INTEGRATION !== 'true' && !(await isPostgresReachable())) {
