@@ -503,17 +503,15 @@ export class MCPManagerService {
         ) {
             throw new Error('Kodus MCP endpoint is invalid');
         }
-        // The MCP controller lives at `/mcp` (behind an optional proxy
-        // prefix). A bare origin points there; any other path would send the
+        // The MCP controller lives at `/mcp`, and `/mcp/issues` is derived
+        // from the origin (as the mcp-manager does), so only that path is
+        // accepted; a bare origin points at it. Any other path would send the
         // organization's token to a handler that is not the MCP server.
         const path = endpoint.pathname.replace(/\/+$/, '');
-        if (!path) {
-            endpoint.pathname = '/mcp';
-        } else if (path.endsWith('/mcp')) {
-            endpoint.pathname = path;
-        } else {
+        if (path !== '' && path !== '/mcp') {
             throw new Error('Kodus MCP endpoint is invalid');
         }
+        endpoint.pathname = '/mcp';
         return endpoint.toString();
     }
 

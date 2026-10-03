@@ -283,7 +283,6 @@ describe('Kodus MCP credential destination', () => {
         ['https://api.kodus.io', 'https://api.kodus.io/mcp'],
         ['https://api.kodus.io/', 'https://api.kodus.io/mcp'],
         ['https://api.kodus.io/mcp/', 'https://api.kodus.io/mcp'],
-        ['https://kodus.example/api/mcp', 'https://kodus.example/api/mcp'],
     ])(
         'resolves the configured endpoint %s to the MCP controller path',
         async (configuredUrl, expected) => {
@@ -304,6 +303,7 @@ describe('Kodus MCP credential destination', () => {
         'https://user:password@api.kodus.io/mcp',
         'https://api.kodus.io/api',
         'https://api.kodus.io/mcp/issues',
+        'https://kodus.example/api/mcp',
     ])(
         'refuses to mint credentials with an invalid configured endpoint (%s)',
         async (configuredUrl) => {
