@@ -113,6 +113,37 @@ describe("LockedFeatureOverlay", () => {
         }
     });
 
+    it("leads with the alternative and demotes the plan CTA under it", () => {
+        render(
+            <LockedFeatureOverlay
+                title="Locked"
+                description="desc"
+                altCta={{
+                    label: "Connect a repository",
+                    href: "/settings/git",
+                }}
+                cta={{
+                    label: "See plans",
+                    href: "/choose-plan",
+                    feature: "cockpit",
+                }}>
+                <span>content</span>
+            </LockedFeatureOverlay>,
+        );
+
+        const links = screen.getAllByRole("link");
+        expect(links.map((link) => link.getAttribute("href"))).toEqual([
+            "/settings/git",
+            "/choose-plan",
+        ]);
+        expect(links[0].querySelector("[data-decorative]")).toHaveClass(
+            "[--button-background:var(--color-primary-light)]",
+        );
+        expect(links[1].querySelector("[data-decorative]")).not.toHaveClass(
+            "[--button-background:var(--color-primary-light)]",
+        );
+    });
+
     it("promotes the plan CTA when the alternative is not offered", () => {
         mockCanOpenBilling.value = false;
         try {
