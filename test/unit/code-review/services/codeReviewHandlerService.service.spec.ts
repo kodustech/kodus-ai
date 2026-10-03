@@ -267,4 +267,41 @@ describe('CodeReviewHandlerService - skip feedback control', () => {
             }),
         ]);
     });
+
+    it('records no fallback when the main model answered (#2066)', async () => {
+        mockPipelineExecute.mockImplementation(async () => {
+            await runWithModelFailover(
+                [
+                    { model: 'claude-opus', byokModelId: 'primary' } as any,
+                    { model: 'gpt-4.1', byokModelId: 'fallback' } as any,
+                ],
+                jest.fn().mockResolvedValue('ok'),
+                { runName: 'code-review-bug' },
+            );
+            return createSkippedPipelineResult({
+                codeReviewConfig: {
+                    automatedReviewActive: false,
+                    showStatusFeedback: false,
+                },
+            });
+        });
+
+        const result = await service.handlePullRequest(
+            organizationAndTeamData as any,
+            repository as any,
+            'main',
+            pullRequest as any,
+            PlatformType.BITBUCKET,
+            'team-automation-id',
+            'webhook',
+            'opened',
+            'execution-id',
+        );
+
+        expect(
+            (result?.reviewWarnings ?? []).some(
+                (w: any) => w.kind === 'PROVIDER_FALLBACK',
+            ),
+        ).toBe(false);
+    });
 });

@@ -606,10 +606,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 emitStageWarning('CALLGRAPH_DROPPED');
             }
 
-            if (
-                !context.sandboxHandle?.remoteCommands &&
-                !context.sandboxSuperseded
-            ) {
+            // The null sandbox (no provider, or no clone params) carries
+            // remoteCommands that only throw, so the checkout is told by its
+            // type, as null-sandbox.service.ts asks callers to.
+            const hasCheckout =
+                !!context.sandboxHandle?.remoteCommands &&
+                context.sandboxHandle.type !== 'null';
+            if (!hasCheckout && !context.sandboxSuperseded) {
                 stageWarnings.push(
                     buildSandboxUnavailableWarning({
                         modelName: effectiveModelName || 'unknown',
@@ -644,11 +647,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         }
                     }
                 } catch (err) {
-                    stageWarnings.push(
-                        buildCallGraphFailedWarning({
-                            modelName: effectiveModelName || 'unknown',
-                        }),
-                    );
+                    // Without a checkout the graph cannot build; that loss is
+                    // already SANDBOX_UNAVAILABLE.
+                    if (hasCheckout) {
+                        stageWarnings.push(
+                            buildCallGraphFailedWarning({
+                                modelName: effectiveModelName || 'unknown',
+                            }),
+                        );
+                    }
                     this.logger.warn({
                         message: `[AGENT] Call graph failed for PR#${prNumber}, proceeding without it`,
                         context: this.stageName,

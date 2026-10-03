@@ -119,6 +119,29 @@ describe('AgentReviewStage — losses the run records (#2066)', () => {
         expect(warning.reason).toBe('sandbox_unavailable');
     });
 
+    it('records a null sandbox (no provider) as a review without a checkout', async () => {
+        const nullSandbox = {
+            ...sandbox(),
+            type: 'null',
+            run: jest
+                .fn()
+                .mockRejectedValue(new Error('No sandbox configured')),
+        };
+        const { stage } = makeStage({
+            generateContextLegacy: jest
+                .fn()
+                .mockRejectedValue(new Error('No sandbox configured')),
+        });
+
+        const result = await run(
+            stage,
+            makeContext({ sandboxHandle: nullSandbox }),
+        );
+
+        expect(kinds(result)).toContain('SANDBOX_UNAVAILABLE');
+        expect(kinds(result)).not.toContain('CALLGRAPH_FAILED');
+    });
+
     it('does not record a superseded lease: the PR closed or was force-pushed', async () => {
         const { stage } = makeStage();
 
