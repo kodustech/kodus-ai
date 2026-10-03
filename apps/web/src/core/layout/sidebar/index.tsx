@@ -147,6 +147,11 @@ const CONTROL_STATES =
 // Below a tablet width a 240px rail would take most of the screen, so the
 // sidebar stays an icon rail there whatever the saved preference.
 const NARROW_QUERY = "(max-width: 767px)";
+// A menu opened from the rail (workspace, settings scope, account) is
+// portaled outside the aside, but its trigger stays inside and says it is
+// open. Popovers and tooltips of the page itself do not count.
+const railMenuOpenIn = (aside: HTMLElement | null) =>
+    !!aside?.querySelector("[aria-haspopup][aria-expanded='true']");
 // A menu opened from the rail renders in a Radix portal. Tooltips share the
 // same popper wrapper, so only menu-like content counts as a layer.
 const RAIL_MENU_SELECTOR =
@@ -186,6 +191,7 @@ export const AppSidebar = ({
     const showRail = collapsed && !peeking;
     const peekTimer = useRef<number | undefined>(undefined);
     const pointerOnRail = useRef(false);
+    const asideRef = useRef<HTMLElement>(null);
     // Escape folds the rail, and the footer's layout changes with it, so the
     // control can slide back under a resting pointer: the browser reports
     // that as a fresh hover ~100ms later. Ignore hovers for a short moment
@@ -219,12 +225,10 @@ export const AppSidebar = ({
         let waitedForMenu = false;
         const close = () => {
             if (pointerOnRail.current) return;
-            // A menu opened from the rail (workspace, settings scope) renders
-            // in a portal, outside it: wait for it to close first.
-            if (document.querySelector("[data-radix-popper-content-wrapper]")) {
-                // A tooltip must not arm the hold below; only a menu can
-                // leave the control under the resting pointer.
-                waitedForMenu ||= !!document.querySelector(RAIL_MENU_SELECTOR);
+            // A menu opened from the rail renders in a portal, outside it:
+            // wait for it to close first.
+            if (railMenuOpenIn(asideRef.current)) {
+                waitedForMenu = true;
                 peekTimer.current = window.setTimeout(close, 300);
                 return;
             }
@@ -256,6 +260,25 @@ export const AppSidebar = ({
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
     }, [peeking]);
+    // React counts a portaled rail menu as inside the aside, so moving onto
+    // it fires no leave — and when that menu closes over the page, no leave
+    // ever comes and the peek stayed open. Close from the pointer instead.
+    useEffect(() => {
+        if (!peeking) return;
+        const onPointerMove = (e: PointerEvent) => {
+            const aside = asideRef.current;
+            if (!pointerOnRail.current || railMenuOpenIn(aside)) return;
+            if (aside?.contains(e.target as Node)) return;
+            pointerOnRail.current = false;
+            window.clearTimeout(peekTimer.current);
+            peekTimer.current = window.setTimeout(() => {
+                if (!pointerOnRail.current && !railMenuOpenIn(asideRef.current))
+                    setPeeking(false);
+            }, 200);
+        };
+        document.addEventListener("pointermove", onPointerMove);
+        return () => document.removeEventListener("pointermove", onPointerMove);
+    }, [peeking]);
     useEffect(() => () => window.clearTimeout(peekTimer.current), []);
 
     const canReadCodeReviewSettings = usePermission(
@@ -281,6 +304,7 @@ export const AppSidebar = ({
     return (
         <RailContext.Provider value={railValue}>
             <aside
+                ref={asideRef}
                 data-collapsed={collapsed}
                 data-peeking={peeking || undefined}
                 onMouseEnter={() => {
