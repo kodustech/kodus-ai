@@ -400,7 +400,7 @@ export class SelfHostedDoctorService {
     /**
      * Finished code review runs of the window, each with the losses it recorded
      * (dataExecution.reviewWarnings) and whether an agent stopped early (its
-     * `AgentReview::*` stage label, agent-review.stage.ts:2636-2653).
+     * `AgentReview::*` stage label, AgentReviewStage's progress labels).
      */
     private async recentReviewRuns(team: DoctorTeam): Promise<ReviewRun[]> {
         const rows: Array<{
@@ -454,7 +454,7 @@ export class SelfHostedDoctorService {
                 { $unwind: '$files' },
                 { $unwind: '$files.suggestions' },
                 {
-                    // Suggestion timestamps are ISO strings (pullRequests.service.ts:845).
+                    // Suggestion timestamps are ISO strings (PullRequestsService).
                     $match: {
                         'files.suggestions.createdAt': {
                             $gte: since.toISOString(),

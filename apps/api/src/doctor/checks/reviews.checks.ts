@@ -11,7 +11,7 @@ import {
 /**
  * A cause turns a line into ! only when it hit at least this many runs AND at
  * least DEGRADED_SHARE of them (#2066): one transient clone failure in 200
- * reviews must not flip the whole install to DEGRADED (doctor-report.ts:18).
+ * reviews must not flip the whole install to DEGRADED (verdictOf).
  */
 export const MIN_DEGRADED_RUNS = 3;
 export const DEGRADED_SHARE = 0.1;
