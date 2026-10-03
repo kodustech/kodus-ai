@@ -164,8 +164,8 @@ export function staleJobsCheck(dataSource: DataSource): DoctorCheck {
     return {
         id: 'jobs.stale',
         async run(): Promise<DoctorResult[]> {
-            // PENDING is never reaped (workflow-job.repository.ts:276) and FAILED
-            // outbox rows are never cleaned (outbox-relay.service.ts:592), so
+            // PENDING is never reaped (WorkflowJobRepository) and FAILED outbox
+            // rows are never cleaned (OutboxRelayService.cleanupOldMessages), so
             // without a lower bound an incident from months ago reads as a
             // failure today. A job scheduled for later is legitimately PENDING
             // until then.

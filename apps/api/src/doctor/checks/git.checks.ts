@@ -59,6 +59,9 @@ export interface GitDeps {
     reach(url: string): Promise<number>;
 }
 
+/** Enough to prove delivery; counting further would only scan more rows. */
+export const WEBHOOK_EVENTS_CAP = 1000;
+
 export interface WebhookDeps extends Pick<GitDeps, 'reach'> {
     /** Git events this install received from `platform` in the last RECENT_DAYS. */
     recentEvents(
@@ -298,7 +301,7 @@ export function webhookUrlCheck(deps: WebhookDeps): DoctorCheck {
                     results.push({
                         check: 'git.webhook_url',
                         status: 'ok',
-                        title: `Kodus received ${events.count} ${platform} event(s) in the last ${RECENT_DAYS} days (latest ${events.last ? events.last.toISOString() : 'unknown'}).`,
+                        title: `Kodus received ${events.count >= WEBHOOK_EVENTS_CAP ? `${WEBHOOK_EVENTS_CAP}+` : events.count} ${platform} event(s) in the last ${RECENT_DAYS} days (latest ${events.last ? events.last.toISOString() : 'unknown'}).`,
                     });
                     continue;
                 }

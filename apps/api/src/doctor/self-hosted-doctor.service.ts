@@ -27,7 +27,11 @@ import {
     staleJobsCheck,
 } from './checks/broker.checks';
 import { bootEnvCheck, configEnvCheck } from './checks/env.checks';
-import { gitAccessCheck, webhookUrlCheck } from './checks/git.checks';
+import {
+    gitAccessCheck,
+    WEBHOOK_EVENTS_CAP,
+    webhookUrlCheck,
+} from './checks/git.checks';
 import { liveLlmComplete, llmCheck } from './checks/llm.checks';
 import {
     analyticsCheck,
@@ -352,19 +356,23 @@ export class SelfHostedDoctorService {
     /**
      * Every received Git event is enqueued as a WEBHOOK_PROCESSING job. Jobs are
      * never deleted, so the `updatedAt` bound lets idx_workflow_jobs_type_updated
-     * cut the scan to the window (a job is never updated before it is created).
+     * cut the scan to the window (a job is never updated before it is created),
+     * and the LIMIT caps the heap reads on an install with heavy traffic.
      */
     private async recentGitEvents(
         platform: string,
     ): Promise<{ count: number; last: Date | null }> {
         const [row] = await this.dataSource.query(
             `SELECT COUNT(*)::int AS count, MAX("createdAt") AS last
-               FROM kodus_workflow.workflow_jobs
-              WHERE "workflowType" = 'WEBHOOK_PROCESSING'
-                AND "updatedAt" > now() - make_interval(days => $2)
-                AND "createdAt" > now() - make_interval(days => $2)
-                AND metadata->>'platformType' = $1`,
-            [platform, RECENT_DAYS],
+               FROM (SELECT "createdAt"
+                       FROM kodus_workflow.workflow_jobs
+                      WHERE "workflowType" = 'WEBHOOK_PROCESSING'
+                        AND "updatedAt" > now() - make_interval(days => $2)
+                        AND "createdAt" > now() - make_interval(days => $2)
+                        AND metadata->>'platformType' = $1
+                      ORDER BY "updatedAt" DESC
+                      LIMIT $3) recent`,
+            [platform, RECENT_DAYS, WEBHOOK_EVENTS_CAP],
         );
         return {
             count: row?.count ?? 0,
@@ -378,7 +386,13 @@ export class SelfHostedDoctorService {
             return (getDefaultKodusConfigFile().ignorePaths ?? []).filter(
                 (p): p is string => typeof p === 'string',
             );
-        } catch {
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    "Doctor could not read the default ignore list; every ignored path is reported as the team's own",
+                context: SelfHostedDoctorService.name,
+                error,
+            });
             return [];
         }
     }

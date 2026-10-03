@@ -7,7 +7,11 @@ import {
     staleJobsCheck,
 } from '../checks/broker.checks';
 import { bootEnvCheck, configEnvCheck } from '../checks/env.checks';
-import { gitAccessCheck, webhookUrlCheck } from '../checks/git.checks';
+import {
+    gitAccessCheck,
+    WEBHOOK_EVENTS_CAP,
+    webhookUrlCheck,
+} from '../checks/git.checks';
 import { llmCheck } from '../checks/llm.checks';
 import {
     analyticsCheck,
@@ -501,6 +505,19 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             expect(results[0].title).toContain('12 GitHub event(s)');
             expect(git.recentEvents).toHaveBeenCalledWith('GITHUB');
             expect(git.reach).not.toHaveBeenCalled();
+        });
+
+        it('says "1000+" when the event count hit the cap', async () => {
+            const git = healthyGit();
+            git.recentEvents.mockResolvedValue({
+                count: WEBHOOK_EVENTS_CAP,
+                last: new Date('2026-10-02T10:00:00Z'),
+            });
+            const results = await webhookUrlCheck(git).run(ctx());
+
+            expect(results[0].title).toContain(
+                `${WEBHOOK_EVENTS_CAP}+ GitHub event(s)`,
+            );
         });
 
         it('webhook URL times out from inside (NAT) is unverified, not failed', async () => {
