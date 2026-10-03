@@ -10,6 +10,10 @@ jest.mock("src/core/utils/gate-hit", () => ({
     captureGateHit: jest.fn(),
 }));
 
+jest.mock("@services/permissions/hooks", () => ({
+    usePermission: () => true,
+}));
+
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { captureGateHit } = require("src/core/utils/gate-hit");
 
