@@ -1,5 +1,8 @@
 import { FormattedConfigLevel, type CodeReviewFormType } from "../../_types";
-import { withModelOverrideField } from "./model-override-field";
+import {
+    withModelOverrideField,
+    withoutUntouchedModelOverride,
+} from "./model-override-field";
 
 const level = FormattedConfigLevel;
 
@@ -37,5 +40,37 @@ describe("withModelOverrideField", () => {
             value: "",
             level: level.DEFAULT,
         });
+    });
+});
+
+describe("withoutUntouchedModelOverride", () => {
+    const payload = { byokModelId: "gpt-5", runOnDraft: true };
+
+    it("leaves the seeded model out when the user did not touch it", () => {
+        expect(
+            withoutUntouchedModelOverride(payload, "gpt-5", "gpt-5"),
+        ).toEqual({ runOnDraft: true });
+    });
+
+    it("treats a missing value like inherit", () => {
+        expect(
+            withoutUntouchedModelOverride(
+                { byokModelId: "", runOnDraft: true },
+                undefined,
+                "",
+            ),
+        ).toEqual({ runOnDraft: true });
+    });
+
+    it("sends a model the user picked", () => {
+        expect(withoutUntouchedModelOverride(payload, "m-2", "gpt-5")).toBe(
+            payload,
+        );
+    });
+
+    it("sends a cleared override, so the scope inherits again", () => {
+        const cleared = { byokModelId: "", runOnDraft: true };
+
+        expect(withoutUntouchedModelOverride(cleared, "", "m-1")).toBe(cleared);
     });
 });

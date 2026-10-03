@@ -63,24 +63,33 @@ describe("savedSsoFormValues", () => {
         });
     });
 
-    it("is unchanged from the form's own defaults until someone edits", () => {
-        const formDefaults = savedSsoFormValues(neverSaved, "acme.com");
+    it("matches an untouched form, so nothing reads as unsaved", () => {
+        // What the page's form starts from for an org with no SSO saved. The
+        // raw config (no identifier format, issuer or domain) differed from
+        // it, and the page opened as "Unsaved changes".
+        const untouchedForm = {
+            active: false,
+            providerConfig: {
+                idpIssuer: "",
+                entryPoint: "",
+                cert: "",
+                identifierFormat: SAML_EMAIL_IDENTIFIER_FORMAT,
+                issuer: "kodus-orchestrator",
+            },
+            domains: ["acme.com"],
+        };
+        const saved = savedSsoFormValues(neverSaved, "acme.com");
 
-        // The page compares the form against this; the raw config (no
-        // identifier format, issuer or domain) used to differ from the
-        // untouched form and read as "Unsaved changes".
-        expect(fingerprint(formDefaults)).toBe(
-            fingerprint(savedSsoFormValues(neverSaved, "acme.com")),
-        );
+        expect(fingerprint(saved)).toBe(fingerprint(untouchedForm));
         expect(
             fingerprint({
-                ...formDefaults,
+                ...untouchedForm,
                 providerConfig: {
-                    ...formDefaults.providerConfig,
+                    ...untouchedForm.providerConfig,
                     entryPoint: "https://idp.acme.com/sso",
                 },
             }),
-        ).not.toBe(fingerprint(formDefaults));
+        ).not.toBe(fingerprint(saved));
     });
 
     it("treats a missing provider config like an empty one", () => {

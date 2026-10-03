@@ -10,6 +10,7 @@ import {
     getUsersWithLicense,
     validateOrganizationLicense,
 } from "src/features/ee/subscription/_services/billing/fetch";
+import { heldSeats } from "src/features/ee/subscription/_utils/held-seats";
 
 /**
  * Fetches all data needed for the app layout.
@@ -32,7 +33,9 @@ export const getLayoutData = cache(async (teamId: string) => {
         getPermissions().catch(() => ({})),
         getOrganizationName().catch(() => ""),
         validateOrganizationLicense({ teamId }).catch(() => null),
-        getUsersWithLicense({ teamId }).catch(() => []),
+        getUsersWithLicense({ teamId })
+            .then(heldSeats)
+            .catch(() => []),
         getLLMConfigStatus().catch(() => null),
         releaseTrackPromise
             .then((releaseTrack) =>
