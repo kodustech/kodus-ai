@@ -111,9 +111,9 @@ import {
     issueDeleteCommentReaction,
     issueDeleteIssueReaction,
     issueEditComment,
+    issueGetCommentReactions,
     issueGetComments,
     issueGetIssue,
-    issueGetIssueReactions,
     issueListIssues,
     repoListStatusesByRef,
     issuePostCommentReaction,
@@ -4439,8 +4439,12 @@ export class ForgejoService implements Omit<
 
     async countReactions(params: {
         organizationAndTeamData: OrganizationAndTeamData;
-        repository: { name: string };
-        prNumber: number;
+        comments: Array<{ id?: number; pull_request_review_id?: number }>;
+        pr: {
+            id?: number;
+            pull_number: number;
+            repository: { id?: string; name: string };
+        };
     }): Promise<any[]> {
         try {
             const authDetail = await this.getAuthDetails(
@@ -4448,34 +4452,79 @@ export class ForgejoService implements Omit<
             );
             if (!authDetail) return [];
 
+            // The shared countReactions contract is `{ organizationAndTeamData,
+            // comments, pr }` (the same shape GitHub/GitLab consume) — the
+            // reaction use-case passes the comments it already fetched and the
+            // PR. Downloading the top-level { repository, prNumber } shape here
+            // read `params.repository` as undefined, so every reaction lookup
+            // failed with "Cannot read properties of undefined (reading 'name')"
+            // and no feedback was stored (#2061).
             const repoInfo = this.extractRepoInfo(
-                params.repository.name,
+                params.pr.repository.name,
                 'countReactions',
             );
             if (!repoInfo) return [];
 
             const client = this.createForgejoClient(authDetail);
-            const result = await issueGetIssueReactions({
-                client,
-                path: {
-                    owner: repoInfo.owner,
-                    repo: repoInfo.repo,
-                    index: params.prNumber,
-                },
-            });
 
-            const reactions = result.data ?? [];
-            const counts: Record<string, number> = {};
-            for (const r of reactions) {
-                if (r.content) {
-                    counts[r.content] = (counts[r.content] || 0) + 1;
-                }
-            }
+            // Forgejo review comments do not carry their reactions in the
+            // comment payload, so each linked comment is queried for its
+            // reactions and the thumbs feedback is tallied per comment — the
+            // same shape GitLab's implementation returns.
+            const results = await Promise.all(
+                params.comments
+                    .filter((comment) => comment?.id != null)
+                    .map(async (comment) => {
+                        const result = await issueGetCommentReactions({
+                            client,
+                            path: {
+                                owner: repoInfo.owner,
+                                repo: repoInfo.repo,
+                                id: comment.id!,
+                            },
+                        });
 
-            return Object.entries(counts).map(([reaction, count]) => ({
-                content: reaction,
-                count,
-            }));
+                        const reactions = result.data ?? [];
+                        let thumbsUp = 0;
+                        let thumbsDown = 0;
+                        for (const reaction of reactions) {
+                            if (
+                                reaction.content === '+1' ||
+                                reaction.content === 'thumbs_up'
+                            ) {
+                                thumbsUp++;
+                            } else if (
+                                reaction.content === '-1' ||
+                                reaction.content === 'thumbs_down'
+                            ) {
+                                thumbsDown++;
+                            }
+                        }
+
+                        if (thumbsUp === 0 && thumbsDown === 0) {
+                            return null;
+                        }
+
+                        return {
+                            reactions: { thumbsUp, thumbsDown },
+                            comment: {
+                                id: comment.id,
+                                pull_request_review_id:
+                                    comment.pull_request_review_id,
+                            },
+                            pullRequest: {
+                                id: params.pr.id,
+                                number: params.pr.pull_number,
+                                repository: {
+                                    id: params.pr.repository.id,
+                                    fullName: params.pr.repository.name,
+                                },
+                            },
+                        };
+                    }),
+            );
+
+            return results.filter(Boolean);
         } catch (error) {
             this.logger.error({
                 message: 'Error counting reactions',
