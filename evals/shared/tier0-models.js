@@ -103,6 +103,12 @@ const TIER0 = {
     // no leaderboard com accessPath=subscription e SEM coluna de custo.
     'gpt-5.6-sol@sub': { provider: 'codex_subscription', codexModel: 'gpt-5.6-sol', keyEnvs: [] },
     'gpt-6-sol@sub': { provider: 'codex_subscription', codexModel: 'gpt-6-sol', keyEnvs: [] },
+    'gpt-6.1-sol@sub': { provider: 'codex_subscription', codexModel: 'gpt-6.1-sol', keyEnvs: [] },
+    // Claude pela ASSINATURA via Claude Agent SDK (#1821): o loop roda no Claude
+    // Code, com as tools do bench por MCP. Credencial em ~/.claude-oauth
+    // (`claude setup-token`), nao em env.
+    'claude-sonnet-5.5@sdk': { provider: 'claude_agent_sdk', sdkModel: 'claude-sonnet-5-5', keyEnvs: [] },
+    'claude-opus-5.5@sdk': { provider: 'claude_agent_sdk', sdkModel: 'claude-opus-5-5', keyEnvs: [] },
     // Mesmo gpt-6-sol pela API da OpenAI (#1821: separar o modelo da rota da assinatura).
     'gpt-6-sol@api': { provider: 'openai', byokNative: true, doModel: 'gpt-6-sol', keyEnvs: ['MATRIX_OPENAI_API_KEY', 'API_OPEN_AI_API_KEY', 'BYOK_OPENAI_API_KEY'] },
     'gpt-6.1-sol@api': { provider: 'openai', byokNative: true, doModel: 'gpt-6.1-sol', keyEnvs: ['MATRIX_OPENAI_API_KEY', 'API_OPEN_AI_API_KEY', 'BYOK_OPENAI_API_KEY'] },
@@ -125,7 +131,7 @@ const TIER0 = {
 
 // Models the benchmark excludes from the default full run (cost). Opt in with
 // --model to force one.
-const EXCLUDED_BY_DEFAULT = new Set(['claude-opus-4-7']);
+const EXCLUDED_BY_DEFAULT = new Set(['claude-opus-4-7', 'claude-sonnet-5.5@sdk', 'claude-opus-5.5@sdk']);
 
 // Routes that only answer inside the wiring smoke (its local server is up only
 // while it runs): never offered as a runnable model.
@@ -153,6 +159,7 @@ function applyModelEnv(modelId, env = process.env) {
     // Assinatura nao usa env var: credencial em ~/.codex/auth.json, modelo
     // construido direto em createModel (agent-provider.js).
     if (spec.provider === 'codex_subscription') return spec;
+    if (spec.provider === 'claude_agent_sdk') return spec;
     const key = spec.keyEnvs.map((e) => env[e]).find(Boolean);
     if (!key) throw new Error(`no API key for ${modelId} — set one of ${spec.keyEnvs.join('/')}`);
 

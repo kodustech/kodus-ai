@@ -1260,12 +1260,14 @@ export async function runFinderWithVerify(
         recall.usage = sumVerifyUsage(recall.usage, scoutChain.usage);
         recall.passStats = [...recall.passStats, ...scoutChain.passStats];
         recall.scoutFlags = [...recall.scoutFlags, ...scoutChain.scoutFlags];
+        recall.investigatedFiles = new Set([...(recall.investigatedFiles ?? []), ...(scoutChain.investigatedFiles ?? [])]);
     }
     if (microChainPromise) {
         const microChain = await microChainPromise;
         recall.findings = mergeSuggestions(recall.findings, microChain.findings);
         recall.usage = sumVerifyUsage(recall.usage, microChain.usage);
         recall.passStats = [...recall.passStats, ...microChain.passStats];
+        recall.investigatedFiles = new Set([...(recall.investigatedFiles ?? []), ...(microChain.investigatedFiles ?? [])]);
     }
     const reasoning = recall.findings.reasoning;
     // HEAVY: collapse near-duplicate candidates BEFORE verify. The resample
@@ -1343,7 +1345,12 @@ export async function runFinderWithVerify(
     // EVIDENCE GATE (ported from legacy): a finding kept WITHOUT the finder
     // having investigated its file is not trusted blindly — it gets a thorough
     // FULL re-verify, which may then drop it.
-    const investigated = strongFilesFromRun(finderState);
+    // The base pass's reads AND every recall pass's (lenses, synthesis): a lens
+    // finding on a file the lens read itself is evidenced.
+    const investigated = new Set([
+        ...strongFilesFromRun(finderState),
+        ...(recall.investigatedFiles ?? []),
+    ]);
     const unevidenced = kept.filter(
         (f) => !fileWasInvestigated(investigated, f.relevantFile),
     );
@@ -1697,8 +1704,14 @@ export async function runRecallPasses(
         cap: number;
         perWorker: number;
     };
+    /** Files the recall passes (synthesis, lenses, scouts…) opened with
+     *  readFile/checkTypes. The evidence gate only saw the base pass's reads,
+     *  so a lens finding on a file the lens itself read still got the full
+     *  re-verify as "uninvestigated". */
+    investigatedFiles?: Set<string>;
 }> {
     let findings = base;
+    const investigatedFiles = new Set<string>();
     let usage = ZERO_RECALL_USAGE;
     // Marco zero da linha do tempo: todo `startMs` e relativo a ele, entao os
     // numeros ficam comparaveis entre PRs e entre rodadas sem carregar epoch.
@@ -1706,7 +1719,7 @@ export async function runRecallPasses(
     const passStats: RecallPassStat[] = [];
     let scoutFlags: ScoutFlag[] = [];
     if (params.skipHeavyPasses) {
-        return { findings, usage, passStats, scoutFlags };
+        return { findings, usage, passStats, scoutFlags, investigatedFiles };
     }
 
     const scoutChainOnly = params.scoutChainOnly === true;
@@ -1768,6 +1781,7 @@ export async function runRecallPasses(
         const passUsage = usageOf(state.usage);
         usage = sumVerifyUsage(usage, passUsage);
         toolCalls.push(...collectToolCalls(state));
+        for (const f of strongFilesFromRun(state)) investigatedFiles.add(f);
         // Which pass produced a finding is invisible downstream once the sets
         // merge, so "are the shard's findings less precise than the
         // generalist's?" has never been answerable — the question that decides
@@ -2402,7 +2416,7 @@ export async function runRecallPasses(
         );
     }
 
-    return { findings, usage, passStats, scoutFlags, shardPlan };
+    return { findings, usage, passStats, scoutFlags, shardPlan, investigatedFiles };
 }
 
 /** Dedup-merge extra findings into the base set (ported from legacy

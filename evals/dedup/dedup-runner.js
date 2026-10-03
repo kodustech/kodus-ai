@@ -58,6 +58,8 @@ async function runDedup(suggestions, modelKey = SECONDARY_BASELINE, opts = {}) {
         user: buildDedupPrompt(suggestions, normSeverity),
         runName: 'code-review-dedup',
         spanName: 'code-review::dedup',
+        // Rota de assinatura (Codex/SDK): o modelo pronto, senao o LLM.run cai no default do env.
+        ...(opts.prebuiltModel ? { prebuiltModel: opts.prebuiltModel } : {}),
         ...(opts.temperature != null ? { temperature: opts.temperature } : {}),
     });
 

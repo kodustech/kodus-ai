@@ -886,6 +886,9 @@ export interface AgentLoopSecrets {
     /** Eval-only: the model for the one-shot prose recovery, set only when the
      *  managed default cannot reach the eval's model (the Codex subscription). */
     prebuiltRecoveryModel?: unknown;
+    /** Eval-only: an AgentRunner that replaces the AI SDK runner for every
+     *  pass and verify (the Claude Agent SDK, whose loop runs in Claude Code). */
+    prebuiltRunner?: unknown;
     gitHubToken?: string;
     /** Cross-repo linked-repo access for agent tools (#1576). */
     linkedRepoAccess?: LinkedRepoAccess;

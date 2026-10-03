@@ -97,23 +97,22 @@ print('   excl = goldens que so esta tecnica acha · derrub. = goldens que so ap
 
 print('\n== POR CORTE')
 cortes = {
-    'G': {'G'}, 'G+S': {'G', 'S'}, 'M1': {'M1'}, 'M3': {'M3'},
-    'A = G+M1': {'G', 'M1'}, 'A+S': {'G', 'M1', 'S'},
-    'B = A+M3': {'G', 'M1', 'M3'}, 'B+S': {'G', 'M1', 'M3', 'S'},
+    'G': {'G'}, 'G+S': {'G', 'S'}, 'M1': {'M1'}, 'M3': {'M3'}, 'M1+M3': {'M1', 'M3'},
+    'G+M1': {'G', 'M1'}, 'G+M3': {'G', 'M3'}, 'G+M1+M3': {'G', 'M1', 'M3'},
+    'G+S+M1': {'G', 'S', 'M1'}, 'G+S+M3': {'G', 'S', 'M3'}, 'G+S+M1+M3': {'G', 'S', 'M1', 'M3'},
 }
 print(f'{"corte":<10} {"gold":>4} {"recall":>7} {"cand/PR":>7} {"FP":>5} {"prec":>6} {"tokens/PR":>10} {"latencia":>9}')
 # Sem nenhum golden do S, os cortes com ele repetem os sem ele e so custam mais.
-s_traz = len(pontua(M, lambda x: x == 'S')[0]) > 0
-if not s_traz:
-    print('   (synthesis-rescue nao trouxe nenhum golden neste modelo: cortes com S omitidos)')
+linhas = []
 for nome, ks in cortes.items():
-    if 'S' in ks and not s_traz:
-        continue
     v, c, fp = pontua(M, lambda x, ks=ks: x in ks)
     toks = sum(tok[k]['fresco'] + tok[k]['cache'] + tok[k]['output'] + ver[k]['input'] + ver[k]['output'] for k in ks) / n_pr
     lat = sum(max((r['G'] + (r['S'] if 'S' in ks else 0)) if 'G' in ks else 0,
                   r['M1'] if 'M1' in ks else 0, r['M3'] if 'M3' in ks else 0) for r in ramo_pr) / n_pr
     prec = len(v) / (len(v) + fp) if (len(v) + fp) else 0
+    linhas.append({'corte': nome, 'goldens': len(v), 'recall': len(v) / total, 'candPR': c / n_pr, 'fp': fp, 'prec': prec, 'tokensPR': toks, 'latencia': lat})
     print(f'{nome:<10} {len(v):>4} {len(v) / total:>6.1%} {c / n_pr:>7.1f} {fp:>5} {prec:>6.1%} {toks / 1e3:>9.0f}k {lat:>8.0f}s')
 print('   tokens/PR = geracao (fresco + cache + output) + verificador dos achados do corte')
 print('   latencia = ramo mais lento em media por PR (G->S em serie; M1 e M3 em paralelo); sem o verificador')
+if len(sys.argv) > 2:
+    json.dump({'rodada': run, 'prs': n_pr, 'total': total, 'cortes': linhas}, open(sys.argv[2], 'w'))

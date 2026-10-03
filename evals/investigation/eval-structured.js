@@ -84,13 +84,27 @@ async function chamadaEstruturada({ model, modelId, nome, schema, prompt, extra 
             inputSchema: jsonSchema(schema),
             execute: async () => ({ output: 'ok' }),
         });
-    const r = await generateText({
-        ...extra,
-        model,
-        tools: { [nome]: t },
-        toolChoice: { type: 'tool', toolName: nome },
-        prompt,
-    });
+    let r;
+    try {
+        r = await generateText({
+            ...extra,
+            model,
+            tools: { [nome]: t },
+            toolChoice: { type: 'tool', toolName: nome },
+            prompt,
+        });
+    } catch (e) {
+        // Muse (Meta) so aceita tool_choice "auto": a ferramenta continua sendo
+        // a unica saida, so que sem forcar pelo nome.
+        if (!/tool_choice|tool choice/i.test(String(e?.message ?? ''))) throw e;
+        r = await generateText({
+            ...extra,
+            model,
+            tools: { [nome]: t },
+            toolChoice: 'auto',
+            prompt: `${prompt}\n\nAnswer by calling ${nome} exactly once.`,
+        });
+    }
     const call = (r.toolCalls || []).find((c) => (c.toolName ?? c.name) === nome);
     return { dados: (call?.input ?? call?.args) || {}, usage: r.usage, via };
 }

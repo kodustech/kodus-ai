@@ -63,6 +63,11 @@ export const REDUCER_SCHEMA = {
                         description:
                             'One sentence: why this finding is worth reporting.',
                     },
+                    mergedDescription: {
+                        type: 'string',
+                        description:
+                            'Only when mergedFrom is not empty: one description of the defect that combines what every candidate in the group said (where, cause, consequence).',
+                    },
                 },
                 required: ['index', 'mergedFrom', 'reason'],
                 additionalProperties: false,
@@ -121,6 +126,9 @@ export function buildReducerCandidates(
             const body = c.suggestionContent
                 ? `\n    ${c.suggestionContent.slice(0, 600)}`
                 : '';
+            const code = c.existingCode
+                ? `\n    code:\n${c.existingCode.slice(0, 2400).replace(/^/gm, '      ')}`
+                : '';
             const fix = c.improvedCode
                 ? `\n    fix: ${c.improvedCode.slice(0, 200)}`
                 : '';
@@ -129,9 +137,52 @@ export function buildReducerCandidates(
             // — que e como todos os filtros desta investigacao operaram, tendo
             // menos material do que o agente que gerou.
             const why = c.reason ? `\n    walk: ${c.reason.slice(0, 700)}` : '';
-            return `${head}${summary}${body}${fix}${why}`;
+            return `${head}${summary}${body}${code}${fix}${why}`;
         })
         .join('\n\n');
+}
+
+function buildMergeOnlyPrompt(list: string, investigate: boolean): string {
+    const investigateClause = investigate
+        ? `
+
+You have grep and readFile over the repository at the commit under review. Use
+them when two candidates look alike but you are not sure they are the same
+defect: read the code both point at. Two candidates are the same defect only
+when one fix resolves both.`
+        : '';
+    return `You are consolidating the candidate findings for ONE pull request.
+Several independent investigators each looked at a different part of this PR
+and produced the candidates below. They could not see each other's work, so the
+set has duplicates and near-duplicates.
+
+Your only job is to group duplicates. You do NOT judge whether a candidate is
+correct or worth posting: that is decided later, by another step.
+
+1. MERGE: candidates describing the SAME underlying defect become ONE. This
+   includes the same mistake repeated at different call sites, methods or files
+   when one fix resolves them all. Keep the clearest instance as the
+   representative and list the others in its mergedFrom.
+   Do NOT merge two different defects because they touch the same file, the
+   same function or the same topic. If fixing one would leave the other broken,
+   they are different defects and both stay.
+   For every entry with a non-empty mergedFrom, write mergedDescription: a
+   rewrite of the group as ONE problem — the single defect they share, every
+   location where it occurs, its cause and its consequence. Use what each
+   candidate contributed about THAT defect, but state it once, in at most four
+   sentences. Leave out anything that is a different problem: a missing test, a
+   second bug, a style point or a hardening idea a member happened to mention.
+   If a member's main point is a different problem, it should not have been
+   merged — keep it as its own entry instead. This is the text that will be
+   posted as one review comment about one issue.
+2. KEEP: every candidate that is not merged into another stays, as its own
+   entry, ordered most important first.
+
+Leave drop empty. Every candidate index must appear exactly once in keep, as an
+index or inside a mergedFrom.${investigateClause}
+
+CANDIDATES:
+${list}`;
 }
 
 /**
@@ -154,8 +205,12 @@ export function buildReducerPrompt(
      *  carry the same phrasing, the same confidence and the same severity as
      *  the true ones (39 of 118 at High). Verification does. */
     investigate: boolean = false,
+    /** #1821: only group and merge duplicates; nothing is dropped here. The
+     *  discard is a later stage, so this pass cannot cost recall by judging. */
+    mergeOnly: boolean = false,
 ): string {
     const list = buildReducerCandidates(candidates, normalizeSeverity);
+    if (mergeOnly) return buildMergeOnlyPrompt(list, investigate);
     const strictClause = strict
         ? `
 

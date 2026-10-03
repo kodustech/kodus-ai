@@ -45,6 +45,7 @@ async function runReducer(candidates, opts = {}) {
         normSeverity,
         !!opts.strict,
         !!opts.investigate,
+        !!opts.mergeOnly,
     );
     // opts.investigate: grep/readFile alongside submitReview, so the reducer
     // can CHECK a claim instead of rating how plausible it sounds. Measured
@@ -60,7 +61,35 @@ async function runReducer(candidates, opts = {}) {
         // A forced tool_choice on the first turn leaves no room to investigate;
         // with read tools the loop has to run free and stop on submitReview.
         ...(opts.investigate
-            ? { stopWhen: (x) => (x.steps?.length ?? 0) >= (opts.maxSteps ?? 30) }
+            ? {
+                  stopWhen: (x) => (x.steps?.length ?? 0) >= (opts.maxSteps ?? 30),
+                  // opts.forceFinal: o ultimo passo do teto so pode submeter,
+                  // como o ForceFinalize do finder; sem isso, quem estoura o
+                  // teto investigando sai sem resposta e vira keep-all.
+                  ...(opts.forceFinal
+                      ? {
+                            prepareStep: ({ stepNumber, messages }) =>
+                                stepNumber >= (opts.maxSteps ?? 30) - 1
+                                    ? {
+                                          activeTools: ['submitReview'],
+                                          // Forcado sem nota, o DeepSeek submete keep/drop vazios.
+                                          messages: [
+                                              ...messages,
+                                              {
+                                                  role: 'user',
+                                                  content: opts.mergeOnly
+                                                      ? `You are at the final step. Call submitReview now: put EVERY candidate index 0-${n - 1} exactly once in keep, as an index or inside a mergedFrom, with mergedDescription on every entry that merged others. Leave drop empty. Do not investigate further.`
+                                                      : `You are at the final step. Call submitReview now with the evidence you have: put EVERY candidate index 0-${n - 1} exactly once, in keep (as index or inside a mergedFrom) or in drop. Do not investigate further.`,
+                                              },
+                                          ],
+                                          ...(opts.namedToolChoice === false
+                                              ? {}
+                                              : { toolChoice: { type: 'tool', toolName: 'submitReview' } }),
+                                      }
+                                    : undefined,
+                        }
+                      : {}),
+              }
             : {}),
         prompt,
         ...(opts.telemetry || {}),
@@ -84,6 +113,11 @@ async function runReducer(candidates, opts = {}) {
         }
     }
 
+    if (process.env.RECALL_REDUCER_DEBUG === '1') {
+        (result.steps || []).forEach((st, i) =>
+            console.log(`[reducer-debug] passo ${i}: ${(st.toolCalls || []).map((tc) => `${tc.toolName}:${JSON.stringify(tc.input).slice(0, 150)}`).join(' | ')} · texto: ${String(st.text || '').slice(0, 150).replace(/\n/g, ' ')} · fim: ${st.finishReason}`),
+        );
+    }
     const call = (result.toolCalls || []).find(
         (c) => (c.toolName ?? c.name) === 'submitReview',
     );
@@ -124,7 +158,8 @@ async function runReducer(candidates, opts = {}) {
             .filter((i) => valid(i) && i !== idx);
         if (from.length) merged.set(idx, from);
     }
-    const dropped = rawDrop
+    // mergeOnly: um drop que o modelo devolva assim mesmo volta para o keep.
+    const dropped = (opts.mergeOnly ? [] : rawDrop)
         .map((d) => ({ index: toIdx(d?.index ?? d), reason: d?.reason }))
         .filter((d) => valid(d.index));
 
@@ -143,6 +178,7 @@ async function runReducer(candidates, opts = {}) {
             merged: new Map(),
             dropped: [],
             usage: result.usage,
+            steps: result.steps?.length,
             noOp,
             raw: object,
         };
@@ -157,6 +193,7 @@ async function runReducer(candidates, opts = {}) {
         dropped,
         unmentioned,
         usage: result.usage,
+        steps: result.steps?.length,
         noOp,
         raw: object,
     };

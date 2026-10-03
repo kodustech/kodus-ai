@@ -23,6 +23,7 @@
  */
 import type { LanguageModel } from 'ai';
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
+import type { AgentRunner } from '@libs/agent-harness/domain/contracts/agent.contract';
 
 import { ContextWindowCompressor } from '@libs/agent-harness/infrastructure/compression/context-window-compressor';
 import { CompressionPolicy } from '@libs/agent-harness/infrastructure/policies/compression.policy';
@@ -412,7 +413,7 @@ export async function runAgentLoopViaCore(
     // wraps the model (limiter with the finder's own queueTimeoutMs + reporter),
     // derives tuning, applies the prompt-cache, and records the cost span. The
     // finder's config-derived reasoning is passed as a spec override below.
-    const runner = new AiSdkAgentRunner(secrets.byokConfig, {
+    const runner = (secrets.prebuiltRunner as AgentRunner | undefined) ?? new AiSdkAgentRunner(secrets.byokConfig, {
         organizationId: input.telemetryMetadata?.organizationId,
         provider:
             typeof input.byokProvider === 'string'

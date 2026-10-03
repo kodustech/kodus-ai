@@ -109,7 +109,6 @@ Rules:
 DROP the finding ONLY if you can actively REFUTE it — concrete evidence that it is wrong or cannot happen:
 - The root cause described is factually wrong (e.g. claims something is not imported when it is; claims a value can be null when it provably cannot).
 - The failure path is impossible given the actual code: a guard upstream prevents it, the branch is unreachable, or the value is already validated before use.
-- It is pure code style, naming, documentation, or formatting — not a behavior bug.
 - It is a generic "missing X" suggestion (missing rate limit / validation / CSRF / auth) with NO concrete code path where the omission produces a wrong outcome.
 - It contradicts a decision already applied in a previous review round for this EXACT pull request (shown below as PreviousReviewDecisions evidence, outcome "implemented"/"partially_implemented"), and the current diff gives no concrete evidence that the applied change is wrong or was reverted.
 

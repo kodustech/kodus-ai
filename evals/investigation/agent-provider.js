@@ -340,6 +340,14 @@ function buildOpenAICompatibleConfig(config, apiKey, defaultName) {
  * O valor escolhido vai para o artefato via runMetaOf(), senao o numero fica
  * sem regime declarado.
  */
+/** Runner do Claude Agent SDK quando RECALL_MODEL e um `@sdk`; undefined no resto. */
+function claudeSdkRunner(cwd) {
+    const spec = require('../shared/tier0-models').TIER0[process.env.RECALL_MODEL || ''];
+    if (!spec || spec.provider !== 'claude_agent_sdk') return undefined;
+    const { ClaudeSdkRunner } = require('./claude-sdk-runner');
+    return new ClaudeSdkRunner(spec.sdkModel, { effort: process.env.RECALL_REASONING_EFFORT || undefined, cwd });
+}
+
 function withReasoningEffort(model, modelId) {
     const effort = process.env.RECALL_REASONING_EFFORT;
     if (!effort) return model;
@@ -485,6 +493,10 @@ async function createModel(config, caseId) {
         // Fala com chatgpt.com/backend-api via token OAuth do Codex; o wrapper
         // resolve o streaming-only + store:false.
         const spec = TIER0[modelId];
+        if (spec && spec.provider === 'claude_agent_sdk') {
+            return require('./claude-sdk-runner').modeloFachada(spec.sdkModel, { effort: process.env.RECALL_REASONING_EFFORT || undefined });
+        }
+
         if (spec && spec.provider === 'codex_subscription') {
             const { buildCodexSubscriptionModel } = require('../../libs/llm/codex-subscription-model.ts');
             return withCallCounter(
@@ -1711,8 +1723,10 @@ class InvestigationAgentProvider {
                     // (applyModelEnv), que sabe o formato de JSON do provedor; so a
                     // assinatura do Codex nao tem esse caminho. Passar o modelo pronto
                     // para todos fez o DeepSeek falhar "did not match schema" (26/09).
+                    prebuiltRunner: claudeSdkRunner(repoHandle ? repoHandle.dir : undefined),
                     prebuiltRecoveryModel:
                         (require('../shared/tier0-models').TIER0[process.env.RECALL_MODEL || '']?.provider === 'codex_subscription' ||
+                            require('../shared/tier0-models').TIER0[process.env.RECALL_MODEL || '']?.provider === 'claude_agent_sdk' ||
                             require('../shared/tier0-models').TIER0[process.env.RECALL_MODEL || '']?.byokNative)
                             ? model
                             : undefined,
