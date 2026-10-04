@@ -43,15 +43,25 @@ require('tsconfig-paths/register');
 const casesFile = process.argv
     .find((a) => a.startsWith('--cases-file='))
     ?.slice('--cases-file='.length);
-const { cases } = casesFile
-    ? JSON.parse(fs.readFileSync(path.resolve(casesFile), 'utf8'))
-    : require('./cases');
-const casesSourceDigest = casesFile
-    ? crypto
-          .createHash('sha256')
-          .update(fs.readFileSync(path.resolve(casesFile)))
-          .digest('hex')
-    : undefined;
+let cases;
+let casesSourceDigest;
+try {
+    if (casesFile) {
+        const source = fs.readFileSync(path.resolve(casesFile), 'utf8');
+        cases = JSON.parse(source).cases;
+        casesSourceDigest = crypto
+            .createHash('sha256')
+            .update(source)
+            .digest('hex');
+    } else {
+        cases = require('./cases').cases;
+    }
+    if (!Array.isArray(cases))
+        throw new Error('Expected a JSON object with a cases array');
+} catch (error) {
+    console.error(`INFRA: cannot load review cases: ${error.message}`);
+    process.exit(2);
+}
 const { selectCases } = require('./case-selection');
 const { assertCompleteRuleReview } = require('./measurement');
 const { applyModelEnv } = require('../shared/tier0-models');
