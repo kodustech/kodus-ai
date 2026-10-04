@@ -394,6 +394,7 @@ jobs:
         # narrower permissions.
         permissions:
             contents: write
+            id-token: write # called workflow reports a quality signal (WIF)
         uses: ./.github/workflows/e2e-cloud.yml
         with:
             image_tag: ${{ github.event.inputs.image_tag || github.sha }}
@@ -447,6 +448,7 @@ jobs:
         if: false
         permissions:
             contents: read
+            id-token: write # called workflow reports a quality signal (WIF)
         uses: ./.github/workflows/code-review-model-benchmark.yml
         secrets: inherit
 

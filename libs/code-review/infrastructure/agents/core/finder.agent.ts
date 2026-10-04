@@ -37,7 +37,11 @@ import { buildToolEvidenceSummary } from '@libs/code-review/infrastructure/agent
 import { supportsStrictToolsForRun } from '@libs/code-review/infrastructure/agents/core/model-strictness';
 import type { ToolEvidenceSummary } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
-import type { Verdict } from '@libs/agent-harness/domain/contracts/verifier.contract';
+import { formatPreviousDecisions } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
+import type {
+    Verdict,
+    VerdictParseMode,
+} from '@libs/agent-harness/domain/contracts/verifier.contract';
 import {
     buildLangfuseTelemetry,
     toAiSdkTelemetryArgs,
@@ -77,6 +81,8 @@ export interface FinderSuggestion {
     severity?: 'critical' | 'high' | 'medium' | 'low';
     confidence?: number;
     ruleUuid?: string;
+    /** Id of the earlier suggestion on this PR this finding revises (#2039). */
+    revisesSuggestionId?: string;
 }
 
 /** JSON schema for submitResult — mirrors the legacy _findingsSchema. */
@@ -138,6 +144,33 @@ export const submitResultTool: AgentTool = {
     execute: async () => ({ output: 'submitted' }),
 };
 
+/** submitResult with `revisesSuggestionId` on each finding (#2039/#2020).
+ *  Offered only when the PR has earlier suggestions: a first-round review sends
+ *  exactly the tool it always did, so this change cannot move its recall. */
+function withRevisionField(tool: AgentTool): AgentTool {
+    const schema = tool.inputSchema as any;
+    const items = schema.properties.suggestions.items;
+    return {
+        ...tool,
+        inputSchema: {
+            ...schema,
+            properties: {
+                ...schema.properties,
+                suggestions: {
+                    ...schema.properties.suggestions,
+                    items: {
+                        ...items,
+                        properties: {
+                            ...items.properties,
+                            revisesSuggestionId: { type: 'string' },
+                        },
+                    },
+                },
+            },
+        },
+    };
+}
+
 export interface BuildFinderSpecParams {
     systemPrompt: string;
     modelId: string;
@@ -159,6 +192,9 @@ export interface BuildFinderSpecParams {
     usageRunName?: string;
     /** Cost-span agentName (the review agent's identity name). */
     agentName?: string;
+    /** The PR has earlier suggestions: the done-tool accepts
+     *  `revisesSuggestionId` (see withRevisionField). */
+    acceptsRevisions?: boolean;
     /** Provider options attached to the system message (e.g. Anthropic prompt
      *  caching) so the long system prompt is cached across the loop's steps. */
 }
@@ -173,7 +209,9 @@ export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
         // Considers the failover target too: a strict tool built for a Gemini
         // primary must NOT be sent to an OpenAI fallback (it rejects the schema).
         {
-            ...submitResultTool,
+            ...(params.acceptsRevisions
+                ? withRevisionField(submitResultTool)
+                : submitResultTool),
             strict: supportsStrictToolsForRun(
                 params.modelId,
                 params.fallbackModelId,
@@ -359,6 +397,14 @@ const RECOVERY_SCHEMA = z.object({
     ),
 });
 
+const REVISION_RECOVERY_SCHEMA = RECOVERY_SCHEMA.extend({
+    suggestions: z.array(
+        RECOVERY_SCHEMA.shape.suggestions.element.extend({
+            revisesSuggestionId: z.string().optional(),
+        }),
+    ),
+});
+
 /** Injected capability: re-structure a prose `reasoning` into findings. The
  *  domain (finder/recall passes) depends only on this function; the adapter
  *  wires it to the concrete internal-model fallback. Undefined = recovery off. */
@@ -386,6 +432,7 @@ export async function recoverFindingsFromProse(
     byokConfig: NormalizedModel | undefined,
     organizationId: string | undefined,
     usageRunName?: string,
+    previousDecisions?: readonly PrDecisionRecord[],
 ): Promise<FinderSuggestion[]> {
     if (!looksLikeFindings(prose)) return [];
     try {
@@ -396,7 +443,9 @@ export async function recoverFindingsFromProse(
         // it is part of the same review, not a separate `other` area.
         const result = await LLM.run({
             byokConfig,
-            schema: RECOVERY_SCHEMA,
+            schema: previousDecisions?.length
+                ? REVISION_RECOVERY_SCHEMA
+                : RECOVERY_SCHEMA,
             // Original instruction text is untouched — only the trailing
             // sentence is new. It must literally contain the word "json"
             // somewhere: OpenAI (and OpenAI-compatible providers) reject a
@@ -409,13 +458,21 @@ export async function recoverFindingsFromProse(
             // Verified live against the real OpenAI API (2026-09-17): the
             // exact same request 400s with that message without this
             // sentence, and 200s with it.
+            // Since #1916 the structured executor guarantees the same thing
+            // centrally for every json_object route (it writes the schema AND
+            // the keyword into the system prompt), so this sentence is now a
+            // belt-and-braces duplicate rather than the only thing standing
+            // between this call and a 400.
             user:
                 "The following is a code reviewer's analysis written as " +
                 'prose. Extract EVERY concrete finding it describes into ' +
                 'the structured schema — one entry per distinct issue, ' +
                 'using the file paths and line numbers mentioned. Do NOT ' +
                 'invent findings; only extract what is explicitly ' +
-                `described.\n\nRespond with a JSON object.\n\nANALYSIS:\n${prose}`,
+                `described.\n\nRespond with a JSON object.\n\nANALYSIS:\n${prose}` +
+                (previousDecisions?.length
+                    ? `\n\n${formatPreviousDecisions(previousDecisions)}\nPreserve the earlier suggestion's Id in revisesSuggestionId when the analysis revises it. Do not invent a relationship absent from the analysis; omit the field for unrelated findings.`
+                    : ''),
             runName: usageRunName
                 ? `${usageRunName}-recovery`
                 : 'code-review-recovery',
@@ -488,10 +545,16 @@ export interface FinderWithVerifyResult {
      *  `kept`): which files the verifier itself read/grepped while judging each.
      *  Empty summary when the verifier used no tools for that finding. */
     keptEvidence: ToolEvidenceSummary[];
+    /** How each KEPT finding's verdict was read (same order as `kept`) — the
+     *  verify funnel's provenance, so a `keep` that is really a parse miss is
+     *  visible in the trace instead of indistinguishable from a judged keep
+     *  (issue #1937). */
+    keptParseMode: VerdictParseMode[];
     droppedByVerify: Array<{
         finding: FinderSuggestion;
         evidence?: string;
         verifierEvidence: ToolEvidenceSummary;
+        parseMode: VerdictParseMode;
     }>;
     /** The finder's RunState (for usage/steps/trace mapping by callers). */
     finderState: RunState;
@@ -593,6 +656,7 @@ export async function runFinderWithVerify(
             reasoning,
             kept: [],
             keptEvidence: [],
+            keptParseMode: [],
             droppedByVerify: [],
             finderState,
             verifyUsage: ZERO_VERIFY_USAGE,
@@ -681,14 +745,19 @@ export async function runFinderWithVerify(
         );
 
     // The harness speaks neutral "candidate"; code-review's own term is "finding".
+    const parseModeOf = (f: FinderSuggestion): VerdictParseMode =>
+        verdictByFinding.get(f)?.parseMode ?? 'default-keep';
+
     return {
         reasoning,
         kept,
         keptEvidence: kept.map(evidenceOf),
+        keptParseMode: kept.map(parseModeOf),
         droppedByVerify: dropped.map((d) => ({
             finding: d.candidate,
             evidence: d.verdict.rationale,
             verifierEvidence: evidenceOf(d.candidate),
+            parseMode: d.verdict.parseMode ?? 'default-keep',
         })),
         finderState,
         verifyUsage: sumVerifyUsage(verifier.usage, gateUsage),

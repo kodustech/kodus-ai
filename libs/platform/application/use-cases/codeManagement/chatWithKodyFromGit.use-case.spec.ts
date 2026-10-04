@@ -426,7 +426,9 @@ describe('ChatWithKodyFromGitUseCase', () => {
             expect(
                 codeManagementService.createResponseToComment,
             ).toHaveBeenCalledWith(
-                expect.objectContaining({ body: 'an answer' }),
+                expect.objectContaining({
+                    body: expect.stringContaining('an answer'),
+                }),
             );
         });
     });

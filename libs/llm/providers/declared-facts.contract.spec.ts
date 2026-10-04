@@ -63,6 +63,7 @@ const NOT_APPLICABLE: Record<string, Record<string, string>> = {};
 const FACTS = [
     'reasoningTraits',
     'temperaturePolicy',
+    'structuredOutputPolicy',
     'providerOptionsNamespace',
 ] as const;
 
@@ -93,6 +94,7 @@ describe('every registered provider declares its own facts', () => {
                 const traits = mod.reasoningTraits?.(cfg as any);
                 const temp = mod.temperaturePolicy?.(cfg as any);
                 const ns = mod.providerOptionsNamespace?.(id, cfg.model);
+                const structured = mod.structuredOutputPolicy?.(cfg as any);
 
                 expect({
                     id,
@@ -105,6 +107,7 @@ describe('every registered provider declares its own facts', () => {
                             typeof traits?.forcedToolChoiceRejectsThinking,
                     },
                     tempKind: temp?.kind,
+                    structuredWire: structured,
                     namespaceIsNonEmptyString:
                         typeof ns === 'string' && ns.length > 0,
                 }).toEqual({
@@ -120,10 +123,50 @@ describe('every registered provider declares its own facts', () => {
                     tempKind: expect.stringMatching(
                         /^(adjustable|fixed|unsupported)$/,
                     ),
+                    // 'json_schema' | 'json_object' | 'none' — never undefined.
+                    // An absent answer sends the structured executor back to the
+                    // default, and a route that is really json_object would ship
+                    // with no contract at all (#1916).
+                    structuredWire: expect.stringMatching(
+                        /^(json_schema|json_object|none)$/,
+                    ),
                     namespaceIsNonEmptyString: true,
                 });
             });
         }
+    });
+
+    it('capabilities() and structuredOutputPolicy() cannot disagree about "none"', () => {
+        // Two statements about one model now exist: `capabilities(model)
+        // .structuredOutput` (model id only) and `structuredOutputPolicy(cfg)`
+        // (id + baseURL + requested provider id). That is tolerable ONLY while
+        // they cannot disagree about 'none' — the half `planStructuredCall`
+        // branches on to pick suppress-thinking vs reroute-json, and the half
+        // both capability gates read. A module that answered 'none' in one and
+        // a response_format in the other would take a call down a plan built
+        // for a protocol it is not speaking.
+        //
+        // The json_schema/json_object half MAY differ, by construction:
+        // capabilities cannot see the baseURL. That difference is inert because
+        // the executor reads the POLICY for it (#1916) — pinned in
+        // structured-output.contract.spec.ts.
+        const disagreements = Object.keys(PROBE_MODEL)
+            .filter((id) => REGISTRY.has(id))
+            .map((id) => {
+                const cfg = { provider: id, model: PROBE_MODEL[id], apiKey: '' };
+                return {
+                    id,
+                    caps:
+                        REGISTRY.get(id).capabilities(cfg.model)
+                            .structuredOutput === 'none',
+                    policy:
+                        REGISTRY.get(id).structuredOutputPolicy?.(cfg as any) ===
+                        'none',
+                };
+            })
+            .filter((r) => r.caps !== r.policy);
+
+        expect(disagreements).toEqual([]);
     });
 
     it('the resolved policy is the DECLARED policy — no fallback in play', () => {

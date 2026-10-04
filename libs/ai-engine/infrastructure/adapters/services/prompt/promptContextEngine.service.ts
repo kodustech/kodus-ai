@@ -38,6 +38,7 @@ interface DetectReferencesParams {
     detectionMode?: 'rule' | 'prompt';
     byokConfig?: NormalizedModel;
     subscriptionStatus?: string;
+    detectionCache?: Record<string, IDetectedReference[]>;
 }
 
 interface DetectionResult {
@@ -46,6 +47,7 @@ interface DetectionResult {
     detectedMarkers: string[];
     requirements: ContextRequirement[];
     promptHash: string;
+    detection?: { fingerprint: string; references: IDetectedReference[] };
 }
 
 const DEFAULT_DOMAIN = 'code';
@@ -67,6 +69,7 @@ export class PromptContextEngineService implements IPromptContextEngineService {
         promptHash: string;
         requirements: ContextRequirement[];
         markers: string[];
+        detection?: { fingerprint: string; references: IDetectedReference[] };
     }> {
         const detection = await this.runDetection(params);
 
@@ -76,6 +79,7 @@ export class PromptContextEngineService implements IPromptContextEngineService {
             promptHash: detection.promptHash,
             requirements: detection.requirements,
             markers: detection.detectedMarkers,
+            ...(detection.detection && { detection: detection.detection }),
         };
     }
 
@@ -125,16 +129,32 @@ export class PromptContextEngineService implements IPromptContextEngineService {
         }
 
         try {
-            const detectedReferences =
-                await this.referenceDetectorService.detectReferences({
-                    requirementId: params.requirementId,
-                    promptText: params.promptText,
-                    organizationAndTeamData: params.organizationAndTeamData,
-                    context: params.context,
-                    detectionMode: params.detectionMode,
-                    byokConfig: params.byokConfig,
-                    subscriptionStatus: params.subscriptionStatus,
-                });
+            // The model reads only the text, so the same text gets the same
+            // answer: reuse it instead of paying for it again. Resolving the
+            // references against the repository below still runs every time,
+            // so a moved or deleted file is still caught.
+            const fingerprint =
+                this.referenceDetectorService.detectionFingerprint(params);
+            const cached = params.detectionCache?.[fingerprint];
+            const { references: detectedReferences, reliable } = Array.isArray(
+                cached,
+            )
+                ? { references: cached, reliable: true }
+                : await this.referenceDetectorService.detectReferencesWithStatus(
+                      {
+                          requirementId: params.requirementId,
+                          promptText: params.promptText,
+                          organizationAndTeamData:
+                              params.organizationAndTeamData,
+                          context: params.context,
+                          detectionMode: params.detectionMode,
+                          byokConfig: params.byokConfig,
+                          subscriptionStatus: params.subscriptionStatus,
+                      },
+                  );
+            const detection = reliable
+                ? { fingerprint, references: detectedReferences }
+                : undefined;
 
             if (!detectedReferences.length) {
                 const requirement = this.buildRequirement({
@@ -151,6 +171,7 @@ export class PromptContextEngineService implements IPromptContextEngineService {
                     detectedMarkers: [],
                     promptHash,
                     requirements: requirement ? [requirement] : [],
+                    detection,
                 };
             }
 
@@ -176,6 +197,7 @@ export class PromptContextEngineService implements IPromptContextEngineService {
                 detectedMarkers: markers,
                 promptHash,
                 requirements: requirement ? [requirement] : [],
+                detection,
             };
         } catch (error) {
             this.logger.error({

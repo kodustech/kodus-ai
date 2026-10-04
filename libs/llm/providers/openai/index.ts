@@ -38,11 +38,13 @@ import {
     isCompatibleReasoner,
     compatibleEffortValue,
     type ModelReasoningTraits,
+    type StructuredOutputMode,
 } from '../kernel/reasoning-traits';
 import {
     normalizeSdkResult,
     normalizeSdkUsage,
 } from '../kernel/usage';
+import { reasoningEffortFromWire } from '../kernel/override-wire-spelling';
 
 /**
  * Native OpenAI model families that honor strict `response_format: json_schema`
@@ -95,6 +97,38 @@ export const openaiModule: ProviderModule = {
             streaming: true,
             promptCaching: true,
         };
+    },
+
+    // The WIRE answer, per id + model + baseURL — the three inputs
+    // `capabilities(model)` above cannot see (one module serves both ids, and
+    // the custom endpoint's behaviour is a property of the URL, not the id).
+    //
+    //   native `openai`        → strict json_schema, always.
+    //   `openai_compatible`    → strict only for the never-downgrade Kimi/
+    //                            Moonshot family or a baseURL we have evidence
+    //                            for (vLLM :8000, Fireworks, the ops allowlist).
+    //                            EVERY other upstream — DeepSeek, GLM, Qwen, a
+    //                            generic proxy — goes out as bare `json_object`,
+    //                            carrying neither the shape nor the keyword
+    //                            (issue #1916).
+    structuredOutputPolicy(
+        cfg: ProviderBuildConfig,
+        opts?: ProviderBuildOptions,
+    ): StructuredOutputMode {
+        // NATIVE openai: `build()` below passes no structured-output setting at
+        // all, so the SDK sends the schema whatever the caller asked for. The
+        // policy has to say the same, or the executor writes a JSON contract
+        // into a prompt whose body already carries the schema.
+        if ((cfg.provider as string) !== 'openai_compatible') {
+            return 'json_schema';
+        }
+        // The compatible build ANDs the opt-out into its flag, so here it is
+        // part of the answer.
+        if (opts?.structuredOutputs === false) return 'json_object';
+        return isNeverDowngradeModel(cfg.model) ||
+            openAiCompatibleHonorsJsonSchema(cfg.baseURL)
+            ? 'json_schema'
+            : 'json_object';
     },
 
     build(cfg: ProviderBuildConfig, opts?: ProviderBuildOptions): LanguageModel {
@@ -161,11 +195,12 @@ export const openaiModule: ProviderModule = {
                 // direct-Moonshot upstream (api.moonshot.ai) keeps json_schema
                 // ON even though shouldEnableJsonSchema alone would reject it
                 // (D-00b). Unknown upstreams still defer to the heuristic — the
-                // capability is additive, not a blanket force-on.
+                // capability is additive, not a blanket force-on. Read from the
+                // policy above so the declaration and this body are ONE
+                // expression.
                 supportsStructuredOutputs:
-                    opts?.structuredOutputs !== false &&
-                    (isNeverDowngradeModel(cfg.model) ||
-                        openAiCompatibleHonorsJsonSchema(baseURL)),
+                    openaiModule.structuredOutputPolicy(cfg, opts) ===
+                    'json_schema',
             })(cfg.model);
         }
 
@@ -241,9 +276,14 @@ export const openaiModule: ProviderModule = {
                         ? { openaiCompatible: { reasoningEffort: value } }
                         : {};
                 }
-                const payload: Record<string, any> = {
-                    thinking: { type: 'enabled' },
-                };
+                // A model that always thinks (GLM-5.3, Kimi k3 / k2.7-code) is
+                // not told to: the toggle changes nothing for it, and a strict
+                // gateway upstream rejects the field (OpenCode Go's glm-5.3-flash,
+                // 2026-09-30: `json: unknown field "thinking"`). OpenCode's own
+                // client sends no reasoning options to GLM-5.3 either.
+                const payload: Record<string, any> = traits.canDisableThinking
+                    ? { thinking: { type: 'enabled' } }
+                    : {};
                 // Only brands documented to accept the PAIR get an effort.
                 // DeepSeek REQUIRES `thinking` + `reasoning_effort` together and
                 // Z.ai accepts both, but Moonshot 400s on the pair ("cannot
@@ -253,7 +293,9 @@ export const openaiModule: ProviderModule = {
                     const value = compatibleEffortValue(effort, traits);
                     if (value) payload.reasoningEffort = value;
                 }
-                return { openaiCompatible: payload };
+                return Object.keys(payload).length
+                    ? { openaiCompatible: payload }
+                    : {};
             }
             if (isNativeOpenAiModel(cfg.model)) {
                 // `reasoningEffort` (camelCase) is the SDK's OWN option name; it
@@ -343,6 +385,10 @@ export const openaiModule: ProviderModule = {
     ],
     providerOptionsNamespace: (id) =>
         id === 'openai_compatible' ? 'openaiCompatible' : 'openai',
+    // Both adapters render `reasoning_effort` from `reasoningEffort` and strip
+    // the snake_case spelling users copy from the vendor docs.
+    normalizeReasoningOverride: (_ns, options) =>
+        reasoningEffortFromWire(options),
     // Native OpenAI takes `reasoningEffort` (+ optional serviceTier); an
     // openai_compatible upstream takes the standard `thinking` toggle — so the
     // Custom-override example differs per served id. Mirrors reasoning() above.

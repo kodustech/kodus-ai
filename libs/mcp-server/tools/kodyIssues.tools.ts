@@ -263,6 +263,7 @@ export class KodyIssuesTools {
 
     getKodyIssueDetails(): McpToolDefinition {
         const inputSchema = z.object({
+            // Filled from the caller's credential by McpToolAuthorizer.
             organizationId: z.string().optional(),
             issueId: z.string(),
         });
@@ -279,10 +280,9 @@ export class KodyIssuesTools {
                 data: z.looseObject({}).nullable(),
             }),
             execute: wrapToolHandler(async (args: InputType) => {
-                const issue = await this.issuesService.findOne({
-                    uuid: args.issueId,
-                    organizationId: args.organizationId,
-                });
+                const issue = args.organizationId
+                    ? await this.findOwnIssue(args.issueId, args.organizationId)
+                    : null;
                 return {
                     success: !!issue,
                     data: issue,
@@ -293,6 +293,8 @@ export class KodyIssuesTools {
 
     updateKodyIssueStatus(): McpToolDefinition {
         const inputSchema = z.object({
+            // Filled from the caller's credential by McpToolAuthorizer.
+            organizationId: z.string().optional(),
             issueId: z.string(),
             status: z.enum(IssueStatus),
         });
@@ -312,6 +314,12 @@ export class KodyIssuesTools {
                 data: z.looseObject({}).nullable(),
             }),
             execute: wrapToolHandler(async (args: InputType) => {
+                if (
+                    !args.organizationId ||
+                    !(await this.ownsIssue(args.issueId, args.organizationId))
+                ) {
+                    return { success: false, data: null };
+                }
                 const updated = await this.issuesService.updateStatus(
                     args.issueId,
                     args.status,
@@ -326,6 +334,8 @@ export class KodyIssuesTools {
 
     updateKodyIssueCategory(): McpToolDefinition {
         const inputSchema = z.object({
+            // Filled from the caller's credential by McpToolAuthorizer.
+            organizationId: z.string().optional(),
             issueId: z.string(),
             label: z.enum(LabelType),
         });
@@ -345,6 +355,12 @@ export class KodyIssuesTools {
                 data: z.looseObject({}).nullable(),
             }),
             execute: wrapToolHandler(async (args: InputType) => {
+                if (
+                    !args.organizationId ||
+                    !(await this.ownsIssue(args.issueId, args.organizationId))
+                ) {
+                    return { success: false, data: null };
+                }
                 const updated = await this.issuesService.updateLabel(
                     args.issueId,
                     args.label,
@@ -358,7 +374,11 @@ export class KodyIssuesTools {
     }
 
     deleteKodyIssue(): McpToolDefinition {
-        const inputSchema = z.object({ issueId: z.string() });
+        const inputSchema = z.object({
+            // Filled from the caller's credential by McpToolAuthorizer.
+            organizationId: z.string().optional(),
+            issueId: z.string(),
+        });
         type InputType = z.infer<typeof inputSchema>;
         return {
             name: 'KODUS_DELETE_KODY_ISSUE',
@@ -373,6 +393,12 @@ export class KodyIssuesTools {
                 data: z.looseObject({}).nullable(),
             }),
             execute: wrapToolHandler(async (args: InputType) => {
+                if (
+                    !args.organizationId ||
+                    !(await this.ownsIssue(args.issueId, args.organizationId))
+                ) {
+                    return { success: false, data: null };
+                }
                 const updated = await this.issuesService.updateStatus(
                     args.issueId,
                     IssueStatus.DISMISSED,
@@ -383,6 +409,33 @@ export class KodyIssuesTools {
                 };
             }),
         };
+    }
+
+    // Issues are addressed by their Mongo _id (the update methods use
+    // findByIdAndUpdate), and an issue of another organization answers like a
+    // missing one. Do not filter with findOne({ uuid }): the schema has no
+    // uuid field, so that lookup never matches. An absent organizationId never
+    // reaches here (McpToolAuthorizer sets it); callers narrow it first, and
+    // the check below keeps an empty value from widening the lookup.
+    private async findOwnIssue(
+        issueId: string,
+        organizationId: string,
+    ): Promise<IIssue | null> {
+        if (!organizationId) return null;
+        let issue: IIssue | null;
+        try {
+            issue = await this.issuesService.findById(issueId);
+        } catch {
+            return null; // malformed id
+        }
+        return issue?.organizationId === organizationId ? issue : null;
+    }
+
+    private async ownsIssue(
+        issueId: string,
+        organizationId: string,
+    ): Promise<boolean> {
+        return !!(await this.findOwnIssue(issueId, organizationId));
     }
 
     getAllTools(): McpToolDefinition[] {

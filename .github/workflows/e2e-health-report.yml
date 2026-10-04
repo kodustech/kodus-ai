@@ -15,6 +15,7 @@ name: "E2E: matrix health report"
 
 permissions:
     contents: read
+    id-token: write # quality signal (report-signal action, WIF)
 
 on:
     schedule:
@@ -104,3 +105,16 @@ jobs:
                   description: |
                       ${{ steps.report.outputs.digest }}
                       Full per-cell table: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            - name: Report quality signal
+              if: always()
+              uses: ./.github/actions/report-signal
+              with:
+                  name: e2e.health
+                  status: ${{ steps.fetch.outputs.found == 'true' && 'green' || 'infra' }}
+                  value: ${{ steps.fetch.outputs.rows }}
+                  unit: count
+                  meta: '{"days": ${{ inputs.days || 30 }}}'
+                  gcp_wif_provider: ${{ vars.GCP_WIF_PROVIDER }}
+                  gcp_sa_email: ${{ vars.GCP_SA_EMAIL }}
+                  gcp_project: ${{ vars.GCP_PROJECT }}

@@ -1023,3 +1023,60 @@ describe('buildLangfuseTelemetry', () => {
         });
     });
 });
+
+describe('buildProviderOptions — a pasted override in the vendor wire spelling', () => {
+    const build = (provider: string, model: string, override: unknown) =>
+        buildProviderOptions('spec', undefined, {
+            byokProvider: provider,
+            modelName: model,
+            reasoningConfigOverride: JSON.stringify(override),
+        });
+
+    it('renames `reasoning_effort` for the openai_compatible adapter', () => {
+        expect(
+            build('openai_compatible', 'deepseek-v4-flash', {
+                reasoning_effort: 'max',
+            }),
+        ).toEqual({ openaiCompatible: { reasoningEffort: 'max' } });
+    });
+
+    it('renames `output_config.effort` for Claude on Vertex, which reads the anthropic options', () => {
+        expect(
+            build('google_vertex', 'claude-sonnet-4-6', {
+                output_config: { effort: 'high' },
+            }),
+        ).toEqual({ anthropic: { effort: 'high' } });
+    });
+
+    it('leaves Gemini on Vertex as pasted: its adapter has no `effort`', () => {
+        expect(
+            build('google_vertex', 'gemini-3.7-flash', {
+                output_config: { effort: 'high' },
+            }),
+        ).toEqual({ google: { output_config: { effort: 'high' } } });
+    });
+
+    it('renames only under the namespace this slot reads', () => {
+        // A second namespace in the same paste belongs to another adapter (or
+        // to telemetry); its spelling is not this provider's to change.
+        expect(
+            build('openai_compatible', 'deepseek-v4-flash', {
+                openaiCompatible: { reasoning_effort: 'max' },
+                anthropic: { output_config: { effort: 'low' } },
+                langsmith: { reasoning_effort: 'x' },
+            }),
+        ).toEqual({
+            openaiCompatible: { reasoningEffort: 'max' },
+            anthropic: { output_config: { effort: 'low' } },
+            langsmith: { reasoning_effort: 'x' },
+        });
+    });
+
+    it('leaves a provider without a rename as pasted', () => {
+        expect(
+            build('google_gemini', 'gemini-3.7-flash', {
+                reasoning_effort: 'max',
+            }),
+        ).toEqual({ google: { reasoning_effort: 'max' } });
+    });
+});

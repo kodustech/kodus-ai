@@ -16,4 +16,5 @@ export const Sandbox = {
     connect: jest.fn().mockResolvedValue({}),
     kill: jest.fn().mockResolvedValue(undefined),
     setTimeout: jest.fn().mockResolvedValue(undefined),
+    list: jest.fn(),
 };

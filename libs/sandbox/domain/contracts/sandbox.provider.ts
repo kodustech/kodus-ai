@@ -78,3 +78,15 @@ export interface ISandboxProvider {
 }
 
 export const SANDBOX_PROVIDER_TOKEN = Symbol('SANDBOX_PROVIDER_TOKEN');
+
+/**
+ * A branch as a host reports it, reduced to the name git wants.
+ *
+ * Azure Repos spells branches in full ("refs/heads/main"). Everything that
+ * builds a ref from a sandbox's base branch writes `origin/<branch>`, which
+ * becomes `origin/refs/heads/main` and resolves to nothing — the dependency
+ * baseline then silently disappears. Normalize wherever a branch enters the
+ * sandbox so the fetch and the consumers cannot disagree.
+ */
+export const toBranchName = (branch?: string): string | undefined =>
+    branch?.replace(/^refs\/heads\//, '');

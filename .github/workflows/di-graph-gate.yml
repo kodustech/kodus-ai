@@ -31,6 +31,7 @@ on:
 
 permissions:
     contents: read
+    id-token: write # quality signal (report-signal action, WIF)
 
 jobs:
     api-di-graph:
@@ -84,3 +85,13 @@ jobs:
                   CODE_MANAGEMENT_WEBHOOK_TOKEN: "ci-placeholder"
                   API_PORT: "3001"
               run: pnpm run ci:validate-di-graph
+
+            - name: Report quality signal
+              if: always()
+              uses: ./.github/actions/report-signal
+              with:
+                  name: gate.di_graph
+                  status: ${{ job.status }}
+                  gcp_wif_provider: ${{ vars.GCP_WIF_PROVIDER }}
+                  gcp_sa_email: ${{ vars.GCP_SA_EMAIL }}
+                  gcp_project: ${{ vars.GCP_PROJECT }}

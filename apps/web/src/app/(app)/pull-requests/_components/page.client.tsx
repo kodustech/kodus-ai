@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef } from "react";
+import { ReviewsSourceTabs } from "@components/system/reviews-source-tabs";
 import { Button } from "@components/ui/button";
 import { Page } from "@components/ui/page";
 import {
@@ -23,8 +24,8 @@ import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { cn } from "src/core/utils/components";
 
-import { AwaitingList } from "./pr-awaiting-list";
 import { PrAuthorSearch } from "./pr-author-search";
+import { AwaitingList } from "./pr-awaiting-list";
 import { PrDataTable } from "./pr-data-table";
 import { type PullRequestsScope } from "./pr-view-switcher";
 import { PullRequestsFilters } from "./pull-requests-filters";
@@ -109,6 +110,14 @@ export function PullRequestsPageClient() {
         "view",
         parseAsStringLiteral(["awaiting"] as const).withOptions(urlOpts),
     );
+    // The PR's own state — the "what still needs a human" axis. Deliberately a
+    // plain filter and not another `view`: the whole point is that it composes
+    // with Repo / Author / Status, which the `awaiting` view cannot do because
+    // it swaps the list component out entirely.
+    const [prState, setPrState] = useQueryState(
+        "prState",
+        parseAsStringLiteral(["open", "closed"] as const).withOptions(urlOpts),
+    );
 
     // View scope is temporarily PINNED to the team dashboard — the "My queue /
     // My team" switcher is hidden for now (product decision). The mine-view
@@ -157,6 +166,19 @@ export function PullRequestsPageClient() {
             : suggestionsFilter === "false"
               ? false
               : undefined;
+    // Typing a PR number into the default (title) scope searches TITLES for
+    // that digit string, which almost never matches — so looking up a PR that
+    // plainly exists answers "nothing here" and gives no hint why. The scope
+    // toggle is right there but reads as decoration until you already know.
+    // Don't silently re-route the search (a title genuinely can contain a
+    // number); offer the jump and let the reader take it.
+    const queryLooksLikePrNumber =
+        searchMode === "title" && /^#?\d+$/.test(trimmedQuery);
+    const searchAsPrNumber = () => {
+        const asNumber = trimmedQuery.replace(/^#/, "");
+        setSearchMode("number");
+        setSearchQuery(asNumber);
+    };
 
     const {
         items: pullRequests,
@@ -165,7 +187,9 @@ export function PullRequestsPageClient() {
         hasNextPage,
         fetchNextPage,
         isFetchingNextPage,
+        isFetchNextPageError,
         filteredPrTotal,
+        refetch,
     } = useInfinitePullRequestExecutions(
         {
             teamId,
@@ -177,6 +201,7 @@ export function PullRequestsPageClient() {
             status: statusFilter ?? undefined,
             needsAttention: needsAttention === "true" ? true : undefined,
             author: effectiveAuthor,
+            prState: prState ?? undefined,
             createdAtFrom: createdAtFrom ?? undefined,
             // Make the "to" bound inclusive of the whole selected day.
             createdAtTo: createdAtTo
@@ -235,6 +260,7 @@ export function PullRequestsPageClient() {
         setNeedsAttention(null);
         setAuthorFilter(null);
         setView(null);
+        setPrState(null);
         setCreatedAtFrom(null);
         setCreatedAtTo(null);
     };
@@ -299,6 +325,15 @@ export function PullRequestsPageClient() {
                 setAuthorPolicy("reviewable");
             },
         },
+        prState && {
+            key: "prState",
+            // "Review status" is the other filter (Kody's run), so this one
+            // says PR out loud to keep the two apart on screen.
+            label: prState === "open" ? "PR: Open" : "PR: Closed",
+            clear: () => {
+                setPrState(null);
+            },
+        },
         statusFilter && {
             key: "status",
             label: `Status: ${STATUS_LABEL[statusFilter]}`,
@@ -347,6 +382,10 @@ export function PullRequestsPageClient() {
         suggestionsFilter !== "all" ||
         needsAttention === "true" ||
         !!effectiveAuthor ||
+        // The PR-state filter runs in the same post-query loop, so it makes
+        // `filteredPrTotal` an upper bound too — without this the header would
+        // print a DB-level count next to a shorter list.
+        !!prState ||
         authorPolicy !== "all";
     const canUseExactFilteredTotal =
         hasActiveFilters &&
@@ -422,9 +461,14 @@ export function PullRequestsPageClient() {
               },
               {
                   key: "awaiting",
-                  label: "Awaiting review",
+                  // Was "Awaiting review", which reads as "waiting for a human
+                  // to review it" — the single most-wanted thing on this
+                  // screen, and not at all what this card selects. It counts
+                  // PRs KODY never reviewed because config blocked her. The
+                  // honest name; the reviewable backlog is the PR state filter.
+                  label: "Kody skipped",
                   sub: "backlog",
-                  hint: "PRs Kody was triggered on but skipped and never reviewed — blocked by config (no license, BYOK, manual/paused cadence, ignored user). Current backlog, not today.",
+                  hint: "PRs Kody was triggered on but skipped and never reviewed — blocked by config (no license, BYOK, manual/paused cadence, ignored user). Current backlog, not today. For PRs still waiting on a human, use the PR state filter.",
                   // Backlog is a current total, not a "today" number — read it
                   // from facets (same source as the toggle's 665), so the card
                   // and the toggle never disagree.
@@ -487,7 +531,7 @@ export function PullRequestsPageClient() {
 
     return (
         <Page.Root scrollable={false} className="min-h-0 gap-3 pt-6 pb-0">
-            <Page.Header className="max-w-full">
+            <Page.Header>
                 {/* Compact command bar. The whole meta-zone is folded into one
                     band: title + count on the left, the "pulse" shortcuts
                     (reviewed today / awaiting / needs attention) as small filter
@@ -499,10 +543,8 @@ export function PullRequestsPageClient() {
                     those stacked bands into this single strip lets the table own
                     the viewport and start near the top. */}
                 <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
-                    <div className="flex items-baseline gap-2">
-                        <Page.Title variant="h2" className="text-balance">
-                            Pull Requests
-                        </Page.Title>
+                    <div className="flex items-center gap-3">
+                        <ReviewsSourceTabs />
                         {totalCount > 0 && (
                             <span className="text-text-tertiary text-sm tabular-nums">
                                 {totalCount}
@@ -563,131 +605,168 @@ export function PullRequestsPageClient() {
                 </div>
             </Page.Header>
 
-            <Page.Content className="max-w-full min-h-0 gap-3 px-6">
+            <Page.Content className="min-h-0 gap-3">
                 {/* Filter toolbar — search + structured filters on ONE wrapping
                     row so the table gets more vertical room; wraps to a second
                     line only on narrow widths. Search scopes: Title / Number /
                     Author (Title & Number drive `q`; Author drives the author
                     filter). */}
                 <div className="flex flex-wrap items-center gap-2">
-                        <div className="border-card-lv3 bg-card-lv2 focus-within:border-primary-light/50 focus-within:ring-primary-light/15 flex h-9 min-w-[18rem] flex-1 items-center gap-2 rounded-xl border pr-1.5 pl-3 transition focus-within:ring-3">
-                            {showAuthorSearch ? (
-                                <UserIcon className="text-text-tertiary size-4 shrink-0" />
-                            ) : (
-                                <SearchIcon className="text-text-tertiary size-4 shrink-0" />
-                            )}
-                            {showAuthorSearch ? (
-                                <PrAuthorSearch
-                                    teamId={teamId}
-                                    onSelect={(name) =>
-                                        setAuthorFilter(name || null)
-                                    }
-                                />
-                            ) : (
-                                <input
-                                    ref={searchRef}
-                                    className="text-text-primary placeholder:text-text-tertiary/70 h-full min-w-0 flex-1 bg-transparent text-sm outline-none"
-                                    inputMode={
+                    <div className="border-card-lv3 bg-card-lv2 focus-within:border-primary-light/50 focus-within:ring-primary-light/15 flex h-9 min-w-[18rem] flex-1 items-center gap-2 rounded-xl border pr-1.5 pl-3 transition focus-within:ring-3">
+                        {showAuthorSearch ? (
+                            <UserIcon className="text-text-tertiary size-4 shrink-0" />
+                        ) : (
+                            <SearchIcon className="text-text-tertiary size-4 shrink-0" />
+                        )}
+                        {showAuthorSearch ? (
+                            <PrAuthorSearch
+                                teamId={teamId}
+                                onSelect={(name) =>
+                                    setAuthorFilter(name || null)
+                                }
+                            />
+                        ) : (
+                            <input
+                                ref={searchRef}
+                                className="text-text-primary placeholder:text-text-tertiary/70 h-full min-w-0 flex-1 bg-transparent text-sm outline-none"
+                                inputMode={
+                                    searchMode === "number" ? "numeric" : "text"
+                                }
+                                placeholder={
+                                    searchMode === "number"
+                                        ? "Search by PR number…"
+                                        : "Search by title…"
+                                }
+                                value={searchQuery}
+                                onChange={(event) => {
+                                    setSearchQuery(
                                         searchMode === "number"
-                                            ? "numeric"
-                                            : "text"
-                                    }
-                                    placeholder={
-                                        searchMode === "number"
-                                            ? "Search by PR number…"
-                                            : "Search by title…"
-                                    }
-                                    value={searchQuery}
-                                    onChange={(event) => {
-                                        setSearchQuery(
-                                            searchMode === "number"
-                                                ? event.target.value.replace(
-                                                      /[^\d]/g,
-                                                      "",
-                                                  )
-                                                : event.target.value,
-                                        );
+                                            ? event.target.value.replace(
+                                                  /[^\d]/g,
+                                                  "",
+                                              )
+                                            : event.target.value,
+                                    );
+                                }}
+                            />
+                        )}
+                        <div className="bg-card-lv1/80 flex shrink-0 items-center gap-0.5 rounded-lg p-0.5">
+                            {searchModes.map((mode) => (
+                                <button
+                                    key={mode}
+                                    type="button"
+                                    onClick={() => {
+                                        // Switching scope starts a fresh
+                                        // search — clear both the text
+                                        // query and the author filter.
+                                        setSearchMode(mode);
+                                        setSearchQuery("");
+                                        setAuthorFilter(null);
                                     }}
-                                />
-                            )}
-                            <div className="bg-card-lv1/80 flex shrink-0 items-center gap-0.5 rounded-lg p-0.5">
-                                {searchModes.map(
-                                    (mode) => (
-                                        <button
-                                            key={mode}
-                                            type="button"
-                                            onClick={() => {
-                                                // Switching scope starts a fresh
-                                                // search — clear both the text
-                                                // query and the author filter.
-                                                setSearchMode(mode);
-                                                setSearchQuery("");
-                                                setAuthorFilter(null);
-                                            }}
-                                            className={cn(
-                                                "rounded-md px-2.5 py-1 text-xs font-medium capitalize transition",
-                                                searchMode === mode
-                                                    ? "bg-card-lv3 text-text-primary"
-                                                    : "text-text-tertiary hover:text-text-secondary",
-                                            )}>
-                                            {mode}
-                                        </button>
-                                    ),
-                                )}
-                            </div>
+                                    className={cn(
+                                        "rounded-md px-2.5 py-1 text-xs font-medium capitalize transition",
+                                        searchMode === mode
+                                            ? "bg-card-lv3 text-text-primary"
+                                            : "text-text-tertiary hover:text-text-secondary",
+                                    )}>
+                                    {mode}
+                                </button>
+                            ))}
                         </div>
+                    </div>
 
                     <PullRequestsFilters
-                            teamId={teamId}
-                            selectedRepository={selectedRepository ?? undefined}
-                            onRepositoryChange={(value) =>
-                                setSelectedRepository(value ?? null)
-                            }
-                            suggestionsFilter={suggestionsFilter}
-                            onSuggestionsFilterChange={(value) =>
-                                setSuggestionsFilter(value)
-                            }
-                            authorPolicy={authorPolicy}
-                            onAuthorPolicyChange={(value) =>
-                                setAuthorPolicy(value)
-                            }
-                            createdAtFrom={createdAtFrom}
-                            createdAtTo={createdAtTo}
-                            onCreatedAtFromChange={(value) =>
-                                setCreatedAtFrom(value || null)
-                            }
-                            onCreatedAtToChange={(value) =>
-                                setCreatedAtTo(value || null)
-                            }
-                        />
+                        teamId={teamId}
+                        selectedRepository={selectedRepository ?? undefined}
+                        onRepositoryChange={(value) =>
+                            setSelectedRepository(value ?? null)
+                        }
+                        suggestionsFilter={suggestionsFilter}
+                        onSuggestionsFilterChange={(value) =>
+                            setSuggestionsFilter(value)
+                        }
+                        authorPolicy={authorPolicy}
+                        onAuthorPolicyChange={(value) => setAuthorPolicy(value)}
+                        createdAtFrom={createdAtFrom}
+                        createdAtTo={createdAtTo}
+                        onCreatedAtFromChange={(value) =>
+                            setCreatedAtFrom(value || null)
+                        }
+                        onCreatedAtToChange={(value) =>
+                            setCreatedAtTo(value || null)
+                        }
+                    />
 
-                        <Select
-                            value={statusFilter ?? "all"}
-                            onValueChange={(value) =>
-                                setStatusFilter(
-                                    value === "all"
-                                        ? null
-                                        : (value as (typeof STATUSES)[number]),
-                                )
-                            }>
-                            <SelectTrigger
-                                size="sm"
-                                className={cn(
-                                    "h-9 w-auto gap-1.5 rounded-lg",
-                                    statusFilter && "border-primary-light/50",
-                                )}>
-                                <SelectValue placeholder="Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">Status</SelectItem>
-                                {STATUSES.map((s) => (
-                                    <SelectItem key={s} value={s}>
-                                        {STATUS_LABEL[s]}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                    {/* The PR's own state. Sits immediately before the review
+                        Status select because the two are constantly mistaken
+                        for each other — "Open" here means the PR is still
+                        waiting on a human, while Status describes how Kody's
+                        run went. Pairing them makes the distinction legible. */}
+                    <Select
+                        value={prState ?? "all"}
+                        onValueChange={(value) =>
+                            setPrState(
+                                value === "all"
+                                    ? null
+                                    : (value as "open" | "closed"),
+                            )
+                        }>
+                        <SelectTrigger
+                            size="sm"
+                            className={cn(
+                                "h-9 w-auto gap-1.5 rounded-lg",
+                                prState && "border-primary-light/50",
+                            )}>
+                            <SelectValue placeholder="PR state" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">PR state</SelectItem>
+                            <SelectItem value="open">Open</SelectItem>
+                            <SelectItem value="closed">Closed</SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    <Select
+                        value={statusFilter ?? "all"}
+                        onValueChange={(value) =>
+                            setStatusFilter(
+                                value === "all"
+                                    ? null
+                                    : (value as (typeof STATUSES)[number]),
+                            )
+                        }>
+                        <SelectTrigger
+                            size="sm"
+                            className={cn(
+                                "h-9 w-auto gap-1.5 rounded-lg",
+                                statusFilter && "border-primary-light/50",
+                            )}>
+                            <SelectValue placeholder="Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Status</SelectItem>
+                            {STATUSES.map((s) => (
+                                <SelectItem key={s} value={s}>
+                                    {STATUS_LABEL[s]}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 </div>
+
+                {queryLooksLikePrNumber && (
+                    <div className="text-text-tertiary flex flex-wrap items-center gap-2 text-xs">
+                        <span>
+                            Searching titles for &ldquo;{trimmedQuery}&rdquo;.
+                        </span>
+                        <Button
+                            size="xs"
+                            variant="helper"
+                            onClick={searchAsPrNumber}>
+                            Look up PR #{trimmedQuery.replace(/^#/, "")} instead
+                        </Button>
+                    </div>
+                )}
 
                 {activeChips.length > 0 && (
                     <div className="flex flex-wrap items-center gap-2">
@@ -714,11 +793,25 @@ export function PullRequestsPageClient() {
                     <div className="min-h-0 flex-1 overflow-y-auto">
                         <AwaitingList teamId={teamId} />
                     </div>
-                ) : error ? (
+                ) : error && !groupedPullRequests.length ? (
+                    // Only when there is nothing to show. React Query marks the
+                    // whole query `error` when ANY page fails, so testing
+                    // `error` alone threw away every row already on screen the
+                    // first time a later page failed — and replaced them with a
+                    // dead end, since this branch also has no way to retry. With
+                    // rows loaded the table stays mounted and its own inline
+                    // recovery handles the failed page.
                     <div className="min-h-0 flex-1 overflow-y-auto py-12 text-center">
-                        <p className="text-sm text-red-600">
-                            Error loading pull requests. Please try again.
+                        <p className="text-text-secondary text-sm">
+                            Couldn&apos;t load pull requests.
                         </p>
+                        <Button
+                            size="sm"
+                            variant="helper"
+                            className="mt-3"
+                            onClick={() => void refetch()}>
+                            Try again
+                        </Button>
                     </div>
                 ) : (
                     <PrDataTable
@@ -727,6 +820,7 @@ export function PullRequestsPageClient() {
                         hasNextPage={hasNextPage}
                         isFetchingNextPage={isFetchingNextPage}
                         fetchNextPage={fetchNextPage}
+                        fetchNextPageFailed={isFetchNextPageError}
                         hasActiveFilters={activeChips.length > 0}
                         onClearFilters={clearAllFilters}
                     />

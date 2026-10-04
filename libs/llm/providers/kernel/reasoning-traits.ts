@@ -282,6 +282,24 @@ export function resolveCompatibleReasoningTraits(
         };
     }
 
+    // MiniMax M3: what production showed, and nothing more. On MiniMax's
+    // Anthropic endpoint a structured call with the `json` tool forced and
+    // `thinking: disabled` came back EMPTY every time (Langfuse 2026-09-29: 37
+    // of 37 Kody Rules shards for one org, zero tool calls), while the same
+    // shard asked for JSON in plain text answered correctly. So no forced tool
+    // for a structured call (the plan below becomes 'reroute-json'), and no
+    // `disabled` either — nothing shows M3 accepts it. `thinksByDefault` stays
+    // false: its answers carry <think> blocks, but no parameter is known that
+    // would be safe to send.
+    if (family === 'minimax' && /minimax[-_.]?m3/.test(m)) {
+        return {
+            thinksByDefault: false,
+            canDisableThinking: false,
+            supportsForcedToolChoice: true,
+            forcedToolChoiceRejectsThinking: true,
+        };
+    }
+
     // Unknown compatible upstream (a self-hosted Llama/vLLM, a generic proxy, any
     // id we don't recognize). Two DIFFERENT safe defaults, one per consumer:
     //   - `thinksByDefault: false` — we must NOT proactively FORCE a `thinking`

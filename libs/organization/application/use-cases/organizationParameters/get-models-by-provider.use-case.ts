@@ -164,24 +164,56 @@ export class GetModelsByProviderUseCase {
             organizationAndTeamData,
         );
 
-        // A just-typed connect-form key wins over the saved slot and env keys, so
-        // the picker lists the models THAT key can actually reach before it's saved.
-        const apiKey =
-            candidateKey ??
-            creds?.apiKey ??
-            (listing.apiKeyEnv ? process.env[listing.apiKeyEnv] : undefined);
-        const baseURL =
-            candidateBaseURL ??
-            creds?.baseURL ??
-            (listing.baseURLEnv
-                ? process.env[listing.baseURLEnv] || undefined
-                : undefined) ??
-            listing.defaultBaseURL;
         // Amazon Bedrock authenticates the list call with a bearer token + region
         // (never an apiKey). A just-typed candidate wins over the saved slot, same
         // precedence as apiKey above, so a fresh connect can list live too.
         const awsBearerToken = candidateAwsBearerToken ?? creds?.awsBearerToken;
         const awsRegion = candidateAwsRegion ?? creds?.awsRegion;
+        const envBaseURL = listing.baseURLEnv
+            ? process.env[listing.baseURLEnv] || undefined
+            : undefined;
+        const baseURL =
+            candidateBaseURL ??
+            creds?.baseURL ??
+            envBaseURL ??
+            listing.defaultBaseURL;
+
+        // A key only ever goes to the host it belongs to. The baseURL can come
+        // from the request or from an org-edited setting, so a key from anywhere
+        // else — the org's saved credential for another endpoint, or Kodus' own
+        // env key — is sent only when the listing call would land on that key's
+        // own host. A listing with a fixed URL (native OpenAI) always matches.
+        const listingOrigin = (base: string | undefined) => {
+            try {
+                return new URL(
+                    listing.url({
+                        apiKey: undefined,
+                        baseURL: base,
+                        awsBearerToken,
+                        awsRegion,
+                    }),
+                ).origin;
+            } catch {
+                return undefined;
+            }
+        };
+        const targetOrigin = listingOrigin(baseURL);
+        const goesToOwnHost = (keyBaseURL: string | undefined) =>
+            targetOrigin !== undefined &&
+            listingOrigin(keyBaseURL) === targetOrigin;
+
+        // A just-typed connect-form key wins over the saved slot and env keys, so
+        // the picker lists the models THAT key can actually reach before it's saved.
+        const apiKey =
+            candidateKey ??
+            (creds?.apiKey &&
+            goesToOwnHost(creds.baseURL ?? listing.defaultBaseURL)
+                ? creds.apiKey
+                : undefined) ??
+            (listing.apiKeyEnv &&
+            goesToOwnHost(envBaseURL ?? listing.defaultBaseURL)
+                ? process.env[listing.apiKeyEnv]
+                : undefined);
 
         // The stand-in when the live call can't run: the http listing's own
         // fallbackModels (e.g. Bedrock's curated profiles), if the listing declares

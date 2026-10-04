@@ -48,6 +48,7 @@ import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 import { ParametersEntity } from '@libs/organization/domain/parameters/entities/parameters.entity';
 import { KodyLearningStatus } from '@libs/organization/domain/parameters/types/configValue.type';
 import { Repositories } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositories.type';
@@ -162,6 +163,7 @@ export class GenerateKodyRulesUseCase {
         @Inject(forwardRef(() => CODE_BASE_CONFIG_SERVICE_TOKEN))
         private readonly codeBaseConfigService: ICodeBaseConfigService,
         private readonly permissionValidationService: PermissionValidationService,
+        private readonly telemetry: TelemetryService,
     ) {}
 
     /**
@@ -645,6 +647,14 @@ export class GenerateKodyRulesUseCase {
                         });
                     });
             }
+
+            void this.telemetry.kodyRulesImported({
+                organizationId,
+                teamId,
+                source: 'discovery',
+                ruleCount: createdRules.length,
+                repositoryCount: reposWithRules.size,
+            });
 
             return allRules.flat();
         } catch (error) {

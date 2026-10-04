@@ -1,5 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 
 import {
     CentralizedConfigPrService,
@@ -21,6 +21,11 @@ import {
     KodyRulesStatus,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import {
+    ITeamService,
+    TEAM_SERVICE_TOKEN,
+} from '@libs/organization/domain/team/contracts/team.service.contract';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 @Injectable()
 export class DeleteRuleInOrganizationByIdKodyRulesUseCase {
@@ -34,6 +39,11 @@ export class DeleteRuleInOrganizationByIdKodyRulesUseCase {
         private readonly centralizedConfigPrService: CentralizedConfigPrService,
 
         private readonly authorizationService: AuthorizationService,
+
+        private readonly telemetry: TelemetryService,
+
+        @Inject(TEAM_SERVICE_TOKEN)
+        private readonly teamService: ITeamService,
     ) {}
 
     async execute(
@@ -53,10 +63,33 @@ export class DeleteRuleInOrganizationByIdKodyRulesUseCase {
         try {
             const ru: any = requestUser;
             const organizationId =
-                actor?.organizationId || ru?.organization?.uuid;
+                ru?.organization?.uuid || actor?.organizationId;
             const teamId = actor?.teamId || ru?.team?.uuid || ru?.teamId;
 
-            const existingRule = await this.kodyRulesService.findById(ruleId);
+            if (!organizationId) {
+                throw new NotFoundException('Rule not found');
+            }
+
+            // A caller-supplied team (the web route takes it as a query param)
+            // feeds the centralized-config lookups below, so it must belong
+            // to the same organization as the rule being deleted.
+            if (actor?.teamId) {
+                const teamOrganizationId =
+                    await this.teamService.findOneOrganizationIdByTeamId(
+                        actor.teamId,
+                    );
+                if (teamOrganizationId !== organizationId) {
+                    throw new NotFoundException('Team not found');
+                }
+            }
+
+            const existingRule = await this.kodyRulesService.findById(
+                ruleId,
+                organizationId,
+            );
+            if (!existingRule) {
+                throw new NotFoundException('Rule not found');
+            }
 
             // The controller guard is type-level only — it cannot see which
             // repository the rule belongs to. Enforce repo scope here (same
@@ -168,7 +201,7 @@ export class DeleteRuleInOrganizationByIdKodyRulesUseCase {
                 }
             }
 
-            return await this.kodyRulesService.deleteRuleWithLogging(
+            const deleted = await this.kodyRulesService.deleteRuleWithLogging(
                 {
                     organizationId,
                 },
@@ -178,6 +211,17 @@ export class DeleteRuleInOrganizationByIdKodyRulesUseCase {
                     userEmail: actor?.userEmail || ru?.email,
                 },
             );
+
+            void this.telemetry.kodyRuleChanged({
+                organizationId,
+                teamId,
+                actorUserId: actor?.userId || ru?.uuid,
+                action: 'deleted',
+                origin: existingRule?.origin,
+                repositoryId: existingRule?.repositoryId,
+            });
+
+            return deleted;
         } catch (error) {
             this.logger.error({
                 message: 'Error deleting Kody Rule in organization by ID',
@@ -185,8 +229,8 @@ export class DeleteRuleInOrganizationByIdKodyRulesUseCase {
                 error: error,
                 metadata: {
                     organizationId:
-                        actor?.organizationId ||
-                        (requestUser as any)?.organization?.uuid,
+                        (requestUser as any)?.organization?.uuid ||
+                        actor?.organizationId,
                     ruleId,
                 },
             });

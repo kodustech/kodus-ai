@@ -79,6 +79,8 @@ async function main() {
     const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'eval-wiring-'));
     const finderOut = path.join(scratch, 'finder-recall-eval-fake.json');
     const traceDir = path.join(scratch, 'trace');
+    const reviewCasesFile = path.join(scratch, 'review-cases.json');
+    fs.writeFileSync(reviewCasesFile, JSON.stringify({ cases: require('./review-rounds/cases').cases }));
 
     const env = {
         ...process.env,
@@ -100,7 +102,10 @@ async function main() {
         { name: 'preflight', args: ['evals/engine-gate.js', '--profile=harness'] },
         { name: 'review-chain', args: ['evals/review-chain/run.js', '--gate'] },
         { name: 'shape-invariance', args: ['evals/review-chain/shape-invariance.js', '--gate'] },
+        { name: 'verifier-verdict', args: ['evals/verifier-verdict/run.js', '--gate'] },
         { name: 'dedup', args: ['evals/dedup/run.js', '--mock=identity', '--gate'] },
+        // The live dedup runner goes through LLM.run like the stage does.
+        { name: 'dedup-engine', model: true, args: ['evals/dedup/run.js', '--model=eval-fake'] },
         { name: 'severity', args: ['evals/severity/run.js', '--mock=heuristic', '--gate'] },
         { name: 'format', args: ['evals/format/run.js', '--mock=perfect', '--gate'] },
         {
@@ -117,6 +122,9 @@ async function main() {
         { name: 'kody-rules', model: true, args: ['evals/kody-rules/real-agent.js', '--dataset=github-cases', '--model=eval-fake', '--runs=1', '--limit=1'] },
         { name: 'anchoring', model: true, args: ['evals/anchoring/anchor-eval.js', '--model=eval-fake', '--limit=1'] },
         { name: 'pr-summary', model: true, args: ['evals/pr-summary/run.js', '--model=eval-fake', '--gate'] },
+        { name: 'reply-addressing', model: true, args: ['evals/reply-addressing/run.js', '--model=eval-fake', '--limit=2'] },
+        { name: 'review-rounds', model: true, args: ['evals/review-rounds/run.js', '--model=eval-fake', `--cases-file=${reviewCasesFile}`, '--case=R2,K1', '--reps=1', `--output=${path.join(scratch, 'review-rounds.json')}`] },
+        { name: 'review-lifecycle', model: true, args: ['evals/review-rounds/lifecycle.js', '--model=eval-fake', '--reps=1', '--wiring-smoke', `--output=${path.join(scratch, 'review-lifecycle.json')}`] },
     ];
 
     const results = [];

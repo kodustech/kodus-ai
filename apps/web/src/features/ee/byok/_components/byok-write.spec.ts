@@ -2,6 +2,7 @@ import type { BYOKConfig, BYOKConnectInput } from '../_types';
 import {
     buildByokBlob,
     credentialSettingsFromConfig,
+    findReusableCredential,
     modelFieldsFromConfig,
 } from './byok-write';
 
@@ -702,5 +703,74 @@ describe('buildByokBlob — keepCredential trim + managed boundaries', () => {
         });
         // m-1 got its fields replaced.
         expect(blob.models.find((m) => m.id === 'm-1')?.temperature).toBe(0.7);
+    });
+});
+
+describe("findReusableCredential — two gateways of one provider", () => {
+    const fireworks = {
+        id: "cred-fireworks",
+        provider: "openai_compatible",
+        apiKey: "cipher-fireworks",
+        settings: { baseURL: "https://api.fireworks.ai/inference/v1" },
+    };
+    const together = {
+        id: "cred-together",
+        provider: "openai_compatible",
+        apiKey: "cipher-together",
+        settings: { baseURL: "https://api.together.xyz/v1" },
+    };
+
+    it("does not reuse a credential that points at another endpoint", () => {
+        // The bug: Together AI and Fireworks are both `openai_compatible`, so
+        // matching on provider alone rewrote the first one's base URL and hung
+        // the new model off its credential — an org could hold only one.
+        expect(
+            findReusableCredential([fireworks], {
+                provider: "openai_compatible",
+                settings: { baseURL: "https://api.together.xyz/v1" },
+            }),
+        ).toBeUndefined();
+    });
+
+    it("reuses the credential for the same endpoint", () => {
+        expect(
+            findReusableCredential([fireworks, together], {
+                provider: "openai_compatible",
+                settings: { baseURL: "https://api.together.xyz/v1" },
+            }),
+        ).toBe(together);
+    });
+
+    it("treats a trailing slash and casing as the same upstream", () => {
+        expect(
+            findReusableCredential([together], {
+                provider: "openai_compatible",
+                settings: { baseURL: "https://API.Together.xyz/v1/" },
+            }),
+        ).toBe(together);
+    });
+
+    it("still reuses by provider when the endpoint is fixed", () => {
+        // A provider whose endpoint is not the org's sends no baseURL: one
+        // credential, many models, exactly as before.
+        const openai = { id: "cred-openai", provider: "openai", apiKey: "c" };
+        expect(
+            findReusableCredential([openai], { provider: "openai" }),
+        ).toBe(openai);
+    });
+
+    it("never reuses a managed credential", () => {
+        const managed = {
+            id: "cred-managed",
+            provider: "openai_compatible",
+            managed: true,
+            settings: { baseURL: "https://api.together.xyz/v1" },
+        };
+        expect(
+            findReusableCredential([managed], {
+                provider: "openai_compatible",
+                settings: { baseURL: "https://api.together.xyz/v1" },
+            }),
+        ).toBeUndefined();
     });
 });

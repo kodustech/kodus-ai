@@ -1,4 +1,5 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { extractDiffHunks } from './extract-diff-hunks';
 import { ConfigService } from '@nestjs/config';
 import { createAppAuth } from '@octokit/auth-app';
 import { INTEGRATION_REQUEST_TIMEOUT_MS } from '@libs/core/infrastructure/http/integration-timeouts';
@@ -78,7 +79,21 @@ import {
     GetIssueParams,
     ListIssuesParams,
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/issues.type';
+import {
+    CheckAnnotation,
+    CheckEvidence,
+    CheckEvidenceConclusion,
+    CheckEvidenceStatus,
+    CheckEvidenceSupport,
+    GetCheckEvidenceParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
+import {
+    isDeniedStatus,
+    RepositoryAccessDiagnosis,
+    summarizeProviderError,
+    UNKNOWN_REPOSITORY_ACCESS,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryAccessDiagnosis.type';
 import {
     CodeManagementConnectionStatus,
     ICodeManagementService,
@@ -154,6 +169,11 @@ export class GithubService
     private readonly TTL = 50 * 60 * 1000; // 50 minutes
 
     private readonly logger = createLogger(GithubService.name);
+
+    /** Caps on the extra annotation round trips a single review will make. */
+    private static readonly MAX_ANNOTATED_RUNS = 10;
+    private static readonly MAX_RAW_DIFF_CHARS = 8_000_000;
+    private static readonly MAX_ANNOTATIONS_PER_RUN = 50;
 
     private readonly enterpriseOctokit = Octokit.plugin(
         enterpriseServer313,
@@ -1434,7 +1454,7 @@ export class GithubService
                     this.suspendedAtUnsupportedByBaseUrl.set(baseUrl, true);
                     this.logger.warn({
                         message:
-                            "GraphQL schema has no User.suspendedAt (github.com) — treating all members as active and skipping future suspended-status batches for this API base URL",
+                            'GraphQL schema has no User.suspendedAt (github.com) — treating all members as active and skipping future suspended-status batches for this API base URL',
                         context: GithubService.name,
                         metadata: { baseUrl },
                     });
@@ -2696,9 +2716,338 @@ export class GithubService
         return this.instanceOctokit(organizationAndTeamData);
     }
 
-    async listIssues(
-        params: ListIssuesParams,
-    ): Promise<CodeManagementIssue[]> {
+    async getCheckEvidence(
+        params: GetCheckEvidenceParams,
+    ): Promise<CheckEvidence[]> {
+        const { organizationAndTeamData, repository, commitSha } = params;
+
+        const octokit = await this.getAuthenticatedOctokit(
+            organizationAndTeamData,
+        );
+
+        // Check runs and commit statuses are separate surfaces — modern
+        // integrations report through the former, older ones (and many
+        // self-hosted CIs) still only post the latter. Fetch both; a failure
+        // on one must not discard the other.
+        const [runs, statuses] = await Promise.allSettled([
+            octokit.rest.checks.listForRef({
+                owner: repository.owner,
+                repo: repository.name,
+                ref: commitSha,
+                per_page: 100,
+            }),
+            octokit.rest.repos.listCommitStatusesForRef({
+                owner: repository.owner,
+                repo: repository.name,
+                ref: commitSha,
+                per_page: 100,
+            }),
+        ]);
+
+        const evidence: CheckEvidence[] = [];
+        const needingAnnotations: Array<{
+            evidence: CheckEvidence;
+            runId: number;
+        }> = [];
+
+        if (runs.status === 'fulfilled') {
+            for (const run of runs.value.data?.check_runs ?? []) {
+                const mapped = this.mapGithubCheckRun(run);
+
+                if (params.includeAnnotations) {
+                    // The run reports its own annotation count, so a run with
+                    // none costs no extra round trip.
+                    if ((run.output?.annotations_count ?? 0) > 0) {
+                        needingAnnotations.push({
+                            evidence: mapped,
+                            runId: run.id,
+                        });
+                    } else {
+                        mapped.annotations = [];
+                    }
+                }
+
+                evidence.push(mapped);
+            }
+        } else {
+            // Names the consequence, because the review continues with
+            // whatever is readable. A token without Checks:read — a PAT rather
+            // than the App installation — sees commit statuses only, and since
+            // only FAILING checks become evidence, a repository whose CI runs
+            // entirely on GitHub Actions then contributes nothing at all
+            // rather than obviously nothing.
+            this.logger.warn({
+                message:
+                    'Failed to list GitHub check runs; CI evidence is limited ' +
+                    'to commit statuses for this commit. Observed with a ' +
+                    'fine-grained token, which cannot reach this endpoint; a ' +
+                    'GitHub App installation can, as can a classic token with ' +
+                    'the repo scope.',
+                context: GithubService.name,
+                error: runs.reason,
+                metadata: {
+                    repository: repository.name,
+                    commitSha,
+                    evidenceFrom: 'commit-statuses-only',
+                },
+            });
+        }
+
+        if (statuses.status === 'fulfilled') {
+            for (const status of statuses.value.data ?? []) {
+                evidence.push(this.mapGithubCommitStatus(status));
+            }
+        } else {
+            this.logger.warn({
+                message: 'Failed to list GitHub commit statuses',
+                context: GithubService.name,
+                error: statuses.reason,
+                metadata: { repository: repository.name, commitSha },
+            });
+        }
+
+        if (needingAnnotations.length > 0) {
+            await this.attachGithubAnnotations(
+                octokit,
+                repository,
+                needingAnnotations,
+            );
+        }
+
+        return evidence;
+    }
+
+    /**
+     * The hunks GitHub omitted from the file listing.
+     *
+     * `pulls.listFiles` (and `compare`, which shares the limit) drop `patch`
+     * once a single file's diff grows past their size cap — routinely true of
+     * a lockfile bump, which is precisely the change a dependency scan cares
+     * about. The raw diff media type is not capped the same way, so one
+     * request recovers every missing hunk at once.
+     */
+    async getFilePatches(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id?: string; name: string; owner?: string };
+        prNumber: number;
+        paths: string[];
+    }): Promise<Array<{ path: string; patch: string }>> {
+        const { organizationAndTeamData, repository, prNumber, paths } = params;
+
+        if (!paths.length) {
+            return [];
+        }
+
+        try {
+            const octokit = await this.getAuthenticatedOctokit(
+                organizationAndTeamData,
+            );
+
+            const owner =
+                repository.owner ??
+                (await this.getGithubAuthDetails(organizationAndTeamData))?.org;
+
+            const { data } = await octokit.rest.pulls.get({
+                owner,
+                repo: repository.name,
+                pull_number: prNumber,
+                mediaType: { format: 'diff' },
+            });
+
+            // A whole-PR diff is large by nature; refuse one big enough to be
+            // a memory problem rather than trading a missing hunk for an OOM.
+            const diff = String(data ?? '');
+            if (diff.length > GithubService.MAX_RAW_DIFF_CHARS) {
+                this.logger.warn({
+                    message:
+                        'Raw pull request diff is too large to parse for the ' +
+                        'missing hunks; those files keep no patch.',
+                    context: GithubService.name,
+                    metadata: {
+                        prNumber,
+                        repository: repository.name,
+                        diffChars: diff.length,
+                    },
+                });
+                return [];
+            }
+
+            return extractDiffHunks(diff, paths);
+        } catch (error) {
+            this.logger.warn({
+                message: 'Failed to read the raw pull request diff',
+                context: GithubService.name,
+                error,
+                metadata: { prNumber, repository: repository.name },
+            });
+            return [];
+        }
+    }
+
+    async supportsCheckEvidence(
+        _organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<CheckEvidenceSupport> {
+        return { statuses: true, annotations: true };
+    }
+
+    private async attachGithubAnnotations(
+        octokit: Awaited<ReturnType<GithubService['getAuthenticatedOctokit']>>,
+        repository: { owner: string; name: string },
+        targets: Array<{ evidence: CheckEvidence; runId: number }>,
+    ): Promise<void> {
+        const capped = targets.slice(0, GithubService.MAX_ANNOTATED_RUNS);
+
+        const results = await Promise.allSettled(
+            capped.map(({ runId }) =>
+                octokit.rest.checks.listAnnotations({
+                    owner: repository.owner,
+                    repo: repository.name,
+                    check_run_id: runId,
+                    per_page: GithubService.MAX_ANNOTATIONS_PER_RUN,
+                }),
+            ),
+        );
+
+        results.forEach((result, index) => {
+            if (result.status !== 'fulfilled') {
+                // Leave `annotations` unset: the caller must be able to tell a
+                // failed fetch from a run that genuinely reported nothing.
+                this.logger.warn({
+                    message: 'Failed to list GitHub check annotations',
+                    context: GithubService.name,
+                    error: result.reason,
+                    metadata: { checkRunId: capped[index].runId },
+                });
+                return;
+            }
+
+            capped[index].evidence.annotations = (result.value.data ?? [])
+                .slice(0, GithubService.MAX_ANNOTATIONS_PER_RUN)
+                .map((annotation) => this.mapGithubAnnotation(annotation));
+        });
+    }
+
+    private mapGithubAnnotation(annotation: {
+        path?: string | null;
+        start_line?: number | null;
+        end_line?: number | null;
+        annotation_level?: string | null;
+        message?: string | null;
+        title?: string | null;
+    }): CheckAnnotation {
+        const startLine = annotation.start_line ?? 0;
+
+        const mapped: CheckAnnotation = {
+            path: annotation.path ?? '',
+            startLine,
+            endLine: annotation.end_line ?? startLine,
+            level: this.mapGithubAnnotationLevel(annotation.annotation_level),
+            message: annotation.message ?? '',
+        };
+
+        if (annotation.title) {
+            mapped.title = annotation.title;
+        }
+
+        return mapped;
+    }
+
+    private mapGithubAnnotationLevel(
+        level: string | null | undefined,
+    ): CheckAnnotation['level'] {
+        if (level === 'notice' || level === 'warning' || level === 'failure') {
+            return level;
+        }
+        return 'warning';
+    }
+
+    private mapGithubCheckRun(run: {
+        id: number;
+        name: string;
+        status: string | null;
+        conclusion: string | null;
+        html_url?: string | null;
+        completed_at?: string | null;
+        app?: { slug?: string | null } | null;
+        output?: { annotations_count?: number | null } | null;
+    }): CheckEvidence {
+        const evidence: CheckEvidence = {
+            id: String(run.id),
+            name: run.name,
+            status: this.mapGithubCheckStatus(run.status),
+            conclusion: this.mapGithubCheckConclusion(run.conclusion),
+            url: run.html_url ?? null,
+            completedAt: run.completed_at ?? null,
+            platform: PlatformType.GITHUB,
+        };
+
+        if (run.app?.slug) {
+            evidence.reporter = run.app.slug;
+        }
+
+        return evidence;
+    }
+
+    private mapGithubCheckStatus(status: string | null): CheckEvidenceStatus {
+        if (status === 'completed') {
+            return 'completed';
+        }
+        // GitHub has grown extra pre-run states (waiting/requested/pending);
+        // they all mean "no result yet", same as queued.
+        if (
+            status === 'queued' ||
+            status === 'waiting' ||
+            status === 'requested' ||
+            status === 'pending'
+        ) {
+            return 'queued';
+        }
+        return 'in_progress';
+    }
+
+    private mapGithubCheckConclusion(
+        conclusion: string | null,
+    ): CheckEvidenceConclusion | null {
+        const known: CheckEvidenceConclusion[] = [
+            'success',
+            'failure',
+            'neutral',
+            'cancelled',
+            'timed_out',
+            'skipped',
+            'stale',
+            'action_required',
+        ];
+        return known.find((value) => value === conclusion) ?? null;
+    }
+
+    private mapGithubCommitStatus(status: {
+        id: number;
+        context: string;
+        state: string;
+        target_url?: string | null;
+        updated_at?: string | null;
+    }): CheckEvidence {
+        // Commit statuses have no queued/in-progress split: `pending` covers
+        // both, and every other state is terminal.
+        const pending = status.state === 'pending';
+
+        return {
+            id: String(status.id),
+            name: status.context,
+            status: pending ? 'in_progress' : 'completed',
+            conclusion: pending
+                ? null
+                : status.state === 'success'
+                  ? 'success'
+                  : 'failure',
+            url: status.target_url ?? null,
+            completedAt: pending ? null : (status.updated_at ?? null),
+            platform: PlatformType.GITHUB,
+        };
+    }
+
+    async listIssues(params: ListIssuesParams): Promise<CodeManagementIssue[]> {
         const { organizationAndTeamData, repository, filters = {} } = params;
 
         const page = Math.max(1, filters.page ?? 1);
@@ -3225,7 +3574,10 @@ export class GithubService
                 // Integrations created before `accountType` was recorded have
                 // no way to tell an org from a personal account, and personal
                 // accounts 404 here. Anything else is a real failure.
-                if (githubAuthDetail.accountType || this.statusOf(err) !== 404) {
+                if (
+                    githubAuthDetail.accountType ||
+                    this.statusOf(err) !== 404
+                ) {
                     throw err;
                 }
 
@@ -4738,6 +5090,11 @@ This is an experimental feature that generates committable changes. Review the d
                     });
                 }
 
+                // Same branch: the base read would repeat the identical call.
+                if (pullRequest.base?.ref === pullRequest.head?.ref) {
+                    throw error;
+                }
+
                 // If it fails, try to fetch from the base branch
                 const lines = (await octokit.repos.getContent({
                     owner: githubAuthDetail?.org,
@@ -4751,7 +5108,16 @@ This is an experimental feature that generates committable changes. Review the d
         } catch (error) {
             const status =
                 (error as any)?.status ?? (error as any)?.response?.status;
-            if (!(params.suppressNotFoundLogs && status === 404)) {
+            if (status === 404) {
+                // Missing on both refs: a normal answer, not a failure.
+                if (!params.suppressNotFoundLogs) {
+                    this.logger.warn({
+                        message: 'File not found on PR head or base branch',
+                        context: GithubService.name,
+                        metadata: { ...params },
+                    });
+                }
+            } else {
                 this.logger.error({
                     message: 'Error getting file content to branch base',
                     context: GithubService.name,
@@ -6753,7 +7119,9 @@ This is an experimental feature that generates committable changes. Review the d
 
             // Shared across both listings: the two endpoints feed one sample,
             // so they must not each spend the full budget.
-            const collectPage = <T extends { created_at: string; body?: string }>(
+            const collectPage = <
+                T extends { created_at: string; body?: string },
+            >(
                 page: T[],
                 done: () => void,
             ): T[] => {
@@ -7048,6 +7416,125 @@ This is an experimental feature that generates committable changes. Review the d
 
             return false;
         }
+    }
+
+    async diagnoseRepositoryAccess(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; fullName?: string };
+    }): Promise<RepositoryAccessDiagnosis> {
+        const result: RepositoryAccessDiagnosis = {
+            ...UNKNOWN_REPOSITORY_ACCESS,
+        };
+
+        try {
+            const githubAuthDetail = await this.getGithubAuthDetails(
+                params.organizationAndTeamData,
+            );
+            const octokit = await this.instanceOctokit(
+                params.organizationAndTeamData,
+                githubAuthDetail,
+            );
+            // The repo's own owner, not the integration account's:
+            // getCorrectOwner resolves a personal PAT to the token user's
+            // login, which 404s on every repo the account only collaborates
+            // on (same reason as createPullRequestWebhook). That 404 would
+            // read as "cannot read" and a false NOT RUNNING.
+            const owner =
+                params.repository.fullName?.split('/')[0] ||
+                (await this.getCorrectOwner(githubAuthDetail, octokit));
+            const repo = params.repository.name;
+            const isApp = githubAuthDetail.authMode === AuthMode.OAUTH;
+
+            try {
+                await octokit.rest.repos.listCommits({
+                    owner,
+                    repo,
+                    per_page: 1,
+                });
+                result.read = 'ok';
+            } catch (error) {
+                result.read = isDeniedStatus(error) ? 'denied' : 'unknown';
+                result.error = summarizeProviderError(error);
+            }
+
+            try {
+                const { data, headers } = await octokit.rest.repos.get({
+                    owner,
+                    repo,
+                });
+                // Anyone who can read a repository can comment on its PRs,
+                // so the role says nothing; the token's scopes do. Only a
+                // classic PAT reports them (`x-oauth-scopes`). Fine-grained
+                // PATs and App installs stay `unknown` rather than guessed.
+                const scopesHeader = headers?.['x-oauth-scopes'];
+                if (typeof scopesHeader === 'string') {
+                    const scopes = scopesHeader
+                        .split(',')
+                        .map((scope) => scope.trim());
+                    result.write =
+                        scopes.includes('repo') ||
+                        (scopes.includes('public_repo') && !data?.private)
+                            ? 'ok'
+                            : 'denied';
+                }
+            } catch (error) {
+                result.error ??= summarizeProviderError(error);
+            }
+
+            // An App install's token carries the permissions the org granted.
+            if (isApp && 'installationId' in githubAuthDetail) {
+                try {
+                    const installation =
+                        await this.getInstallationAuthentication(
+                            githubAuthDetail.installationId,
+                        );
+                    const pullRequests =
+                        installation?.permissions?.pull_requests;
+                    if (pullRequests === 'write') {
+                        result.write = 'ok';
+                    } else if (pullRequests) {
+                        result.write = 'denied';
+                    }
+                } catch (error) {
+                    result.error ??= summarizeProviderError(error);
+                }
+            }
+
+            const webhookUrl = this.configService.get<string>(
+                'API_GITHUB_CODE_MANAGEMENT_WEBHOOK',
+            );
+            if (isApp) {
+                result.hook = 'app-level';
+            } else if (webhookUrl) {
+                // Unset URL: nothing to match, so the hook stays unknown
+                // (the doctor reports the missing URL itself).
+                try {
+                    const { data: hooks } = await octokit.repos.listWebhooks({
+                        owner,
+                        repo,
+                    });
+                    result.hook = hooks.some(
+                        (hook) =>
+                            hook?.config?.url === webhookUrl && hook?.active,
+                    )
+                        ? 'present'
+                        : 'missing';
+                } catch (error) {
+                    // Listing hooks needs admin on the repo; without it we
+                    // cannot tell whether the hook exists.
+                    result.error ??= summarizeProviderError(error);
+                }
+            }
+        } catch (error) {
+            // A 401/403/404 before any repository call (resolving the owner,
+            // building the client) still means the token cannot read.
+            if (isDeniedStatus(error)) {
+                result.read = 'denied';
+            }
+            result.error = summarizeProviderError(error);
+        }
+
+        return result;
     }
 
     async deleteWebhook(params: {

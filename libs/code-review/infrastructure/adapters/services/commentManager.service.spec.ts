@@ -391,6 +391,79 @@ describe('CommentManagerService.generateSummaryPR', () => {
             expect(getClassification(thrown)).toBeDefined();
         });
 
+        // Production 2026-09-28: a gateway with a smaller window than the model
+        // name suggests rejected the single summary call ("Your input exceeds
+        // the context window of this model"), and the retry re-sent the same
+        // oversized prompt. With no maxInputTokens configured nothing split it.
+        describe('context overflow on the single call', () => {
+            const overflow = new Error(
+                'Your input exceeds the context window of this model. Please adjust your input and try again.',
+            );
+            const bigFiles = ['a.ts', 'b.ts', 'c.ts'].map((filename) => ({
+                filename,
+                patch: `+ ${'x'.repeat(4000)}`,
+                status: 'modified' as any,
+            }));
+
+            it('retries split into chunks and consolidates', async () => {
+                codeManagementService.getPullRequestByNumber.mockResolvedValue({
+                    body: '',
+                });
+                (tracedGenerateText as jest.Mock)
+                    .mockRejectedValueOnce(overflow)
+                    .mockImplementation(async ({ prompt }: { prompt?: string }) => {
+                        if (prompt) capturedPrompts.push({ prompt, role: 'user' });
+                        return { text: NEW_SUMMARY_TEXT };
+                    });
+
+                const result = await service.generateSummaryPR(
+                    stubPR,
+                    stubRepository,
+                    bigFiles,
+                    stubOrg,
+                    'en-US',
+                    summaryConfig,
+                );
+
+                expect(result).toContain(NEW_SUMMARY_TEXT);
+                const chunkPrompts = capturedPrompts.filter((p) =>
+                    /This is chunk \d+ of \d+/.test(p.prompt),
+                );
+                expect(chunkPrompts.length).toBeGreaterThanOrEqual(2);
+                // Every file still reaches the model, in some chunk.
+                for (const f of bigFiles) {
+                    expect(
+                        chunkPrompts.some((p) => p.prompt.includes(f.filename)),
+                    ).toBe(true);
+                }
+            });
+
+            it('does not split on an error that is not an overflow', async () => {
+                codeManagementService.getPullRequestByNumber.mockResolvedValue({
+                    body: '',
+                });
+                (tracedGenerateText as jest.Mock)
+                    .mockRejectedValueOnce(new Error('Service Unavailable'))
+                    .mockImplementation(async ({ prompt }: { prompt?: string }) => {
+                        if (prompt) capturedPrompts.push({ prompt, role: 'user' });
+                        return { text: NEW_SUMMARY_TEXT };
+                    });
+
+                await service.generateSummaryPR(
+                    stubPR,
+                    stubRepository,
+                    bigFiles,
+                    stubOrg,
+                    'en-US',
+                    summaryConfig,
+                );
+
+                expect(
+                    capturedPrompts.some((p) => /This is chunk/.test(p.prompt)),
+                ).toBe(false);
+            });
+        });
+
         it('still returns null for the deliberate skip (summary disabled)', async () => {
             const result = await service.generateSummaryPR(
                 stubPR,
@@ -663,6 +736,29 @@ describe('CommentManagerService — pure helpers', () => {
             expect(out).toContain('- Repository per aggregate');
             expect(out).not.toContain('{{count}}');
             expect(out).not.toContain('{{ruleTitles}}');
+        });
+
+        it('renders none of the admin-facing losses on the PR (#2066)', () => {
+            const adminOnly = [
+                'SANDBOX_UNAVAILABLE',
+                'CALLGRAPH_FAILED',
+                'SUGGESTIONS_DROPPED_PATH_MISMATCH',
+                'KODY_RULES_PARTIAL',
+                'PROVIDER_FALLBACK',
+            ].map((kind) => ({
+                kind: kind as any,
+                reason: 'sandbox_unavailable' as const,
+                contextWindowTokens: 0,
+                modelName: 'gpt-4.1',
+                detail: 'admin only',
+                ruleTitles: ['Should not leak'],
+            }));
+            expect(
+                svc().resolveSkippedRulesNotice(
+                    adminOnly,
+                    LanguageValue.ENGLISH,
+                ),
+            ).toBeUndefined();
         });
 
         it('falls back to en-US copy for a language without the key', () => {
@@ -1763,5 +1859,66 @@ describe('LLMResponseProcessor.processResponse — raw-string parse rows', () =>
         const raw = "{codeSuggestions:[{id:'a',},],}";
         const out = proc().processResponse(org, 1, raw);
         expect(out?.codeSuggestions?.[0]?.id).toBe('a');
+    });
+});
+
+// A single-line suggestion has no start_line, so the old attempt 3
+// (`line = start_line`) sent a comment with no line at all and GitHub answered
+// "No subschema in oneOf matched … line, path weren't supplied" (30/day).
+describe('CommentManagerService.createReviewCommentWithRetry — line mismatch', () => {
+    const lineMismatch = () =>
+        Object.assign(new Error('line could not be resolved'), {
+            errorType: 'failed_lines_mismatch',
+        });
+
+    const retryWith = (lineComment: any) => {
+        const createReviewComment = jest.fn().mockRejectedValue(lineMismatch());
+        const svc = new CommentManagerService(
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            { createReviewComment } as any,
+        ) as any;
+        const result = svc.createReviewCommentWithRetry({
+            organizationAndTeamData: { organizationId: 'o', teamId: 't' },
+            repository: { name: 'r', id: '1', language: 'ts' },
+            commit: {},
+            prNumber: 1,
+            lineComment,
+            language: 'en-US',
+        });
+        return { result, createReviewComment };
+    };
+
+    it('never sends a comment without a line for a single-line suggestion', async () => {
+        const { result, createReviewComment } = retryWith({
+            path: 'a.ts',
+            start_line: undefined,
+            line: 10,
+            side: 'RIGHT',
+            body: {},
+        });
+
+        await expect(result).rejects.toMatchObject({
+            errorType: 'failed_lines_mismatch',
+        });
+        for (const [args] of createReviewComment.mock.calls) {
+            expect(args.lineComment.line).toBe(10);
+        }
+    });
+
+    it('still tries the start of a multi-line range as the last attempt', async () => {
+        const { result, createReviewComment } = retryWith({
+            path: 'a.ts',
+            start_line: 5,
+            line: 10,
+            side: 'RIGHT',
+            body: {},
+        });
+
+        await expect(result).rejects.toBeDefined();
+        expect(createReviewComment).toHaveBeenCalledTimes(3);
+        expect(createReviewComment.mock.calls[2][0].lineComment.line).toBe(5);
     });
 });

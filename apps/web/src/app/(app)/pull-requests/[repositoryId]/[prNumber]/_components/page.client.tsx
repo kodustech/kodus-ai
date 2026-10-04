@@ -20,6 +20,12 @@ import { ErrorBoundary, type FallbackProps } from "react-error-boundary";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 
 import { DiffViewer } from "./diff-viewer";
+import {
+    effectiveReviewStatus,
+    emptyFindingsLabel,
+    shouldLoadMoreRuns,
+    type ReviewRunStatus,
+} from "./review-run-status";
 import { ReviewStateProvider, useReviewStore } from "./review-store";
 import { adaptForTryDiffViewer, buildHeaderPrInfo } from "./try-port/adapt";
 import { CommitsList } from "./try-port/CommitsList";
@@ -59,23 +65,37 @@ function ReviewProgressBar({
     total,
     bugs,
     flags,
+    reviewStatus,
 }: {
     viewed: number;
     total: number;
     bugs: number;
     flags: number;
+    reviewStatus?: ReviewRunStatus;
 }) {
     const pct = total > 0 ? Math.round((100 * viewed) / total) : 0;
     // Mirror the rail buckets exactly so the two summaries always agree:
     // "N potential bugs · M flags · X/Y viewed".
     const clean = bugs + flags === 0;
+    const empty = emptyFindingsLabel(reviewStatus);
+    const emptyColor = {
+        clean: "var(--green)",
+        danger: "var(--color-danger)",
+        warning: "var(--color-warning)",
+        muted: "var(--text-dim)",
+    }[empty.tone];
     return (
         <div className="mt-2 mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-2)]/70 px-4 py-2.5">
             <div className="flex items-center gap-2.5 text-sm">
                 {clean ? (
-                    <span className="inline-flex items-center gap-1.5 font-medium text-[var(--green)]">
-                        <span className="size-1.5 rounded-full bg-[var(--green)]" />
-                        Nothing to flag.
+                    <span
+                        className="inline-flex items-center gap-1.5 font-medium"
+                        style={{ color: emptyColor }}>
+                        <span
+                            className="size-1.5 rounded-full"
+                            style={{ backgroundColor: emptyColor }}
+                        />
+                        {empty.text}
                     </span>
                 ) : (
                     <>
@@ -121,6 +141,16 @@ function ReviewProgressBar({
     );
 }
 
+// Newest first, the same order the PR list uses for a PR's runs.
+const runTime = (run: PullRequestExecution) =>
+    Date.parse(
+        run.automationExecution?.createdAt ||
+            run.automationExecution?.updatedAt ||
+            run.updatedAt ||
+            run.createdAt ||
+            "",
+    ) || 0;
+
 interface ReviewPageClientProps {
     repositoryId: string;
     prNumber: number;
@@ -139,19 +169,63 @@ export function ReviewPageClient({
     } = usePullRequestSuggestions(repositoryId, prNumber);
 
     // Get PR metadata from executions
-    const { items: executions } = useInfinitePullRequestExecutions(
+    const {
+        items: executions,
+        data: runPages,
+        hasNextPage,
+        fetchNextPage,
+        isFetching,
+        isError: lastFetchFailed,
+    } = useInfinitePullRequestExecutions(
         {
             teamId,
             repositoryId,
             pullRequestNumber: prNumber.toString(),
         },
-        { pageSize: 1 },
+        // Every run of the PR, not just the latest: the empty state needs to
+        // know whether any of them finished clean (see effectiveReviewStatus).
+        { pageSize: 20 },
     );
 
-    const prExecution = useMemo(
-        () => executions.find((e) => e.prNumber === prNumber),
+    const prRuns = useMemo(
+        () =>
+            executions
+                .filter((e) => e.prNumber === prNumber)
+                .sort((a, b) => runTime(b) - runTime(a)),
         [executions, prNumber],
     );
+    const prExecution = prRuns[0];
+    const reviewStatus = effectiveReviewStatus(
+        prRuns.map((run) => run.automationExecution?.status),
+        hasNextPage,
+    );
+
+    // A clean run can sit past the first page on a PR with many pushes; page
+    // on just until one shows up (see shouldLoadMoreRuns).
+    const hasCleanRun = prRuns.some(
+        (run) => run.automationExecution?.status === "success",
+    );
+    const pagesLoaded = runPages?.pages.length ?? 0;
+    useEffect(() => {
+        if (
+            shouldLoadMoreRuns({
+                hasNextPage,
+                hasCleanRun,
+                isFetching,
+                lastFetchFailed,
+                pagesLoaded,
+            })
+        ) {
+            fetchNextPage();
+        }
+    }, [
+        hasNextPage,
+        hasCleanRun,
+        isFetching,
+        lastFetchFailed,
+        pagesLoaded,
+        fetchNextPage,
+    ]);
 
     // Extract repo name from suggestions or execution data
     const repoFullName =
@@ -220,6 +294,7 @@ export function ReviewPageClient({
             patchFilenames={patchFilenames}>
             <ReviewLayout
                 execution={prExecution}
+                reviewStatus={reviewStatus}
                 fileSuggestions={fileSuggestions}
                 prLevelSuggestions={prLevelSuggestions}
                 patchFiles={patchFiles}
@@ -240,7 +315,7 @@ export function ReviewPageClient({
 // Mirrors ReviewLayout's shell (max-w-[1600px] + file-tree / diff / sidebar
 // grid) so the page paints its structure immediately instead of a centered
 // spinner while suggestions load.
-function ReviewPageSkeleton() {
+export function ReviewPageSkeleton() {
     return (
         <div className="kodus-scroll h-full overflow-y-auto bg-[var(--bg)]">
             <section className="px-6 py-6">
@@ -269,6 +344,7 @@ function ReviewPageSkeleton() {
 
 function ReviewLayout({
     execution,
+    reviewStatus,
     fileSuggestions,
     prLevelSuggestions,
     patchFiles,
@@ -280,6 +356,7 @@ function ReviewLayout({
     repositoryName,
 }: {
     execution?: PullRequestExecution;
+    reviewStatus?: ReviewRunStatus;
     fileSuggestions: any[];
     prLevelSuggestions: any[];
     patchFiles: PullRequestFile[];
@@ -364,9 +441,7 @@ function ReviewLayout({
     const bugCount = useMemo(
         () =>
             treeIssues.filter((i) =>
-                ["critical", "high"].includes(
-                    (i.severity ?? "").toLowerCase(),
-                ),
+                ["critical", "high"].includes((i.severity ?? "").toLowerCase()),
             ).length,
         [treeIssues],
     );
@@ -553,6 +628,7 @@ function ReviewLayout({
                                     total={treeFiles.length}
                                     bugs={bugCount}
                                     flags={flagCount}
+                                    reviewStatus={reviewStatus}
                                 />
                             )}
 
@@ -633,7 +709,7 @@ function FileTreeRail({
                 </svg>
             </span>
             <span
-                className="font-mono text-3xs tracking-[0.16em] text-[var(--text-dim)] uppercase transition-colors group-hover:text-[var(--text-muted)]"
+                className="text-3xs font-mono tracking-[0.16em] text-[var(--text-dim)] uppercase transition-colors group-hover:text-[var(--text-muted)]"
                 style={{
                     writingMode: "vertical-rl",
                     transform: "rotate(180deg)",

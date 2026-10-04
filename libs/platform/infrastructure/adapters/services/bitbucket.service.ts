@@ -18,6 +18,7 @@ import {
 } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
 import { IntegrationConfigEntity } from '@libs/integrations/domain/integrationConfigs/entities/integration-config.entity';
 import { ReactionsInComments } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
+import { RepositoryAccessDiagnosis } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryAccessDiagnosis.type';
 import {
     CodeManagementIssue,
     GetIssueParams,
@@ -437,6 +438,18 @@ export class BitbucketService implements Omit<
         return impl.getPullRequestByNumber(params);
     }
 
+    async getCheckEvidence(params: any) {
+        const impl = await this.getImplementation(
+            params.organizationAndTeamData,
+        );
+        // Data Center has no implementation yet; the facade treats a missing
+        // method as "no evidence", so answer that here instead of throwing.
+        if (typeof impl.getCheckEvidence !== 'function') {
+            return [];
+        }
+        return impl.getCheckEvidence(params);
+    }
+
     async getCommitsForPullRequestForCodeReview(params: any) {
         const impl = await this.getImplementation(
             params.organizationAndTeamData,
@@ -660,6 +673,16 @@ export class BitbucketService implements Omit<
             params.organizationAndTeamData,
         );
         return impl.isWebhookActive(params);
+    }
+
+    async diagnoseRepositoryAccess(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; fullName?: string };
+    }): Promise<RepositoryAccessDiagnosis> {
+        const impl = await this.getImplementation(
+            params.organizationAndTeamData,
+        );
+        return impl.diagnoseRepositoryAccess(params);
     }
 
     async deleteWebhook(params: any) {

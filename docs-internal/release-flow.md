@@ -25,7 +25,7 @@ For visual layout, see `docs/diagrams/ci-flow-files.excalidraw`.
 
 | Event | Workflow(s) | Notes |
 |---|---|---|
-| `pull_request` opened/synchronize | `pr-title-check`, `tests`, `env-drift-check`, `permissions-matrix-check`, `feature-gate-check`, `preview-deploy` | All run in parallel. Kody also reviews the diff (3 global rules). |
+| `pull_request` opened/synchronize | `pr-title-check`, `tests`, `env-drift-check`, `permissions-matrix-check`, `feature-gate-check`, `preview-deploy` | All run in parallel. Kody also reviews the diff (3 global rules). `preview-deploy` decides per PR which shapes to bring up (cloud, self-hosted, both or none — `scripts/preview/decide-profiles.cjs`) and also re-runs on `preview:*` label changes. |
 | `push` to `main` matching `apps/{api,worker,webhooks}/**` or `libs/**` or `packages/**` | `qa-build-push-and-pr-green` → `e2e-cloud` (workflow_call, `fast.yml`) | Backend deploy + cloud matrix on the new image |
 | `push` to `main` matching `apps/web/**` or `libs/feature-gate/**` | `web-qa-deploy` | Web deploy to QA ECS |
 | `push` to `main` matching `apps/mcp-manager/**` or relevant `docker/`/`tsconfig*` | `qa-mcp-manager-deploy` | MCP deploy via SSH start-app.sh |

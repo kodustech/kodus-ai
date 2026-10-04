@@ -286,7 +286,7 @@ const TaskModelControl = ({
                         variant="helper"
                         size="xs"
                         role="combobox"
-                        className="min-w-64 justify-between gap-2"
+                        className="w-full justify-between gap-2 sm:w-auto sm:min-w-64"
                         rightIcon={
                             <ChevronsUpDownIcon className="-mr-1 opacity-50" />
                         }>

@@ -1,0 +1,144 @@
+{
+    "__doc": [
+        "Production delivery mix for the verify gate — what this eval protects.",
+        "Counts only, no payloads: kodus-ai is public and the corpus is customer source,",
+        "so capture.js writes the corpus outside the repo and only these aggregates land here.",
+        "Regenerate: node evals/verifier-verdict/capture.js --days 10 --limit 200 --write-observed",
+        "Every count is a FLOOR — trace fetches that failed are skipped, and the sample is newest-first."
+    ],
+    "capturedAt": "2026-09-21T18:00:52.865Z",
+    "traces": 200,
+    "verifierRuns": 220,
+    "delivery": {
+        "tool": 96,
+        "text": 57,
+        "none": 67
+    },
+    "refutationsDeliveredAsText": 1,
+    "byModel": {
+        "accounts/fireworks/models/deepseek-v4-flash-0731": {
+            "tool": 24,
+            "text": 0,
+            "text?": 1,
+            "none": 32,
+            "refutations": 0
+        },
+        "gpt-5.6-luna": {
+            "tool": 8,
+            "text": 5,
+            "text?": 0,
+            "none": 9,
+            "refutations": 0
+        },
+        "kimi-k2.7-code": {
+            "tool": 1,
+            "text": 4,
+            "text?": 0,
+            "none": 6,
+            "refutations": 0
+        },
+        "openai/gpt-5.6-luna": {
+            "tool": 0,
+            "text": 4,
+            "text?": 0,
+            "none": 0,
+            "refutations": 0
+        },
+        "deepseek/deepseek-v4-flash": {
+            "tool": 8,
+            "text": 0,
+            "text?": 0,
+            "none": 0,
+            "refutations": 0
+        },
+        "MiniMax-M3": {
+            "tool": 12,
+            "text": 6,
+            "text?": 2,
+            "none": 1,
+            "refutations": 1
+        },
+        "gemini-3.1-pro-preview-customtools": {
+            "tool": 5,
+            "text": 1,
+            "text?": 0,
+            "none": 1,
+            "refutations": 0
+        },
+        "claude-opus-5": {
+            "tool": 22,
+            "text": 21,
+            "text?": 0,
+            "none": 1,
+            "refutations": 0
+        },
+        "gpt-5.6-terra": {
+            "tool": 1,
+            "text": 2,
+            "text?": 0,
+            "none": 2,
+            "refutations": 0
+        },
+        "glm-5.3": {
+            "tool": 4,
+            "text": 0,
+            "text?": 0,
+            "none": 4,
+            "refutations": 0
+        },
+        "minimax/minimax-m2.5": {
+            "tool": 0,
+            "text": 0,
+            "text?": 0,
+            "none": 1,
+            "refutations": 0
+        },
+        "accounts/fireworks/models/deepseek-v4p1-flash": {
+            "tool": 5,
+            "text": 4,
+            "text?": 0,
+            "none": 1,
+            "refutations": 0
+        },
+        "gpt-5.6-sol-review": {
+            "tool": 1,
+            "text": 0,
+            "text?": 0,
+            "none": 0,
+            "refutations": 0
+        },
+        "gemini-3.5-flash": {
+            "tool": 0,
+            "text": 0,
+            "text?": 1,
+            "none": 0,
+            "refutations": 0
+        },
+        "zai/glm-5.3": {
+            "tool": 3,
+            "text": 3,
+            "text?": 1,
+            "none": 0,
+            "refutations": 0
+        },
+        "claude-sonnet-4-6": {
+            "tool": 1,
+            "text": 2,
+            "text?": 0,
+            "none": 1,
+            "refutations": 0
+        },
+        "z-ai/glm-4.7-flash": {
+            "tool": 1,
+            "text": 0,
+            "text?": 0,
+            "none": 8,
+            "refutations": 0
+        }
+    },
+    "caveats": [
+        "Counted per verifier run, not per published comment: a second verify pass (the evidence gate) can rescue a finding the first pass lost.",
+        "No provider breakdown — byokProvider is not on the trace metadata, so the model id is the proxy.",
+        "The verifier is identified by its system prompt; the per-finding observation name verifier.agent.ts builds never reaches the trace."
+    ]
+}

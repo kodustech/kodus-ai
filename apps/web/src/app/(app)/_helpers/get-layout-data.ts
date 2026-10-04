@@ -10,6 +10,7 @@ import {
     getUsersWithLicense,
     validateOrganizationLicense,
 } from "src/features/ee/subscription/_services/billing/fetch";
+import { heldSeats } from "src/features/ee/subscription/_utils/held-seats";
 
 /**
  * Fetches all data needed for the app layout.
@@ -27,11 +28,14 @@ export const getLayoutData = cache(async (teamId: string) => {
         llmConfigStatus,
         githubEnterpriseServerPatFeatureFlag,
         kodusProviderFeatureFlag,
+        deterministicEvidenceFeatureFlag,
     ] = await Promise.all([
         getPermissions().catch(() => ({})),
         getOrganizationName().catch(() => ""),
         validateOrganizationLicense({ teamId }).catch(() => null),
-        getUsersWithLicense({ teamId }).catch(() => []),
+        getUsersWithLicense({ teamId })
+            .then(heldSeats)
+            .catch(() => []),
         getLLMConfigStatus().catch(() => null),
         releaseTrackPromise
             .then((releaseTrack) =>
@@ -50,6 +54,15 @@ export const getLayoutData = cache(async (teamId: string) => {
                 }),
             )
             .catch(() => false),
+        releaseTrackPromise
+            .then((releaseTrack) =>
+                isFeatureEnabled({
+                    feature: FEATURE_FLAGS.deterministicEvidence,
+                    identifier: "organization",
+                    releaseTrack,
+                }),
+            )
+            .catch(() => false),
     ]);
 
     return {
@@ -61,6 +74,7 @@ export const getLayoutData = cache(async (teamId: string) => {
         featureFlags: {
             githubEnterpriseServerPat: githubEnterpriseServerPatFeatureFlag,
             kodusProvider: kodusProviderFeatureFlag,
+            deterministicEvidence: deterministicEvidenceFeatureFlag,
         },
     };
 });

@@ -1,0 +1,460 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "judge": "claude-haiku-4-5",
+  "source": "Private production mirror exported with SEO Copilot BigQuery credentials. Source code and raw outputs are stored outside this repository.",
+  "runs": [
+    {
+      "case": "customer-A-original-history",
+      "engine": {
+        "commit": "f63d552ed7153f0b61db0dd0b3a28ca5b8a423cb",
+        "sourceDigest": "4a8b1b88b86a9e3d53d5bb01427ee3756cd76d31d49958101a149a36a1ca1156"
+      },
+      "inputSha256": "72aeb3c5dd5e544a1e0a6fd04f13ad57d39fd39df85aecc591646108dd7bfdbf",
+      "measured": 3,
+      "infra": 0,
+      "rows": [
+        {
+          "rep": 1,
+          "measured": true,
+          "infraReason": null,
+          "deliveredCount": 0,
+          "claims": [
+            {
+              "id": "atomic-batch-repeat",
+              "expect": "not_deliver",
+              "pass": true,
+              "delivered": false,
+              "linked": false
+            },
+            {
+              "id": "empty-payload-repeat",
+              "expect": "not_deliver",
+              "pass": true,
+              "delivered": false,
+              "linked": false
+            }
+          ]
+        },
+        {
+          "rep": 2,
+          "measured": true,
+          "infraReason": null,
+          "deliveredCount": 0,
+          "claims": [
+            {
+              "id": "atomic-batch-repeat",
+              "expect": "not_deliver",
+              "pass": true,
+              "delivered": false,
+              "linked": false
+            },
+            {
+              "id": "empty-payload-repeat",
+              "expect": "not_deliver",
+              "pass": true,
+              "delivered": false,
+              "linked": false
+            }
+          ]
+        },
+        {
+          "rep": 3,
+          "measured": true,
+          "infraReason": null,
+          "deliveredCount": 0,
+          "claims": [
+            {
+              "id": "atomic-batch-repeat",
+              "expect": "not_deliver",
+              "pass": true,
+              "delivered": false,
+              "linked": false
+            },
+            {
+              "id": "empty-payload-repeat",
+              "expect": "not_deliver",
+              "pass": true,
+              "delivered": false,
+              "linked": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "case": "customer-A-all-history",
+      "engine": {
+        "commit": "f63d552ed7153f0b61db0dd0b3a28ca5b8a423cb",
+        "sourceDigest": "4a8b1b88b86a9e3d53d5bb01427ee3756cd76d31d49958101a149a36a1ca1156"
+      },
+      "inputSha256": "72aeb3c5dd5e544a1e0a6fd04f13ad57d39fd39df85aecc591646108dd7bfdbf",
+      "measured": 3,
+      "infra": 0,
+      "rows": [
+        {
+          "rep": 1,
+          "measured": true,
+          "infraReason": null,
+          "deliveredCount": 0,
+          "claims": [
+            {
+              "id": "atomic-batch-repeat",
+              "expect": "not_deliver",
+              "pass": true,
+              "delivered": false,
+              "linked": false
+            },
+            {
+              "id": "empty-payload-repeat",
+              "expect": "not_deliver",
+              "pass": true,
+              "delivered": false,
+              "linked": false
+            }
+          ]
+        },
+        {
+          "rep": 2,
+          "measured": true,
+          "infraReason": null,
+          "deliveredCount": 0,
+          "claims": [
+            {
+              "id": "atomic-batch-repeat",
+              "expect": "not_deliver",
+              "pass": true,
+              "delivered": false,
+              "linked": false
+            },
+            {
+              "id": "empty-payload-repeat",
+              "expect": "not_deliver",
+              "pass": true,
+              "delivered": false,
+              "linked": false
+            }
+          ]
+        },
+        {
+          "rep": 3,
+          "measured": true,
+          "infraReason": null,
+          "deliveredCount": 0,
+          "claims": [
+            {
+              "id": "atomic-batch-repeat",
+              "expect": "not_deliver",
+              "pass": true,
+              "delivered": false,
+              "linked": false
+            },
+            {
+              "id": "empty-payload-repeat",
+              "expect": "not_deliver",
+              "pass": true,
+              "delivered": false,
+              "linked": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "case": "customer-A-fresh-focused",
+      "engine": {
+        "commit": "f63d552ed7153f0b61db0dd0b3a28ca5b8a423cb",
+        "sourceDigest": "4a8b1b88b86a9e3d53d5bb01427ee3756cd76d31d49958101a149a36a1ca1156"
+      },
+      "inputSha256": "72aeb3c5dd5e544a1e0a6fd04f13ad57d39fd39df85aecc591646108dd7bfdbf",
+      "measured": 0,
+      "infra": 3,
+      "rows": [
+        {
+          "rep": 1,
+          "measured": false,
+          "infraReason": "INFRA: Kody Rules were not fully evaluated: KODY_RULES_PARTIAL: 1 of 3 Kody Rules check(s) failed to run; the rules on them were not applied",
+          "deliveredCount": null,
+          "claims": []
+        },
+        {
+          "rep": 2,
+          "measured": false,
+          "infraReason": "INFRA: Kody Rules were not fully evaluated: KODY_RULES_PARTIAL: 1 of 3 Kody Rules check(s) failed to run; the rules on them were not applied",
+          "deliveredCount": null,
+          "claims": []
+        },
+        {
+          "rep": 3,
+          "measured": false,
+          "infraReason": "INFRA: Kody Rules were not fully evaluated: KODY_RULES_PARTIAL: 1 of 3 Kody Rules check(s) failed to run; the rules on them were not applied",
+          "deliveredCount": null,
+          "claims": []
+        }
+      ]
+    },
+    {
+      "case": "customer-B-fresh",
+      "engine": {
+        "commit": "03b25de6ec9310180b9797eaa725f4dae7922a25",
+        "sourceDigest": "1958e843eee55787fa9411d486360a8378b69db0bcd96576d347d311e8af9ccc"
+      },
+      "inputSha256": "60c94f5b4645cf1a0f04bea86b599cfe9305b7cf5e2adb70867ebf0d8b63c731",
+      "measured": 3,
+      "infra": 0,
+      "rows": [
+        {
+          "rep": 1,
+          "measured": true,
+          "infraReason": null,
+          "deliveredCount": 0,
+          "claims": [
+            {
+              "id": "error-context-repeat",
+              "expect": "deliver",
+              "pass": false,
+              "delivered": false,
+              "linked": false
+            },
+            {
+              "id": "gitignore-race-repeat",
+              "expect": "deliver",
+              "pass": false,
+              "delivered": false,
+              "linked": false
+            }
+          ]
+        },
+        {
+          "rep": 2,
+          "measured": true,
+          "infraReason": null,
+          "deliveredCount": 1,
+          "claims": [
+            {
+              "id": "error-context-repeat",
+              "expect": "deliver",
+              "pass": true,
+              "delivered": true,
+              "linked": false
+            },
+            {
+              "id": "gitignore-race-repeat",
+              "expect": "deliver",
+              "pass": false,
+              "delivered": false,
+              "linked": false
+            }
+          ]
+        },
+        {
+          "rep": 3,
+          "measured": true,
+          "infraReason": null,
+          "deliveredCount": 2,
+          "claims": [
+            {
+              "id": "error-context-repeat",
+              "expect": "deliver",
+              "pass": true,
+              "delivered": true,
+              "linked": false
+            },
+            {
+              "id": "gitignore-race-repeat",
+              "expect": "deliver",
+              "pass": false,
+              "delivered": false,
+              "linked": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "case": "customer-B-history",
+      "engine": {
+        "commit": "f63d552ed7153f0b61db0dd0b3a28ca5b8a423cb",
+        "sourceDigest": "4a8b1b88b86a9e3d53d5bb01427ee3756cd76d31d49958101a149a36a1ca1156"
+      },
+      "inputSha256": "44a39d37882dd678f7350e1ad6d1eee14057a30fd9d230119301831582b55f81",
+      "measured": 2,
+      "infra": 1,
+      "rows": [
+        {
+          "rep": 1,
+          "measured": true,
+          "infraReason": null,
+          "deliveredCount": 0,
+          "claims": [
+            {
+              "id": "error-context-repeat",
+              "expect": "not_deliver",
+              "pass": true,
+              "delivered": false,
+              "linked": false
+            },
+            {
+              "id": "gitignore-race-repeat",
+              "expect": "not_deliver",
+              "pass": true,
+              "delivered": false,
+              "linked": false
+            }
+          ]
+        },
+        {
+          "rep": 2,
+          "measured": false,
+          "infraReason": "INFRA: Kody Rules were not fully evaluated: KODY_RULES_PARTIAL: 1 of 2 Kody Rules check(s) failed to run; the rules on them were not applied",
+          "deliveredCount": null,
+          "claims": []
+        },
+        {
+          "rep": 3,
+          "measured": true,
+          "infraReason": null,
+          "deliveredCount": 1,
+          "claims": [
+            {
+              "id": "error-context-repeat",
+              "expect": "not_deliver",
+              "pass": true,
+              "delivered": false,
+              "linked": false
+            },
+            {
+              "id": "gitignore-race-repeat",
+              "expect": "not_deliver",
+              "pass": false,
+              "delivered": true,
+              "linked": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "case": "customer-C-fresh",
+      "engine": {
+        "commit": "03b25de6ec9310180b9797eaa725f4dae7922a25",
+        "sourceDigest": "1958e843eee55787fa9411d486360a8378b69db0bcd96576d347d311e8af9ccc"
+      },
+      "inputSha256": "60c94f5b4645cf1a0f04bea86b599cfe9305b7cf5e2adb70867ebf0d8b63c731",
+      "measured": 3,
+      "infra": 0,
+      "rows": [
+        {
+          "rep": 1,
+          "measured": true,
+          "infraReason": null,
+          "deliveredCount": 1,
+          "claims": [
+            {
+              "id": "serialization-repeat",
+              "expect": "observe",
+              "pass": true,
+              "delivered": true,
+              "linked": false
+            }
+          ]
+        },
+        {
+          "rep": 2,
+          "measured": true,
+          "infraReason": null,
+          "deliveredCount": 1,
+          "claims": [
+            {
+              "id": "serialization-repeat",
+              "expect": "observe",
+              "pass": true,
+              "delivered": true,
+              "linked": false
+            }
+          ]
+        },
+        {
+          "rep": 3,
+          "measured": true,
+          "infraReason": null,
+          "deliveredCount": 1,
+          "claims": [
+            {
+              "id": "serialization-repeat",
+              "expect": "observe",
+              "pass": true,
+              "delivered": true,
+              "linked": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "case": "customer-C-history",
+      "engine": {
+        "commit": "03b25de6ec9310180b9797eaa725f4dae7922a25",
+        "sourceDigest": "1958e843eee55787fa9411d486360a8378b69db0bcd96576d347d311e8af9ccc"
+      },
+      "inputSha256": "60c94f5b4645cf1a0f04bea86b599cfe9305b7cf5e2adb70867ebf0d8b63c731",
+      "measured": 3,
+      "infra": 0,
+      "rows": [
+        {
+          "rep": 1,
+          "measured": true,
+          "infraReason": null,
+          "deliveredCount": 0,
+          "claims": [
+            {
+              "id": "serialization-repeat",
+              "expect": "not_deliver",
+              "pass": true,
+              "delivered": false,
+              "linked": false
+            }
+          ]
+        },
+        {
+          "rep": 2,
+          "measured": true,
+          "infraReason": null,
+          "deliveredCount": 0,
+          "claims": [
+            {
+              "id": "serialization-repeat",
+              "expect": "not_deliver",
+              "pass": true,
+              "delivered": false,
+              "linked": false
+            }
+          ]
+        },
+        {
+          "rep": 3,
+          "measured": true,
+          "infraReason": null,
+          "deliveredCount": 0,
+          "claims": [
+            {
+              "id": "serialization-repeat",
+              "expect": "not_deliver",
+              "pass": true,
+              "delivered": false,
+              "linked": false
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "Final stored snapshots, not historical per-commit replay; developer replies are unavailable.",
+    "Some unchanged file contents are absent from the mirror.",
+    "Customer A and B history runs focus on implementation files; all exported files remain readable as context.",
+    "Customer C uses the same full changed-file snapshot for both control and history.",
+    "The earlier full customer A control delivered both target claims in one complete measured attempt; subsequent full/focused control attempts suffered provider timeouts.",
+    "Customer B concurrency claim was absent in all fresh controls, so absence with history is not suppression proof for that claim.",
+    "No fleet floor or calibrated nightly comparison is inferred."
+  ]
+}

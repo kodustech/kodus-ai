@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { Test, TestingModule } from '@nestjs/testing';
 
@@ -25,6 +26,7 @@ import {
     KodyRulesStatus,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -59,9 +61,7 @@ describe('CreateOrUpdateKodyRulesUseCase (centralized pending states)', () => {
             createMutationPullRequestIfEnabled: jest.fn(),
             getCentralizedRepositoryIfEnabled: jest.fn(),
             resolveRepositoryFolderName: jest.fn(),
-            resolveDirectoryGroupFolderName: jest
-                .fn()
-                .mockResolvedValue(null),
+            resolveDirectoryGroupFolderName: jest.fn().mockResolvedValue(null),
             buildCentralizedPath: jest.fn(),
             sanitizeFileName: jest.fn(),
             buildRuleFileName: jest.fn(
@@ -79,6 +79,13 @@ describe('CreateOrUpdateKodyRulesUseCase (centralized pending states)', () => {
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
+                {
+                    provide: TelemetryService,
+                    useValue: {
+                        kodyRuleChanged: jest.fn(),
+                        kodyRulesImported: jest.fn(),
+                    },
+                },
                 CreateOrUpdateKodyRulesUseCase,
                 {
                     provide: KODY_RULES_SERVICE_TOKEN,
@@ -111,6 +118,7 @@ describe('CreateOrUpdateKodyRulesUseCase (centralized pending states)', () => {
                     provide: PermissionValidationService,
                     useValue: {
                         getBYOKConfig: jest.fn().mockResolvedValue(null),
+                        resolveTaskSlot: jest.fn().mockResolvedValue(null),
                         getSubscriptionStatus: jest
                             .fn()
                             .mockResolvedValue(undefined),
@@ -119,9 +127,7 @@ describe('CreateOrUpdateKodyRulesUseCase (centralized pending states)', () => {
                 {
                     provide: KODY_RULE_DETECTOR_COMPILER_TOKEN,
                     useValue: {
-                        compileAndSave: jest
-                            .fn()
-                            .mockResolvedValue(undefined),
+                        compileAndSave: jest.fn().mockResolvedValue(undefined),
                     },
                 },
                 {
@@ -139,6 +145,94 @@ describe('CreateOrUpdateKodyRulesUseCase (centralized pending states)', () => {
         }).compile();
 
         useCase = module.get(CreateOrUpdateKodyRulesUseCase);
+    });
+
+    it('rejects a foreign rule before creating a centralized PR', async () => {
+        kodyRulesServiceMock.findById.mockImplementation(
+            async (...args: unknown[]) =>
+                args[1] === 'org-1'
+                    ? null
+                    : ({
+                          uuid: 'foreign-rule',
+                          title: 'Private rule',
+                          rule: 'Private content',
+                          repositoryId: 'foreign-repo',
+                          type: KodyRulesType.STANDARD,
+                          examples: [
+                              {
+                                  snippet: 'private source code',
+                                  isCorrect: true,
+                              },
+                          ],
+                      } as any),
+        );
+        centralizedConfigPrServiceMock.createMutationPullRequestIfEnabled.mockResolvedValue(
+            { mode: 'centralized-pr' },
+        );
+
+        await expect(
+            useCase.execute(
+                {
+                    uuid: 'foreign-rule',
+                    title: 'Requested title',
+                    rule: 'Requested text',
+                    repositoryId: 'repo-1',
+                    type: KodyRulesType.STANDARD,
+                } as any,
+                'org-1',
+                undefined,
+                false,
+                'team-1',
+                {
+                    uuid: 'owner-1',
+                    email: 'owner@example.com',
+                    organization: { uuid: 'org-1' },
+                } as any,
+            ),
+        ).rejects.toBeInstanceOf(NotFoundException);
+        expect(
+            centralizedConfigPrServiceMock.createMutationPullRequestIfEnabled,
+        ).not.toHaveBeenCalled();
+        expect(kodyRulesServiceMock.createOrUpdate).not.toHaveBeenCalled();
+    });
+
+    // The repository drops undefined fields from its $set, so only an explicit
+    // null clears the pointer of a rule that references nothing — else the
+    // review keeps loading an empty revision for it.
+    it('clears the context reference pointer with null when detection returns no id', async () => {
+        const detection = (useCase as any).contextReferenceDetectionService;
+        detection.detectAndSaveReferences.mockResolvedValue(undefined);
+
+        await (useCase as any).detectAndSaveReferencesAsync(
+            'rule-1',
+            'Every defensive branch needs a test',
+            'repo-1',
+            { organizationId: 'org-1', teamId: 'team-1' },
+        );
+
+        expect(kodyRulesServiceMock.updateRuleReferences).toHaveBeenCalledWith(
+            'org-1',
+            'rule-1',
+            { contextReferenceId: null },
+        );
+    });
+
+    it('persists the context reference id when detection returns one', async () => {
+        const detection = (useCase as any).contextReferenceDetectionService;
+        detection.detectAndSaveReferences.mockResolvedValue('revision-9');
+
+        await (useCase as any).detectAndSaveReferencesAsync(
+            'rule-1',
+            'Follow the conventions in docs/style.md',
+            'repo-1',
+            { organizationId: 'org-1', teamId: 'team-1' },
+        );
+
+        expect(kodyRulesServiceMock.updateRuleReferences).toHaveBeenCalledWith(
+            'org-1',
+            'rule-1',
+            { contextReferenceId: 'revision-9' },
+        );
     });
 
     it('persists create flow as pending_add when centralized PR mode is active', async () => {

@@ -8,6 +8,7 @@ import {
     ajvValidator,
     ensureValidatingSchema,
     extractJsonFromText,
+    extractLastJsonObjectWith,
     normalizeEnvelope,
     readOutput,
     repairAndValidate,
@@ -94,6 +95,92 @@ describe('extractJsonFromText', () => {
         expect(extractJsonFromText('just prose')).toBeNull();
         expect(extractJsonFromText('```\nstill prose\n```')).toBeNull();
         expect(extractJsonFromText('')).toBeNull();
+    });
+});
+
+// Production 2026-09-30: MiniMax-M3 wrote its reasoning in the answer, inside
+// <think>…</think>, before the JSON. 1,197 Kody Rules shards failed to parse
+// in a day, and in 950 the JSON right after </think> was valid. The reasoning
+// quotes code, so the first balanced {…} in the text is often not the answer.
+describe('reasoning written before the answer', () => {
+    const answer = '{"violations":[]}';
+    const reasoning =
+        '<think>Rule [1] says no `any`. The line is `const x = { a: 1 }` — typed, so no violation.</think>';
+
+    it('extracts the answer after the reasoning block', () => {
+        expect(extractJsonFromText(`${reasoning}${answer}`)).toBe(answer);
+    });
+
+    it('repairs it too, so a failed structured call is salvaged', () => {
+        expect(repairJsonText(`${reasoning}\n\n${answer}`)).toBe(answer);
+    });
+
+    it('takes a fenced answer after the reasoning', () => {
+        expect(
+            extractJsonFromText(`${reasoning}\n\`\`\`json\n${answer}\n\`\`\``),
+        ).toBe(answer);
+    });
+
+    it('finds nothing when the reasoning never closes (no answer was written)', () => {
+        expect(
+            extractJsonFromText('<think>Rule [1] … `const x = { a: 1 }` … still thinking'),
+        ).toBeNull();
+    });
+
+    it('keeps the answer when another reasoning block follows it', () => {
+        expect(
+            extractJsonFromText(`${reasoning}${answer}<think>checking { x }</think>`),
+        ).toBe(answer);
+    });
+
+    it('keeps an answer whose text quotes the closing tag', () => {
+        const quoting =
+            '{"violations":[{"suggestionContent":"a prompt file closes with </think> early"}]}';
+        expect(extractJsonFromText(`${reasoning}${quoting}`)).toBe(quoting);
+    });
+
+    it('skips several reasoning blocks in a row', () => {
+        expect(
+            extractJsonFromText(`${reasoning}<think>again { "a": 1 }</think>${answer}`),
+        ).toBe(answer);
+    });
+
+    it('skips reasoning that follows a line of prose, before the answer starts', () => {
+        expect(extractJsonFromText(`Sure.\n${reasoning}\n${answer}`)).toBe(answer);
+    });
+
+    it('leaves reasoning after the answer alone', () => {
+        expect(extractJsonFromText(`${answer}\n<think>${'{ not the answer }'}</think>`)).toBe(
+            answer,
+        );
+    });
+
+    it('finds the answer after an unclosed block that is not at the start', () => {
+        // The block never closes, but it did not open the response, so the
+        // answer behind it is still there to be found.
+        expect(
+            extractJsonFromText(`Let me think. <think>no any here. ${answer}`),
+        ).toBe(answer);
+    });
+
+    it('finds the answer behind an unclosed block that follows a closed one', () => {
+        // Only a block that is the first thing in the response means "no answer";
+        // after a block that did close, the answer may still be there.
+        expect(extractJsonFromText(`<think>x</think><think>y ${answer}`)).toBe(answer);
+    });
+
+    it('does not rescan the whole text once per block', () => {
+        // Cost grows with the blocks, not with blocks times length: a payload of
+        // thousands of blocks must not turn into thousands of full scans.
+        const many = '<think>x</think>'.repeat(200_000);
+        const started = Date.now();
+        expect(extractJsonFromText(`${many}${answer}`)).toBe(answer);
+        expect(Date.now() - started).toBeLessThan(1000);
+    });
+
+    it('leaves a <think> tag inside a JSON string alone', () => {
+        const json = '{"violations":[{"suggestionContent":"<think> is not HTML"}]}';
+        expect(extractJsonFromText(json)).toBe(json);
     });
 });
 
@@ -790,5 +877,68 @@ describe('normalizeEnvelope (the SHAPE layer — #1786)', () => {
             });
             expect(spy).not.toHaveBeenCalled();
         });
+    });
+});
+
+// The verdict parser's extractor (#1937): unlike extractJsonFromText, it walks
+// to the END of the text, so a quoted code block or an example object before the
+// answer cannot be mistaken for it.
+describe('extractLastJsonObjectWith', () => {
+    it('returns the last object carrying the key', () => {
+        expect(
+            extractLastJsonObjectWith(
+                'example {"keep": true, "r": 1} verdict {"keep": false, "r": 2}',
+                ['keep'],
+            ),
+        ).toEqual({ keep: false, r: 2 });
+    });
+
+    it('skips a fenced code block that is not JSON', () => {
+        expect(
+            extractLastJsonObjectWith(
+                '```ts\nconst o = { keep: true, n: 1 };\n```\n{"keep": false}',
+                ['keep'],
+            ),
+        ).toEqual({ keep: false });
+    });
+
+    it('descends into a wrapper to find the key', () => {
+        expect(
+            extractLastJsonObjectWith('{"result": {"keep": false}}', ['keep']),
+        ).toEqual({ keep: false });
+    });
+
+    it('matches an alias, convention-insensitively', () => {
+        expect(
+            extractLastJsonObjectWith('{"should_keep": false}', ['shouldKeep']),
+        ).toEqual({ should_keep: false });
+    });
+
+    it('survives an unbalanced object before the answer', () => {
+        expect(
+            extractLastJsonObjectWith('oops {"a": 1 \n{"keep": false}', ['keep']),
+        ).toEqual({ keep: false });
+    });
+
+    it('tolerates a trailing comma', () => {
+        expect(extractLastJsonObjectWith('{"keep": false,}', ['keep'])).toEqual({
+            keep: false,
+        });
+    });
+
+    it('returns null when nothing carries the key', () => {
+        expect(extractLastJsonObjectWith('{"other": 1}', ['keep'])).toBeNull();
+        expect(extractLastJsonObjectWith('just prose', ['keep'])).toBeNull();
+        expect(extractLastJsonObjectWith('', ['keep'])).toBeNull();
+        expect(extractLastJsonObjectWith(null as any, ['keep'])).toBeNull();
+    });
+
+    it('does not read a keep nested inside the matched object', () => {
+        expect(
+            extractLastJsonObjectWith(
+                '{"keep": false, "cited": {"keep": true}}',
+                ['keep'],
+            ),
+        ).toEqual({ keep: false, cited: { keep: true } });
     });
 });

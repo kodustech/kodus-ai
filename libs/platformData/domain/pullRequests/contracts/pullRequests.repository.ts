@@ -195,6 +195,20 @@ export interface IPullRequestsRepository {
         deliveryStatus: DeliveryStatus,
     ): Promise<ISuggestion[]>;
     /**
+     * The most recent `limit` file-level suggestions with this
+     * `deliveryStatus` on the PR, across ALL its files. Repository-scoped like
+     * `findSuggestionsByPRAndFilenames`, but not narrowed to the files of the
+     * current diff: a finding can repeat an earlier one that was anchored on
+     * another file (code moved between rounds).
+     */
+    findSuggestionsOnPR(
+        prNumber: number,
+        repoFullName: string,
+        organizationId: string,
+        deliveryStatus: DeliveryStatus,
+        limit: number,
+    ): Promise<ISuggestion[]>;
+    /**
      * PR-LEVEL suggestions (stored separately in `prLevelSuggestions`, not
      * nested under `files[]` — today exclusively kody-rules PULL_REQUEST-scope
      * findings, which judge the diff as a whole and carry no `relevantFile`).
@@ -207,6 +221,8 @@ export interface IPullRequestsRepository {
         repoFullName: string,
         organizationId: string,
         deliveryStatus: DeliveryStatus,
+        /** Most recent N kept (default 5). */
+        limit?: number,
     ): Promise<ISuggestionByPR[]>;
     findSuggestionsByRuleId(
         ruleId: string,

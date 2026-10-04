@@ -36,6 +36,9 @@ import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engi
 import type { DocumentationSearchAdapter } from '@libs/code-review/infrastructure/agents/engine/agent-tools.factory';
 import type { FindingsOutput } from '@libs/code-review/infrastructure/agents/core/findings-schema';
 import type { LinkedRepoAccess } from '@libs/ee/linked-repositories';
+import type { VerdictParseMode } from '@libs/agent-harness/domain/contracts/verifier.contract';
+import { CheckEvidence } from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
+import { AnalyzerFinding } from '@libs/code-review/infrastructure/analyzers/analyzer-finding.type';
 
 export type { FindingsOutput } from '@libs/code-review/infrastructure/agents/core/findings-schema';
 
@@ -115,6 +118,18 @@ export interface PrReviewContext {
     prBody?: string;
     /** Base branch of the PR (e.g. "main"). Passed to tools for git diff. */
     baseBranch?: string;
+    /**
+     * CI results the repository's own pipeline reported for the head commit.
+     * Rendered as evidence so the agent does not re-derive — or re-report —
+     * what a deterministic tool already proved. Untrusted text: escape it.
+     */
+    ciEvidence?: CheckEvidence[];
+    /**
+     * Findings Kody's own scanners already produced for this change. Rendered
+     * so the agent does not re-report what is already being published as its
+     * own comment. Untrusted text: escape it.
+     */
+    analyzerFindings?: AnalyzerFinding[];
 }
 
 /** How the agent investigates: sandbox + auth + call graph. */
@@ -549,7 +564,10 @@ export interface VerificationDecisionTrace {
     index: number;
     relevantFile: string;
     action: 'keep' | 'drop' | 'refine';
-    parseMode: 'direct' | 'fallback-llm' | 'default-keep';
+    /** How the verifier's verdict was read: `tool` = it called submitVerdict,
+     *  `text` = it answered in prose and the deterministic parser recovered the
+     *  verdict, `default-keep` = nothing parseable, fail-open (issue #1937). */
+    parseMode: VerdictParseMode;
     rationale: string;
     confidence?: 'high' | 'medium' | 'low';
     verifierEvidence: ToolEvidenceSummary;

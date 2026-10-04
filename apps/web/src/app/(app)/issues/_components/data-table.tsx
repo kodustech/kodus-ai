@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { Spinner } from "@components/ui/spinner";
+import { Skeleton } from "@components/ui/skeleton";
 import {
     Table,
     TableBody,
@@ -51,7 +51,7 @@ export const IssuesDataTable = (
         <div
             ref={parentRef}
             // 'transition-none' is required for table virtualization to avoid stuttering
-            className="flex-1 overflow-auto **:transition-none">
+            className="border-card-lv3/60 bg-card-lv1 flex-1 overflow-auto rounded-xl border **:transition-none">
             <div style={{ height: `${virtualizer.getTotalSize()}px` }}>
                 {/* '--table-body-height' is required for sticky header to work */}
                 <Table className="after:inline-block after:h-(--table-body-height)">
@@ -99,13 +99,22 @@ export const IssuesDataTable = (
                             );
                         }}>
                         {props.loading === true ? (
-                            <TableRow className="hover:bg-transparent">
-                                <TableCell
-                                    colSpan={columns.length}
-                                    align="center">
-                                    <Spinner className="size-7" />
-                                </TableCell>
-                            </TableRow>
+                            Array.from({ length: 8 }).map((_, i) => (
+                                <TableRow
+                                    key={`skeleton-${i}`}
+                                    className="hover:bg-transparent">
+                                    <TableCell colSpan={columns.length}>
+                                        <div
+                                            className="flex items-center gap-4"
+                                            aria-hidden>
+                                            <Skeleton className="h-4 w-2/5" />
+                                            <Skeleton className="ml-auto h-5 w-20 rounded-md" />
+                                            <Skeleton className="h-5 w-16 rounded-md" />
+                                            <Skeleton className="h-4 w-24" />
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            ))
                         ) : (
                             <>
                                 {!rows.length ? (

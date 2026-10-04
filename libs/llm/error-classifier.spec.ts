@@ -6,6 +6,9 @@ import {
     isTerminalCategory,
     llmErrorLogLevel,
 } from './error-classifier';
+import { APICallError } from '@ai-sdk/provider';
+import { RetryError } from 'ai';
+
 import {
     AgentContextWindowTooSmallError,
     AgentPromptTooLargeError,
@@ -137,7 +140,147 @@ describe('classifyLLMError', () => {
         });
     });
 
+    // Production 2026-09-28: every provider failure that outlived the SDK's four
+    // attempts reached the customer as "Unexpected error". The SDK wraps the
+    // last attempt in a RetryError that carries no status of its own — the 503
+    // (or 404, or 429) lives on `lastError`.
+    describe('retries exhausted (AI_RetryError wrapping the provider error)', () => {
+        function exhausted(lastError: APICallError): RetryError {
+            return new RetryError({
+                message: `Failed after 4 attempts. Last error: ${lastError.message}`,
+                reason: 'maxRetriesExceeded',
+                errors: [lastError, lastError, lastError, lastError],
+            });
+        }
+
+        function apiError(statusCode: number, message: string, responseBody?: string) {
+            return new APICallError({
+                message,
+                url: 'https://llm.example.test/v1/chat/completions',
+                requestBodyValues: {},
+                statusCode,
+                responseBody,
+            });
+        }
+
+        it('a 503 on every attempt → TRANSIENT', () => {
+            const err = exhausted(apiError(503, 'Service Unavailable'));
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.TRANSIENT,
+            );
+        });
+
+        it('reads the HTTP status from the last attempt', () => {
+            const err = exhausted(apiError(503, 'Service Unavailable'));
+            expect(classifyLLMError(err).httpStatus).toBe(503);
+        });
+
+        it('a 404 on every attempt → MODEL_NOT_FOUND', () => {
+            const err = exhausted(apiError(404, 'Not Found'));
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.MODEL_NOT_FOUND,
+            );
+        });
+
+        it('classifies from the last attempt\'s response body', () => {
+            const err = exhausted(
+                apiError(
+                    429,
+                    'Too Many Requests',
+                    '{"error":{"message":"Insufficient balance or no resource package. Please recharge."}}',
+                ),
+            );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.QUOTA_EXCEEDED,
+            );
+        });
+    });
+
+    describe('error chains: cause and lastError', () => {
+        it('classifies from a cause when the outer message says nothing', () => {
+            const err = new Error('Bad request', {
+                cause: new Error('error code: insufficient_quota'),
+            });
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.QUOTA_EXCEEDED,
+            );
+        });
+
+        it('terminates on a cause cycle', () => {
+            const a = new Error('first') as Error & { cause?: unknown };
+            const b = new Error('second') as Error & { cause?: unknown };
+            a.cause = b;
+            b.cause = a;
+            expect(() => classifyLLMError(a)).not.toThrow();
+        });
+
+        it('terminates on a lastError cycle', () => {
+            const a = new Error('first') as Error & { lastError?: unknown };
+            const b = new Error('second') as Error & { lastError?: unknown };
+            a.lastError = b;
+            b.lastError = a;
+            expect(() => classifyLLMError(a)).not.toThrow();
+        });
+
+        it('terminates on an error that is its own lastError', () => {
+            const a = new Error('Service Unavailable') as Error & {
+                lastError?: unknown;
+            };
+            a.lastError = a;
+            expect(classifyLLMError(a).category).toBe(
+                LlmErrorCategory.TRANSIENT,
+            );
+        });
+    });
+
     describe('message-string fallback (no HTTP status)', () => {
+        it.each(['model_not_found', 'No such model: x', 'The model x does not exist'])(
+            '"%s" → MODEL_NOT_FOUND',
+            (message) => {
+                expect(classifyLLMError(new Error(message)).category).toBe(
+                    LlmErrorCategory.MODEL_NOT_FOUND,
+                );
+            },
+        );
+
+        // The review path rebuilds the error from the harness trace as a plain
+        // Error, so the status can be gone and only the SDK's text survives.
+        it('"Service Unavailable" in a retry message → TRANSIENT', () => {
+            const err = new Error(
+                'Failed after 4 attempts. Last error: AI_APICallError: Service Unavailable',
+            );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.TRANSIENT,
+            );
+        });
+
+        it('"Bad Gateway" / "Gateway Timeout" → TRANSIENT', () => {
+            expect(
+                classifyLLMError(new Error('AI_APICallError: Bad Gateway'))
+                    .category,
+            ).toBe(LlmErrorCategory.TRANSIENT);
+            expect(
+                classifyLLMError(new Error('AI_APICallError: Gateway Timeout'))
+                    .category,
+            ).toBe(LlmErrorCategory.TRANSIENT);
+        });
+
+        it('OpenAI "exceeds the context window" → CONTEXT_OVERFLOW', () => {
+            const err = new Error(
+                'Your input exceeds the context window of this model. Please adjust your input and try again.',
+            );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.CONTEXT_OVERFLOW,
+            );
+        });
+
+        it('"Model does not support this protocol" → MODEL_NOT_FOUND', () => {
+            const err = new Error('Model does not support this protocol.');
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.MODEL_NOT_FOUND,
+            );
+        });
+
         it('OpenAI insufficient_quota → QUOTA_EXCEEDED', () => {
             const err = new Error(
                 'You exceeded your current quota. error code: insufficient_quota',

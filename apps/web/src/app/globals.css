@@ -509,11 +509,6 @@
     }
 }
 
-/* Reserve space for the right sidebar */
-body {
-    padding-right: 60px !important;
-}
-
 @keyframes field-highlight-pulse {
     0%,
     100% {

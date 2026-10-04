@@ -3,6 +3,11 @@ import {
     buildProviderFallbackWarning,
     buildRuleContextUnavailableWarning,
     buildBadFixDowngradedWarning,
+    buildCallGraphFailedWarning,
+    buildKodyRulesPartialWarning,
+    buildPathMismatchWarning,
+    buildSandboxUnavailableWarning,
+    withFallbackWarnings,
     type ReviewWarning,
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 
@@ -185,5 +190,79 @@ describe('buildBadFixDowngradedWarning', () => {
         ]);
         expect(out).toHaveLength(1);
         expect(out[0].agentName).toBeUndefined();
+    });
+});
+
+describe('losses a review used to record only in its logs (#2066)', () => {
+    it('names each loss with its own cause, not a small context window', () => {
+        const all = [
+            buildSandboxUnavailableWarning({ modelName: 'gpt-4.1' }),
+            buildCallGraphFailedWarning({ modelName: 'gpt-4.1' }),
+            buildPathMismatchWarning({
+                count: 2,
+                modelName: 'gpt-4.1',
+                agentName: 'bug',
+            }),
+            buildKodyRulesPartialWarning({
+                failed: 1,
+                total: 3,
+                modelName: 'gpt-4.1',
+                agentName: 'kody-rules',
+            }),
+        ];
+
+        expect(all.map((x) => [x.kind, x.reason])).toEqual([
+            ['SANDBOX_UNAVAILABLE', 'sandbox_unavailable'],
+            ['CALLGRAPH_FAILED', 'callgraph_failed'],
+            ['SUGGESTIONS_DROPPED_PATH_MISMATCH', 'path_mismatch'],
+            ['KODY_RULES_PARTIAL', 'judge_shard_failed'],
+        ]);
+        expect(all.every((x) => x.contextWindowTokens === 0)).toBe(true);
+        expect(all[2].detail).toContain('bug: 2 finding(s)');
+        expect(all[3].detail).toContain('1 of 3 Kody Rules check(s)');
+    });
+
+    it("keeps each agent's path drops when they fold together", () => {
+        const [merged] = dedupReviewWarnings([
+            buildPathMismatchWarning({
+                count: 1,
+                modelName: 'gpt-4.1',
+                agentName: 'bug',
+            }),
+            buildPathMismatchWarning({
+                count: 1,
+                modelName: 'gpt-4.1',
+                agentName: 'security',
+            }),
+        ]);
+
+        expect(merged.detail).toContain('bug: 1');
+        expect(merged.detail).toContain('security: 1');
+    });
+});
+
+describe('withFallbackWarnings', () => {
+    it('leaves the warnings untouched when nothing failed over', () => {
+        const warnings = [w('PROMPT_COMPACTED')];
+        expect(withFallbackWarnings(warnings, [])).toBe(warnings);
+        expect(withFallbackWarnings(undefined, [])).toBeUndefined();
+    });
+
+    it('adds one fallback warning per model the review fell back to', () => {
+        const out = withFallbackWarnings(
+            [w('PROMPT_COMPACTED')],
+            [
+                { failedModel: 'claude-opus', usedModel: 'gpt-4.1' },
+                { failedModel: 'claude-opus', usedModel: 'gpt-4.1' },
+            ],
+        );
+
+        expect(out?.map((x) => x.kind)).toEqual([
+            'PROMPT_COMPACTED',
+            'PROVIDER_FALLBACK',
+        ]);
+        expect(out?.[1].detail).toBe(
+            'main provider claude-opus failed; review ran on fallback gpt-4.1',
+        );
     });
 });

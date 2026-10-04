@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { Page } from "@components/ui/page";
+import { getLLMConfigStatus } from "@services/organizationParameters/fetch";
 import {
     getTokenPricingBatch,
     getTokenUsageByDeveloper,
@@ -9,14 +10,13 @@ import {
 import {
     BaseUsageContract,
     ModelPricingInfo,
+    UsageByPrResultContract,
     UsageByTaskAreaResultContract,
     UsageByTaskModelSpanContract,
-    UsageByPrResultContract,
     UsageSummaryContract,
 } from "@services/usage/types";
 import { CookieName } from "src/core/utils/cookie";
 import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team-id";
-import { getLLMConfigStatus } from "@services/organizationParameters/fetch";
 import { isBYOKSubscriptionPlan } from "src/features/ee/byok/_utils";
 import { getSelectedDateRange } from "src/features/ee/cockpit/_helpers/get-selected-date-range";
 import { validateOrganizationLicense } from "src/features/ee/subscription/_services/billing/fetch";
@@ -308,10 +308,10 @@ export default async function TokenUsagePage({
         <Page.Root>
             {/* Full-width like the cockpit (its layout uses the same
                 max-w-full px-6 on header + content). */}
-            <Page.Header className="max-w-full px-6">
+            <Page.Header>
                 <Page.Title>Token Usage</Page.Title>
             </Page.Header>
-            <Page.Content className="max-w-full px-6">
+            <Page.Content>
                 <TokenUsagePageClient
                     data={data}
                     byTaskArea={byTaskArea}

@@ -89,12 +89,14 @@ import { TeamMembersController } from './controllers/teamMembers.controller';
 import { TokenUsageController } from './controllers/tokenUsage.controller';
 import { SpendLimitController } from './controllers/spendLimit.controller';
 import { KodusCreditsController } from './controllers/kodusCredits.controller';
+import { BillingEventsController } from './controllers/billingEvents.controller';
 import { UsersController } from './controllers/user.controller';
 import { CronModule } from './cron/cron.module';
 import { CentralizedConfigModule } from '@libs/centralized-config/modules/centralized-config.module';
 import { LangfuseShutdownProvider } from '@libs/core/log/langfuse-shutdown.provider';
 import { NotificationModule } from '@libs/notifications/modules/notification.module';
 import { NotificationController } from './controllers/notification.controller';
+import { SelfHostedDoctorModule } from './doctor/self-hosted-doctor.module';
 
 @Module({
     imports: [
@@ -159,6 +161,7 @@ import { NotificationController } from './controllers/notification.controller';
         GlobalCacheModule,
         CentralizedConfigModule,
         NotificationModule,
+        SelfHostedDoctorModule,
     ],
     controllers: [
         CodeManagementController,
@@ -180,6 +183,7 @@ import { NotificationController } from './controllers/notification.controller';
         TokenUsageController,
         SpendLimitController,
         KodusCreditsController,
+        BillingEventsController,
         PermissionsController,
         GithubController,
         IntegrationController,

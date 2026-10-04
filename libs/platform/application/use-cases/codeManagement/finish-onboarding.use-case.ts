@@ -357,6 +357,13 @@ export class FinishOnboardingUseCase {
                 }),
             );
 
+            if (provisioned) {
+                void this.telemetry.trialStarted({
+                    organizationId,
+                    teamId,
+                });
+            }
+
             if (!provisioned) {
                 this.logger.warn({
                     message:

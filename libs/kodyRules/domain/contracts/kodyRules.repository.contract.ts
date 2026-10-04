@@ -1,6 +1,7 @@
 import { KodyRulesEntity } from '../entities/kodyRules.entity';
 import {
     IKodyRule,
+    IKodyRuleIndexEntry,
     IKodyRules,
     KodyRulesStatus,
 } from '../interfaces/kodyRules.interface';
@@ -14,7 +15,7 @@ export interface IKodyRulesRepository {
         kodyRules: Omit<IKodyRules, 'uuid'>,
     ): Promise<KodyRulesEntity | null>;
 
-    findById(uuid: string): Promise<IKodyRule | null>;
+    findById(uuid: string, organizationId: string): Promise<IKodyRule | null>;
     findOne(filter?: Partial<IKodyRules>): Promise<KodyRulesEntity | null>;
     find(filter?: Partial<IKodyRules>): Promise<KodyRulesEntity[]>;
     /** Projected list of org ids that have ≥1 rule — avoids loading every
@@ -23,6 +24,13 @@ export interface IKodyRulesRepository {
     findByOrganizationId(
         organizationId: string,
     ): Promise<KodyRulesEntity | null>;
+
+    /**
+     * Projected list of an organization's rules — id, title and scope only.
+     * Server-side projection so a picker never pulls every rule body, example
+     * and detector out of Mongo just to show titles.
+     */
+    findRulesIndex(organizationId: string): Promise<IKodyRuleIndexEntry[]>;
 
     /**
      * Count rules for an organization matching an optional status.

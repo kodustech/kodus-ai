@@ -27,6 +27,7 @@ name: "E2E: self-hosted on demand"
 permissions:
     contents: write
     packages: write
+    id-token: write # e2e-self-hosted-matrix reports a quality signal (WIF)
 
 on:
     pull_request:
