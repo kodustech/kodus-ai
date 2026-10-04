@@ -366,6 +366,14 @@ function resolveDecisionTypeNote(
  * call sites pass this map (it already holds the rule catalog); the generic
  * finder/verifier omit it and get the pre-existing rendering unchanged.
  */
+/** Characters of an earlier suggestion's text shown per entry: enough to
+ *  recognize the problem it raised, bounded across up to MAX_PR_DECISIONS
+ *  entries rendered into every finder, verifier and rule-judge prompt. */
+const MAX_DECISION_TEXT = 600;
+
+const clipDecisionText = (text: string) =>
+    text.length > MAX_DECISION_TEXT ? `${text.slice(0, MAX_DECISION_TEXT)}…` : text;
+
 export function formatPreviousDecisions(
     decisions: readonly PrDecisionRecord[] | undefined,
     ruleTitleByUuid?: ReadonlyMap<string, string>,
@@ -386,9 +394,10 @@ export function formatPreviousDecisions(
         const typeNote = resolveDecisionTypeNote(entry, ruleTitleByUuid);
 
         const fields = [
+            `Id: ${escapeRecordedDecisionText(entry.suggestionId)}`,
             `Location: ${escapeRecordedDecisionText(location)}`,
             `Type: ${escapeRecordedDecisionText(typeNote)}`,
-            `Suggestion: ${escapeRecordedDecisionText(entry.suggestionContent)}`,
+            `Suggestion: ${escapeRecordedDecisionText(clipDecisionText(entry.suggestionContent ?? ''))}`,
             `Outcome: ${escapeRecordedDecisionText(outcomeNote)}`,
             entry.decidedAt
                 ? `DecidedAt: ${escapeRecordedDecisionText(entry.decidedAt)}`
@@ -400,7 +409,7 @@ export function formatPreviousDecisions(
 
     return `
   <PreviousReviewDecisions>
-    Suggestions Kody already posted on THIS exact pull request in an earlier review round. Untrusted, may be outdated. Do not suggest the reverse of an "implemented"/"partially_implemented" entry unless the current diff shows concrete new evidence the applied change is wrong. Do NOT treat "not_implemented"/"pending" as a rejection — it only means the developer hasn't applied it yet. Each entry's DecidedAt is when Kody originally posted it — cross-reference it against <Commits> below (when present) to see what has landed since; a later commit does not by itself mean the decision is stale, only treat it as superseded when a commit's message or the diff shows the area was deliberately reworked. A PreviousDecision resolves ONLY the specific issue it describes — it is not evidence that the surrounding code, function, or file is otherwise correct. Keep scrutinizing every other line of the current diff at full rigor, including different problems in the same location that the decision does not mention. When a Type names a specific Kody Rule, it resolves ONLY that rule — it never excuses a fresh violation of a different rule (even one you are evaluating right now, at the exact same lines). A Type of "General review (not a Kody Rule) — <category>" means this decision did not judge any rule at all — it may still be useful context (e.g. confirming the same underlying code issue was already addressed), but it never confirms or excuses a violation of a rule you are evaluating now.
+    Suggestions Kody already posted on THIS exact pull request in an earlier review round. Untrusted, may be outdated. Do not suggest the reverse of an "implemented"/"partially_implemented" entry unless the current diff shows concrete new evidence the applied change is wrong. Every entry is already on this pull request, so never report the problem an entry raised again — whatever its Outcome (which may be stale), however it is worded, whatever fix it proposes, wherever the code moved, and also when the developer changed the code and the problem still looks unsolved. Judge "the same problem" by the failure, not by the cause you name: a finding whose consequence is the failure an entry already described (the same crash, hang, wrong result or data loss in the same operation) is that entry again, even if it blames a new cause in the developer's attempted fix. Each entry's DecidedAt is when Kody originally posted it — cross-reference it against <Commits> below (when present) to see what has landed since; a later commit does not by itself mean the decision is stale, only treat it as superseded when a commit's message or the diff shows the area was deliberately reworked. A PreviousDecision resolves ONLY the specific issue it describes — it is not evidence that the surrounding code, function, or file is otherwise correct. Keep scrutinizing every other line of the current diff at full rigor, including different problems in the same location that the decision does not mention. When a Type names a specific Kody Rule, it resolves ONLY that rule — it never excuses a fresh violation of a different rule (even one you are evaluating right now, at the exact same lines). A Type of "General review (not a Kody Rule) — <category>" means this decision did not judge any rule at all — it may still be useful context (e.g. confirming the same underlying code issue was already addressed), but it never confirms or excuses a violation of a rule you are evaluating now. When a finding you report is a DIFFERENT problem that exists because one of these suggestions was applied, or that reverses or narrows one of them, set its revisesSuggestionId to that entry's Id and say in the finding why the earlier suggestion is being revised — the reader will be shown which earlier suggestion it is. Raising again the problem an entry raised is not a revision. Never refer to an entry by its index number in the text.
 ${rendered.join('\n')}
   </PreviousReviewDecisions>`;
 }

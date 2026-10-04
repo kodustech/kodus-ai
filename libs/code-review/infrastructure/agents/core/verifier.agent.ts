@@ -24,7 +24,10 @@ import { BudgetPolicy } from '@libs/agent-harness/infrastructure/policies/budget
 import { ForceTextFinalizePolicy } from '@libs/agent-harness/infrastructure/policies/force-text-finalize.policy';
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
 
-import { buildVerifierPrompt } from '@libs/code-review/infrastructure/agents/prompts/verifier-prompt';
+import {
+    buildVerifierPrompt,
+    VERIFIER_REPEAT_RULE,
+} from '@libs/code-review/infrastructure/agents/prompts/verifier-prompt';
 import { formatPreviousDecisions } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
 import { LLM_ENVELOPE_TAG } from '@libs/llm/structured-output-repair';
 import {
@@ -33,7 +36,6 @@ import {
 } from '@libs/agent-harness/infrastructure/verify/llm-verdict';
 import { createLogger } from '@libs/core/log/logger';
 import type { FinderSuggestion } from '@libs/code-review/infrastructure/agents/core/finder.agent';
-import { normalizePath } from '@libs/code-review/infrastructure/agents/core/finder.agent';
 import { supportsStrictToolsForRun } from '@libs/code-review/infrastructure/agents/core/model-strictness';
 import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 import {
@@ -132,8 +134,8 @@ export function buildVerifierAgentSpec(
 }
 
 /** Format a finding into the verifier's per-run task prompt (HV2 evidence).
- *  `previousDecisions` (issue #1313) should already be filtered to this
- *  candidate's own file by the caller — see LlmVerifier.verify(). */
+ *  `previousDecisions` (issue #1313) is the PR's history, not filtered by
+ *  file — see LlmVerifier.verify(). */
 export function verifierPromptFor(
     finding: FinderSuggestion,
     previousDecisions?: readonly PrDecisionRecord[],
@@ -147,6 +149,7 @@ export function verifierPromptFor(
         `Claim: ${finding.suggestionContent}`,
         finding.existingCode ? `Code:\n${finding.existingCode}` : '',
         formatPreviousDecisions(previousDecisions),
+        previousDecisions?.length ? VERIFIER_REPEAT_RULE : '',
     ]
         .filter(Boolean)
         .join('\n');
@@ -345,20 +348,11 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
             ? `#${candidate.relevantLinesStart}`
             : '';
         const fnId = `${this.params.agentName ?? 'agent'}/verify:${candidate.relevantFile}${loc}`;
-        // Scoped to the candidate's own file (issue #1313) — matching by line
-        // range is deliberately NOT done here (line numbers shift across
-        // review rounds); the model judges same-file semantic overlap itself.
-        // `relevantFile` on both sides is LLM-produced free text (z.string()),
-        // not a validated path, so compare through the same normalizePath()
-        // used elsewhere for this exact class of drift (slashes, leading
-        // './', case) instead of strict equality — a normalization mismatch
-        // here would silently drop the evidence and reopen the #1313 symptom.
-        const candidateFile = normalizePath(candidate.relevantFile ?? '');
-        const matchingDecisions = this.params.previousDecisions?.filter(
-            (decision) =>
-                !!decision.relevantFile &&
-                normalizePath(decision.relevantFile) === candidateFile,
-        );
+        // The PR's whole history (capped upstream at MAX_PR_DECISIONS), not
+        // only the candidate's file: a repeat can sit on a file the code moved
+        // out of, and the finder sometimes names a file by its basename alone
+        // (#2011 round B), which a per-file match never found (#2020).
+        const matchingDecisions = this.params.previousDecisions;
         const state = await this.runner.run(
             spec,
             {

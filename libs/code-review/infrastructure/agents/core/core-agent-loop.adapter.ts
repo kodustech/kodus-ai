@@ -160,6 +160,7 @@ export async function runAgentLoopViaCore(
                 : undefined,
             maxSteps: input.maxSteps ?? 20,
             providerOptions,
+            acceptsRevisions: !!input.previousDecisions?.length,
         });
 
     // Base pass uses the reported `coverageLedger` (read back below for the
