@@ -1,0 +1,2807 @@
+{
+  "model": "gpt-5.4",
+  "judge": "gpt-5.6-luna",
+  "judgeReasoningEffort": "low",
+  "reps": 3,
+  "note": "original 10 cases + 9 added cases, same commit",
+  "rows": [
+    {
+      "model": "gpt-5.4",
+      "rep": 1,
+      "case": "U1-premise-unread",
+      "family": "unread-premise",
+      "sandbox": "dead",
+      "ms": 31710,
+      "sandboxCalls": 5,
+      "sandboxFailed": 5,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 6,
+          "severity": "high",
+          "marked": false,
+          "text": "In src/payments/settle.ts, removing the null/undefined guard around `claim(id)` causes unconditional dereferences of `job.amount` and `job.account`, so a missing ID now throws instead of preserving the previous `{ status: 'missing' }` contract. Restore the `if (!job) { return { status: 'missing' as const }; }` check before computing the fee and debiting the ledger."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver_normal",
+          "proposed": false,
+          "truth": "false",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 2,
+      "case": "U1-premise-unread",
+      "family": "unread-premise",
+      "sandbox": "dead",
+      "ms": 13306,
+      "sandboxCalls": 3,
+      "sandboxFailed": 3,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver_normal",
+          "proposed": false,
+          "truth": "false",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 3,
+      "case": "U1-premise-unread",
+      "family": "unread-premise",
+      "sandbox": "dead",
+      "ms": 13071,
+      "sandboxCalls": 3,
+      "sandboxFailed": 3,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver_normal",
+          "proposed": false,
+          "truth": "false",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 1,
+      "case": "U2-premise-readable",
+      "family": "unread-premise",
+      "sandbox": "alive",
+      "ms": 47401,
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 7,
+          "severity": "high",
+          "marked": false,
+          "text": "In src/payments/settle.ts, the settled debit now subtracts the fee from job.amount even though computeFee is documented as a fee charged on top of the amount, which undercharges every settlement by twice the intended delta relative to the previous behavior. Debit the account for `job.amount + fee` so the charged amount includes the processing fee."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "false",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 2,
+      "case": "U2-premise-readable",
+      "family": "unread-premise",
+      "sandbox": "alive",
+      "ms": 41980,
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 7,
+          "severity": "high",
+          "marked": false,
+          "text": "In src/payments/settle.ts, debiting `job.amount - fee` contradicts `computeFee`'s contract because the fee is charged on top of the job amount, which undercharges every settlement and breaks accounting by collecting less than the job amount plus processing fee. Pass `job.amount + fee` to `ledger.debit` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "false",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 3,
+      "case": "U2-premise-readable",
+      "family": "unread-premise",
+      "sandbox": "alive",
+      "ms": 45579,
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 7,
+          "severity": "medium",
+          "marked": false,
+          "text": "In src/payments/settle.ts, settle now debits `job.amount - fee` even though `computeFee` is documented as a fee charged on top of the amount, which reverses the fee application and undercharges `job.account` by twice the fee relative to the documented settlement rule. Debit the principal plus fee again with `await ledger.debit(job.account, job.amount + fee);`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "false",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 1,
+      "case": "U3-cross-file-dies-in-verify",
+      "family": "unread-premise",
+      "sandbox": "dies-in-verify",
+      "ms": 39652,
+      "sandboxCalls": 13,
+      "sandboxFailed": 5,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 7,
+          "severity": "high",
+          "marked": false,
+          "text": "In `src/billing/status.ts`, `fetchStatus` now rethrows `NotReadyError` instead of wrapping it, but its only caller treats `NotReadyError` as \"gateway never received it\" and resubmits the charge. That makes a transient \"charge exists but not settled yet\" status trigger `gw.submit(...)`, and because `Gateway.submit` is documented as non-idempotent, polling can create duplicate charges; keep wrapping `NotReadyError` here, or introduce a distinct error type for \"missing at gateway\" and update `pollCharge` to resubmit only on that error."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 2,
+      "case": "U3-cross-file-dies-in-verify",
+      "family": "unread-premise",
+      "sandbox": "dies-in-verify",
+      "ms": 37111,
+      "sandboxCalls": 11,
+      "sandboxFailed": 3,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 7,
+          "severity": "critical",
+          "marked": false,
+          "text": "In src/billing/status.ts, rethrowing `NotReadyError` from `fetchStatus` changes what `pollCharge` sees: it treats `NotReadyError` as \"gateway never received it\" and calls the non-idempotent `gw.submit` again, so a transient \"has the charge but has not settled it yet\" status can create duplicate charges. Keep translating `gw.status` failures to `FailedError`, or introduce a distinct error type for the \"missing at gateway, safe to resubmit\" case and have `pollCharge` retry only that case."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 3,
+      "case": "U3-cross-file-dies-in-verify",
+      "family": "unread-premise",
+      "sandbox": "dies-in-verify",
+      "ms": 37304,
+      "sandboxCalls": 10,
+      "sandboxFailed": 3,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 7,
+          "severity": "critical",
+          "marked": false,
+          "text": "`fetchStatus` now rethrows `NotReadyError`, but its caller `pollCharge` treats that exception as \"gateway never received it\" and immediately calls non-idempotent `gw.submit` again. When `gw.status()` throws `NotReadyError` for a charge the gateway already has but has not settled yet, this can create a second charge for the same payload, so keep wrapping `NotReadyError` here or introduce a distinct exception for \"missing at gateway\"."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 1,
+      "case": "U4-cross-file-dead",
+      "family": "unread-premise",
+      "sandbox": "dead",
+      "ms": 17937,
+      "sandboxCalls": 4,
+      "sandboxFailed": 4,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "not_deliver_normal",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 2,
+      "case": "U4-cross-file-dead",
+      "family": "unread-premise",
+      "sandbox": "dead",
+      "ms": 14614,
+      "sandboxCalls": 3,
+      "sandboxFailed": 3,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "not_deliver_normal",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 3,
+      "case": "U4-cross-file-dead",
+      "family": "unread-premise",
+      "sandbox": "dead",
+      "ms": 13134,
+      "sandboxCalls": 3,
+      "sandboxFailed": 3,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "not_deliver_normal",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 1,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 36149,
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 2,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 45547,
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/poller.ts",
+          "line": 15,
+          "severity": "low",
+          "marked": false,
+          "text": "`metrics.increment('billing.resubmit')` in `src/billing/poller.ts` runs before `gw.submit`, so the `NotReadyError` path counts a successful resubmission even when `submit` rejects and no resend occurs, which overstates retries and hides real gateway failure rates. Record the metric only after a successful `await gw.submit(...)`, or emit a separate failure metric in a `catch` if both counts are needed."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 3,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 26344,
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 1,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 43663,
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "In src/billing/status.ts, `fetchStatus` now propagates `NotReadyError` directly, but `pollCharge` interprets that as \"gateway never received it\" and calls `gw.submit(...)`; since `errors.ts` defines `NotReadyError` as \"gateway has the charge but has not settled it yet\", this can duplicate a non-idempotent submission for an already-accepted charge. Keep `NotReadyError` wrapped here, or introduce a distinct error type for the \"never received, safe to resend\" case so `pollCharge` only resubmits on that signal."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 2,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 45472,
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "`fetchStatus` in `src/billing/status.ts` now rethrows `NotReadyError`, but its only caller `pollCharge` treats that as \"gateway never received it\" and resubmits the charge. When `gw.status()` reports the documented transient state that the gateway has the charge but has not settled it yet, this can trigger `gw.submit()` on a non-idempotent API and create duplicate charges, so preserve the caller contract with a distinct error such as `GatewayPendingError` or update `pollCharge`'s `NotReadyError` branch before propagating it unchanged."
+        },
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "`fetchStatus` in `src/billing/status.ts` now rethrows `NotReadyError`, but its only caller `pollCharge` interprets that as \"gateway never received it\" and resubmits the charge. That turns a transient \"accepted but not settled yet\" status into a duplicate submission because `Gateway.submit` is explicitly non-idempotent, so preserve the previous wrapping behavior for `NotReadyError` or introduce a distinct error type before callers decide to resubmit."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 3,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 43747,
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "`fetchStatus` in `src/billing/status.ts` now rethrows `NotReadyError` directly, but its only production caller, `pollCharge`, interprets that error as \"gateway never received it\" and resubmits the charge. When `gw.status()` throws the documented transient \"has the charge but has not settled it yet\" error, this makes `pollCharge` call the non-idempotent `gw.submit()` again and create duplicate charges, so only propagate `NotReadyError` unchanged if callers distinguish pending settlement from a missing charge; otherwise keep wrapping it here or introduce a separate error type for the resubmit pa"
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 1,
+      "case": "R3-consequence-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 44777,
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "`fetchStatus` in `src/billing/status.ts` now rethrows `NotReadyError`, but `pollCharge` interprets that error as \"gateway never received it\" and calls `gw.submit(charge.payload)`. When `gw.status` is actually reporting the documented transient \"gateway has the charge but has not settled it yet\" state, this can create a duplicate non-idempotent charge, so keep mapping that condition to an error type or state that `pollCharge` does not treat as missing/resubmit, or update `pollCharge` to distinguish a status-time `NotReadyError` from submit-time absence before calling `submit`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 2,
+      "case": "R3-consequence-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 47143,
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "marked": false,
+          "text": "`fetchStatus` in `src/billing/status.ts` should not propagate `NotReadyError` unchanged, because its caller `pollCharge` interprets that error as \"gateway never received it\" and resubmits via the non-idempotent `gw.submit`, which can create duplicate charges when `gw.status` only means the charge is not settled yet. Keep wrapping status failures in `FailedError`, or introduce a distinct error type for \"missing at gateway\" so resendable failures stay separate from transient settlement delays."
+        },
+        {
+          "file": "src/billing/status.ts",
+          "line": 7,
+          "severity": "critical",
+          "marked": false,
+          "text": "`fetchStatus` in `src/billing/status.ts` should not rethrow `NotReadyError` unchanged, because its only caller `pollCharge` treats it as \"gateway never received it\" and resubmits the charge. Since `Gateway.submit` is non-idempotent, a merely unsettled charge can produce duplicate charges on any polling tick that sees this transient status, so keep the gateway's \"not settled yet\" condition distinct from the caller's \"missing at gateway\" retry signal."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 3,
+      "case": "R3-consequence-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 47104,
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 7,
+          "severity": "critical",
+          "marked": false,
+          "text": "`fetchStatus` in `src/billing/status.ts` should not rethrow `NotReadyError` directly, because its only caller, `pollCharge`, treats that exception as \"gateway never received it\" and resubmits via the non-idempotent `gw.submit()`. When `gw.status()` uses `NotReadyError` for the transient \"accepted but not settled yet\" state described in `errors.ts`, that behavior can create a duplicate charge, so preserve the previous wrapping or introduce a distinct transient status/polling error that callers can retry without resubmitting."
+        },
+        {
+          "file": "src/billing/status.ts",
+          "line": 7,
+          "severity": "critical",
+          "marked": false,
+          "text": "Propagating `NotReadyError` unchanged from `fetchStatus` in `src/billing/status.ts` is unsafe because its only caller, `pollCharge`, interprets it as \"gateway never received the charge\" and retries with the non-idempotent `gw.submit`. If `gw.status` is reporting the documented transient \"has the charge but not settled yet\" condition, that will create a duplicate charge, so map that case to an error or result distinct from the resend trigger, or keep wrapping `NotReadyError` here until callers distinguish the two cases."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 1,
+      "case": "R4a-kodus2011-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 27597,
+      "sandboxCalls": 3,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 2,
+      "case": "R4a-kodus2011-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 28272,
+      "sandboxCalls": 6,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 3,
+      "case": "R4a-kodus2011-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 27831,
+      "sandboxCalls": 5,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 1,
+      "case": "R4b-kodus2011-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 28629,
+      "sandboxCalls": 6,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 2,
+      "case": "R4b-kodus2011-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 37380,
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 3,
+      "case": "R4b-kodus2011-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 44162,
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "libs/common/utils/prompts/replyAddressedToKody.ts",
+          "line": 124,
+          "severity": "low",
+          "marked": false,
+          "text": "In libs/common/utils/prompts/replyAddressedToKody.ts, the new combined `REFERENCE` regex no longer decodes uppercase-`X` hexadecimal numeric references like `&#X3C;`, which regresses the old `NUMERIC_REFERENCE` (`/gi`) behavior and leaves browser-valid input undecoded so it bypasses prompt canonicalization. Accept both `x` and `X` in the numeric branch, for example `&#(?:[xX]([0-9a-f]+)|(\\d+));?`, or make the hex discriminator case-insensitive another way."
+        }
+      ],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 1,
+      "case": "R5-unrelated-same-area",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 36478,
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "medium",
+          "marked": false,
+          "text": "The arguments to FailedError are reversed in src/billing/status.ts, so the original error string is stored as chargeId and the actual charge ID is stored as cause. This breaks the FailedError contract verified in src/billing/errors.ts and causes downstream handlers to lose the real charge identifier and the original exception object when a gateway status call fails."
+        }
+      ],
+      "claims": [
+        {
+          "id": "swapped-args",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 2,
+      "case": "R5-unrelated-same-area",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 37188,
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "medium",
+          "marked": false,
+          "text": "`FailedError` is constructed with its parameters reversed in `src/billing/status.ts`, so the gateway error string ends up in `chargeId` and the real `chargeId` is stored as `cause`, breaking the `FailedError` contract for callers that read `err.chargeId`. Pass `chargeId` as the first argument and the original error as the second."
+        }
+      ],
+      "claims": [
+        {
+          "id": "swapped-args",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 3,
+      "case": "R5-unrelated-same-area",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 40637,
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "medium",
+          "marked": false,
+          "text": "In src/billing/status.ts, fetchStatus passes FailedError constructor arguments in the wrong order. FailedError is defined as constructor(chargeId, cause?), so non-NotReady failures record the stringified underlying error as chargeId and lose the real charge ID, breaking callers that inspect or log FailedError."
+        },
+        {
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "medium",
+          "marked": false,
+          "text": "In src/billing/status.ts, fetchStatus passes FailedError constructor arguments in the wrong order, using the stringified error as chargeId and the real chargeId as cause. Since FailedError is defined as constructor(chargeId, cause), downstream code will lose the actual charge identifier and misreport failures under the wrong ID."
+        }
+      ],
+      "claims": [
+        {
+          "id": "swapped-args",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 1,
+      "case": "U5-premise-read-then-dies",
+      "family": "unread-premise",
+      "sandbox": "dies-after-reading:src/payments/queue.ts",
+      "ms": 45353,
+      "sandboxCalls": 16,
+      "sandboxFailed": 7,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 7,
+          "severity": "medium",
+          "marked": false,
+          "text": "This changes settlement from debiting `job.amount + fee` to `job.amount - fee`, which reverses the fee adjustment and undercharges the account by `2 * fee`, producing incorrect ledger balances for every settled job with a non-zero fee. Restore the debit amount in `src/payments/settle.ts` so settlement includes the fee if it is supposed to charge principal plus fees."
+        },
+        {
+          "file": "src/payments/settle.ts",
+          "line": 6,
+          "severity": "high",
+          "marked": false,
+          "text": "Removing the `if (!job)` guard in `settle` in `src/payments/settle.ts` makes the function dereference `job.amount` and `job.account` even when `claim(id)` returns no job, changing missing or expired IDs from returning `{ status: 'missing' }` to failing at runtime. Restore the null check before computing the fee and debiting the ledger."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "false",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 2,
+      "case": "U5-premise-read-then-dies",
+      "family": "unread-premise",
+      "sandbox": "dies-after-reading:src/payments/queue.ts",
+      "ms": 39990,
+      "sandboxCalls": 12,
+      "sandboxFailed": 5,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 7,
+          "severity": "high",
+          "marked": false,
+          "text": "In src/payments/settle.ts, changing `ledger.debit(job.account, ...)` to subtract `fee` from `job.amount` reverses the prior settlement behavior and under-debits the account by 2×fee on every settled job with a nonzero fee, producing incorrect ledger balances. Restore the debit to include the fee unless another newly added path credits the fee separately."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "false",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 3,
+      "case": "U5-premise-read-then-dies",
+      "family": "unread-premise",
+      "sandbox": "dies-after-reading:src/payments/queue.ts",
+      "ms": 36815,
+      "sandboxCalls": 15,
+      "sandboxFailed": 6,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 7,
+          "severity": "medium",
+          "marked": false,
+          "text": "In src/payments/settle.ts, the settlement now debits `job.amount - fee` instead of `job.amount + fee`, reducing the ledger charge by twice the fee relative to the previous behavior and potentially under-collecting each settled job, which can leave account and ledger balances inconsistent. Restore the debit to include the fee if settlements are supposed to collect principal plus fees."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "false",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 1,
+      "case": "U6-premise-file-unreachable",
+      "family": "unread-premise",
+      "sandbox": "dead-for:src/payments/queue.ts",
+      "ms": 49965,
+      "sandboxCalls": 28,
+      "sandboxFailed": 1,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 6,
+          "severity": "medium",
+          "marked": false,
+          "text": "`settle` in `src/payments/settle.ts` now dereferences `job.amount` without checking whether `claim(id)` returned `null` or `undefined`, which can throw before `handler.ts` returns `{ status: 'missing' }` and turn a normal missing-job response into a runtime failure. Restore the local `if (!job)` guard or make `claim` throw `JobNotFoundError` consistently and document that contract at the boundary."
+        },
+        {
+          "file": "src/payments/settle.ts",
+          "line": 8,
+          "severity": "high",
+          "marked": false,
+          "text": "In `src/payments/settle.ts`, changing the debit from `job.amount + fee` to `job.amount - fee` contradicts the `computeFee` contract, since `fees.ts` documents the fee as charged on top of the job amount. This would undercharge every settlement and produce incorrect ledger balances, so debit `job.amount + fee`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver_normal",
+          "proposed": false,
+          "truth": "false",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 2,
+      "case": "U6-premise-file-unreachable",
+      "family": "unread-premise",
+      "sandbox": "dead-for:src/payments/queue.ts",
+      "ms": 51743,
+      "sandboxCalls": 21,
+      "sandboxFailed": 1,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 7,
+          "severity": "high",
+          "marked": false,
+          "text": "In src/payments/settle.ts, changing the debit from `job.amount + fee` to `job.amount - fee` contradicts `computeFee` being documented as a processing fee charged on top of the job amount, causing each job to settle for less than its principal and under-collect by `2 * fee` relative to the previous contract. Debit the account for `job.amount + fee` so the fee is added instead of subtracted."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver_normal",
+          "proposed": false,
+          "truth": "false",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 3,
+      "case": "U6-premise-file-unreachable",
+      "family": "unread-premise",
+      "sandbox": "dead-for:src/payments/queue.ts",
+      "ms": 50538,
+      "sandboxCalls": 23,
+      "sandboxFailed": 1,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 7,
+          "severity": "high",
+          "marked": false,
+          "text": "`settle` in `src/payments/settle.ts` now debits `job.amount - fee` even though `computeFee` is documented as a fee charged on top of the job amount. This undercharges every settlement and can even produce a negative debit for small amounts, so debit `job.amount + fee` as before or update the fee contract everywhere if this business rule intentionally changed."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver_normal",
+          "proposed": false,
+          "truth": "false",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 1,
+      "case": "U7-sandbox-recovers",
+      "family": "unread-premise",
+      "sandbox": "flaky:3",
+      "ms": 25787,
+      "sandboxCalls": 7,
+      "sandboxFailed": 3,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "false",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 2,
+      "case": "U7-sandbox-recovers",
+      "family": "unread-premise",
+      "sandbox": "flaky:3",
+      "ms": 39267,
+      "sandboxCalls": 11,
+      "sandboxFailed": 3,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 8,
+          "severity": "high",
+          "marked": false,
+          "text": "In src/payments/settle.ts, changing `ledger.debit(job.account, ...)` from `job.amount + fee` to `job.amount - fee` flips fee handling so settlement now debits less than the job amount instead of charging the fee on top, which changes the money movement semantics and can under-collect every settled job. If the previous contract was intentional, keep debiting `job.amount + fee`; otherwise, post the fee separately and add explicit tests for the intended accounting behavior."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "false",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 3,
+      "case": "U7-sandbox-recovers",
+      "family": "unread-premise",
+      "sandbox": "flaky:3",
+      "ms": 42618,
+      "sandboxCalls": 11,
+      "sandboxFailed": 3,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 8,
+          "severity": "high",
+          "marked": false,
+          "text": "Changing `ledger.debit` in `src/payments/settle.ts` from `job.amount + fee` to `job.amount - fee` reverses fee application and will under-debit settled accounts by twice the fee whenever `computeFee` returns a positive fee, producing incorrect ledger balances. If the existing contract is to charge principal plus fee, pass `job.amount + fee` to `ledger.debit`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "false",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 1,
+      "case": "U8-self-contained",
+      "family": "unread-premise",
+      "sandbox": "none",
+      "ms": 26963,
+      "sandboxCalls": 0,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": true,
+        "zeroCoverage": true,
+        "lowCoverage": true,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 6,
+          "severity": "high",
+          "marked": false,
+          "text": "In src/payments/settle.ts, settle now dereferences `job.amount` and `job.account` without checking whether `claim(id)` returned a job, which can cause a runtime exception on the path that previously returned `{ status: 'missing' }`. Restore the null check before computing the fee and debiting the ledger."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        },
+        {
+          "id": "null-crash",
+          "expect": "observe",
+          "proposed": false,
+          "truth": "false",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 2,
+      "case": "U8-self-contained",
+      "family": "unread-premise",
+      "sandbox": "none",
+      "ms": 26605,
+      "sandboxCalls": 0,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": true,
+        "zeroCoverage": true,
+        "lowCoverage": true,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 6,
+          "severity": "high",
+          "marked": false,
+          "text": "Removing the `if (!job)` guard in `src/payments/settle.ts` means `settle` now dereferences `job.amount` and `job.account`, so if `claim(id)` returns no job on the path the old code handled, it will throw at runtime instead of returning `{ status: 'missing' }`. Restore the null check before computing the fee or debiting the ledger."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        },
+        {
+          "id": "null-crash",
+          "expect": "observe",
+          "proposed": false,
+          "truth": "false",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 3,
+      "case": "U8-self-contained",
+      "family": "unread-premise",
+      "sandbox": "none",
+      "ms": 33050,
+      "sandboxCalls": 0,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": true,
+        "zeroCoverage": true,
+        "lowCoverage": true,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "file": "src/payments/settle.ts",
+          "line": 6,
+          "severity": "high",
+          "marked": false,
+          "text": "The null/missing-job guard was removed from `src/payments/settle.ts` even though `settle` still immediately reads `job.amount` and `job.account`. If `claim(id)` returns the same falsy value this function previously handled, `computeFee(job.amount)` or `ledger.debit(job.account, ...)` will now throw instead of returning `{ status: 'missing' }`, so restore `if (!job) return { status: 'missing' as const };` before using `job`."
+        },
+        {
+          "file": "src/payments/settle.ts",
+          "line": 7,
+          "severity": "medium",
+          "marked": false,
+          "text": "In `src/payments/settle.ts`, changing the debit from `job.amount + fee` to `job.amount - fee` reverses the fee adjustment and settles the ledger for less than the job amount by the fee. If the previous fee-charging behavior was correct, keep the debit as `job.amount + fee`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "fee-sign",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "null-crash",
+          "expect": "observe",
+          "proposed": false,
+          "truth": "false",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 1,
+      "case": "U9-missing-module-is-evidence",
+      "family": "unread-premise",
+      "sandbox": "alive",
+      "ms": 32017,
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/jobs/runner.ts",
+          "line": 1,
+          "severity": "high",
+          "marked": false,
+          "text": "In src/jobs/runner.ts, changing the import to './retry-policy' breaks module resolution because there is no corresponding module in src/jobs, so loading runner.ts now fails and any code path importing this job runner crashes before jobs can execute. Restore the existing './retry' import or add or rename the target file so the specifier resolves."
+        }
+      ],
+      "claims": [
+        {
+          "id": "missing-module",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 2,
+      "case": "U9-missing-module-is-evidence",
+      "family": "unread-premise",
+      "sandbox": "alive",
+      "ms": 35652,
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/jobs/runner.ts",
+          "line": 1,
+          "severity": "high",
+          "marked": false,
+          "text": "`runner.ts` imports `retryPolicy` from `./retry-policy`, but the only matching implementation in `src/jobs` is `retry.ts` and there is no `retry-policy` module, which breaks module resolution and prevents the file from compiling/loading so `run()` cannot be used at all. Restore the import to `./retry` or add the missing `retry-policy.ts` module if the rename was intentional."
+        }
+      ],
+      "claims": [
+        {
+          "id": "missing-module",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 3,
+      "case": "U9-missing-module-is-evidence",
+      "family": "unread-premise",
+      "sandbox": "alive",
+      "ms": 37448,
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "file": "src/jobs/runner.ts",
+          "line": 1,
+          "severity": "critical",
+          "marked": false,
+          "text": "The import in src/jobs/runner.ts was changed to './retry-policy', but no corresponding module exists under src/jobs and the only available implementation is still './retry', so runner.ts will fail to compile or throw on load before any job can run. Restore the import to './retry' or add or rename the target file so './retry-policy' exists and exports retryPolicy."
+        },
+        {
+          "file": "src/jobs/runner.ts",
+          "line": 1,
+          "severity": "critical",
+          "marked": false,
+          "text": "The import in src/jobs/runner.ts was changed from './retry' to './retry-policy', but no corresponding module exists under src/jobs, causing module resolution to fail so runner.ts will not compile or load and job execution breaks immediately. Restore the existing './retry' import or add or rename the target module so the path resolves."
+        }
+      ],
+      "claims": [
+        {
+          "id": "missing-module",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 1,
+      "case": "R6-incomplete-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 34865,
+      "sandboxCalls": 4,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/ledger/ledger.ts",
+          "line": 5,
+          "severity": "high",
+          "marked": false,
+          "text": "In src/ledger/ledger.ts, the positive-amount validation was added only to debit, so credit still accepts zero or negative amounts and credit(-x) can still act as a debit. Apply the same `amount > 0` guard in `credit` so both entry points enforce the same contract and throw `RangeError` for invalid amounts."
+        }
+      ],
+      "claims": [
+        {
+          "id": "credit-negative",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 2,
+      "case": "R6-incomplete-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 20763,
+      "sandboxCalls": 3,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "credit-negative",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 3,
+      "case": "R6-incomplete-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 32548,
+      "sandboxCalls": 4,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/ledger/ledger.ts",
+          "line": 9,
+          "severity": "medium",
+          "marked": false,
+          "text": "`debit` now rejects non-positive amounts, but `credit` in `src/ledger/ledger.ts` still accepts them, so `credit(account, -x)` can still mutate the balance as a debit and bypass the positive-amount invariant. Apply the same `amount > 0` validation in `credit` before updating the balance."
+        }
+      ],
+      "claims": [
+        {
+          "id": "credit-negative",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 1,
+      "case": "R7-refines-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 43817,
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "file": "src/http/client.ts",
+          "line": 2,
+          "severity": "high",
+          "marked": false,
+          "text": "The new AbortController in src/http/client.ts is never connected to fetch because getJson still calls fetch(url) without controller.signal, so the intended 5s timeout never aborts a request and a server that never responds can hang getJson indefinitely. Pass the signal into fetch, for example with fetch(url, { signal: controller.signal })."
+        },
+        {
+          "file": "getJson",
+          "line": 2,
+          "severity": "high",
+          "marked": false,
+          "text": "The newly added timeout in getJson does not actually affect the request because the AbortController created on lines 2-3 is never passed to fetch on line 5, so the timeout callback cannot cancel the in-flight request. Pass signal to fetch."
+        }
+      ],
+      "claims": [
+        {
+          "id": "signal-not-passed",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 2,
+      "case": "R7-refines-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 28685,
+      "sandboxCalls": 3,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/http/client.ts",
+          "line": 2,
+          "severity": "high",
+          "marked": false,
+          "text": "In src/http/client.ts, the new AbortController is never passed to fetch, so the 5-second timeout never aborts the HTTP request and callers can still hang indefinitely on an unresponsive server. Pass controller.signal into fetch to enforce the timeout contract this PR is trying to add."
+        }
+      ],
+      "claims": [
+        {
+          "id": "signal-not-passed",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 3,
+      "case": "R7-refines-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 29179,
+      "sandboxCalls": 3,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/http/client.ts",
+          "line": 2,
+          "severity": "high",
+          "marked": false,
+          "text": "The new timeout logic in src/http/client.ts never reaches fetch because the AbortController signal is not passed in the request options, so getJson still hangs indefinitely on a non-responsive server and the intended 5s timeout is not enforced. Pass controller.signal to fetch(url, { signal: controller.signal }) so the scheduled abort can cancel the request."
+        }
+      ],
+      "claims": [
+        {
+          "id": "signal-not-passed",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 1,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 35333,
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 2,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 45102,
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 7,
+          "severity": "high",
+          "marked": false,
+          "text": "`fetchStatus` in `src/billing/status.ts` now propagates `NotReadyError`, but its only caller treats that exception as \"the gateway never received the charge\" and immediately resubmits. When `gw.status()` returns `NotReadyError` for a charge the gateway already has but has not settled yet, `pollCharge` can create a duplicate charge because `Gateway.submit()` is documented as non-idempotent, so keep transient pending-status errors distinct from the resend signal expected by `pollCharge`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 3,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 19491,
+      "sandboxCalls": 7,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 1,
+      "case": "R9-repeat-after-dev-rejected",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 39490,
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "file": "src/billing/poller.ts",
+          "line": 15,
+          "severity": "critical",
+          "marked": false,
+          "text": "In src/billing/poller.ts, the `NotReadyError` branch in `pollCharge` still treats polling a previously ACCEPTED charge as a signal to call the non-idempotent `gw.submit` again, even though `Gateway.submit` creates a new charge on every call. That duplicates billing whenever status polling returns `NotReadyError`, and the `metrics.increment('billing.resubmit')` line makes this broken path look intentional, so `pollCharge` should wait/retry instead of resubmitting until `fetchStatus` succeeds."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-repeat-after-rejection",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 2,
+      "case": "R9-repeat-after-dev-rejected",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 30686,
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-after-rejection",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "rep": 3,
+      "case": "R9-repeat-after-dev-rejected",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 22092,
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-after-rejection",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "measured": 57,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 9,
+        "violations": 2,
+        "rate": 0.222
+      },
+      "repeat-of-open (no issue)": {
+        "n": 6,
+        "violations": 1,
+        "rate": 0.167
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 12,
+        "violations": 12,
+        "rate": 1
+      },
+      "refuted-shipped (control)": {
+        "n": 9,
+        "violations": 1,
+        "rate": 0.111
+      },
+      "true-bug-missed (guard)": {
+        "n": 42,
+        "violations": 9,
+        "rate": 0.214
+      }
+    },
+    "byCase": {
+      "U1-premise-unread · fee-sign [deliver]": {
+        "pass": 0,
+        "n": 3,
+        "delivered": 0
+      },
+      "U1-premise-unread · null-crash [not_deliver_normal]": {
+        "pass": 2,
+        "n": 3,
+        "delivered": 1
+      },
+      "U2-premise-readable · fee-sign [deliver]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 3
+      },
+      "U2-premise-readable · null-crash [not_deliver]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 0
+      },
+      "U3-cross-file-dies-in-verify · resubmit-double-charge [deliver]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 3
+      },
+      "U4-cross-file-dead · resubmit-double-charge [not_deliver_normal, proposed]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 0
+      },
+      "R1-repeat-open · resubmit-repeat [not_deliver, proposed]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 0
+      },
+      "R2-consequence-status-implemented · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 0,
+        "n": 3,
+        "delivered": 3
+      },
+      "R3-consequence-status-stale · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 0,
+        "n": 3,
+        "delivered": 3
+      },
+      "R4a-kodus2011-status-implemented · entity-not-neutralized [if_delivered_linked, proposed]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 0
+      },
+      "R4b-kodus2011-status-stale · entity-not-neutralized [if_delivered_linked, proposed]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 0
+      },
+      "R5-unrelated-same-area · swapped-args [deliver]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 3
+      },
+      "U5-premise-read-then-dies · fee-sign [deliver]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 3
+      },
+      "U5-premise-read-then-dies · null-crash [not_deliver]": {
+        "pass": 2,
+        "n": 3,
+        "delivered": 1
+      },
+      "U6-premise-file-unreachable · fee-sign [deliver]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 3
+      },
+      "U6-premise-file-unreachable · null-crash [not_deliver_normal]": {
+        "pass": 2,
+        "n": 3,
+        "delivered": 1
+      },
+      "U7-sandbox-recovers · fee-sign [deliver]": {
+        "pass": 2,
+        "n": 3,
+        "delivered": 2
+      },
+      "U7-sandbox-recovers · null-crash [not_deliver]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 0
+      },
+      "U8-self-contained · fee-sign [deliver]": {
+        "pass": 1,
+        "n": 3,
+        "delivered": 1
+      },
+      "U8-self-contained · null-crash [observe]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 3
+      },
+      "U9-missing-module-is-evidence · missing-module [deliver]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 3
+      },
+      "R6-incomplete-fix · credit-negative [deliver_linked, proposed]": {
+        "pass": 0,
+        "n": 3,
+        "delivered": 2
+      },
+      "R7-refines-prior · signal-not-passed [deliver_linked, proposed]": {
+        "pass": 0,
+        "n": 3,
+        "delivered": 3
+      },
+      "R8-consequence-kody-rule-prior · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 0,
+        "n": 3,
+        "delivered": 1
+      },
+      "R9-repeat-after-dev-rejected · resubmit-repeat-after-rejection [not_deliver, proposed]": {
+        "pass": 2,
+        "n": 3,
+        "delivered": 1
+      }
+    }
+  }
+}

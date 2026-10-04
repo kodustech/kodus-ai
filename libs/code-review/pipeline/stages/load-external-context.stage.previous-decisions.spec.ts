@@ -47,7 +47,7 @@ describe('LoadExternalContextStage previous review decisions (issue #1313, uncon
         return { stage, buildPreviousReviewDecisionsUseCase, featureGate };
     }
 
-    it('loads decisions scoped to the changed files with no feature-gate check', async () => {
+    it('loads the whole PR\'s decisions (not only the changed files) with no feature-gate check', async () => {
         const { stage, buildPreviousReviewDecisionsUseCase, featureGate } =
             makeStage();
 
@@ -60,7 +60,6 @@ describe('LoadExternalContextStage previous review decisions (issue #1313, uncon
             organizationId: 'org-1',
             prNumber: 42,
             repositoryFullName: 'org/repo',
-            filePaths: ['src/index.ts'],
         });
         // No alpha gate for this feature — every org gets it.
         expect(featureGate.isEnabled).not.toHaveBeenCalled();

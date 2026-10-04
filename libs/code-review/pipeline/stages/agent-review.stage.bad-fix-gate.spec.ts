@@ -117,6 +117,73 @@ afterEach(() => {
 });
 
 describe('AgentReviewStage — improvedCode publication gate (#1833)', () => {
+    it('adds the revision reference after formatting to both the comment and the correction prompt', async () => {
+        const { stage, reviewOrchestrator } = makeStage();
+        reviewOrchestrator.execute.mockResolvedValue(
+            happyEnvelope([
+                sugg({
+                    revisesSuggestionId: 'prior-1',
+                    llmPrompt: 'Raw finding.',
+                }),
+            ]),
+        );
+        const { formatSuggestionContent } = jest.requireMock(
+            '@libs/code-review/infrastructure/agents/engine/format-suggestion-content',
+        );
+        formatSuggestionContent.mockResolvedValueOnce(
+            new Map([[0, { suggestionContent: 'Formatted finding.' }]]),
+        );
+        const result = await run(
+            stage,
+            makeContext({
+                previousDecisions: [
+                    {
+                        suggestionId: 'prior-1',
+                        relevantFile: 'src/user.ts',
+                        relevantLinesStart: 10,
+                        suggestionContent: 'Earlier fix.',
+                        label: 'bug',
+                        outcome: 'implemented',
+                        decidedAt: '2026-10-03T10:00:00Z',
+                    },
+                ],
+            }),
+        );
+        const [published] = analyzedSuggestions(result);
+        expect(published.suggestionContent).toContain(
+            'Revises an earlier Kody suggestion',
+        );
+        expect(published.suggestionContent).toContain('Formatted finding.');
+        expect(published.llmPrompt).toBe(published.suggestionContent);
+    });
+
+    it('assigns distinct suggestion IDs to PR-level findings of the same rule across rounds', async () => {
+        const { stage, reviewOrchestrator } = makeStage();
+        const envelope = () =>
+            happyEnvelope([
+                sugg({
+                    label: 'kody_rules',
+                    relevantFile: undefined,
+                    relevantLinesStart: undefined,
+                    relevantLinesEnd: undefined,
+                    improvedCode: '',
+                    brokenKodyRulesIds: ['rule-1'],
+                }),
+            ]);
+        reviewOrchestrator.execute.mockImplementation(envelope);
+        const first = await run(stage, makeContext());
+        const second = await run(stage, makeContext());
+        expect(first.validSuggestionsByPR).toHaveLength(1);
+        expect(second.validSuggestionsByPR).toHaveLength(1);
+        expect(first.validSuggestionsByPR[0].id).not.toBe('rule-1');
+        expect(first.validSuggestionsByPR[0].id).not.toBe(
+            second.validSuggestionsByPR[0].id,
+        );
+        expect(first.validSuggestionsByPR[0].brokenKodyRulesIds).toEqual([
+            'rule-1',
+        ]);
+    });
+
     it('downgrades an empty improvedCode to a plain comment instead of dropping it', async () => {
         const { stage, reviewOrchestrator } = makeStage();
         reviewOrchestrator.execute.mockResolvedValue(
@@ -229,9 +296,9 @@ describe('AgentReviewStage — improvedCode publication gate (#1833)', () => {
         expect(result.fileAnalysisResults).toHaveLength(1);
         const analyzed = analyzedSuggestions(result);
         expect(analyzed).toHaveLength(2);
-        expect(
-            analyzed.filter((s: any) => s.improvedCode === ''),
-        ).toHaveLength(1);
+        expect(analyzed.filter((s: any) => s.improvedCode === '')).toHaveLength(
+            1,
+        );
 
         const warnings = result.reviewWarnings ?? [];
         const badFixWarning = warnings.find(

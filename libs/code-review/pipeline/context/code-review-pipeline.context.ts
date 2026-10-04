@@ -229,8 +229,9 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     externalPromptContext?: IExternalPromptContext;
     /** Decisions recorded by Kodus Trace, scoped to the changed files. */
     traceDecisions?: TraceContextDecision[];
-    /** Suggestions already posted on THIS PR in a previous review round,
-     *  scoped to the changed files (issue #1313). */
+    /** Suggestions already posted on THIS PR in a previous review round —
+     *  the most recent across the whole PR, not only the changed files
+     *  (issue #1313, #2020). */
     previousDecisions?: PrDecisionRecord[];
     /** Camadas já formatadas para incluir no ContextPack (ex.: arquivos, instruções). */
     externalPromptLayers?: ContextLayer[];

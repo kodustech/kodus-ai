@@ -1,0 +1,203 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "judge": "claude-haiku-4-5",
+  "judgeReasoningEffort": null,
+  "reps": 3,
+  "engine": {
+    "commit": "03b25de6ec9310180b9797eaa725f4dae7922a25",
+    "sourceDigest": "3b409a719f077fff11ab4d17d1afee27fe9943ff3b13422cbaf3795144723628"
+  },
+  "startedAt": "2026-10-04T14:16:48.691Z",
+  "updatedAt": "2026-10-04T14:29:35.090Z",
+  "complete": true,
+  "selectedCases": [
+    "R10-kodus2044-reversal"
+  ],
+  "summary": {
+    "measured": 2,
+    "infra": 1,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "index-reference (#2039)": {
+        "n": 1,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R10-kodus2044-reversal \u00b7 unresolved-team-bypass [if_delivered_linked, proposed]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R10-kodus2044-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 465541,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "claim": "WHAT: the new early-return for KODUS_CREATE_MEMORY returns a `data` object that omits `uuid`, `rule`, and `status`, which the tool's declared `outputSchema` (line 1070-1087, `z.looseObject`) marks as required. WHY: the MCP response's `structuredContent` no longer conforms to the schema the server advertises for this tool, so clients (and any output validation in `wrapToolHandler`) that enforce `outputSchema` will reject/throw on the 'Team not found.' response instead of surfacing it \u2014 the refusal path becomes an error rather than a graceful `success: false`. The TypeScript interface `CreateMemoryRuleResponse` (line 111-124) marks these fields optional, which is why the mismatch compiles silently. HOW: either make the schema fields optional to match the interface, or populate the required fields in the refusal payload (e.g. `uuid: ''`, `rule: args.kodyRule.rule`, `status: KodyRulesStatus.ACTIVE`).",
+          "keep": true,
+          "rationale": "Verified: the outputSchema at lines 1070-1087 declares `data` as a z.looseObject with `uuid: z.string()`, `rule: z.string()`, and `status: z.enum(KodyRulesStatus)` \u2014 all non-optional/required. The new early-return payload at lines 1116-1127 supplies only title, action, requiresApproval, message, and link, omitting uuid, rule, and status. The TypeScript interface CreateMemoryRuleResponse (lines 111-124) marks uuid/rule/status optional, so the mismatch compiles silently. The refusal path is reachable (teamBelongsToAnotherOrganization returning true), so structuredContent built from this data will not conform to the advertised schema. This is a concrete, factual schema/payload mismatch, not a generic 'missing X' suggestion. It is also distinct from PreviousDecision index 1, which concerned the gating logic refusing teams that fail to resolve \u2014 a different failure (incorrect refusal) from this one (non-conforming output payload).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 1050,
+                "endLine": 1140
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 100,
+                "endLine": 130
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "wrapToolHandler",
+                "path": "libs/mcp-server",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "wrapToolHandler|structuredContent|outputSchema|parse\\(",
+                "path": "libs/mcp-server",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 45,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "line": 1116,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "In libs/mcp-server/tools/kodyRules.tools.ts, the new early-return for KODUS_CREATE_MEMORY omits `uuid`, `rule`, and `status` from `data`, but the tool's `outputSchema` (lines 1070-1087, `z.looseObject`) marks them as required, so the MCP `structuredContent` no longer conforms and clients or `wrapToolHandler` output validation will reject/throw on the 'Team not found.' response instead of surfacing a graceful `success: false`; the optional fields in `CreateMemoryRuleResponse` (lines 111-124) let the mismatch compile silently. Either make the schema fields optional to match the interface or populate the required fields in the refusal payload (e.g. `uuid: ''`, `rule: args.kodyRule.rule`, `status: KodyRulesStatus.ACTIVE`)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unresolved-team-bypass",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R10-kodus2044-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 270962,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 24,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "unresolved-team-bypass",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R10-kodus2044-reversal",
+      "error": "INFRA: agent did not run (finishReason=error, steps=0)"
+    }
+  ],
+  "infraReasonNote": "Provider DNS resolution failed during this batch (api.fireworks.ai ENOTFOUND); one judge request exhausted fetch retries. Unmeasured rows remain infra."
+}
