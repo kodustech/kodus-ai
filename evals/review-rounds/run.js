@@ -53,6 +53,7 @@ const casesSourceDigest = casesFile
           .digest('hex')
     : undefined;
 const { selectCases } = require('./case-selection');
+const { assertCompleteRuleReview } = require('./measurement');
 const { applyModelEnv } = require('../shared/tier0-models');
 const {
     matchComment,
@@ -346,6 +347,7 @@ async function runKodyRules(c, counter) {
             scope: r.scope || 'file',
         })),
     });
+    assertCompleteRuleReview(out.warnings);
     return {
         steps: out.turnsUsed ?? 0,
         finishReason: out.finishReason,

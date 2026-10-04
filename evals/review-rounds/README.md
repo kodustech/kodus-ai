@@ -145,3 +145,5 @@ of exported customer snapshots and persisted suggestions without committing
 their source code. Record the export's origin and missing context alongside the
 result: a final snapshot with earlier comments does not reconstruct the code
 at each historical commit. The sandbox can only read the exported files.
+Partial Kody Rules shard failures and unavailable declared rule context are
+unmeasured (infra), even when the provider returns no findings.
