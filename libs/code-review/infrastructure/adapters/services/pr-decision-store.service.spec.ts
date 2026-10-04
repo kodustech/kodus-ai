@@ -198,11 +198,13 @@ describe('PrDecisionStoreService.load', () => {
             repositoryFullName: 'kodustech/kodus-ai',
         });
 
+        // Same cap as the file-level read: PR-level history is not cut at 5.
         expect(repo.findPrLevelSuggestionsByPR).toHaveBeenCalledWith(
             42,
             'kodustech/kodus-ai',
             'org-1',
             DeliveryStatus.SENT,
+            MAX_PR_DECISIONS,
         );
         expect(result).toHaveLength(1);
         expect(result[0].relevantFile).toBeUndefined();

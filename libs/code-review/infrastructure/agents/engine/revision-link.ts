@@ -28,11 +28,12 @@ export function applyRevisionLinks(
     previousDecisions: readonly PrDecisionRecord[] | undefined,
 ): number {
     let linked = 0;
+    const priorById = new Map(
+        (previousDecisions ?? []).map((d) => [d.suggestionId, d]),
+    );
     for (const s of suggestions) {
         const prior = s.revisesSuggestionId
-            ? previousDecisions?.find(
-                  (d) => d.suggestionId === s.revisesSuggestionId,
-              )
+            ? priorById.get(s.revisesSuggestionId)
             : undefined;
         if (!prior) {
             if (s.revisesSuggestionId) delete s.revisesSuggestionId;

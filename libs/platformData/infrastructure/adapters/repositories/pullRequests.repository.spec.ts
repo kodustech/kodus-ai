@@ -418,6 +418,15 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
     });
 
     describe('findPrLevelSuggestionsByPR (issue #1313 Fase 1b — PR-level PrDecisionStore read)', () => {
+        it('keeps the most recent `limit` PR-level suggestions when given one (default 5)', async () => {
+            (exec as jest.Mock).mockResolvedValue([]);
+            await repo.findPrLevelSuggestionsByPR(42, 'kodustech/kodus-ai', 'org-A', 'sent' as any, 40);
+            await repo.findPrLevelSuggestionsByPR(42, 'kodustech/kodus-ai', 'org-A', 'sent' as any);
+            const sliceOf = (call: number) => JSON.stringify(aggregate.mock.calls[call][0]).match(/"\$slice":\[.*?,(\d+)\]/)?.[1];
+            expect(sliceOf(0)).toBe('40');
+            expect(sliceOf(1)).toBe('5');
+        });
+
         it('includes organizationId AND repository.fullName in the FIRST $match (multi-tenant + cross-repo scope)', async () => {
             (exec as jest.Mock).mockResolvedValueOnce([]);
 

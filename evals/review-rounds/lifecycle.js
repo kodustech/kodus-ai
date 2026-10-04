@@ -1,6 +1,7 @@
 // Stateful reviews: only comments actually delivered become the next round's history.
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const { execFileSync } = require('child_process');
 const { once, instrumentVerifier, engineSnapshot } = require('./run');
 const { cases } = require('./cases');
@@ -15,7 +16,7 @@ const byId = (id) => clone(cases.find((c) => c.id.startsWith(id + '-')));
 
 function change(before, after, filename) {
     // Real consecutive snapshots, not a repeated diff from the initial commit.
-    const scratch = fs.mkdtempSync('/private/tmp/kody-lifecycle-diff-');
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'kody-lifecycle-diff-'));
     fs.writeFileSync(path.join(scratch, 'before'), before);
     fs.writeFileSync(path.join(scratch, 'after'), after);
     let diff;

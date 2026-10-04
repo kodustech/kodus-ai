@@ -221,6 +221,8 @@ export interface IPullRequestsRepository {
         repoFullName: string,
         organizationId: string,
         deliveryStatus: DeliveryStatus,
+        /** Most recent N kept (default 5). */
+        limit?: number,
     ): Promise<ISuggestionByPR[]>;
     findSuggestionsByRuleId(
         ruleId: string,

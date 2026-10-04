@@ -329,12 +329,14 @@ export class PullRequestsService implements IPullRequestsService {
         repoFullName: string,
         organizationId: string,
         deliveryStatus: DeliveryStatus,
+        limit?: number,
     ): Promise<ISuggestionByPR[]> {
         return this.pullRequestsRepository.findPrLevelSuggestionsByPR(
             prNumber,
             repoFullName,
             organizationId,
             deliveryStatus,
+            limit,
         );
     }
 

@@ -104,11 +104,14 @@ export class PrDecisionStoreService implements PrDecisionStore {
                 DeliveryStatus.SENT,
                 MAX_PR_DECISIONS,
             ),
+            // Same cap as the file-level read: the most recent
+            // MAX_PR_DECISIONS on the whole PR, PR-level included.
             this.pullRequestsRepository.findPrLevelSuggestionsByPR(
                 params.prNumber,
                 params.repositoryFullName,
                 params.organizationId,
                 DeliveryStatus.SENT,
+                MAX_PR_DECISIONS,
             ),
         ]);
 

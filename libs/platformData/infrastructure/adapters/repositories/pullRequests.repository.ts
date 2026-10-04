@@ -1103,6 +1103,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         repoFullName: string,
         organizationId: string,
         deliveryStatus: DeliveryStatus,
+        limit: number = PER_FILE_HISTORY_LIMIT,
     ): Promise<ISuggestionByPR[]> {
         const result = await this.pullRequestsModel
             .aggregate([
@@ -1145,7 +1146,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                                         sortBy: { createdAt: -1 },
                                     },
                                 },
-                                PER_FILE_HISTORY_LIMIT,
+                                limit,
                             ],
                         },
                     },
