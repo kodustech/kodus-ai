@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 
 import {
     MAX_PR_DECISIONS,
@@ -62,7 +63,21 @@ export function toRecordFromPrLevel(
     suggestion: ISuggestionByPR,
 ): PrDecisionRecord {
     return {
-        suggestionId: suggestion.id,
+        // Older PR-level suggestions reused the rule UUID across comments.
+        // Identify the posted comment rather than that source ID. Legacy
+        // records without comment metadata get a stable reference from the
+        // fields that distinguish their review round and finding.
+        suggestionId: suggestion.comment?.id
+            ? `pr-comment-${suggestion.comment.id}`
+            : `pr-legacy-${createHash('sha256')
+                  .update(
+                      JSON.stringify([
+                          suggestion.id,
+                          suggestion.createdAt ?? '',
+                          suggestion.suggestionContent,
+                      ]),
+                  )
+                  .digest('hex')}`,
         suggestionContent: suggestion.suggestionContent,
         label: suggestion.label,
         brokenKodyRulesIds: suggestion.brokenKodyRulesIds,

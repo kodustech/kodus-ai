@@ -127,3 +127,21 @@ delivers nothing is a failure, not a vacuous pass.
 `node evals/review-rounds/lifecycle.js --model=deepseek-v4-flash --reps=3`. Exit 1
 for an acceptance violation, 2 for infra. `--wiring-smoke` skips the quality
 assertions on `eval-fake` only: it proves the wiring, never model quality.
+
+The `rules-rejected-four-rounds` and `rules-fixed-three-rounds` sequences drive
+the production Kody Rules provider through the same lifecycle. They reproduce
+the shape of Trinio's report on private PR #2933 using invented code, not a
+replay of that PR: four nearby commits after rejection, or a repair followed by
+three commits while the stored status remains pending. Each sequence ends with
+a new violation of the same rule in another function, which must be delivered.
+Only actual delivered comments enter the next round's history; an empty first
+review fails. Select either with `--sequence=<id>`.
+
+## Private snapshot replays
+
+`run.js --cases-file=/absolute/path/cases.json` reads an external JSON object
+with a `cases` array in the same shape as `cases.js`. This allows a local replay
+of exported customer snapshots and persisted suggestions without committing
+their source code. Record the export's origin and missing context alongside the
+result: a final snapshot with earlier comments does not reconstruct the code
+at each historical commit. The sandbox can only read the exported files.

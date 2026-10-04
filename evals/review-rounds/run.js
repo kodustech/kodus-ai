@@ -39,7 +39,19 @@ if (!process.env.JUDGE_MODEL) {
 require('ts-node/register/transpile-only');
 require('tsconfig-paths/register');
 
-const { cases } = require('./cases');
+// Private customer exports can be replayed locally without vendoring their code.
+const casesFile = process.argv
+    .find((a) => a.startsWith('--cases-file='))
+    ?.slice('--cases-file='.length);
+const { cases } = casesFile
+    ? JSON.parse(fs.readFileSync(path.resolve(casesFile), 'utf8'))
+    : require('./cases');
+const casesSourceDigest = casesFile
+    ? crypto
+          .createHash('sha256')
+          .update(fs.readFileSync(path.resolve(casesFile)))
+          .digest('hex')
+    : undefined;
 const { selectCases } = require('./case-selection');
 const { applyModelEnv } = require('../shared/tier0-models');
 const {
@@ -389,19 +401,18 @@ async function once(c, judgeKey) {
             formatted.get(i)?.suggestionContent || s.suggestionContent,
     }));
     applyRevisionLinks(posted, c.previousDecisions);
-    const delivered = kept
-        .map((s, i) => ({
-            sourceIndex: i,
-            file: s.relevantFile,
-            line: s.relevantLinesStart,
-            severity: severity.get(i) ?? s.severity,
-            text: posted[i].suggestionContent,
-            linkedById: !!posted[i].revisesSuggestionId,
-            revisesSuggestionId: posted[i].revisesSuggestionId,
-            label: s.label,
-            brokenKodyRulesIds: s.brokenKodyRulesIds,
-            marked: isMarkedUnverified(s),
-        }));
+    const delivered = kept.map((s, i) => ({
+        sourceIndex: i,
+        file: s.relevantFile,
+        line: s.relevantLinesStart,
+        severity: severity.get(i) ?? s.severity,
+        text: posted[i].suggestionContent,
+        linkedById: !!posted[i].revisesSuggestionId,
+        revisesSuggestionId: posted[i].revisesSuggestionId,
+        label: s.label,
+        brokenKodyRulesIds: s.brokenKodyRulesIds,
+        marked: isMarkedUnverified(s),
+    }));
 
     const claims = [];
     // A delivered comment answers one claim at most: two claims on the same
@@ -618,6 +629,7 @@ async function main() {
                     updatedAt: new Date().toISOString(),
                     complete,
                     selectedCases: selected.map((c) => c.id),
+                    casesSourceDigest,
                     summary: summarize(rows),
                     rows,
                 },

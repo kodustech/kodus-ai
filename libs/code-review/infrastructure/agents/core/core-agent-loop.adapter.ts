@@ -236,6 +236,7 @@ export async function runAgentLoopViaCore(
                     secrets.byokConfig,
                     input.telemetryMetadata?.organizationId,
                     input.usageRunName,
+                    input.previousDecisions,
                 ),
         },
         { prompt: input.userPrompt },

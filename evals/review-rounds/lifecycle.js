@@ -16,7 +16,9 @@ const byId = (id) => clone(cases.find((c) => c.id.startsWith(id + '-')));
 
 function change(before, after, filename) {
     // Real consecutive snapshots, not a repeated diff from the initial commit.
-    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'kody-lifecycle-diff-'));
+    const scratch = fs.mkdtempSync(
+        path.join(os.tmpdir(), 'kody-lifecycle-diff-'),
+    );
     fs.writeFileSync(path.join(scratch, 'before'), before);
     fs.writeFileSync(path.join(scratch, 'after'), after);
     let diff;
@@ -42,6 +44,74 @@ function harmless(c, round, file) {
         before + `\n// Review commit ${round}: telemetry documentation only.\n`;
     next.changedFiles = [change(before, next.repo[file], file)];
     return next;
+}
+
+function ruleSequences() {
+    // Synthetic reproduction of Trinio's report, not a replay of private PR #2933.
+    const file = 'src/jobs/handler.ts';
+    const template = byId('K1');
+    const first = clone(template);
+    delete first.previousDecisions;
+    first.repo[file] = byId('K2').repo[file];
+    first.claims = [clone(template.claims[0])];
+    first.claims[0].expect = 'deliver';
+    const valid = first.repo[file].replace(
+        "    await db.results.insert(run.id, run.output);\n    await db.progress.update(run.id, 'done');",
+        "    await db.progress.update(run.id, 'done');\n    await db.results.insert(run.id, run.output);",
+    );
+    first.changedFiles = [change(valid, first.repo[file], file)];
+
+    const nearbyCommit = (c, index) => {
+        const next = clone(c);
+        next.repo[file] = c.repo[file].replace(
+            'export async function finishRun(run: Run) {',
+            `export async function finishRun(run: Run) {\n    // Commit ${index}: document completion telemetry.`,
+        );
+        next.changedFiles = [change(c.repo[file], next.repo[file], file)];
+        next.claims[0].expect = 'not_deliver';
+        return next;
+    };
+    const addNewViolation = (rounds) => {
+        const next = clone(rounds.at(-1));
+        next.repo[file] +=
+            "\nexport async function finishBatch(batch: Batch) {\n    await db.results.insertMany(batch.id, batch.outputs);\n    await db.progress.update(batch.id, 'done');\n}\n";
+        next.repo[file] = next.repo[file].replace(
+            'import type { Run }',
+            'import type { Run, Batch }',
+        );
+        next.changedFiles = [
+            change(rounds.at(-1).repo[file], next.repo[file], file),
+        ];
+        next.claims = [clone(next.claims[0]), clone(template.claims[1])];
+        rounds.push(next);
+    };
+    const rejected = [clone(first)];
+    for (let i = 1; i <= 4; i++)
+        rejected.push(nearbyCommit(rejected.at(-1), i));
+    addNewViolation(rejected);
+
+    const fixed = [clone(first)];
+    const repair = clone(first);
+    repair.repo[file] = valid;
+    repair.changedFiles = [change(first.repo[file], valid, file)];
+    repair.claims[0].expect = 'not_deliver';
+    fixed.push(repair);
+    for (let i = 1; i <= 3; i++) fixed.push(nearbyCommit(fixed.at(-1), i));
+    addNewViolation(fixed);
+    return [
+        {
+            id: 'rules-rejected-four-rounds',
+            action: 'Trinio-shaped synthetic: rejected rule finding, four nearby commits with line shifts, then a new violation of the same rule in another function.',
+            historyOutcome: 'not_implemented',
+            rounds: rejected,
+        },
+        {
+            id: 'rules-fixed-three-rounds',
+            action: 'Trinio-shaped synthetic: corrected rule violation, three nearby commits while status remains pending, then a new violation of the same rule in another function.',
+            historyOutcome: 'pending',
+            rounds: fixed,
+        },
+    ];
 }
 
 function sequences() {
@@ -133,6 +203,7 @@ function sequences() {
         {
             id: 'fixed-three-rounds',
             action: 'Developer removes the duplicate submission; persisted status deliberately stays pending.',
+            historyOutcome: 'pending',
             rounds: fixed,
         },
         {
@@ -140,6 +211,7 @@ function sequences() {
             action: 'Developer adds an ineffective timeout; the hang the first comment raised is not posted again.',
             rounds: refinement,
         },
+        ...ruleSequences(),
     ];
 }
 
@@ -199,9 +271,7 @@ async function main() {
                             label: d.label || 'bug',
                             brokenKodyRulesIds: d.brokenKodyRulesIds,
                             outcome:
-                                sequence.id === 'fixed-three-rounds'
-                                    ? 'pending'
-                                    : 'not_implemented',
+                                sequence.historyOutcome || 'not_implemented',
                             decidedAt: new Date().toISOString(),
                         });
                     console.log(

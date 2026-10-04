@@ -1648,9 +1648,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     }
                     draft.validSuggestionsByPR.push(
                         ...prLevelSuggestions.map((s) => ({
-                            id:
-                                s.brokenKodyRulesIds?.[0] ||
-                                crypto.randomUUID(),
+                            id: crypto.randomUUID(),
                             // Any finding that named a file has to say WHERE,
                             // since a PR-level comment carries no anchor of
                             // its own — true whether it's fileAnchored

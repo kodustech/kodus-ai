@@ -73,7 +73,9 @@ describe('toOutcome', () => {
 describe('toRecord', () => {
     it('maps every field a consumer needs, deriving outcome from implementationStatus', () => {
         const record = toRecord(
-            makeSuggestion({ implementationStatus: ImplementationStatus.IMPLEMENTED }),
+            makeSuggestion({
+                implementationStatus: ImplementationStatus.IMPLEMENTED,
+            }),
         );
 
         expect(record).toEqual({
@@ -90,7 +92,10 @@ describe('toRecord', () => {
 
     it('passes brokenKodyRulesIds through so the sharded judge can resolve the rule identity (PR #1895 review)', () => {
         const record = toRecord(
-            makeSuggestion({ label: 'kody_rules', brokenKodyRulesIds: ['rule-uuid-1'] }),
+            makeSuggestion({
+                label: 'kody_rules',
+                brokenKodyRulesIds: ['rule-uuid-1'],
+            }),
         );
 
         expect(record.brokenKodyRulesIds).toEqual(['rule-uuid-1']);
@@ -108,7 +113,7 @@ describe('toRecordFromPrLevel (issue #1313 Fase 1b)', () => {
         const record = toRecordFromPrLevel(makePrLevelSuggestion());
 
         expect(record).toEqual({
-            suggestionId: 'pr-sug-1',
+            suggestionId: expect.stringMatching(/^pr-/),
             suggestionContent: 'Split this into two migrations.',
             label: 'bug',
             outcome: 'pending',
@@ -122,6 +127,37 @@ describe('toRecordFromPrLevel (issue #1313 Fase 1b)', () => {
             makePrLevelSuggestion({ createdAt: undefined }),
         );
         expect(record.decidedAt).toBe('');
+    });
+
+    it('gives legacy comments with a repeated rule id stable, distinct references', () => {
+        const newer = makePrLevelSuggestion({
+            id: 'rule-1',
+            comment: { id: 102, pullRequestReviewId: null as any },
+        });
+        const older = makePrLevelSuggestion({
+            id: 'rule-1',
+            comment: { id: 101, pullRequestReviewId: null as any },
+        });
+        expect(toRecordFromPrLevel(newer).suggestionId).not.toBe(
+            toRecordFromPrLevel(older).suggestionId,
+        );
+        expect(toRecordFromPrLevel(newer).suggestionId).toBe(
+            toRecordFromPrLevel({ ...newer }).suggestionId,
+        );
+    });
+
+    it('distinguishes legacy suggestions without comment metadata by their recorded date and content', () => {
+        const base = makePrLevelSuggestion({
+            id: 'rule-1',
+            comment: undefined,
+        });
+        const ids = [
+            base,
+            { ...base, createdAt: '2026-01-02T00:00:00.000Z' },
+            { ...base, suggestionContent: 'A different issue.' },
+        ].map((s) => toRecordFromPrLevel(s).suggestionId);
+        expect(new Set(ids).size).toBe(3);
+        expect(toRecordFromPrLevel({ ...base }).suggestionId).toBe(ids[0]);
     });
 
     it('passes brokenKodyRulesIds through for a PR-level kody_rules decision (PR #1895 review)', () => {
@@ -145,14 +181,15 @@ describe('toRecordFromPrLevel (issue #1313 Fase 1b)', () => {
 });
 
 describe('PrDecisionStoreService.load', () => {
-    function makeService(over: {
-        findSuggestionsOnPR?: jest.Mock;
-        findPrLevelSuggestionsByPR?: jest.Mock;
-    } = {}) {
+    function makeService(
+        over: {
+            findSuggestionsOnPR?: jest.Mock;
+            findPrLevelSuggestionsByPR?: jest.Mock;
+        } = {},
+    ) {
         const repo = {
             findSuggestionsOnPR:
-                over.findSuggestionsOnPR ??
-                jest.fn().mockResolvedValue([]),
+                over.findSuggestionsOnPR ?? jest.fn().mockResolvedValue([]),
             findPrLevelSuggestionsByPR:
                 over.findPrLevelSuggestionsByPR ??
                 jest.fn().mockResolvedValue([]),
@@ -284,7 +321,7 @@ describe('PrDecisionStoreService.load', () => {
                 organizationId: 'org-1',
                 prNumber: 42,
                 repositoryFullName: 'kodustech/kodus-ai',
-                }),
+            }),
         ).resolves.toEqual([]);
     });
 });

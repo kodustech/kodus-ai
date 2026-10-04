@@ -23,12 +23,11 @@
  * replies or thread resolution — issue #1670, deferred).
  */
 export type PrDecisionOutcome =
-    | 'implemented'
-    | 'partially_implemented'
-    | 'not_implemented'
-    | 'pending';
+    'implemented' | 'partially_implemented' | 'not_implemented' | 'pending';
 
 export interface PrDecisionRecord {
+    /** Opaque reference to one posted suggestion. PR-level legacy storage can
+     *  reuse a rule id, so its reference is derived from the comment instead. */
     readonly suggestionId: string;
     /** Absent for a PR-LEVEL decision — a kody-rules PULL_REQUEST-scope
      *  finding, which judges the diff as a whole and is never anchored to one
@@ -83,9 +82,7 @@ export const MAX_PR_DECISIONS = 40;
  * callers are expected to fail open (treat an error as "no history").
  */
 export interface PrDecisionStore {
-    load(
-        params: LoadPrDecisionsParams,
-    ): Promise<readonly PrDecisionRecord[]>;
+    load(params: LoadPrDecisionsParams): Promise<readonly PrDecisionRecord[]>;
 }
 
 /** DI token, kept alongside the contract — same placement as

@@ -10,6 +10,7 @@ import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-dec
 export interface RevisableSuggestion {
     revisesSuggestionId?: string;
     suggestionContent?: string;
+    llmPrompt?: string;
 }
 
 export function revisionLinkLine(prior: PrDecisionRecord): string {
@@ -28,9 +29,14 @@ export function applyRevisionLinks(
     previousDecisions: readonly PrDecisionRecord[] | undefined,
 ): number {
     let linked = 0;
-    const priorById = new Map(
-        (previousDecisions ?? []).map((d) => [d.suggestionId, d]),
-    );
+    const priorById = new Map<string, PrDecisionRecord | undefined>();
+    for (const decision of previousDecisions ?? []) {
+        // Never guess which comment a duplicate reference identifies.
+        priorById.set(
+            decision.suggestionId,
+            priorById.has(decision.suggestionId) ? undefined : decision,
+        );
+    }
     for (const s of suggestions) {
         const prior = s.revisesSuggestionId
             ? priorById.get(s.revisesSuggestionId)
@@ -42,6 +48,9 @@ export function applyRevisionLinks(
         const line = revisionLinkLine(prior);
         if (!(s.suggestionContent || '').startsWith(line)) {
             s.suggestionContent = `${line}\n\n${s.suggestionContent || ''}`;
+        }
+        if (s.llmPrompt && !s.llmPrompt.startsWith(line)) {
+            s.llmPrompt = `${line}\n\n${s.llmPrompt}`;
         }
         linked++;
     }
