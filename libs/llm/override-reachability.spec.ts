@@ -222,8 +222,14 @@ describe('describeDroppedEffort', () => {
         const msg = describeDroppedEffort('high');
         expect(msg).toContain('"high"');
         expect(msg).toContain('no effect');
-        // Two of the three causes cannot be fixed on this screen, so it explains
+        // All three causes cannot be fixed on this screen, so it explains
         // rather than instructs.
         expect(msg).toContain('proxy');
+        // The third cause: a known reasoner whose transport cannot carry the
+        // level (MiniMax M3.1's mandatory thinking, Kimi's thinking) still sends
+        // a reasoning parameter, so the message must name it rather than claim
+        // none is sent (#2038 review).
+        expect(msg).toContain('cannot express this level');
+        expect(msg).not.toContain('no reasoning parameter is sent');
     });
 });

@@ -206,13 +206,14 @@ export function describeUnreachedKeys(
 }
 
 /** The advisory for an effort that reached nothing. Says what happened and what
- *  it means, and does NOT promise a fix — for two of the three causes there is
- *  nothing the user can change on this screen except the model. */
+ *  it means, and does NOT promise a fix — for all three causes there is nothing
+ *  the user can change on this screen except the model. */
 export function describeDroppedEffort(effort: string): string {
     return (
         `The connection works, but the "${effort}" reasoning effort is not reaching this ` +
-        `provider: no reasoning parameter is sent for this model, so the setting has no ` +
-        `effect on a review. Either the model does not support reasoning, or its name here ` +
-        `is one we cannot map to a known model (common behind a proxy or a custom alias).`
+        `provider, so the setting has no effect on a review. Either the model does not ` +
+        `support reasoning, or its name here is one we cannot map to a known model ` +
+        `(common behind a proxy or a custom alias), or it is a known reasoner whose ` +
+        `transport cannot express this level.`
     );
 }
