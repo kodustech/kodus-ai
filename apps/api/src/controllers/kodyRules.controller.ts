@@ -989,20 +989,29 @@ export class KodyRulesController {
     @ApiOperation({
         summary: 'Count imported (auto-synced) rules per status',
         description:
-            'Returns { active, paused, deleted } counts of IDE-synced rules ' +
-            'for a repository. Drives copy on the toggle-off confirmation modal ' +
-            'and the orphan-rules banner.',
+            'Returns { active, paused, deleted, pinned } counts of IDE-synced rules ' +
+            'for a repository. With repositoryId=global, sums them over the ' +
+            'repositories that inherit IDE rules sync from the global setting. ' +
+            'Drives copy on the toggle-off confirmation modal and the ' +
+            'orphan-rules banner.',
     })
     @ApiQuery({ name: 'repositoryId', type: String, required: true })
+    @ApiQuery({
+        name: 'teamId',
+        type: String,
+        required: false,
+        description: 'Required when repositoryId=global.',
+    })
     @ApiOkResponse({ type: ApiObjectResponseDto })
     public async countImportedRules(
         @Query('repositoryId') repositoryId: string,
+        @Query('teamId') teamIdParam?: string,
     ) {
         const organizationId = this.request.user.organization.uuid;
         if (!organizationId) {
             throw new Error('Organization ID not found');
         }
-        const teamId = (this.request.user as any).team?.uuid;
+        const teamId = teamIdParam ?? (this.request.user as any).team?.uuid;
 
         return this.manageImportedKodyRulesUseCase.count({
             organizationAndTeamData: { organizationId, teamId },

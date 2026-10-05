@@ -13,6 +13,7 @@ import {
     ICodeBaseConfigService,
 } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import { requiresKnowledgeApproval } from '@libs/common/utils/kody-rules/knowledge-approval';
+import { resolveKodyLearningSettings } from '@libs/common/utils/kody-rules/kody-learning-settings';
 import { with429Retry } from '@libs/core/infrastructure/http/rate-limit-retry';
 import { GenerateKodyRulesDTO } from '@libs/core/domain/dtos/generate-kody-rules.dto';
 
@@ -23,8 +24,6 @@ import {
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { resolveKodyRulesModelPolicy } from '@libs/kodyRules/application/services/kody-rules-model-policy';
 import { generateDateFilter } from '@libs/common/utils/transforms/date';
-import { deepMerge } from '@libs/common/utils/deep';
-import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
 import { IntegrationConfigKey, ParametersKey } from '@libs/core/domain/enums';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import {
@@ -896,34 +895,13 @@ export class GenerateKodyRulesUseCase {
                 organizationAndTeamData,
             );
 
-            const resolvedGlobal = deepMerge(
-                getDefaultKodusConfigFile(),
-                codeReviewConfig?.configValue?.configs ?? {},
-            );
-            const globalExcluded = (resolvedGlobal as any)
-                ?.kodyLearningExcludedReviewers as string[] | undefined;
-
-            const byRepo = new Map<string, string[] | undefined>();
-            for (const repo of codeReviewConfig?.configValue?.repositories ??
-                []) {
-                const resolvedRepo = deepMerge(
-                    resolvedGlobal,
-                    repo.configs ?? {},
-                );
-                byRepo.set(
-                    repo.id,
-                    (resolvedRepo as any)?.kodyLearningExcludedReviewers as
-                        | string[]
-                        | undefined,
-                );
-            }
-
             return {
                 forRepo: (repositoryId: string) =>
                     toSet(
-                        byRepo.has(repositoryId)
-                            ? byRepo.get(repositoryId)
-                            : globalExcluded,
+                        resolveKodyLearningSettings(
+                            codeReviewConfig?.configValue,
+                            repositoryId,
+                        ).kodyLearningExcludedReviewers,
                     ),
             };
         } catch (error) {

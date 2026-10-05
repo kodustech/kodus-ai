@@ -1168,7 +1168,7 @@ summary:
 
 # kody rules
 ideRulesSyncEnabled: false
-kodyRulesGeneratorEnabled: true
+kodyRulesGeneratorEnabled: false
 kodyLearningExcludedReviewers: []
 kodyKnowledgeApproval:
     enabled: false

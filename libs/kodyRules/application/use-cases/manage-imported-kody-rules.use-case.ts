@@ -105,10 +105,26 @@ export class ManageImportedKodyRulesUseCase {
         return { action, counts };
     }
 
+    /**
+     * `repositoryId: "global"` counts across the repositories that inherit IDE
+     * rules sync "on" from global, i.e. the ones a global toggle-off affects.
+     */
     async count(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryId: string;
     }) {
+        if (params.repositoryId === 'global') {
+            if (!params.organizationAndTeamData.teamId) {
+                throw new BadRequestException(
+                    'teamId is required to count across the global scope',
+                );
+            }
+
+            return this.syncService.countIdeSyncRulesInheritingGlobal(
+                params.organizationAndTeamData,
+            );
+        }
+
         return this.syncService.countIdeSyncRulesForRepository(params);
     }
 }

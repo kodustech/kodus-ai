@@ -17,15 +17,22 @@ function build(opts: {
     seededAfterLock?: (repoId: string) => boolean;
     lockAcquired?: (repoId: string) => boolean;
     acquireThrows?: (repoId: string) => boolean;
+    globalConfigs?: Record<string, unknown>;
+    repoConfigs?: Record<string, Record<string, unknown>>;
 }) {
     const parametersService = {
         findByKey: jest.fn().mockResolvedValue({
             configValue: {
-                configs: {},
+                // Teams that learn from past reviews store it at global level
+                // (backfilled for teams that existed before the default
+                // turned off).
+                configs: opts.globalConfigs ?? {
+                    kodyRulesGeneratorEnabled: true,
+                },
                 repositories: opts.repoIds.map((id) => ({
                     id,
                     isSelected: true,
-                    configs: {},
+                    configs: opts.repoConfigs?.[id] ?? {},
                 })),
             },
         }),
@@ -91,6 +98,52 @@ const run = (cron: KodyLearningCronProvider) =>
         organizationId: 'org-1',
         teamId: 'team-1',
     });
+
+describe('KodyLearningCronProvider — generator setting inheritance', () => {
+    it('skips repos that inherit "off" from global and keeps repo overrides', async () => {
+        const { cron, generateKodyRulesUseCase } = build({
+            repoIds: ['inherits', 'own-on'],
+            seeded: () => true,
+            globalConfigs: { kodyRulesGeneratorEnabled: false },
+            repoConfigs: { 'own-on': { kodyRulesGeneratorEnabled: true } },
+        });
+
+        await run(cron);
+
+        expect(generateKodyRulesUseCase.execute).toHaveBeenCalledTimes(1);
+        expect(generateKodyRulesUseCase.execute).toHaveBeenCalledWith(
+            { teamId: 'team-1', weeks: 1, repositoriesIds: ['own-on'] },
+            'org-1',
+        );
+    });
+
+    it('generates nothing for a team that never turned the generator on', async () => {
+        const { cron, generateKodyRulesUseCase } = build({
+            repoIds: ['r1'],
+            seeded: () => true,
+            globalConfigs: {},
+        });
+
+        await run(cron);
+
+        expect(generateKodyRulesUseCase.execute).not.toHaveBeenCalled();
+    });
+
+    it('skips a repo whose own value is "off" while global is on', async () => {
+        const { cron, generateKodyRulesUseCase } = build({
+            repoIds: ['r1', 'own-off'],
+            seeded: () => true,
+            repoConfigs: { 'own-off': { kodyRulesGeneratorEnabled: false } },
+        });
+
+        await run(cron);
+
+        expect(generateKodyRulesUseCase.execute).toHaveBeenCalledWith(
+            { teamId: 'team-1', weeks: 1, repositoriesIds: ['r1'] },
+            'org-1',
+        );
+    });
+});
 
 describe('KodyLearningCronProvider — per-repo backfill window', () => {
     it('uses a 3-month window for repos with no past-review rules yet', async () => {
@@ -275,7 +328,7 @@ describe('KodyLearningCronProvider — backfill lock concurrency bound (pool exh
         const parametersService = {
             findByKey: jest.fn().mockResolvedValue({
                 configValue: {
-                    configs: {},
+                    configs: { kodyRulesGeneratorEnabled: true },
                     repositories: repoIds.map((id) => ({
                         id,
                         isSelected: true,

@@ -1300,3 +1300,117 @@ describe('KodyRulesSyncService — stale deletion snapshots', () => {
         ).rejects.toBe(error);
     });
 });
+
+describe('KodyRulesSyncService.isIdeRulesSyncEnabled — inherits the global value', () => {
+    const ORG = { organizationId: 'org-1', teamId: 'team-1' };
+
+    const makeService = (configValue: unknown) => {
+        const parametersService = {
+            findByKey: jest.fn().mockResolvedValue({ configValue }),
+        };
+        const deps: any[] = new Array(KodyRulesSyncService.length).fill({});
+        deps[1] = parametersService;
+        return new (KodyRulesSyncService as any)(...deps);
+    };
+
+    it('is on for a repository without its own value when global is on', async () => {
+        const service = makeService({
+            configs: { ideRulesSyncEnabled: true },
+            repositories: [{ id: 'repo-1', configs: {} }],
+        });
+
+        await expect(
+            service.isIdeRulesSyncEnabled(ORG, 'repo-1'),
+        ).resolves.toBe(true);
+    });
+
+    it('is off for a repository that inherits off', async () => {
+        const service = makeService({
+            configs: { ideRulesSyncEnabled: false },
+            repositories: [{ id: 'repo-1', configs: {} }],
+        });
+
+        await expect(
+            service.isIdeRulesSyncEnabled(ORG, 'repo-1'),
+        ).resolves.toBe(false);
+    });
+
+    it('lets a repository override win over global', async () => {
+        const service = makeService({
+            configs: { ideRulesSyncEnabled: true },
+            repositories: [
+                { id: 'repo-1', configs: { ideRulesSyncEnabled: false } },
+            ],
+        });
+
+        await expect(
+            service.isIdeRulesSyncEnabled(ORG, 'repo-1'),
+        ).resolves.toBe(false);
+    });
+
+    it('is off when there is no repository context', async () => {
+        const service = makeService({ configs: { ideRulesSyncEnabled: true } });
+
+        await expect(
+            service.isIdeRulesSyncEnabled(ORG, undefined),
+        ).resolves.toBe(false);
+    });
+});
+
+describe('KodyRulesSyncService.countIdeSyncRulesInheritingGlobal', () => {
+    const ORG = { organizationId: 'org-1', teamId: 'team-1' };
+
+    const ideRule = (repositoryId: string, status: KodyRulesStatus) => ({
+        uuid: `${repositoryId}-${status}`,
+        repositoryId,
+        sourcePath: '.cursorrules',
+        status,
+    });
+
+    const makeService = (configValue: unknown) => {
+        const deps: any[] = new Array(KodyRulesSyncService.length).fill({});
+        deps[0] = {
+            findByOrganizationId: jest.fn().mockResolvedValue({
+                rules: [
+                    ideRule('inherits', KodyRulesStatus.ACTIVE),
+                    ideRule('inherits', KodyRulesStatus.PAUSED),
+                    ideRule('own-on', KodyRulesStatus.ACTIVE),
+                    ideRule('own-off', KodyRulesStatus.ACTIVE),
+                    {
+                        uuid: 'manual',
+                        repositoryId: 'inherits',
+                        status: KodyRulesStatus.ACTIVE,
+                    },
+                ],
+            }),
+        };
+        deps[1] = { findByKey: jest.fn().mockResolvedValue({ configValue }) };
+        return new (KodyRulesSyncService as any)(...deps);
+    };
+
+    it('sums the imported rules of repos that inherit "on" from global', async () => {
+        const service = makeService({
+            configs: { ideRulesSyncEnabled: true },
+            repositories: [
+                { id: 'inherits', configs: {} },
+                { id: 'own-on', configs: { ideRulesSyncEnabled: true } },
+                { id: 'own-off', configs: { ideRulesSyncEnabled: false } },
+            ],
+        });
+
+        await expect(
+            service.countIdeSyncRulesInheritingGlobal(ORG),
+        ).resolves.toEqual({ active: 1, paused: 1, deleted: 0, pinned: 0 });
+    });
+
+    it('is all zeros when global sync is already off', async () => {
+        const service = makeService({
+            configs: {},
+            repositories: [{ id: 'inherits', configs: {} }],
+        });
+
+        await expect(
+            service.countIdeSyncRulesInheritingGlobal(ORG),
+        ).resolves.toEqual({ active: 0, paused: 0, deleted: 0, pinned: 0 });
+    });
+});
