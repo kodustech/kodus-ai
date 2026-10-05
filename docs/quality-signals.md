@@ -2,7 +2,7 @@
 
 Every quality gate writes one row per run to BigQuery `kody-408918.quality.signals`. The
 dashboard and the daily digest read it. Nothing is computed there: the producer decides
-the status, the table records it. Plan and task list: `docs/quality-signals-plan.md`.
+the status, the table records it.
 
 ## The row
 
