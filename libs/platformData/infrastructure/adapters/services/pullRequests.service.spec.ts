@@ -257,6 +257,20 @@ describe('PullRequestsService.aggregateAndSaveDataStructure — existing-PR iden
         );
     }
 
+    function callSaveWithSuggestions(repository: any, suggestions: any[]) {
+        return (service as any).aggregateAndSaveDataStructure(
+            { number: 2, user: { username: 'someone' } },
+            repository,
+            [],
+            [],
+            [],
+            PlatformType.BITBUCKET,
+            stubOrg,
+            [],
+            suggestions,
+        );
+    }
+
     it('looks the existing PR up by repository.id and stops there when it matches', async () => {
         const byId = { uuid: 'by-id' };
         pullRequestsRepository.findByNumberAndRepositoryId.mockResolvedValue(
@@ -318,6 +332,64 @@ describe('PullRequestsService.aggregateAndSaveDataStructure — existing-PR iden
         ).not.toHaveBeenCalled();
         expect(
             pullRequestsRepository.findByNumberAndRepositoryId,
+        ).not.toHaveBeenCalled();
+    });
+
+    it('passes a string id to the id lookup so a numeric provider id matches the stored value', async () => {
+        // The write paths store `repository.id?.toString()` on a Mixed path
+        // Mongoose does not cast; a raw numeric id would never match (#2076
+        // review).
+        await callSave({ id: 12345, name: 'kody-format-probe-1822' });
+
+        expect(
+            pullRequestsRepository.findByNumberAndRepositoryId,
+        ).toHaveBeenCalledWith(2, '12345', stubOrg);
+    });
+
+    it('rejects a name hit that belongs to another repository, creating instead of updating', async () => {
+        // Two repositories of one organization share a name: the id lookup
+        // misses and the name lookup returns the OTHER repository's document.
+        // Updating it would rewrite its `repository.id` from this payload and
+        // take this save's suggestions (#2076 review).
+        pullRequestsRepository.findByNumberAndRepositoryId.mockResolvedValue(
+            null,
+        );
+        pullRequestsRepository.findByNumberAndRepositoryName.mockResolvedValue({
+            uuid: 'other-repo-pr',
+            number: 2,
+            repository: {
+                id: 'other-repo-uuid',
+                name: 'kody-format-probe-1822',
+            },
+        });
+
+        await callSave(stubRepository);
+
+        expect((service as any).handleInitialPullRequest).toHaveBeenCalled();
+        expect((service as any).update).not.toHaveBeenCalled();
+    });
+
+    it('appends pr-level suggestions to the id-resolved record, never a name lookup', async () => {
+        const byId = {
+            uuid: 'by-id',
+            prLevelSuggestions: [{ id: 'old' }],
+        };
+        pullRequestsRepository.findByNumberAndRepositoryId.mockResolvedValue(
+            byId,
+        );
+
+        await callSaveWithSuggestions(stubRepository, [{ id: 'new' }]);
+
+        // The append targets the record the identity lookup resolved.
+        expect((service as any).update).toHaveBeenCalledWith(
+            byId,
+            expect.objectContaining({
+                prLevelSuggestions: [{ id: 'old' }, { id: 'new' }],
+            }),
+        );
+        // A fresh name lookup here could return a same-named foreign repo.
+        expect(
+            pullRequestsRepository.findByNumberAndRepositoryName,
         ).not.toHaveBeenCalled();
     });
 });
