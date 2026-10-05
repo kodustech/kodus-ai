@@ -746,22 +746,14 @@ export class PullRequestsService implements IPullRequestsService {
 
         // Identity is the repository ID — the column the unique index
         // (`number_1_repository.id_1_organizationId_1`) already enforces — not
-        // the repository name. Two repositories in one organization can share
-        // a name across owners or providers, and matching on the name merged
-        // their records: the second save overwrote the first PR's suggestions
-        // and left its feedback unattributed (#2059). The name is only a
-        // fallback for the providers that hand us no id.
-        const existingPR = repository?.id
-            ? await this.pullRequestsRepository.findByNumberAndRepositoryId(
-                  pullRequest?.number,
-                  repository.id,
-                  organizationAndTeamData,
-              )
-            : await this.pullRequestsRepository.findByNumberAndRepositoryName(
-                  pullRequest?.number,
-                  repository?.name,
-                  organizationAndTeamData,
-              );
+        // the repository name (see `findExistingPullRequest`). The name is only
+        // a fallback: for a provider that hands us no id, and for a stored
+        // document whose id column is absent or differently formatted.
+        const existingPR = await this.findExistingPullRequest(
+            pullRequest?.number,
+            repository,
+            organizationAndTeamData,
+        );
 
         if (!existingPR) {
             return this.handleInitialPullRequest(
@@ -1056,6 +1048,64 @@ export class PullRequestsService implements IPullRequestsService {
                 },
             });
         }
+    }
+
+    /**
+     * The stored PR this save must UPDATE, or null when it is a PR we have not
+     * seen before.
+     *
+     * Identity is the repository ID — the column the unique index
+     * (`number_1_repository.id_1_organizationId_1`) already enforces — not the
+     * repository name: two repositories in one organization can share a name
+     * across owners or providers, and matching on the name merged their records
+     * (#2059).
+     *
+     * The name is the fallback, used in two cases: a provider that hands us no
+     * id at all, and an id lookup that MISSED because the stored document
+     * carries no id (or a different representation of it) — retrying by name
+     * before creating keeps those documents updated instead of duplicated.
+     * With neither an id nor a name there is nothing to bound the query to, so
+     * the name lookup is never issued on its own: `{number, organizationId}`
+     * alone can match a DIFFERENT repository's PR and contaminate it — the path
+     * the previous TypeError used to abort (#2076 review).
+     */
+    private async findExistingPullRequest(
+        pullRequestNumber: number,
+        repository: any,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<any> {
+        if (repository?.id) {
+            const byId =
+                await this.pullRequestsRepository.findByNumberAndRepositoryId(
+                    pullRequestNumber,
+                    repository.id,
+                    organizationAndTeamData,
+                );
+            if (byId) {
+                return byId;
+            }
+        }
+
+        if (repository?.name) {
+            return this.pullRequestsRepository.findByNumberAndRepositoryName(
+                pullRequestNumber,
+                repository.name,
+                organizationAndTeamData,
+            );
+        }
+
+        this.logger.warn({
+            message:
+                'Saving a pull request with no repository id and no repository name; skipping the identity lookup',
+            context: PullRequestsService.name,
+            metadata: {
+                organizationId: organizationAndTeamData?.organizationId,
+                teamId: organizationAndTeamData?.teamId,
+                number: pullRequestNumber,
+            },
+        });
+
+        return null;
     }
 
     private async handleInitialPullRequest(
