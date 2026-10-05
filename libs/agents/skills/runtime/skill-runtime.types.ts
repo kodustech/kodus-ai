@@ -60,6 +60,8 @@ export interface SkillCapabilityRuntimeConfig {
 export interface SkillFetcherRuntime {
     toolCaller: ToolCaller;
     capabilityRuntime: SkillCapabilityRuntimeConfig;
+    /** Closes the MCP clients the fetcher opened. Call once the run is over. */
+    dispose?: () => Promise<void>;
 }
 
 export type CapabilityExecutionMode = 'deterministic' | 'agentic';

@@ -83,7 +83,13 @@ export class MCPRegistry {
 
                 // ─── 3. Criar & conectar cliente ───────────────────────────────────
                 const client = new SpecCompliantMCPClient(clientConfig);
-                await client.connect();
+                try {
+                    await client.connect();
+                } catch (error) {
+                    // Not kept in the registry, so nothing else will release it.
+                    await client.disconnect().catch(() => undefined);
+                    throw error;
+                }
                 this.clients.set(config.name, client);
 
                 this.markToolsDirty(config.name);

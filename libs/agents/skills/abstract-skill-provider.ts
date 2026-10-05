@@ -214,50 +214,58 @@ export abstract class AbstractSkillProvider<
             });
         }
         const fetcherRuntime = fetcherInitialization.runtime;
-
-        const initialCtx = this.createInitialContext({
-            organizationAndTeamData,
-            prepareContext: context.prepareContext,
-            thread: context.thread,
-            userLanguage,
-        });
-
-        const capabilityRuntimeConfig = fetcherRuntime.capabilityRuntime;
-        const capabilityHooks = buildCapabilityHooks<TContext>({
-            strategyService: this.capabilityStrategyService,
-            resourcePlanService: this.capabilityResourcePlanService,
-            resolveTaskContextMode: (ctx, providerType) =>
-                this.resolveTaskContextMode(ctx, providerType),
-            recordExecution: (trace) => this.recordCapabilityExecution(trace),
-        });
-
-        const blueprintExecution = await this.executeBlueprintWithHandling(
-            context,
-            initialCtx,
-            fetcherRuntime.toolCaller,
-            capabilityRuntimeConfig,
-            capabilityHooks,
-            organizationAndTeamData,
-            userLanguage,
-        );
-        if (blueprintExecution.feedback) {
-            return this.formatExecutionFeedback({
+        try {
+            const initialCtx = this.createInitialContext({
+                organizationAndTeamData,
+                prepareContext: context.prepareContext,
+                thread: context.thread,
                 userLanguage,
-                context,
-                feedback: blueprintExecution.feedback,
             });
+
+            const capabilityRuntimeConfig = fetcherRuntime.capabilityRuntime;
+            const capabilityHooks = buildCapabilityHooks<TContext>({
+                strategyService: this.capabilityStrategyService,
+                resourcePlanService: this.capabilityResourcePlanService,
+                resolveTaskContextMode: (ctx, providerType) =>
+                    this.resolveTaskContextMode(ctx, providerType),
+                recordExecution: (trace) =>
+                    this.recordCapabilityExecution(trace),
+            });
+
+            const blueprintExecution = await this.executeBlueprintWithHandling(
+                context,
+                initialCtx,
+                fetcherRuntime.toolCaller,
+                capabilityRuntimeConfig,
+                capabilityHooks,
+                organizationAndTeamData,
+                userLanguage,
+            );
+            if (blueprintExecution.feedback) {
+                return this.formatExecutionFeedback({
+                    userLanguage,
+                    context,
+                    feedback: blueprintExecution.feedback,
+                });
+            }
+            const result = blueprintExecution.result;
+            const response = await this.buildResponse(result.context);
+
+            this.logExecutionCompleted(
+                result,
+                organizationAndTeamData,
+                response,
+            );
+
+            const traces = result.context.capabilityExecutionTrace ?? [];
+            if (traces.length > 0) {
+                this.logCapabilityTraces(traces, organizationAndTeamData);
+            }
+
+            return response;
+        } finally {
+            await fetcherRuntime.dispose?.();
         }
-        const result = blueprintExecution.result;
-        const response = await this.buildResponse(result.context);
-
-        this.logExecutionCompleted(result, organizationAndTeamData, response);
-
-        const traces = result.context.capabilityExecutionTrace ?? [];
-        if (traces.length > 0) {
-            this.logCapabilityTraces(traces, organizationAndTeamData);
-        }
-
-        return response;
     }
 
     private async initializeFetcherRuntime(

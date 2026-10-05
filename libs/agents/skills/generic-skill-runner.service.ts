@@ -212,8 +212,7 @@ export class GenericSkillRunnerService {
             if (mcpAdapter) {
                 try {
                     await mcpAdapter.connect();
-                    toolRegistry =
-                        await buildMcpAgentToolRegistry(mcpAdapter);
+                    toolRegistry = await buildMcpAgentToolRegistry(mcpAdapter);
 
                     const registeredTools = toolRegistry.list();
                     this.logger.log({
@@ -247,6 +246,7 @@ export class GenericSkillRunnerService {
                             1,
                             { skill: skillName, reason: 'connect_error' },
                         );
+                        await mcpAdapter.disconnect().catch(() => undefined);
                         throw new McpConnectionUnavailableError({
                             skillName,
                             availableProviders,
@@ -341,14 +341,11 @@ export class GenericSkillRunnerService {
                                             organizationId:
                                                 organizationAndTeamData?.organizationId,
                                             teamId: organizationAndTeamData?.teamId,
-                                            provider:
-                                                byokConfig?.provider,
+                                            provider: byokConfig?.provider,
                                         },
                                     }),
                             });
-                        return this.normalizeToolExecutionResponse(
-                            result.text,
-                        );
+                        return this.normalizeToolExecutionResponse(result.text);
                     } finally {
                         cleanup();
                     }
@@ -373,6 +370,9 @@ export class GenericSkillRunnerService {
             return {
                 toolCaller,
                 capabilityRuntime,
+                dispose: async () => {
+                    await mcpAdapter?.disconnect().catch(() => undefined);
+                },
             };
         } catch (error) {
             this.recordSetupMetric(skillName, 'fetcher', 'failed', startedAt);
