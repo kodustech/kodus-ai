@@ -14,6 +14,10 @@ dotenv.config({ path: path.join(__dirname, '../../.env.local'), override: true }
 if (process.env.HOME) {
     dotenv.config({ path: path.join(process.env.HOME, '.kodus-dev/config'), override: true });
 }
+// Platform OpenAI key for the dedup embedding tier, captured before
+// applyModelEnv rewrites API_OPEN_AI_API_KEY with the scenario's BYOK key —
+// in production the embedder never sees the BYOK key either.
+const PLATFORM_OPENAI_KEY = process.env.API_OPEN_AI_API_KEY;
 
 const { jsonSchema } = require('ai');
 const {
@@ -21,11 +25,16 @@ const {
     DEDUP_SCHEMA,
     contentSimilarity,
     DEDUP_CONTENT_THRESHOLD,
+    DEDUP_EMBEDDING_LOW,
+    DEDUP_EMBEDDING_HIGH,
+    cosineSimilarity,
+    dedupEmbeddingText,
+    DEDUP_TIEBREAK_SCHEMA,
+    buildTiebreakPrompt,
 } = require('@libs/code-review/infrastructure/agents/engine/dedup-prompt');
 const { SECONDARY_BASELINE } = require('../shared/secondary-models');
 const { TIER0, applyModelEnv } = require('../shared/tier0-models');
 
-const normSeverity = (s) => (s == null ? 'medium' : String(s).toLowerCase());
 
 // Aliases kept so older CLI/scripts (--model=kimi-k2.7, gemini-3-flash) still work.
 const DEDUP_ALIASES = {
@@ -55,7 +64,7 @@ async function runDedup(suggestions, modelKey = SECONDARY_BASELINE, opts = {}) {
 
     const object = await LLM.run({
         schema: jsonSchema(DEDUP_SCHEMA),
-        user: buildDedupPrompt(suggestions, normSeverity),
+        user: buildDedupPrompt(suggestions),
         runName: 'code-review-dedup',
         spanName: 'code-review::dedup',
         // Rota de assinatura (Codex/SDK): o modelo pronto, senao o LLM.run cai no default do env.
@@ -137,11 +146,67 @@ async function runDedup(suggestions, modelKey = SECONDARY_BASELINE, opts = {}) {
             if (opts.guard === 'tight') return tightOverlap(dup, rep);
             return sameFileOverlap(dup, rep); // 'exact'
         };
+        // 'tiered' → the full production guard (agent-review.stage resolveDedupMerge,
+        // PR #1527): lexical >= threshold honors; else embedding cosine (platform
+        // OpenAI embedder) >= HIGH honors, < LOW vetoes, in between the BYOK model
+        // breaks the tie. Any failure vetoes, like production.
+        const embCache = new Map();
+        const embed = async (i) => {
+            if (embCache.has(i)) return embCache.get(i);
+            let v = null;
+            try {
+                const { buildPlatformEmbedder } = require('@libs/common/utils/document');
+                const { embed: aiEmbed } = require('ai');
+                const model = buildPlatformEmbedder({ apiKey: PLATFORM_OPENAI_KEY });
+                const text = dedupEmbeddingText(suggestions[i]);
+                if (model && text) v = (await aiEmbed({ model, value: text })).embedding;
+            } catch { v = null; }
+            embCache.set(i, v);
+            return v;
+        };
+        const tiebreak = async (a, b) => {
+            try {
+                const { LLM } = require('@libs/llm/llm');
+                const out = await LLM.run({
+                    schema: jsonSchema(DEDUP_TIEBREAK_SCHEMA),
+                    user: buildTiebreakPrompt(a, b),
+                    runName: 'dedup-tiebreak',
+                    ...(opts.prebuiltModel ? { prebuiltModel: opts.prebuiltModel } : {}),
+                });
+                return typeof out?.sameBug === 'boolean' ? out.sameBug : null;
+            } catch { return null; }
+        };
+        const tiered = async (d) => {
+            const dup = suggestions[d.idx], rep = suggestions[d.keptInto];
+            if (contentSimilarity(dup, rep) >= DEDUP_CONTENT_THRESHOLD) return 'lexical';
+            const [va, vb] = await Promise.all([embed(d.idx), embed(d.keptInto)]);
+            if (!va || !vb) return { veto: 'veto-sem-embedding' };
+            const cos = cosineSimilarity(va, vb);
+            if (cos >= DEDUP_EMBEDDING_HIGH) return 'embedding-high';
+            if (cos < DEDUP_EMBEDDING_LOW) return { veto: 'veto-embedding-low' };
+            const tb = await tiebreak(dup, rep);
+            return tb === true ? 'tiebreak-sim' : { veto: tb === false ? 'veto-tiebreak-nao' : 'veto-tiebreak-erro' };
+        };
+        // 'record' → honor every proposed merge, but store each pair's lexical
+        // score, embedding cosine and tiebreak verdict, so guard variants can be
+        // replayed offline on the SAME LLM grouping.
+        if (opts.guard === 'record') {
+            opts.pairs = await Promise.all(dropped.map(async (d) => {
+                const dup = suggestions[d.idx], rep = suggestions[d.keptInto];
+                const [va, vb] = await Promise.all([embed(d.idx), embed(d.keptInto)]);
+                return { idx: d.idx, keptInto: d.keptInto, lex: contentSimilarity(dup, rep), cos: va && vb ? cosineSimilarity(va, vb) : null, tb: await tiebreak(dup, rep) };
+            }));
+        }
         const survives = [];
+        const guardReasons = {};
         for (const d of dropped) {
-            if (keepMerge(suggestions[d.idx], suggestions[d.keptInto])) survives.push(d);
+            const ok = opts.guard === 'record' ? true : opts.guard === 'tiered'
+                ? await tiered(d).then((r) => { const k = typeof r === 'string' ? r : r.veto; guardReasons[k] = (guardReasons[k] || 0) + 1; return typeof r === 'string'; })
+                : keepMerge(suggestions[d.idx], suggestions[d.keptInto]);
+            if (ok) survives.push(d);
             else kept.add(d.idx); // un-merge, keep it
         }
+        opts.guardReasons = guardReasons;
         dropped.length = 0;
         dropped.push(...survives);
     }

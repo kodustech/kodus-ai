@@ -112,14 +112,11 @@ type ReducerCandidate = {
 /** Numbered candidate list the reducer reasons over. Richer than the dedup
  *  summary: the reducer judges MERIT, not just similarity, so it needs the
  *  claim's substance (content + the proposed fix), not only a one-liner. */
-export function buildReducerCandidates(
-    candidates: ReducerCandidate[],
-    normalizeSeverity: (severity?: string) => string,
-): string {
+export function buildReducerCandidates(candidates: ReducerCandidate[]): string {
     return candidates
         .map((c, i) => {
             const loc = `${c.relevantFile || 'unknown'}:${c.relevantLinesStart ?? '?'}-${c.relevantLinesEnd ?? '?'}`;
-            const head = `[${i}] ${loc} [${c.label || 'unknown'}/${normalizeSeverity(c.severity)}]`;
+            const head = `[${i}] ${loc} [${c.label || 'unknown'}]`;
             const summary = c.oneSentenceSummary
                 ? `\n    ${c.oneSentenceSummary}`
                 : '';
@@ -192,7 +189,6 @@ ${list}`;
  */
 export function buildReducerPrompt(
     candidates: ReducerCandidate[],
-    normalizeSeverity: (severity?: string) => string,
     /** Forces the DROP rule to be exercised. Measured over three 30-PR runs,
      *  the reducer dropped 1 candidate out of 412 — every removal came from
      *  MERGE. The rule exists and the model never reaches for it, so the
@@ -209,7 +205,7 @@ export function buildReducerPrompt(
      *  discard is a later stage, so this pass cannot cost recall by judging. */
     mergeOnly: boolean = false,
 ): string {
-    const list = buildReducerCandidates(candidates, normalizeSeverity);
+    const list = buildReducerCandidates(candidates);
     if (mergeOnly) return buildMergeOnlyPrompt(list, investigate);
     const strictClause = strict
         ? `

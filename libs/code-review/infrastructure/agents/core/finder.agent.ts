@@ -138,6 +138,9 @@ const REASON_DESCRIPTION_WALK =
 const REASON_DESCRIPTION_EVIDENCE =
     'Evidence for THIS finding: the input or state that triggers it and the file:line locations involved.';
 
+const DEV_LEVEL_DESCRIPTION =
+    'The LEAST experienced reviewer who would have caught this: junior if it is visible in the changed lines themselves, pleno if you had to follow the value somewhere else, senior if it only appears when you compare the change against what the code guaranteed before, expert if it only appears on a run that is not the simple one (a second execution, a concurrent one, a retry, a cold cache, or an API contract that disagrees with how the call reads), qa if it only showed up when a quality analyst exercised a concrete test case. This is not severity.';
+
 function buildSubmitResultSchema(
     requireFindingReason = false,
     claudeSafeWording = false,
@@ -149,6 +152,13 @@ function buildSubmitResultSchema(
     requireDevLevel = false,
     leanOutput = false,
 ): JSONSchema {
+    if (leanOutput) {
+        return buildLeanSubmitResultSchema(
+            requireFindingReason,
+            claudeSafeWording,
+            requireDevLevel,
+        );
+    }
     return {
         type: 'object',
         // additionalProperties:false on every object is required by provider strict
@@ -192,18 +202,79 @@ function buildSubmitResultSchema(
                                   developerLevel: {
                                       type: 'string',
                                       enum: ['junior', 'pleno', 'senior', 'expert', 'qa'],
-                                      description:
-                                          'The LEAST experienced reviewer who would have caught this: junior if it is visible in the changed lines themselves, pleno if you had to follow the value somewhere else, senior if it only appears when you compare the change against what the code guaranteed before, expert if it only appears on a run that is not the simple one (a second execution, a concurrent one, a retry, a cold cache, or an API contract that disagrees with how the call reads), qa if it only showed up when a quality analyst exercised a concrete test case. This is not severity.',
+                                      description: DEV_LEVEL_DESCRIPTION,
                                   },
                               }
                             : {}),
                     },
-                    // leanOutput (#1821): only what finding the bug needs is
-                    // required; the rest stays optional for a later stage.
                     required: [
                         'relevantFile',
                         'suggestionContent',
-                        ...(leanOutput ? [] : ['existingCode', 'improvedCode']),
+                        'existingCode',
+                        'improvedCode',
+                        ...(requireFindingReason ? ['reason'] : []),
+                        ...(requireDevLevel ? ['developerLevel'] : []),
+                    ],
+                },
+            },
+        },
+        required: ['reasoning', 'suggestions'],
+    };
+}
+
+/** Lean output (#1821): exactly the fields the lean prompt asks for, all
+ *  required. Snippet, fix, severity and confidence are not optional here —
+ *  they are not part of the finder's output at all; a later stage adds them. */
+function buildLeanSubmitResultSchema(
+    requireFindingReason: boolean,
+    claudeSafeWording: boolean,
+    requireDevLevel: boolean,
+): JSONSchema {
+    return {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+            reasoning: { type: 'string' },
+            suggestions: {
+                type: 'array',
+                items: {
+                    type: 'object',
+                    additionalProperties: false,
+                    properties: {
+                        label: {
+                            type: 'string',
+                            enum: ['bug', 'security', 'performance'],
+                        },
+                        relevantFile: { type: 'string' },
+                        relevantLinesStart: { type: 'number' },
+                        relevantLinesEnd: { type: 'number' },
+                        suggestionContent: { type: 'string' },
+                        ...(requireFindingReason
+                            ? {
+                                  reason: {
+                                      type: 'string',
+                                      description: claudeSafeWording
+                                          ? REASON_DESCRIPTION_EVIDENCE
+                                          : REASON_DESCRIPTION_WALK,
+                                  },
+                              }
+                            : {}),
+                        ...(requireDevLevel
+                            ? {
+                                  developerLevel: {
+                                      type: 'string',
+                                      enum: ['junior', 'pleno', 'senior', 'expert', 'qa'],
+                                      description: DEV_LEVEL_DESCRIPTION,
+                                  },
+                              }
+                            : {}),
+                    },
+                    required: [
+                        'label',
+                        'relevantFile',
+                        'relevantLinesStart',
+                        'relevantLinesEnd',
+                        'suggestionContent',
                         ...(requireFindingReason ? ['reason'] : []),
                         ...(requireDevLevel ? ['developerLevel'] : []),
                     ],

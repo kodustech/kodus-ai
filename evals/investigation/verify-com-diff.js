@@ -24,6 +24,9 @@ const { bundleFor } = require('../../libs/code-review/infrastructure/agents/core
 const arg = (n, d) => { const h = process.argv.slice(2).find((a) => a.startsWith(`--${n}=`)); return h ? h.split('=').slice(1).join('=') : d; };
 const SUFIXO = arg('sufixo'), POOL = arg('pool'), OUT = arg('out'), PAR = Number(arg('par', '3'));
 const SO = (arg('only', '') || '').split(',').filter(Boolean);
+// --teto=N: passos do verify (padrao 5). --ks=<arq>: {caseId: [k...]} so essas sugestoes do dedup; sem gate.
+const TETO = Number(arg('teto', '5'));
+const KS = arg('ks') ? JSON.parse(fs.readFileSync(arg('ks'), 'utf8')) : null;
 const MODELO = process.env.RECALL_MODEL;
 const semToolChoiceNomeado = /muse|kimi|glm/i.test(MODELO);
 const norm = (p) => String(p || '').replace(/\\/g, '/').replace(/^\.?\/+/, '').toLowerCase();
@@ -76,7 +79,7 @@ async function verifica(model, cmd, c, diff, teto) {
 (async () => {
     const model = buildModel(MODELO);
     console.log(`[verify+diff] ${descreveModelo(MODELO)} · ${SUFIXO}`);
-    const DD = JSON.parse(fs.readFileSync(path.join(__dirname, 'results', 'dedup-prod2', `${SUFIXO}.json`), 'utf8')).prs;
+    const DD = JSON.parse(fs.readFileSync(path.join(__dirname, 'results', arg('dedup', 'dedup-prod2'), `${SUFIXO}.json`), 'utf8')).prs;
     const vars = {};
     for (const f of fs.readdirSync(path.join(__dirname, 'datasets')).filter((x) => x.endsWith('.json'))) {
         try { const v = JSON.parse(fs.readFileSync(path.join(__dirname, 'datasets', f), 'utf8'))[0].vars; if (v?.caseId) vars[v.caseId] = v; } catch {}
@@ -96,15 +99,15 @@ async function verifica(model, cmd, c, diff, teto) {
             h = await prepareRepo(vars[cid], `${cid}-vd-${process.pid}`);
             if (!h) throw new Error('sem repo');
             const cmd = new LocalRepoCommands(h.dir);
-            const kept = DD[cid].kept || [];
+            const kept = KS ? (KS[cid] || []) : (DD[cid].kept || []);
             const decis = {};
             let j = 0;
             await Promise.all(Array.from({ length: 4 }, async () => {
                 while (j < kept.length) {
                     const k = kept[j++]; const c = cands[k];
-                    let v = await retry(() => verifica(model, cmd, c, diff, 5));
+                    let v = await retry(() => verifica(model, cmd, c, diff, TETO));
                     // Evidence gate de producao: so do G, em arquivo que o G nao abriu, e mantido -> 10 passos.
-                    const gate = c.producedBy === 'generalist-base' && !lido(c.relevantFile) && v.keep;
+                    const gate = !KS && c.producedBy === 'generalist-base' && !lido(c.relevantFile) && v.keep;
                     if (gate) v = { ...(await retry(() => verifica(model, cmd, c, diff, 10))), gate: true };
                     decis[k] = v;
                 }

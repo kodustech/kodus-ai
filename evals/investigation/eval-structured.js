@@ -24,6 +24,8 @@ const idLimpo = (modelId) =>
         .replace(/@[a-z0-9_-]+$/i, '');
 
 function plano(modelId) {
+    // A fachada do Agent SDK nao faz chamada de ferramenta: JSON no texto.
+    if (require('../shared/tier0-models').TIER0[modelId || process.env.RECALL_MODEL || '']?.provider === 'claude_agent_sdk') return 'reroute-json';
     return planStructuredCall(
         undefined,
         resolveCompatibleReasoningTraits(idLimpo(modelId)),

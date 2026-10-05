@@ -186,7 +186,6 @@ export function bundleFor(
         finding.relevantLinesStart != null
             ? `Lines: ${finding.relevantLinesStart}-${finding.relevantLinesEnd ?? finding.relevantLinesStart}`
             : '',
-        `Severity: ${finding.severity ?? 'unknown'}`,
         `Claim: ${finding.suggestionContent}`,
         walk ? `Walk that produced it (the finder's own trace — verify it, do not assume it is right):\n${walk}` : '',
         finding.existingCode ? `Code:\n${finding.existingCode}` : '',

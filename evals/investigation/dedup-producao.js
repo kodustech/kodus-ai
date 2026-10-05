@@ -17,24 +17,28 @@ const { buildModel } = require('./eval-model');
 const { TIER0 } = require('../shared/tier0-models');
 const arg = (n, d) => { const h = process.argv.slice(2).find((a) => a.startsWith(`--${n}=`)); return h ? h.split('=').slice(1).join('=') : d; };
 const SUFIXO = arg('sufixo'), POOLSV = arg('poolsv'), OUT = arg('out'), PAR = Number(arg('par', '4'));
+// --guard=tiered: o guarda completo de producao (lexico, embedding, desempate). Padrao 'content' (so lexico).
+const GUARD = arg('guard', 'content');
 const MODELO = process.env.RECALL_MODEL;
-const assinatura = TIER0[MODELO]?.provider === 'codex_subscription';
+const assinatura = ['codex_subscription', 'claude_agent_sdk'].includes(TIER0[MODELO]?.provider);
 (async () => {
     const prebuilt = assinatura ? buildModel(MODELO) : undefined;
     const L30 = JSON.parse(fs.readFileSync(path.join(__dirname, 'light-30.json'), 'utf8'));
     const res = fs.existsSync(OUT) ? JSON.parse(fs.readFileSync(OUT, 'utf8')) : { prs: {} };
-    const fila = L30.filter((c) => !res.prs[c] || res.prs[c].erro);
+    const SO = (arg('only', '') || '').split(',').filter(Boolean);
+    const fila = L30.filter((c) => (!SO.length || SO.includes(c)) && (!res.prs[c] || res.prs[c].erro));
     let i = 0;
     const um = async (cid) => {
         try {
             const cands = JSON.parse(fs.readFileSync(path.join(__dirname, 'pools', POOLSV, `${cid}.raw.txt`), 'utf8')).trace.preFilterCandidates;
-            const r = await runDedup(cands, MODELO, { guard: 'content', prebuiltModel: prebuilt });
+            const op = { guard: GUARD, prebuiltModel: prebuilt };
+            const r = await runDedup(cands, MODELO, op);
             // Como a producao (agent-review.stage, camada 3): o que o dedup nao classificou fica.
             const kept = [...new Set([...(r.kept || []), ...(r.unmentioned || [])])].sort((a, b) => a - b);
             // Quem foi fundido em quem (depois do guarda): o tamanho do grupo e o sinal de consenso.
             const membros = Object.fromEntries(kept.map((k) => [k, [k]]));
             for (const d of r.dropped || []) if (membros[d.keptInto]) membros[d.keptInto].push(d.idx);
-            res.prs[cid] = { antes: cands.length, kept, membros, depois: kept.length, noOp: !!r.noOp, textos: kept.map((k) => cands[k]?.suggestionContent).filter(Boolean) };
+            res.prs[cid] = { antes: cands.length, kept, membros, depois: kept.length, noOp: !!r.noOp, guarda: op.guardReasons, ...(op.pairs ? { pares: op.pairs, keptPre: r.kept, unmentioned: r.unmentioned } : {}), textos: kept.map((k) => cands[k]?.suggestionContent).filter(Boolean) };
         } catch (e) {
             res.prs[cid] = { erro: String(e?.message || e).slice(0, 300) };
         } finally {

@@ -11,7 +11,6 @@ const {
     REDUCER_SCHEMA,
 } = require('@libs/code-review/infrastructure/agents/engine/reducer-prompt');
 
-const normSeverity = (s) => (s == null ? 'medium' : String(s).toLowerCase());
 
 /**
  * @param {Array} candidates  findings to reduce
@@ -42,7 +41,6 @@ async function runReducer(candidates, opts = {}) {
     };
     const prompt = buildReducerPrompt(
         candidates,
-        normSeverity,
         !!opts.strict,
         !!opts.investigate,
         !!opts.mergeOnly,

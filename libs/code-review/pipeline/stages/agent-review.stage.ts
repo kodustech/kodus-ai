@@ -2157,9 +2157,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             const dedupOutput = (await LLM.run({
                 byokConfig: resolvedSlot,
                 schema: jsonSchema(DEDUP_SCHEMA as any),
-                user: buildDedupPrompt(suggestions, (sev) =>
-                    this.normalizeSeverity(sev),
-                ),
+                user: buildDedupPrompt(suggestions),
                 runName: 'code-review-dedup',
                 spanName: 'code-review::dedup',
                 organizationId: telemetryMeta?.organizationId,

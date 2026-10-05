@@ -155,18 +155,15 @@ export function collapseNearDuplicates<T extends DedupSuggestionLike>(
 }
 
 /**
- * Build the per-suggestion summary block the dedup model sees. `normalizeSeverity`
- * is injected so production keeps its exact severity normalization; callers that
- * don't need it (the eval) can pass an identity function.
+ * Build the per-suggestion summary block the dedup model sees. No severity:
+ * the finder's self-declared severity is unreliable, and severity is assigned
+ * later, at enrichment.
  */
-export function buildDedupSummaries(
-    suggestions: DedupSuggestionLike[],
-    normalizeSeverity: (severity?: string) => string,
-): string {
+export function buildDedupSummaries(suggestions: DedupSuggestionLike[]): string {
     return suggestions
         .map(
             (s, i) =>
-                `[${i}] ${s.relevantFile || 'unknown'}:${s.relevantLinesStart}-${s.relevantLinesEnd} [${s.label || 'unknown'}/${normalizeSeverity(s.severity)}]: ${s.oneSentenceSummary || s.suggestionContent?.substring(0, 200)}${s.improvedCode ? `\n    fix: ${s.improvedCode.substring(0, 100)}` : ''}`,
+                `[${i}] ${s.relevantFile || 'unknown'}:${s.relevantLinesStart}-${s.relevantLinesEnd} [${s.label || 'unknown'}]: ${s.oneSentenceSummary || s.suggestionContent?.substring(0, 200)}${s.improvedCode ? `\n    fix: ${s.improvedCode.substring(0, 100)}` : ''}`,
         )
         .join('\n');
 }
@@ -183,10 +180,9 @@ export function buildDedupSummaries(
  *  positive and reads as N redundant comments to the user. */
 export function buildDedupPrompt(
     suggestions: DedupSuggestionLike[],
-    normalizeSeverity: (severity?: string) => string,
     opts?: { mergeRootCause?: boolean },
 ): string {
-    const summaries = buildDedupSummaries(suggestions, normalizeSeverity);
+    const summaries = buildDedupSummaries(suggestions);
     const rootCauseClass = opts?.mergeRootCause
         ? `
 

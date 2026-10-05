@@ -39,7 +39,10 @@ describe('leanOutput', () => {
         const out = outputBlock(buildUserPrompt(input({ leanOutput: true }), meta));
         for (const f of ['"existingCode"', '"improvedCode"', '"severity"', '"confidence"', 'WHAT:', '"language"', '"oneSentenceSummary"']) expect(out).not.toContain(f);
         for (const f of ['"reasoning"', '"relevantFile"', '"relevantLinesStart"', '"suggestionContent"', '"label"']) expect(out).toContain(f);
-        expect(required(buildSubmitResultTool(false, false, false, true))).toEqual(['relevantFile', 'suggestionContent']);
+        const lean = buildSubmitResultTool(false, false, false, true);
+        expect(required(lean)).toEqual(['label', 'relevantFile', 'relevantLinesStart', 'relevantLinesEnd', 'suggestionContent']);
+        // Nothing optional: the schema carries exactly the required fields.
+        expect(Object.keys((lean.inputSchema as any).properties.suggestions.items.properties).sort()).toEqual(['label', 'relevantFile', 'relevantLinesEnd', 'relevantLinesStart', 'suggestionContent']);
     });
 
     it('on changes nothing outside the OutputFormat block', () => {

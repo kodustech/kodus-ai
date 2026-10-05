@@ -31,6 +31,10 @@ function buildModel(modelId = MODELO, options = {}) {
     // com a chave de outro provedor — o erro que sai e "api key is invalid",
     // que parece chave errada e nao configuracao faltando.
     const { TIER0, applyModelEnv } = require('../shared/tier0-models');
+    // Claude por assinatura (Agent SDK): a fachada de 1 turno, so texto.
+    if (TIER0[modelId]?.provider === 'claude_agent_sdk') {
+        return require('./claude-sdk-runner').modeloFachada(TIER0[modelId].sdkModel, { effort: process.env.RECALL_REASONING_EFFORT || undefined });
+    }
     // API nativa como no BYOK da nuvem (modulo 'openai' do registro -> Responses
     // API), igual a geracao em agent-provider.js: o slot gerenciado mandaria a
     // chave OpenAI como openai_compatible (/v1/chat/completions), onde o
