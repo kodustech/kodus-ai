@@ -1,11 +1,24 @@
 /** @jest-environment jsdom */
 import "@testing-library/jest-dom";
+
 import { fireEvent, render, screen } from "@testing-library/react";
 
-import { GateCtaLink } from "./gate-cta-link";
+import { GateAltLink, GateCtaLink } from "./gate-cta-link";
 
 jest.mock("src/core/utils/gate-hit", () => ({
     captureGateCtaClick: jest.fn(),
+}));
+
+const mockCanOpenBilling = { value: true };
+jest.mock("@services/permissions/hooks", () => ({
+    usePermission: () => mockCanOpenBilling.value,
+}));
+
+const mockSelfHosted = { value: false };
+jest.mock("src/core/utils/self-hosted", () => ({
+    get isSelfHosted() {
+        return mockSelfHosted.value;
+    },
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -14,6 +27,8 @@ const { captureGateCtaClick } = require("src/core/utils/gate-hit");
 describe("GateCtaLink", () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        mockCanOpenBilling.value = true;
+        mockSelfHosted.value = false;
     });
 
     it("renders with the default label and href", () => {
@@ -63,5 +78,109 @@ describe("GateCtaLink", () => {
             subscriptionStatus: "active",
             metadata: { lockedCount: 1 },
         });
+    });
+
+    describe("for someone who cannot open billing", () => {
+        beforeEach(() => {
+            mockCanOpenBilling.value = false;
+        });
+
+        it.each([
+            "/choose-plan",
+            "/settings/subscription",
+            "/settings/subscription?tab=members",
+        ])("points them at an admin instead of linking to %s", (href) => {
+            render(<GateCtaLink feature="cockpit" href={href} />);
+
+            expect(screen.queryByRole("link")).not.toBeInTheDocument();
+            expect(
+                screen.getByText(
+                    "Ask an organization admin to upgrade the plan.",
+                ),
+            ).toBeInTheDocument();
+        });
+
+        it("asks for a license on self-hosted", () => {
+            mockSelfHosted.value = true;
+
+            render(<GateCtaLink feature="cockpit" />);
+
+            expect(
+                screen.getByText(
+                    "Ask an organization admin to activate a license.",
+                ),
+            ).toBeInTheDocument();
+        });
+
+        it("still links anywhere that is not billing", () => {
+            render(
+                <GateCtaLink feature="kody_rules" label="Open" href="/byok" />,
+            );
+
+            expect(screen.getByRole("link", { name: /open/i })).toHaveAttribute(
+                "href",
+                "/byok",
+            );
+        });
+
+        it("does not mistake a lookalike path for billing", () => {
+            render(
+                <GateCtaLink
+                    feature="kody_rules"
+                    label="Open"
+                    href="/choose-planner"
+                />,
+            );
+
+            expect(
+                screen.getByRole("link", { name: /open/i }),
+            ).toBeInTheDocument();
+        });
+    });
+});
+
+describe("GateAltLink", () => {
+    beforeEach(() => {
+        mockCanOpenBilling.value = true;
+    });
+
+    it("links to its target", () => {
+        render(
+            <GateAltLink href="/settings/git" label="Connect a repository" />,
+        );
+
+        expect(
+            screen.getByRole("link", { name: /connect a repository/i }),
+        ).toHaveAttribute("href", "/settings/git");
+    });
+
+    it("is offered when it leads to billing the viewer can open", () => {
+        render(<GateAltLink href="/choose-plan" label="Compare plans" />);
+
+        expect(
+            screen.getByRole("link", { name: /compare plans/i }),
+        ).toHaveAttribute("href", "/choose-plan");
+    });
+
+    it("is not offered when it leads to billing the viewer cannot open", () => {
+        mockCanOpenBilling.value = false;
+
+        const { container } = render(
+            <GateAltLink href="/choose-plan" label="Compare plans" />,
+        );
+
+        expect(container).toBeEmptyDOMElement();
+    });
+
+    it("stays for anyone when it leads elsewhere", () => {
+        mockCanOpenBilling.value = false;
+
+        render(
+            <GateAltLink href="/settings/git" label="Connect a repository" />,
+        );
+
+        expect(
+            screen.getByRole("link", { name: /connect a repository/i }),
+        ).toBeInTheDocument();
     });
 });

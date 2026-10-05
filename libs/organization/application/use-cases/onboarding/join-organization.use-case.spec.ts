@@ -1,6 +1,12 @@
+import { ForbiddenException } from '@nestjs/common';
 import { environment } from '@libs/ee/configs/environment';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import { JoinOrganizationUseCase } from './join-organization.use-case';
+
+
+const joinableOrganizations = (orgs: { uuid: string }[]) => ({
+    execute: jest.fn().mockResolvedValue(orgs),
+});
 
 describe('JoinOrganizationUseCase', () => {
     let originalCloudMode: boolean;
@@ -104,13 +110,14 @@ describe('JoinOrganizationUseCase', () => {
             deps.parametersService as any,
             deps.notificationService as any,
             { organizationJoined: jest.fn() } as any,
+            joinableOrganizations([{ uuid: 'org-new' }]) as any,
         );
         jest.spyOn(useCase, 'cleanUp').mockResolvedValue(undefined);
 
-        const result = await useCase.execute({
-            userId: 'user-1',
-            organizationId: 'org-new',
-        });
+        const result = await useCase.execute(
+            { userId: 'user-1', organizationId: 'org-new' },
+            { uuid: 'user-1', email: 'dev@acme.dev' },
+        );
 
         expect(deps.userService.update).toHaveBeenCalledWith(
             { uuid: 'user-1' },
@@ -146,13 +153,14 @@ describe('JoinOrganizationUseCase', () => {
             deps.parametersService as any,
             deps.notificationService as any,
             { organizationJoined: jest.fn() } as any,
+            joinableOrganizations([{ uuid: 'org-new' }]) as any,
         );
         jest.spyOn(useCase, 'cleanUp').mockResolvedValue(undefined);
 
-        const result = await useCase.execute({
-            userId: 'user-1',
-            organizationId: 'org-new',
-        });
+        const result = await useCase.execute(
+            { userId: 'user-1', organizationId: 'org-new' },
+            { uuid: 'user-1', email: 'dev@acme.dev' },
+        );
 
         expect(deps.userService.update).toHaveBeenCalledWith(
             { uuid: 'user-1' },
@@ -181,5 +189,68 @@ describe('JoinOrganizationUseCase', () => {
             recipients: { kind: 'user', userId: 'user-1' },
         });
         expect(result).toEqual({ status: STATUS.PENDING_EMAIL });
+    });
+
+    describe('caller and organization come from the authenticated user', () => {
+        const build = (deps: ReturnType<typeof createDeps>, joinable: any) =>
+            new JoinOrganizationUseCase(
+                deps.userService as any,
+                deps.organizationService as any,
+                deps.teamService as any,
+                deps.teamMembersService as any,
+                deps.profileService as any,
+                deps.authService as any,
+                deps.parametersService as any,
+                deps.notificationService as any,
+                { organizationJoined: jest.fn() } as any,
+                joinable,
+            );
+
+        it.each([
+            [
+                'another user',
+                { userId: 'victim', organizationId: 'org-new' },
+                [{ uuid: 'org-new' }],
+            ],
+            [
+                'an organization without auto-join for the email domain',
+                { userId: 'user-1', organizationId: 'org-private' },
+                [{ uuid: 'org-new' }],
+            ],
+            [
+                'any organization when no domain matches',
+                { userId: 'user-1', organizationId: 'org-new' },
+                [],
+            ],
+        ])('refuses to move %s', async (_label, body, orgs) => {
+            const deps = createDeps();
+            setupDefaultFlow(deps);
+            const joinable = joinableOrganizations(orgs);
+            await expect(
+                build(deps, joinable).execute(body as any, {
+                    uuid: 'user-1',
+                    email: 'dev@acme.dev',
+                }),
+            ).rejects.toBeInstanceOf(ForbiddenException);
+            expect(deps.userService.update).not.toHaveBeenCalled();
+            expect(deps.teamMembersService.create).not.toHaveBeenCalled();
+            expect(deps.teamMembersService.update).not.toHaveBeenCalled();
+        });
+
+        it('checks the domain of the authenticated email, not the body', async () => {
+            const deps = createDeps();
+            setupDefaultFlow(deps);
+            const joinable = joinableOrganizations([]);
+            await expect(
+                build(deps, joinable).execute(
+                    { userId: 'user-1', organizationId: 'org-new' },
+                    { uuid: 'user-1', email: 'dev@acme.dev' },
+                ),
+            ).rejects.toBeInstanceOf(ForbiddenException);
+            expect(joinable.execute).toHaveBeenCalledWith(
+                'acme.dev',
+                'dev@acme.dev',
+            );
+        });
     });
 });

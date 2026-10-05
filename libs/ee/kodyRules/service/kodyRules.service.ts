@@ -214,8 +214,11 @@ export class KodyRulesService implements IKodyRulesService {
         return this.kodyRulesRepository.create(kodyRules);
     }
 
-    async findById(uuid: string): Promise<IKodyRule | null> {
-        return this.kodyRulesRepository.findById(uuid);
+    async findById(
+        uuid: string,
+        organizationId: string,
+    ): Promise<IKodyRule | null> {
+        return this.kodyRulesRepository.findById(uuid, organizationId);
     }
 
     async findOne(
@@ -967,7 +970,7 @@ export class KodyRulesService implements IKodyRulesService {
         organizationId: string,
         ruleId: string,
         references: {
-            contextReferenceId?: string;
+            contextReferenceId?: string | null;
             // Todos os outros campos de referência foram movidos para Context OS
         },
     ): Promise<IKodyRule | null> {
@@ -1201,7 +1204,9 @@ export class KodyRulesService implements IKodyRulesService {
         const updatedFileScopeRule = updatedKodyRules.rules.find(
             (r) => r.uuid === ruleId,
         );
-        return updatedFileScopeRule ? (updatedFileScopeRule as IKodyRule) : null;
+        return updatedFileScopeRule
+            ? (updatedFileScopeRule as IKodyRule)
+            : null;
     }
 
     /**

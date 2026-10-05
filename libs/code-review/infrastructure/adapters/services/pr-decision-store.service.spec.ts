@@ -6,6 +6,7 @@ import {
 } from './pr-decision-store.service';
 import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enums/implementationStatus.enum';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
+import { MAX_PR_DECISIONS } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 import type {
     ISuggestion,
     ISuggestionByPR,
@@ -72,7 +73,9 @@ describe('toOutcome', () => {
 describe('toRecord', () => {
     it('maps every field a consumer needs, deriving outcome from implementationStatus', () => {
         const record = toRecord(
-            makeSuggestion({ implementationStatus: ImplementationStatus.IMPLEMENTED }),
+            makeSuggestion({
+                implementationStatus: ImplementationStatus.IMPLEMENTED,
+            }),
         );
 
         expect(record).toEqual({
@@ -89,7 +92,10 @@ describe('toRecord', () => {
 
     it('passes brokenKodyRulesIds through so the sharded judge can resolve the rule identity (PR #1895 review)', () => {
         const record = toRecord(
-            makeSuggestion({ label: 'kody_rules', brokenKodyRulesIds: ['rule-uuid-1'] }),
+            makeSuggestion({
+                label: 'kody_rules',
+                brokenKodyRulesIds: ['rule-uuid-1'],
+            }),
         );
 
         expect(record.brokenKodyRulesIds).toEqual(['rule-uuid-1']);
@@ -107,7 +113,7 @@ describe('toRecordFromPrLevel (issue #1313 Fase 1b)', () => {
         const record = toRecordFromPrLevel(makePrLevelSuggestion());
 
         expect(record).toEqual({
-            suggestionId: 'pr-sug-1',
+            suggestionId: expect.stringMatching(/^pr-/),
             suggestionContent: 'Split this into two migrations.',
             label: 'bug',
             outcome: 'pending',
@@ -121,6 +127,37 @@ describe('toRecordFromPrLevel (issue #1313 Fase 1b)', () => {
             makePrLevelSuggestion({ createdAt: undefined }),
         );
         expect(record.decidedAt).toBe('');
+    });
+
+    it('gives legacy comments with a repeated rule id stable, distinct references', () => {
+        const newer = makePrLevelSuggestion({
+            id: 'rule-1',
+            comment: { id: 102, pullRequestReviewId: null as any },
+        });
+        const older = makePrLevelSuggestion({
+            id: 'rule-1',
+            comment: { id: 101, pullRequestReviewId: null as any },
+        });
+        expect(toRecordFromPrLevel(newer).suggestionId).not.toBe(
+            toRecordFromPrLevel(older).suggestionId,
+        );
+        expect(toRecordFromPrLevel(newer).suggestionId).toBe(
+            toRecordFromPrLevel({ ...newer }).suggestionId,
+        );
+    });
+
+    it('distinguishes legacy suggestions without comment metadata by their recorded date and content', () => {
+        const base = makePrLevelSuggestion({
+            id: 'rule-1',
+            comment: undefined,
+        });
+        const ids = [
+            base,
+            { ...base, createdAt: '2026-01-02T00:00:00.000Z' },
+            { ...base, suggestionContent: 'A different issue.' },
+        ].map((s) => toRecordFromPrLevel(s).suggestionId);
+        expect(new Set(ids).size).toBe(3);
+        expect(toRecordFromPrLevel({ ...base }).suggestionId).toBe(ids[0]);
     });
 
     it('passes brokenKodyRulesIds through for a PR-level kody_rules decision (PR #1895 review)', () => {
@@ -144,14 +181,15 @@ describe('toRecordFromPrLevel (issue #1313 Fase 1b)', () => {
 });
 
 describe('PrDecisionStoreService.load', () => {
-    function makeService(over: {
-        findSuggestionsByPRAndFilenames?: jest.Mock;
-        findPrLevelSuggestionsByPR?: jest.Mock;
-    } = {}) {
+    function makeService(
+        over: {
+            findSuggestionsOnPR?: jest.Mock;
+            findPrLevelSuggestionsByPR?: jest.Mock;
+        } = {},
+    ) {
         const repo = {
-            findSuggestionsByPRAndFilenames:
-                over.findSuggestionsByPRAndFilenames ??
-                jest.fn().mockResolvedValue([]),
+            findSuggestionsOnPR:
+                over.findSuggestionsOnPR ?? jest.fn().mockResolvedValue([]),
             findPrLevelSuggestionsByPR:
                 over.findPrLevelSuggestionsByPR ??
                 jest.fn().mockResolvedValue([]),
@@ -159,24 +197,11 @@ describe('PrDecisionStoreService.load', () => {
         return { service: new PrDecisionStoreService(repo as any), repo };
     }
 
-    it('returns an empty array without querying when filePaths is empty', async () => {
-        const { service, repo } = makeService();
-
-        const result = await service.load({
-            organizationId: 'org-1',
-            prNumber: 42,
-            repositoryFullName: 'kodustech/kodus-ai',
-            filePaths: [],
-        });
-
-        expect(result).toEqual([]);
-        expect(repo.findSuggestionsByPRAndFilenames).not.toHaveBeenCalled();
-        expect(repo.findPrLevelSuggestionsByPR).not.toHaveBeenCalled();
-    });
-
-    it('queries only SENT suggestions scoped to org + PR + repo fullName + filePaths', async () => {
+    // The whole PR, not the files of the current diff (#2020): a finding can
+    // repeat a suggestion anchored on a file the code moved out of.
+    it('queries the most recent SENT suggestions on the whole PR, scoped to org + PR + repo fullName', async () => {
         const { service, repo } = makeService({
-            findSuggestionsByPRAndFilenames: jest
+            findSuggestionsOnPR: jest
                 .fn()
                 .mockResolvedValue([makeSuggestion()]),
         });
@@ -185,15 +210,14 @@ describe('PrDecisionStoreService.load', () => {
             organizationId: 'org-1',
             prNumber: 42,
             repositoryFullName: 'kodustech/kodus-ai',
-            filePaths: ['src/foo.ts'],
         });
 
-        expect(repo.findSuggestionsByPRAndFilenames).toHaveBeenCalledWith(
+        expect(repo.findSuggestionsOnPR).toHaveBeenCalledWith(
             42,
             'kodustech/kodus-ai',
-            ['src/foo.ts'],
             'org-1',
             DeliveryStatus.SENT,
+            MAX_PR_DECISIONS,
         );
         expect(result).toHaveLength(1);
     });
@@ -209,14 +233,15 @@ describe('PrDecisionStoreService.load', () => {
             organizationId: 'org-1',
             prNumber: 42,
             repositoryFullName: 'kodustech/kodus-ai',
-            filePaths: ['src/foo.ts'],
         });
 
+        // Same cap as the file-level read: PR-level history is not cut at 5.
         expect(repo.findPrLevelSuggestionsByPR).toHaveBeenCalledWith(
             42,
             'kodustech/kodus-ai',
             'org-1',
             DeliveryStatus.SENT,
+            MAX_PR_DECISIONS,
         );
         expect(result).toHaveLength(1);
         expect(result[0].relevantFile).toBeUndefined();
@@ -224,7 +249,7 @@ describe('PrDecisionStoreService.load', () => {
 
     it('merges file-scoped and PR-level results together', async () => {
         const { service } = makeService({
-            findSuggestionsByPRAndFilenames: jest
+            findSuggestionsOnPR: jest
                 .fn()
                 .mockResolvedValue([makeSuggestion()]),
             findPrLevelSuggestionsByPR: jest
@@ -236,7 +261,6 @@ describe('PrDecisionStoreService.load', () => {
             organizationId: 'org-1',
             prNumber: 42,
             repositoryFullName: 'kodustech/kodus-ai',
-            filePaths: ['src/foo.ts'],
         });
 
         expect(result).toHaveLength(2);
@@ -244,7 +268,7 @@ describe('PrDecisionStoreService.load', () => {
 
     it('fails open PER SOURCE: a file-scoped error still returns the PR-level results', async () => {
         const { service } = makeService({
-            findSuggestionsByPRAndFilenames: jest
+            findSuggestionsOnPR: jest
                 .fn()
                 .mockRejectedValue(new Error('Mongo unavailable')),
             findPrLevelSuggestionsByPR: jest
@@ -256,7 +280,6 @@ describe('PrDecisionStoreService.load', () => {
             organizationId: 'org-1',
             prNumber: 42,
             repositoryFullName: 'kodustech/kodus-ai',
-            filePaths: ['src/foo.ts'],
         });
 
         expect(result).toHaveLength(1);
@@ -265,7 +288,7 @@ describe('PrDecisionStoreService.load', () => {
 
     it('fails open PER SOURCE: a PR-level error still returns the file-scoped results', async () => {
         const { service } = makeService({
-            findSuggestionsByPRAndFilenames: jest
+            findSuggestionsOnPR: jest
                 .fn()
                 .mockResolvedValue([makeSuggestion()]),
             findPrLevelSuggestionsByPR: jest
@@ -277,7 +300,6 @@ describe('PrDecisionStoreService.load', () => {
             organizationId: 'org-1',
             prNumber: 42,
             repositoryFullName: 'kodustech/kodus-ai',
-            filePaths: ['src/foo.ts'],
         });
 
         expect(result).toHaveLength(1);
@@ -286,7 +308,7 @@ describe('PrDecisionStoreService.load', () => {
 
     it('fails open entirely: both sources erroring returns an empty list, never throws', async () => {
         const { service } = makeService({
-            findSuggestionsByPRAndFilenames: jest
+            findSuggestionsOnPR: jest
                 .fn()
                 .mockRejectedValue(new Error('Mongo unavailable')),
             findPrLevelSuggestionsByPR: jest
@@ -299,7 +321,6 @@ describe('PrDecisionStoreService.load', () => {
                 organizationId: 'org-1',
                 prNumber: 42,
                 repositoryFullName: 'kodustech/kodus-ai',
-                filePaths: ['src/foo.ts'],
             }),
         ).resolves.toEqual([]);
     });

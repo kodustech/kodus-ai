@@ -321,6 +321,18 @@ export function withJsonContract(
     return `${system ? `${system}\n\n` : ''}${contract}`;
 }
 
+/**
+ * The same keyword, in the user turn. `withJsonContract` alone is enough for a
+ * provider that reads the system prompt as a message, but an OpenAI-compatible
+ * gateway that re-issues the call on the Responses API moves the system prompt
+ * to `instructions`, and OpenAI's json_object check reads only the input
+ * messages: "Response input messages must contain the word 'json' in some form
+ * to use 'text.format' of type 'json_object'".
+ */
+export function withJsonUserHint(user: string): string {
+    return `${user}\n\nRespond with the JSON object only.`;
+}
+
 async function runReviewCall<T>(
     params: BaseReviewCallParams,
     mode: ReviewCallMode<T>,
@@ -465,13 +477,15 @@ async function runReviewCall<T>(
         override?: {
             outputArgs?: Record<string, unknown>;
             extract?: (r: any) => T | Promise<T>;
+            /** The user turn when the wire carries no schema (json_object). */
+            prompt?: string;
         },
     ): Promise<T> => {
         const exec = () =>
             tracedGenerateText({
                 model: model as any,
                 system: systemOverride ?? system,
-                prompt: user,
+                prompt: override?.prompt ?? user,
                 // Output mode: structured spreads `output: Output.object`, text
                 // spreads nothing (plain generateText → r.text).
                 ...(override?.outputArgs ?? mode.outputArgs),
@@ -524,6 +538,9 @@ async function runReviewCall<T>(
                   // resolveTaskSlot (route = the LlmTask, not the tier).
                   route: mainSlot?.route,
                   usedFallback: mainSlot?.usedFallback,
+                  // Every review call builds its SDK telemetry (falling back
+                  // to the org id), so every one is traced.
+                  traced: true,
                   attrs: extraAttrs
                       ? { ...spanAttrs, ...extraAttrs }
                       : spanAttrs,
@@ -558,6 +575,7 @@ async function runReviewCall<T>(
                 downgraded.modelName,
                 downgradedSystem,
                 { structuredRecovery: reason },
+                { prompt: withJsonUserHint(user) },
             );
         } catch (err) {
             // The re-ask gets the same free repair as the first attempt: a
@@ -613,7 +631,13 @@ async function runReviewCall<T>(
     }
 
     try {
-        return await call(mainModel, mainModelName, mainSystem);
+        return await call(
+            mainModel,
+            mainModelName,
+            mainSystem,
+            undefined,
+            schemaOnlyInPrompt ? { prompt: withJsonUserHint(user) } : undefined,
+        );
     } catch (err) {
         // json_schema → json_object fallback. A structured provider that
         // advertised support but rejected the json_schema body at runtime

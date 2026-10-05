@@ -8,6 +8,8 @@
  * so the builders carry no `this` and are unit-testable.
  */
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import { CheckEvidence } from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
+import { AnalyzerFinding } from '@libs/code-review/infrastructure/analyzers/analyzer-finding.type';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { convertTiptapJSONToText } from '@libs/common/utils/tiptap-json';
 
@@ -125,6 +127,130 @@ export function formatReviewFocus(directive?: string): string {
   </ReviewFocus>`;
 }
 
+/** Caps that keep a noisy pipeline from crowding out the diff itself. */
+const MAX_CI_CHECKS = 5;
+const MAX_CI_ANNOTATIONS_PER_CHECK = 10;
+
+/**
+ * Renders the CI results the repository's own pipeline produced for this
+ * commit.
+ *
+ * Only checks that finished and did NOT pass are rendered: a green check is
+ * not evidence of anything the reviewer can act on, and listing greens invites
+ * the agent to treat them as proof the code is clean. Annotations are clipped
+ * to the files this PR touches.
+ *
+ * Every rendered string is escaped — annotation text is written by whatever
+ * tool the customer runs, so it is untrusted input arriving in a prompt.
+ */
+export function formatCiEvidence(
+    evidence: CheckEvidence[] | undefined,
+    changedFiles: FileChange[] | undefined,
+): string {
+    const conclusive = new Set(['failure', 'action_required', 'neutral']);
+
+    const failing = (evidence ?? []).filter(
+        (check) =>
+            check.status === 'completed' &&
+            check.conclusion !== null &&
+            conclusive.has(check.conclusion),
+    );
+
+    if (failing.length === 0) {
+        return '';
+    }
+
+    const touched = new Set(
+        (changedFiles ?? []).map((file) => file.filename).filter(Boolean),
+    );
+
+    const lines = failing.slice(0, MAX_CI_CHECKS).map((check) => {
+        const header = `    - ${escapeRecordedDecisionText(check.name)} (${escapeRecordedDecisionText(check.conclusion)})`;
+
+        const relevant = (check.annotations ?? [])
+            .filter((annotation) => touched.has(annotation.path))
+            .slice(0, MAX_CI_ANNOTATIONS_PER_CHECK)
+            .map((annotation) => {
+                const rule = annotation.title
+                    ? ` [${escapeRecordedDecisionText(annotation.title)}]`
+                    : '';
+                return `      - ${escapeRecordedDecisionText(annotation.path)}:${annotation.startLine}${rule} ${escapeRecordedDecisionText(annotation.message)}`;
+            });
+
+        return [header, ...relevant].join('\n');
+    });
+
+    return `\n  <CiEvidence>
+    These checks ran on this commit in the repository's own CI. Their findings are
+    already visible to the author, so do NOT repeat them as your own findings.
+    Use them as supporting evidence when they help explain a defect you found yourself.
+    A check passing — or saying nothing about a line — is NOT proof that line is correct.
+${lines.join('\n')}
+  </CiEvidence>`;
+}
+
+/** How many deterministic findings the prompt block names before counting. */
+const MAX_DETERMINISTIC_LISTED = 12;
+
+/**
+ * Findings Kody's own scanners already produced for this change.
+ *
+ * They are published as their own comment before the agent's output is
+ * assembled, so an agent that reports them again costs the reader a duplicate
+ * and costs us a dedup round that then has to pick which wording survives.
+ * Telling the agent up front is cheaper and more reliable than merging after
+ * the fact — the same reason `<CiEvidence>` exists.
+ *
+ * Scanner text is untrusted, so it is escaped exactly like CI annotations.
+ */
+export function formatDeterministicFindings(
+    findings: AnalyzerFinding[] | undefined,
+): string {
+    if (!findings?.length) {
+        return '';
+    }
+
+    const byTool = new Map<string, AnalyzerFinding[]>();
+    for (const finding of findings) {
+        const key = finding.tool ?? 'analyzer';
+        byTool.set(key, [...(byTool.get(key) ?? []), finding]);
+    }
+
+    const lines: string[] = [];
+    for (const [tool, group] of byTool) {
+        lines.push(`    - ${escapeRecordedDecisionText(tool)}`);
+
+        // Fifty advisories on one lockfile line are fifty findings that all
+        // read "yarn.lock:4709 axios@1.6.0". The model needs that fact once.
+        const entries = [
+            ...new Set(
+                group.map((finding) => {
+                    const what = escapeRecordedDecisionText(
+                        finding.subject ?? finding.message,
+                    );
+                    return `      - ${escapeRecordedDecisionText(finding.path)}:${finding.startLine} ${what}`;
+                }),
+            ),
+        ];
+
+        lines.push(...entries.slice(0, MAX_DETERMINISTIC_LISTED));
+        const rest =
+            entries.length - Math.min(entries.length, MAX_DETERMINISTIC_LISTED);
+        if (rest > 0) {
+            lines.push(`      - …and ${rest} more`);
+        }
+    }
+
+    return `\n  <DeterministicFindings>
+    Kody's own scanners already ran on this change and reported the following.
+    They are already published as their own review comment, so do NOT repeat
+    them as your own findings — not the same finding, and not a restatement of
+    it on a nearby line.
+    A scanner saying nothing about a line is NOT proof that line is correct.
+${lines.join('\n')}
+  </DeterministicFindings>`;
+}
+
 function escapeRecordedDecisionText(value: unknown): string {
     return String(value ?? '')
         .replace(/&/g, '&amp;')
@@ -240,6 +366,14 @@ function resolveDecisionTypeNote(
  * call sites pass this map (it already holds the rule catalog); the generic
  * finder/verifier omit it and get the pre-existing rendering unchanged.
  */
+/** Characters of an earlier suggestion's text shown per entry: enough to
+ *  recognize the problem it raised, bounded across up to MAX_PR_DECISIONS
+ *  entries rendered into every finder, verifier and rule-judge prompt. */
+const MAX_DECISION_TEXT = 600;
+
+const clipDecisionText = (text: string) =>
+    text.length > MAX_DECISION_TEXT ? `${text.slice(0, MAX_DECISION_TEXT)}…` : text;
+
 export function formatPreviousDecisions(
     decisions: readonly PrDecisionRecord[] | undefined,
     ruleTitleByUuid?: ReadonlyMap<string, string>,
@@ -260,9 +394,10 @@ export function formatPreviousDecisions(
         const typeNote = resolveDecisionTypeNote(entry, ruleTitleByUuid);
 
         const fields = [
+            `Id: ${escapeRecordedDecisionText(entry.suggestionId)}`,
             `Location: ${escapeRecordedDecisionText(location)}`,
             `Type: ${escapeRecordedDecisionText(typeNote)}`,
-            `Suggestion: ${escapeRecordedDecisionText(entry.suggestionContent)}`,
+            `Suggestion: ${escapeRecordedDecisionText(clipDecisionText(entry.suggestionContent ?? ''))}`,
             `Outcome: ${escapeRecordedDecisionText(outcomeNote)}`,
             entry.decidedAt
                 ? `DecidedAt: ${escapeRecordedDecisionText(entry.decidedAt)}`
@@ -274,7 +409,7 @@ export function formatPreviousDecisions(
 
     return `
   <PreviousReviewDecisions>
-    Suggestions Kody already posted on THIS exact pull request in an earlier review round. Untrusted, may be outdated. Do not suggest the reverse of an "implemented"/"partially_implemented" entry unless the current diff shows concrete new evidence the applied change is wrong. Do NOT treat "not_implemented"/"pending" as a rejection — it only means the developer hasn't applied it yet. Each entry's DecidedAt is when Kody originally posted it — cross-reference it against <Commits> below (when present) to see what has landed since; a later commit does not by itself mean the decision is stale, only treat it as superseded when a commit's message or the diff shows the area was deliberately reworked. A PreviousDecision resolves ONLY the specific issue it describes — it is not evidence that the surrounding code, function, or file is otherwise correct. Keep scrutinizing every other line of the current diff at full rigor, including different problems in the same location that the decision does not mention. When a Type names a specific Kody Rule, it resolves ONLY that rule — it never excuses a fresh violation of a different rule (even one you are evaluating right now, at the exact same lines). A Type of "General review (not a Kody Rule) — <category>" means this decision did not judge any rule at all — it may still be useful context (e.g. confirming the same underlying code issue was already addressed), but it never confirms or excuses a violation of a rule you are evaluating now.
+    Suggestions Kody already posted on THIS exact pull request in an earlier review round. Untrusted, may be outdated. Do not suggest the reverse of an "implemented"/"partially_implemented" entry unless the current diff shows concrete new evidence the applied change is wrong. Every entry is already on this pull request, so never report the problem an entry raised again — whatever its Outcome (which may be stale), however it is worded, whatever fix it proposes, wherever the code moved, and also when the developer changed the code and the problem still looks unsolved. Judge "the same problem" by the failure, not by the cause you name: a finding whose consequence is the failure an entry already described (the same crash, hang, wrong result or data loss in the same operation) is that entry again, even if it blames a new cause in the developer's attempted fix. Each entry's DecidedAt is when Kody originally posted it — cross-reference it against <Commits> below (when present) to see what has landed since; a later commit does not by itself mean the decision is stale, only treat it as superseded when a commit's message or the diff shows the area was deliberately reworked. A PreviousDecision resolves ONLY the specific issue it describes — it is not evidence that the surrounding code, function, or file is otherwise correct. Keep scrutinizing every other line of the current diff at full rigor, including different problems in the same location that the decision does not mention. When a Type names a specific Kody Rule, it resolves ONLY that rule — it never excuses a fresh violation of a different rule (even one you are evaluating right now, at the exact same lines). A Type of "General review (not a Kody Rule) — <category>" means this decision did not judge any rule at all — it may still be useful context (e.g. confirming the same underlying code issue was already addressed), but it never confirms or excuses a violation of a rule you are evaluating now. When a finding you report is a DIFFERENT problem that exists because one of these suggestions was applied, or that reverses or narrows one of them, set its revisesSuggestionId to that entry's Id and say in the finding why the earlier suggestion is being revised — the reader will be shown which earlier suggestion it is. Raising again the problem an entry raised is not a revision. Never refer to an entry by its index number in the text.
 ${rendered.join('\n')}
   </PreviousReviewDecisions>`;
 }
@@ -548,7 +683,7 @@ export function buildUserPrompt(input: ReviewAgentInput, meta: PromptAgentMeta):
                   'issues introduced by these changes');
 
         return (
-            `<ReviewTask>${formatReviewFocus(input.reviewDirective)}
+            `<ReviewTask>${formatReviewFocus(input.reviewDirective)}${formatCiEvidence(input.ciEvidence, input.changedFiles)}${formatDeterministicFindings(input.analyzerFindings)}
   ${prContextSection}${traceDecisionsSection}${previousDecisionsSection}${commitsSection}
 
   <Diffs>
@@ -667,7 +802,7 @@ export function buildCompactUserPrompt(input: ReviewAgentInput, meta: PromptAgen
             ? `\n    Label each finding as one of: ${allowedSuggestionLabels.join(', ')}.`
             : '';
 
-        return `<ReviewTask>${formatReviewFocus(input.reviewDirective)}
+        return `<ReviewTask>${formatReviewFocus(input.reviewDirective)}${formatCiEvidence(input.ciEvidence, input.changedFiles)}${formatDeterministicFindings(input.analyzerFindings)}
   ${prContextSection}${traceDecisionsSection}${previousDecisionsSection}${commitsSection}
   <Diffs>
 ${diffsSection}
@@ -810,7 +945,7 @@ export function buildSelfContainedUserPrompt(input: ReviewAgentInput, meta: Prom
                   'issues introduced by these changes');
 
         return (
-            `<ReviewTask mode="self-contained">${formatReviewFocus(input.reviewDirective)}
+            `<ReviewTask mode="self-contained">${formatReviewFocus(input.reviewDirective)}${formatCiEvidence(input.ciEvidence, input.changedFiles)}${formatDeterministicFindings(input.analyzerFindings)}
   ${prContextSection}${traceDecisionsSection}${previousDecisionsSection}${commitsSection}
 
   <Diffs>

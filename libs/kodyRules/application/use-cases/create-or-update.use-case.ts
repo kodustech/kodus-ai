@@ -109,7 +109,10 @@ export class CreateOrUpdateKodyRulesUseCase {
                     user: requestUser,
                     action: Action.Create,
                     resource: ResourceType.KodyRules,
-                    repoIds: await this.resolveAuthorizationRepoIds(kodyRule),
+                    repoIds: await this.resolveAuthorizationRepoIds(
+                        kodyRule,
+                        organizationId,
+                    ),
                 });
             }
 
@@ -267,6 +270,7 @@ export class CreateOrUpdateKodyRulesUseCase {
      */
     private async resolveAuthorizationRepoIds(
         kodyRule: CreateKodyRuleDto,
+        organizationId: string,
     ): Promise<string[] | undefined> {
         const ruleScope = kodyRule.repositoryId
             ? [kodyRule.repositoryId]
@@ -276,9 +280,12 @@ export class CreateOrUpdateKodyRulesUseCase {
             return ruleScope;
         }
 
-        const existing = await this.kodyRulesService.findById(kodyRule.uuid);
+        const existing = await this.kodyRulesService.findById(
+            kodyRule.uuid,
+            organizationId,
+        );
         if (!existing) {
-            return ruleScope;
+            throw new NotFoundException('Rule not found');
         }
 
         const toggledIds = this.getInheritanceOnlyToggledIds(
@@ -315,8 +322,7 @@ export class CreateOrUpdateKodyRulesUseCase {
             'updatedAt',
         ]);
 
-        const normalized = (value: unknown) =>
-            JSON.stringify(value ?? null);
+        const normalized = (value: unknown) => JSON.stringify(value ?? null);
 
         for (const key of Object.keys(incoming)) {
             if (ignoredKeys.has(key)) {
@@ -380,7 +386,10 @@ export class CreateOrUpdateKodyRulesUseCase {
     ): Promise<CentralizedPrMetadata | null> {
         const existingRule =
             kodyRule.uuid &&
-            (await this.kodyRulesService.findById(kodyRule.uuid));
+            (await this.kodyRulesService.findById(
+                kodyRule.uuid,
+                organizationAndTeamData.organizationId,
+            ));
 
         if (kodyRule.uuid && !existingRule) {
             throw new NotFoundException('Rule not found');
@@ -744,11 +753,14 @@ export class CreateOrUpdateKodyRulesUseCase {
                             },
                         );
 
+                    // No id means the rule references nothing: clear the
+                    // pointer. Null, not undefined — the repository skips
+                    // undefined fields, which would keep a stale pointer.
                     await this.kodyRulesService.updateRuleReferences(
                         organizationAndTeamData.organizationId,
                         ruleId,
                         {
-                            contextReferenceId,
+                            contextReferenceId: contextReferenceId ?? null,
                         },
                     );
 

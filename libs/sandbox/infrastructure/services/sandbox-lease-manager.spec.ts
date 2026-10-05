@@ -159,9 +159,12 @@ describe('SandboxLeaseManager', () => {
         expect(result.sandbox).toBeDefined();
 
         // updateReady called with prKey
+        // The third argument is the base branch, persisted so a joiner
+        // reconnecting to this sandbox can still ask git for the base ref.
         expect(leaseRepo.updateReady).toHaveBeenCalledWith(
             prKey,
             expect.any(String),
+            undefined,
         );
 
         // Release: decrement lease

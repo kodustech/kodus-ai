@@ -121,15 +121,27 @@ export interface CodeReviewSettings {
 /**
  * Settings that skip reviews on purpose (validate-config.stage.ts:250-574,
  * fetch-changed-files.stage.ts:99) are "configured to skip", not broken.
+ *
+ * `defaultIgnorePaths` is the default "Ignored files" list. A config that
+ * changed the field stores it in full (the backfill migration
+ * 2026082700000000 copied the default into it), so only what goes beyond the
+ * default is something the team chose to skip.
  */
 export function skipSettingsCheck(
     load: (ctx: DoctorContext) => Promise<CodeReviewSettings[]>,
+    defaultIgnorePaths: () => readonly string[] = () => [],
 ): DoctorCheck {
     return {
         id: 'config.skip',
         async run(ctx: DoctorContext): Promise<DoctorResult[]> {
             const results: DoctorResult[] = [];
-            for (const { team, repository, config } of await load(ctx)) {
+            const settings = await load(ctx);
+            const defaults = new Set(
+                settings.some((s) => s.config.ignorePaths?.length)
+                    ? defaultIgnorePaths()
+                    : [],
+            );
+            for (const { team, repository, config } of settings) {
                 const scope = teamScope(team, repository ?? undefined);
                 const where = repository
                     ? 'Settings > Code Review for this repository'
@@ -164,9 +176,12 @@ export function skipSettingsCheck(
                         `Only pull requests into ${config.baseBranches.slice(0, 5).join(', ')} are reviewed.`,
                     );
                 }
-                if (config.ignorePaths?.length) {
+                const ownIgnorePaths = (config.ignorePaths ?? []).filter(
+                    (p) => !defaults.has(p),
+                );
+                if (ownIgnorePaths.length) {
                     skip(
-                        `${config.ignorePaths.length} path pattern(s) are ignored (${config.ignorePaths.slice(0, 3).join(', ')}).`,
+                        `${ownIgnorePaths.length} path pattern(s) beyond the default list are ignored (${ownIgnorePaths.slice(0, 3).join(', ')}).`,
                     );
                 }
                 if (config.ignoredTitleKeywords?.length) {

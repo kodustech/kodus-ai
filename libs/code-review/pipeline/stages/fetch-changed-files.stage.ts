@@ -141,6 +141,8 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
                     message: message,
                 };
                 draft.ignoredFiles = ignoredList?.map((f) => f.filename) || [];
+                draft.ignoredFileChanges =
+                    ignoredList?.filter((f) => f.status !== 'removed') || [];
             });
         }
 
@@ -176,6 +178,8 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
             draft.changedFiles = filesWithLineNumbers;
             draft.pullRequest.stats = stats;
             draft.ignoredFiles = ignoredList?.map((f) => f.filename) || [];
+            draft.ignoredFileChanges =
+                ignoredList?.filter((f) => f.status !== 'removed') || [];
         });
     }
 

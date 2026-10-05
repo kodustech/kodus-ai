@@ -290,6 +290,55 @@ describe('CLI sandbox clone against a self-managed git host', () => {
         }
     });
 
+    it('never touches the repository GIT_DIR names (a worker started from a git hook)', async () => {
+        // The pre-push hook exports GIT_DIR. The sandbox used to inherit it,
+        // so its `git init` and `config core.hooksPath /dev/null` rewrote
+        // kodus-ai's own config (core.bare=true, hooks off) instead of the
+        // temp clone's.
+        const callerRepo = await mkdtemp(join(tmpdir(), 'kodus-git-caller-'));
+        await execFileAsync('git', ['init', '-q', callerRepo], {
+            env: scrubbedGitEnv(),
+        });
+        const callerGitDir = join(callerRepo, '.git');
+        const readCallerConfig = async (key: string) =>
+            execFileAsync(
+                'git',
+                ['--git-dir', callerGitDir, 'config', '--get', key],
+                {
+                    env: scrubbedGitEnv(),
+                },
+            ).then(
+                ({ stdout }) => stdout.trim(),
+                () => null,
+            );
+        const saved = process.env.GIT_DIR;
+        process.env.GIT_DIR = callerGitDir;
+        try {
+            const sandbox = await sandboxService.createSandboxWithRepo({
+                cloneUrl: `http://127.0.0.1:${port}/group/repo`,
+                branch: 'main',
+                platform: PlatformType.GITLAB,
+                checkoutSha: headSha,
+            } as any);
+            try {
+                const head = await sandbox.run('git rev-parse HEAD');
+                expect(head.stdout.trim()).toBe(headSha);
+                expect((await sandbox.run('cat app.ts')).stdout).toContain(
+                    'export const answer = 42;',
+                );
+            } finally {
+                await sandbox.cleanup?.();
+            }
+
+            expect(await readCallerConfig('core.hooksPath')).toBeNull();
+            expect(await readCallerConfig('core.bare')).toBe('false');
+        } finally {
+            if (saved === undefined) delete process.env.GIT_DIR;
+            else process.env.GIT_DIR = saved;
+            await rm(callerRepo, { recursive: true, force: true });
+        }
+    });
+
     it('fails loudly instead of silently cloning github.com when nothing is connected', async () => {
         const host = `http://127.0.0.1:${port}`;
         const resolver = buildResolver(host, undefined);

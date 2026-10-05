@@ -1,9 +1,13 @@
-import { Inject } from '@nestjs/common';
+import { Inject, NotFoundException } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { createLogger } from '@libs/core/log/logger';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
+import {
+    ITeamService,
+    TEAM_SERVICE_TOKEN,
+} from '@libs/organization/domain/team/contracts/team.service.contract';
 import {
     ITeamMemberService,
     TEAM_MEMBERS_SERVICE_TOKEN,
@@ -27,6 +31,9 @@ export class CreateOrUpdateTeamMembersUseCase implements IUseCase {
         @Inject(TEAM_MEMBERS_SERVICE_TOKEN)
         private readonly teamMembersService: ITeamMemberService,
 
+        @Inject(TEAM_SERVICE_TOKEN)
+        private readonly teamService: ITeamService,
+
         @Inject(REQUEST)
         private readonly request: UserRequest,
 
@@ -35,6 +42,19 @@ export class CreateOrUpdateTeamMembersUseCase implements IUseCase {
         private readonly telemetry: TelemetryService,
     ) {}
     public async execute(teamId: string, members: IMembers[]): Promise<any> {
+        // `teamId` comes from the request body and the route guard only
+        // checks the caller's role, so without this an owner could attach
+        // members to a team of another organization. Checked before the
+        // try below, whose catch swallows errors into an empty response.
+        const teamOrganizationId =
+            await this.teamService.findOneOrganizationIdByTeamId(teamId);
+        if (
+            !teamOrganizationId ||
+            teamOrganizationId !== this.request.user?.organization?.uuid
+        ) {
+            throw new NotFoundException('Team not found');
+        }
+
         try {
             const result: IUpdateOrCreateMembersResponse =
                 await this.teamMembersService.updateOrCreateMembers(

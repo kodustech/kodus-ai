@@ -64,3 +64,10 @@ Output JSON:
 `,
     };
 }
+
+/**
+ * Added to a verifier run only when the PR has earlier suggestions, right
+ * after its <PreviousReviewDecisions> block — never to the system prompt, so a
+ * review with no history verifies exactly as before (#2020, repeats).
+ */
+export const VERIFIER_REPEAT_RULE = `Also DROP the finding when it raises again the problem a PreviousReviewDecisions entry already raised on this pull request — whatever that entry's Outcome, however it is worded, whatever fix it proposes, wherever the code moved, also when it says the developer's fix is incomplete. Judge by the failure, not the cause it names: the same crash, hang, wrong result or data loss in the same operation is a repeat even when the finding blames a new cause in the attempted fix. That comment is already on the pull request. A DIFFERENT problem is not a repeat: a consequence of applying the earlier suggestion, another bug in the same code, or the same kind of problem in a separate operation.`;

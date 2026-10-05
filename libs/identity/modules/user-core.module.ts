@@ -5,6 +5,7 @@ import { AuthModel } from '../infrastructure/adapters/repositories/schemas/auth.
 import { UserModel } from '../infrastructure/adapters/repositories/schemas/user.model';
 
 import { CryptoModule } from '@libs/core/crypto/crypto.module';
+import { ProfilesModule } from './profiles.module';
 import { PASSWORD_SERVICE_TOKEN } from '../domain/user/contracts/password.service.contract';
 import { USER_REPOSITORY_TOKEN } from '../domain/user/contracts/user.repository.contract';
 import { USER_SERVICE_TOKEN } from '../domain/user/contracts/user.service.contract';
@@ -18,7 +19,11 @@ import { DeleteUserUseCase } from '../application/use-cases/user/delete.use-case
 import { InviteDataUserUseCase } from '../application/use-cases/user/invite-data.use-case';
 
 @Module({
-    imports: [TypeOrmModule.forFeature([UserModel, AuthModel]), CryptoModule], // Added AuthModel
+    imports: [
+        TypeOrmModule.forFeature([UserModel, AuthModel]), // Added AuthModel
+        CryptoModule,
+        ProfilesModule,
+    ],
     providers: [
         DeleteUserUseCase,
         CheckUserWithEmailUserUseCase,

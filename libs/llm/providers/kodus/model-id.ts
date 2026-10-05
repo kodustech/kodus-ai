@@ -51,6 +51,23 @@ export function canonicalKodusModelId(id: string): string {
     return RETIRED_KODUS_MODELS.get(id) ?? id;
 }
 
+/**
+ * The same retirements in the upstream's own id form — what a BYOK slot that
+ * calls the upstream directly saves (openai_compatible → Fireworks stores
+ * `accounts/fireworks/models/...`, without the `fireworks/` routing prefix).
+ */
+const RETIRED_UPSTREAM_MODELS: ReadonlyMap<string, string> = new Map(
+    [...RETIRED_KODUS_MODELS].map(([from, to]) => [
+        from.slice(from.indexOf('/') + 1),
+        to.slice(to.indexOf('/') + 1),
+    ]),
+);
+
+/** The id a saved upstream model id runs as today (retired ids → replacement). */
+export function canonicalUpstreamModelId(id: string): string {
+    return RETIRED_UPSTREAM_MODELS.get(id) ?? id;
+}
+
 /** Split `<upstream>/<model>` into its parts, or null when the prefix is not
  *  one Kodus routes to (or the id has no slash). Pure, never throws. */
 export function splitKodusModelId(rawId: string | undefined): KodusModelRef | null {

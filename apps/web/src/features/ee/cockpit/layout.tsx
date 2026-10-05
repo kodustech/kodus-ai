@@ -111,10 +111,26 @@ async function CockpitLayoutBody({
         // argues from the org's own reviews beats one that argues from sample
         // charts — and when the count is zero, the honest next step is a
         // repository, not a plan (see `altCta` below).
-        const reviewedCount = await getReviewedPullRequestCount({
+        //
+        // Only successful runs count as "reviewed": a skipped or failed run
+        // (no AI key, provider down) produced nothing to measure. And zero
+        // recent reviews is not "never had one": an org whose reviews are
+        // older than the window, or all failed, already has a repository.
+        const recentReviewedCount = await getReviewedPullRequestCount({
             teamId: selectedTeamId,
             windowDays: LOCKED_PREVIEW_WINDOW_DAYS,
+            status: "success",
         });
+        const allTimeRunCount =
+            recentReviewedCount === 0
+                ? await getReviewedPullRequestCount({ teamId: selectedTeamId })
+                : null;
+        // 0 only when the workspace never ran a review at all; null when the
+        // count is unknown or there is nothing recent worth quoting.
+        const reviewedCount =
+            recentReviewedCount === 0 && allTimeRunCount !== 0
+                ? null
+                : recentReviewedCount;
         const hasReviews = reviewedCount !== null && reviewedCount > 0;
         // Self-hosted has no plan chooser — it has a license key.
         const planCta = planCtaTarget();

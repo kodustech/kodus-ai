@@ -197,6 +197,13 @@ export class TeamMemberService implements ITeamMemberService {
         inviterEmail?: string,
     ): Promise<IUpdateOrCreateMembersResponse> {
         try {
+            // Members are identified by email only (client ids are dropped in
+            // getUserIdFromMembers); an entry without one cannot be resolved
+            // and would reach the create path with an undefined email.
+            members = members.filter(
+                (member) =>
+                    typeof member?.email === 'string' && member.email.trim(),
+            );
             const emails = members.map((member) => member.email);
             const usersToSendInvite = [];
             const results: IInviteResult[] = [];
@@ -346,6 +353,16 @@ export class TeamMemberService implements ITeamMemberService {
     ): Promise<IMembers[]> {
         const membersWithUserId: IMembers[] = [];
 
+        // `uuid` (team member) and `userId` arrive in the request body. They
+        // are resolved here only from members of the caller's organization,
+        // matched by email; a client value would otherwise attach another
+        // organization's user (and expose their email) or rewrite another
+        // organization's team member row.
+        for (const member of members) {
+            delete member.uuid;
+            delete member.userId;
+        }
+
         const membersOfOrganization = await this.findManyByOrganizationId(
             organizationAndTeamData.organizationId,
             [STATUS.ACTIVE, STATUS.PENDING],
@@ -482,17 +499,17 @@ export class TeamMemberService implements ITeamMemberService {
                 uuid: userToSendInvitation.uuid,
             });
 
-            const inviteLink = `${process.env.API_USER_INVITE_BASE_URL}/invite/${user.uuid}`;
-
-            const filteredMembers = user?.teamMember?.filter(
+            const isMemberOfThisOrganization = user?.teamMember?.some(
                 (member) =>
-                    member.organization.uuid ===
+                    member.organization?.uuid ===
                     organizationAndTeamData.organizationId,
             );
 
-            if (!filteredMembers && filteredMembers.length <= 0) {
-                return;
+            if (!isMemberOfThisOrganization) {
+                continue;
             }
+
+            const inviteLink = `${process.env.API_USER_INVITE_BASE_URL}/invite/${user.uuid}`;
 
             await this.notificationService.emit({
                 event: NotificationEvent.TEAM_MEMBER_INVITED,

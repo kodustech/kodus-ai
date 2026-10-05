@@ -1,6 +1,37 @@
 import { KodyRulesRepository } from './kodyRules.repository';
 import { KodyRulesStatus } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
+describe('KodyRulesRepository.findById organization isolation', () => {
+    it('restricts the document match to the requested organization', async () => {
+        const aggregate = jest
+            .fn()
+            .mockReturnValue({ exec: jest.fn().mockResolvedValue([]) });
+        const repo = new KodyRulesRepository({ aggregate } as any, {} as any);
+
+        await expect(
+            repo.findById('foreign-rule', 'org-own'),
+        ).resolves.toBeNull();
+        expect(aggregate.mock.calls[0][0][0]).toEqual({
+            $match: {
+                'organizationId': 'org-own',
+                'rules.uuid': 'foreign-rule',
+            },
+        });
+    });
+
+    it('never drops the organization filter, even for an empty id', async () => {
+        const aggregate = jest
+            .fn()
+            .mockReturnValue({ exec: jest.fn().mockResolvedValue([]) });
+        const repo = new KodyRulesRepository({ aggregate } as any, {} as any);
+
+        await expect(repo.findById('rule-own', '')).resolves.toBeNull();
+        expect(aggregate.mock.calls[0][0][0]).toEqual({
+            $match: { 'organizationId': '', 'rules.uuid': 'rule-own' },
+        });
+    });
+});
+
 /**
  * Regression coverage for the bulk-cleanup bug: the "Reset integration and
  * remove repositories config" flow used to leave directory-scoped and
@@ -89,5 +120,37 @@ describe('KodyRulesRepository.updateRulesStatusByFilter', () => {
         expect(update.$set['rules.$[elem].status']).toBe(
             KodyRulesStatus.PAUSED,
         );
+    });
+});
+
+describe('KodyRulesRepository.updateRule — clearing a field', () => {
+    function build() {
+        const exec = jest.fn().mockResolvedValue(null);
+        const findOneAndUpdate = jest.fn().mockReturnValue({ exec });
+        const findOne = jest.fn().mockReturnValue({ exec });
+        const repo = new KodyRulesRepository(
+            { findOneAndUpdate, findOne } as any,
+            {} as any,
+        );
+        return { repo, findOneAndUpdate };
+    }
+
+    it('writes null, which clears the stored value', async () => {
+        const { repo, findOneAndUpdate } = build();
+
+        await repo.updateRule('doc-1', 'rule-1', { contextReferenceId: null });
+
+        const [, update] = findOneAndUpdate.mock.calls[0];
+        expect(update.$set).toEqual({ 'rules.$.contextReferenceId': null });
+    });
+
+    it('skips undefined, which leaves the stored value in place', async () => {
+        const { repo, findOneAndUpdate } = build();
+
+        await repo.updateRule('doc-1', 'rule-1', {
+            contextReferenceId: undefined,
+        });
+
+        expect(findOneAndUpdate).not.toHaveBeenCalled();
     });
 });

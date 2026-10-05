@@ -36,6 +36,9 @@ export interface LlmObservability {
         route?: string;
         /** True when a fallback model served instead of the primary. */
         usedFallback?: boolean;
+        /** The call has model telemetry on: it runs inside a Langfuse
+         *  observation whose trace id the usage row keeps. */
+        traced?: boolean;
         attrs?: Record<string, any>;
         exec: () => Promise<T>;
     }): Promise<T>;

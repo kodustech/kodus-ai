@@ -66,7 +66,12 @@ export const ByokModelSelect = ({
     // toggle it; switching provider resets to the new provider's default via a
     // render-time reset (no effect → no cascading setState-in-effect). Hooks stay
     // above every early return so their call order is stable across renders.
-    const autoManual = !(foundProvider?.autoListModels ?? false);
+    // A custom endpoint (requiresBaseUrl) is never auto-listed, but it lists
+    // live once its base URL is typed — so it starts on the picker too.
+    const canList =
+        (foundProvider?.autoListModels ?? false) ||
+        (foundProvider?.listsModelsLive ?? false);
+    const autoManual = !canList;
     const [manualOverride, setManual] = useState<boolean | null>(null);
     const [prevProvider, setPrevProvider] = useState(provider);
     if (provider !== prevProvider) {
@@ -84,11 +89,7 @@ export const ByokModelSelect = ({
     if (manual) {
         return (
             <ModelInput
-                onBackToSelect={
-                    !foundProvider?.requiresBaseUrl
-                        ? () => setManual(false)
-                        : undefined
-                }
+                onBackToSelect={canList ? () => setManual(false) : undefined}
             />
         );
     }
@@ -101,6 +102,7 @@ export const ByokModelSelect = ({
             <ModelSelectLive
                 excludeIds={excludeIds}
                 credentialStored={credentialStored}
+                requiresBaseUrl={foundProvider.requiresBaseUrl ?? false}
                 onUseManual={() => setManual(true)}
             />
         );
@@ -249,7 +251,12 @@ const ModelPickerPopover = ({
                                         <ChevronsUpDownIcon className="-mr-2 opacity-50" />
                                     }>
                                     {models.find((p) => p.id === field.value)
-                                        ?.name ?? (
+                                        ?.name ??
+                                        // A saved model the endpoint does not
+                                        // list is still the selected one.
+                                        (field.value
+                                            ? formatModelLabel(field.value)
+                                            : undefined) ?? (
                                         <span className="font-normal">
                                             Select a model
                                         </span>
@@ -417,16 +424,23 @@ const ModelSelectLive = ({
     onUseManual,
     excludeIds = [],
     credentialStored,
+    requiresBaseUrl = false,
 }: {
     onUseManual?: () => void;
     excludeIds?: string[];
     credentialStored: boolean;
+    /** A custom endpoint: nothing to ask until its base URL is typed. */
+    requiresBaseUrl?: boolean;
 }) => {
     const form = useFormContext<EditKeyForm>();
     const provider = form.watch("provider");
     const isBedrock = provider === "amazon_bedrock";
     const typedKeyRaw = (form.watch("apiKey") ?? "").trim();
-    const typedBaseURL = (form.watch("baseURL") ?? undefined) || undefined;
+    // Debounced like the key: the URL is typed a character at a time, and each
+    // intermediate value would otherwise be a request to a different host.
+    const typedBaseURL =
+        useDebouncedValue((form.watch("baseURL") ?? "").trim(), 700) ||
+        undefined;
     const typedKey = useDebouncedValue(typedKeyRaw, 700);
     const hasKey = typedKey.length > 0;
 
@@ -451,7 +465,10 @@ const ModelSelectLive = ({
 
     // List live when we have SOMETHING to authenticate with: a typed key, or a
     // stored credential the server resolves on its own. Else prompt for the key.
-    const enabled = hasKey || hasAwsBearer || hasAwsIam || credentialStored;
+    const hasCredential =
+        hasKey || hasAwsBearer || hasAwsIam || credentialStored;
+    const missingBaseUrl = requiresBaseUrl && !typedBaseURL;
+    const enabled = hasCredential && !missingBaseUrl;
 
     const { data, isFetching, isError } = useLLMProviderModelsPreview({
         provider,
@@ -483,7 +500,9 @@ const ModelSelectLive = ({
                             <ChevronsUpDownIcon className="-mr-2 opacity-50" />
                         }>
                         <span className="text-text-tertiary font-normal">
-                            Enter your API key to load models
+                            {missingBaseUrl
+                                ? "Enter the base URL to load models"
+                                : "Enter your API key to load models"}
                         </span>
                     </Button>
                 </FormControl.Input>

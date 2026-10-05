@@ -133,6 +133,73 @@ describe('AgentReviewStage — dedup LLM.run contract (#1786)', () => {
             telemetryMeta,
         ) as Promise<{ suggestions: any[]; trace: any }>;
 
+    const ANALYZER_EVIDENCE = { source: 'kodus-analyzer', ruleId: 'r' };
+
+    const scanner = (over: any = {}) => ({
+        relevantFile: 'yarn.lock',
+        relevantLinesStart: 10,
+        relevantLinesEnd: 10,
+        label: 'deterministic',
+        severity: 'high',
+        oneSentenceSummary: 'scanner finding',
+        suggestionContent: 'scanner finding body',
+        evidence: { ...ANALYZER_EVIDENCE },
+        ...over,
+    });
+
+    /**
+     * There is one analyzer suggestion per tool, so two of them are always
+     * DIFFERENT categories (secrets vs dependencies) published as two comments
+     * on purpose. Every merge path drops the duplicate's body and keeps only
+     * its location, so honoring such a merge deletes a whole category from the
+     * review rather than removing a duplicate.
+     */
+    describe('two scanner findings are never merged', () => {
+        it('keeps both when the model groups them', async () => {
+            runSpy = jest.spyOn(LLM, 'run').mockResolvedValue({
+                groups: [{ keep: 0, duplicates: [1] }],
+                unique: [],
+            } as any);
+            const stage = makeStage();
+
+            const out = await callDedup(stage, [
+                scanner({ oneSentenceSummary: 'secrets' }),
+                scanner({ oneSentenceSummary: 'dependencies' }),
+            ]);
+
+            expect(out.suggestions).toHaveLength(2);
+        });
+
+        /**
+         * The `keep was already added` branch absorbs duplicates WITHOUT
+         * consulting the content guard at all — it appends the location and
+         * drops the body. A malformed group set that reuses a keep index
+         * therefore bypasses every other protection.
+         */
+        it('keeps both when a malformed group set reuses the keep index', async () => {
+            runSpy = jest.spyOn(LLM, 'run').mockResolvedValue({
+                groups: [
+                    { keep: 0, duplicates: [2] },
+                    { keep: 0, duplicates: [1] },
+                ],
+                unique: [],
+            } as any);
+            const stage = makeStage();
+
+            const out = await callDedup(stage, [
+                scanner({ oneSentenceSummary: 'secrets' }),
+                scanner({ oneSentenceSummary: 'dependencies' }),
+                dupB(),
+            ]);
+
+            const bodies = out.suggestions.map(
+                (s: any) => s.oneSentenceSummary,
+            );
+            expect(bodies).toContain('secrets');
+            expect(bodies).toContain('dependencies');
+        });
+    });
+
     // ── Layer 1: HAPPY PATH ────────────────────────────────────────────────
     describe('happy path — correct DEDUP_SCHEMA envelope', () => {
         it('merges a duplicate the model grouped, returning exactly one', async () => {

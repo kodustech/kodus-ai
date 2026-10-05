@@ -12,6 +12,7 @@ import {
     useEffect,
     useId,
     useMemo,
+    useRef,
     useState,
     useSyncExternalStore,
 } from "react";
@@ -115,8 +116,28 @@ import { useScopeTools, type ScopeTarget } from "./scope-tools";
  * Folds down to an icon rail (labels move into tooltips) and remembers that
  * in a cookie, so the server renders the chosen width on the first paint.
  */
-const RailContext = createContext(false);
-const useRail = () => useContext(RailContext);
+const RailContext = createContext({ collapsed: false, serverCollapsed: false });
+const unsubscribeNothing = () => undefined;
+const subscribeNever = () => unsubscribeNothing;
+/**
+ * Whether the rail is folded, as this component may render it right now.
+ *
+ * The code review group sits in a Suspense boundary (it reads search params)
+ * that hydrates after the rail. On a phone the rail has already folded by
+ * then, so the group hydrated with a value the server never rendered and
+ * React threw the tree away (#418). While a component hydrates, React reads
+ * the server snapshot below, so it gets what the server rendered; right after,
+ * the real value.
+ */
+const useRail = () => {
+    const { collapsed, serverCollapsed } = useContext(RailContext);
+    const hydrated = useSyncExternalStore(
+        subscribeNever,
+        () => true,
+        () => false,
+    );
+    return hydrated ? collapsed : serverCollapsed;
+};
 
 // Every control in the rail: an instant keyboard ring (never faded in) and a
 // pressed step one surface up. Links drop the DS link's focus underline for it.
@@ -126,6 +147,15 @@ const CONTROL_STATES =
 // Below a tablet width a 240px rail would take most of the screen, so the
 // sidebar stays an icon rail there whatever the saved preference.
 const NARROW_QUERY = "(max-width: 767px)";
+// A menu opened from the rail (workspace, settings scope, account) is
+// portaled outside the aside, but its trigger stays inside and says it is
+// open. Popovers and tooltips of the page itself do not count.
+const railMenuOpenIn = (aside: HTMLElement | null) =>
+    !!aside?.querySelector("[aria-haspopup][aria-expanded='true']");
+// A menu opened from the rail renders in a Radix portal. Tooltips share the
+// same popper wrapper, so only menu-like content counts as a layer.
+const RAIL_MENU_SELECTOR =
+    "[data-radix-popper-content-wrapper] :is([role='menu'], [role='listbox'], [role='dialog'])";
 const useIsNarrow = () =>
     useSyncExternalStore(
         (onChange) => {
@@ -147,33 +177,169 @@ export const AppSidebar = ({
     const [collapsedByChoice, setCollapsed] = useState(initialCollapsed);
     const isNarrow = useIsNarrow();
     const collapsed = collapsedByChoice || isNarrow;
+    // Peek: hovering the expand control shows the full rail over the page,
+    // without reflowing it, until the pointer leaves the rail. Clicking the
+    // control while peeking keeps it open, as before.
+    const [peekOpen, setPeeking] = useState(false);
+    // A peek must not survive the viewport going narrow, where the rail is
+    // forced: drop it (or one a pending timer plants) instead of hiding it,
+    // or it lays the open rail over the page again when the viewport widens.
+    if (isNarrow && peekOpen) setPeeking(false);
+    // Only while folded by choice: a peek timer that fires after the rail was
+    // opened must not lay the open rail over the page.
+    const peeking = collapsed && peekOpen && !isNarrow;
+    const showRail = collapsed && !peeking;
+    const peekTimer = useRef<number | undefined>(undefined);
+    const pointerOnRail = useRef(false);
+    const asideRef = useRef<HTMLElement>(null);
+    // Escape folds the rail, and the footer's layout changes with it, so the
+    // control can slide back under a resting pointer: the browser reports
+    // that as a fresh hover ~100ms later. Ignore hovers for a short moment
+    // after Escape instead of reopening on that.
+    const peekHoldUntil = useRef(0);
     const toggle = () => {
         const next = !collapsed;
+        // A click within the intent delay (a tap fires hover and click
+        // together) must not leave the timer to peek after the toggle.
+        window.clearTimeout(peekTimer.current);
+        // Folding can leave the control under the resting pointer, which the
+        // browser reports as a fresh hover: don't peek straight back open.
+        if (next) peekHoldUntil.current = Date.now() + 600;
         setCollapsed(next);
+        setPeeking(false);
         document.cookie = `${SIDEBAR_COLLAPSED_COOKIE}=${next ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
     };
+
+    const startPeek = () => {
+        if (!collapsed || isNarrow || Date.now() < peekHoldUntil.current)
+            return;
+        window.clearTimeout(peekTimer.current);
+        // A short intent delay, so crossing the button doesn't flash it open.
+        peekTimer.current = window.setTimeout(() => setPeeking(true), 150);
+    };
+    const cancelPeek = () => {
+        if (!peeking) window.clearTimeout(peekTimer.current);
+    };
+    const endPeek = () => {
+        window.clearTimeout(peekTimer.current);
+        let waitedForMenu = false;
+        const close = () => {
+            if (pointerOnRail.current) return;
+            // A menu opened from the rail renders in a portal, outside it:
+            // wait for it to close first.
+            if (railMenuOpenIn(asideRef.current)) {
+                waitedForMenu = true;
+                peekTimer.current = window.setTimeout(close, 300);
+                return;
+            }
+            // The menu just closed under the pointer, and folding can slide
+            // the control under it: hold off that synthetic re-hover.
+            if (waitedForMenu) peekHoldUntil.current = Date.now() + 600;
+            setPeeking(false);
+        };
+        peekTimer.current = window.setTimeout(close, 200);
+    };
+    useEffect(() => {
+        if (!peeking) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key !== "Escape") return;
+            // A menu opened from the rail, or a dialog such as the command
+            // palette (not a popper), is the top layer: this Escape closes
+            // it, not the peek.
+            if (
+                document.querySelector(RAIL_MENU_SELECTOR) ||
+                document.querySelector("[role='dialog'][data-state='open']")
+            )
+                return;
+            // Only a pointer already on the rail can be re-hovered by the
+            // control moving under it; a hover from the page is genuine.
+            if (pointerOnRail.current) peekHoldUntil.current = Date.now() + 600;
+            window.clearTimeout(peekTimer.current);
+            setPeeking(false);
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [peeking]);
+    // React counts a portaled rail menu as inside the aside, so moving onto
+    // it fires no leave — and when that menu closes over the page, no leave
+    // ever comes and the peek stayed open. Close from the pointer instead.
+    useEffect(() => {
+        if (!peeking) return;
+        const onPointerMove = (e: PointerEvent) => {
+            const aside = asideRef.current;
+            if (!pointerOnRail.current || railMenuOpenIn(aside)) return;
+            if (aside?.contains(e.target as Node)) return;
+            pointerOnRail.current = false;
+            window.clearTimeout(peekTimer.current);
+            peekTimer.current = window.setTimeout(() => {
+                if (!pointerOnRail.current && !railMenuOpenIn(asideRef.current))
+                    setPeeking(false);
+            }, 200);
+        };
+        document.addEventListener("pointermove", onPointerMove);
+        return () => document.removeEventListener("pointermove", onPointerMove);
+    }, [peeking]);
+    useEffect(() => () => window.clearTimeout(peekTimer.current), []);
 
     const canReadCodeReviewSettings = usePermission(
         Action.Read,
         ResourceType.CodeReviewSettings,
     );
 
+    // The server renders the saved choice only: it cannot know the viewport.
+    const railValue = useMemo(
+        () => ({ collapsed: showRail, serverCollapsed: initialCollapsed }),
+        [showRail, initialCollapsed],
+    );
+
+    // The nav scrolls once the groups are open; keep the current page's item
+    // in view instead of leaving it cut off under the plan panel.
+    const navRef = useRef<HTMLElement>(null);
+    useEffect(() => {
+        navRef.current
+            ?.querySelector<HTMLElement>('a[aria-current="page"]')
+            ?.scrollIntoView({ block: "nearest" });
+    }, [pathname]);
+
     return (
-        <RailContext.Provider value={collapsed}>
+        <RailContext.Provider value={railValue}>
             <aside
+                ref={asideRef}
                 data-collapsed={collapsed}
+                data-peeking={peeking || undefined}
+                onMouseEnter={() => {
+                    pointerOnRail.current = true;
+                    if (peeking) window.clearTimeout(peekTimer.current);
+                }}
+                onMouseLeave={() => {
+                    pointerOnRail.current = false;
+                    if (peeking) endPeek();
+                }}
+                // Picking a destination from the peeked rail closes it.
+                onClickCapture={(e) => {
+                    if (
+                        peeking &&
+                        (e.target as HTMLElement).closest("a[href]")
+                    ) {
+                        window.clearTimeout(peekTimer.current);
+                        setPeeking(false);
+                    }
+                }}
                 className={cn(
                     // Width snaps, never animates: a width transition reflows
                     // the whole page on every frame.
                     "bg-card-lv1 border-card-lv3/60 z-40 flex h-full shrink-0 flex-col overflow-hidden border-r",
                     collapsed ? "w-14" : "w-60",
+                    // A peek keeps the rail's 56px in the row and lays the
+                    // rest over the page, so the page doesn't reflow.
+                    peeking && "relative z-50 -mr-[184px] w-60 shadow-2xl",
                 )}>
                 <div
                     className={cn(
                         "flex flex-col gap-3 pt-4 pb-3",
-                        collapsed ? "items-center px-2" : "px-3",
+                        showRail ? "items-center px-2" : "px-3",
                     )}>
-                    {collapsed ? (
+                    {showRail ? (
                         <NextLink
                             href="/"
                             aria-label="Kodus home"
@@ -191,7 +357,7 @@ export const AppSidebar = ({
                         </NextLink>
                     )}
                     <WorkspaceSwitcher />
-                    {collapsed ? (
+                    {showRail ? (
                         <RailTooltip label="Search (⌘K)">
                             <span>
                                 <CommandPalette variant="rail" />
@@ -203,10 +369,11 @@ export const AppSidebar = ({
                 </div>
 
                 <nav
+                    ref={navRef}
                     aria-label="Main"
                     className={cn(
                         "flex min-h-0 flex-1 [scrollbar-width:thin] flex-col overflow-x-hidden overflow-y-auto pt-1 pb-4",
-                        collapsed ? "gap-3 px-2" : "gap-5 px-3",
+                        showRail ? "gap-3 px-2" : "gap-5 px-3",
                     )}>
                     <ul className="flex flex-col gap-0.5">
                         {mainItems
@@ -240,38 +407,47 @@ export const AppSidebar = ({
                 <div
                     className={cn(
                         "flex flex-col gap-1 px-2 pt-2 pb-1",
-                        collapsed && "items-center",
+                        showRail && "items-center",
                     )}>
                     {/* Too wide for the rail, like it was for phones in
                         the top bar. */}
-                    {!collapsed && (
+                    {!showRail && (
                         <ErrorBoundary fallback={null}>
                             <div className="flex px-1 pb-1">
                                 <GithubStars />
                             </div>
                         </ErrorBoundary>
                     )}
-                    <SidebarPlanStatus collapsed={collapsed} />
+                    <SidebarPlanStatus collapsed={showRail} />
                     {!isNarrow && (
                         <RailTooltip label="Expand sidebar">
                             <button
                                 type="button"
                                 onClick={toggle}
+                                onMouseEnter={startPeek}
+                                onMouseLeave={cancelPeek}
                                 aria-label={
-                                    collapsed
-                                        ? "Expand sidebar"
-                                        : "Collapse sidebar"
+                                    peeking
+                                        ? "Keep sidebar open"
+                                        : collapsed
+                                          ? "Expand sidebar"
+                                          : "Collapse sidebar"
                                 }
                                 aria-expanded={!collapsed}
                                 className={cn(
                                     "text-text-tertiary hover:bg-card-lv2 hover:text-text-primary flex h-8 items-center gap-2.5 rounded-lg text-sm transition-colors",
                                     CONTROL_STATES,
-                                    collapsed
+                                    showRail
                                         ? "w-9 justify-center"
                                         : "w-full px-2.5",
                                 )}>
-                                {collapsed ? (
+                                {showRail ? (
                                     <PanelLeftOpenIcon className="size-4" />
+                                ) : peeking ? (
+                                    <>
+                                        <PanelLeftOpenIcon className="size-4" />
+                                        Keep open
+                                    </>
                                 ) : (
                                     <>
                                         <PanelLeftCloseIcon className="size-4" />
@@ -286,10 +462,10 @@ export const AppSidebar = ({
                 <div
                     className={cn(
                         "border-card-lv3/60 flex gap-1 border-t px-2 py-2",
-                        collapsed ? "flex-col items-center" : "items-center",
+                        showRail ? "flex-col items-center" : "items-center",
                     )}>
-                    <div className={cn(!collapsed && "min-w-0 flex-1")}>
-                        <UserNav variant={collapsed ? "rail" : "sidebar"} />
+                    <div className={cn(!showRail && "min-w-0 flex-1")}>
+                        <UserNav variant={showRail ? "rail" : "sidebar"} />
                     </div>
                     <NotificationBell />
                 </div>

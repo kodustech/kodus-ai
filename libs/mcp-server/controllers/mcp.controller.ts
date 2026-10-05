@@ -16,6 +16,7 @@ import {
     ApiTags,
 } from '@nestjs/swagger';
 import { McpServerService } from '../services/mcp-server.service';
+import { McpAuthGuard } from '../guards/mcp-auth.guard';
 import { McpEnabledGuard } from '../guards/mcp-enabled.guard';
 import { createLogger } from '@libs/core/log/logger';
 import { Public } from '@libs/identity/infrastructure/adapters/services/auth/public.decorator';
@@ -27,7 +28,7 @@ import {
 @ApiTags('MCP')
 @Public()
 @Controller('mcp')
-@UseGuards(McpEnabledGuard)
+@UseGuards(McpEnabledGuard, McpAuthGuard)
 export class McpController {
     private readonly logger = createLogger(McpController.name);
 

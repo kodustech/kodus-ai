@@ -143,6 +143,37 @@ export function extractJsonFromText(text: string): string | null {
     }
     let s = text.trim();
 
+    // 0. Skip reasoning written into the answer. Some models (MiniMax-M3 in
+    // production) put <think>…</think> before the JSON, and the reasoning
+    // quotes code, so the first balanced {…} below would be a quote, not the
+    // answer.
+    //
+    // Only a block that opens BEFORE the JSON starts is reasoning: past that
+    // point a <think> or </think> is text inside the answer (a finding about a
+    // prompt file quotes both), and each block ends at its FIRST closing tag so
+    // an answer that quotes the tag, or is followed by another block, survives.
+    // One left-to-right pass, so the cost grows with the length of the text and
+    // not with its length times the number of blocks.
+    let kept = '';
+    let pos = 0;
+    for (;;) {
+        const open = s.indexOf('<think>', pos);
+        if (open < 0) break;
+        const gap = s.slice(pos, open);
+        if (/[{[]/.test(gap)) break;
+        const close = s.indexOf('</think>', open);
+        if (close < 0) {
+            // A block that never closes and is the first thing in the response
+            // carries no answer at all. Anywhere else, including right after a
+            // block that did close, the scan below may still find one.
+            if (pos === 0 && !gap.trim()) return null;
+            break;
+        }
+        kept += gap;
+        pos = close + '</think>'.length;
+    }
+    s = (kept + s.slice(pos)).trim();
+
     // 1. Unwrap a markdown code fence.
     const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
     if (fence?.[1]) s = fence[1].trim();

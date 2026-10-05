@@ -10,6 +10,7 @@ import {
     ISandboxProvider,
     SandboxInstance,
     SANDBOX_PROVIDER_TOKEN,
+    toBranchName,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -610,7 +611,11 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
 
             sandboxId = sandbox.sandboxId;
 
-            await this.leaseRepo.updateReady(prKey, sandboxId);
+            await this.leaseRepo.updateReady(
+                prKey,
+                sandboxId,
+                sandbox?.baseBranch,
+            );
 
             // Check for mid-create invalidation (Pitfall 5)
             const latestDoc = await this.leaseRepo.findByPrKey(prKey);
@@ -926,10 +931,18 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             }
         }
 
+        // The caller's value is authoritative for THIS review; the persisted
+        // one covers a joiner that arrived without clone params.
+        const baseBranch =
+            cloneParams?.baseBranch ??
+            (await this.leaseRepo.findByPrKey(prKey).catch(() => null))
+                ?.baseBranch;
+
         const sandbox: SandboxInstance = this.buildSandboxInstance(
             e2bSandbox,
             prKey,
             leaseId,
+            baseBranch,
         );
         this.leaseIdToPrKey.set(leaseId, prKey);
 
@@ -950,8 +963,19 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         e2bSandbox: Sandbox,
         prKey: string,
         leaseId: string,
+        baseBranch?: string,
     ): SandboxInstance {
         return {
+            // Restored from the lease. The base ref is already on disk from
+            // creation, but without the NAME nothing can ask git for it, and a
+            // tool that needs the previous version of a file then silently has
+            // no baseline — the same creator/reconnect drift the shared
+            // remoteCommands above exists to prevent.
+            // Normalized here rather than at each call site: creator and
+            // joiner reach this from different places, and a joiner that
+            // re-introduced the host's raw `refs/heads/...` spelling would
+            // break `origin/<base>` for every consumer.
+            baseBranch: toBranchName(baseBranch),
             // Single shared implementation (see e2b-sandbox.service.ts) — resolves
             // paths against the repo root, surfaces errors, logs empty reads.
             // Sharing it prevents the creator/reconnect drift that blinded reviews.

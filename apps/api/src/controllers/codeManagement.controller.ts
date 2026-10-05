@@ -61,9 +61,11 @@ import {
     CodeManagementRepositoryTreeResponseDto,
     CodeManagementWebhookStatusResponseDto,
 } from '../dtos/code-management.response.dto';
+import { TenantScopeGuard } from '../guards/tenant-scope.guard';
 @ApiTags('Code Management')
 @ApiBearerAuth('jwt')
 @ApiStandardResponses()
+@UseGuards(TenantScopeGuard)
 @Controller('code-management')
 export class CodeManagementController {
     constructor(

@@ -79,6 +79,12 @@ import {
     ListIssuesParams,
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/issues.type';
 import {
+    CheckEvidence,
+    CheckEvidenceConclusion,
+    CheckEvidenceStatus,
+    GetCheckEvidenceParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
+import {
     PullRequest,
     PullRequestAuthor,
     PullRequestCodeReviewTime,
@@ -291,6 +297,10 @@ export class GitlabService implements Omit<
                 merged_at: mergeRequest.merged_at,
                 head: {
                     ref: mergeRequest.source_branch,
+                    sha:
+                        mergeRequest.diff_refs?.head_sha ??
+                        mergeRequest.sha ??
+                        '',
                     repo: {
                         name: params.repository.name,
                         // Use source project ID so forked MRs can fetch files from the right project
@@ -338,6 +348,172 @@ export class GitlabService implements Omit<
             queryTimeout: 600000,
             camelize: false,
         });
+    }
+
+    async getCheckEvidence(
+        params: GetCheckEvidenceParams,
+    ): Promise<CheckEvidence[]> {
+        const { organizationAndTeamData, repository, commitSha } = params;
+
+        const authDetail = await this.getAuthDetails(organizationAndTeamData);
+        if (!authDetail) {
+            return [];
+        }
+
+        const projectId = `${repository.owner}/${repository.name}`;
+
+        try {
+            const gitlabAPI = this.instanceGitlabApi(authDetail);
+            // One endpoint covers both pipeline jobs and externally posted
+            // commit statuses, so there is no second surface to merge here.
+            const statuses = await gitlabAPI.Commits.allStatuses(
+                projectId,
+                commitSha,
+            );
+
+            return (statuses ?? []).map((status) =>
+                this.mapGitlabCommitStatus(status),
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: 'Failed to read GitLab commit statuses',
+                context: GitlabService.name,
+                error,
+                metadata: { projectId, commitSha },
+            });
+            return [];
+        }
+    }
+
+    /**
+     * Hunks GitLab collapsed out of the merge-request diff.
+     *
+     * `/diffs` serves a cached, size-limited view: past `diff_max_patch_bytes`
+     * an entry comes back with `collapsed` or `too_large` set and an EMPTY
+     * `diff`, which a lockfile bump reaches easily. `access_raw_diffs` reads
+     * from the database instead and returns the real hunks.
+     */
+    async getFilePatches(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id?: string; name: string; owner?: string };
+        prNumber: number;
+        paths: string[];
+    }): Promise<Array<{ path: string; patch: string }>> {
+        const { organizationAndTeamData, repository, prNumber, paths } = params;
+
+        if (!paths.length) {
+            return [];
+        }
+
+        const authDetail = await this.getAuthDetails(organizationAndTeamData);
+        if (!authDetail) {
+            return [];
+        }
+
+        const projectId = repository.id
+            ? String(repository.id)
+            : `${repository.owner}/${repository.name}`;
+
+        try {
+            const gitlabAPI = this.instanceGitlabApi(authDetail);
+            const mr = await gitlabAPI.MergeRequests.showChanges(
+                projectId,
+                prNumber,
+                { accessRawDiffs: true },
+            );
+
+            const wanted = new Set(paths);
+            const out: Array<{ path: string; patch: string }> = [];
+
+            for (const change of (mr as { changes?: unknown[] })?.changes ??
+                []) {
+                const typed = change as {
+                    new_path?: string;
+                    old_path?: string;
+                    diff?: string;
+                };
+                const path = typed.new_path ?? typed.old_path;
+                if (!path || !wanted.has(path) || !typed.diff?.trim()) {
+                    continue;
+                }
+                out.push({ path, patch: typed.diff });
+            }
+
+            return out;
+        } catch (error) {
+            this.logger.warn({
+                message: 'Failed to read raw merge request diffs',
+                context: GitlabService.name,
+                error,
+                metadata: { projectId, prNumber },
+            });
+            return [];
+        }
+    }
+
+    private mapGitlabCommitStatus(status: {
+        id: number;
+        name?: string;
+        status: string;
+        target_url?: string | null;
+        finished_at?: string | null;
+        allow_failure?: boolean;
+    }): CheckEvidence {
+        const state = this.mapGitlabStatusState(status.status);
+        const failedButAllowed =
+            status.status === 'failed' && status.allow_failure === true;
+
+        const conclusion: CheckEvidenceConclusion | null =
+            state !== 'completed'
+                ? null
+                : failedButAllowed
+                  ? 'neutral'
+                  : this.mapGitlabConclusion(status.status);
+
+        return {
+            id: String(status.id),
+            name: status.name ?? '',
+            status: state,
+            conclusion,
+            url: status.target_url ?? null,
+            completedAt:
+                state === 'completed' ? (status.finished_at ?? null) : null,
+            platform: PlatformType.GITLAB,
+        };
+    }
+
+    private mapGitlabStatusState(status: string): CheckEvidenceStatus {
+        if (
+            status === 'success' ||
+            status === 'failed' ||
+            status === 'canceled' ||
+            status === 'skipped'
+        ) {
+            return 'completed';
+        }
+        if (status === 'running') {
+            return 'in_progress';
+        }
+        // created / pending / manual / scheduled / waiting_for_resource /
+        // preparing all mean the job has not produced a result yet.
+        return 'queued';
+    }
+
+    private mapGitlabConclusion(
+        status: string,
+    ): CheckEvidenceConclusion | null {
+        switch (status) {
+            case 'success':
+                return 'success';
+            case 'failed':
+                return 'failure';
+            case 'canceled':
+                return 'cancelled';
+            case 'skipped':
+                return 'skipped';
+            default:
+                return null;
+        }
     }
 
     async listIssues(params: ListIssuesParams): Promise<CodeManagementIssue[]> {
@@ -2851,23 +3027,12 @@ export class GitlabService implements Omit<
 
         try {
             for (const repo of repositories) {
-                const existingHooks = await gitlabAPI.ProjectHooks.all(repo.id);
-
-                const hookExists = existingHooks.some(
-                    (hook) => hook?.url === webhookUrl,
+                await this.ensureSingleKodusHook(
+                    gitlabAPI,
+                    repo.id,
+                    webhookUrl,
+                    organizationAndTeamData,
                 );
-
-                if (!hookExists) {
-                    await gitlabAPI.ProjectHooks.add(repo.id, webhookUrl, {
-                        mergeRequestsEvents: true,
-                        enableSslVerification: true,
-                        noteEvents: true,
-                        issuesEvents: true,
-                    });
-                    console.log(`Webhook added to project ${repo.id}`);
-                } else {
-                    console.log(`Webhook already exists in project ${repo.id}`);
-                }
             }
         } catch (error) {
             this.logger.error({
@@ -2880,6 +3045,110 @@ export class GitlabService implements Omit<
                 },
             });
             throw error;
+        }
+    }
+
+    /**
+     * Leaves one Kodus hook on the project: GitLab delivers every event once
+     * per hook. Passes running at once can each add a hook, so every pass
+     * keeps the same survivor and removes the rest; concurrent passes, on any
+     * instance, agree on it. This also clears older duplicates.
+     *
+     * Among duplicates, the survivor is the oldest hook GitLab still calls
+     * (not disabled after failures), preferring one with note and merge
+     * request events, so a disabled copy or one created by hand without those
+     * events is never kept over a working one; if the survivor lacks those
+     * events they are turned on. A single hook is left as it is.
+     */
+    private async ensureSingleKodusHook(
+        gitlabAPI: any,
+        projectId: string | number,
+        webhookUrl: string,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<void> {
+        const listKodusHooks = async () =>
+            ((await gitlabAPI.ProjectHooks.all(projectId)) ?? []).filter(
+                (hook) => hook?.url === webhookUrl,
+            );
+
+        let hooks = await listKodusHooks();
+
+        if (hooks.length === 0) {
+            await gitlabAPI.ProjectHooks.add(projectId, webhookUrl, {
+                mergeRequestsEvents: true,
+                enableSslVerification: true,
+                noteEvents: true,
+                issuesEvents: true,
+            });
+            // Another pass may have added its own hook in the meantime.
+            hooks = await listKodusHooks();
+        }
+
+        if (hooks.length <= 1) {
+            return;
+        }
+
+        const isExecutable = (hook) =>
+            (hook?.alert_status ?? 'executable') === 'executable';
+        const hasEvents = (hook) =>
+            hook?.note_events !== false && hook?.merge_requests_events !== false;
+
+        // Executable first: GitLab never calls a disabled hook, while missing
+        // events on an executable one are fixed by the edit below.
+        const [kept, ...duplicates] = hooks.sort(
+            (a, b) =>
+                Number(isExecutable(b)) - Number(isExecutable(a)) ||
+                Number(hasEvents(b)) - Number(hasEvents(a)) ||
+                Number(a.id) - Number(b.id),
+        );
+
+        if (!hasEvents(kept)) {
+            try {
+                await gitlabAPI.ProjectHooks.edit(projectId, kept.id, webhookUrl, {
+                    noteEvents: true,
+                    mergeRequestsEvents: true,
+                });
+            } catch (error) {
+                this.logger.warn({
+                    message: `Could not enable events on Kodus webhook ${kept.id} in GitLab project ${projectId}`,
+                    context: GitlabService.name,
+                    error,
+                    metadata: { organizationAndTeamData, projectId },
+                });
+            }
+        }
+
+        // Best effort: a failed removal must not stop the pass from setting
+        // up the hooks of the repositories that come after this one.
+        const removedHookIds = [];
+        for (const hook of duplicates) {
+            try {
+                await gitlabAPI.ProjectHooks.remove(projectId, hook.id);
+                removedHookIds.push(hook.id);
+            } catch (error) {
+                // 404: a concurrent pass removed it first.
+                if (!this.isGitlabNotFoundError(error)) {
+                    this.logger.warn({
+                        message: `Could not remove duplicate Kodus webhook ${hook.id} from GitLab project ${projectId}`,
+                        context: GitlabService.name,
+                        error,
+                        metadata: { organizationAndTeamData, projectId },
+                    });
+                }
+            }
+        }
+
+        if (removedHookIds.length > 0) {
+            this.logger.warn({
+                message: `Removed ${removedHookIds.length} duplicate Kodus webhook(s) from GitLab project ${projectId}`,
+                context: GitlabService.name,
+                metadata: {
+                    organizationAndTeamData,
+                    projectId,
+                    keptHookId: kept.id,
+                    removedHookIds,
+                },
+            });
         }
     }
 
@@ -4588,9 +4857,7 @@ export class GitlabService implements Omit<
             if (webhookUrl) {
                 try {
                     const hooks = await gitlabAPI.ProjectHooks.all(projectId);
-                    result.hook = hooks.some(
-                        (hook) => hook?.url === webhookUrl,
-                    )
+                    result.hook = hooks.some((hook) => hook?.url === webhookUrl)
                         ? 'present'
                         : 'missing';
                 } catch (error) {
@@ -5215,6 +5482,16 @@ export class GitlabService implements Omit<
             sourceRefName: mergeRequest?.source_branch ?? '', // TODO: remove, legacy, use head.ref
             head: {
                 ref: mergeRequest?.source_branch ?? '',
+                // `diff_refs` is typed loosely by the client; the head sha
+                // lives there on a merge-request payload and falls back to
+                // the MR's own sha.
+                sha:
+                    (
+                        mergeRequest?.diff_refs as
+                            { head_sha?: string } | undefined
+                    )?.head_sha ??
+                    mergeRequest?.sha ??
+                    '',
                 repo: {
                     id: mergeRequest?.source_project_id?.toString() ?? '',
                     name: '',

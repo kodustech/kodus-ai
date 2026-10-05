@@ -1,5 +1,8 @@
-import { HttpException, HttpStatus } from '@nestjs/common';
+import { HttpStatus } from '@nestjs/common';
 
+import { ITeamCliKeyConfig } from '@libs/organization/domain/team-cli-key/interfaces/team-cli-key.interface';
+
+import { ManageTeamCliKeysUseCase } from '@libs/organization/application/use-cases/team-cli-key/manage.use-case';
 import { TeamCliKeyController } from '../team-cli-key.controller';
 
 describe('TeamCliKeyController', () => {
@@ -13,8 +16,9 @@ describe('TeamCliKeyController', () => {
     };
     let request: { user?: { uuid?: string } };
     let eventEmitter: { emit: jest.Mock };
+    let teamService: { findOneOrganizationIdByTeamId: jest.Mock };
 
-    const cliKeyConfig = {
+    const cliKeyConfig: ITeamCliKeyConfig = {
         capabilities: ['config:repo:manage'],
     };
 
@@ -55,11 +59,24 @@ describe('TeamCliKeyController', () => {
             emit: jest.fn(),
         };
 
+        const teamOrganization: Record<string, string> = {
+            'team-1': 'org-1',
+            'team-other-org': 'org-2',
+        };
+        teamService = {
+            findOneOrganizationIdByTeamId: jest.fn((teamId: string) =>
+                Promise.resolve(teamOrganization[teamId]),
+            ),
+        };
+
         controller = new TeamCliKeyController(
-            teamCliKeyService as any,
+            new ManageTeamCliKeysUseCase(
+                teamCliKeyService as any,
+                eventEmitter as any,
+                { cliKeyChanged: jest.fn() } as any,
+                teamService as any,
+            ),
             request as any,
-            eventEmitter as any,
-            { cliKeyChanged: jest.fn() } as any,
         );
     });
 
@@ -153,6 +170,59 @@ describe('TeamCliKeyController', () => {
             }),
         ).rejects.toMatchObject({
             status: HttpStatus.NOT_FOUND,
-        } as HttpException);
+        });
+    });
+
+    describe('organization isolation', () => {
+        const expectNotFound = async (call: Promise<unknown>) => {
+            await expect(call).rejects.toMatchObject({
+                status: HttpStatus.NOT_FOUND,
+            });
+        };
+
+        it('does not generate a key for a team of another organization', async () => {
+            await expectNotFound(
+                controller.generateKey('team-other-org', { name: 'CI Key' }),
+            );
+            expect(teamCliKeyService.generateKey).not.toHaveBeenCalled();
+        });
+
+        it('does not list the keys of a team of another organization', async () => {
+            await expectNotFound(controller.listKeys('team-other-org'));
+            expect(teamCliKeyService.findByTeamId).not.toHaveBeenCalled();
+        });
+
+        it('does not update a key of a team of another organization', async () => {
+            teamCliKeyService.findById.mockResolvedValue({
+                uuid: 'key-9',
+                team: { uuid: 'team-other-org' },
+            });
+
+            await expectNotFound(
+                controller.updateKeyConfig('team-other-org', 'key-9', {
+                    config: cliKeyConfig,
+                }),
+            );
+            expect(teamCliKeyService.update).not.toHaveBeenCalled();
+        });
+
+        it('does not revoke a key of a team of another organization', async () => {
+            teamCliKeyService.findById.mockResolvedValue({
+                uuid: 'key-9',
+                team: { uuid: 'team-other-org' },
+            });
+
+            await expectNotFound(
+                controller.revokeKey('team-other-org', 'key-9'),
+            );
+            expect(teamCliKeyService.revokeKey).not.toHaveBeenCalled();
+        });
+
+        it('rejects a team that does not exist', async () => {
+            await expectNotFound(
+                controller.generateKey('team-missing', { name: 'CI Key' }),
+            );
+            expect(teamCliKeyService.generateKey).not.toHaveBeenCalled();
+        });
     });
 });

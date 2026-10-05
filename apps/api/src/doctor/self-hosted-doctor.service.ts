@@ -2,7 +2,9 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 
 import { Inject, Injectable } from '@nestjs/common';
+import { InjectConnection } from '@nestjs/mongoose';
 import { InjectDataSource } from '@nestjs/typeorm';
+import { Connection } from 'mongoose';
 import { DataSource } from 'typeorm';
 
 import { createLogger } from '@libs/core/log/logger';
@@ -14,6 +16,7 @@ import {
 } from '@libs/ee/license/interfaces/license.interface';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
 import { buildGitAuthHeader } from '@libs/sandbox/infrastructure/providers/git-auth-header';
 
 import {
@@ -26,8 +29,19 @@ import {
     staleJobsCheck,
 } from './checks/broker.checks';
 import { bootEnvCheck, configEnvCheck } from './checks/env.checks';
-import { gitAccessCheck, webhookUrlCheck } from './checks/git.checks';
+import {
+    gitAccessCheck,
+    WEBHOOK_EVENTS_CAP,
+    webhookUrlCheck,
+} from './checks/git.checks';
 import { liveLlmComplete, llmCheck } from './checks/llm.checks';
+import {
+    FeedbackCounts,
+    recentReviewsCheck,
+    recentSuggestionsCheck,
+    ReviewRun,
+    SuggestionCounts,
+} from './checks/reviews.checks';
 import {
     analyticsCheck,
     astGraphCheck,
@@ -46,6 +60,8 @@ import {
     DoctorReport,
     DoctorResult,
     DoctorTeam,
+    licenseCandidates,
+    RECENT_DAYS,
 } from './doctor.types';
 
 const execFileAsync = promisify(execFile);
@@ -53,6 +69,8 @@ const execFileAsync = promisify(execFile);
 /** A check that hangs must not hang the report. */
 export const CHECK_TIMEOUT_MS = 90_000;
 const SEAT_LOOKBACK_DAYS = 14;
+/** Under CHECK_TIMEOUT_MS, so a slow aggregation fails alone, as "?". */
+const MONGO_QUERY_TIMEOUT_MS = 30_000;
 
 /**
  * Pull requests of a team ($1) whose latest run since $2 was skipped for a
@@ -90,6 +108,8 @@ export class SelfHostedDoctorService {
     constructor(
         @InjectDataSource()
         private readonly dataSource: DataSource,
+        @InjectConnection()
+        private readonly mongo: Connection,
         private readonly codeManagementService: CodeManagementService,
         private readonly permissionValidationService: PermissionValidationService,
         @Inject(LICENSE_SERVICE_TOKEN)
@@ -145,7 +165,10 @@ export class SelfHostedDoctorService {
                     }),
                 complete: liveLlmComplete,
             }),
-            webhookUrlCheck({ reach: reachUrl }),
+            webhookUrlCheck({
+                reach: reachUrl,
+                recentEvents: (platform) => this.recentGitEvents(platform),
+            }),
             gitAccessCheck({
                 diagnose: (team, repository) =>
                     this.codeManagementService.diagnoseRepositoryAccess({
@@ -162,9 +185,21 @@ export class SelfHostedDoctorService {
             astGraphCheck((ctx) => this.loadAstStatuses(ctx)),
             configEnvCheck,
             versionCheck(() => this.versionCheckService.getStatus()),
-            skipSettingsCheck((ctx) => this.loadCodeReviewSettings(ctx)),
+            skipSettingsCheck(
+                (ctx) => this.loadCodeReviewSettings(ctx),
+                () => this.defaultIgnorePaths(),
+            ),
             editionCheck,
             analyticsCheck(() => this.lastAnalyticsRun()),
+            recentReviewsCheck({
+                runs: (team) => this.recentReviewRuns(team),
+            }),
+            recentSuggestionsCheck({
+                suggestions: (organizationId) =>
+                    this.recentSuggestions(organizationId),
+                feedback: (organizationId) =>
+                    this.recentFeedback(organizationId),
+            }),
         ];
     }
 
@@ -272,18 +307,20 @@ export class SelfHostedDoctorService {
             `SELECT COUNT(*)::int AS count FROM automation WHERE "automationType" = 'AutomationCodeReview'`,
         );
 
-        const firstOrg = teams[0];
         let licensed = false;
-        if (firstOrg) {
+        for (const team of licenseCandidates(teams)) {
             try {
                 licensed = (
                     await this.licenseService.validateOrganizationLicense({
-                        organizationId: firstOrg.organizationId,
-                        teamId: firstOrg.teamId,
+                        organizationId: team.organizationId,
+                        teamId: team.teamId,
                     })
                 ).valid;
             } catch {
                 licensed = false;
+            }
+            if (licensed) {
+                break;
             }
         }
 
@@ -336,6 +373,212 @@ export class SelfHostedDoctorService {
             }
         }
         return out;
+    }
+
+    /**
+     * Every received Git event is enqueued as a WEBHOOK_PROCESSING job. Jobs are
+     * never deleted, so the `updatedAt` bound lets idx_workflow_jobs_type_updated
+     * cut the scan to the window (a job is never updated before it is created),
+     * and the LIMIT caps the heap reads on an install with heavy traffic.
+     */
+    private async recentGitEvents(
+        platform: string,
+    ): Promise<{ count: number; last: Date | null }> {
+        const [row] = await this.dataSource.query(
+            `SELECT COUNT(*)::int AS count, MAX("createdAt") AS last
+               FROM (SELECT "createdAt"
+                       FROM kodus_workflow.workflow_jobs
+                      WHERE "workflowType" = 'WEBHOOK_PROCESSING'
+                        AND "updatedAt" > now() - make_interval(days => $2)
+                        AND "createdAt" > now() - make_interval(days => $2)
+                        AND metadata->>'platformType' = $1
+                      ORDER BY "updatedAt" DESC
+                      LIMIT $3) recent`,
+            [platform, RECENT_DAYS, WEBHOOK_EVENTS_CAP],
+        );
+        return {
+            count: row?.count ?? 0,
+            last: row?.last ? new Date(row.last) : null,
+        };
+    }
+
+    /**
+     * Finished code review runs of the window, each with the losses it recorded
+     * (dataExecution.reviewWarnings) and whether an agent stopped early (its
+     * `AgentReview::*` stage label, AgentReviewStage's progress labels).
+     */
+    private async recentReviewRuns(team: DoctorTeam): Promise<ReviewRun[]> {
+        const rows: Array<{
+            status: ReviewRun['status'];
+            errorMessage: string | null;
+            warningKinds: string[] | null;
+            agentCutShort: boolean;
+        }> = await this.dataSource.query(
+            `SELECT ae.status::text AS status,
+                    left(ae."errorMessage", 300) AS "errorMessage",
+                    ARRAY(SELECT DISTINCT w->>'kind'
+                            FROM jsonb_array_elements(
+                                   CASE WHEN jsonb_typeof(ae."dataExecution"->'reviewWarnings') = 'array'
+                                        THEN ae."dataExecution"->'reviewWarnings'
+                                        ELSE '[]'::jsonb END) w) AS "warningKinds",
+                    EXISTS (SELECT 1 FROM code_review_execution cre
+                             WHERE cre.automation_execution_id = ae.uuid
+                               AND cre.stage_name LIKE 'AgentReview::%'
+                               AND (cre.message LIKE '% — timed out after %'
+                                    OR cre.message LIKE '% — hit step limit %'
+                                    OR cre.message LIKE '% — failed %')) AS "agentCutShort"
+               FROM automation_execution ae
+               JOIN team_automations ta ON ta.uuid = ae.team_automation_id
+               JOIN automation a ON a.uuid = ta."automationUuid"
+              WHERE ta."teamUuid" = $1
+                AND a."automationType" = 'AutomationCodeReview'
+                AND ae.status::text IN ('success', 'partial_error', 'error', 'skipped')
+                AND ae."createdAt" > now() - make_interval(days => $2)`,
+            [team.teamId, RECENT_DAYS],
+        );
+        return rows.map((r) => ({
+            status: r.status,
+            errorMessage: r.errorMessage,
+            warningKinds: r.warningKinds ?? [],
+            agentCutShort: r.agentCutShort === true,
+        }));
+    }
+
+    /**
+     * Suggestions created in the window, file-level and pull-request-level, by
+     * what happened to them. The `updatedAt` bound keeps the scan to the pull
+     * requests touched in the window; `maxTimeMS` stops it on an install whose
+     * planner picks a wider index.
+     */
+    private async recentSuggestions(
+        organizationId: string,
+    ): Promise<SuggestionCounts> {
+        const since = new Date(Date.now() - RECENT_DAYS * 86_400_000);
+        const rows = (await this.mongo
+            .collection('pullRequests')
+            .aggregate(
+                [
+                    { $match: { organizationId, updatedAt: { $gte: since } } },
+                    {
+                        $project: {
+                            suggestion: {
+                                $concatArrays: [
+                                    {
+                                        $reduce: {
+                                            input: { $ifNull: ['$files', []] },
+                                            initialValue: [],
+                                            in: {
+                                                $concatArrays: [
+                                                    '$$value',
+                                                    {
+                                                        $ifNull: [
+                                                            '$$this.suggestions',
+                                                            [],
+                                                        ],
+                                                    },
+                                                ],
+                                            },
+                                        },
+                                    },
+                                    { $ifNull: ['$prLevelSuggestions', []] },
+                                ],
+                            },
+                        },
+                    },
+                    { $unwind: '$suggestion' },
+                    {
+                        // Suggestion timestamps are ISO strings (PullRequestsService).
+                        $match: {
+                            'suggestion.createdAt': {
+                                $gte: since.toISOString(),
+                            },
+                        },
+                    },
+                    {
+                        $group: {
+                            _id: {
+                                delivery: '$suggestion.deliveryStatus',
+                                implementation:
+                                    '$suggestion.implementationStatus',
+                            },
+                            count: { $sum: 1 },
+                        },
+                    },
+                ],
+                { maxTimeMS: MONGO_QUERY_TIMEOUT_MS },
+            )
+            .toArray()) as Array<{
+            _id: { delivery: string | null; implementation: string | null };
+            count: number;
+        }>;
+
+        const counts: SuggestionCounts = {
+            sent: 0,
+            deliveryFailed: 0,
+            heldBack: 0,
+            implemented: 0,
+        };
+        for (const { _id, count } of rows) {
+            // A replaced comment was posted, then superseded by a newer one.
+            if (_id.delivery === 'sent' || _id.delivery === 'replaced')
+                counts.sent += count;
+            else if (
+                _id.delivery === 'failed' ||
+                _id.delivery === 'failed_lines_mismatch'
+            )
+                counts.deliveryFailed += count;
+            else if (_id.delivery === 'not_sent') counts.heldBack += count;
+            if (
+                _id.implementation === 'implemented' ||
+                _id.implementation === 'partially_implemented'
+            )
+                counts.implemented += count;
+        }
+        return counts;
+    }
+
+    /** Reaction snapshots the reactions cron refreshed in the window. */
+    private async recentFeedback(
+        organizationId: string,
+    ): Promise<FeedbackCounts> {
+        const since = new Date(Date.now() - RECENT_DAYS * 86_400_000);
+        const [row] = (await this.mongo
+            .collection('codeReviewFeedback')
+            .aggregate(
+                [
+                    { $match: { organizationId, updatedAt: { $gte: since } } },
+                    {
+                        $group: {
+                            _id: null,
+                            thumbsUp: { $sum: '$reactions.thumbsUp' },
+                            thumbsDown: { $sum: '$reactions.thumbsDown' },
+                        },
+                    },
+                ],
+                { maxTimeMS: MONGO_QUERY_TIMEOUT_MS },
+            )
+            .toArray()) as Array<{ thumbsUp: number; thumbsDown: number }>;
+        return {
+            thumbsUp: row?.thumbsUp ?? 0,
+            thumbsDown: row?.thumbsDown ?? 0,
+        };
+    }
+
+    /** Without the default list every pattern reads as the team's own choice. */
+    private defaultIgnorePaths(): string[] {
+        try {
+            return (getDefaultKodusConfigFile().ignorePaths ?? []).filter(
+                (p): p is string => typeof p === 'string',
+            );
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    "Doctor could not read the default ignore list; every ignored path is reported as the team's own",
+                context: SelfHostedDoctorService.name,
+                error,
+            });
+            return [];
+        }
     }
 
     private async countUnlicensedSkips(

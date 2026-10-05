@@ -2,7 +2,7 @@ import { createThreadId } from '@libs/common/utils/thread-id';
 import { ConversationAgentUseCase } from '@libs/agents/application/use-cases/conversation-agent.use-case';
 import { OrganizationAndTeamDataDto } from '@libs/core/domain/dtos/organizationAndTeamData.dto';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
-import { Body, Controller, Inject, Post } from '@nestjs/common';
+import { Body, Controller, Inject, Post, UseGuards } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import {
     ApiTags,
@@ -11,10 +11,12 @@ import {
     ApiOperation,
 } from '@nestjs/swagger';
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
+import { TenantScopeGuard } from '../guards/tenant-scope.guard';
 
 @ApiTags('Agent')
 @ApiBearerAuth('jwt')
 @ApiStandardResponses()
+@UseGuards(TenantScopeGuard)
 @Controller('agent')
 export class AgentController {
     constructor(

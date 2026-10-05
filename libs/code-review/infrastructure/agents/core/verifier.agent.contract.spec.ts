@@ -907,7 +907,18 @@ describe('verifier contract — previous review decisions (issue #1313)', () => 
         expect(p).not.toContain('<PreviousReviewDecisions>');
     });
 
-    it("LlmVerifier.verify scopes previousDecisions to the candidate's own file, never by line range", async () => {
+    // #2020: a repeat can sit on a file the code moved out of, and the finder
+    // sometimes names a file by its basename — the verifier sees the PR's
+    // whole history, never filtered by file or line range.
+    // A first-round review (no history) must verify exactly as before: the
+    // repeat rule rides with the history block, never the system prompt.
+    it('adds the repeat rule only when the PR has earlier suggestions', () => {
+        expect(verifierPromptFor(candidate())).not.toContain('raises again the problem');
+        expect(verifierPromptFor(candidate(), [decision({ relevantFile: 'src/x.ts' })])).toContain('raises again the problem');
+        expect(buildVerifierAgentSpec({ modelId: 'm', tools: new InMemoryToolRegistry([]) } as any).systemPrompt).not.toContain('raises again the problem');
+    });
+
+    it("LlmVerifier.verify gives the verifier the PR's whole history, not only the candidate's file", async () => {
         const { runner, run } = fakeRunner(async () =>
             makeState({ keep: false, rationale: 'refuted: already applied' }),
         );
@@ -933,10 +944,10 @@ describe('verifier contract — previous review decisions (issue #1313)', () => 
 
         const [, input] = run.mock.calls[0];
         expect(input.prompt).toContain('SAME FILE decision');
-        expect(input.prompt).not.toContain('OTHER FILE decision');
+        expect(input.prompt).toContain('OTHER FILE decision');
     });
 
-    it('LlmVerifier.verify sends no PreviousReviewDecisions block when nothing matches the file', async () => {
+    it('LlmVerifier.verify still shows a decision on another file (repeats survive moved code)', async () => {
         const { runner, run } = fakeRunner(async () =>
             makeState({ keep: true, rationale: 'r' }),
         );
@@ -951,7 +962,7 @@ describe('verifier contract — previous review decisions (issue #1313)', () => 
         );
 
         const [, input] = run.mock.calls[0];
-        expect(input.prompt).not.toContain('<PreviousReviewDecisions>');
+        expect(input.prompt).toContain('<PreviousReviewDecisions>');
     });
 
     it('reproduces the #1313 symptom end to end: a same-file "implemented" decision lets the verifier refute the opposite suggestion', async () => {

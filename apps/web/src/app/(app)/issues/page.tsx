@@ -88,11 +88,6 @@ export default function IssuesPage() {
         [filters, canAccessIssues],
     );
 
-    const unresolvedIssues = useMemo(
-        () => canAccessIssues.filter((issue) => issue.status !== "resolved"),
-        [canAccessIssues],
-    );
-
     useEffectOnce(() => {
         if (_filtersQuery) return;
         setFilters(savedFiltersOrDefault, { history: "replace" });
@@ -131,10 +126,14 @@ export default function IssuesPage() {
                         {canAccessIssues.length > 0 && (
                             <span className="flex gap-0.5 text-sm">
                                 <span>Showing </span>
-                                {unresolvedIssues.length !== issues.length ? (
+                                {filteredData.length !==
+                                canAccessIssues.length ? (
                                     <>
+                                        <span className="text-primary-light">
+                                            {filteredData.length}
+                                        </span>
                                         <span className="text-text-secondary">
-                                            of {unresolvedIssues.length} issues
+                                            of {canAccessIssues.length} issues
                                         </span>
                                     </>
                                 ) : (
