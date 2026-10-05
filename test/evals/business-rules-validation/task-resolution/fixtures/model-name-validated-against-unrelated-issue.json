@@ -1,0 +1,25 @@
+{
+    "name": "model-name-validated-against-unrelated-issue",
+    "issue": "#2018",
+    "passesOnMain": false,
+    "repository": {
+        "issues": [
+            {
+                "number": 45,
+                "title": "Password reset links must expire after 15 minutes",
+                "body": "Reset links expire after 15 minutes and can be used once."
+            }
+        ]
+    },
+    "gitIssuesConnected": true,
+    "trackers": [],
+    "pullRequest": {
+        "title": "feat: summarize recipe reviews with gpt-5 mini",
+        "body": "Adds a constant for the summary model.",
+        "branch": "feat/review-summary"
+    },
+    "expect": {
+        "outcome": "silent",
+        "taskNotContains": ["Password reset"]
+    }
+}
