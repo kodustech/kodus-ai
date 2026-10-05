@@ -1,7 +1,7 @@
 # Matrix Gaps — Root Causes da Semana 2026-07-06→13 e Plano de Testes
 
 Investigação profunda dos bugs/regressões da última semana + feedbacks de clientes
-(Physitrack/Michał, cliente do experimento `.kody/rules` 42%, cliente BYOK que pausou).
+(cliente A, cliente do experimento `.kody/rules` 42%, cliente BYOK que pausou).
 Objetivo: entender causa raiz, por que a matriz/testes não pegaram, e o que criar.
 
 ---

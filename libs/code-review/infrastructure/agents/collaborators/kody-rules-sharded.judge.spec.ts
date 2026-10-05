@@ -461,14 +461,14 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
         expect(warn.mock.calls[0][0].context).toBe('kody-rules-sharded');
     });
 
-    // ── language templating (Starian GitLab MR !16111) ───────────────────────
+    // ── language templating (customer-reported) ───────────────────────
     // Neither shard prompt had any language templating: a PR-scope kody-rules
     // finding's suggestionContent shipped in raw English regardless of the
     // org's configured Kody Language. `languageLabel` (resolved upstream via
     // prompt-builder.ts's resolveLanguageLabel — the same helper every other
     // review agent uses) must reach BOTH the file-shard and PR-shard user
     // prompts, and must be a no-op (byte-identical prompt) when absent.
-    describe('languageLabel — respond-in-language instruction (Starian MR !16111)', () => {
+    describe('languageLabel — respond-in-language instruction (customer-reported)', () => {
         it('includes a respond-in-language instruction in the FILE-shard user prompt when languageLabel is set', async () => {
             let fileUser = '';
             const run: RunJudge = async ({ filename, user }) => {

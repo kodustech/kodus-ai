@@ -1140,7 +1140,7 @@ const displayNames = new Intl.DisplayNames(['en'], { type: 'language' });
  * (e.g. `"Portuguese (Brazil)"`) for prompt injection. Exported so other
  * prompt builders outside this file — e.g. the kody-rules sharded judge
  * (`kody-rules-sharded.judge.ts`), which has its own static system prompts
- * and previously had zero language templating (#Starian GitLab MR !16111) —
+ * and previously had zero language templating (a customer-reported bug) —
  * can follow the SAME language-resolution mechanism instead of inventing a
  * second one.
  */
