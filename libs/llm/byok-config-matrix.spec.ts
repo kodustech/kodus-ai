@@ -1309,20 +1309,46 @@ describe('production config shapes — invariants', () => {
             'openai_compatible | code-review | high',
             'openai_compatible | k3 | high',
             'openai_compatible | k3-256k | medium',
+            // Kimi k2.6 / latest joined once the shape-marker fix (#2038
+            // review) stopped reading `thinking.type` as proof the level
+            // landed: Moonshot has no effort level, so the drop was real and
+            // the marker had been hiding it.
+            'openai_compatible | kimi-k2.6 | high',
+            'openai_compatible | kimi-k2.6 | medium',
             'openai_compatible | kimi-k2.7-code | high',
             'openai_compatible | kimi-k2.7-code | medium',
             'openai_compatible | kimi-k3 | high',
+            'openai_compatible | kimi-latest | high',
             'openai_compatible | kodus-review | high',
             'openai_compatible | kodus-review-fallback | high',
             'openai_compatible | mimo-v2.5 | high',
             'openai_compatible | mimo-v2.5-pro | high',
             'openai_compatible | mimo-v2.5-pro | medium',
             'openai_compatible | mistral-large-3:675b | medium',
+            'openai_compatible | moonshotai/Kimi-K2.5 | medium',
             'openai_compatible | nemotron-3-ultra-550b-a55b | medium',
             'openai_compatible | qwen3.8-max | low',
             'openai_compatible | tencent/hy3:free | high',
         ]);
     }, 180000);
+
+    it('reports the M3.1 effort drop the production pin cannot see', () => {
+        // The M3.1 rows above are hand-written entries, not production shapes,
+        // so the corpus pin above cannot cover them. With the adaptive shape
+        // alone on the wire the level the user picked reaches nothing — and the
+        // connect form must say so. Excluding `thinking.type` from
+        // `reasoningEffortWasDropped` is what makes that visible (#2038 review).
+        expect(
+            reasoningEffortWasDropped(
+                buildReasoningProviderOptions(
+                    'anthropic_compatible',
+                    'high',
+                    'MiniMax-M3.1-Flash-Preview',
+                ),
+                { thinking: { type: 'adaptive' } },
+            ),
+        ).toBe(true);
+    });
 
     it('never sends a reasoning parameter to a model we say does not reason', async () => {
         // The coherence invariant, and the one that catches a whole class rather
