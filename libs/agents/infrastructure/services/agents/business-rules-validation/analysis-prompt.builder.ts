@@ -58,7 +58,7 @@ export function buildBusinessRulesAnalysisPrompt(
         'Write ALL generated prose in USER LANGUAGE.',
         'Only requirement quotes copied from task context may remain in the original source language.',
         'Do not mix languages in headings, status labels, findings, explanations, or suggested actions.',
-        'Follow the grounding rules and output format from your system prompt exactly. Return ONLY a JSON object.',
+        'Follow the grounding rules and output format from your system prompt exactly. Submit the result with the submitValidation tool; set status and findings so they agree with the summary.',
     );
 
     return sections.join('\n');

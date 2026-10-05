@@ -146,6 +146,18 @@ export abstract class AbstractSkillProvider<
     async execute(
         context: SkillExecutionContext<TPrepareContext>,
     ): Promise<string> {
+        return (await this.executeWithContext(context)).response;
+    }
+
+    /**
+     * `execute`, plus the blueprint's final context when the blueprint ran to
+     * the end. A skill exposes structured results from it (e.g. a verdict) so
+     * its callers don't have to re-read them out of the response text. No
+     * context when the run stopped on feedback (preflight or blueprint error).
+     */
+    protected async executeWithContext(
+        context: SkillExecutionContext<TPrepareContext>,
+    ): Promise<{ response: string; context?: TContext }> {
         const organizationAndTeamData = context.organizationAndTeamData;
         if (!organizationAndTeamData) {
             throw new Error(
@@ -200,18 +212,20 @@ export abstract class AbstractSkillProvider<
         context: SkillExecutionContext<TPrepareContext>,
         organizationAndTeamData: OrganizationAndTeamData,
         userLanguage: string,
-    ): Promise<string> {
+    ): Promise<{ response: string; context?: TContext }> {
         const fetcherInitialization = await this.initializeFetcherRuntime(
             context,
             organizationAndTeamData,
             userLanguage,
         );
         if (fetcherInitialization.feedback) {
-            return this.formatExecutionFeedback({
-                userLanguage,
-                context,
-                feedback: fetcherInitialization.feedback,
-            });
+            return {
+                response: await this.formatExecutionFeedback({
+                    userLanguage,
+                    context,
+                    feedback: fetcherInitialization.feedback,
+                }),
+            };
         }
         const fetcherRuntime = fetcherInitialization.runtime;
         try {
@@ -242,11 +256,13 @@ export abstract class AbstractSkillProvider<
                 userLanguage,
             );
             if (blueprintExecution.feedback) {
-                return this.formatExecutionFeedback({
-                    userLanguage,
-                    context,
-                    feedback: blueprintExecution.feedback,
-                });
+                return {
+                    response: await this.formatExecutionFeedback({
+                        userLanguage,
+                        context,
+                        feedback: blueprintExecution.feedback,
+                    }),
+                };
             }
             const result = blueprintExecution.result;
             const response = await this.buildResponse(result.context);
@@ -262,7 +278,7 @@ export abstract class AbstractSkillProvider<
                 this.logCapabilityTraces(traces, organizationAndTeamData);
             }
 
-            return response;
+            return { response, context: result.context };
         } finally {
             await fetcherRuntime.dispose?.();
         }

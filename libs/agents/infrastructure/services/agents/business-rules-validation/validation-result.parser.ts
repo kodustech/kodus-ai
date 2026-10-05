@@ -6,6 +6,10 @@ import {
 } from '../../../../skills/runtime/value-utils';
 
 import { ValidationResult } from './types';
+import {
+    parseValidationFindings,
+    parseValidationStatus,
+} from './validation-verdict';
 
 const PARSER_FALLBACK_SUMMARY =
     '❌ **Error processing validation**\n\nAn error occurred while processing the system response. Please try again.';
@@ -178,6 +182,9 @@ function tryParseValidationObject(
             ? record.confidence
             : undefined;
 
+    const status = parseValidationStatus(record.status);
+    const findings = parseValidationFindings(record.findings);
+
     return {
         needsMoreInfo: record.needsMoreInfo === true,
         mode,
@@ -187,6 +194,8 @@ function tryParseValidationObject(
         confidence,
         missingInfo,
         summary,
+        ...(status ? { status } : {}),
+        ...(findings ? { findings } : {}),
     };
 }
 

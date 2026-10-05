@@ -2,6 +2,8 @@ import { createThreadId } from '@libs/common/utils/thread-id';
 import { createLogger } from '@libs/core/log/logger';
 import { BusinessRulesValidationAgentProvider } from '@libs/agents/infrastructure/services/agents/business-rules-validation/businessRulesValidationAgent';
 import { NO_TASK_MCP_SENTINEL } from '@libs/agents/infrastructure/services/agents/business-rules-validation/no-task-mcp-sentinel';
+import type { ValidationResult } from '@libs/agents/infrastructure/services/agents/business-rules-validation/types';
+import { resolveValidationStatus } from '@libs/agents/infrastructure/services/agents/business-rules-validation/validation-verdict';
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
@@ -117,7 +119,8 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
         // whether it runs: the business_logic config toggle (off ⇒ skips), the
         // PR/repo context, and whether there's a PR body for the agent to read.
         this.logger.log({
-            message: '[BUSINESS-LOGIC] stage entered — evaluating run conditions',
+            message:
+                '[BUSINESS-LOGIC] stage entered — evaluating run conditions',
             context: this.stageName,
             metadata: {
                 organizationId: context.organizationAndTeamData?.organizationId,
@@ -203,7 +206,7 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
             });
 
             const agentPromise =
-                this.businessRulesValidationAgentProvider.execute({
+                this.businessRulesValidationAgentProvider.validate({
                     organizationAndTeamData: context.organizationAndTeamData,
                     prepareContext,
                     thread,
@@ -215,7 +218,7 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
                     byokModelId: context.codeReviewConfig?.byokModelId,
                 });
 
-            const result = await Promise.race([
+            const { response: result, validationResult } = await Promise.race([
                 agentPromise,
                 timeoutPromise,
             ]).finally(() => clearTimeout(timeout));
@@ -261,7 +264,10 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
                 });
             }
 
-            const classification = this.classifyResult(result);
+            const classification = this.classifyResult(
+                result,
+                validationResult,
+            );
 
             if (classification.kind === 'limitation') {
                 this.logger.warn({
@@ -332,10 +338,7 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
             if (classification.kind === 'no_gap') {
                 const noGapSuggestion: ISuggestionByPR = {
                     id: uuidv4(),
-                    suggestionContent: this.withRerunHint(
-                        result,
-                        explicitRun,
-                    ),
+                    suggestionContent: this.withRerunHint(result, explicitRun),
                     oneSentenceSummary:
                         'Business logic validation passed — PR aligns with task requirements.',
                     label: LabelType.BUSINESS_LOGIC,
@@ -446,9 +449,7 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
         const prBody = context.pullRequest?.body ?? '';
         const signalSources = this.buildSignalSources(context);
 
-        if (
-            !this.hasRelevantBusinessSignals(signalSources, connectedMcps)
-        ) {
+        if (!this.hasRelevantBusinessSignals(signalSources, connectedMcps)) {
             return {
                 reason: 'no_signals',
                 message:
@@ -490,7 +491,7 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
 
         return Boolean(
             lastExecution?.businessLogicValidatedAt ||
-                lastExecution?.businessLogicHash,
+            lastExecution?.businessLogicHash,
         );
     }
 
@@ -632,7 +633,10 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
         if (typeof value !== 'string') {
             return '';
         }
-        return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+        return value
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '');
     }
 
     private matchTaskManagementHints(
@@ -790,9 +794,15 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
      *                   task context, etc.). This MUST NOT be reported as
      *                   success — the UI would claim the review passed
      *                   when no validation actually ran.
+     *
+     * A completed analysis is decided by its verdict (#2019): the report is
+     * written in the team's language and in free prose, so no keyword list can
+     * read it reliably. The text matching below only covers results that carry
+     * no verdict — feedback from a failed preflight or MCP fetch.
      */
     private classifyResult(
         result: string,
+        validationResult?: ValidationResult,
     ):
         | { kind: 'gap_found' }
         | { kind: 'no_gap' }
@@ -802,6 +812,13 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
                 kind: 'limitation',
                 message: 'Business logic agent returned an empty response.',
             };
+        }
+
+        const status = resolveValidationStatus(validationResult);
+        if (status) {
+            return status === 'compliant'
+                ? { kind: 'no_gap' }
+                : { kind: 'gap_found' };
         }
 
         const lower = result.toLowerCase();

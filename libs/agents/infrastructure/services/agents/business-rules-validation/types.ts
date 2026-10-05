@@ -8,8 +8,7 @@ import { BlueprintContext } from '@libs/shared/blueprint/blueprint.types';
 
 export type TaskQuality = 'EMPTY' | 'MINIMAL' | 'PARTIAL' | 'COMPLETE';
 export type BusinessLogicValidationMode =
-    | 'full_analysis'
-    | 'limitation_response';
+    'full_analysis' | 'limitation_response';
 export type TaskContextStatus = 'missing' | 'weak' | 'usable';
 export type PrDiffStatus = 'missing' | 'usable';
 export type BusinessLogicReason =
@@ -63,6 +62,15 @@ export interface BusinessRulesPrepareContext extends Record<string, unknown> {
     taskContextResolutionMode?: 'cache_first' | 'agent_first';
 }
 
+/** The analyzer's conclusion on a completed analysis. */
+export type ValidationStatus = 'compliant' | 'issues_found' | 'scope_mismatch';
+export type ValidationFindingSeverity = 'must_fix' | 'suggestion' | 'info';
+
+export interface ValidationFinding {
+    severity: ValidationFindingSeverity;
+    title: string;
+}
+
 export interface ValidationResult {
     needsMoreInfo: boolean;
     missingInfo?: string;
@@ -72,6 +80,16 @@ export interface ValidationResult {
     taskContextStatus?: TaskContextStatus;
     prDiffStatus?: PrDiffStatus;
     confidence?: 'low' | 'medium' | 'high';
+    /** Verdict of a completed analysis. Callers read this, never `summary`. */
+    status?: ValidationStatus;
+    findings?: ValidationFinding[];
+}
+
+/** What `validate()` hands a caller: the user-facing report plus, when the
+ *  analysis ran, the structured result it was rendered from. */
+export interface BusinessRulesValidationOutput {
+    response: string;
+    validationResult?: ValidationResult;
 }
 export type { TaskContextNormalized };
 

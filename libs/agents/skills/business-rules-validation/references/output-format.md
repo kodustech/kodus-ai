@@ -25,6 +25,12 @@ Use evidence wording:
 ```json
 {
   "needsMoreInfo": false,
+  "status": "issues_found",
+  "findings": [
+    { "severity": "must_fix", "title": "No evidence of team-scoped rule resolution in this PR diff" },
+    { "severity": "suggestion", "title": "No evidence of deterministic mixed-license handling in this PR diff" },
+    { "severity": "info", "title": "Migration impact not addressed in this PR diff" }
+  ],
   "mode": "full_analysis",
   "reason": "analysis_ready",
   "taskContextStatus": "usable",
@@ -39,6 +45,10 @@ Use evidence wording:
 ```json
 {
   "needsMoreInfo": false,
+  "status": "scope_mismatch",
+  "findings": [
+    { "severity": "must_fix", "title": "PR scope does not match the task scope" }
+  ],
   "mode": "full_analysis",
   "reason": "analysis_ready",
   "taskContextStatus": "usable",
@@ -53,6 +63,8 @@ Use evidence wording:
 ```json
 {
   "needsMoreInfo": false,
+  "status": "compliant",
+  "findings": [{ "severity": "info", "title": "Requirements covered" }],
   "mode": "full_analysis",
   "reason": "analysis_ready",
   "taskContextStatus": "usable",

@@ -161,6 +161,9 @@ export function applyBusinessRulesVerdict(
         ...result,
         needsMoreInfo: false,
         reason: undefined,
+        // The claimed violation was refuted: nothing is left to report.
+        status: 'compliant',
+        findings: [],
         confidence: verdict.confidence ?? 'low',
         // Use the verifier's rationale verbatim — it's written in the configured
         // language — instead of an English prefix that would mix languages.

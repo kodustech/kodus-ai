@@ -39,13 +39,12 @@ import {
 } from '../../../../skills/skill.errors';
 import { createBusinessRulesBlueprint } from './blueprint';
 import { NO_TASK_MCP_SENTINEL as NO_TASK_MCP_SENTINEL_CONST } from './no-task-mcp-sentinel';
-import {
-    buildMcpConnectionFailureFeedback,
-} from './required-mcp-feedback';
+import { buildMcpConnectionFailureFeedback } from './required-mcp-feedback';
 import {
     AgentThread,
     BusinessRulesContext,
     BusinessRulesPrepareContext,
+    BusinessRulesValidationOutput,
     ValidationResult,
 } from './types';
 import { MetricsCollectorService } from '@libs/core/infrastructure/metrics/metrics-collector.service';
@@ -58,6 +57,11 @@ import {
 import { buildBusinessRulesAnalysisPrompt } from './analysis-prompt.builder';
 import { buildBusinessRulesContractViolationFeedback } from './contract-feedback.builder';
 import { parseBusinessRulesValidationResult } from './validation-result.parser';
+import {
+    readValidationArtifact,
+    submitValidationTool,
+    VALIDATION_RESULT_TOOL,
+} from './validation-verdict';
 import {
     applyBusinessRulesVerdict,
     BusinessRulesVerifier,
@@ -81,6 +85,8 @@ type AnalyzerMessage = { role: 'system' | 'user'; content: string };
  *  `{ content, usage }`). */
 interface AnalyzerCallResult {
     content: string;
+    /** Payload of the `submitValidation` result tool, when the run used it. */
+    structured?: unknown;
     usage?: {
         inputTokens?: number;
         outputTokens?: number;
@@ -339,6 +345,25 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
         return super.buildResponse(ctx);
     }
 
+    /**
+     * Run the validation and return the report together with the structured
+     * result it came from. Callers that decide what happened (pass, gap,
+     * limitation) read `validationResult` instead of the report text.
+     */
+    async validate(
+        context: SkillExecutionContext<BusinessRulesPrepareContext>,
+    ): Promise<BusinessRulesValidationOutput> {
+        const { response, context: finalContext } =
+            await this.executeWithContext(context);
+
+        return {
+            response,
+            ...(finalContext?.validationResult
+                ? { validationResult: finalContext.validationResult }
+                : {}),
+        };
+    }
+
     private async runAnalyzer(
         _step: LLMStep,
         ctx: BusinessRulesContext,
@@ -401,8 +426,7 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
         if (!shouldVerifyValidationResult(result, policy)) {
             return result;
         }
-        const orgId =
-            ctx.organizationAndTeamData?.organizationId?.toString();
+        const orgId = ctx.organizationAndTeamData?.organizationId?.toString();
         const teamId = ctx.organizationAndTeamData?.teamId?.toString();
         try {
             const runner = new AiSdkAgentRunner(this.byokConfig, {
@@ -567,6 +591,7 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
                 ),
                 {
                     maxTokens: this.maxOutputTokensFallback,
+                    submitResultTool: true,
                 },
                 'businessRulesAnalyzer',
                 this.telemetryMetadataFromCtx(params.ctx),
@@ -577,7 +602,11 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
 
         this.logAnalyzerUsage(params.ctx, params.attempt, analysisResult);
 
-        return this.parseValidationResult(analysisResult.content);
+        // The result tool is the contract; text is the fallback for a model
+        // that answered without calling it.
+        return this.parseValidationResult(
+            analysisResult.structured ?? analysisResult.content,
+        );
     }
 
     /**
@@ -612,7 +641,7 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
 
     private async callLLM(
         messages: AnalyzerMessage[],
-        options: { maxTokens?: number },
+        options: { maxTokens?: number; submitResultTool?: boolean },
         functionId: string,
         metadata?: {
             organizationId?: string;
@@ -655,7 +684,15 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
             runName: functionId,
             spanName: `BusinessRulesValidation::${functionId}`,
             systemPrompt: system ?? '',
-            tools: new InMemoryToolRegistry([]),
+            // The analyzer submits its result through a result tool the runner
+            // materializes into state.artifacts — same convention as the
+            // verifier's submitVerdict. The formatter is a plain completion.
+            tools: new InMemoryToolRegistry(
+                options.submitResultTool ? [submitValidationTool] : [],
+            ),
+            ...(options.submitResultTool
+                ? { resultToolName: VALIDATION_RESULT_TOOL }
+                : {}),
             policies: [],
             maxSteps: 1,
             // maxOutputTokens fallback only; LLM.run owns temperature + reasoning.
@@ -698,13 +735,20 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
             inputTokens: state.usage.inputTokens,
             outputTokens: state.usage.outputTokens,
             totalTokens:
-                (state.usage.inputTokens ?? 0) + (state.usage.outputTokens ?? 0),
+                (state.usage.inputTokens ?? 0) +
+                (state.usage.outputTokens ?? 0),
         };
 
         // Cost is recorded by LLM.run's span (agentName/phase/spanName set on the
         // spec above) — ONE place, same schema. No manual record here.
 
-        return { content: finalText(state), usage };
+        return {
+            content: finalText(state),
+            structured: options.submitResultTool
+                ? readValidationArtifact(state)
+                : undefined,
+            usage,
+        };
     }
 
     private buildAnalyzerMessages(

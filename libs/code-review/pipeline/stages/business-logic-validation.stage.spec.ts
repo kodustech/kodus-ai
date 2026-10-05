@@ -19,7 +19,7 @@ import { AutomationStatus } from '@libs/automation/domain/automation/enum/automa
  */
 describe('BusinessLogicValidationStage — input contract', () => {
     let stage: BusinessLogicValidationStage;
-    let agent: { execute: jest.Mock };
+    let agent: { execute: jest.Mock; validate: jest.Mock };
 
     const ORG = { organizationId: 'org-1', teamId: 'team-1' };
     const REPO = { id: 'repo-1', name: 'tiny-url' };
@@ -49,19 +49,31 @@ describe('BusinessLogicValidationStage — input contract', () => {
 
     /** Let evaluateSkip's live gates pass so the real agent-input assembly runs. */
     const passGate = () => {
-        jest.spyOn(stage as any, 'getConnectedTaskManagementMcps').mockResolvedValue([
-            'jira',
-        ]);
-        jest.spyOn(stage as any, 'hasRelevantBusinessSignals').mockReturnValue(true);
+        jest.spyOn(
+            stage as any,
+            'getConnectedTaskManagementMcps',
+        ).mockResolvedValue(['jira']);
+        jest.spyOn(stage as any, 'hasRelevantBusinessSignals').mockReturnValue(
+            true,
+        );
     };
 
     beforeEach(async () => {
-        agent = { execute: jest.fn().mockResolvedValue('A business logic gap.') };
+        agent = {
+            execute: jest.fn().mockResolvedValue('A business logic gap.'),
+            // The stage reads validate(); it carries the same input and report.
+            validate: jest.fn(async (input) => ({
+                response: await agent.execute(input),
+            })),
+        };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 BusinessLogicValidationStage,
-                { provide: BusinessRulesValidationAgentProvider, useValue: agent },
+                {
+                    provide: BusinessRulesValidationAgentProvider,
+                    useValue: agent,
+                },
                 { provide: MCPManagerService, useValue: {} },
             ],
         }).compile();
@@ -86,7 +98,9 @@ describe('BusinessLogicValidationStage — input contract', () => {
     });
 
     it('skips when the org context is missing (no agent call)', async () => {
-        const context = buildContext({ organizationAndTeamData: undefined } as any);
+        const context = buildContext({
+            organizationAndTeamData: undefined,
+        } as any);
 
         const result = await stage.execute(context);
 

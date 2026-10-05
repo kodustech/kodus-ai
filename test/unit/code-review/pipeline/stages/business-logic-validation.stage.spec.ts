@@ -19,7 +19,7 @@ const jiraConnection = (organizationId: string): JiraConnection => ({
 
 describe('BusinessLogicValidationStage', () => {
     let stage: BusinessLogicValidationStage;
-    let agentProvider: { execute: jest.Mock };
+    let agentProvider: { execute: jest.Mock; validate: jest.Mock };
     let mcpManagerService: {
         getConnections: jest.Mock;
         getIntegrations: jest.Mock;
@@ -48,9 +48,17 @@ describe('BusinessLogicValidationStage', () => {
     });
 
     beforeEach(() => {
-        agentProvider = { execute: jest.fn() };
+        agentProvider = {
+            execute: jest.fn(),
+            // The stage reads validate(); it carries the same input and report.
+            validate: jest.fn(async (input) => ({
+                response: await agentProvider.execute(input),
+            })),
+        };
         mcpManagerService = {
-            getConnections: jest.fn().mockResolvedValue([jiraConnection('org-1')]),
+            getConnections: jest
+                .fn()
+                .mockResolvedValue([jiraConnection('org-1')]),
             getIntegrations: jest.fn().mockResolvedValue([]),
         };
         stage = new BusinessLogicValidationStage(
@@ -257,7 +265,8 @@ describe('BusinessLogicValidationStage', () => {
                 withTicket({
                     pipelineMetadata: {
                         lastExecution: {
-                            businessLogicValidatedAt: '2026-09-02T17:23:23.000Z',
+                            businessLogicValidatedAt:
+                                '2026-09-02T17:23:23.000Z',
                         },
                     },
                 }),
@@ -280,7 +289,8 @@ describe('BusinessLogicValidationStage', () => {
                     },
                     pipelineMetadata: {
                         lastExecution: {
-                            businessLogicValidatedAt: '2026-09-02T17:23:23.000Z',
+                            businessLogicValidatedAt:
+                                '2026-09-02T17:23:23.000Z',
                         },
                     },
                 }),
@@ -297,7 +307,8 @@ describe('BusinessLogicValidationStage', () => {
                     origin: 'command-force',
                     pipelineMetadata: {
                         lastExecution: {
-                            businessLogicValidatedAt: '2026-09-02T17:23:23.000Z',
+                            businessLogicValidatedAt:
+                                '2026-09-02T17:23:23.000Z',
                         },
                     },
                 }),
@@ -313,7 +324,8 @@ describe('BusinessLogicValidationStage', () => {
                     pipelineMetadata: {
                         forceFullRerun: true,
                         lastExecution: {
-                            businessLogicValidatedAt: '2026-09-02T17:23:23.000Z',
+                            businessLogicValidatedAt:
+                                '2026-09-02T17:23:23.000Z',
                         },
                     },
                 }),
@@ -414,9 +426,9 @@ describe('BusinessLogicValidationStage', () => {
                 }) as any,
             );
 
-            expect(result.businessLogicResults?.[0].suggestionContent).toContain(
-                '@kody -v business-logic',
-            );
+            expect(
+                result.businessLogicResults?.[0].suggestionContent,
+            ).toContain('@kody -v business-logic');
         });
 
         it('omits the footer when the user asked for this run explicitly', async () => {
@@ -443,7 +455,9 @@ describe('BusinessLogicValidationStage', () => {
 
     describe('detectTicketKeys', () => {
         it('matches Jira-style keys with underscores', () => {
-            const keys = (stage as any).detectTicketKeys('Implements PROJ_1-42');
+            const keys = (stage as any).detectTicketKeys(
+                'Implements PROJ_1-42',
+            );
             expect(keys).toEqual(['PROJ_1-42']);
         });
 
@@ -601,7 +615,11 @@ describe('BusinessLogicValidationStage', () => {
     describe('skip when no task MCP connected', () => {
         it('returns a skip decision when only non-task MCPs are connected', async () => {
             mcpManagerService.getConnections.mockResolvedValue([
-                { appName: 'Slack', provider: 'slack', organizationId: 'org-1' },
+                {
+                    appName: 'Slack',
+                    provider: 'slack',
+                    organizationId: 'org-1',
+                },
             ]);
             mcpManagerService.getIntegrations.mockResolvedValue([]);
 

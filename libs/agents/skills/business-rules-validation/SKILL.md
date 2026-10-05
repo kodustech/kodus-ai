@@ -140,11 +140,13 @@ When task reference details are available:
 
 ## Output Format
 
-Return a single JSON object. Do not include any text outside the JSON.
+Submit the result by calling the `submitValidation` tool exactly once. If you cannot call tools, answer with the same object as a single JSON object and no text outside it.
 
 ```json
 {
   "needsMoreInfo": boolean,
+  "status": "compliant | issues_found | scope_mismatch",
+  "findings": [{ "severity": "must_fix | suggestion | info", "title": "string" }],
   "mode": "full_analysis | limitation_response",
   "reason": "analysis_ready | task_context_missing | task_context_weak | pr_diff_missing",
   "taskContextStatus": "missing | weak | usable",
@@ -154,6 +156,14 @@ Return a single JSON object. Do not include any text outside the JSON.
   "summary": "Markdown response for both analysis and limitation outcomes"
 }
 ```
+
+`status` and `findings` are what Kodus acts on; `summary` is only what people read. They must agree:
+
+- `compliant`: every requirement is implemented. `findings` holds only `info` entries, or is empty.
+- `issues_found`: at least one `must_fix` or `suggestion` finding.
+- `scope_mismatch`: the PR diff is outside the task domain. Lead `findings` with a `must_fix` stating it.
+
+Write `status`, `severity` and the other enum values exactly as listed, in English, whatever `USER LANGUAGE` is. List every finding of the summary in `findings`, with the same severity.
 
 ### When `needsMoreInfo = true`
 
@@ -190,6 +200,7 @@ Use this structure in `summary`:
 
 Set:
 
+- `status` and `findings` as described above
 - `mode = "full_analysis"`
 - `reason = "analysis_ready"`
 - `taskContextStatus = "usable"`
