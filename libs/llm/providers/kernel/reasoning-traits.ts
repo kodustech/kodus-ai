@@ -319,21 +319,22 @@ export function resolveCompatibleReasoningTraits(
             requiredThinkingShape: 'adaptive',
             // Thinking is ON in every state here (the vendor's own Thinking
             // Control table: `thinking` omitted and `{type:'adaptive'}` are both
-            // "Thinking on", `{type:'disabled'}` is a 400), and the Anthropic
-            // protocol carries no sampling temperature while thinking is enabled
-            // — the adapter says so and removes the field:
+            // "Thinking on", `{type:'disabled'}` is a 400). Over the Anthropic
+            // protocol that also means no sampling temperature is ever carried
+            // — that transport's adapter says so and removes the field:
             //   AI SDK Warning (anthropic.messages / MiniMax-M3.1-Flash-Preview):
             //   temperature is not supported when thinking is enabled
             // Captured through the wire harness on the high, medium AND none
             // paths: `thinking:{type:'adaptive'}` present, `temperature` absent
-            // in each. So a stored temperature can never take effect on this
-            // model — withhold it and let the connect form say so, instead of
-            // handing the SDK a field it silently discards.
+            // in each.
             //
-            // The WHILE-THINKING trait, not `temperatureNotModifiable`: the
-            // vendor DOES document the field (range [0, 2], "Fully supported"),
-            // it is thinking being unavoidable that makes it unusable.
-            rejectsSamplingWhileThinking: true,
+            // The withholding belongs to that TRANSPORT, not to this row: the
+            // vendor documents `temperature` as "Fully supported" [0, 2], and
+            // over api.minimax.io/v1, OpenRouter or Novita no adapter drops the
+            // field, so a shared `rejectsSamplingWhileThinking` here would
+            // silently discard the user's value on endpoints that honor it
+            // (#2038 review). `anthropicModule.temperaturePolicy` applies it,
+            // which is why this row states no sampling fact at all.
         };
     }
 

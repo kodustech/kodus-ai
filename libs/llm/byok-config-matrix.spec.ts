@@ -50,10 +50,7 @@ jest.mock('@libs/common/utils/crypto', () => ({
 
 import PROD_SHAPES from './testing/__fixtures__/byok-prod-shapes.json';
 import { describeBaseUrlProblem } from './base-url-hygiene';
-import {
-    captureByokWire,
-    resolveProviderOptions,
-} from './testing/byok-wire';
+import { captureByokWire, resolveProviderOptions } from './testing/byok-wire';
 import {
     reasoningEffortWasDropped,
     unreachedOverrideKeys,
@@ -229,15 +226,23 @@ const CASES = [
 
     {
         id: 'open_router — the family rules survive the aggregator',
-        why: 'OpenRouter is a transport hosting other people\'s models; it does not change what a GLM is. Without delegating the shared traits, an always-thinking glm-5.3 got whatever temperature was stored, and GLM was reported as accepting a FORCED tool_choice its auto-only API rejects — for 17% of production slots',
+        why: "OpenRouter is a transport hosting other people's models; it does not change what a GLM is. Without delegating the shared traits, an always-thinking glm-5.3 got whatever temperature was stored, and GLM was reported as accepting a FORCED tool_choice its auto-only API rejects — for 17% of production slots",
         doc: 'docs.z.ai/api-reference/llm/chat-completion',
-        slot: { provider: 'open_router', model: 'z-ai/glm-5.3', temperature: 0 },
+        slot: {
+            provider: 'open_router',
+            model: 'z-ai/glm-5.3',
+            temperature: 0,
+        },
         wire: { has: { temperature: 1 } },
     },
     {
         id: 'open_router — a prefixed OpenAI id is NOT dragged into the compatible table',
         why: 'The shared table only knows the compatible brands, so openai/* and anthropic/* fall to the unknown default — unchanged, and safe because that default never forces a param',
-        slot: { provider: 'open_router', model: 'openai/gpt-5.6-luna', temperature: 0.5 },
+        slot: {
+            provider: 'open_router',
+            model: 'openai/gpt-5.6-luna',
+            temperature: 0.5,
+        },
         wire: { has: { temperature: 0.5 }, hasNot: ['thinking'] },
     },
 
@@ -488,7 +493,27 @@ const CASES = [
         },
         wire: {
             has: { thinking: { type: 'adaptive' } },
-            hasNot: ['budget_tokens'],
+            // And NOTHING else rides along: an `effort` would render as
+            // `output_config:{effort}`, a field MiniMax documents nowhere for
+            // this endpoint — a 400 risk on the path this entry exists to fix,
+            // or a scale the request cannot honor. The off path sends the same
+            // shape alone for the same reason (#2038 review).
+            hasNot: ['budget_tokens', 'output_config'],
+        },
+    },
+    {
+        id: 'minimax M3.1 — over the OpenAI protocol the stored temperature is KEPT',
+        why: 'The counterweight to the two WITHHELD rows above, and the reason the withholding lives in the Anthropic transport rather than on the model row. MiniMax documents `temperature` as fully supported [0, 2] and api.minimax.io/v1 is the OpenAI-protocol surface where nothing removes the field, so the same slot that loses its value on /anthropic keeps it here. A model-wide `rejectsSamplingWhileThinking` (the first version of this fix) silently discarded it — including a deliberate 0 for determinism — and made the connect form call the setting unsupported on an endpoint the vendor documents as supporting it (#2038 review)',
+        doc: 'platform.minimax.io/docs/api-reference/text-anthropic-api — "temperature: Fully supported. Range [0, 2]"',
+        slot: {
+            provider: 'openai_compatible',
+            model: 'MiniMax-M3.1-Flash-Preview',
+            baseURL: 'https://api.minimax.io/v1',
+            reasoningEffort: 'high',
+            temperature: 0.7,
+        },
+        wire: {
+            has: { temperature: 0.7 },
         },
     },
     {
@@ -525,7 +550,7 @@ const CASES = [
     },
     {
         id: 'minimax M3 — the Anthropic transport does not fabricate a budget for it',
-        why: 'This case was first written the other way round, asserting the budget as a deliberate transport difference. It was not: M3 was reaching the compatible branch\'s `return budget` fall-through and going out with thinking:{type:enabled,budgetTokens:40000} — a field invented for a brand whose own table validates a toggle for M2 and explicitly declines to for M3, on the transport four production slots use. `budget` belongs to the compatible brands that DO implement the legacy Anthropic thinking shape (Kimi, GLM, DeepSeek all declare it); an id we cannot confirm reasons gets the same treatment the native branch already gives an unidentified one — omit rather than gamble on a 400',
+        why: "This case was first written the other way round, asserting the budget as a deliberate transport difference. It was not: M3 was reaching the compatible branch's `return budget` fall-through and going out with thinking:{type:enabled,budgetTokens:40000} — a field invented for a brand whose own table validates a toggle for M2 and explicitly declines to for M3, on the transport four production slots use. `budget` belongs to the compatible brands that DO implement the legacy Anthropic thinking shape (Kimi, GLM, DeepSeek all declare it); an id we cannot confirm reasons gets the same treatment the native branch already gives an unidentified one — omit rather than gamble on a 400",
         doc: 'platform.minimax.io — Anthropic SDK endpoint https://api.minimax.io/anthropic',
         slot: {
             provider: 'anthropic_compatible',
@@ -666,8 +691,8 @@ const CASES = [
         },
     },
     {
-        id: 'bedrock claude 4.8 — the adaptive shape, in Converse\'s envelope',
-        why: 'Bedrock sent NO reasoning at all, so two production slots (claude-opus-4-7 and 4-8, both on effort=high) got none. The shape is the Anthropic family\'s — 4.7+ take adaptive + effort and reject a budget — and only the envelope is Bedrock\'s',
+        id: "bedrock claude 4.8 — the adaptive shape, in Converse's envelope",
+        why: "Bedrock sent NO reasoning at all, so two production slots (claude-opus-4-7 and 4-8, both on effort=high) got none. The shape is the Anthropic family's — 4.7+ take adaptive + effort and reject a budget — and only the envelope is Bedrock's",
         slot: {
             provider: 'amazon_bedrock',
             awsRegion: 'us-east-1',
@@ -743,7 +768,7 @@ const CASES = [
 
     {
         id: 'bedrock — a pasted reasoning override actually reaches the request',
-        why: 'The namespace was declared as `amazon-bedrock`, read off the built model\'s provider ID. The ID names the provider; the providerOptions KEY is chosen separately, and @ai-sdk/amazon-bedrock parses only `amazonBedrock` or its legacy `bedrock` alias. So every Bedrock override was wrapped under a key nothing reads and dropped in silence — the precise failure the field was added to prevent, reintroduced by verifying the wrong property. Captured empty before the fix',
+        why: "The namespace was declared as `amazon-bedrock`, read off the built model's provider ID. The ID names the provider; the providerOptions KEY is chosen separately, and @ai-sdk/amazon-bedrock parses only `amazonBedrock` or its legacy `bedrock` alias. So every Bedrock override was wrapped under a key nothing reads and dropped in silence — the precise failure the field was added to prevent, reintroduced by verifying the wrong property. Captured empty before the fix",
         slot: {
             provider: 'amazon_bedrock',
             awsRegion: 'us-east-1',
@@ -798,7 +823,9 @@ const CASES = [
         slot: {
             provider: 'openai',
             model: 'gpt-5.4',
-            reasoningConfigOverride: JSON.stringify({ reasoning_effort: 'low' }),
+            reasoningConfigOverride: JSON.stringify({
+                reasoning_effort: 'low',
+            }),
         },
         wire: { has: { reasoning: { effort: 'low' } } },
     },
@@ -827,7 +854,9 @@ const CASES = [
             awsRegion: 'us-east-1',
             model: 'anthropic.claude-opus-4-8',
             reasoningConfigOverride: JSON.stringify({
-                bedrock: { reasoningConfig: { type: 'enabled', budgetTokens: 2048 } },
+                bedrock: {
+                    reasoningConfig: { type: 'enabled', budgetTokens: 2048 },
+                },
             }),
         },
         wire: {
@@ -1341,7 +1370,8 @@ describe('production config shapes — invariants', () => {
             const { orgs, ...slot } = shape as any;
             if (slot.provider === 'open_router') continue;
             if (reasoningConfigForModel(slot.model)) continue;
-            if (!slot.reasoningEffort || slot.reasoningEffort === 'none') continue;
+            if (!slot.reasoningEffort || slot.reasoningEffort === 'none')
+                continue;
             NON_REASONING.push(slot);
         }
 
@@ -1358,8 +1388,13 @@ describe('production config shapes — invariants', () => {
                 apiKey: 'k',
             } as any).catch(() => null);
             if (!w) continue;
-            const body = typeof w.body === 'string' ? w.body : JSON.stringify(w.body);
-            if (/"(thinking|reasoning|thinkingConfig|reasoning_effort|output_config)"/.test(body)) {
+            const body =
+                typeof w.body === 'string' ? w.body : JSON.stringify(w.body);
+            if (
+                /"(thinking|reasoning|thinkingConfig|reasoning_effort|output_config)"/.test(
+                    body,
+                )
+            ) {
                 leaked.push({ ...slot, body: body.slice(0, 160) });
             }
         }
