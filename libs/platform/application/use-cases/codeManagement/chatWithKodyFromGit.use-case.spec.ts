@@ -9,6 +9,12 @@ import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 
 import { ChatWithKodyFromGitUseCase } from './chatWithKodyFromGit.use-case';
 
+const skippedWith = (reason: string, message: string) => ({
+    outcome: { kind: 'skipped', reason, message },
+    references: [],
+    attempts: [],
+});
+
 describe('ChatWithKodyFromGitUseCase', () => {
     let useCase: ChatWithKodyFromGitUseCase;
     let codeManagementService: {
@@ -25,8 +31,8 @@ describe('ChatWithKodyFromGitUseCase', () => {
     let conversationAgentUseCase: {
         execute: jest.Mock;
     };
-    let businessRulesValidationAgentUseCase: {
-        execute: jest.Mock;
+    let businessValidationService: {
+        validate: jest.Mock;
     };
     let permissionValidationService: {
         validateExecutionPermissions: jest.Mock;
@@ -61,8 +67,12 @@ describe('ChatWithKodyFromGitUseCase', () => {
         conversationAgentUseCase = {
             execute: jest.fn().mockResolvedValue('an answer'),
         };
-        businessRulesValidationAgentUseCase = {
-            execute: jest.fn().mockResolvedValue(undefined),
+        businessValidationService = {
+            validate: jest
+                .fn()
+                .mockResolvedValue(
+                    skippedWith('no_reference', 'No task found'),
+                ),
         };
         permissionValidationService = {
             validateExecutionPermissions: jest
@@ -87,7 +97,7 @@ describe('ChatWithKodyFromGitUseCase', () => {
         useCase = new ChatWithKodyFromGitUseCase(
             codeManagementService as any,
             conversationAgentUseCase as any,
-            businessRulesValidationAgentUseCase as any,
+            businessValidationService as any,
             permissionValidationService as any,
             leaseManager as any,
             pullRequestsService as any,
@@ -130,29 +140,24 @@ describe('ChatWithKodyFromGitUseCase', () => {
             },
         } as any);
 
-        expect(
-            businessRulesValidationAgentUseCase.execute,
-        ).toHaveBeenCalledWith(
+        expect(businessValidationService.validate).toHaveBeenCalledWith(
             expect.objectContaining({
+                door: 'command',
                 organizationAndTeamData: {
                     organizationId: 'org-1',
                     teamId: 'team-1',
                 },
-                prepareContext: expect.objectContaining({
-                    userQuestion:
-                        '@kody -v business-logic validate this change',
-                    pullRequestDescription: 'PR description body',
-                    platformType: PlatformType.GITHUB,
-                    repository: expect.objectContaining({
-                        id: 'repo-1',
-                        name: 'kodus-extension',
-                        owner: 'kodus',
-                    }),
-                    pullRequest: {
-                        pullRequestNumber: 132,
-                        headRef: 'feature/improve-refs',
-                        baseRef: 'main',
-                    },
+                taskInput: 'validate this change',
+                platformType: PlatformType.GITHUB,
+                repository: expect.objectContaining({
+                    id: 'repo-1',
+                    name: 'kodus-extension',
+                }),
+                pullRequest: expect.objectContaining({
+                    number: 132,
+                    body: 'PR description body',
+                    headRef: 'feature/improve-refs',
+                    baseRef: 'main',
                 }),
             }),
         );
@@ -197,68 +202,56 @@ describe('ChatWithKodyFromGitUseCase', () => {
             },
         } as any);
 
-        expect(
-            businessRulesValidationAgentUseCase.execute,
-        ).toHaveBeenCalledWith(
+        expect(businessValidationService.validate).toHaveBeenCalledWith(
             expect.objectContaining({
-                prepareContext: expect.objectContaining({
-                    userQuestion: `@kody -v business-logic ${jiraUrl}`,
-                    pullRequestDescription: 'PR description body',
-                    repository: expect.objectContaining({
-                        name: 'kodus-extension',
-                        owner: 'kodus',
-                    }),
-                    pullRequest: expect.objectContaining({
-                        pullRequestNumber: 132,
-                    }),
+                taskInput: jiraUrl,
+                pullRequest: expect.objectContaining({
+                    number: 132,
+                    body: 'PR description body',
                 }),
             }),
         );
     });
 
-    // Regression: __NO_TASK_MCP__ is an internal marker the agent returns
-    // when no task-management MCP is connected — it must NEVER reach a PR
-    // comment verbatim. The pipeline path already guards it; this is the
-    // explicit @kody -v business-logic command path, which had no guard.
-    // Exercises the private handler directly — the full webhook dispatch
-    // (ack/reaction/posting branching) is covered by the other tests in this
-    // file; this one isolates the translation itself.
-    it('translates the NO_TASK_MCP sentinel into a readable message instead of returning it raw', async () => {
-        businessRulesValidationAgentUseCase.execute.mockResolvedValueOnce(
-            '__NO_TASK_MCP__',
+    // An explicit ask always gets an answer: when nothing was validated the
+    // reply says why, in place of the old internal __NO_TASK_MCP__ marker.
+    it('replies with the reason when nothing was validated', async () => {
+        businessValidationService.validate.mockResolvedValueOnce(
+            skippedWith('no_tracker', 'No task-management MCP is connected.'),
         );
 
-        const response = await (useCase as any).handleBusinessLogicValidation(
-            {
-                prepareContext: { userQuestion: '@kody -v business-logic' },
-                organizationAndTeamData: {
-                    organizationId: 'org-1',
-                    teamId: 'team-1',
-                },
-                thread: undefined,
+        const response = await (useCase as any).handleBusinessLogicValidation({
+            prepareContext: { userQuestion: '@kody -v business-logic' },
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
             },
-        );
+            thread: undefined,
+        });
 
-        expect(response).not.toBe('__NO_TASK_MCP__');
-        expect(response).not.toContain('__NO_TASK_MCP__');
         expect(response).toMatch(/no task-management mcp/i);
     });
 
     it('passes through a real business-logic result unchanged', async () => {
-        businessRulesValidationAgentUseCase.execute.mockResolvedValueOnce(
-            '## Business Rules Validation\n\nStatus: Issues Found',
-        );
-
-        const response = await (useCase as any).handleBusinessLogicValidation(
-            {
-                prepareContext: { userQuestion: '@kody -v business-logic' },
-                organizationAndTeamData: {
-                    organizationId: 'org-1',
-                    teamId: 'team-1',
-                },
-                thread: undefined,
+        businessValidationService.validate.mockResolvedValueOnce({
+            outcome: {
+                kind: 'validated',
+                task: { tracker: 'Linear', id: 'PLAT-41' },
+                verdict: { needsMoreInfo: false, summary: 'x' },
+                report: '## Business Rules Validation\n\nStatus: Issues Found',
             },
-        );
+            references: [],
+            attempts: [],
+        });
+
+        const response = await (useCase as any).handleBusinessLogicValidation({
+            prepareContext: { userQuestion: '@kody -v business-logic' },
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            thread: undefined,
+        });
 
         expect(response).toBe(
             '## Business Rules Validation\n\nStatus: Issues Found',

@@ -5,7 +5,7 @@ import yaml from 'js-yaml';
 import { Injectable, Logger } from '@nestjs/common';
 import { z } from 'zod';
 
-import { asRecord } from './runtime/value-utils';
+import { asRecord } from '../business-validation/value-utils';
 import { SkillNotFoundError } from './skill.errors';
 
 /** A required external MCP plugin category declared in SKILL.md frontmatter. */

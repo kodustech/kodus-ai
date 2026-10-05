@@ -106,9 +106,10 @@ describe('FinishOnboardingUseCase', () => {
         // onboarding response. Sync runs first; generation is chained off its
         // completion so it sees the imported rules.
         await new Promise((resolve) => setImmediate(resolve));
-        expect(
-            syncSelectedReposKodyRulesUseCase.execute,
-        ).toHaveBeenCalledWith({ teamId: 'team-1', organizationId: 'org-1' });
+        expect(syncSelectedReposKodyRulesUseCase.execute).toHaveBeenCalledWith({
+            teamId: 'team-1',
+            organizationId: 'org-1',
+        });
         expect(generateKodyRulesUseCase.execute).toHaveBeenCalledWith(
             { teamId: 'team-1', months: 3 },
             'org-1',
@@ -140,9 +141,10 @@ describe('FinishOnboardingUseCase', () => {
         // Onboarding still schedules its (detached) rule import despite the
         // billing error.
         await new Promise((resolve) => setImmediate(resolve));
-        expect(
-            syncSelectedReposKodyRulesUseCase.execute,
-        ).toHaveBeenCalledWith({ teamId: 'team-1', organizationId: 'org-1' });
+        expect(syncSelectedReposKodyRulesUseCase.execute).toHaveBeenCalledWith({
+            teamId: 'team-1',
+            organizationId: 'org-1',
+        });
     });
 
     it('persists the connected GitHub organization member-count snapshot', async () => {

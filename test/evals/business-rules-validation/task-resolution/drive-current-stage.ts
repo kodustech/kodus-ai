@@ -1,7 +1,5 @@
-import { BusinessRulesValidationAgentProvider } from '@libs/agents/infrastructure/services/agents/business-rules-validation/businessRulesValidationAgent';
-import { CapabilityResourcePlanService } from '@libs/agents/skills/runtime/capability-resource-plan.service';
-import { CapabilityStrategyService } from '@libs/agents/skills/runtime/capability-strategy.service';
-import { GenericSkillRunnerService } from '@libs/agents/skills/generic-skill-runner.service';
+import { BusinessValidationService } from '@libs/agents/business-validation/business-validation.service';
+import { IntentJudge } from '@libs/agents/business-validation/judge/intent-judge';
 import { SkillLoaderService } from '@libs/agents/skills/skill-loader.service';
 import { BusinessLogicValidationStage } from '@libs/code-review/pipeline/stages/business-logic-validation.stage';
 
@@ -10,10 +8,7 @@ import { frozenContext } from '../../../fixtures/frozen-pipeline-context';
 import { FakeMcpHost, ToolCall } from './fake-mcp-host';
 import { ResolutionFixture } from './fixture.types';
 
-/**
- * What a developer sees, the same for every driver: the stage today, the
- * resolver after the refactor.
- */
+/** What a developer sees: what the judge read, what was posted, what was written to a tracker. */
 export type ResolutionObservation = {
     outcome: ResolutionFixture['expect']['outcome'];
     /** What the judge was given as the task, when it ran at all. */
@@ -33,23 +28,12 @@ export const CURRENT_STAGE_UNSUPPORTED: Array<keyof ResolutionFixture> = [
 
 const ORG = { organizationId: 'org-eval', teamId: 'team-eval' };
 
-/** Any service the run only reports to (metrics, usage): accepts every call. */
-const sink = (): any =>
-    new Proxy(
-        {},
-        {
-            get: (_target, prop) =>
-                prop === 'then' ? undefined : async () => undefined,
-        },
-    );
-
 /**
- * Runs today's BusinessLogicValidationStage with the real business-rules
- * provider, skill runner, capability seeds and learning loop. Only the
+ * Runs BusinessLogicValidationStage with the real BusinessValidationService:
+ * reference extraction, tracker catalog, MCP sessions and resolver. Only the
  * boundaries are replaced: the mcp-manager's connection list, the MCP servers
  * behind it (FakeMcpHost), and the judge, whose input is captured instead of
- * sent to a model. The fetcher's agentic fallback runs on a model that answers
- * with no tool calls (mocked by the spec).
+ * sent to a model.
  */
 export async function driveCurrentStage(
     fixture: ResolutionFixture,
@@ -67,41 +51,32 @@ export async function driveCurrentStage(
             getIntegrations: async () => [],
         };
 
-        const runner = new GenericSkillRunnerService(
-            new SkillLoaderService(),
-            sink(),
+        const service = new BusinessValidationService(
             mcpManager as never,
-        );
-        const provider = new BusinessRulesValidationAgentProvider(
             { resolveTaskSlot: async () => undefined } as never,
             { findByKey: async () => null } as never,
-            sink(),
-            runner,
-            undefined,
-            new CapabilityStrategyService(),
-            new CapabilityResourcePlanService(),
+            new SkillLoaderService(),
         );
 
+        // The judge is the boundary: capture what it read instead of calling a model.
         let taskReadByJudge: string | undefined;
-        (provider as any).runLLMStep = async (_step: unknown, ctx: any) => {
-            taskReadByJudge = ctx.taskContext ?? '';
-            return {
-                ...ctx,
-                validationResult: {
+        const judge = jest
+            .spyOn(IntentJudge.prototype, 'judge')
+            .mockImplementation(async (input) => {
+                taskReadByJudge = input.taskText;
+                return {
                     needsMoreInfo: false,
-                    mode: 'full_analysis',
-                    reason: 'analysis_ready',
-                    summary: 'Fully compliant.',
-                },
-                formattedResponse:
-                    '## Business Rules Validation\n**Status:** ✅ Compliant — fully compliant.',
-            };
-        };
+                    status: 'compliant',
+                    findings: [],
+                    summary:
+                        '## Business Rules Validation\n**Status:** Compliant',
+                };
+            });
+        const translate = jest
+            .spyOn(IntentJudge.prototype, 'translate')
+            .mockImplementation(async (message) => message);
 
-        const stage = new BusinessLogicValidationStage(
-            provider,
-            mcpManager as never,
-        );
+        const stage = new BusinessLogicValidationStage(service);
         const result = await stage.execute(
             frozenContext({
                 organizationAndTeamData: ORG,
@@ -121,8 +96,15 @@ export async function driveCurrentStage(
                 codeReviewConfig: { reviewOptions: { business_logic: true } },
                 pipelineMetadata: {},
                 errors: [],
+                changedFiles: fixture.pullRequest.files.map((file) => ({
+                    filename: file.filename,
+                    status: 'modified',
+                    patch: file.patch,
+                })),
             } as never),
         );
+        judge.mockRestore();
+        translate.mockRestore();
 
         const comment: string | undefined =
             result.businessLogicResults?.[0]?.suggestionContent;
@@ -195,6 +177,7 @@ function buildConnections(fixture: ResolutionFixture, host: FakeMcpHost) {
             timeout: 2_000,
             allowedTools: e.allowedTools,
             category: e.category,
+            integrationId: e.integrationId,
         },
         item: {
             id: `conn-${index}`,

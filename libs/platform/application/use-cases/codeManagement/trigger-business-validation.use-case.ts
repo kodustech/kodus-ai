@@ -1,11 +1,9 @@
-import { createThreadId } from '@libs/common/utils/thread-id';
 import { createLogger } from '@libs/core/log/logger';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
-import { createHash } from 'node:crypto';
 
-import { BusinessRulesValidationAgentProvider } from '@libs/agents/infrastructure/services/agents/business-rules-validation/businessRulesValidationAgent';
-import { NO_TASK_MCP_SENTINEL } from '@libs/agents/infrastructure/services/agents/business-rules-validation/no-task-mcp-sentinel';
-import { BusinessRulesPrepareContext } from '@libs/agents/infrastructure/services/agents/business-rules-validation/types';
+import { BusinessValidationService } from '@libs/agents/business-validation/business-validation.service';
+import { replyFor } from '@libs/agents/business-validation/command';
+import { formatPullRequestDiff } from '@libs/agents/business-validation/pull-request-diff';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -58,6 +56,7 @@ interface BaseBusinessValidationExecutionContext {
 
 interface PullRequestValidationExecutionContext extends BaseBusinessValidationExecutionContext {
     mode: 'pull_request';
+    title?: string;
     repository: BusinessValidationRepositoryContext;
     prNumber: number;
     prUrl: string;
@@ -73,21 +72,12 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
     private readonly logger = createLogger(
         TriggerBusinessValidationUseCase.name,
     );
-    private static readonly MAX_SIGNAL_SOURCE_LENGTH = 20_000;
-    private static readonly REQUIREMENT_KEYWORDS = [
-        'requirement',
-        'acceptance criteria',
-        'user story',
-        'given',
-        'when',
-        'then',
-    ];
 
     constructor(
         private readonly codeManagementService: CodeManagementService,
         @Inject(INTEGRATION_CONFIG_SERVICE_TOKEN)
         private readonly integrationConfigService: IIntegrationConfigService,
-        private readonly businessRulesValidationAgentProvider: BusinessRulesValidationAgentProvider,
+        private readonly businessValidationService: BusinessValidationService,
     ) {}
 
     async execute(params: {
@@ -115,38 +105,47 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
                       taskReference,
                   });
 
-        const prepareContext = this.buildPrepareContext({
-            command,
-            taskReference,
-            taskId: input.taskId,
-            taskUrl: input.taskUrl,
+        const validation = await this.businessValidationService.validate({
+            door: 'cli',
+            organizationAndTeamData,
+            repository: executionContext.repository
+                ? {
+                      id: executionContext.repository.id,
+                      name: executionContext.repository.name,
+                      owner: executionContext.repository.owner,
+                  }
+                : undefined,
+            pullRequest:
+                executionContext.mode === 'pull_request'
+                    ? {
+                          number: executionContext.prNumber,
+                          title: executionContext.title,
+                          body: executionContext.pullRequestDescription,
+                          headRef: executionContext.headRef,
+                          baseRef: executionContext.baseRef,
+                      }
+                    : undefined,
             platformType,
-            executionContext,
+            taskInput: taskReference,
+            diff:
+                executionContext.mode === 'local_diff'
+                    ? executionContext.prDiff
+                    : async () =>
+                          formatPullRequestDiff(
+                              await this.codeManagementService.getFilesByPullRequestId(
+                                  {
+                                      organizationAndTeamData,
+                                      repository: {
+                                          id: executionContext.repository.id,
+                                          name: executionContext.repository
+                                              .name,
+                                      },
+                                      prNumber: executionContext.prNumber,
+                                  },
+                              ),
+                          ),
         });
-
-        const agentResult =
-            await this.businessRulesValidationAgentProvider.execute({
-                organizationAndTeamData,
-                thread: this.createThread({
-                    organizationAndTeamData,
-                    context: executionContext,
-                }),
-                prepareContext,
-            });
-
-        // NO_TASK_MCP_SENTINEL is an internal marker (never meant to reach a
-        // user) that the pipeline path silently swallows. This CLI-triggered
-        // path returns `result` straight through the API response to the
-        // `kodus` CLI's stdout, so leaving it unguarded here surfaces the raw
-        // "__NO_TASK_MCP__" string to whoever ran the command.
-        const result =
-            agentResult ===
-            NO_TASK_MCP_SENTINEL
-                ? 'No task-management MCP (Jira, GitHub Issues, Linear, Notion, ' +
-                  'ClickUp, etc.) is connected for this organization, so ' +
-                  'business rules validation has nothing to compare the PR ' +
-                  'against. Connect one in the Kodus settings to use this command.'
-                : agentResult;
+        const result = replyFor(validation.outcome);
 
         if (executionContext.mode === 'pull_request') {
             return {
@@ -333,6 +332,7 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
                 owner: repositoryOwner,
                 defaultBranch: pr.base?.repo?.defaultBranch || pr.base?.ref,
             },
+            title: pr.title,
             pullRequestDescription: pr.body || pr.message || '',
             headRef: pr.head?.ref,
             baseRef: pr.base?.ref,
@@ -541,177 +541,5 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
         }
 
         return owner;
-    }
-
-    private buildPrepareContext(params: {
-        command: string;
-        taskReference?: string;
-        taskId?: string;
-        taskUrl?: string;
-        platformType?: string;
-        executionContext:
-            | PullRequestValidationExecutionContext
-            | LocalDiffValidationExecutionContext;
-    }): BusinessRulesPrepareContext {
-        const {
-            command,
-            taskReference,
-            taskId,
-            taskUrl,
-            platformType,
-            executionContext,
-        } = params;
-        const prepareContext: BusinessRulesPrepareContext = {
-            userQuestion: command,
-            taskReference: taskReference || undefined,
-            taskId: taskId?.trim() || undefined,
-            taskUrl: taskUrl?.trim() || undefined,
-            pullRequestDescription: executionContext.pullRequestDescription,
-            platformType: platformType || undefined,
-            businessSignals: this.detectSignals(
-                executionContext.pullRequestDescription,
-                taskReference,
-                executionContext.prDiff,
-                taskId,
-                taskUrl,
-            ),
-        };
-
-        if (executionContext.repository) {
-            prepareContext.repository = {
-                id: executionContext.repository.id,
-                name: executionContext.repository.name,
-                owner: executionContext.repository.owner,
-                defaultBranch: executionContext.repository.defaultBranch,
-            };
-            prepareContext.defaultBranch =
-                executionContext.repository.defaultBranch ||
-                executionContext.baseRef;
-        }
-
-        if (executionContext.prDiff) {
-            prepareContext.prDiff = executionContext.prDiff;
-        }
-
-        if (executionContext.mode === 'pull_request') {
-            prepareContext.pullRequest = {
-                pullRequestNumber: executionContext.prNumber,
-                headRef: executionContext.headRef,
-                baseRef: executionContext.baseRef,
-            };
-            prepareContext.pullRequestNumber = executionContext.prNumber;
-            prepareContext.headRef = executionContext.headRef;
-            prepareContext.baseRef = executionContext.baseRef;
-        }
-
-        return prepareContext;
-    }
-
-    private detectSignals(
-        pullRequestDescription: string,
-        taskReference?: string,
-        prDiff?: string,
-        taskId?: string,
-        taskUrl?: string,
-    ): Record<string, string[]> {
-        const normalizedTaskId = taskId?.trim();
-        const normalizedTaskUrl = taskUrl?.trim();
-        const prDiffSignal =
-            typeof prDiff === 'string' && prDiff.length > 0
-                ? prDiff.slice(
-                      0,
-                      TriggerBusinessValidationUseCase.MAX_SIGNAL_SOURCE_LENGTH,
-                  )
-                : undefined;
-        const referenceSource = [taskReference, pullRequestDescription]
-            .filter(Boolean)
-            .join('\n');
-        const ticketSource = [referenceSource, prDiffSignal, normalizedTaskId]
-            .filter(Boolean)
-            .join('\n');
-        const taskLinkSource = [normalizedTaskUrl, referenceSource]
-            .filter(Boolean)
-            .join('\n');
-        const keywordSource = [referenceSource, prDiffSignal]
-            .filter(Boolean)
-            .join('\n');
-
-        const ticketKeys = [
-            ...(normalizedTaskId ? [normalizedTaskId] : []),
-            ...this.detectTicketKeys(ticketSource),
-        ];
-        const taskLinks = [
-            ...(normalizedTaskUrl ? [normalizedTaskUrl] : []),
-            ...this.detectTaskLinks(taskLinkSource),
-        ];
-
-        return {
-            ticketKeys: [...new Set(ticketKeys)],
-            taskLinks: [...new Set(taskLinks)],
-            requirementKeywords: this.detectRequirementKeywords(keywordSource),
-        };
-    }
-
-    private detectTicketKeys(content: string): string[] {
-        const matches = content.match(/[A-Z]{2,}-\d+/g);
-        return [...new Set(matches ?? [])];
-    }
-
-    private detectTaskLinks(content: string): string[] {
-        const matches = content.match(/https?:\/\/[^\s)>\]"']+/g);
-        return [...new Set(matches ?? [])];
-    }
-
-    private detectRequirementKeywords(content: string): string[] {
-        const lower = content.toLowerCase();
-        return TriggerBusinessValidationUseCase.REQUIREMENT_KEYWORDS.filter(
-            (keyword) => lower.includes(keyword),
-        );
-    }
-
-    private createThread(params: {
-        organizationAndTeamData: OrganizationAndTeamData;
-        context:
-            | PullRequestValidationExecutionContext
-            | LocalDiffValidationExecutionContext;
-    }): ReturnType<typeof createThreadId> | undefined {
-        const { organizationAndTeamData, context } = params;
-
-        try {
-            const identifiers: Record<string, string | number> = {
-                organizationId: organizationAndTeamData.organizationId,
-                teamId: organizationAndTeamData.teamId,
-            };
-
-            if (context.repository?.id) {
-                identifiers.repositoryId = context.repository.id;
-            }
-
-            if (context.mode === 'pull_request') {
-                identifiers.pullRequestNumber = context.prNumber;
-            } else {
-                identifiers.localDiffHash = this.buildDiffHash(context.prDiff);
-            }
-
-            return createThreadId(identifiers, { prefix: 'vbl' });
-        } catch (error) {
-            this.logger.warn({
-                message:
-                    'Failed to create business validation thread identifier',
-                context: TriggerBusinessValidationUseCase.name,
-                error,
-                metadata: {
-                    organizationId: organizationAndTeamData.organizationId,
-                    teamId: organizationAndTeamData.teamId,
-                    repositoryId: context.repository?.id,
-                    mode: context.mode,
-                },
-            });
-            return undefined;
-        }
-    }
-
-    private buildDiffHash(diff: string): string {
-        return createHash('sha256').update(diff).digest('hex').slice(0, 16);
     }
 }

@@ -12,14 +12,10 @@ import {
     MongoConversationStore,
 } from '../infrastructure/persistence/mongo-conversation-store';
 
-import { BusinessRulesValidationAgentUseCase } from '../application/use-cases/business-rules-validation-agent.use-case';
 import { ConversationAgentUseCase } from '../application/use-cases/conversation-agent.use-case';
-import { BusinessRulesValidationAgentProvider } from '../infrastructure/services/agents/business-rules-validation/businessRulesValidationAgent';
 import { ConversationAgentProvider } from '../infrastructure/services/agents/conversation/conversationAgent';
 import { SkillLoaderService } from '../skills/skill-loader.service';
-import { GenericSkillRunnerService } from '../skills/generic-skill-runner.service';
-import { CapabilityStrategyService } from '../skills/runtime/capability-strategy.service';
-import { CapabilityResourcePlanService } from '../skills/runtime/capability-resource-plan.service';
+import { BusinessValidationService } from '../business-validation/business-validation.service';
 
 @Module({
     imports: [
@@ -33,28 +29,20 @@ import { CapabilityResourcePlanService } from '../skills/runtime/capability-reso
         MongooseModule.forFeature([AgentSessionModelInstance]),
     ],
     providers: [
-        BusinessRulesValidationAgentUseCase,
         ConversationAgentUseCase,
-        BusinessRulesValidationAgentProvider,
         ConversationAgentProvider,
         SkillLoaderService,
-        GenericSkillRunnerService,
-        CapabilityStrategyService,
-        CapabilityResourcePlanService,
+        BusinessValidationService,
         {
             provide: CONVERSATION_STORE_TOKEN,
             useClass: MongoConversationStore,
         },
     ],
     exports: [
-        BusinessRulesValidationAgentUseCase,
         ConversationAgentUseCase,
-        BusinessRulesValidationAgentProvider,
         ConversationAgentProvider,
         SkillLoaderService,
-        GenericSkillRunnerService,
-        CapabilityStrategyService,
-        CapabilityResourcePlanService,
+        BusinessValidationService,
         CONVERSATION_STORE_TOKEN,
     ],
 })

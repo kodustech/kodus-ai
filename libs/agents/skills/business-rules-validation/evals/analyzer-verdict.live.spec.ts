@@ -1,12 +1,6 @@
-import { BusinessRulesValidationAgentProvider } from '@libs/agents/infrastructure/services/agents/business-rules-validation/businessRulesValidationAgent';
-import { buildBusinessRulesAnalysisPrompt } from '@libs/agents/infrastructure/services/agents/business-rules-validation/analysis-prompt.builder';
-import type {
-    BusinessRulesContext,
-    ValidationResult,
-} from '@libs/agents/infrastructure/services/agents/business-rules-validation/types';
-import { parseBusinessRulesValidationResult } from '@libs/agents/infrastructure/services/agents/business-rules-validation/validation-result.parser';
-import { resolveValidationStatus } from '@libs/agents/infrastructure/services/agents/business-rules-validation/validation-verdict';
-import { GenericSkillRunnerService } from '@libs/agents/skills/generic-skill-runner.service';
+import { IntentJudge } from '@libs/agents/business-validation/judge/intent-judge';
+import type { ValidationResult } from '@libs/agents/business-validation/judge/validation.types';
+import { resolveValidationStatus } from '@libs/agents/business-validation/judge/validation-verdict';
 import { SkillLoaderService } from '@libs/agents/skills/skill-loader.service';
 
 /**
@@ -67,41 +61,27 @@ async function analyze(
     diff: string,
     userLanguage: string,
 ): Promise<ValidationResult> {
-    const runner = new GenericSkillRunnerService(
-        new SkillLoaderService(),
-        {} as any,
-    );
-    const provider = new BusinessRulesValidationAgentProvider(
-        {} as any,
-        {} as any,
-        {} as any,
-        runner,
-    );
-    const ctx = {
-        organizationAndTeamData: { organizationId: 'eval-org', teamId: 'eval-team' },
-        userLanguage,
-        taskContext: TASK,
+    const loader = new SkillLoaderService();
+    const result = await new IntentJudge(
+        undefined,
+        { analyzerTimeoutMs: 170_000, analyzerMaxIterations: 1 },
+        { organizationId: 'eval-org', teamId: 'eval-team' },
+    ).judge({
+        instructions: [
+            loader.loadInstructions('business-rules-validation'),
+            ...loader
+                .listReferences('business-rules-validation')
+                .map((file) => loader.loadReference('business-rules-validation', file) ?? ''),
+        ].join('\n\n---\n\n'),
+        task: { tracker: 'Git Issues', id: '#183', title: 'Mine badge' },
+        taskText: TASK,
         taskQuality: 'COMPLETE',
-        prDiff: diff,
-        prBody: 'Closes #183',
-    } as unknown as BusinessRulesContext;
-
-    const res = await (provider as any).callLLM(
-        [
-            {
-                role: 'system',
-                content: runner.getAnalyzerInstructions('business-rules-validation'),
-            },
-            { role: 'user', content: buildBusinessRulesAnalysisPrompt(ctx) },
-        ],
-        { maxTokens: 8000, submitResultTool: true },
-        'businessRulesAnalyzer',
-        {},
-    );
-
-    const result = parseBusinessRulesValidationResult(res.structured ?? res.content);
+        diff,
+        pullRequestBody: 'Closes #183',
+        userLanguage,
+    });
     console.log(
-        `[analyzer-verdict] lang=${userLanguage} via=${res.structured ? 'tool' : 'text'} status=${result.status} findings=${JSON.stringify(result.findings)}`,
+        `[analyzer-verdict] lang=${userLanguage} status=${result.status} reason=${result.reason} findings=${JSON.stringify(result.findings)} missing=${(result.missingInfo ?? "").slice(0, 160)}`,
     );
     return result;
 }

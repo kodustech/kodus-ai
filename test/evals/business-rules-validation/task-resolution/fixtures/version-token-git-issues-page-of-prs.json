@@ -1,175 +1,176 @@
 {
-    "name": "version-token-git-issues-page-of-prs",
-    "issue": "#2018",
-    "passesOnMain": false,
-    "repository": {
-        "issues": [
-            {
-                "number": 300,
-                "title": "chore: bump dependency 0",
-                "isPullRequest": true
-            },
-            {
-                "number": 301,
-                "title": "chore: bump dependency 1",
-                "isPullRequest": true
-            },
-            {
-                "number": 302,
-                "title": "chore: bump dependency 2",
-                "isPullRequest": true
-            },
-            {
-                "number": 303,
-                "title": "chore: bump dependency 3",
-                "isPullRequest": true
-            },
-            {
-                "number": 304,
-                "title": "chore: bump dependency 4",
-                "isPullRequest": true
-            },
-            {
-                "number": 305,
-                "title": "chore: bump dependency 5",
-                "isPullRequest": true
-            },
-            {
-                "number": 306,
-                "title": "chore: bump dependency 6",
-                "isPullRequest": true
-            },
-            {
-                "number": 307,
-                "title": "chore: bump dependency 7",
-                "isPullRequest": true
-            },
-            {
-                "number": 308,
-                "title": "chore: bump dependency 8",
-                "isPullRequest": true
-            },
-            {
-                "number": 309,
-                "title": "chore: bump dependency 9",
-                "isPullRequest": true
-            },
-            {
-                "number": 310,
-                "title": "chore: bump dependency 10",
-                "isPullRequest": true
-            },
-            {
-                "number": 311,
-                "title": "chore: bump dependency 11",
-                "isPullRequest": true
-            },
-            {
-                "number": 312,
-                "title": "chore: bump dependency 12",
-                "isPullRequest": true
-            },
-            {
-                "number": 313,
-                "title": "chore: bump dependency 13",
-                "isPullRequest": true
-            },
-            {
-                "number": 314,
-                "title": "chore: bump dependency 14",
-                "isPullRequest": true
-            },
-            {
-                "number": 315,
-                "title": "chore: bump dependency 15",
-                "isPullRequest": true
-            },
-            {
-                "number": 316,
-                "title": "chore: bump dependency 16",
-                "isPullRequest": true
-            },
-            {
-                "number": 317,
-                "title": "chore: bump dependency 17",
-                "isPullRequest": true
-            },
-            {
-                "number": 318,
-                "title": "chore: bump dependency 18",
-                "isPullRequest": true
-            },
-            {
-                "number": 319,
-                "title": "chore: bump dependency 19",
-                "isPullRequest": true
-            },
-            {
-                "number": 320,
-                "title": "chore: bump dependency 20",
-                "isPullRequest": true
-            },
-            {
-                "number": 321,
-                "title": "chore: bump dependency 21",
-                "isPullRequest": true
-            },
-            {
-                "number": 322,
-                "title": "chore: bump dependency 22",
-                "isPullRequest": true
-            },
-            {
-                "number": 323,
-                "title": "chore: bump dependency 23",
-                "isPullRequest": true
-            },
-            {
-                "number": 324,
-                "title": "chore: bump dependency 24",
-                "isPullRequest": true
-            },
-            {
-                "number": 325,
-                "title": "chore: bump dependency 25",
-                "isPullRequest": true
-            },
-            {
-                "number": 326,
-                "title": "chore: bump dependency 26",
-                "isPullRequest": true
-            },
-            {
-                "number": 327,
-                "title": "chore: bump dependency 27",
-                "isPullRequest": true
-            },
-            {
-                "number": 328,
-                "title": "chore: bump dependency 28",
-                "isPullRequest": true
-            },
-            {
-                "number": 329,
-                "title": "chore: bump dependency 29",
-                "isPullRequest": true
-            },
-            {
-                "number": 12,
-                "title": "Scale servings",
-                "body": "Amounts scale with servings."
-            }
-        ]
-    },
-    "gitIssuesConnected": true,
-    "trackers": [],
-    "pullRequest": {
-        "title": "fix: handle UTF-8 in the recipe importer",
-        "body": "Decodes imported files as UTF-8.",
-        "branch": "fix/utf8-import"
-    },
-    "expect": {
-        "outcome": "silent",
-        "commentNotContains": ["Insufficient Task Context"]
-    }
+  "name": "version-token-git-issues-page-of-prs",
+  "issue": "#2018",
+  "repository": {
+    "issues": [
+      {
+        "number": 300,
+        "title": "chore: bump dependency 0",
+        "isPullRequest": true
+      },
+      {
+        "number": 301,
+        "title": "chore: bump dependency 1",
+        "isPullRequest": true
+      },
+      {
+        "number": 302,
+        "title": "chore: bump dependency 2",
+        "isPullRequest": true
+      },
+      {
+        "number": 303,
+        "title": "chore: bump dependency 3",
+        "isPullRequest": true
+      },
+      {
+        "number": 304,
+        "title": "chore: bump dependency 4",
+        "isPullRequest": true
+      },
+      {
+        "number": 305,
+        "title": "chore: bump dependency 5",
+        "isPullRequest": true
+      },
+      {
+        "number": 306,
+        "title": "chore: bump dependency 6",
+        "isPullRequest": true
+      },
+      {
+        "number": 307,
+        "title": "chore: bump dependency 7",
+        "isPullRequest": true
+      },
+      {
+        "number": 308,
+        "title": "chore: bump dependency 8",
+        "isPullRequest": true
+      },
+      {
+        "number": 309,
+        "title": "chore: bump dependency 9",
+        "isPullRequest": true
+      },
+      {
+        "number": 310,
+        "title": "chore: bump dependency 10",
+        "isPullRequest": true
+      },
+      {
+        "number": 311,
+        "title": "chore: bump dependency 11",
+        "isPullRequest": true
+      },
+      {
+        "number": 312,
+        "title": "chore: bump dependency 12",
+        "isPullRequest": true
+      },
+      {
+        "number": 313,
+        "title": "chore: bump dependency 13",
+        "isPullRequest": true
+      },
+      {
+        "number": 314,
+        "title": "chore: bump dependency 14",
+        "isPullRequest": true
+      },
+      {
+        "number": 315,
+        "title": "chore: bump dependency 15",
+        "isPullRequest": true
+      },
+      {
+        "number": 316,
+        "title": "chore: bump dependency 16",
+        "isPullRequest": true
+      },
+      {
+        "number": 317,
+        "title": "chore: bump dependency 17",
+        "isPullRequest": true
+      },
+      {
+        "number": 318,
+        "title": "chore: bump dependency 18",
+        "isPullRequest": true
+      },
+      {
+        "number": 319,
+        "title": "chore: bump dependency 19",
+        "isPullRequest": true
+      },
+      {
+        "number": 320,
+        "title": "chore: bump dependency 20",
+        "isPullRequest": true
+      },
+      {
+        "number": 321,
+        "title": "chore: bump dependency 21",
+        "isPullRequest": true
+      },
+      {
+        "number": 322,
+        "title": "chore: bump dependency 22",
+        "isPullRequest": true
+      },
+      {
+        "number": 323,
+        "title": "chore: bump dependency 23",
+        "isPullRequest": true
+      },
+      {
+        "number": 324,
+        "title": "chore: bump dependency 24",
+        "isPullRequest": true
+      },
+      {
+        "number": 325,
+        "title": "chore: bump dependency 25",
+        "isPullRequest": true
+      },
+      {
+        "number": 326,
+        "title": "chore: bump dependency 26",
+        "isPullRequest": true
+      },
+      {
+        "number": 327,
+        "title": "chore: bump dependency 27",
+        "isPullRequest": true
+      },
+      {
+        "number": 328,
+        "title": "chore: bump dependency 28",
+        "isPullRequest": true
+      },
+      {
+        "number": 329,
+        "title": "chore: bump dependency 29",
+        "isPullRequest": true
+      },
+      {
+        "number": 12,
+        "title": "Scale servings",
+        "body": "Amounts scale with servings."
+      }
+    ]
+  },
+  "gitIssuesConnected": true,
+  "trackers": [],
+  "pullRequest": {
+    "title": "fix: handle UTF-8 in the recipe importer",
+    "body": "Decodes imported files as UTF-8.",
+    "branch": "fix/utf8-import"
+  },
+  "expect": {
+    "outcome": "silent",
+    "commentNotContains": [
+      "Insufficient Task Context"
+    ]
+  }
 }

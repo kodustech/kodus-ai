@@ -14,12 +14,13 @@ export type TrackerTask = {
 
 /**
  * How a tool answers. `get` looks the task up by the value of `idArg`; `list`
- * returns every task; `write` changes nothing but is recorded, so a case can
- * assert the fetch never wrote to the customer's tracker.
+ * returns every task; `sites` returns the Atlassian sites the token reaches;
+ * `write` changes nothing but is recorded, so a case can assert the fetch
+ * never wrote to the customer's tracker.
  */
 export type TrackerTool = {
     name: string;
-    kind: 'get' | 'list' | 'write';
+    kind: 'get' | 'list' | 'write' | 'sites';
     description?: string;
     idArg?: string;
     /** For a tool with an `action` enum (Azure `wit_work_item`): the only
@@ -48,8 +49,8 @@ export type ResolutionFixture = {
     name: string;
     /** The issue this case reproduces. */
     issue: string;
-    /** Whether today's code already behaves as expected (a guard, not a repro). */
-    passesOnMain: boolean;
+    /** Reproduces an open issue: expected to fail until it is fixed. */
+    knownFailing?: boolean;
     repository: {
         id: string;
         name: string;

@@ -256,11 +256,25 @@ export class FakeMcpHost {
                 server: tracker.integrationId,
                 tool: tool.name,
                 args,
-                kind: writes ? 'write' : tool.kind,
+                kind: writes
+                    ? 'write'
+                    : tool.kind === 'sites'
+                      ? 'list'
+                      : tool.kind,
             });
 
             if (writes) {
                 return this.toolText({ success: true });
+            }
+            if (tool.kind === 'sites') {
+                return this.toolText([
+                    {
+                        id: `cloud-${tracker.integrationId}`,
+                        url: 'https://acme.atlassian.net',
+                        name: 'acme',
+                        scopes: ['read:jira-work'],
+                    },
+                ]);
             }
             if (tool.kind === 'list') {
                 return this.toolText(
