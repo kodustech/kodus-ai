@@ -329,10 +329,16 @@ describe('CodeReviewJobProcessorService', () => {
             // "another worker owns this" returned early: the consumer acked the
             // message, the job vanished with no FAILED stamp, no republish and no
             // notice, and the row stayed PENDING where neither
-            // findStaleProcessing nor requeueStaleJobs ever selects it.
+            // findStaleProcessing nor requeueStaleJobs ever selects it. The write
+            // is still fenced, though — on "no live owner" rather than on a lease,
+            // because a redelivery of the same jobId can be consumed while
+            // another worker runs it (#1902 review).
             rateLimitGate.check.mockRejectedValue(
                 new RateLimitError({ resetAt: new Date() }),
             );
+            // The row is free, so the guarded write lands and the failure is
+            // recorded and republished.
+            jobRepository.update.mockResolvedValue(true);
 
             await expect(service.process('job-1')).rejects.toThrow(
                 /rate limit/i,
@@ -342,8 +348,43 @@ describe('CodeReviewJobProcessorService', () => {
                 ([, data]) => data?.status === JobStatus.FAILED,
             );
             expect(failureCall).toBeDefined();
-            // Nothing was claimed, so the write is not fenced on a lease.
-            expect(failureCall).toHaveLength(2);
+            expect(failureCall).toEqual([
+                'job-1',
+                expect.objectContaining({ status: JobStatus.FAILED }),
+                { noLiveOwner: true },
+            ]);
+        });
+
+        it('leaves the row alone when a live worker owns it, without notifying or republishing', async () => {
+            // The same pre-claim failure, but this delivery was consumed while
+            // another worker holds the row (the inbox dedupes on
+            // (consumerId, messageId), not jobId). The guarded write matches
+            // nothing, so this run must not stamp FAILED over that worker's row,
+            // must not email the author about a review that is still running,
+            // and must not rethrow — a republish would deliver it again.
+            const notify = jest
+                .spyOn(
+                    service as unknown as { notifyReviewFailed: jest.Mock },
+                    'notifyReviewFailed',
+                )
+                .mockResolvedValue(undefined);
+            // A pre-claim failure that is NOT a rate-limit one, so the notice
+            // would be sent if the run went on.
+            jobRepository.findOne.mockResolvedValue(
+                makeJob({ payload: { event: 'issue_comment' } }),
+            );
+            jobRepository.update.mockResolvedValue(false);
+
+            await expect(service.process('job-1')).resolves.toBeUndefined();
+
+            expect(jobRepository.update).toHaveBeenCalledWith(
+                'job-1',
+                expect.objectContaining({ status: JobStatus.FAILED }),
+                { noLiveOwner: true },
+            );
+            expect(notify).not.toHaveBeenCalled();
+            expect(notificationService.emit).not.toHaveBeenCalled();
+            notify.mockRestore();
         });
 
         it('stops quietly when the lease it held was reclaimed', async () => {

@@ -246,7 +246,7 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                     .set(updateData)
                     .where('uuid = :uuid', { uuid: id })
                     .andWhere(
-                        '(status <> :processing OR leaseExpiresAt IS NULL OR leaseExpiresAt < :now)',
+                        '(status <> :processing OR "leaseExpiresAt" IS NULL OR "leaseExpiresAt" < :now)',
                         {
                             processing: JobStatus.PROCESSING,
                             now: new Date(),
@@ -256,7 +256,7 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                 return (result.affected ?? 0) > 0;
             }
 
-            if (guard) {
+            if (guard && !('noLiveOwner' in guard)) {
                 // Ownership-conditional write. The row may have been reclaimed
                 // by the reaper (leaseOwner replaced, status back to PENDING)
                 // between this worker's last renewal and now, so the condition

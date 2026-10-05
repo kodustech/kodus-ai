@@ -240,4 +240,43 @@ describe('WorkflowJobRepository — lease-based stale-job reclaim (#1830)', () =
             'job."maxRetries"',
         ]);
     });
+
+    // The no-live-owner guard is what a run that never claimed a lease writes
+    // through (the payload check, the rate-limit gate). Its predicate runs as
+    // raw SQL, so the mixed-case column has to be quoted or PostgreSQL folds it
+    // to `leaseexpiresat` and the whole UPDATE fails — and a throw here escapes
+    // into the caller's catch, which stamps the very FAILED over a live worker's
+    // row this guard exists to withhold (#1902 review).
+    it('fences the no-live-owner write on a quoted, mixed-case-safe predicate', async () => {
+        qb.execute.mockResolvedValue({ raw: [], affected: 0 });
+
+        const landed = await repo.update(
+            'job-1',
+            { status: JobStatus.FAILED },
+            { noLiveOwner: true },
+        );
+
+        const predicate = qb.andWhere.mock.calls[0][0] as string;
+        expect(predicate).toContain('"leaseExpiresAt"');
+        expect(predicate).not.toMatch(/[^"]leaseExpiresAt/);
+        expect(predicate).toContain('status <> :processing');
+        expect(qb.andWhere.mock.calls[0][1]).toEqual({
+            processing: JobStatus.PROCESSING,
+            now: expect.any(Date),
+        });
+        // No row matched, i.e. a live worker owns the job.
+        expect(landed).toBe(false);
+    });
+
+    it('reports the no-live-owner write as landed when the row was free', async () => {
+        qb.execute.mockResolvedValue({ raw: [], affected: 1 });
+
+        await expect(
+            repo.update(
+                'job-1',
+                { status: JobStatus.FAILED },
+                { noLiveOwner: true },
+            ),
+        ).resolves.toBe(true);
+    });
 });
