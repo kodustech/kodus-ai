@@ -9,10 +9,9 @@
  * queues from its own (stale) copy of the arguments that lacked the AST
  * queues' `x-single-active-consumer`/`x-consumer-timeout`.
  *
- * Both declaration sites — the @RabbitSubscribe decorators in
- * workflow-job-consumer.service.ts and the eager assert in
- * rabbitmq-dlq.initializer.ts — MUST reference this module so they can never
- * drift apart again. Do not inline queue arguments at either site.
+ * The @RabbitSubscribe decorators in workflow-job-consumer.service.ts MUST
+ * reference this module; do not inline queue arguments there or redeclare
+ * these queues elsewhere with a copy.
  */
 export const WORKFLOW_JOB_QUEUE_ARGUMENTS: Record<
     string,

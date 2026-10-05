@@ -89,7 +89,7 @@ function expectActionable(results: DoctorResult[]) {
 const healthyBroker = (
     over: {
         consumers?: Record<string, number | null>;
-        delayed?: boolean;
+        retryPath?: boolean;
         connectError?: Error;
     } = {},
 ): BrokerProbe => ({
@@ -100,7 +100,7 @@ const healthyBroker = (
         return {
             consumerCount: async (q: string) =>
                 over.consumers && q in over.consumers ? over.consumers[q] : 1,
-            exchangeExists: async () => over.delayed ?? true,
+            exchangeExists: async () => over.retryPath ?? true,
             close: async () => undefined,
         };
     }),
@@ -253,12 +253,12 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             ).toBe('fail');
         });
 
-        it('delayed-message plugin missing', async () => {
+        it('retry path missing', async () => {
             const results = await brokerCheck(
-                healthyBroker({ delayed: false }),
+                healthyBroker({ retryPath: false }),
             ).run(ctx());
             expect(
-                results.find((r) => r.check === 'broker.delayed_plugin')
+                results.find((r) => r.check === 'broker.retry_path')
                     ?.status,
             ).toBe('fail');
             expectActionable(results);

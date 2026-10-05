@@ -7,11 +7,8 @@ import { RabbitMQDLQInitializer } from "@libs/core/infrastructure/queue/rabbitmq
  * - Must NOT implement `onModuleInit` (used to, which caused bind
  *   attempts on queues that didn't exist yet — silently dropping
  *   delayed retries on first boot with a fresh rabbit volume).
- * - Must assertQueue each workflow.jobs.*.queue (with the same args as
- *   @RabbitSubscribe) BEFORE binding it. Bind-only raced the consumers
- *   and failed with 404 NOT_FOUND on a fresh volume / reconnect, silently
- *   dropping the binding so CODE_REVIEW jobs were published to a queue no
- *   one consumed and the review never ran.
+ * - Declares the plugin-free retry path (#1663) on boot and on every
+ *   reconnect, and never an `x-delayed-message` exchange.
  */
 
 describe("RabbitMQDLQInitializer lifecycle", () => {
@@ -33,101 +30,96 @@ describe("RabbitMQDLQInitializer lifecycle", () => {
         await expect(instance.onApplicationBootstrap()).resolves.toBeUndefined();
     });
 
-    it("asserts delayed exchanges and bind queues when a live channel exists", async () => {
-        const assertExchange = jest.fn().mockResolvedValue(undefined);
-        const bindQueue = jest.fn().mockResolvedValue(undefined);
-        const assertQueue = jest.fn().mockResolvedValue(undefined);
+    const liveChannel = () => ({
+        assertExchange: jest.fn().mockResolvedValue(undefined),
+        assertQueue: jest.fn().mockResolvedValue(undefined),
+        bindQueue: jest.fn().mockResolvedValue(undefined),
+        bindExchange: jest.fn().mockResolvedValue(undefined),
+    });
+
+    it("asserts the retry path and never an x-delayed-message exchange, eagerly and on reconnect", async () => {
+        const eager = liveChannel();
+        const onReconnect = liveChannel();
         const addSetup = jest
             .fn()
             .mockImplementation(async (cb: (ch: unknown) => Promise<void>) => {
-                // addSetup also triggers the full declare path
-                await cb({ assertExchange, bindQueue, assertQueue });
+                await cb(onReconnect);
             });
 
-        const amqp = {
-            channel: { assertExchange, bindQueue, assertQueue },
+        const instance = new RabbitMQDLQInitializer({
+            channel: eager,
             managedChannel: { addSetup },
-        } as any;
-
-        const instance = new RabbitMQDLQInitializer(amqp);
+        } as any);
         await instance.onApplicationBootstrap();
+        // addSetup is not awaited by the initializer; wait for the callback.
+        await addSetup.mock.results[0].value;
 
-        // 3 delayed exchanges declared eagerly
-        expect(assertExchange).toHaveBeenCalledWith(
-            "workflow.exchange.delayed",
-            "x-delayed-message",
-            expect.any(Object),
-        );
-        expect(assertExchange).toHaveBeenCalledWith(
-            "workflow.events.delayed",
-            "x-delayed-message",
-            expect.any(Object),
-        );
-        expect(assertExchange).toHaveBeenCalledWith(
-            "orchestrator.exchange.delayed",
-            "x-delayed-message",
-            expect.any(Object),
-        );
-
-        // 5 workflow queues bound to workflow.exchange.delayed
-        const expectedQueues = [
-            "workflow.jobs.code_review.queue",
-            "workflow.jobs.webhook.queue",
-            "workflow.jobs.check_implementation.queue",
-            "workflow.jobs.ast_graph_build.queue",
-            "workflow.jobs.ast_graph_incremental.queue",
-        ];
-        for (const q of expectedQueues) {
-            expect(bindQueue).toHaveBeenCalledWith(
-                q,
-                "workflow.exchange.delayed",
-                expect.stringMatching(/workflow\.jobs\.\*/),
+        for (const ch of [eager, onReconnect]) {
+            // Declaring one fails on a broker without the plugin (#1663).
+            expect(
+                ch.assertExchange.mock.calls.map((c) => c[1]),
+            ).not.toContain("x-delayed-message");
+            expect(ch.assertExchange).toHaveBeenCalledWith(
+                "kodus.retry",
+                "headers",
+                expect.any(Object),
             );
+            expect(ch.assertQueue).toHaveBeenCalledWith(
+                "kodus.retry.wait.5000",
+                expect.objectContaining({
+                    arguments: expect.objectContaining({
+                        "x-queue-type": "quorum",
+                        "x-message-ttl": 5000,
+                        "x-dead-letter-exchange": "kodus.retry.return",
+                    }),
+                }),
+            );
+            for (const target of [
+                "workflow.exchange",
+                "workflow.events",
+                "orchestrator.exchange",
+            ]) {
+                expect(ch.bindExchange).toHaveBeenCalledWith(
+                    target,
+                    "kodus.retry.return",
+                    "",
+                    { "x-match": "all", "kodus-retry-target": target },
+                );
+            }
         }
-
-        // addSetup registered for reconnection path
+        // The reconnect path also re-declares the DLQs.
+        expect(onReconnect.assertQueue).toHaveBeenCalledWith(
+            "workflow.jobs.dlq",
+            expect.any(Object),
+        );
         expect(addSetup).toHaveBeenCalledTimes(1);
     });
 
-    it("assertQueues each workflow.jobs.*.queue before binding, with @RabbitSubscribe's args", async () => {
-        const assertExchange = jest.fn().mockResolvedValue(undefined);
-        const bindQueue = jest.fn().mockResolvedValue(undefined);
-        const assertQueue = jest.fn().mockResolvedValue(undefined);
-        const addSetup = jest.fn();
-        const amqp = {
-            channel: { assertExchange, bindQueue, assertQueue },
-            managedChannel: { addSetup },
-        } as any;
-
-        const instance = new RabbitMQDLQInitializer(amqp);
+    // A headers exchange ignores `x-` headers when matching: a binding on
+    // `x-retry-bucket` matched every message, putting each retry in every
+    // wait queue.
+    it("binds each wait queue on a header the headers exchange actually matches", async () => {
+        const ch = liveChannel();
+        const instance = new RabbitMQDLQInitializer({
+            channel: ch,
+            managedChannel: { addSetup: jest.fn() },
+        } as any);
         await instance.onApplicationBootstrap();
 
-        // Each workflow job queue is asserted (so bind never races a
-        // not-yet-declared queue into a 404) with the SAME args as the
-        // @RabbitSubscribe consumer — otherwise a divergent redeclare would
-        // close the channel with PRECONDITION_FAILED.
-        const assertedQueues = assertQueue.mock.calls.map((c) => c[0]);
-        expect(assertedQueues).toContain("workflow.jobs.code_review.queue");
-        expect(assertedQueues).toContain("workflow.jobs.webhook.queue");
-        expect(assertQueue).toHaveBeenCalledWith(
-            "workflow.jobs.code_review.queue",
-            expect.objectContaining({
-                durable: true,
-                arguments: expect.objectContaining({
-                    "x-queue-type": "quorum",
-                    "x-dead-letter-exchange": "workflow.exchange.dlx",
-                    "x-dead-letter-routing-key": "workflow.job.failed",
-                }),
-            }),
+        expect(ch.bindQueue).toHaveBeenCalledWith(
+            "kodus.retry.wait.5000",
+            "kodus.retry",
+            "",
+            { "x-match": "all", "kodus-retry-bucket": "5000" },
         );
-
-        // assertQueue must precede bindQueue for the same queue.
-        const firstAssert = assertQueue.mock.invocationCallOrder[0];
-        const firstBind = bindQueue.mock.invocationCallOrder.find(
-            (_, i) =>
-                bindQueue.mock.calls[i][0] === "workflow.jobs.code_review.queue",
-        );
-        expect(firstAssert).toBeLessThan(firstBind as number);
+        for (const [, , , args] of [
+            ...ch.bindQueue.mock.calls,
+            ...ch.bindExchange.mock.calls,
+        ]) {
+            const matched = Object.keys(args).filter((k) => k !== "x-match");
+            expect(matched.length).toBeGreaterThan(0);
+            expect(matched.every((k) => !k.startsWith("x-"))).toBe(true);
+        }
     });
 
     // Regression: `this.amqpConnection.channel` is a getter that throws

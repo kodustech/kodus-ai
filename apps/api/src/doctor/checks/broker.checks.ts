@@ -1,6 +1,8 @@
 import * as amqplib from 'amqplib';
 import { DataSource } from 'typeorm';
 
+import { RETRY_EXCHANGE } from '@libs/core/infrastructure/queue/config/rabbitmq-retry-topology';
+
 import {
     DoctorCheck,
     DoctorContext,
@@ -19,9 +21,6 @@ export const REVIEW_QUEUES = [
         what: 'code reviews',
     },
 ];
-
-/** Declared x-delayed-message (rabbitmq-topology.config.ts:18). */
-export const DELAYED_EXCHANGE = 'workflow.exchange.delayed';
 
 export const STALE_JOB_MINUTES = 30;
 
@@ -142,13 +141,14 @@ export function brokerCheck(probe: BrokerProbe): DoctorCheck {
                     });
                 }
 
-                if (!(await broker.exchangeExists(DELAYED_EXCHANGE))) {
+                // Entry of the retry path every app declares on startup.
+                if (!(await broker.exchangeExists(RETRY_EXCHANGE))) {
                     results.push({
-                        check: 'broker.delayed_plugin',
+                        check: 'broker.retry_path',
                         status: 'fail',
-                        title: 'The message queue cannot schedule delayed jobs.',
-                        impact: 'Retries and scheduled review steps are lost.',
-                        fix: `Enable the rabbitmq_delayed_message_exchange plugin (exchange ${DELAYED_EXCHANGE} is missing), or use the kodus-rabbitmq image, then restart the worker.`,
+                        title: 'The message queue cannot schedule retries.',
+                        impact: 'A job that fails once is not retried.',
+                        fix: `Restart the worker: it declares exchange ${RETRY_EXCHANGE} and its wait queues on startup. No broker plugin is needed.`,
                     });
                 }
             } finally {
