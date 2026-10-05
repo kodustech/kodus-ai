@@ -3043,6 +3043,13 @@ export class GitlabService implements Omit<
     async createMergeRequestWebhook(params: any) {
         const { organizationAndTeamData } = params;
 
+        // When this run began observing. The failure record carries the moment
+        // it was written, and a run whose observation predates the stored one
+        // does not write at all — the caller fires this method without awaiting
+        // it, so two saves can finish out of order and the older one must not
+        // erase or resurrect what the newer one recorded (#2003 review).
+        const startedAt = new Date().toISOString();
+
         const webhookUrl = process.env.API_GITLAB_CODE_MANAGEMENT_WEBHOOK; // Replace with your webhook URL
 
         // Read the selection first: if auth resolution fails, the failure still
@@ -3107,6 +3114,7 @@ export class GitlabService implements Omit<
                     organizationAndTeamData,
                     selection,
                     this.failuresForSelection(selection, error),
+                    startedAt,
                 );
                 throw error;
             }
@@ -3157,6 +3165,7 @@ export class GitlabService implements Omit<
                 organizationAndTeamData,
                 selection,
                 failures,
+                startedAt,
             );
         } catch (error) {
             // The caller fires this method unawaited and only swallows the
@@ -3190,6 +3199,7 @@ export class GitlabService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData,
         selection: Repositories[],
         failures: Record<string, { reason: string; at: string }>,
+        startedAt: string,
     ): Promise<void> {
         let currentRepositories: Repositories[];
 
@@ -3216,6 +3226,7 @@ export class GitlabService implements Omit<
                     this.recordWebhookCreationFailures(
                         organizationAndTeamData,
                         failures,
+                        startedAt,
                     ),
             );
             return;
@@ -3228,6 +3239,7 @@ export class GitlabService implements Omit<
                     this.recordWebhookCreationFailures(
                         organizationAndTeamData,
                         failures,
+                        startedAt,
                     ),
             );
             return;
@@ -3314,6 +3326,7 @@ export class GitlabService implements Omit<
     private async recordWebhookCreationFailures(
         organizationAndTeamData: OrganizationAndTeamData,
         failures: Record<string, { reason: string; at: string }>,
+        startedAt: string,
     ): Promise<void> {
         try {
             const integration = await this.integrationService.findOne({
@@ -3328,12 +3341,43 @@ export class GitlabService implements Omit<
                 return;
             }
 
+            // A run that began observing BEFORE the stored record was written
+            // must not overwrite it: the caller fires createMergeRequestWebhook
+            // without awaiting it, so a save that started earlier can finish
+            // later and would otherwise resurrect a failure a newer save just
+            // cleared, or erase the one the newer save surfaced (#2003 review).
+            // The record carries when it was written, so the stale run is a
+            // no-op instead of a blind wholesale replace.
+            const stored = await this.integrationConfigService.findIntegrationConfigFormatted<{
+                recordedAt?: string;
+                failures?: Record<string, { reason: string; at: string }>;
+            }>(
+                IntegrationConfigKey.WEBHOOK_CREATION_FAILURES,
+                organizationAndTeamData,
+            );
+
+            if (stored?.recordedAt && stored.recordedAt > startedAt) {
+                this.logger.log({
+                    message:
+                        'Skipping the webhook failure record: a newer reconciliation already wrote it',
+                    context: GitlabService.name,
+                    serviceName: 'GitlabService recordWebhookCreationFailures',
+                    metadata: {
+                        organizationId:
+                            organizationAndTeamData?.organizationId,
+                        teamId: organizationAndTeamData?.teamId,
+                    },
+                });
+                return;
+            }
+
             // Replaced wholesale on every save: the loop above visits every
             // selected project, so a project missing from `failures` has no
-            // creation failure left to report.
+            // creation failure left to report. `recordedAt` is what lets a
+            // later-finishing, older-observing run recognise itself as stale.
             await this.integrationConfigService.createOrUpdateConfig(
                 IntegrationConfigKey.WEBHOOK_CREATION_FAILURES,
-                failures,
+                { recordedAt: new Date().toISOString(), failures },
                 integration.uuid,
                 organizationAndTeamData,
             );

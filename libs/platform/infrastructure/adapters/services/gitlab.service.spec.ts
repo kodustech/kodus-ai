@@ -653,9 +653,15 @@ describe('GitlabService', () => {
             add: jest.Mock;
         }) => {
             const createOrUpdateConfig = jest.fn().mockResolvedValue(undefined);
+            // The writer reads the stored record first to refuse a stale
+            // overwrite (#2003 review). Default: nothing stored yet.
+            const findIntegrationConfigFormatted = jest
+                .fn()
+                .mockResolvedValue(undefined);
 
             (service as any).integrationConfigService = {
                 createOrUpdateConfig,
+                findIntegrationConfigFormatted,
             };
 
             jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({
@@ -679,7 +685,7 @@ describe('GitlabService', () => {
 
             process.env.API_GITLAB_CODE_MANAGEMENT_WEBHOOK = webhookUrl;
 
-            return { createOrUpdateConfig, gitlabApi };
+            return { createOrUpdateConfig, gitlabApi, findIntegrationConfigFormatted };
         };
 
         afterEach(() => {
@@ -731,6 +737,34 @@ describe('GitlabService', () => {
             expect(order).toEqual(['start-1', 'end-1', 'start-2', 'end-2']);
         });
 
+        it('a stale run does not overwrite a record a newer run already wrote', async () => {
+            // The queue orders writes but not OBSERVATIONS: a save that started
+            // earlier can reach the write last. The record carries when it was
+            // written, so the stale run must recognise itself and leave it
+            // alone — otherwise it resurrects a failure a newer save just
+            // cleared, or erases the one the newer save surfaced (#2003
+            // review).
+            const { createOrUpdateConfig, findIntegrationConfigFormatted } =
+                setUpWebhookCreation({
+                    repositories: [{ id: 11 }],
+                    add: jest.fn().mockResolvedValue({}),
+                });
+            // A record written AFTER this run began observing (its `startedAt`
+            // is the moment the call entered, i.e. about now).
+            findIntegrationConfigFormatted.mockResolvedValue({
+                recordedAt: new Date(Date.now() + 60_000).toISOString(),
+                failures: {
+                    '99': { reason: 'newer', at: new Date().toISOString() },
+                },
+            });
+
+            await service.createMergeRequestWebhook({
+                organizationAndTeamData,
+            });
+
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
+        });
+
         it('records a failure for every selected project when auth resolution fails', async () => {
             // An expired or revoked token fails for every project at once: the
             // alert has to name them all, otherwise the silent failure #1983 is
@@ -754,11 +788,13 @@ describe('GitlabService', () => {
             expect(createOrUpdateConfig).toHaveBeenCalledWith(
                 IntegrationConfigKey.WEBHOOK_CREATION_FAILURES,
                 expect.objectContaining({
-                    '11': expect.objectContaining({
-                        reason: expect.stringContaining('401'),
-                    }),
-                    '22': expect.objectContaining({
-                        reason: expect.stringContaining('401'),
+                    failures: expect.objectContaining({
+                        '11': expect.objectContaining({
+                            reason: expect.stringContaining('401'),
+                        }),
+                        '22': expect.objectContaining({
+                            reason: expect.stringContaining('401'),
+                        }),
                     }),
                 }),
                 'integration-1',
@@ -824,11 +860,13 @@ describe('GitlabService', () => {
             expect(createOrUpdateConfig).toHaveBeenCalledWith(
                 IntegrationConfigKey.WEBHOOK_CREATION_FAILURES,
                 expect.objectContaining({
-                    '11': expect.objectContaining({
-                        reason: expect.stringContaining('401'),
-                    }),
-                    '22': expect.objectContaining({
-                        reason: expect.stringContaining('401'),
+                    failures: expect.objectContaining({
+                        '11': expect.objectContaining({
+                            reason: expect.stringContaining('401'),
+                        }),
+                        '22': expect.objectContaining({
+                            reason: expect.stringContaining('401'),
+                        }),
                     }),
                 }),
                 'integration-1',
@@ -919,16 +957,20 @@ describe('GitlabService', () => {
             expect(createOrUpdateConfig).toHaveBeenCalledWith(
                 IntegrationConfigKey.WEBHOOK_CREATION_FAILURES,
                 {
-                    '22': expect.objectContaining({
-                        reason: expect.stringContaining('HTTP 403'),
-                        at: expect.any(String),
-                    }),
+                    recordedAt: expect.any(String),
+                    failures: {
+                        '22': expect.objectContaining({
+                            reason: expect.stringContaining('HTTP 403'),
+                            at: expect.any(String),
+                        }),
+                    },
                 },
                 'integration-1',
                 organizationAndTeamData,
             );
 
-            const [, failures] = createOrUpdateConfig.mock.calls[0];
+            const [, written] = createOrUpdateConfig.mock.calls[0];
+            const failures = written.failures;
 
             expect(failures['22'].reason).toContain('Maintainer or Owner');
             expect(failures['11']).toBeUndefined();
@@ -948,7 +990,10 @@ describe('GitlabService', () => {
 
             expect(createOrUpdateConfig).toHaveBeenCalledWith(
                 IntegrationConfigKey.WEBHOOK_CREATION_FAILURES,
-                {},
+                {
+                    recordedAt: expect.any(String),
+                    failures: {},
+                },
                 'integration-1',
                 organizationAndTeamData,
             );
@@ -992,6 +1037,7 @@ describe('GitlabService', () => {
                         at: expect.any(String),
                     }),
                 }),
+                expect.any(String),
             );
         });
     });

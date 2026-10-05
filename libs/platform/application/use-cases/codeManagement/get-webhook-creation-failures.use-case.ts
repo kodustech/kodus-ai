@@ -46,15 +46,16 @@ export class GetWebhookCreationFailuresUseCase implements IUseCase {
                 );
             }
 
-            const failures =
-                await this.integrationConfigService.findIntegrationConfigFormatted<
-                    Record<string, WebhookCreationFailure>
-                >(
+            const stored =
+                await this.integrationConfigService.findIntegrationConfigFormatted<{
+                    recordedAt?: string;
+                    failures?: Record<string, WebhookCreationFailure>;
+                }>(
                     IntegrationConfigKey.WEBHOOK_CREATION_FAILURES,
                     organizationAndTeamData,
                 );
 
-            return { failures: failures ?? {} };
+            return { failures: stored?.failures ?? {} };
         } catch (error) {
             this.logger.error({
                 message: 'Error while reading webhook creation failures',
