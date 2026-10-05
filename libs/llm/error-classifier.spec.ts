@@ -450,6 +450,13 @@ describe('classifyLLMError', () => {
             'proxy hop failed: ERR_502',
             'gateway returned http504',
             'connect failed with 502badgateway via the mesh proxy',
+            // A JSON body (or a message) puts the separator -- and a quote --
+            // between the keyword and the digits; the keyword carries it, the
+            // bare alternative keeps refusing it (#1898 review).
+            'the upstream returned code:503',
+            'the upstream returned status=503',
+            'a JSON body {"code":503} came back from the proxy',
+            'a JSON body {"statusCode":503} came back from the proxy',
         ])('status glued to a word (%s) → TRANSIENT', (msg) => {
             const err = new Error(msg);
             expect(classifyLLMError(err).category).toBe(

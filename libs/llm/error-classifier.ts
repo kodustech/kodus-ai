@@ -412,16 +412,20 @@ function matchByMessage(lower: string): LlmErrorCategory {
         // 530 over a 5xx, proxy passthrough). Guard so a standalone 5xx is not
         // flanked by digits (a number "5032" is not a status), and allow a
         // letter/separator adjacency ONLY when it sits behind an explicit
-        // status keyword (`HTTP_503`, `ERR_502`, `http504`, `status: 530`,
-        // `code_503`). A bare digit glued to arbitrary letters or a separator
-        // or annotation punctuation (`(503`, `#503`, `$503`, `=503`, `(`, `[`,
-        // `{`, `#`, `$`, `;`, `:`, `=`) is a request id, hash, URL path,
-        // base64 blob, issue number or a thousands-separated number
-        // (`req_a503b`, `req_503ab`, `trace-503x`, `...d503e...`,
-        // `/releases/503`, `1,503 tokens`, `+503`), NOT a status — matching it would mis-classify a permanent failure as
-        // TRANSIENT, wrongly cascade to the paid fallback and surface a wrong
-        // message (#1875, #1898 review).
-        /(?<![a-z0-9_.,+/$#;:=(\[{-])(?:502|503|504|530)(?!\d)|(?<![a-z0-9])(?:http|err|error|status|code)[_-]?(?:502|503|504|530)(?!\d)/.test(
+        // status keyword (`HTTP_503`, `ERR_502`, `http504`, `code_503`,
+        // `code:503`, `status=503`, `"code":503`, `"statusCode":503`). The
+        // keyword carries the separator too (an optional quote for a JSON body,
+        // then `_`/`-`/`:`/`=`): `statuscode` is spelled out because the bare
+        // `code` tail of `statuscode` has no boundary to sit behind. A bare
+        // digit glued to arbitrary letters or a separator or annotation
+        // punctuation (`(503`, `#503`, `$503`, `=503`, `(`, `[`, `{`, `#`,
+        // `$`, `;`, `:`, `=`) is a request id, hash, URL path, base64 blob,
+        // issue number or a thousands-separated number (`req_a503b`,
+        // `req_503ab`, `trace-503x`, `...d503e...`, `/releases/503`,
+        // `1,503 tokens`, `+503`), NOT a status — matching it would
+        // mis-classify a permanent failure as TRANSIENT, wrongly cascade to the
+        // paid fallback and surface a wrong message (#1875, #1898 review).
+        /(?<![a-z0-9_.,+/$#;:=(\\[{-])(?:502|503|504|530)(?!\d)|(?<![a-z0-9])(?:http|err|error|statuscode|status|code)["']?[_-]?[:=]?(?:502|503|504|530)(?!\d)/.test(
             lower,
         )
     ) {
