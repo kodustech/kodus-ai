@@ -257,7 +257,12 @@ describe('PullRequestsService.aggregateAndSaveDataStructure — existing-PR iden
         );
     }
 
-    it('looks the existing PR up by repository.id, never by repository.name', async () => {
+    it('looks the existing PR up by repository.id and stops there when it matches', async () => {
+        const byId = { uuid: 'by-id' };
+        pullRequestsRepository.findByNumberAndRepositoryId.mockResolvedValue(
+            byId,
+        );
+
         await callSave(stubRepository);
 
         expect(
@@ -269,12 +274,48 @@ describe('PullRequestsService.aggregateAndSaveDataStructure — existing-PR iden
         ).not.toHaveBeenCalled();
     });
 
+    it('retries by name when the id lookup misses, so a legacy document is updated not duplicated', async () => {
+        // A document stored before the id column was populated matches by name;
+        // without the retry the save would create a second record for the same
+        // PR and split its suggestions across two (#2076 review).
+        const byName = { uuid: 'by-name' };
+        pullRequestsRepository.findByNumberAndRepositoryId.mockResolvedValue(
+            null,
+        );
+        pullRequestsRepository.findByNumberAndRepositoryName.mockResolvedValue(
+            byName,
+        );
+
+        await callSave(stubRepository);
+
+        expect(
+            pullRequestsRepository.findByNumberAndRepositoryName,
+        ).toHaveBeenCalledWith(2, stubRepository.name, stubOrg);
+        expect((service as any).update).toHaveBeenCalledWith(
+            byName,
+            expect.anything(),
+        );
+    });
+
     it('falls back to the name only when the provider gave no repository id', async () => {
         await callSave({ name: 'kody-format-probe-1822' });
 
         expect(
             pullRequestsRepository.findByNumberAndRepositoryName,
         ).toHaveBeenCalledWith(2, 'kody-format-probe-1822', stubOrg);
+        expect(
+            pullRequestsRepository.findByNumberAndRepositoryId,
+        ).not.toHaveBeenCalled();
+    });
+
+    it('never issues an unbounded name query when there is neither an id nor a name', async () => {
+        // `{number, organizationId}` alone can match a DIFFERENT repository's
+        // PR with the same number — the cross-repo contamination #2059 fixes.
+        await callSave({});
+
+        expect(
+            pullRequestsRepository.findByNumberAndRepositoryName,
+        ).not.toHaveBeenCalled();
         expect(
             pullRequestsRepository.findByNumberAndRepositoryId,
         ).not.toHaveBeenCalled();
