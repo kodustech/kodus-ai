@@ -36,10 +36,9 @@ import {
  * bullets (examples untouched — ruleBlock renders them separately) nearly
  * doubled occurrence-recall on terse models (gpt-5.4-mini 32%→59% avg) with no
  * regression on strong ones (kimi peak 95%, glm stable). Validated on the
- * Rails convention analog cases; see docs/plans/
- * kody-rules-summary-productization.md — including the variants that were
- * tried and REJECTED (examples-first ordering, verdict checklists, a third
- * "when not to flag" section — all reduced recall; don't re-add them).
+ * Rails convention analog cases (#1567). Variants tried and REJECTED
+ * (examples-first ordering, verdict checklists, a third "when not to flag"
+ * section) all reduced recall; don't re-add them.
  *
  * The summary is consumed EXCLUSIVELY by the review path (resolveForReview);
  * UI/sync/export always see the full rule text. `sourceHash` (sha256 of the

@@ -48,8 +48,8 @@ the default branch.
 
 ## Internal engineering docs
 
-Engineering plans, runbooks, and dev-only guides live in `docs-internal/`
-(separate from this site). Those don't ship to the public docs.
+Engineering plans and design notes live in GitHub issues, not in the repo.
+`docs-internal/` only holds the generated OpenAPI spec and Postman collection.
 
 ## Troubleshooting
 
