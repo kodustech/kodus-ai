@@ -244,3 +244,82 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — generator seed trigger', 
         expect(generateInitialKodyRulesUseCase.execute).not.toHaveBeenCalled();
     });
 });
+
+describe('UpdateOrCreateCodeReviewParameterUseCase — new team config', () => {
+    const buildWithoutConfig = () => {
+        const createOrUpdateParametersUseCase = {
+            execute: jest.fn().mockResolvedValue(true),
+        };
+        const useCase = new UpdateOrCreateCodeReviewParameterUseCase(
+            { findByKey: jest.fn().mockResolvedValue(null) } as any,
+            createOrUpdateParametersUseCase as any,
+            {
+                findIntegrationConfigFormatted: jest.fn().mockResolvedValue([]),
+            } as any,
+            { emit: jest.fn() } as any,
+            { ensure: jest.fn() } as any,
+            { detectAndSaveReferences: jest.fn() } as any,
+            { buildConfigKey: jest.fn().mockReturnValue('config-key') } as any,
+            {
+                getCentralizedRepositoryIfEnabled: jest
+                    .fn()
+                    .mockResolvedValue(null),
+                getScopedKodusConfigFileContent: jest
+                    .fn()
+                    .mockResolvedValue(null),
+                createMutationPullRequestIfEnabled: jest
+                    .fn()
+                    .mockResolvedValue({ mode: 'direct' }),
+            } as any,
+            { find: jest.fn().mockResolvedValue([]) } as any,
+            {
+                getBYOKConfig: jest.fn(),
+                getSubscriptionStatus: jest.fn(),
+            } as any,
+            { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            {
+                validateOrganizationLicense: jest.fn().mockResolvedValue({
+                    valid: true,
+                    subscriptionStatus: 'active',
+                    planType: 'teams_byok',
+                }),
+            } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
+        );
+
+        const savedGlobalConfigs = () =>
+            createOrUpdateParametersUseCase.execute.mock.calls[0][1].configs;
+
+        return { useCase, savedGlobalConfigs };
+    };
+
+    const save = (
+        useCase: UpdateOrCreateCodeReviewParameterUseCase,
+        configValue: object,
+    ) =>
+        useCase.execute({
+            configValue,
+            organizationAndTeamData: { ...ORG },
+            skipAuthorization: true,
+        } as any);
+
+    it('starts learning from past reviews off when the first save does not set it', async () => {
+        const { useCase, savedGlobalConfigs } = buildWithoutConfig();
+
+        await save(useCase, { runOnDraft: false });
+
+        expect(savedGlobalConfigs()).toEqual(
+            expect.objectContaining({ kodyRulesGeneratorEnabled: false }),
+        );
+    });
+
+    it('keeps "on" when the first save opts in', async () => {
+        const { useCase, savedGlobalConfigs } = buildWithoutConfig();
+
+        await save(useCase, { kodyRulesGeneratorEnabled: true });
+
+        expect(savedGlobalConfigs()).not.toHaveProperty(
+            'kodyRulesGeneratorEnabled',
+        );
+    });
+});

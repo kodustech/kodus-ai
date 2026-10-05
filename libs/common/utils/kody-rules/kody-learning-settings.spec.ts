@@ -32,7 +32,7 @@ describe('resolveKodyLearningSettings', () => {
     it('falls back to the defaults when nothing is configured', () => {
         expect(resolveKodyLearningSettings(undefined, 'repo-1')).toEqual({
             ideRulesSyncEnabled: false,
-            kodyRulesGeneratorEnabled: false,
+            kodyRulesGeneratorEnabled: true,
             kodyLearningExcludedReviewers: [],
         });
     });

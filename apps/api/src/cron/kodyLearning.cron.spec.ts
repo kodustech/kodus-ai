@@ -23,12 +23,7 @@ function build(opts: {
     const parametersService = {
         findByKey: jest.fn().mockResolvedValue({
             configValue: {
-                // Teams that learn from past reviews store it at global level
-                // (backfilled for teams that existed before the default
-                // turned off).
-                configs: opts.globalConfigs ?? {
-                    kodyRulesGeneratorEnabled: true,
-                },
+                configs: opts.globalConfigs ?? {},
                 repositories: opts.repoIds.map((id) => ({
                     id,
                     isSelected: true,
@@ -115,18 +110,6 @@ describe('KodyLearningCronProvider — generator setting inheritance', () => {
             { teamId: 'team-1', weeks: 1, repositoriesIds: ['own-on'] },
             'org-1',
         );
-    });
-
-    it('generates nothing for a team that never turned the generator on', async () => {
-        const { cron, generateKodyRulesUseCase } = build({
-            repoIds: ['r1'],
-            seeded: () => true,
-            globalConfigs: {},
-        });
-
-        await run(cron);
-
-        expect(generateKodyRulesUseCase.execute).not.toHaveBeenCalled();
     });
 
     it('skips a repo whose own value is "off" while global is on', async () => {
@@ -328,7 +311,7 @@ describe('KodyLearningCronProvider — backfill lock concurrency bound (pool exh
         const parametersService = {
             findByKey: jest.fn().mockResolvedValue({
                 configValue: {
-                    configs: { kodyRulesGeneratorEnabled: true },
+                    configs: {},
                     repositories: repoIds.map((id) => ({
                         id,
                         isSelected: true,

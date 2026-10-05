@@ -1,6 +1,6 @@
 import type { QueryRunner } from 'typeorm';
 
-import { BackfillKodyLearningDefaults2026100500000000 } from '../2026100500000000-BackfillKodyLearningDefaults';
+import { PinIdeRulesSyncUnderGlobalOn2026100500000000 } from '../2026100500000000-PinIdeRulesSyncUnderGlobalOn';
 
 interface Row {
     uuid: string;
@@ -33,9 +33,9 @@ function makeQueryRunner(rows: Row[]) {
 }
 
 const run = (queryRunner: QueryRunner) =>
-    new BackfillKodyLearningDefaults2026100500000000().up(queryRunner);
+    new PinIdeRulesSyncUnderGlobalOn2026100500000000().up(queryRunner);
 
-describe('BackfillKodyLearningDefaults migration', () => {
+describe('PinIdeRulesSyncUnderGlobalOn migration', () => {
     it('only reads the active code review configs', async () => {
         const { queryRunner, query } = makeQueryRunner([]);
 
@@ -46,7 +46,7 @@ describe('BackfillKodyLearningDefaults migration', () => {
         expect(sql).toMatch(/active\s*=\s*true/);
     });
 
-    it('pins the generator on at global for a team without a global value', async () => {
+    it('never touches the generator setting', async () => {
         const rows: Row[] = [
             {
                 uuid: 'team-a',
@@ -55,45 +55,15 @@ describe('BackfillKodyLearningDefaults migration', () => {
                     repositories: [{ id: 'r1', configs: {} }],
                 },
             },
-            { uuid: 'team-no-configs', configValue: { repositories: [] } },
-        ];
-        const { queryRunner } = makeQueryRunner(rows);
-
-        await run(queryRunner);
-
-        expect(rows[0].configValue.configs).toEqual({
-            automatedReviewActive: true,
-            kodyRulesGeneratorEnabled: true,
-        });
-        expect(rows[0].configValue.repositories[0].configs).toEqual({});
-        expect(rows[1].configValue.configs).toEqual({
-            kodyRulesGeneratorEnabled: true,
-        });
-    });
-
-    it('keeps a global or repository generator value that is already stored', async () => {
-        const rows: Row[] = [
-            {
-                uuid: 'team-off',
-                configValue: {
-                    configs: { kodyRulesGeneratorEnabled: false },
-                    repositories: [
-                        {
-                            id: 'r1',
-                            configs: { kodyRulesGeneratorEnabled: true },
-                        },
-                    ],
-                },
-            },
         ];
         const { queryRunner, updates } = makeQueryRunner(rows);
 
         await run(queryRunner);
 
         expect(updates).toEqual([]);
-        expect(rows[0].configValue.configs.kodyRulesGeneratorEnabled).toBe(
-            false,
-        );
+        expect(rows[0].configValue.configs).toEqual({
+            automatedReviewActive: true,
+        });
     });
 
     it('pins IDE sync off on repositories that would start inheriting a global "on"', async () => {
@@ -101,10 +71,7 @@ describe('BackfillKodyLearningDefaults migration', () => {
             {
                 uuid: 'team-ide',
                 configValue: {
-                    configs: {
-                        ideRulesSyncEnabled: true,
-                        kodyRulesGeneratorEnabled: true,
-                    },
+                    configs: { ideRulesSyncEnabled: true },
                     repositories: [
                         { id: 'inherits', configs: {} },
                         { id: 'no-configs' },
@@ -145,7 +112,7 @@ describe('BackfillKodyLearningDefaults migration', () => {
             {
                 uuid: 'team-default',
                 configValue: {
-                    configs: { kodyRulesGeneratorEnabled: true },
+                    configs: {},
                     repositories: [{ id: 'r1', configs: {} }],
                 },
             },

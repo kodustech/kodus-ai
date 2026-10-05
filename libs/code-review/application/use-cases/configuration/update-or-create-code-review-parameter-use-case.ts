@@ -32,7 +32,10 @@ import {
 } from '@libs/ai-engine/infrastructure/adapters/services/context/context-reference-detection.service';
 import { deepDifference, deepMerge } from '@libs/common/utils/deep';
 import { convertTiptapJSONToText } from '@libs/common/utils/tiptap-json';
-import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
+import {
+    buildDefaultGlobalCodeReviewConfig,
+    getDefaultKodusConfigFile,
+} from '@libs/common/utils/validateCodeReviewConfigFile';
 import { IntegrationConfigKey, ParametersKey } from '@libs/core/domain/enums';
 import {
     CodeReviewConfigWithoutLLMProvider,
@@ -619,8 +622,10 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
     ) {
         const defaultConfig: ConfigDelta = getDefaultKodusConfigFile();
 
-        const sanitizedConfigValue =
-            this.stripCustomMessagesFromConfig(configValue);
+        const sanitizedConfigValue = this.stripCustomMessagesFromConfig({
+            ...buildDefaultGlobalCodeReviewConfig().configs,
+            ...configValue,
+        });
 
         const updatedConfigValue = this.stripCustomMessagesFromConfig(
             deepDifference(defaultConfig, sanitizedConfigValue),
