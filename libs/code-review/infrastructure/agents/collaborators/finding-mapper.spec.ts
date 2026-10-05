@@ -77,6 +77,24 @@ describe('mapAgentFindings', () => {
             ctx(),
         );
         expect(r.suggestions).toHaveLength(0);
+        expect(r.droppedForPath).toBe(1);
+    });
+
+    it('counts path drops, not findings dropped for other reasons (#2066)', () => {
+        const r = mapAgentFindings(
+            {
+                findings: {
+                    suggestions: [
+                        { suggestionContent: 'x', relevantFile: 'other.ts' },
+                        { suggestionContent: 'y', relevantFile: 'src/a.ts' },
+                        { relevantFile: 'gone.ts' } as any,
+                    ],
+                },
+            },
+            ctx(),
+        );
+        expect(r.suggestions).toHaveLength(1);
+        expect(r.droppedForPath).toBe(1);
     });
 
     it('keeps + canonicalizes a matching finding (normalized path)', () => {

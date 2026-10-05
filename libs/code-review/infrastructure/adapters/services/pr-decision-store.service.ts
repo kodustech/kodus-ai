@@ -1,10 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 
-import type {
-    LoadPrDecisionsParams,
-    PrDecisionOutcome,
-    PrDecisionRecord,
-    PrDecisionStore,
+import {
+    MAX_PR_DECISIONS,
+    type LoadPrDecisionsParams,
+    type PrDecisionOutcome,
+    type PrDecisionRecord,
+    type PrDecisionStore,
 } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 import { createLogger } from '@libs/core/log/logger';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
@@ -62,7 +64,21 @@ export function toRecordFromPrLevel(
     suggestion: ISuggestionByPR,
 ): PrDecisionRecord {
     return {
-        suggestionId: suggestion.id,
+        // Older PR-level suggestions reused the rule UUID across comments.
+        // Identify the posted comment rather than that source ID. Legacy
+        // records without comment metadata get a stable reference from the
+        // fields that distinguish their review round and finding.
+        suggestionId: suggestion.comment?.id
+            ? `pr-comment-${suggestion.comment.id}`
+            : `pr-legacy-${createHash('sha256')
+                  .update(
+                      JSON.stringify([
+                          suggestion.id,
+                          suggestion.createdAt ?? '',
+                          suggestion.suggestionContent,
+                      ]),
+                  )
+                  .digest('hex')}`,
         suggestionContent:
             suggestion.fullExplanation || suggestion.suggestionContent,
         label: suggestion.label,
@@ -97,23 +113,22 @@ export class PrDecisionStoreService implements PrDecisionStore {
     async load(
         params: LoadPrDecisionsParams,
     ): Promise<readonly PrDecisionRecord[]> {
-        if (!params.filePaths.length) {
-            return [];
-        }
-
         const [fileScoped, prLevel] = await Promise.allSettled([
-            this.pullRequestsRepository.findSuggestionsByPRAndFilenames(
+            this.pullRequestsRepository.findSuggestionsOnPR(
                 params.prNumber,
                 params.repositoryFullName,
-                params.filePaths,
                 params.organizationId,
                 DeliveryStatus.SENT,
+                MAX_PR_DECISIONS,
             ),
+            // Same cap as the file-level read: the most recent
+            // MAX_PR_DECISIONS on the whole PR, PR-level included.
             this.pullRequestsRepository.findPrLevelSuggestionsByPR(
                 params.prNumber,
                 params.repositoryFullName,
                 params.organizationId,
                 DeliveryStatus.SENT,
+                MAX_PR_DECISIONS,
             ),
         ]);
 

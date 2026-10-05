@@ -738,6 +738,29 @@ describe('CommentManagerService — pure helpers', () => {
             expect(out).not.toContain('{{ruleTitles}}');
         });
 
+        it('renders none of the admin-facing losses on the PR (#2066)', () => {
+            const adminOnly = [
+                'SANDBOX_UNAVAILABLE',
+                'CALLGRAPH_FAILED',
+                'SUGGESTIONS_DROPPED_PATH_MISMATCH',
+                'KODY_RULES_PARTIAL',
+                'PROVIDER_FALLBACK',
+            ].map((kind) => ({
+                kind: kind as any,
+                reason: 'sandbox_unavailable' as const,
+                contextWindowTokens: 0,
+                modelName: 'gpt-4.1',
+                detail: 'admin only',
+                ruleTitles: ['Should not leak'],
+            }));
+            expect(
+                svc().resolveSkippedRulesNotice(
+                    adminOnly,
+                    LanguageValue.ENGLISH,
+                ),
+            ).toBeUndefined();
+        });
+
         it('falls back to en-US copy for a language without the key', () => {
             const out = svc().resolveSkippedRulesNotice(
                 [skipWarning(['Only rule'])],

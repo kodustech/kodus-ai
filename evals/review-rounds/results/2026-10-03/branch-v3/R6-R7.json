@@ -1,0 +1,366 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "judge": "gpt-5.6-luna",
+  "judgeReasoningEffort": "low",
+  "reps": 3,
+  "engine": {
+    "commit": "14439a95335f07c92cb445ccea3069a9b2904e30",
+    "sourceDigest": "0e0cd300fc96bc97368cb5f8f3b15cae405c3de01769dc360fb5c578754e4bc5"
+  },
+  "startedAt": "2026-10-03T21:56:47.394Z",
+  "updatedAt": "2026-10-03T22:16:38.782Z",
+  "complete": true,
+  "selectedCases": [
+    "R6-incomplete-fix",
+    "R7-refines-prior"
+  ],
+  "summary": {
+    "measured": 6,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 6,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "index-reference (#2039)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      }
+    },
+    "byCase": {
+      "R6-incomplete-fix · credit-negative-repeat [not_deliver, proposed]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 0
+      },
+      "R7-refines-prior · signal-not-passed-repeat [not_deliver, proposed]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 0
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R6-incomplete-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 128414,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "credit-negative-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R6-incomplete-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 188527,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/ledger/ledger.ts",
+          "claim": "credit (lines 9-11) still accepts zero or negative amounts, so a negative credit silently debits instead of failing. This is the same wrong-result failure in the same credit operation that a prior review decision already raised (its suggestion named credit explicitly and its outcome is partially_implemented), so per the duplicate-reporting rules this is flagged as a previously raised issue rather than a new finding; the new guard added to debit (line 5, `if (!(amount > 0)) throw new RangeError('amount must be positive')`) was verified correct for 0, negatives, NaN, undefined, null and -0 and has no callers or tests, so no caller contract is broken.",
+          "keep": false,
+          "rationale": "The finding describes credit accepting zero/negative amounts so a negative credit silently debits. PreviousReviewDecisions entry round-a-ledger (src/ledger/ledger.ts:4-10, bug) raised exactly this: \"debit and credit accept zero or negative amounts, so a negative credit silently debits ... Reject non-positive amounts in both debit and credit.\" The entry names credit explicitly and its outcome is partially_implemented (the debit guard was added; credit was left). The candidate itself acknowledges this is the same wrong-result failure in the same credit operation. Per the duplicate-reporting rules, raising again the problem a previous entry already raised is a repeat, so it must be dropped. The code confirms credit (lines 9-11) still lacks a guard, but that is precisely the unresolved part of the already-posted suggestion, not a new finding.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/ledger/ledger.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "credit-negative-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R6-incomplete-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 148542,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "credit-negative-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R7-refines-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 378863,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 6,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "signal-not-passed-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R7-refines-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 236393,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/http/client.ts",
+          "claim": "WHAT: The AbortController added on lines 2-3 is never wired to fetch — line 5 still calls fetch(url) without { signal: controller.signal }, so controller.abort() has no effect. WHY: The abort timer is inert dead code, so a server that never responds still hangs the caller forever, meaning the timeout this PR intended to add does not actually work. HOW: Pass the signal through: `const res = await fetch(url, { signal: controller.signal });`.",
+          "keep": false,
+          "rationale": "The technical claim is accurate: line 5 calls fetch(url) without the signal, making the AbortController inert. However, this is a repeat of the already-posted PreviousReviewDecision round-a-http (outcome: implemented), which raised the identical failure — getJson hanging forever because the timeout is ineffective, proposing an AbortController aborted after 5s. The candidate finding describes the same hang in the same operation and explicitly argues the applied fix is incomplete. The rules mandate dropping a finding that re-raises a previously posted problem, \"also when it says the developer's fix is incomplete,\" and to judge by failure rather than the new cause named. Same failure, same operation → drop.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/http/client.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "signal-not-passed-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R7-refines-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 109231,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/http/client.ts",
+          "claim": "WHAT: The AbortController is created and aborted after 5s, but its `signal` is never passed to `fetch` — `fetch(url)` is called without `{ signal: controller.signal }`. WHY: `controller.abort()` has no effect on the in-flight request, so the 5s timeout does nothing and a server that never responds still hangs the caller forever, which is exactly the failure the earlier timeout suggestion (round-a-http) was meant to fix. HOW: pass the signal to fetch: `const res = await fetch(url, { signal: controller.signal });`.",
+          "keep": false,
+          "rationale": "The finding is factually accurate (fetch is called without the signal, so the AbortController has no effect), but it re-raises the exact problem already posted on this PR as round-a-http: \"getJson calls fetch with no timeout, so a server that never answers hangs the caller forever.\" The consequence — a non-responding server hangs the caller forever in the same getJson operation — is identical. Per the rules, a finding is a repeat even when it frames itself as \"the developer's fix is incomplete\" and blames a new cause (the unwired signal). Applying the earlier suggestion (adding the AbortController) introduced no new defect, so this is not a distinct consequence of the fix; it is the same hang the earlier entry already covered.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/http/client.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "signal|AbortController|fetch\\(",
+                "path": "src/http/client.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 6,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "signal-not-passed-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

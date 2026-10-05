@@ -163,6 +163,8 @@ export type CodeSuggestion = {
     deliveryStatus?: DeliveryStatus;
     implementationStatus?: ImplementationStatus;
     brokenKodyRulesIds?: string[];
+    /** Earlier Kody suggestion on this PR that this one revises (#2039/#2020). */
+    revisesSuggestionId?: string;
     clusteringInformation?: {
         type?: ClusteringType;
         relatedSuggestionsIds?: string[];

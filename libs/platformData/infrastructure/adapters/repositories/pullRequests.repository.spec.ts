@@ -385,7 +385,48 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
         });
     });
 
+    describe('findSuggestionsOnPR (PrDecisionStore read, whole PR)', () => {
+        const run = async () => {
+            (exec as jest.Mock).mockResolvedValueOnce([]);
+            await repo.findSuggestionsOnPR(42, 'kodustech/kodus-ai', 'org-A', 'sent' as any, 40);
+            return aggregate.mock.calls[0][0];
+        };
+
+        it('includes organizationId AND repository.fullName in the FIRST $match (multi-tenant + cross-repo scope)', async () => {
+            const pipeline = await run();
+            expect(pipeline[0]?.$match).toEqual({
+                'number': 42,
+                'repository.fullName': 'kodustech/kodus-ai',
+                'organizationId': 'org-A',
+            });
+        });
+
+        it('reads every file of the PR (no file filter), only the given deliveryStatus', async () => {
+            const pipeline = await run();
+            expect(pipeline.some((stage: any) => stage.$match?.['files.path'])).toBe(false);
+            expect(pipeline).toContainEqual({ $match: { 'files.suggestions.deliveryStatus': 'sent' } });
+        });
+
+        it('keeps the most recent `limit` — sorted newest first, then limited, inside the query', async () => {
+            const pipeline = await run();
+            const sort = pipeline.findIndex((stage: any) => stage.$sort);
+            const limit = pipeline.findIndex((stage: any) => stage.$limit);
+            expect(pipeline[sort]).toEqual({ $sort: { createdAt: -1 } });
+            expect(pipeline[limit]).toEqual({ $limit: 40 });
+            expect(limit).toBe(sort + 1);
+        });
+    });
+
     describe('findPrLevelSuggestionsByPR (issue #1313 Fase 1b — PR-level PrDecisionStore read)', () => {
+        it('keeps the most recent `limit` PR-level suggestions when given one (default 5)', async () => {
+            (exec as jest.Mock).mockResolvedValue([]);
+            await repo.findPrLevelSuggestionsByPR(42, 'kodustech/kodus-ai', 'org-A', 'sent' as any, 40);
+            await repo.findPrLevelSuggestionsByPR(42, 'kodustech/kodus-ai', 'org-A', 'sent' as any);
+            const sliceOf = (call: number) => JSON.stringify(aggregate.mock.calls[call][0]).match(/"\$slice":\[.*?,(\d+)\]/)?.[1];
+            expect(sliceOf(0)).toBe('40');
+            expect(sliceOf(1)).toBe('5');
+        });
+
         it('includes organizationId AND repository.fullName in the FIRST $match (multi-tenant + cross-repo scope)', async () => {
             (exec as jest.Mock).mockResolvedValueOnce([]);
 

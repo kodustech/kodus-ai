@@ -582,7 +582,9 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
             ...over,
         });
 
-        it('scopes the FILE shard to that file only — never leaks another file\'s decision', async () => {
+        // #2020: a violation repeated after the code moved to another file
+        // must still be recognized — every shard sees the PR's history.
+        it('gives the FILE shard the PR\'s whole history, not only its own file', async () => {
             let fileUser = '';
             const run: RunJudge = async ({ filename, user }) => {
                 if (filename === 'src/a.ts') fileUser = user;
@@ -603,7 +605,28 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
             });
             expect(fileUser).toContain('<PreviousReviewDecisions>');
             expect(fileUser).toContain('SAME FILE');
-            expect(fileUser).not.toContain('OTHER FILE');
+            expect(fileUser).toContain('OTHER FILE');
+        });
+
+        // #2039: round A was a Kody Rule finding; a rule finding that revises an
+        // earlier suggestion must be able to say which one.
+        it('a violation can name the earlier suggestion it revises; null means none', async () => {
+            const run: RunJudge = async () => [
+                { ruleId: 1, relevantLinesStart: 1, relevantLinesEnd: 1, suggestionContent: 'revises', improvedCode: 'y', revisesSuggestionId: 'sug-1' },
+                { ruleId: 1, relevantLinesStart: 1, relevantLinesEnd: 1, suggestionContent: 'fresh', improvedCode: 'z', revisesSuggestionId: null },
+            ] as RawShardViolation[];
+            const out = await judgeKodyRulesSharded({
+                changedFiles: [file('src/a.ts', '1 +x')],
+                rules: [{ uuid: 'r1', title: 't', rule: 'r', path: '**/*.ts' }],
+                runJudge: run,
+                previousDecisions: [decision({ relevantFile: 'src/a.ts' })],
+            });
+            const byText = Object.fromEntries(out.violations.map((v) => [v.suggestionContent, v]));
+            expect(byText.revises.revisesSuggestionId).toBe('sug-1');
+            expect('revisesSuggestionId' in byText.fresh).toBe(false);
+            expect(shardViolationsWireSchema.jsonSchema).toMatchObject({
+                properties: { violations: { items: { required: expect.arrayContaining(['revisesSuggestionId']) } } },
+            });
         });
 
         it('gives the PR shard the FULL list — file-level AND PR-level', async () => {

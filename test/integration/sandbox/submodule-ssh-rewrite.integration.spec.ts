@@ -29,10 +29,21 @@ const GIT_ENV = {
     GIT_CONFIG_NOSYSTEM: '1',
     HOME: '/nonexistent',
 };
+// Without the scrub, GIT_DIR from a git hook sends these commits and pushes to
+// the caller's repository instead of the temp ones.
+function scrubbedGitEnv(): NodeJS.ProcessEnv {
+    const env: NodeJS.ProcessEnv = {};
+    for (const [key, value] of Object.entries(process.env)) {
+        if (key.startsWith('GIT_') && key !== 'GIT_EXEC_PATH') continue;
+        env[key] = value;
+    }
+    return env;
+}
+
 const git = (args: string[], cwd?: string) =>
     execFileAsync('git', args, {
         cwd,
-        env: { ...process.env, ...GIT_ENV },
+        env: { ...scrubbedGitEnv(), ...GIT_ENV },
     } as any);
 
 const maybe =
@@ -162,7 +173,7 @@ maybe('an ssh submodule is fetched over https', () => {
             {
                 cwd: superDir,
                 env: {
-                    ...process.env,
+                    ...scrubbedGitEnv(),
                     ...GIT_ENV,
                     // Two pairs on the same channel the plan uses. The second
                     // is test scaffolding only: git refuses the `file`

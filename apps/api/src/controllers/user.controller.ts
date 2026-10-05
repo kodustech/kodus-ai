@@ -127,7 +127,10 @@ export class UsersController {
     })
     @ApiCreatedResponse({ type: ApiObjectResponseDto })
     public async joinOrganization(@Body() body: JoinOrganizationDto) {
-        return await this.joinOrganizationUseCase.execute(body);
+        return await this.joinOrganizationUseCase.execute(
+            body,
+            this.request.user,
+        );
     }
 
     @Patch('/marketing-survey')

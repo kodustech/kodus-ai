@@ -9,10 +9,15 @@ export class GetSSOConnectionTestResultUseCase {
         private readonly ssoTestSessionService: SSOTestSessionService,
     ) {}
 
-    async execute(sessionId: string) {
+    async execute(sessionId: string, organizationId: string) {
         const session = await this.ssoTestSessionService.getSession(sessionId);
 
-        if (!session) {
+        // A session of another organization answers like a missing one.
+        if (
+            !session ||
+            !organizationId ||
+            session.organizationId !== organizationId
+        ) {
             throw new NotFoundException({
                 message: 'SSO test session not found',
                 code: 'SSO_TEST_SESSION_NOT_FOUND',

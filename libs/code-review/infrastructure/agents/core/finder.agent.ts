@@ -38,6 +38,7 @@ import { buildToolEvidenceSummary } from '@libs/code-review/infrastructure/agent
 import { supportsStrictToolsForRun } from '@libs/code-review/infrastructure/agents/core/model-strictness';
 import type { ToolEvidenceSummary } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
+import { formatPreviousDecisions } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
 import type {
     Verdict,
     VerdictParseMode,
@@ -81,6 +82,8 @@ export interface FinderSuggestion {
     severity?: 'critical' | 'high' | 'medium' | 'low';
     confidence?: number;
     ruleUuid?: string;
+    /** Id of the earlier suggestion on this PR this finding revises (#2039). */
+    revisesSuggestionId?: string;
 }
 
 /** JSON schema for submitResult — mirrors the legacy _findingsSchema. */
@@ -146,6 +149,33 @@ export const submitResultTool: AgentTool = {
     execute: async () => ({ output: 'submitted' }),
 };
 
+/** submitResult with `revisesSuggestionId` on each finding (#2039/#2020).
+ *  Offered only when the PR has earlier suggestions: a first-round review sends
+ *  exactly the tool it always did, so this change cannot move its recall. */
+function withRevisionField(tool: AgentTool): AgentTool {
+    const schema = tool.inputSchema as any;
+    const items = schema.properties.suggestions.items;
+    return {
+        ...tool,
+        inputSchema: {
+            ...schema,
+            properties: {
+                ...schema.properties,
+                suggestions: {
+                    ...schema.properties.suggestions,
+                    items: {
+                        ...items,
+                        properties: {
+                            ...items.properties,
+                            revisesSuggestionId: { type: 'string' },
+                        },
+                    },
+                },
+            },
+        },
+    };
+}
+
 export interface BuildFinderSpecParams {
     systemPrompt: string;
     modelId: string;
@@ -167,6 +197,9 @@ export interface BuildFinderSpecParams {
     usageRunName?: string;
     /** Cost-span agentName (the review agent's identity name). */
     agentName?: string;
+    /** The PR has earlier suggestions: the done-tool accepts
+     *  `revisesSuggestionId` (see withRevisionField). */
+    acceptsRevisions?: boolean;
     /** Provider options attached to the system message (e.g. Anthropic prompt
      *  caching) so the long system prompt is cached across the loop's steps. */
 }
@@ -181,7 +214,9 @@ export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
         // Considers the failover target too: a strict tool built for a Gemini
         // primary must NOT be sent to an OpenAI fallback (it rejects the schema).
         {
-            ...submitResultTool,
+            ...(params.acceptsRevisions
+                ? withRevisionField(submitResultTool)
+                : submitResultTool),
             strict: supportsStrictToolsForRun(
                 params.modelId,
                 params.fallbackModelId,
@@ -367,6 +402,14 @@ const RECOVERY_SCHEMA = z.object({
     ),
 });
 
+const REVISION_RECOVERY_SCHEMA = RECOVERY_SCHEMA.extend({
+    suggestions: z.array(
+        RECOVERY_SCHEMA.shape.suggestions.element.extend({
+            revisesSuggestionId: z.string().optional(),
+        }),
+    ),
+});
+
 /** Injected capability: re-structure a prose `reasoning` into findings. The
  *  domain (finder/recall passes) depends only on this function; the adapter
  *  wires it to the concrete internal-model fallback. Undefined = recovery off. */
@@ -394,6 +437,7 @@ export async function recoverFindingsFromProse(
     byokConfig: NormalizedModel | undefined,
     organizationId: string | undefined,
     usageRunName?: string,
+    previousDecisions?: readonly PrDecisionRecord[],
 ): Promise<FinderSuggestion[]> {
     if (!looksLikeFindings(prose)) return [];
     try {
@@ -404,7 +448,9 @@ export async function recoverFindingsFromProse(
         // it is part of the same review, not a separate `other` area.
         const result = await LLM.run({
             byokConfig,
-            schema: RECOVERY_SCHEMA,
+            schema: previousDecisions?.length
+                ? REVISION_RECOVERY_SCHEMA
+                : RECOVERY_SCHEMA,
             // Original instruction text is untouched — only the trailing
             // sentence is new. It must literally contain the word "json"
             // somewhere: OpenAI (and OpenAI-compatible providers) reject a
@@ -428,7 +474,10 @@ export async function recoverFindingsFromProse(
                 'the structured schema — one entry per distinct issue, ' +
                 'using the file paths and line numbers mentioned. Do NOT ' +
                 'invent findings; only extract what is explicitly ' +
-                `described.\n\nRespond with a JSON object.\n\nANALYSIS:\n${prose}`,
+                `described.\n\nRespond with a JSON object.\n\nANALYSIS:\n${prose}` +
+                (previousDecisions?.length
+                    ? `\n\n${formatPreviousDecisions(previousDecisions)}\nPreserve the earlier suggestion's Id in revisesSuggestionId when the analysis revises it. Do not invent a relationship absent from the analysis; omit the field for unrelated findings.`
+                    : ''),
             runName: usageRunName
                 ? `${usageRunName}-recovery`
                 : 'code-review-recovery',

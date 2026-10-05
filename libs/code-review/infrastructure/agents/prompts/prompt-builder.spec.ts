@@ -201,6 +201,29 @@ describe('buildUserPrompt', () => {
         );
     });
 
+    // #2039/#2020 and repeats: each entry carries the Id a revision links to,
+    // the block forbids raising an entry's problem again whatever its Outcome,
+    // and an entry's text is bounded (it is rendered into every finder,
+    // verifier and rule-judge prompt).
+    it('renders each entry\'s Id, forbids re-raising any entry, and clips long suggestion text', () => {
+        const block = formatPreviousDecisions([
+            {
+                suggestionId: 'sug-77',
+                relevantFile: 'src/a.ts',
+                suggestionContent: 'x'.repeat(2000),
+                label: 'bug',
+                outcome: 'not_implemented',
+                decidedAt: '2026-01-01T00:00:00.000Z',
+            },
+        ]);
+
+        expect(block).toContain('Id: sug-77');
+        expect(block).toContain('never report the problem an entry raised again');
+        expect(block).toContain('revisesSuggestionId');
+        expect(block).not.toContain('x'.repeat(601));
+        expect(block).toContain('x'.repeat(600) + '…');
+    });
+
     it('labels not_implemented/pending as weak signals, never as rejection', () => {
         const block = formatPreviousDecisions([
             {

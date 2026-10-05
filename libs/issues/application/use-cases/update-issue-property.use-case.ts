@@ -1,4 +1,4 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
 import { KODY_ISSUES_MANAGEMENT_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/KodyIssuesManagement.contract';
@@ -43,8 +43,15 @@ export class UpdateIssuePropertyUseCase implements IUseCase {
     ): Promise<IssuesEntity | null> {
         const issue = await this.issuesService.findById(uuid);
 
-        if (!issue || !issue.repository?.id) {
-            throw new Error('Issue not found');
+        // The repository-scoped check below builds its subject from the
+        // caller's organization, never the issue's, so an issue of another
+        // organization must be rejected here.
+        if (
+            !issue ||
+            !issue.repository?.id ||
+            issue.organizationId !== this.request.user?.organization?.uuid
+        ) {
+            throw new NotFoundException('Issue not found');
         }
 
         await this.authorizationService.ensure({

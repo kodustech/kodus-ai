@@ -1,12 +1,10 @@
-import { Button } from "@components/ui/button";
 import { Card } from "@components/ui/card";
 import { Heading } from "@components/ui/heading";
-import { Link } from "@components/ui/link";
 import { LockIcon } from "lucide-react";
 import { cn } from "src/core/utils/components";
 import type { GateFeature, GateSurface } from "src/core/utils/gate-hit";
 
-import { GateCtaLink } from "./gate-cta-link";
+import { GateCtaArea } from "./gate-cta-link";
 
 /**
  * Renders the real (or mocked) screen behind a blur with a centered
@@ -72,48 +70,7 @@ export const LockedFeatureOverlay = ({
 
                     {details}
 
-                    {(cta || altCta) && (
-                        <div className="flex flex-col items-center gap-3">
-                            {altCta ? (
-                                <Link href={altCta.href}>
-                                    <Button
-                                        decorative
-                                        size="md"
-                                        variant="primary">
-                                        {altCta.label}
-                                    </Button>
-                                </Link>
-                            ) : (
-                                cta && (
-                                    <GateCtaLink
-                                        href={cta.href}
-                                        label={cta.label}
-                                        feature={cta.feature}
-                                        surface={cta.surface}
-                                        planType={cta.planType}
-                                        subscriptionStatus={
-                                            cta.subscriptionStatus
-                                        }
-                                        metadata={cta.metadata}
-                                    />
-                                )
-                            )}
-
-                            {altCta && cta && (
-                                <GateCtaLink
-                                    href={cta.href}
-                                    label={cta.label}
-                                    feature={cta.feature}
-                                    surface={cta.surface}
-                                    planType={cta.planType}
-                                    subscriptionStatus={cta.subscriptionStatus}
-                                    metadata={cta.metadata}
-                                    size="sm"
-                                    variant="cancel"
-                                />
-                            )}
-                        </div>
-                    )}
+                    <GateCtaArea cta={cta} altCta={altCta} />
                 </Card>
             </div>
         </div>

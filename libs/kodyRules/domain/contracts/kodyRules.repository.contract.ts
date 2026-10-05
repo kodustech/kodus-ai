@@ -15,7 +15,7 @@ export interface IKodyRulesRepository {
         kodyRules: Omit<IKodyRules, 'uuid'>,
     ): Promise<KodyRulesEntity | null>;
 
-    findById(uuid: string): Promise<IKodyRule | null>;
+    findById(uuid: string, organizationId: string): Promise<IKodyRule | null>;
     findOne(filter?: Partial<IKodyRules>): Promise<KodyRulesEntity | null>;
     find(filter?: Partial<IKodyRules>): Promise<KodyRulesEntity[]>;
     /** Projected list of org ids that have ≥1 rule — avoids loading every

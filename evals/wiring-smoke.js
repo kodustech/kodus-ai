@@ -79,6 +79,8 @@ async function main() {
     const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'eval-wiring-'));
     const finderOut = path.join(scratch, 'finder-recall-eval-fake.json');
     const traceDir = path.join(scratch, 'trace');
+    const reviewCasesFile = path.join(scratch, 'review-cases.json');
+    fs.writeFileSync(reviewCasesFile, JSON.stringify({ cases: require('./review-rounds/cases').cases }));
 
     const env = {
         ...process.env,
@@ -121,6 +123,8 @@ async function main() {
         { name: 'anchoring', model: true, args: ['evals/anchoring/anchor-eval.js', '--model=eval-fake', '--limit=1'] },
         { name: 'pr-summary', model: true, args: ['evals/pr-summary/run.js', '--model=eval-fake', '--gate'] },
         { name: 'reply-addressing', model: true, args: ['evals/reply-addressing/run.js', '--model=eval-fake', '--limit=2'] },
+        { name: 'review-rounds', model: true, args: ['evals/review-rounds/run.js', '--model=eval-fake', `--cases-file=${reviewCasesFile}`, '--case=R2,K1', '--reps=1', `--output=${path.join(scratch, 'review-rounds.json')}`] },
+        { name: 'review-lifecycle', model: true, args: ['evals/review-rounds/lifecycle.js', '--model=eval-fake', '--reps=1', '--wiring-smoke', `--output=${path.join(scratch, 'review-lifecycle.json')}`] },
     ];
 
     const results = [];

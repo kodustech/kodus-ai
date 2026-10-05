@@ -1,4 +1,9 @@
-import { forwardRef, Inject, Injectable } from '@nestjs/common';
+import {
+    forwardRef,
+    Inject,
+    Injectable,
+    NotFoundException,
+} from '@nestjs/common';
 import { LLM } from '@libs/llm/llm';
 import {
     CODE_BASE_CONFIG_SERVICE_TOKEN,
@@ -3140,16 +3145,11 @@ export class KodyRulesSyncService {
             if (!rule.uuid) continue;
 
             if (targetStatus === KodyRulesStatus.DELETED) {
-                await this.deleteRuleInOrganizationByIdKodyRulesUseCase.execute(
+                const deleted = await this.deleteSyncedRuleIfPresent(
+                    organizationAndTeamData,
                     rule.uuid,
-                    {
-                        source: 'web',
-                        organizationId: organizationAndTeamData.organizationId,
-                        teamId: organizationAndTeamData.teamId,
-                        userId: this.systemUserInfo.userId,
-                        userEmail: this.systemUserInfo.userEmail,
-                    },
                 );
+                if (!deleted) continue;
             } else {
                 await this.createOrUpdateKodyRulesUseCase.execute(
                     { ...rule, status: targetStatus } as any,
@@ -3527,11 +3527,11 @@ export class KodyRulesSyncService {
                 // for this file.
                 if (this.shouldIgnoreFile(decoded)) {
                     if (existing?.uuid) {
-                        await this.deleteGlobalRuleByUuid({
+                        const deleted = await this.deleteGlobalRuleByUuid({
                             organizationAndTeamData,
                             uuid: existing.uuid,
                         });
-                        syncOutcome.removed.push(file.path);
+                        if (deleted) syncOutcome.removed.push(file.path);
                     }
                     continue;
                 }
@@ -3636,11 +3636,11 @@ export class KodyRulesSyncService {
                 if (rule?.status === KodyRulesStatus.DELETED) continue;
                 const sp = (rule?.sourcePath || '').split('#')[0];
                 if (sp && !seenSourcePaths.has(sp) && rule?.uuid) {
-                    await this.deleteGlobalRuleByUuid({
+                    const deleted = await this.deleteGlobalRuleByUuid({
                         organizationAndTeamData,
                         uuid: rule.uuid,
                     });
-                    syncOutcome.removed.push(sp);
+                    if (deleted) syncOutcome.removed.push(sp);
                 }
             }
 
@@ -3669,19 +3669,49 @@ export class KodyRulesSyncService {
         }
     }
 
+    /** A stale sync snapshot may contain a rule deleted by another operation. */
+    private async deleteSyncedRuleIfPresent(
+        organizationAndTeamData: OrganizationAndTeamData,
+        uuid: string,
+    ): Promise<boolean> {
+        if (!organizationAndTeamData.organizationId) {
+            throw new NotFoundException('Organization not found');
+        }
+        try {
+            const result =
+                await this.deleteRuleInOrganizationByIdKodyRulesUseCase.execute(
+                    uuid,
+                    {
+                        source: 'web',
+                        organizationId: organizationAndTeamData.organizationId,
+                        teamId: organizationAndTeamData.teamId,
+                        userId: this.systemUserInfo.userId,
+                        userEmail: this.systemUserInfo.userEmail,
+                    },
+                );
+            return result !== false;
+        } catch (error) {
+            // Only a rule that is already gone is skipped; a team outside the
+            // organization (also a NotFoundException) must still surface.
+            if (
+                error instanceof NotFoundException &&
+                error.message === 'Rule not found'
+            ) {
+                return false;
+            }
+            throw error;
+        }
+    }
+
     /** Soft-delete a single global-synced rule via the centralized-aware path. */
-    private async deleteGlobalRuleByUuid(params: {
+    private deleteGlobalRuleByUuid(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         uuid: string;
-    }): Promise<void> {
-        const { organizationAndTeamData, uuid } = params;
-        await this.deleteRuleInOrganizationByIdKodyRulesUseCase.execute(uuid, {
-            source: 'web',
-            organizationId: organizationAndTeamData.organizationId,
-            teamId: organizationAndTeamData.teamId,
-            userId: this.systemUserInfo.userId,
-            userEmail: this.systemUserInfo.userEmail,
-        });
+    }): Promise<boolean> {
+        return this.deleteSyncedRuleIfPresent(
+            params.organizationAndTeamData,
+            params.uuid,
+        );
     }
 
     /**
@@ -3708,11 +3738,11 @@ export class KodyRulesSyncService {
                 if (!this.isGlobalSyncedRule(rule, sourceRepositoryId)) continue;
                 if (rule?.status === KodyRulesStatus.DELETED) continue;
                 if (!rule?.uuid) continue;
-                await this.deleteGlobalRuleByUuid({
+                const deleted = await this.deleteGlobalRuleByUuid({
                     organizationAndTeamData,
                     uuid: rule.uuid,
                 });
-                removed += 1;
+                if (deleted) removed += 1;
             }
 
             this.logger.log({

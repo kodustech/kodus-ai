@@ -32,12 +32,9 @@ import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enu
 import { clampPatchForPersistWithFlag } from '@libs/platformData/domain/pullRequests/utils/diff-budget';
 import { UNRESOLVED_RANK_BONUS } from '@libs/platformData/domain/pullRequests/deep-link-rank';
 
-// Mirrors MAX_DECISIONS_PER_FILE in
-// libs/code-review/application/use-cases/previousReviewDecisions/build-previous-review-decisions.use-case.ts
-// (the only current caller of findSuggestionsByPRAndFilenames /
-// findPrLevelSuggestionsByPR) — capping in the aggregation itself keeps the
-// query bounded instead of fetching a whole PR's suggestion history and
-// discarding most of it in JS. If that use-case's cap changes, update this too.
+// Bounds findSuggestionsByPRAndFilenames / findPrLevelSuggestionsByPR in the
+// aggregation itself, instead of fetching a whole PR's suggestion history and
+// discarding most of it in JS.
 const PER_FILE_HISTORY_LIMIT = 5;
 
 @Injectable()
@@ -1073,11 +1070,42 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         return result;
     }
 
+    async findSuggestionsOnPR(
+        prNumber: number,
+        repoFullName: string,
+        organizationId: string,
+        deliveryStatus: DeliveryStatus,
+        limit: number,
+    ): Promise<ISuggestion[]> {
+        return this.pullRequestsModel
+            .aggregate([
+                {
+                    $match: {
+                        'number': prNumber,
+                        'repository.fullName': repoFullName,
+                        'organizationId': organizationId,
+                    },
+                },
+                { $unwind: '$files' },
+                { $unwind: '$files.suggestions' },
+                {
+                    $match: {
+                        'files.suggestions.deliveryStatus': deliveryStatus,
+                    },
+                },
+                { $replaceRoot: { newRoot: '$files.suggestions' } },
+                { $sort: { createdAt: -1 } },
+                { $limit: limit },
+            ])
+            .exec();
+    }
+
     async findPrLevelSuggestionsByPR(
         prNumber: number,
         repoFullName: string,
         organizationId: string,
         deliveryStatus: DeliveryStatus,
+        limit: number = PER_FILE_HISTORY_LIMIT,
     ): Promise<ISuggestionByPR[]> {
         const result = await this.pullRequestsModel
             .aggregate([
@@ -1120,7 +1148,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                                         sortBy: { createdAt: -1 },
                                     },
                                 },
-                                PER_FILE_HISTORY_LIMIT,
+                                limit,
                             ],
                         },
                     },

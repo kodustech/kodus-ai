@@ -229,8 +229,9 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     externalPromptContext?: IExternalPromptContext;
     /** Decisions recorded by Kodus Trace, scoped to the changed files. */
     traceDecisions?: TraceContextDecision[];
-    /** Suggestions already posted on THIS PR in a previous review round,
-     *  scoped to the changed files (issue #1313). */
+    /** Suggestions already posted on THIS PR in a previous review round —
+     *  the most recent across the whole PR, not only the changed files
+     *  (issue #1313, #2020). */
     previousDecisions?: PrDecisionRecord[];
     /** Camadas já formatadas para incluir no ContextPack (ex.: arquivos, instruções). */
     externalPromptLayers?: ContextLayer[];
@@ -278,6 +279,13 @@ export interface CodeReviewPipelineContext extends PipelineContext {
 
     /** Sandbox handle kept alive for safeguard agent verification */
     sandboxHandle?: SandboxInstance;
+
+    /**
+     * The sandbox lease was superseded (PR closed or force-pushed) while it was
+     * being acquired. The review runs without a sandbox, but it is moot, so it
+     * is not reported as a review that lost its checkout.
+     */
+    sandboxSuperseded?: boolean;
 
     /** Parameters used to create the sandbox — kept for renewal if it expires */
     getFreshCloneParams?: () => Promise<CreateSandboxParams>;

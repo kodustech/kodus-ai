@@ -24,6 +24,7 @@ jest.mock('@libs/core/log/logger', () => ({
 
 import { McpController } from '../mcp.controller';
 import { KodusIssuesMcpController } from '../kodus-issues-mcp.controller';
+import { McpAuthGuard } from '../../guards/mcp-auth.guard';
 import { McpEnabledGuard } from '../../guards/mcp-enabled.guard';
 
 function makeResponse(accept?: string) {
@@ -118,11 +119,11 @@ describe('McpController', () => {
         );
     });
 
-    it('keeps only the MCP enabled guard at controller level', () => {
+    it('requires the MCP enabled guard and caller authentication', () => {
         const guards =
             Reflect.getMetadata(GUARDS_METADATA, McpController) ?? [];
 
-        expect(guards).toEqual([McpEnabledGuard]);
+        expect(guards).toEqual([McpEnabledGuard, McpAuthGuard]);
     });
 });
 
@@ -196,11 +197,11 @@ describe('KodusIssuesMcpController', () => {
         );
     });
 
-    it('keeps only the MCP enabled guard at controller level', () => {
+    it('requires the MCP enabled guard and caller authentication', () => {
         const guards =
             Reflect.getMetadata(GUARDS_METADATA, KodusIssuesMcpController) ??
             [];
 
-        expect(guards).toEqual([McpEnabledGuard]);
+        expect(guards).toEqual([McpEnabledGuard, McpAuthGuard]);
     });
 });
