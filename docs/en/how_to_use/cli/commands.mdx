@@ -156,6 +156,8 @@ kodus auth login                              # Interactive login
 kodus auth login -e user@mail.com -p password # Non-interactive
 ```
 
+Interactive login opens the **Authorize Kodus CLI** page in your browser; click **Authorize CLI** there to finish.
+
 | Flag                    | Short | Description      |
 | ----------------------- | ----- | ---------------- |
 | `--email <email>`       | `-e`  | Account email    |
@@ -284,7 +286,7 @@ For a complete walkthrough, see: [/en/how_to_use/code_review/configs/centralized
 
 ## `kodus config repo`
 
-Inspect and update repository settings stored in Kodus. Team-key auth is required. Use `.` to target the current repository.
+Inspect and update repository settings stored in Kodus. Team-key auth is required, and the key needs **Allow repository configuration via CLI** turned on (**Organization → CLI keys**, **Configure** on the key; off by default). Use `.` to target the current repository.
 
 <Note>`kodus config repo` and `kodus config remote` are aliases for the same command group.</Note>
 
@@ -333,6 +335,8 @@ kodus config repo add-ignore-title . "^WIP:"
 ## `kodus rules`
 
 Create, update, and view Kody Rules — structured rules that Kodus applies during review.
+
+With a team key, the key needs **Allow Kody Rules management via CLI** turned on (**Organization → CLI keys**, **Configure** on the key; off by default).
 
 ### Usage
 

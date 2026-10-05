@@ -56,26 +56,25 @@ O fluxo principal é BYOK no Kodus Cloud. Instalações self-hosted podem usar v
 
 ### Opção 1 — BYOK no Kodus Cloud (recomendado)
 
-1. Na interface do Kodus, abra **Configurações → BYOK** ([app.kodus.io/byok](https://app.kodus.io/byok)).
-2. O Synthetic não está no catálogo curado — clique em **Configure manually** no final da lista de modelos. Use `?slot=fallback` na URL se estiver configurando um fallback em vez do modelo principal.
-3. Preencha o assistente:
+1. Na barra lateral, abra **AI providers** ([app.kodus.io/byok](https://app.kodus.io/byok)).
+2. O Synthetic não tem um card dedicado — na aba **Providers**, escolha **OpenAI-compatible** em **Custom**. Qual modelo roda por padrão e qual é o fallback é definido depois, na aba **Routing**.
+3. Preencha o formulário:
 
    | Campo | Valor |
    | --- | --- |
-   | **Provider** | `OpenAI Compatible` |
    | **Base URL** | `https://api.synthetic.new/openai/v1` |
    | **Model** | ex.: `hf:zai-org/GLM-4.6` (use o prefixo `hf:` e o caminho completo do HuggingFace) |
-   | **API Key** | sua chave de API do Synthetic |
-   | **Max Concurrent Requests** | comece com `3–5` para caber no orçamento de 5 horas em PRs maiores (em Advanced settings) |
+   | **API key** | sua chave de API do Synthetic |
+   | **Max concurrent requests** | comece com `3–5` para caber no orçamento de 5 horas em PRs maiores (em Advanced settings) |
 
 4. Clique em **Test & save**. O Kodus sonda o endpoint e persiste a configuração em caso de sucesso. 401 significa que a chave está errada; 404 geralmente significa que a URL base ou o caminho do modelo está errado.
 
 <Tip>
-  O orçamento de 500 mensagens por 5 horas é por assinatura, não por PR. Para times que fazem revisões contínuas pesadas, mantenha o `Max Concurrent Requests` baixo o suficiente para que um PR grande com vários arquivos não consuma toda a janela, ou distribua o trabalho entre múltiplas assinaturas.
+  O orçamento de 500 mensagens por 5 horas é por assinatura, não por PR. Para times que fazem revisões contínuas pesadas, mantenha o **Max concurrent requests** baixo o suficiente para que um PR grande com vários arquivos não consuma toda a janela, ou distribua o trabalho entre múltiplas assinaturas.
 </Tip>
 
 <Note>
-  Configure o Synthetic como **Main** e mantenha uma chave OpenAI ou Anthropic como **Fallback** — quando a janela de 5 horas se esgotar, o Kodus realiza o failover automaticamente e as revisões continuam fluindo.
+  Na aba **Routing**, defina o Synthetic como **Model for all tasks** e um modelo OpenAI ou Anthropic como **Fallback (optional)** — quando a janela de 5 horas se esgotar, o Kodus realiza o failover automaticamente e as revisões continuam fluindo.
 </Note>
 
 ### Opção 2 — Self-hosted (variáveis de ambiente)
@@ -114,8 +113,8 @@ Escolha pay-per-token (Moonshot, Fireworks, Together, Groq) se seu tráfego for 
 <AccordionGroup>
   <Accordion title="429 Too Many Requests dentro da janela de 5 horas">
     - O orçamento da assinatura é por **janela deslizante de 5 horas**, não por hora ou por mês. Verifique quantas requisições você enviou recentemente no painel do Synthetic.
-    - Aguarde a janela avançar, reduza `Max Concurrent Requests` no BYOK, ou faça upgrade/empilhe planos.
-    - Configure um provedor BYOK de `Fallback` para que as revisões continuem funcionando enquanto você está com a taxa limitada.
+    - Aguarde a janela avançar, reduza **Max concurrent requests** no modelo (**AI providers** → **Edit model**), ou faça upgrade/empilhe planos.
+    - Defina um modelo **Fallback (optional)** na aba **Routing** para que as revisões continuem funcionando enquanto você está com a taxa limitada.
   </Accordion>
 
   <Accordion title="Erros 401 / autenticação">

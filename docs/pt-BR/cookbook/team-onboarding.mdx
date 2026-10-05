@@ -12,7 +12,7 @@ Colocar um novo time em funcionamento com o Kodus leva cerca de 30 minutos. Este
 
 1. Cadastre-se em [kodus.io](https://kodus.io) ou acesse sua instância auto-hospedada
 2. Crie um novo workspace para o seu time
-3. Conecte seu provedor Git (GitHub, GitLab, Bitbucket ou Azure DevOps)
+3. Conecte seu provedor Git (GitHub, GitLab, Bitbucket, Azure Repos ou Forgejo)
 4. Selecione os repositórios a monitorar
 
 ## Passo 2 — Defina a linha de base de revisão
@@ -34,15 +34,15 @@ suggestionControl:
 automatedReviewActive: true
 ```
 
-Isso fornece revisões automatizadas com um limite razoável de sugestões. Ajuste após uma semana com base no feedback.
+Isso fornece revisões automatizadas com um limite de severidade razoável. Ajuste após uma semana com base no feedback.
 
 ## Passo 3 — Importe regras existentes de ferramentas de IDE
 
 Se o seu time já usa regras do Cursor, Copilot ou Claude:
 
-1. Vá para **Configurações de Code Review** → **Kody Rules**
+1. Na barra lateral, selecione o repositório no seletor de escopo no topo do grupo **Code review**, abra **Kody Rules**, clique em **Configuration** e ative **Auto-sync rules from repo**
 2. O Kodus detecta arquivos `.cursorrules`, `.github/copilot-instructions.md` e `.claude`
-3. Importe os que fazem sentido para revisão de código
+3. Revise as regras importadas e mantenha as que fazem sentido para revisão de código
 
 Isso evita ter que reescrever regras do zero.
 
@@ -82,8 +82,8 @@ Adicione regras para coisas que nunca devem acontecer:
 
 ```
 Name: No console.log in production code
-Scope: File
-Paths: src/**/*.ts
+Execution mode: Per file
+Path: src/**/*.ts
 Severity: High
 Instructions: Flag any console.log, console.warn, or console.error
 in fileDiff. Use the project logger instead.
@@ -92,8 +92,8 @@ Exclude test files (*.spec.ts, *.test.ts).
 
 ```
 Name: No hardcoded API URLs
-Scope: File
-Paths: src/**/*.ts
+Execution mode: Per file
+Path: src/**/*.ts
 Severity: Critical
 Instructions: Flag any hardcoded URL (http:// or https://)
 in fileDiff that looks like an API endpoint.
@@ -102,7 +102,7 @@ URLs must come from environment variables or config files.
 
 ## Passo 6 — Conecte a gestão de tarefas (opcional, mas recomendado)
 
-Conecte Jira, Linear, Notion ou ClickUp em **Configurações** → **Plugins** para habilitar a validação de lógica de negócio. Isso permite que o Kodus verifique se os PRs implementam o que as tarefas descrevem.
+Conecte Jira, Linear, Notion ou ClickUp em **Plugins** (na barra lateral) para habilitar a validação de lógica de negócio. Isso permite que o Kodus verifique se os PRs implementam o que as tarefas descrevem.
 
 ## Passo 7 — Execute um PR piloto
 
@@ -117,16 +117,16 @@ Abra um PR de teste e verifique:
 
 Após uma semana de revisões, consulte o time:
 
-- Há sugestões demais? → Aumente `severityLevelFilter` ou reduza `maxSuggestions`
+- Há sugestões demais? → Aumente **Minimum severity to post** em **Code review → What to review** (`severityLevelFilter` no `kodus-config.yml`)
 - As regras estão gerando muito ruído? → Restrinja os caminhos de arquivo ou adicione exclusões
 - Faltam padrões importantes? → Adicione novas regras ou Memories
-- Quer regras geradas automaticamente? → Clique em **Gerar Kody Rules** para obter sugestões do histórico de revisões
+- Quer regras geradas automaticamente? → Selecione o repositório no seletor de escopo, abra **Code review → Kody Rules**, clique em **Configuration** e ative **Generate from past reviews** para obter sugestões do histórico de revisões
 
 ## Dicas
 
 - Não sobrecarregue com regras no primeiro dia — comece pequeno e expanda
 - Deixe o time ensinar o Kody naturalmente por meio de conversas antes de formalizar como regras
 - Use `@kody start-review` nos primeiros PRs para que o time veja o Kodus em ação
-- Habilite a aprovação de memórias geradas por LLM se quiser revisar o que o Kody aprende
+- Ative **Kody knowledge approval** (**Code review → Kody Rules → Configuration**) se quiser revisar o que o Kody aprende
 
 Para o guia completo de configuração, consulte [Início Rápido](/pt-BR/how_to_use/quickstart).

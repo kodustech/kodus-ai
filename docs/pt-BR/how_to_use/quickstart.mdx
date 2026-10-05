@@ -5,46 +5,51 @@ description: "Coloque o Kody revisando seus pull requests: crie a conta, conecte
 
 <Steps>
   <Step title="Criar uma Conta">
-    Cadastre-se inserindo seu nome, e-mail e senha, ou use um provedor social como Google, GitHub ou GitLab.
+    Cadastre-se com **Sign up with Github** ou **Sign up with Gitlab**, ou com seu e-mail (nome e senha). O cadastro por e-mail exige um endereço corporativo — domínios gratuitos como Gmail, Outlook, Hotmail ou Yahoo são rejeitados.
   </Step>
 
-  <Step title="Configurar uma Ferramenta de Gerenciamento de Código">
+  <Step title="Criar seu Workspace">
+    Em **Let's create a Workspace**, informe o **Organization Name** (e, opcionalmente, um número de telefone e **Enable Auto Join** para os seus domínios de e-mail aprovados) e depois responda a uma pesquisa de duas perguntas. Se já existirem workspaces para o seu domínio de e-mail, o Kodus oferece primeiro a opção de entrar em um deles.
+  </Step>
+
+  <Step title="Conectar sua ferramenta Git">
+    Em **Connect your Git tool**, escolha a aba do seu provedor (**Github**, **Gitlab**, **Bitbucket**, **Azure Repos** ou **Forgejo**).
     <AccordionGroup>
         <Accordion title="Configurar GitHub" icon="github">
-            Conecte o GitHub via OAuth ou token:
-              - **OAuth (Recomendado)**: Clique no botão "via OAuth". Você será redirecionado para a página de autenticação do GitHub.
+            Conecte o GitHub instalando o app ou com um token:
+              - **App (Recomendado)**: Clique em **Install Github app**. Você será redirecionado para o GitHub.
                 - ✅ O Kody aparece como um bot dedicado nos PRs
                 - ✅ Melhor trilha de auditoria (distinção clara entre revisões humanas e de IA)
                 - Requer permissões de `owner` para sua organização
                 - Conceda acesso a todos os repositórios que deseja que o Kody analise (você pode ajustar isso depois)
-              - **Token**: As revisões aparecem sob seu nome de usuário. <a href="/pt-BR/how_to_use/code_review/general_config/github_pat">Visite a página de Configuração de Token do GitHub para instruções detalhadas.</a>
+              - **Token**: Clique em **Connect via token**. As revisões aparecem sob seu nome de usuário. <a href="/pt-BR/how_to_use/code_review/general_config/github_pat">Visite a página de Configuração de Token do GitHub para instruções detalhadas.</a>
 
             <Note>Usando GitHub Enterprise? Coloque na allowlist o IP do Kodus `52.55.217.197` no firewall da sua rede antes de conectar.</Note>
         </Accordion>
 
         <Accordion title="Configurar GitLab" icon="gitlab">
-            Conecte o GitLab via OAuth ou token:
-              - **OAuth (Recomendado)**: Clique no botão "via OAuth" e você será redirecionado para a página de autenticação do GitLab.
+            Conecte o GitLab instalando o app ou com um token:
+              - **App (Recomendado)**: Clique em **Install Gitlab app** e você será redirecionado para a página de autenticação do GitLab.
                 - ✅ O Kody aparece como um bot dedicado nos PRs
                 - Conceda acesso a todos os repositórios que deseja que o Kody analise (você pode ajustar isso depois)
-              - **Token**: As revisões aparecem sob seu nome de usuário. <a href="/pt-BR/how_to_use/code_review/general_config/gitlab_pat">Visite a página de Configuração de Token do GitLab para instruções detalhadas.</a>
+              - **Token**: Clique em **Connect via token**. As revisões aparecem sob seu nome de usuário. <a href="/pt-BR/how_to_use/code_review/general_config/gitlab_pat">Visite a página de Configuração de Token do GitLab para instruções detalhadas.</a>
 
             <Note>Usando uma instância GitLab self-hosted? Coloque na allowlist o IP do Kodus `52.55.217.197` no firewall da sua rede antes de conectar.</Note>
         </Accordion>
               <Accordion title="Configurar Bitbucket" icon="bitbucket">
-            Conecte o Bitbucket via OAuth ou token:
+            O Bitbucket se conecta apenas com token — clique em **Connect via token**:
               - **Token**: <a href="/pt-BR/how_to_use/code_review/general_config/bitbucket_pat">Visite a página de Configuração de Token do Bitbucket para instruções detalhadas.</a>
 
             <Note>Usando Bitbucket Data Center (self-hosted)? Coloque na allowlist o IP do Kodus `52.55.217.197` no firewall da sua rede antes de conectar.</Note>
         </Accordion>
         <Accordion title="Configurar Azure DevOps" icon="microsoft">
-            Conecte o Azure DevOps via OAuth ou token:
+            O Azure DevOps se conecta apenas com token — abra a aba **Azure Repos** e clique em **Connect via token**:
               - **Token**: <a href="/pt-BR/how_to_use/code_review/general_config/azure_devops_pat">Visite a página de Configuração de Token do Azure DevOps para instruções detalhadas.</a>
 
             <Note>Usando Azure DevOps Server (self-hosted)? Coloque na allowlist o IP do Kodus `52.55.217.197` no firewall da sua rede antes de conectar.</Note>
         </Accordion>
         <Accordion title="Configurar Forgejo" icon="/images/forgejo.svg">
-            Conecte o Forgejo via token:
+            O Forgejo se conecta apenas com token — clique em **Connect via token**:
               - **Token**: <a href="/pt-BR/how_to_use/code_review/general_config/forgejo_pat">Visite a página de Configuração de Token do Forgejo para instruções detalhadas.</a>
 
             <Note>O suporte para Forgejo é mantido pela comunidade.</Note>
@@ -56,14 +61,33 @@ description: "Coloque o Kody revisando seus pull requests: crie a conta, conecte
 
 <Step title="Selecionar Repositórios">
   Escolha os repositórios que deseja que o Kody acesse para revisões automatizadas e
-  insights acionáveis.
+  insights acionáveis. Em **Who should Kody review?**, escolha **PRs opened by
+  me** (para testar sem afetar o time) ou **All PRs in selected repos**.
+</Step>
+
+<Step title="Escolher de quem o Kody aprende">
+  Em **Whose reviews should Kody learn from?**, todos estão incluídos por
+  padrão. Selecione os desenvolvedores cujas revisões o Kody não deve usar para aprender.
+</Step>
+
+<Step title="Definir a severidade mínima">
+  Em **Minimum severity level**, escolha a menor severidade que o Kody publica:
+  **Low/All**, **Medium**, **High** ou **Critical**.
+</Step>
+
+<Step title="Revisar suas Kody Rules">
+  Em **Review your Kody Rules**, o Kody lista as regras que detectou nos arquivos de
+  configuração dos seus repositórios. Selecione as que você quer e clique em **Apply N and
+  continue**, ou clique em **I'll do this later**.
 </Step>
 
 <Step title="Executar Sua Primeira Revisão de PR">
-  Selecione um pull request (PR) para o Kody revisar. Isso mostrará o poder das
-  revisões de código automatizadas. Uma vez selecionado, o Kody realizará a revisão diretamente
-  na sua ferramenta Git. Não se preocupe, isso é apenas para a primeira vez — depois disso,
-  o Kody revisará automaticamente cada PR que você abrir.
+  Em **Kody is ready for your first PR review**, use **Select a PR to review**
+  para escolher um pull request (PR) e clique em **Review now** (ou **Skip for now**).
+  Isso mostrará o poder das revisões de código automatizadas. Uma vez selecionado, o Kody
+  realizará a revisão diretamente na sua ferramenta Git. Não se preocupe, isso é apenas
+  para a primeira vez — depois disso, o Kody revisará automaticamente os novos PRs, de acordo
+  com a sua escolha em **Who should Kody review?**.
 </Step>
 <Step title="Aproveite as Revisões Automatizadas do Kody! 🔥">
   Relaxe e deixe o Kody otimizar seu processo de revisão com sugestões inteligentes

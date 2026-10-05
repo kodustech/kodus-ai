@@ -8,21 +8,21 @@ Kodus se integra con Azure DevOps mediante webhooks. Una vez configurado, cada p
 ## Pasos
 
 1. **Crea una cuenta** en [kodus.io](https://kodus.io) o [aloja Kodus tú mismo](/es/how_to_deploy/deploy_kodus/generic_vm)
-2. **Conecta Azure DevOps** — autoriza durante la configuración y configura tu Token de Acceso Personal
-3. **Configura webhooks** — sigue la configuración guiada para habilitar los eventos de pull request
-4. **Selecciona repositorios** — elige qué repositorios de Azure DevOps debe revisar Kodus
+2. **Conecta Azure DevOps** — en el paso **Connect your Git tool** del onboarding, abre la pestaña **Azure Repos**, haz clic en **Connect via token** e ingresa el nombre de tu organización de Azure Repos y tu Token de Acceso Personal (también puedes conectarlo más tarde desde **Repositories** en la barra lateral)
+3. **Selecciona repositorios** — elige qué repositorios de Azure DevOps debe revisar Kodus
+4. **Webhooks** — Kodus crea automáticamente los service hooks de pull request cuando guardas la selección. Si eso no ocurrió (normalmente en instalaciones self-hosted), regístralos manualmente con la guía de [Webhooks de Azure DevOps](/es/how_to_deploy/platforms/azure_devops/azdevops_webhook)
 5. **Abre un pull request** — Kodus lo revisa automáticamente
 
 ## Qué obtienes
 
 - Revisiones automatizadas en cada PR
 - Comentarios publicados directamente en el pull request
-- Reglas y controles de sugerencias personalizables
+- Reglas personalizables, categorías de revisión y un umbral de severidad mínima
 - Validación de lógica de negocio contra elementos de trabajo vinculados
 
 ## Configuración personalizada
 
-Coloca un archivo `kodus-config.yml` en la raíz de tu repositorio para personalizar el comportamiento por repositorio. El archivo anula la configuración de la web automáticamente.
+Coloca un archivo `kodus-config.yml` en la raíz de tu repositorio para personalizar el comportamiento por repositorio. El archivo anula la configuración de la web una vez que **kodus Config File Overrides Web Preferences** está activado para ese repositorio (**Code review → General**).
 
 ## Usar un Token de Acceso Personal
 

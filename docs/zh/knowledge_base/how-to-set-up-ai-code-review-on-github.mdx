@@ -8,7 +8,7 @@ description: "安装和配置 Kodus 以在每个拉取请求上获得自动 AI �
 ## 步骤
 
 1. **创建帐户** — 在 [kodus.io](https://kodus.io) 或[自托管 Kodus](/zh/how_to_deploy/deploy_kodus/generic_vm)
-2. **连接 GitHub** — 在设置过程中安装 Kodus GitHub App
+2. **连接 GitHub** — 在入门引导的 **Connect your Git tool** 步骤中，点击 **Install Github app**（之后也可以从侧边栏的 **Repositories** 进行连接）
 3. **选择代码库** — 选择 Kodus 应审查的代码库
 4. **打开 PR** — Kodus 自动审查并发布评论
 
@@ -16,15 +16,15 @@ description: "安装和配置 Kodus 以在每个拉取请求上获得自动 AI �
 
 - 每个 PR 自动审查（或使用 `@kody start-review` 按需审查）
 - 直接在 PR 中发布的代码建议评论
-- 可自定义的规则、严重性过滤器和建议限制
+- 可自定义的规则、审查类别和最低严重性阈值
 - 根据关联任务的业务逻辑验证
 
 ## 自定义配置
 
-在代码库根目录放置 `kodus-config.yml` 以自定义每个代码库的行为。该文件自动覆盖 Web 设置。
+在代码库根目录放置 `kodus-config.yml` 以自定义每个代码库的行为。该文件会在该代码库开启 **kodus Config File Overrides Web Preferences**（**Code review → General**）后覆盖 Web 设置。
 
 ## 使用个人访问令牌
 
-对于私有代码库或权限更严格的组织，可能需要配置 GitHub 个人访问令牌（PAT）。
+对于私有代码库或权限更严格的组织，可能需要配置 GitHub 个人访问令牌（PAT）。在入门引导中选择 **Connect via token**（或在 **Repositories** 上连接 GitHub 时选择 **Token** 选项卡）。此后审查将以令牌所有者的帐户发布，并且 GitHub Checks/PR 状态不可用。
 
 完整设置指南，请参阅[快速开始](/zh/how_to_use/quickstart)和 [GitHub App 设置](/zh/how_to_deploy/platforms/github/github_app)。

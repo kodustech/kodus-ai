@@ -12,7 +12,7 @@ icon: "users-gear"
 
 1. [kodus.io](https://kodus.io) でサインアップするか、セルフホスティングインスタンスにアクセスする
 2. チームの新しいワークスペースを作成する
-3. Gitプロバイダーを接続する（GitHub、GitLab、Bitbucket、またはAzure DevOps）
+3. Gitプロバイダーを接続する（GitHub、GitLab、Bitbucket、Azure Repos、またはForgejo）
 4. 監視するリポジトリを選択する
 
 ## ステップ2 — レビューのベースラインを設定する
@@ -34,15 +34,15 @@ suggestionControl:
 automatedReviewActive: true
 ```
 
-これにより、適切な提案制限を持つ自動レビューが得られます。1週間後、フィードバックに基づいて調整してください。
+これにより、適切な重要度しきい値を持つ自動レビューが得られます。1週間後、フィードバックに基づいて調整してください。
 
 ## ステップ3 — IDEツールから既存のルールをインポートする
 
 チームがすでにCursor、Copilot、またはClaudeのルールを使用している場合：
 
-1. **コードレビュー設定** → **Kodyルール** に移動する
+1. サイドバーで **Code review** グループ上部のスコープピッカーからリポジトリを選び、**Kody Rules** を開いて **Configuration** をクリックし、**Auto-sync rules from repo** をオンにする
 2. Kodusは `.cursorrules`、`.github/copilot-instructions.md`、および `.claude` ファイルを検出する
-3. コードレビューに意味があるものをインポートする
+3. インポートされたルールを確認し、コードレビューに意味があるものを残す
 
 これにより、ルールをゼロから書き直す必要がなくなります。
 
@@ -82,8 +82,8 @@ automatedReviewActive: true
 
 ```
 Name: 本番コードにconsole.logは禁止
-Scope: File
-Paths: src/**/*.ts
+Execution mode: Per file
+Path: src/**/*.ts
 Severity: High
 Instructions: fileDiffでconsole.log、console.warn、またはconsole.errorに
 フラグを立てる。代わりにプロジェクトロガーを使用する。
@@ -92,8 +92,8 @@ Instructions: fileDiffでconsole.log、console.warn、またはconsole.errorに
 
 ```
 Name: ハードコードされたAPIURLは禁止
-Scope: File
-Paths: src/**/*.ts
+Execution mode: Per file
+Path: src/**/*.ts
 Severity: Critical
 Instructions: fileDiffでAPIエンドポイントのように見える
 ハードコードされたURL（http://またはhttps://）にフラグを立てる。
@@ -102,7 +102,7 @@ URLは環境変数または設定ファイルから取得する必要がある�
 
 ## ステップ6 — タスク管理を接続する（オプションだが推奨）
 
-**設定** → **Plugins** でJira、Linear、Notion、またはClickUpを接続して、ビジネスロジック検証を有効にします。これにより、KodusがPRがタスクの説明どおりに実装されているかどうかを確認できます。
+**Plugins**（サイドバー内）でJira、Linear、Notion、またはClickUpを接続して、ビジネスロジック検証を有効にします。これにより、KodusがPRがタスクの説明どおりに実装されているかどうかを確認できます。
 
 ## ステップ7 — パイロットPRを実行する
 
@@ -117,16 +117,16 @@ URLは環境変数または設定ファイルから取得する必要がある�
 
 1週間のレビュー後、チームに確認します：
 
-- 提案が多すぎますか？ → `severityLevelFilter` を上げるか `maxSuggestions` を下げる
+- 提案が多すぎますか？ → **Code review → What to review** で **Minimum severity to post** を上げる（`kodus-config.yml` では `severityLevelFilter`）
 - ルールがうるさすぎますか？ → ファイルパスを絞り込むか除外を追加する
 - 重要なパターンが見つかっていませんか？ → 新しいルールまたはMemoriesを追加する
-- 自動生成ルールが欲しいですか？ → **Kodyルールを生成** をクリックして、レビュー履歴から提案を取得する
+- 自動生成ルールが欲しいですか？ → スコープピッカーでリポジトリを選び、**Code review → Kody Rules** を開いて **Configuration** をクリックし、**Generate from past reviews** をオンにして、レビュー履歴から提案を取得する
 
 ## ヒント
 
 - 初日からルールで過負荷にしない — 小さく始めて成長させる
 - 正式なルールとして定める前に、チームが会話を通じてKodyを自然に教えられるようにする
 - 最初の数回のPRには `@kody start-review` を使用して、チームがKodusの動作を確認できるようにする
-- Kodyが学ぶことをレビューしたい場合は、LLMが生成したメモリの承認を有効にする
+- Kodyが学ぶことをレビューしたい場合は、**Kody knowledge approval**（**Code review → Kody Rules → Configuration**）をオンにする
 
 完全なセットアップガイドについては、[クイックスタート](/ja/how_to_use/quickstart) を参照してください。

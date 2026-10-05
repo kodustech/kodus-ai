@@ -53,10 +53,12 @@ This guide gets you from zero to a reviewed diff in under five minutes.
         kodus auth login
         ```
 
+        The CLI opens the **Authorize Kodus CLI** page in your browser (sign in to Kodus if asked). Check the **Device**, **Mode**, and **Expires** details, click **Authorize CLI**, then return to the terminal.
+
         Tokens are stored in `~/.kodus/credentials.json` and auto-refreshed.
       </Tab>
       <Tab title="Team (shared key)">
-        Generate a team key at <a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a> and apply it:
+        An organization owner generates a team key in the sidebar under **Organization → CLI keys** (<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>). Apply it:
 
         ```bash
         kodus auth team-key --key kodus_xxxxx

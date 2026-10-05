@@ -24,14 +24,13 @@ description: "关联兄弟仓库，使 Kody 在 PR 触及边界表面时能读�
 
 关联仓库是**按仓库**的，不是全局的。关系是有方向的：`frontend` 上的关联仅在审查 `frontend` 的 PR 时生效。
 
-1. 打开**代码审查设置**。
-2. 选择**具体仓库**（不是 Global）。
-3. 打开该仓库菜单中的 **Linked Repositories** 页面。
-4. 在 **Linked repositories** 中添加已连接到组织的兄弟仓库。
-5. 可选设置：
-   - **Instructions** — 给 Kody 的自由文本提示（例如：“此前端消费的 REST API”）。
-   - **Ref** — 可选的 branch/tag 固定。留空则使用自动 ref 级联（见下）。
-6. 保存。
+1. 在侧边栏 **Code review** 分组顶部的范围选择器中，选择**具体仓库**（不是 Global）。
+2. 打开 **Linked repositories**（仅在仓库范围下显示）。
+3. 点击 **Add repository**，选择已连接到组织的兄弟仓库。
+4. 可选设置：
+   - **Instructions · optional** — 给 Kody 的自由文本提示（例如：“此前端消费的 REST API”）。
+   - **Branch / ref pin · optional** — branch/tag 固定。留空则使用自动 ref 级联（见下）。
+5. 点击 **Save settings**。
 
 最多可关联 **3** 个仓库。仅接受已连接到同一组织的仓库。
 
@@ -131,5 +130,5 @@ Also needs org/shared-contracts@feature/new-events
 ## 相关指南
 
 - [如何跨代码库共享编码标准](/zh/knowledge_base/how-to-share-standards-across-repositories) — 组织级规则与继承（不是源码上下文）
-- [如何使用项目特定上下文审查 PR](/zh/knowledge_base/how-to-review-prs-with-project-context) — 记忆、文件引用、自定义提示、MCP
+- [如何使用项目特定上下文审查 PR](/zh/knowledge_base/how-to-review-prs-with-project-context) — 记忆、文件引用、类别说明、MCP
 - [如何减少代码审查噪音](/zh/knowledge_base/how-to-reduce-code-review-noise) — 增加上下文时仍保持审查聚焦

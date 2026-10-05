@@ -21,15 +21,15 @@ description: "当你的 BYOK 模型支出接近月度上限时收到提醒。仅
 
 ## 如何配置
 
-该限额位于 BYOK 页面,在你的 Main 和 Fallback 模型下方。
+该限额位于 **AI providers** 页面的 **Budget** 标签页中(**Budget & alerts** 区块)。
 
 <Steps>
-  <Step title="打开 BYOK 设置">
-    前往 [app.kodus.io/byok](https://app.kodus.io/byok),滚动到 **Monthly spend limit**。(该区块在你配置了至少一个 BYOK 模型后才会出现。)
+  <Step title="打开 Budget 标签页">
+    在侧边栏中打开 **AI providers**,选择 **Budget** 标签页([app.kodus.io/byok?tab=budget](https://app.kodus.io/byok?tab=budget))。(这些设置在你用自己的密钥连接了至少一个模型后才会出现;在此之前,该标签页会引导你前往 **Go to Providers**。)
   </Step>
 
   <Step title="核对模型价格">
-    每个已配置的模型都会显示其每 token 价格 —— **input、output、cache read、cache write** —— 单位为 **$ / 1M tokens**。**Catalog** 徽标表示 Kodus 自动找到了价格;**Manual** 徽标表示是你自己填写的。
+    展开 **Adjust model prices**。每个已配置的模型都会显示其每 token 价格 —— **Input、Output、Cache read、Cache write** —— 单位为 **$ / 1M tokens**。**Catalog** 徽标表示 Kodus 自动找到了价格;**Manual** 徽标表示是你自己填写的。
   </Step>
 
   <Step title="修正没有价格的模型">
@@ -37,7 +37,7 @@ description: "当你的 BYOK 模型支出接近月度上限时收到提醒。仅
   </Step>
 
   <Step title="设置月度限额并启用">
-    以美元填入你的上限,打开 **Enable spend alerts**,然后点击 **Save spend limit**。
+    在 **Monthly limit (US$)** 中填入金额,打开 **Enable spend alerts**,然后点击 **Save budget & alerts**。该标签页还会显示 **Projected this month**,而 **Open Costs** 会带你前往 **Organization → Token usage** 查看完整明细。
   </Step>
 </Steps>
 
@@ -79,7 +79,7 @@ description: "当你的 BYOK 模型支出接近月度上限时收到提醒。仅
 
 ## 准确性
 
-支出是一个**估算值**。它由你的审查所消耗的 token 以及 BYOK 页面上显示的每 token 价格推算而来 —— 不会与提供商账单精确到分。
+支出是一个**估算值**。它由你的审查所消耗的 token 以及 **Budget** 标签页上显示的每 token 价格推算而来 —— 不会与提供商账单精确到分。
 
 <CardGroup cols={2}>
   <Card title="保持价格准确" icon="tags">
@@ -102,7 +102,7 @@ description: "当你的 BYOK 模型支出接近月度上限时收到提醒。仅
   </Accordion>
 
   <Accordion title="哪些内容计入支出?">
-    只有你的 **BYOK** 模型上的 token 用量,按 BYOK 页面上显示的当前费率计价。Kodus 托管的模型不计入。
+    只有你的 **BYOK** 模型上的 token 用量,按 **Budget** 标签页上显示的当前费率计价。Kodus 托管的模型不计入。
   </Accordion>
 
   <Accordion title="支出什么时候重置?">
@@ -112,7 +112,7 @@ description: "当你的 BYOK 模型支出接近月度上限时收到提醒。仅
   <Accordion title="我在月中切换了模型 —— 支出会跳变吗?">
     不会。支出是**按模型**追踪的:每个模型的 token 按*该模型*的费率计价。如果你在模型 A 上花了 \$50 然后切换到模型 B,模型 A 的用量仍然是 \$50 —— 切换到 B 绝不会把 A 的 token 按 B 的费率重新计价。你的总额只是随着 B 之后的用量而增长。
 
-    唯一会让已发生用量被重新计价的,是**同一个模型的价格**发生变化 —— 当价格目录更新了某个模型的费率,或你在 BYOK 页面编辑了它的手动价格时,该模型当月至今的用量会按新费率重新计算(不存在冻结快照)。
+    唯一会让已发生用量被重新计价的,是**同一个模型的价格**发生变化 —— 当价格目录更新了某个模型的费率,或你在 **Adjust model prices** 中编辑了它的手动价格时,该模型当月至今的用量会按新费率重新计算(不存在冻结快照)。
   </Accordion>
 
   <Accordion title="为什么我无法启用该限额?">

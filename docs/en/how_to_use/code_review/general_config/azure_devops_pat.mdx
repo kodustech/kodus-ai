@@ -47,7 +47,7 @@ Copy the generated token and store it securely, as you’ll need it to configure
 
 ## Adding the Token to Kody
 
-After generating the token, paste it into the Kody automation setup screen. The configuration modal will open automatically when you attempt to enable the automation.
+After generating the token, paste it into Kodus: during onboarding (**Connect your Git tool** → **Azure Repos** tab → **Connect via token**), or later in the sidebar under **Repositories** → **Connect a provider** → **Azure Repos**. Fill in **Organization name** and **Personal Access Token**, then click **Validate and save**.
 
 ## Troubleshooting: Kody isn't reviewing PRs in Azure DevOps
 
@@ -57,7 +57,7 @@ If Kody is connected but **nothing happens on new pull requests** — no reactio
 
 Open the PAT in Azure DevOps and confirm every scope listed under [Generating the PAT](#generating-the-pat-personal-access-token) is enabled. The one most often missed is **Code: Read & Write** — without **Write**, Kody can read your repositories but cannot post review comments, so the reviews "run silently".
 
-If the PAT was created before a scope was added, Azure DevOps won't retroactively add it. Create a new PAT with the full scope list and update it in the Kody automation setup.
+If the PAT was created before a scope was added, Azure DevOps won't retroactively add it. Create a new PAT with the full scope list and reconnect with it (**Repositories** → **Reset** on the provider card → **Just reset the integration**, then connect Azure Repos again with the new token).
 
 ### 2. Check the user's project permissions
 

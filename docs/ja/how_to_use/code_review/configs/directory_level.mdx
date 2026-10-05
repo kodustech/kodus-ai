@@ -51,8 +51,10 @@ Kody は PR ごとに 1 つの設定を選択します：**ディレクトリ** 
 
 ## セットアップ
 
-1. リポジトリのコードレビュー設定を開きます
-2. ディレクトリエントリを追加して設定を割り当てます
-3. 変更を保存します
+1. サイドバーで **Code review** グループ上部のスコープピッカーを開き、**Add repository configuration** を選択します
+2. **Create repository settings** で **Select the target repository** を選び、続けて **Select the target directories**（1 つ以上のフォルダ）を選んで **Create settings** をクリックします
+3. 新しいディレクトリスコープを選択し（スコープピッカーでリポジトリの下にインデントされて表示されます）、任意のページ（General、What to review、Kody Rules、What Kody writes）で設定を変更します。設定ページは **Save settings** で保存します
+
+後でフォルダを変更するには、スコープピッカーの横にある **⋯** メニュー → **Edit directories** を使用します。**Delete configuration** はディレクトリ設定を削除します。
 
 `kodus-config.yml` も使用している場合は、Web 設定をオーバーライドします（一般設定の設定優先度を参照）。

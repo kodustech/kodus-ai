@@ -7,16 +7,16 @@ Conectar o Jira ao Kodus habilita dois recursos poderosos: **validação automá
 
 ## Como conectar
 
-1. Vá em **Configurações** → **Plugins**
-2. Encontre **Jira** nos plugins disponíveis
-3. Clique em **Conectar** e autorize o acesso ao seu workspace do Jira
-4. Selecione quais projetos o Kodus pode acessar
+1. Na barra lateral, abra **Plugins**
+2. Clique no card **Jira**
+3. Autentique-se (OAuth ou API token) e autorize o acesso ao seu workspace do Jira
+4. Escolha as ferramentas que o Kody pode usar e clique em **Install plugin**
 
 ## O que isso habilita
 
 ### Validação automática de lógica de negócio
 
-Quando um PR está vinculado a um ticket do Jira, o Kodus automaticamente:
+Quando um PR está vinculado a um ticket do Jira e a categoria **Business Logic** está ativada em **Code review → What to review**, o Kodus automaticamente:
 - Busca o título, a descrição e os critérios de aceitação do ticket
 - Compara o diff do PR com os requisitos
 - Reporta implementações ausentes, incompatibilidades de escopo e lacunas

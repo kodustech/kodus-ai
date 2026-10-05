@@ -14,7 +14,7 @@ Kodus 支持三个配置级别，自然映射到 monorepo：
 
 | 级别 | 适用于 | 示例 |
 |------|--------|------|
-| **组织** | 所有代码库 | "永远不要提交 `.env` 文件" |
+| **Global** | 所有代码库 | "永远不要提交 `.env` 文件" |
 | **代码库** | 整个 monorepo | "使用约定式提交" |
 | **目录** | 特定包 | "React 组件必须使用 PascalCase" |
 
@@ -36,13 +36,12 @@ monorepo/
 
 ## 步骤 2 — 创建目录级配置
 
-前往**代码审查设置** → **代码库** → 点击目录进行配置。
+在侧边栏中，打开 **Code review** 分组顶部的范围选择器，选择 **Add repository configuration**。在 **Create repository settings** 中，**Select the target repository**（即该 monorepo），然后 **Select the target directories**（一个或多个包文件夹），并点击 **Create settings**。每个目录都会以缩进形式显示在范围选择器中对应代码库的下方 — 选择它即可进行配置。
 
 每个目录可以有自己的：
 - **Kody 规则**（文件级和 PR 级）
-- **审查选项**（启用哪些分析类型）
-- **建议控制**（严重性过滤器、最大建议数）
-- **忽略路径**
+- **What to review**（启用哪些类别，以及发布建议的最低严重性）
+- **Ignored files**（位于 **General**）
 
 ## 步骤 3 — 编写有针对性的规则
 
@@ -50,7 +49,7 @@ monorepo/
 
 ```
 名称：React 组件必须使用设计系统令牌
-范围：文件
+执行模式：Per file
 路径：apps/web/src/components/**/*.tsx
 严重性：高
 说明：
@@ -63,7 +62,7 @@ monorepo/
 
 ```
 名称：领域层不得从基础设施导入
-范围：文件
+执行模式：Per file
 路径：apps/api/src/domain/**/*.ts
 严重性：严重
 说明：
@@ -76,7 +75,7 @@ monorepo/
 
 ```
 名称：公共 API 更改需要变更集
-范围：拉取请求
+执行模式：Per PR
 严重性：高
 说明：
   如果 pr_files_diff 修改了 libs/shared/src/index.ts 中的任何文件
@@ -98,13 +97,13 @@ CommonJS require() is not allowed anywhere.
 Any breaking change requires a major version bump and a changeset.
 ```
 
-## 步骤 5 — 按目录配置建议控制
+## 步骤 5 — 按目录设置严重性阈值
 
-高流量包可能需要更严格的限制：
+高流量包可能需要更严格的过滤。在范围选择器中选择该目录，打开 **What to review**，并设置 **Minimum severity to post**：
 
-- **apps/web/** — 最多 5 个建议，中等严重性过滤（前端变化快）
-- **libs/shared/** — 最多 15 个建议，低严重性过滤（稳定性重要）
-- **infra/** — 最多 3 个建议，高严重性过滤（少但关键）
+- **apps/web/** — **Medium**（前端变化快）
+- **libs/shared/** — **Low/All**（稳定性重要）
+- **infra/** — **High**（少但关键）
 
 ## 步骤 6 — 忽略生成的路径
 

@@ -8,7 +8,7 @@ description: "Comprehensive analytics and metrics for engineering team performan
 Cockpit Analytics provides comprehensive insights into your engineering team's performance through key metrics that measure productivity, code quality, and delivery efficiency. These metrics help you identify areas for improvement and track progress over time.
 
 <Warning>
-  Cockpit requires a paid tier: **Teams or Enterprise on cloud**, or **licensed self-hosted Enterprise**. Unlicensed self-hosted (Community) and free BYOK plans don't include it. Self-hosted Enterprise also needs the [Analytics Worker](/en/how_to_deploy/deploy_kodus/analytics_worker) running.
+  Cockpit requires a paid tier: **Teams or Enterprise on cloud** (trials included), or **licensed self-hosted Enterprise**. Unlicensed self-hosted (Community) and free BYOK plans don't include it: the **Cockpit** item stays in the sidebar with a padlock and opens a blurred **Unlock the Cockpit** preview with a **See plans** button (**Activate a license** on self-hosted). Self-hosted Enterprise also needs the [Analytics Worker](/en/how_to_deploy/deploy_kodus/analytics_worker) running.
 </Warning>
 
 <Frame caption="Monitor your team's performance with real-time analytics.">
@@ -18,20 +18,23 @@ Cockpit Analytics provides comprehensive insights into your engineering team's p
 ## Key Features
 
 - Data refreshes every 30 minutes by default (`ANALYTICS_INGESTION_CRON`)
-- Teams/Enterprise on cloud, or licensed self-hosted Enterprise
+- Teams/Enterprise on cloud (including trials), or licensed self-hosted Enterprise
 - AI-powered metric calculation
 - 8+ DORA and custom metrics
 
-## The two tabs
+## The tabs
 
-The cockpit is split into two tabs:
+The cockpit is split into two metric tabs, followed by an **Issues** tab:
 
-- **Kodus Review** — how effective Kodus's reviews are: implementation rate, severity calibration, negative feedback, and the health of your Kody Rules. This is about Kodus itself, and it's where you take action. See [Kodus Review](/en/how_to_use/cockpit/kodus_review).
+- **Kodus Review** (opens by default) — how effective Kodus's reviews are: implementation rate, severity calibration, negative feedback, and the health of your Kody Rules. This is about Kodus itself, and it's where you take action. See [Kodus Review](/en/how_to_use/cockpit/kodus_review).
 - **Productivity** — general delivery metrics: deploy frequency, lead time, PR cycle time, PR size, and developer activity.
+- **Issues** — opens the [Issues](/en/how_to_use/issues/overview) list, with the open-issue count next to the tab name.
+
+At the top of the page you pick a repository (**All repositories** by default) and a date range (**Last 15 days** by default; presets **Last week**, **Last 15 days**, **Last month**, **Last 3 months**, or custom dates). There is no per-developer filter. The link button (**Copy link to this view**) copies a URL that reopens the same tab, repository, and range.
 
 <Note>
-  Owners can hide whole tabs or individual metrics for the entire organization — see
-  [Cockpit Configuration](/en/how_to_use/cockpit/configuration).
+  Owners can hide whole tabs or individual metrics for the entire organization from
+  **Organization → Cockpit visibility** — see [Cockpit Configuration](/en/how_to_use/cockpit/configuration).
 </Note>
 
 ## Key Metrics Categories
@@ -45,11 +48,11 @@ The cockpit is split into two tabs:
 
 ## How Developer Matching Works
 
-Cockpit tracks developers using the **Git commit username**. This may differ from:
+Cockpit's per-developer charts (**PRs Merged By Developer**, **Team Activity**) attribute each pull request to its **author's username on your Git provider**. This may differ from:
 - GitHub/GitLab display name
 - Email address
 - Kodus workspace account
 
 <Tip>
-  If you see discrepancies in developer metrics, check that commit usernames are consistent across your team's Git configuration.
+  If you see discrepancies in developer metrics, check whether the same person opens pull requests from more than one Git provider account.
 </Tip>

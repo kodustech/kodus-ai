@@ -7,6 +7,8 @@ description: "Configure personalized start and end review messages for Kody"
 
 Customize the messages that Kody sends at the beginning and end of code reviews. This feature allows you to personalize the communication style and add specific context or instructions for your team.
 
+In the sidebar, open **Code review → What Kody writes**. The messages are in the **Comments during the review** section, with one tab per message: **Review starts**, **Review ends** and **Review fails**. Each tab has a **Message** box and a **Reset to…** menu (restore the inherited message, or the default message at Global).
+
 ## Default Behavior
 
 When you haven't customized any messages, Kody works as follows:
@@ -27,25 +29,26 @@ This creates a complete timeline: **Initial Message → Suggestions → Final Me
 
 ## Message Configuration Options
 
-### Message Behavior
+### Post this message
 
-Use the **Message behavior** dropdown to decide when Kody should post your custom
-start and end messages:
+On the **Review starts** and **Review ends** tabs, use the **Post this message**
+select to decide when Kody should post that message (each message has its own
+setting):
 
 - **Important:** Messages are only sent when a review actually runs.  
   If your review cadence is **Manual**, messages are posted only when someone runs `@kody start-review`.
 
-- **Every push**: Kody posts the start message when the pull request opens and
-  repeats the start/end pair after every new push **that triggers a review**.
-  This happens automatically only when cadence is **Automatic** or **Auto-pause**.
-- **Only when opened**: Kody sends the start and end messages only once, right
-  after the first review run. If cadence is **Manual**, the first review run is
-  when you call `@kody start-review`. Future pushes just add review suggestions
-  plus the usual reaction so authors know the review reran.
-- **Off**: Custom messages are disabled. Kody still runs the review and posts
-  suggestions, but no start or end messages are sent.
+- **On every push** (`every_push`): posted when the pull request opens and again
+  after every new push **that triggers a review**. This happens automatically
+  only when cadence is **Automatic** or **Auto-pause**.
+- **Only when the PR opens** (`only_when_opened`): posted only once, right after
+  the first review run. If cadence is **Manual**, the first review run is when
+  you call `@kody start-review`. Future pushes just add review suggestions plus
+  the usual reaction so authors know the review reran.
+- **Never** (`off`): the message is not posted; the text is kept for later. Kody
+  still runs the review and posts suggestions.
 
-When the behavior is `Every push` or `Only when opened`, Kody uses whichever
+When a message is set to **On every push** or **Only when the PR opens**, Kody uses whichever
 templates you have filled in. If you only customize the start message, only that
 message is sent; same for the end message. This keeps the familiar timeline of
 **Initial Message → Suggestions → Final Message** whenever the behavior allows
@@ -57,7 +60,7 @@ PR opened → no message yet
 
 ## Dynamic Context
 
-You can enhance your custom messages with dynamic context using the **Add Context** button. This allows you to include:
+You can enhance your custom messages with dynamic context using the **Add context** menu next to **Message** (on the **Review starts** and **Review ends** tabs). This allows you to include:
 
 ### changedFiles
 
@@ -69,7 +72,7 @@ A comprehensive summary of all changes in the pull request, giving an overview o
 
 ### reviewOptions
 
-A reflection of the team's configured review settings, showing which analysis types are enabled or disabled for the review.
+A reflection of the team's configured review settings, showing which review categories are enabled or disabled for the review.
 
 ### reviewCadence
 
@@ -110,7 +113,7 @@ agent to apply all of the review's fixes at once.
 <Note>
   In `kodus-config.yml` these are written with an `@` prefix — `@changedFiles`,
   `@changeSummary`, `@reviewOptions`, `@reviewCadence`, `@reviewScope`, `@agentPrompt` — placed
-  anywhere inside the message `content`. The **Add Context** button inserts the same tokens for
+  anywhere inside the message `content`. The **Add context** menu inserts the same tokens for
   you in the web UI.
 </Note>
 
@@ -118,10 +121,12 @@ agent to apply all of the review's fixes at once.
 
 Separate from the start/end pair, you can append your own text to the comment Kody posts when a
 review **fails** — for example when no BYOK provider is configured, or the provider rejected the
-request.
+request. Write it on the **Review fails** tab.
 
-- **Off** (default) — Kody posts its standard error comment unchanged.
-- **Active** — your text is appended below the standard error comment.
+There is no on/off setting for this message: the text itself is the switch.
+
+- **Empty** (default) — Kody posts its standard error comment unchanged.
+- **Filled in** — your text is appended below the standard error comment.
 
 Use it to point people at the right internal owner or runbook instead of leaving them with a
 generic failure:
@@ -136,14 +141,15 @@ customMessages:
 
 Leaving `content` empty keeps the default error message unchanged.
 
-## Global settings
+## Comment visibility (global settings)
 
-Two toggles that apply to every Kody comment, not just custom messages:
+Two toggles that apply to every Kody comment, not just custom messages. They are in the
+**Comment visibility** section of **What Kody writes**:
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| `hideComments` | `false` | Posts every review message as a hidden/minimized comment. Shown in the UI as **Post as hidden comment**. **GitHub only** — the toggle is hidden on other platforms. |
-| `suggestionCopyPrompt` | `true` | Adds the copy-as-prompt affordance to suggestions so you can paste them into a coding agent. **Not available on Bitbucket.** |
+| `hideComments` | `false` | Posts every review message as a hidden/minimized comment. Shown in the UI as **Post as hidden comment**. **GitHub only** — the toggle is hidden when no GitHub connection exists. |
+| `suggestionCopyPrompt` | `true` | Adds the copy-as-prompt affordance to suggestions so you can paste them into a coding agent. Shown in the UI as **Add a copyable prompt to each suggestion**. **Not available on Bitbucket** — the toggle is hidden when Bitbucket is your only connected platform. |
 
 ```yaml
 customMessages:

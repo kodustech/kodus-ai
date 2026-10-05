@@ -6,7 +6,7 @@ icon: "moon"
 
 ## Moonshot 工作原理
 
-Moonshot AI 发布 **Kimi** 系列模型(K2、K2.5、K2.6、K2.6 Coding)。Kimi 在长上下文代码理解和 Agent 型任务上表现尤为突出,其 API 完全兼容 OpenAI — Kodus 通过 `OpenAI Compatible` 提供商与之对接(或直接使用 BYOK 中精选的 **Kimi K2.6 Coding** 卡片)。
+Moonshot AI 发布 **Kimi** 系列模型(K2、K2.5、K2.6、K2.6 Coding)。Kimi 在长上下文代码理解和 Agent 型任务上表现尤为突出,其 API 完全兼容 OpenAI — Kodus 可以通过 **OpenAI-compatible** 提供商与之对接。Kodus 还提供专用的 **Moonshot** 提供商,它通过 Moonshot 的 Anthropic 兼容端点(`https://api.moonshot.ai/anthropic`)进行连接。
 
 Moonshot 为同一模型系列提供**两条路径**,各自有独立端点:
 
@@ -69,35 +69,27 @@ Moonshot 还运营一个仅限中国大陆的平台(`platform.moonshot.cn`,基�
 
 ## 在 Kodus 中配置 Moonshot
 
-主流程是在 Kodus Cloud 上使用 BYOK — 精选的 **Kimi K2.6 Coding** 卡片会为您处理端点切换。希望在进程层级固定提供商的自托管用户可以改用环境变量。
+主流程是使用 Kodus Cloud 上的 **AI providers** 页面。希望在进程层级固定提供商的自托管用户可以改用环境变量。
 
-### 方式 1 — Kodus Cloud 上的 BYOK(推荐)
+### 方式 1 — Kodus Cloud 上的 Moonshot 提供商(推荐用于开发者 API)
 
 <Steps>
-  <Step title="打开 BYOK 并选择 Kimi K2.6 Coding">
-    访问 [app.kodus.io/byok](https://app.kodus.io/byok),在主模型部分点击 **Kimi K2.6 Coding** 卡片。
+  <Step title="打开 AI providers 并选择 Moonshot">
+    在侧边栏中打开 **AI providers**([app.kodus.io/byok](https://app.kodus.io/byok))。在 **Providers** 选项卡上,点击 **Moonshot** 磁贴(位于 **Connect your first provider** 下;如果您已连接过提供商,则位于 **Add another provider** 下)。
   </Step>
 
-  <Step title="选择您的方案">
-    卡片会展开一个 **Plan** 选择器。请选择:
-    - **Developer API** — 如果您的密钥来自 [platform.moonshot.ai](https://platform.moonshot.ai/console/api-keys)
-    - **Kimi Code Plan** — 如果您的密钥来自 [kimi.com/code](https://www.kimi.com/code) 订阅
-
-    基础 URL 和"获取密钥"链接会自动更新。
+  <Step title="粘贴您的 API 密钥并选择模型">
+    在 **API key** 卡片中粘贴来自 [platform.moonshot.ai](https://platform.moonshot.ai/console/api-keys) 的开发者 API 密钥。随后 **Model** 选择器会加载 Moonshot 的模型 — 选择其中一个(例如 `kimi-k2.6`)或选择 **Type model manually**。Kodus 会为您填入 `https://api.moonshot.ai/anthropic` 端点;该磁贴没有方案选择器,也没有基础 URL 字段,因此对于 Kimi Code Plan 密钥(或中国平台),请使用下面的方式 2。
   </Step>
 
-  <Step title="粘贴您的 API 密钥">
-    只需密钥。对于 Kimi Code Plan 用户,Kodus 会在高级设置中预填 `maxConcurrentRequests=30`(匹配文档中的上限)。
-  </Step>
-
-  <Step title="测试并保存">
-    点击**测试并保存**。Kodus 会通过一次低成本的元数据调用探测端点,成功后持久化配置。401 表示密钥与所选方案的端点不匹配。
+  <Step title="Test & save">
+    点击 **Test & save**。Kodus 会测试连接,成功后保存配置。401 表示密钥与端点不匹配。
   </Step>
 </Steps>
 
 ### 调优推理(可选)
 
-Kimi K2.6 Coding 默认开启推理 — 精选卡片预填 **Thinking: Medium**,对于 OpenAI 兼容的提供商会发出 `thinking: { type: "enabled" }`。两种常见覆盖:
+**Thinking / Reasoning** 位于 **Advanced (optional)** 下。对于 Kimi,除 Off 以外的任何级别都会发出 `thinking: { type: "enabled" }`。如需覆盖,请将 **Thinking / Reasoning** 切换为 **Custom** 并粘贴以下任一配置:
 
 - **禁用 thinking**,在小型 PR 上实现更快/更便宜的审查:
 
@@ -116,29 +108,28 @@ Kimi K2.6 Coding 默认开启推理 — 精选卡片预填 **Thinking: Medium**,
   ```
 
 <Note>
-  无需命名空间包装 — Kodus 在发送前会在 `openaiCompatible`(当前提供商)下自动包装。详见 [主 BYOK 文档 → 自定义 JSON 覆盖](/zh/how_to_use/byok#自定义-json-覆盖)。
+  无需命名空间包装 — Kodus 在发送前会将选项包装在当前提供商的命名空间下。详见 [主 BYOK 文档 → 自定义 JSON 覆盖](/zh/how_to_use/byok#自定义-json-覆盖)。
 </Note>
 
 ### 调优并发
 
-- **Kimi Code Plan**:保留预填的 `maxConcurrentRequests=30`(文档上限)。更高会返回 429。
+- **Kimi Code Plan**:将 **Max concurrent requests**(位于 **Advanced (optional)** 下)设置为 `30`(文档上限)。更高会返回 429。
 - **开发者 API**:保持为空(无上限)。实际限制随充值档位伸缩 — Tier 1(约 $10 充值)允许约 50 并发;Tier 5(约 $3000)允许约 1000。如果审查时看到 429,请显式下调。
 
 <Note>
-  将 Kimi 配置为 **Main**,同时保留一个 OpenAI 或 Anthropic 密钥作为 **Fallback** — 如果 Moonshot 返回 429 或 402,Kodus 会自动故障转移。
+  在 **Routing** 选项卡上,将 Kimi 设置为 **Model for all tasks**,并将一个 OpenAI 或 Anthropic 模型设置为 **Fallback (optional)** — 如果 Moonshot 返回 429 或 402,Kodus 会自动故障转移。
 </Note>
 
-### 方式 2 — 手动配置
+### 方式 2 — OpenAI 兼容端点
 
-如果您需要精选目录中没有的 Kimi 变体(例如 `kimi-k2.5` 或 `kimi-k2-0905`),请点击目录底部的**手动配置**并填写:
+对于 Kimi Code Plan、中国平台或 Moonshot 的 OpenAI 兼容端点,请打开 **AI providers**,在 **Providers** 选项卡上选择 **Custom** 下的 **OpenAI-compatible**,并填写:
 
 | 字段 | 值 |
 | --- | --- |
-| **Provider** | `OpenAI Compatible` |
 | **Base URL** | `https://api.moonshot.ai/v1`(开发者 API)<br />`https://api.kimi.com/coding/v1`(Kimi Code Plan)<br />`https://api.moonshot.cn/v1`(仅限中国大陆) |
 | **Model** | `kimi-k2.6`、`kimi-k2.6`、`kimi-k2.5`、`kimi-k2-0905`、`kimi-k2` |
-| **API Key** | 您的 Moonshot 或 Kimi Code 密钥(与上述基础 URL 匹配) |
-| **Max Concurrent Requests** | Kimi Code Plan 上为 `30`;开发者 API 保持为空(随充值档位伸缩) |
+| **API key** | 您的 Moonshot 或 Kimi Code 密钥(与上述基础 URL 匹配) |
+| **Max concurrent requests**(位于 **Advanced (optional)** 下) | Kimi Code Plan 上为 `30`;开发者 API 保持为空(随充值档位伸缩) |
 
 ### 方式 3 — 自托管(环境变量)
 
@@ -152,7 +143,7 @@ API_OPEN_AI_API_KEY="your-moonshot-or-kimi-code-api-key"
 ```
 
 <Note>
-  仅在有意禁用 BYOK 的自托管 Kodus 安装中才需要这条路径。如果您的自托管实例启用了 BYOK,请优先使用**方式 1** — 精选卡片会为您处理端点逻辑。
+  仅在有意禁用 BYOK 的自托管 Kodus 安装中才需要这条路径。如果您的自托管实例启用了 BYOK,请优先使用**方式 1**或**方式 2** — **AI providers** 页面的用法与 Cloud 上相同。
 </Note>
 
 编辑 `.env` 后重启 API 和 worker 容器,然后验证集成:
@@ -176,7 +167,7 @@ docker-compose logs api worker | grep -iE "moonshot|kimi"
     - Kimi Code Plan 密钥仅在 `api.kimi.com/coding/v1` 上工作。
     - 来自 `platform.moonshot.ai` 的开发者 API 密钥仅在 `api.moonshot.ai/v1` 上工作。
     - 来自 `platform.moonshot.cn` 的开发者 API 密钥仅在 `api.moonshot.cn/v1` 上工作。
-    - 在精选卡片中,确认 **Plan** 选择器与密钥来源匹配。
+    - **Moonshot** 磁贴始终使用 `https://api.moonshot.ai/anthropic`,因此需要 `platform.moonshot.ai` 的密钥。Kimi Code Plan 或 `platform.moonshot.cn` 的密钥请通过 **OpenAI-compatible** 并配合相应的 **Base URL** 连接。
   </Accordion>
 
   <Accordion title="余额不足">

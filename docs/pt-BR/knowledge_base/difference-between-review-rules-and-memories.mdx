@@ -21,7 +21,7 @@ Regras de Revisão são **verificações tradicionais de revisão de código** q
 - Validação estrutural usando variáveis como `fileDiff`, `pr_files_diff`
 
 **Como funcionam:**
-- Aplicadas em escopo de nível de arquivo ou nível de PR
+- Executadas por arquivo ou por PR (o **Execution mode** da regra)
 - Executadas apenas durante a revisão de código
 - Suportam referências de arquivo (`@file`, `@repo`) e funções MCP
 - Produzem sugestões com níveis de severidade
@@ -39,7 +39,7 @@ Memórias são **instruções contextuais persistentes** injetadas em todas as i
 **Como funcionam:**
 - Injetadas como contexto de alta prioridade em todos os prompts
 - Melhoram sugestões futuras ao dar ao Kody contexto específico do repositório
-- Criadas via conversa (`@kody remember: ...`) ou manualmente na interface
+- Criadas via conversa (`@kody remember: ...`) ou manualmente com **New memory** na aba **Memories** de **Code review → Kody Rules**
 - Com escopo de diretório, repositório ou nível de organização
 - O Kody deduplica automaticamente e resolve conflitos entre memórias
 
@@ -56,6 +56,6 @@ Memórias são **instruções contextuais persistentes** injetadas em todas as i
 
 ## Posso converter entre elas?
 
-Sim. No modal de Memórias Pendentes, você pode **converter uma memória em uma Regra de Revisão** se decidir que ela precisa de uma aplicação mais estruturada com caminhos de arquivo e níveis de severidade.
+Não diretamente — não há uma ação de conversão no app. Memórias pendentes aparecem na seção **Pending review** de **Code review → Kody Rules**, onde você pode aprová-las (**Approve**) ou descartá-las (**Discard**). Se uma memória precisar de uma aplicação mais estruturada com caminhos de arquivo e níveis de severidade, crie uma Regra de Revisão com **New rule** na aba **Review Rules** e exclua ou descarte a memória.
 
 Para detalhes, consulte [Regras do Kody](/pt-BR/how_to_use/code_review/configs/kody_rules).

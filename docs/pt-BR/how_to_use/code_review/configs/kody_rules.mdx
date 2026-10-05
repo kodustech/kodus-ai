@@ -3,27 +3,19 @@ title: "Visão Geral"
 description: "Kody Rules são diretrizes personalizáveis que sua equipe configura para aplicar automaticamente qualidade de código, consistência, segurança e manutenibilidade."
 ---
 
-
-<iframe
-  width="100%"
-  height="400"
-  src="https://www.youtube.com/embed/KrzlUmmJh3s?si=igZuKTjlfT2FwRVm"
-  title="YouTube video player"
-  frameborder="0"
-  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-  referrerpolicy="strict-origin-when-cross-origin"
-  allowfullscreen
-></iframe>
+<Frame caption="Code review → Kody Rules no escopo de repositório: revisão pendente, abas Review Rules e Memories, filtros e a tabela de regras">
+  <img src="/images/kody-rules.png" alt="Kody Rules page" />
+</Frame>
 
 ## Dois tipos na interface de Kody Rules
 
-As Kody Rules são organizadas em duas categorias, gerenciadas por meio de uma interface com abas nas suas configurações:
+As Kody Rules são organizadas em duas categorias, gerenciadas pelas abas **Review Rules** e **Memories** na barra lateral, em **Code review → Kody Rules**. Escolha **Global** (ou um repositório / diretório) no seletor de escopo no topo do grupo **Code review** para definir qual nível você está editando.
 
 <Tabs>
   <Tab title="Regras de Revisão">
     Regras tradicionais de code review que são executadas durante a etapa de revisão de código dedicada. Elas analisam diffs de arquivos e metadados do PR para aplicar padrões de codificação.
 
-    - Aplicadas no nível de **Arquivo** ou de **Pull Request**
+    - Aplicadas no nível de **Arquivo** (modo de execução **Per file**) ou de **Pull Request** (modo de execução **Per PR**)
     - Suportam variáveis, referências a arquivos e funções MCP
     - Acionadas durante revisões de código automatizadas
   </Tab>
@@ -42,7 +34,7 @@ As Kody Rules são organizadas em duas categorias, gerenciadas por meio de uma i
 
 ### Criar Regras Personalizadas
 
-Defina regras com base nas necessidades exatas da sua equipe. As Regras de Revisão podem ser aplicadas em dois níveis diferentes: **[Nível de Arquivo](#regras-no-nível-de-arquivo)** e **[Nível de Pull Request](#regras-no-nível-de-pull-request)**. Ambos os níveis suportam variáveis, referências a arquivos e funções MCP para criar regras poderosas e conscientes do contexto.
+Defina regras com base nas necessidades exatas da sua equipe. Na aba **Review Rules**, clique em **New rule** (ou **Write a rule** quando a lista estiver vazia) para abrir o diálogo da regra. As Regras de Revisão podem ser aplicadas em dois níveis diferentes, escolhidos no campo **Execution mode**: **[Nível de Arquivo](#regras-no-nível-de-arquivo)** (**Per file**) e **[Nível de Pull Request](#regras-no-nível-de-pull-request)** (**Per PR**). Ambos os níveis suportam variáveis, referências a arquivos e funções MCP para criar regras poderosas e conscientes do contexto.
 
 #### Variáveis, Referências a Arquivos e Funções MCP
 
@@ -67,7 +59,7 @@ As variáveis representam os dados de contexto disponíveis durante a execução
   - `pr_author` - Autor do Pull Request
   - `pr_number` - Número do Pull Request
 
-Use essas variáveis nas instruções da sua regra para acessar dados de contexto e combine-as com funções MCP para buscar informações adicionais ou realizar análises dinâmicas.
+Use essas variáveis nas instruções da sua regra para acessar dados de contexto (o menu **Variables** no editor **Instructions** insere as disponíveis para o modo de execução selecionado) e combine-as com funções MCP para buscar informações adicionais ou realizar análises dinâmicas.
 
 **Referências a Arquivos:**
 
@@ -91,7 +83,7 @@ Referencie arquivos diretamente nas instruções da sua regra para comparar cód
 
 **Funções MCP:**
 
-Acesse funções MCP (Model Context Protocol) por meio do menu suspenso `@MCP` no editor de regras para buscar dados e contexto adicionais. Você pode usar qualquer ferramenta ou servidor MCP conectado na página de [Plugins](/pt-BR/how_to_use/code_review/plugins) do seu workspace.
+As regras podem usar funções MCP (Model Context Protocol) para buscar dados e contexto adicionais. Você pode usar qualquer ferramenta ou servidor MCP conectado na página de [Plugins](/pt-BR/how_to_use/code_review/plugins) do seu workspace. O editor de regras não tem mais um seletor de MCP.
 
 As funções disponíveis incluem:
 
@@ -127,9 +119,11 @@ Veja a seção [Variáveis, Referências a Arquivos e Funções MCP](#variáveis
 **Como Configurar:**
 
 - **Nome da regra**: Defina claramente o propósito da regra
-- **Caminhos de Arquivo**: Limite as regras a arquivos ou diretórios específicos usando padrões glob
-- **Severidade**: Defina como Crítico, Alto, Médio ou Baixo
-- **Instruções Detalhadas**: Use `fileDiff`, referencie arquivos com `@file`/`@repo` e chame funções MCP para compor regras poderosas com contexto rico
+- **Execution mode**: **Per file** (o padrão)
+- **Path**: Limite as regras a arquivos ou diretórios específicos usando padrões glob (deixe vazio para aplicar a todos os arquivos)
+- **Instructions**: Use `fileDiff`, referencie arquivos com `@file`/`@repo` e chame funções MCP para compor regras poderosas com contexto rico. Regras novas podem usar **Start with a popular template**
+- **Severity**: Defina como Critical, High (o padrão), Medium ou Low
+- **Advanced settings**: **Inheritable** (ativado por padrão; veja [Herança de Regras](/pt-BR/how_to_use/code_review/configs/rules_inheritance)) e **Code examples** (**Bad example** / **Good example**)
 
 **Exemplo de Configuração:**
 
@@ -192,7 +186,7 @@ Veja a seção [Variáveis, Referências a Arquivos e Funções MCP](#variáveis
 
 **Como Configurar:**
 
-O processo de criação é idêntico ao das regras de nível de arquivo, mas você deve selecionar o escopo "Pull-request". Esse contexto mais amplo permite a análise de dependências entre arquivos e a qualidade geral do PR.
+O processo de criação é idêntico ao das regras de nível de arquivo, mas você deve definir **Execution mode** como **Per PR** (**Path** não se aplica nesse modo). Esse contexto mais amplo permite a análise de dependências entre arquivos e a qualidade geral do PR.
 
 **Exemplos:**
 
@@ -240,9 +234,9 @@ Essa composição permite regras que entendem não apenas as alterações de có
 
 Aproveite as boas práticas comprovadas instantaneamente:
 
-- Navegue até Descoberta de Regras no seu painel Kodus.
-- Filtre regras por severidade, linguagem ou tags.
-- Importe e ative regras com um único clique.
+- Em **Code review → Kody Rules** (aba **Review Rules**), clique em **Discovery** para abrir a biblioteca de regras (**Rules Marketplace**). Você também chega a ela por **Browse the library** quando a lista de regras está vazia, ou buscando **Rules library** na paleta de comandos ⌘K.
+- Comece por **Featured**, ou mude para **Browse** para pesquisar o catálogo completo e filtrar regras por **Severity**, **Language** ou **Packs**.
+- Abra uma regra e clique em **Add to my rules**, usando o seletor de repositórios ao lado para escolher **Global** ou os repositórios (e diretórios) que devem receber a regra.
 
 **Exemplos:**
 
@@ -302,10 +296,10 @@ Quando uma memória é criada ou atualizada, Kody responde com uma confirmação
 
 Você também pode criar memórias manualmente:
 
-1. Acesse **Configurações de Code Review** → **Repositório** → **Kody Rules**
-2. Mude para a aba **Memórias**
-3. Clique em **Adicionar Memória** para criar uma nova entrada
-4. Preencha o conteúdo da memória e o escopo
+1. Na barra lateral, escolha **Global** (ou o repositório / diretório) no seletor de escopo no topo do grupo **Code review** e abra **Kody Rules**. A memória é criada no escopo que você escolher aqui
+2. Mude para a aba **Memories**
+3. Clique em **New memory** (ou **Add a memory** quando a lista estiver vazia)
+4. Preencha **Memory name** e **Instructions** e clique em **Create memory**
 
 ### Escopos de Memória
 
@@ -315,20 +309,21 @@ Cada memória tem um escopo que determina onde ela se aplica:
 |-------|-------------|---------|
 | **Diretório** | Aplica-se a arquivos que correspondem a um padrão glob dentro do repositório | `src/components/ui`, `src/**/*.ts` |
 | **Repositório** | Aplica-se a todo o repositório | Todos os arquivos no repositório |
-| **Organização** | Aplica-se a todos os repositórios na organização | Todos os repositórios na organização |
+| **Organização** (**Global** no seletor de escopo) | Aplica-se a todos os repositórios na organização | Todos os repositórios na organização |
 
 ### Aprovação de Memórias Geradas por LLM
 
 Por padrão, as memórias geradas por IA são ativadas automaticamente. Você pode exigir aprovação manual antes que entrem em vigor:
 
-1. Acesse **Configurações de Code Review** → **Repositório** → **Kody Rules** → aba **Memórias**
-2. Habilite **Aprovação de memórias geradas por LLM**
+1. Acesse **Code review → Kody Rules** no escopo desejado (Global, um repositório ou um diretório)
+2. Clique em **Configuration** para abrir o painel lateral
+3. Habilite **Kody knowledge approval**
 
 Quando habilitado:
-- Memórias geradas por IA entram em um **estado pendente** e não ficam ativas até serem aprovadas
-- Um badge de notificação aparece mostrando a contagem de memórias pendentes
-- Clique em **Memórias Pendentes** para revisar, aprovar, descartar ou converter itens pendentes
-- Tanto a criação de novas memórias quanto as atualizações de memórias existentes passam pelo fluxo de aprovação
+- Regras e memórias geradas por IA entram em um **estado pendente** e não ficam ativas até serem aprovadas
+- Um badge nas abas **Review Rules** e **Memories** mostra a contagem de itens pendentes
+- Os itens pendentes aparecem na seção **Pending review** no topo da página, onde você os aprova ou descarta (veja [Pending review](#pending-review) abaixo)
+- Tanto a criação de novas regras/memórias quanto as atualizações de regras/memórias existentes passam pelo fluxo de aprovação
 
 Você também pode definir isso em `kodus-config.yml`:
 
@@ -337,17 +332,14 @@ kodyKnowledgeApproval:
     enabled: true
 ```
 
-### Revisão de Memórias Pendentes
+### Pending review
 
-O modal de Memórias Pendentes mostra duas categorias:
+A seção **Pending review** ("Rules and memories awaiting approval.") lista regras e memórias pendentes juntas, cada uma marcada como **Rule**, **Memory** ou **Update**:
 
-- **Novas Memórias**: Memórias geradas por IA aguardando aprovação
-- **Atualizações de Memória**: Alterações propostas para memórias existentes
+- **Novas regras e memórias**: Itens gerados por IA aguardando aprovação. Escolha **Approve** para ativar o item ou **Discard** para rejeitá-lo.
+- **Atualizações**: Alterações propostas para uma regra ou memória existente, exibidas como um diff. Escolha **Update existing** para aplicar a alteração, **Create new instead** para manter o original e adicionar a proposta como um item separado, ou **Discard** para rejeitá-la.
 
-Para cada item pendente, você pode:
-- **Aplicar**: Ativar a memória ou aplicar a atualização
-- **Descartar**: Rejeitar a memória ou atualização
-- **Converter em Regra de Revisão**: Transformar uma memória em uma Regra de Revisão padrão
+Selecione vários itens e use **Bulk actions** (**Approve N**, **Create as new (N)**, **Discard N**) para tratá-los de uma vez.
 
 ## Próximos Passos
 

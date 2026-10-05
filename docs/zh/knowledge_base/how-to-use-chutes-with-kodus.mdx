@@ -56,26 +56,25 @@ Chutes 使用 HuggingFace 风格的 `org/model` 标识符,部分带 `-TEE` 后�
 
 ### 方式 1 — Kodus Cloud 上的 BYOK(推荐)
 
-1. 在 Kodus Web UI 中打开**设置 → BYOK**([app.kodus.io/byok](https://app.kodus.io/byok))。
-2. Chutes 不在精选目录中 — 请点击模型列表底部的**手动配置**。如果要配置备用模型而非主模型,请在 URL 中使用 `?slot=fallback`。
-3. 填写向导:
+1. 在侧边栏中打开 **AI providers**([app.kodus.io/byok](https://app.kodus.io/byok))。
+2. Chutes 没有专属磁贴 — 请在 **Providers** 选项卡上选择 **Custom** 下的 **OpenAI-compatible**。默认运行哪个模型、哪个作为备用模型,之后在 **Routing** 选项卡上设置。
+3. 填写表单:
 
    | 字段 | 值 |
    | --- | --- |
-   | **Provider** | `OpenAI Compatible` |
    | **Base URL** | `https://llm.chutes.ai/v1` |
    | **Model** | 例如 `deepseek-ai/DeepSeek-V3-0324-TEE` |
-   | **API Key** | 您的 Chutes API 密钥 |
-   | **Max Concurrent Requests** | `3–5` 是安全起点;若未触及上限可上调(在高级设置下) |
+   | **API key** | 您的 Chutes API 密钥 |
+   | **Max concurrent requests** | `3–5` 是安全起点;若未触及上限可上调(在高级设置下) |
 
 4. 点击**测试并保存**。Kodus 会探测端点,成功后持久化配置。
 
 <Tip>
-  5× 上限基于每 token 价格计算。前沿模型比小模型更快消耗上限 — 如果想最大化每美元的审查数量,可以将 Chutes 与更便宜的模型(Llama、较小的 Qwen 变体)搭配用于常规 PR,通过 Kody 规则或独立的 BYOK 配置文件将前沿模型留给复杂审查。
+  5× 上限基于每 token 价格计算。前沿模型比小模型更快消耗上限 — 如果想最大化每美元的审查数量,可以将 Chutes 与更便宜的模型(Llama、较小的 Qwen 变体)搭配用于常规 PR,通过 **Routing** 选项卡上的按代理覆盖或按代码库设置的 **Code review model**(**Code review → General**)将前沿模型留给复杂审查。
 </Tip>
 
 <Note>
-  由于 Chutes 运行在去中心化计算上,冷启动和尾部延迟比专用提供商更多变。配置一个 OpenAI 或 Anthropic 密钥作为 **Fallback**,以便当节点响应慢或月度上限触及时 Kodus 能故障转移。
+  由于 Chutes 运行在去中心化计算上,冷启动和尾部延迟比专用提供商更多变。在 **Routing** 选项卡上将一个 OpenAI 或 Anthropic 模型设置为 **Fallback (optional)**,以便当节点响应慢或月度上限触及时 Kodus 能故障转移。
 </Note>
 
 ### 方式 2 — 自托管(环境变量)
@@ -120,7 +119,7 @@ docker-compose logs api worker | grep -iE "chutes|llm\.chutes"
   <Accordion title="月度 5× 上限触及">
     - 在 Chutes 仪表板查看当前使用情况。
     - 临时切换到更便宜的模型以延长上限,或升级档位。
-    - 配置 `Fallback` BYOK 提供商,让上限触及时审查仍能继续。
+    - 在 **Routing** 选项卡上设置一个 **Fallback (optional)** 模型,让上限触及时审查仍能继续。
   </Accordion>
 
   <Accordion title="401 / 身份验证错误">
@@ -134,7 +133,7 @@ docker-compose logs api worker | grep -iE "chutes|llm\.chutes"
 
   <Accordion title="延迟慢或不稳定">
     - Chutes 运行在去中心化计算上,尾部延迟比专用云更高。
-    - 对延迟敏感的审查,优先使用专用提供商;把 Chutes 留给隔夜或批量审查任务,或把快速提供商配置为 `Main`、Chutes 为 `Fallback`。
+    - 对延迟敏感的审查,优先使用专用提供商;把 Chutes 留给隔夜或批量审查任务,或在 **Routing** 中把快速提供商设置为 **Model for all tasks**、Chutes 设置为 **Fallback (optional)**。
   </Accordion>
 
   <Accordion title="连接错误">

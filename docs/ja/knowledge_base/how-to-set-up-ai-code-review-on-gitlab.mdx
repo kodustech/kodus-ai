@@ -8,20 +8,20 @@ KodusはOAuthとWebhookを通じてGitLabと統合します。設定されると
 ## 手順
 
 1. [kodus.io](https://kodus.io)で**アカウントを作成**するか、[Kodusをセルフホスト](/ja/how_to_deploy/deploy_kodus/generic_vm)します
-2. **GitLabに接続** — セットアップ中にOAuth経由で認証します
-3. **Webhookを設定** — ガイド付きセットアップに従ってマージリクエストイベントを有効にします
-4. **プロジェクトを選択** — Kodusがレビューすべきプロジェクトを選択します
+2. **GitLabに接続** — オンボーディングの **Connect your Git tool** ステップで **Install Gitlab app** をクリックしてOAuth経由で認証するか、**Connect via token** を選択します（後からサイドバーの **Repositories** から接続することもできます）
+3. **プロジェクトを選択** — Kodusがレビューすべきプロジェクトを選択します
+4. **Webhook** — 選択を保存すると、Kodusがマージリクエストのwebhookを自動的に登録します。登録されなかった場合（一部のセルフホスト環境など）は、[GitLab Webhook](/ja/how_to_deploy/platforms/gitlab/gitlab_webhook) ガイドに従って手動で追加してください
 5. **マージリクエストをオープン** — Kodusが自動的にレビューします
 
 ## 得られるもの
 
 - すべてのMRでの自動レビュー
 - マージリクエスト内に直接投稿されるコメント
-- カスタマイズ可能なルールと提案コントロール
+- カスタマイズ可能なルール、レビューカテゴリ、最小重要度のしきい値
 - リンクされたタスクに対するビジネスロジック検証
 
 ## カスタム設定
 
-プロジェクトごとの動作をカスタマイズするには、リポジトリルートに `kodus-config.yml` を配置します。
+プロジェクトごとの動作をカスタマイズするには、リポジトリルートに `kodus-config.yml` を配置します。そのプロジェクトで **kodus Config File Overrides Web Preferences** がオンになっている場合（**Code review → General**）、ファイルはウェブ設定をオーバーライドします。
 
 完全なセットアップガイドについては、[GitLab OAuth](/ja/how_to_deploy/platforms/gitlab/gitlab_oauth)と[GitLab Webhook](/ja/how_to_deploy/platforms/gitlab/gitlab_webhook)を参照してください。

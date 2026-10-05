@@ -21,15 +21,15 @@ The monthly spend limit watches how much you're spending on your **BYOK models**
 
 ## Configure it
 
-The limit lives on the BYOK screen, below your Main and Fallback models.
+The limit lives on the **AI providers** page, in the **Budget** tab (section **Budget & alerts**).
 
 <Steps>
-  <Step title="Open BYOK settings">
-    Go to [app.kodus.io/byok](https://app.kodus.io/byok) and scroll to **Monthly spend limit**. (The section appears once you have at least one BYOK model configured.)
+  <Step title="Open the Budget tab">
+    In the sidebar, open **AI providers** and pick the **Budget** tab ([app.kodus.io/byok?tab=budget](https://app.kodus.io/byok?tab=budget)). (The settings appear once you have at least one model connected with your own key; until then the tab points you to **Go to Providers**.)
   </Step>
 
   <Step title="Check the model prices">
-    Each configured model shows its per-token price — **input, output, cache read, cache write** — as **$ / 1M tokens**. A **Catalog** badge means Kodus found the price automatically; a **Manual** badge means you've entered it yourself.
+    Expand **Adjust model prices**. Each configured model shows its per-token price — **Input, Output, Cache read, Cache write** — as **$ / 1M tokens**. A **Catalog** badge means Kodus found the price automatically; a **Manual** badge means you've entered it yourself.
   </Step>
 
   <Step title="Fix any model with no price">
@@ -37,7 +37,7 @@ The limit lives on the BYOK screen, below your Main and Fallback models.
   </Step>
 
   <Step title="Set the monthly limit and enable">
-    Enter your cap in US$, flip **Enable spend alerts** on, and click **Save spend limit**.
+    Enter the amount in **Monthly limit (US$)**, turn on **Enable spend alerts**, and click **Save budget & alerts**. The tab also shows **Projected this month**, and **Open Costs** takes you to the full breakdown on **Organization → Token usage**.
   </Step>
 </Steps>
 
@@ -79,7 +79,7 @@ You can manage where these land (and which roles receive them) under **Spend Lim
 
 ## Accuracy
 
-Spend is an **estimate**. It's derived from the tokens your reviews used and the per-token prices shown on the BYOK screen — it won't match your provider invoice to the cent.
+Spend is an **estimate**. It's derived from the tokens your reviews used and the per-token prices shown on the **Budget** tab — it won't match your provider invoice to the cent.
 
 <CardGroup cols={2}>
   <Card title="Keep prices accurate" icon="tags">
@@ -102,7 +102,7 @@ Spend is an **estimate**. It's derived from the tokens your reviews used and the
   </Accordion>
 
   <Accordion title="What counts toward the spend?">
-    Only token usage on your **BYOK** models, priced at the current rates shown on the BYOK screen. Kodus-hosted models don't count.
+    Only token usage on your **BYOK** models, priced at the current rates shown on the **Budget** tab. Kodus-hosted models don't count.
   </Accordion>
 
   <Accordion title="When does the spend reset?">
@@ -112,7 +112,7 @@ Spend is an **estimate**. It's derived from the tokens your reviews used and the
   <Accordion title="I switched models mid-month — does my spend jump?">
     No. Spend is tracked **per model**: each model's tokens are priced at *that model's* rate. If you spent \$50 on model A and then switch to model B, model A's usage stays at \$50 — switching to B never re-prices A's tokens at B's rate. Your total just grows by what model B then uses.
 
-    The only thing that re-prices already-incurred usage is a change to **that same model's price** — when the pricing catalog updates a model's rate, or you edit its manual price on the BYOK screen, that model's month-to-date usage is recomputed at the new rate (there's no frozen snapshot).
+    The only thing that re-prices already-incurred usage is a change to **that same model's price** — when the pricing catalog updates a model's rate, or you edit its manual price under **Adjust model prices**, that model's month-to-date usage is recomputed at the new rate (there's no frozen snapshot).
   </Accordion>
 
   <Accordion title="Why can't I enable the limit?">

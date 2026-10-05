@@ -11,12 +11,13 @@ O Single Sign-On (SSO) permite gerenciar o acesso ao Kodus por meio de um único
 
 <Steps>
     <Step title="Acessar as configurações de SSO">
-        Navegue até as configurações da sua organização em
-        [app.kodus.io/organization/sso](https://app.kodus.io/organization/sso)
+        Na barra lateral, abra **Organization → SSO**
+        ([app.kodus.io/organization/sso](https://app.kodus.io/organization/sso)).
+        O SSO está disponível no plano Enterprise (e durante um trial); nos outros planos a página mostra uma prévia bloqueada.
     </Step>
 
     <Step title="Preencher a configuração do seu IdP">
-        Preencha as configurações do seu IdP, como o ID do emissor, a URL e o certificado de assinatura. Esses dados podem ser preenchidos manualmente ou fornecendo a URL de metadados ou um arquivo XML de metadados do seu IdP.
+        Em **SAML SSO Configuration**, preencha as configurações do seu IdP: **IDP Issuer**, **SSO URL** e **X.509 Certificate**. Esses dados podem ser preenchidos manualmente ou fornecendo a **Metadata URL (optional)** do seu IdP (depois **Fetch**) ou um arquivo XML de metadados (**Upload Metadata XML File**).
 
         <Info>
             Esses valores geralmente podem ser encontrados na documentação do seu IdP ou no console de administração deles.
@@ -24,7 +25,7 @@ O Single Sign-On (SSO) permite gerenciar o acesso ao Kodus por meio de um único
     </Step>
 
     <Step title="Configurar o Kodus como SP no seu IdP">
-        Configure o Kodus como um SP no seu IdP fornecendo nosso ID de entidade (`kodus-orchestrator` por padrão) e a URL de callback da sua organização encontrada na página de configurações de SSO.
+        Configure o Kodus como um SP no seu IdP fornecendo nosso ID de entidade (**Service Provider Entity ID**, `kodus-orchestrator` por padrão) e a **Callback URL** da sua organização, ambos exibidos na página de configurações de SSO.
 
         Certifique-se de que o formato do ID de nome está definido como e-mail.
 
@@ -33,8 +34,12 @@ O Single Sign-On (SSO) permite gerenciar o acesso ao Kodus por meio de um único
         </Warning>
     </Step>
 
-    <Step title="Habilitar e testar o SSO">
-        Habilite o SSO no Kodus e teste a configuração fazendo logout e login novamente. Ao tentar fazer login com um domínio de e-mail associado ao seu IdP, você terá a opção de fazer login via SSO.
+    <Step title="Verificar seus domínios">
+        Adicione seus domínios de e-mail em **Allowed Domains** e clique em **Verify** em cada um. Em **Verify Enterprise Domain**, informe um e-mail desse domínio para receber um link de verificação (instâncias self-hosted verificam na hora). Cada domínio precisa mostrar **Verified** antes que o SSO possa ser habilitado.
+    </Step>
+
+    <Step title="Testar e habilitar o SSO">
+        Clique em **Test connection** e conclua um login no seu IdP. Depois de um teste bem-sucedido, ative **Enable SAML SSO** e clique em **Save settings**. Ao tentar fazer login com um domínio de e-mail associado ao seu IdP, você verá **Continue with SSO**.
     </Step>
 
 </Steps>

@@ -14,7 +14,7 @@ Kodus supports three config levels that map naturally to a monorepo:
 
 | Level | Applies to | Example |
 |-------|-----------|---------|
-| **Organization** | All repos | "Never commit `.env` files" |
+| **Global** | All repos | "Never commit `.env` files" |
 | **Repository** | The monorepo | "Use conventional commits" |
 | **Directory** | A specific package | "React components must use PascalCase" |
 
@@ -36,13 +36,12 @@ monorepo/
 
 ## Step 2 — Create directory-level configs
 
-Go to **Code Review Settings** → **Repository** → click on a directory to configure it.
+In the sidebar, open the scope picker at the top of the **Code review** group and choose **Add repository configuration**. In **Create repository settings**, **Select the target repository** (the monorepo), then **Select the target directories** (one or more package folders) and click **Create settings**. Each directory appears indented under the repository in the scope picker — pick it to configure it.
 
 Each directory can have its own:
 - **Kody Rules** (file-level and PR-level)
-- **Review options** (which analysis types to enable)
-- **Suggestion control** (severity filters, max suggestions)
-- **Ignored paths**
+- **What to review** (which categories to enable, and the minimum severity to post)
+- **Ignored files** (on **General**)
 
 ## Step 3 — Write targeted rules
 
@@ -50,8 +49,8 @@ Each directory can have its own:
 
 ```
 Name: React components must use design system tokens
-Scope: File
-Paths: apps/web/src/components/**/*.tsx
+Execution mode: Per file
+Path: apps/web/src/components/**/*.tsx
 Severity: High
 Instructions:
   Check fileDiff for hardcoded colors, spacing, or font sizes.
@@ -63,8 +62,8 @@ Instructions:
 
 ```
 Name: Domain layer must not import from infrastructure
-Scope: File
-Paths: apps/api/src/domain/**/*.ts
+Execution mode: Per file
+Path: apps/api/src/domain/**/*.ts
 Severity: Critical
 Instructions:
   Check fileDiff for any import from "../infrastructure",
@@ -77,7 +76,7 @@ Instructions:
 
 ```
 Name: Public API changes require changeset
-Scope: Pull Request
+Execution mode: Per PR
 Severity: High
 Instructions:
   If pr_files_diff modifies any file in libs/shared/src/index.ts
@@ -100,13 +99,13 @@ CommonJS require() is not allowed anywhere.
 Any breaking change requires a major version bump and a changeset.
 ```
 
-## Step 5 — Configure suggestion control per directory
+## Step 5 — Set the severity threshold per directory
 
-High-traffic packages might need stricter limits:
+High-traffic packages might need stricter filters. Pick the directory in the scope picker, open **What to review**, and set **Minimum severity to post**:
 
-- **apps/web/** — max 5 suggestions, medium severity filter (frontend moves fast)
-- **libs/shared/** — max 15 suggestions, low severity filter (stability matters)
-- **infra/** — max 3 suggestions, high severity filter (fewer but critical)
+- **apps/web/** — **Medium** (frontend moves fast)
+- **libs/shared/** — **Low/All** (stability matters)
+- **infra/** — **High** (fewer but critical)
 
 ## Step 6 — Ignore generated paths
 

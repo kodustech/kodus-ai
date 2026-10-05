@@ -7,6 +7,8 @@ description: "Configure mensagens de início e fim de revisão personalizadas pa
 
 Personalize as mensagens que Kody envia no início e no fim das revisões de código. Este recurso permite personalizar o estilo de comunicação e adicionar contexto específico ou instruções para sua equipe.
 
+Na barra lateral, abra **Code review → What Kody writes**. As mensagens ficam na seção **Comments during the review**, com uma aba por mensagem: **Review starts**, **Review ends** e **Review fails**. Cada aba tem uma caixa **Message** e um menu **Reset to…** (restaura a mensagem herdada, ou a mensagem padrão no escopo Global).
+
 ## Comportamento Padrão
 
 Quando você não personalizou nenhuma mensagem, Kody funciona da seguinte forma:
@@ -27,25 +29,26 @@ Isso cria uma linha do tempo completa: **Mensagem Inicial → Sugestões → Men
 
 ## Opções de Configuração de Mensagens
 
-### Comportamento da Mensagem
+### Post this message
 
-Use o menu suspenso **Comportamento da mensagem** para decidir quando Kody deve postar suas mensagens
-de início e fim personalizadas:
+Nas abas **Review starts** e **Review ends**, use o seletor **Post this message**
+para decidir quando Kody deve postar aquela mensagem (cada mensagem tem sua própria
+configuração):
 
 - **Importante:** As mensagens são enviadas apenas quando uma revisão de fato é executada.  
   Se a sua cadência de revisão for **Manual**, as mensagens são postadas somente quando alguém executa `@kody start-review`.
 
-- **A cada push**: Kody posta a mensagem de início quando o pull request é aberto e
-  repete o par início/fim após cada novo push **que aciona uma revisão**.
-  Isso acontece automaticamente apenas quando a cadência é **Automática** ou **Auto-pause**.
-- **Somente quando aberto**: Kody envia as mensagens de início e fim apenas uma vez, logo
+- **On every push** (`every_push`): postada quando o pull request é aberto e novamente
+  após cada novo push **que aciona uma revisão**. Isso acontece automaticamente
+  apenas quando a cadência é **Automática** ou **Auto-pause**.
+- **Only when the PR opens** (`only_when_opened`): postada apenas uma vez, logo
   após a primeira execução da revisão. Se a cadência for **Manual**, a primeira execução
   é quando você chama `@kody start-review`. Pushes futuros apenas adicionam sugestões
   de revisão mais a reação usual para que os autores saibam que a revisão foi reexecutada.
-- **Desativado**: As mensagens personalizadas estão desabilitadas. Kody ainda executa a revisão e posta
-  sugestões, mas nenhuma mensagem de início ou fim é enviada.
+- **Never** (`off`): a mensagem não é postada; o texto é guardado para depois. Kody
+  ainda executa a revisão e posta sugestões.
 
-Quando o comportamento é `A cada push` ou `Somente quando aberto`, Kody usa os
+Quando uma mensagem está definida como **On every push** ou **Only when the PR opens**, Kody usa os
 templates que você preencheu. Se você personalizar apenas a mensagem de início, apenas essa
 mensagem é enviada; o mesmo vale para a mensagem de fim. Isso mantém a linha do tempo familiar de
 **Mensagem Inicial → Sugestões → Mensagem Final** sempre que o comportamento permite
@@ -57,7 +60,7 @@ PR aberto → nenhuma mensagem ainda
 
 ## Contexto Dinâmico
 
-Você pode enriquecer suas mensagens personalizadas com contexto dinâmico usando o botão **Adicionar Contexto**. Isso permite incluir:
+Você pode enriquecer suas mensagens personalizadas com contexto dinâmico usando o menu **Add context** ao lado de **Message** (nas abas **Review starts** e **Review ends**). Isso permite incluir:
 
 ### changedFiles
 
@@ -69,7 +72,7 @@ Um resumo abrangente de todas as alterações no pull request, dando uma visão 
 
 ### reviewOptions
 
-Um reflexo das configurações de revisão da equipe, mostrando quais tipos de análise estão habilitados ou desabilitados para a revisão.
+Um reflexo das configurações de revisão da equipe, mostrando quais categorias de revisão estão habilitadas ou desabilitadas para a revisão.
 
 ### reviewCadence
 
@@ -110,7 +113,7 @@ aplicar de uma vez todas as correções da revisão.
 <Note>
   No `kodus-config.yml` esses tokens são escritos com prefixo `@` — `@changedFiles`,
   `@changeSummary`, `@reviewOptions`, `@reviewCadence`, `@reviewScope`, `@agentPrompt` —
-  em qualquer posição dentro do `content` da mensagem. O botão **Add Context** insere os
+  em qualquer posição dentro do `content` da mensagem. O menu **Add context** insere os
   mesmos tokens pra você na interface web.
 </Note>
 
@@ -118,10 +121,12 @@ aplicar de uma vez todas as correções da revisão.
 
 Separada do par início/fim, você pode anexar seu próprio texto ao comentário que o Kody publica
 quando uma revisão **falha** — por exemplo quando não há provider BYOK configurado, ou quando o
-provider rejeitou a requisição.
+provider rejeitou a requisição. Escreva-o na aba **Review fails**.
 
-- **Off** (padrão) — o Kody publica a mensagem de erro padrão, sem alteração.
-- **Active** — seu texto é anexado abaixo da mensagem de erro padrão.
+Não existe um ajuste de ligar/desligar para essa mensagem: o próprio texto é o interruptor.
+
+- **Vazio** (padrão) — o Kody publica a mensagem de erro padrão, sem alteração.
+- **Preenchido** — seu texto é anexado abaixo da mensagem de erro padrão.
 
 Use para apontar as pessoas ao responsável certo ou ao runbook, em vez de deixá-las com uma
 falha genérica:
@@ -136,14 +141,15 @@ customMessages:
 
 Deixar `content` vazio mantém a mensagem de erro padrão inalterada.
 
-## Configurações globais
+## Visibilidade dos comentários (configurações globais)
 
-Dois toggles que valem para todo comentário do Kody, não só para as mensagens customizadas:
+Dois toggles que valem para todo comentário do Kody, não só para as mensagens customizadas. Eles ficam na
+seção **Comment visibility** de **What Kody writes**:
 
 | Configuração | Padrão | O que faz |
 | --- | --- | --- |
-| `hideComments` | `false` | Publica toda mensagem de revisão como comentário oculto/minimizado. Aparece na interface como **Post as hidden comment**. **Apenas GitHub** — o toggle fica escondido nas outras plataformas. |
-| `suggestionCopyPrompt` | `true` | Adiciona às sugestões o recurso de copiar como prompt, para você colar num agente de código. **Não disponível no Bitbucket.** |
+| `hideComments` | `false` | Publica toda mensagem de revisão como comentário oculto/minimizado. Aparece na interface como **Post as hidden comment**. **Apenas GitHub** — o toggle fica escondido quando não existe nenhuma conexão com o GitHub. |
+| `suggestionCopyPrompt` | `true` | Adiciona às sugestões o recurso de copiar como prompt, para você colar num agente de código. Aparece na interface como **Add a copyable prompt to each suggestion**. **Não disponível no Bitbucket** — o toggle fica escondido quando o Bitbucket é sua única plataforma conectada. |
 
 ```yaml
 customMessages:

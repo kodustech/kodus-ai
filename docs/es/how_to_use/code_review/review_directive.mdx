@@ -6,7 +6,7 @@ description: "Dirige la atención de Kody hacia un área específica del pull re
 Una **directiva de revisión** te permite indicarle a Kody dónde concentrar su análisis más profundo en una revisión concreta. En lugar de cambiar la configuración, adjuntas una instrucción breve al lanzar la revisión — por ejemplo, "enfócate en la lógica de auth y sesión" — y Kody dedica su análisis más riguroso al código modificado que coincide.
 
 <Note>
-  Una directiva es **efímera**: se aplica solo a esa ejecución de revisión. No se guarda en tu configuración ni afecta a revisiones futuras. Para cambiar el comportamiento de Kody de forma permanente, usa [Custom Prompts](/es/how_to_use/code_review/configs/custom_prompts) o [Kody Rules](/es/how_to_use/code_review/configs/kody_rules).
+  Una directiva es **efímera**: se aplica solo a esa ejecución de revisión. No se guarda en tu configuración ni afecta a revisiones futuras. Para cambiar el comportamiento de Kody de forma permanente, usa las instrucciones por categoría y la personalidad de Kody ([Instructions & Personality](/es/how_to_use/code_review/configs/custom_prompts), antes Custom Prompts) o [Kody Rules](/es/how_to_use/code_review/configs/kody_rules).
 </Note>
 
 ## Cuándo Usarla
@@ -138,7 +138,7 @@ Para solicitar acceso, escríbenos en [Discord](https://discord.gg/TFZBRk9fT6) o
   </Accordion>
   <Accordion title="Ejemplos débiles">
     - `@kody review por favor sé exhaustivo` — no hay área que priorizar.
-    - `@kody review comenta solo en el archivo X` — una directiva no es un filtro; usa [rutas ignoradas](/es/how_to_use/code_review/configs/general) para acotar archivos.
+    - `@kody review comenta solo en el archivo X` — una directiva no es un filtro; usa [Ignored files](/es/how_to_use/code_review/configs/general) para acotar archivos.
   </Accordion>
 </AccordionGroup>
 

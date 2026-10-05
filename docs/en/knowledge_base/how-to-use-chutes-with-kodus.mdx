@@ -56,26 +56,25 @@ See the live list and current pricing at [llm.chutes.ai/v1/models](https://llm.c
 
 ### Option 1 — BYOK on Kodus Cloud (recommended)
 
-1. In the Kodus web UI, open **Settings → BYOK** ([app.kodus.io/byok](https://app.kodus.io/byok)).
-2. Chutes isn't in the curated catalog — click **Configure manually** at the bottom of the model list. Use `?slot=fallback` in the URL if configuring a fallback instead of the main model.
-3. Fill the wizard:
+1. In the sidebar, open **AI providers** ([app.kodus.io/byok](https://app.kodus.io/byok)).
+2. Chutes has no dedicated tile — on the **Providers** tab, pick **OpenAI-compatible** under **Custom**. Which model runs by default and which is the fallback is set afterwards on the **Routing** tab.
+3. Fill the form:
 
    | Field | Value |
    | --- | --- |
-   | **Provider** | `OpenAI Compatible` |
    | **Base URL** | `https://llm.chutes.ai/v1` |
    | **Model** | e.g. `deepseek-ai/DeepSeek-V3-0324-TEE` |
-   | **API Key** | your Chutes API key |
-   | **Max Concurrent Requests** | `3–5` is a safe start; raise if you don't hit cap (under Advanced settings) |
+   | **API key** | your Chutes API key |
+   | **Max concurrent requests** | `3–5` is a safe start; raise if you don't hit cap (under Advanced settings) |
 
 4. Click **Test & save**. Kodus probes the endpoint and persists the config on success.
 
 <Tip>
-  The 5× cap is computed from per-token prices. Expensive frontier models burn through the cap faster than small ones — if you want to maximize reviews per dollar, pair Chutes with a cheaper model (Llama, Qwen smaller variants) for routine PRs and save the frontier models for complex reviews via a Kody rule or separate BYOK profile.
+  The 5× cap is computed from per-token prices. Expensive frontier models burn through the cap faster than small ones — if you want to maximize reviews per dollar, pair Chutes with a cheaper model (Llama, Qwen smaller variants) for routine PRs and save the frontier models for complex reviews via a per-agent override on the **Routing** tab or a per-repository **Code review model** (**Code review → General**).
 </Tip>
 
 <Note>
-  Because Chutes runs on decentralized compute, cold-start and tail latency vary more than on dedicated providers. Configure an OpenAI or Anthropic key as **Fallback** so Kodus can fail over when a node is slow or the monthly cap is hit.
+  Because Chutes runs on decentralized compute, cold-start and tail latency vary more than on dedicated providers. Set an OpenAI or Anthropic model as **Fallback (optional)** on the **Routing** tab so Kodus can fail over when a node is slow or the monthly cap is hit.
 </Note>
 
 ### Option 2 — Self-hosted (environment variables)
@@ -120,7 +119,7 @@ Pick Synthetic instead if you want a simpler flat subscription with no per-model
   <Accordion title="Monthly 5× cap reached">
     - Check current usage in the Chutes dashboard.
     - Switch temporarily to a cheaper model to extend the cap, or upgrade tier.
-    - Configure a `Fallback` BYOK provider so reviews keep running while you're capped.
+    - Set a **Fallback (optional)** model on the **Routing** tab so reviews keep running while you're capped.
   </Accordion>
 
   <Accordion title="401 / authentication errors">
@@ -134,7 +133,7 @@ Pick Synthetic instead if you want a simpler flat subscription with no per-model
 
   <Accordion title="Slow or inconsistent latency">
     - Chutes runs on decentralized compute, so tail latency is higher than on dedicated clouds.
-    - For latency-sensitive reviews, prefer dedicated providers; reserve Chutes for overnight or batch review jobs, or configure a fast provider as `Main` and Chutes as `Fallback`.
+    - For latency-sensitive reviews, prefer dedicated providers; reserve Chutes for overnight or batch review jobs, or set a fast provider as **Model for all tasks** and Chutes as **Fallback (optional)** in **Routing**.
   </Accordion>
 
   <Accordion title="Connection errors">

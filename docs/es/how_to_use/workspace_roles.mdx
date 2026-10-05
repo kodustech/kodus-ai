@@ -52,21 +52,23 @@ Aquí hay un desglose detallado de lo que puede hacer cada rol, basado en la mat
 
 ## Gestionar Miembros del Espacio de Trabajo
 
+Los miembros del espacio de trabajo se gestionan en la pestaña **Workspace members** de **Organization → Subscription** — no hay una página de miembros separada. Solo los **Owners** pueden invitar miembros, cambiar roles o eliminar miembros.
+
 ### Agregar Nuevos Miembros
 
-1. Navega a la sección **Miembros** de tu espacio de trabajo
-2. Haz clic en el botón **"Invitar miembro"**
-3. Ingresa la dirección de correo electrónico del miembro
-4. Selecciona el rol apropiado para el nuevo miembro
-5. Envía la invitación
+1. En la barra lateral, abre **Organization → Subscription** y elige la pestaña **Workspace members**
+2. Haz clic en **Invite member**
+3. En **Workspace member invitation**, escribe el correo electrónico del miembro y haz clic en **Add to invite list** (repite para más personas)
+4. Haz clic en **Send invites**
+5. Los miembros invitados entran como **Contributor**; cambia su rol después (ver más abajo)
 
 ### Unión Automática para Miembros del Espacio de Trabajo
 
 Habilita la unión automática para permitir que los usuarios con dominios de correo electrónico coincidentes se unan a tu espacio de trabajo automáticamente.
 
 **Cómo habilitarlo:**
-1. Ve a [Configuración de la Organización](https://app.kodus.io/organization/general)
-2. Habilita la unión automática para tu organización
+1. Ve a **Organization → General** ([app.kodus.io/organization/general](https://app.kodus.io/organization/general))
+2. En **Auto Join**, activa **Enable Auto Join**, ingresa tu dominio y guarda
 3. Actualmente funciona solo con el dominio de correo electrónico de tu cuenta registrada
 4. ¿Necesitas un dominio diferente? Contáctanos en la comunidad
 
@@ -78,18 +80,22 @@ Habilita la unión automática para permitir que los usuarios con dominios de co
 
 ### Cambiar Roles de Miembros
 
-1. Ve a la sección **Miembros** de tu espacio de trabajo
+1. Ve a **Organization → Subscription → Workspace members**
 2. Encuentra al miembro cuyo rol deseas cambiar
-3. Haz clic en el menú desplegable de su rol actual
-4. Selecciona el nuevo rol de las opciones disponibles
+3. Abre el selector en su columna **Role**
+4. Selecciona el nuevo rol (**Owner**, **Billing Manager**, **Repo Admin** o **Contributor**)
 5. El cambio surte efecto inmediatamente
+
+Para un **Repository Admin**, asigna los repositorios que puede editar con el botón **+** junto a su rol, que abre **Assign repositories**.
 
 ### Eliminar Miembros
 
-1. En la sección **Miembros**, localiza al miembro a eliminar
-2. Haz clic en el menú **"Acciones"** (tres puntos)
-3. Selecciona **"Eliminar del espacio de trabajo"**
-4. Confirma la eliminación en el cuadro de diálogo
+1. En **Organization → Subscription → Workspace members**, localiza al miembro a eliminar
+2. Abre el menú **Actions** (tres puntos) en su fila
+3. Selecciona **Delete**
+4. Confirma con **Remove** en el cuadro de diálogo
+
+El mismo menú tiene **Approve** para los miembros marcados como **Needs approval** y **Copy invite link** para volver a compartir el enlace de invitación de un miembro.
 
 ## Consideraciones de Seguridad
 
@@ -103,7 +109,7 @@ Habilita la unión automática para permitir que los usuarios con dominios de co
 <AccordionGroup>
   <Accordion title="No puedo invitar nuevos miembros al espacio de trabajo">
     **Soluciones:**
-    - Verifica que tengas el rol de Propietario o Administrador de Repositorio
+    - Verifica que tengas el rol de Propietario — solo los Owners pueden invitar miembros
     - Comprueba si tu espacio de trabajo ha alcanzado algún límite del sistema
     - Asegúrate de que tienes los permisos correctos en tu cuenta
   </Accordion>
@@ -111,7 +117,7 @@ Habilita la unión automática para permitir que los usuarios con dominios de co
   <Accordion title="Un miembro no puede editar las configuraciones de revisión de código">
     **Soluciones:**
     - Confirma que el miembro tiene el rol de Administrador de Repositorio o Propietario para el repositorio específico
-    - Verifica si el miembro tiene permisos "propios" para el repositorio que quiere editar
+    - Para un Administrador de Repositorio, comprueba que el repositorio le esté asignado (**Assign repositories** en la columna **Role** de **Workspace members**)
     - Verifica que la asignación de rol del miembro sea correcta
   </Accordion>
 

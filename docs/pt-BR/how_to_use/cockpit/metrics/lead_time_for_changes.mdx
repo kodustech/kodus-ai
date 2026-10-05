@@ -1,29 +1,31 @@
 ---
 title: "Tempo de Ciclo de PR"
-description: "Meça o tempo desde o primeiro commit até o deploy em produção"
+description: "Meça quanto tempo os pull requests ficam abertos, da abertura ao fechamento"
 ---
 
 ## O que é Tempo de Ciclo de PR
 
-O Tempo de Ciclo de PR mede o tempo total desde quando um desenvolvedor faz o primeiro commit até que esse código seja mesclado com sucesso na branch padrão. Essa métrica representa a velocidade de entrega de ponta a ponta do seu processo de desenvolvimento.
+O Tempo de Ciclo de PR mede quanto tempo um pull request fica aberto: desde quando é aberto até quando é fechado. Essa métrica representa a velocidade de revisão e merge do seu processo de desenvolvimento.
+
+No Cockpit, é o card **PR Cycle Time (p75)** e o gráfico **PR Cycle Time** na aba **Productivity**.
 
 ## Como Calculamos
 
-Rastreamos automaticamente o tempo entre seu primeiro commit e quando esse código é mesclado na branch padrão (main/master). Como merges para main tipicamente representam quando o código está pronto para produção, isso nos dá uma boa medida do tempo de ciclo de desenvolvimento.
+Rastreamos automaticamente o tempo entre a abertura e o fechamento de cada pull request. Partimos da data de abertura do PR, e não do primeiro commit, porque branches com rebase podem carregar commits antigos que inflariam o número. Para o tempo gasto antes da abertura do PR, veja [Lead Time Breakdown](/pt-BR/how_to_use/cockpit/metrics/lead_time_breakdown).
 
 **O que rastreamos:**
-- Tempo do primeiro commit até o merge do PR
-- O ciclo de desenvolvimento completo
+- Tempo da abertura do PR até o fechamento do PR
+- PRs fechados no intervalo de datas selecionado
 - Quanto tempo o código leva para ser integrado
 
 **O que não contamos:**
-- Tempo gasto em planejamento ou design (antes do primeiro commit)
+- Tempo gasto em planejamento, design ou codificação antes da abertura do PR
 - Tempo após o merge (deploy, adoção pelos usuários, etc.)
 - Mudanças com falha ou abandonadas
 
 **Como é calculado:**
 ```
-Tempo de Ciclo de PR = (Hora do Merge do PR) - (Hora do Primeiro Commit)
+Tempo de Ciclo de PR = (Hora de Fechamento do PR) - (Hora de Abertura do PR)
 ```
 
 Usamos o 75º percentil (P75) para mostrar o tempo de ciclo típico, filtrando outliers incomumente longos que poderiam distorcer sua compreensão do desempenho normal.

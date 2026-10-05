@@ -1,17 +1,28 @@
 ---
-title: "カスタムプロンプト"
-description: "各カテゴリとサジェストの書き方に合わせて Kody のレビュープロンプトをカスタマイズし、チームのニーズに合わせます"
+title: "指示とパーソナリティ"
+description: "各レビューカテゴリで Kody が何を探すか、そしてサジェストの書き方（旧 Custom Prompts）をカスタマイズし、チームのニーズに合わせます"
 ---
 
-カスタムプロンプトにより、Kody がコードを分析し、結果を伝達する方法を完全に制御できます。各レビューカテゴリで AI が何を探すか、チームの基準とコミュニケーションスタイルに合わせてサジェストをどのように提示するかをカスタマイズします。
+カテゴリの指示と Kody のパーソナリティ（旧 **Custom Prompts**）により、Kody がコードを分析し、結果を伝達する方法を完全に制御できます。各レビューカテゴリで AI が何を探すか、チームの基準とコミュニケーションスタイルに合わせてサジェストをどのように提示するかをカスタマイズします。
 
-<Card
-  title="カスタムプロンプト設定にアクセス"
-  icon="gear"
-  href="https://app.kodus.io/settings/code-review/global/custom-prompts"
->
-  組織内のすべてのリポジトリのカスタムプロンプトを設定します
-</Card>
+旧 Custom Prompts ページはナビゲーションからなくなりました。その 2 つの部分は現在、サイドバーの **Code review** グループの 2 つのページにあります：
+
+<CardGroup cols={2}>
+  <Card
+    title="カテゴリの指示"
+    icon="gear"
+    href="https://app.kodus.io/settings/code-review/global/review-scope"
+  >
+    **Code review → What to review**：Bug、Performance、Security の各行にある **Instructions** エディター
+  </Card>
+  <Card
+    title="Kody のパーソナリティ"
+    icon="comments"
+    href="https://app.kodus.io/settings/code-review/global/output"
+  >
+    **Code review → What Kody writes**：**Personality instructions** エディター
+  </Card>
+</CardGroup>
 
 ## カスタムプロンプトを使用する理由
 
@@ -34,9 +45,12 @@ description: "各カテゴリとサジェストの書き方に合わせて Kody 
 
 カスタムプロンプトは 2 つのレベルで動作します：
 
-### カテゴリプロンプト
+### カテゴリの指示（What to review）
 
-各レビューカテゴリで Kody が何を探すかを定義します：
+各レビューカテゴリで Kody が何を探すかを定義します。**Code review → What to review** では、有効になっている
+**Bug**、**Performance**、**Security** の各行に **Instructions** ボタンがあり、エディター（*What counts as a bug issue* など）を
+展開します。変更するまでは Kody のデフォルトが表示されます — チップには **Kody's default** または **Custom** と表示され —
+**Reset to default** で元に戻せます。カテゴリがオフの間はエディターは表示されず、Business Logic には指示がありません。
 
 <Tabs>
   <Tab title="バグ">
@@ -82,7 +96,11 @@ description: "各カテゴリとサジェストの書き方に合わせて Kody 
   </Tab>
 </Tabs>
 
-### サジェストプロンプト
+### Kody のパーソナリティ（What Kody writes）
+
+旧 **Suggestion Prompts** のベース指示です。**Code review → What Kody writes** の **Kody's personality**
+セクションに **Personality instructions** エディター（最大 2000 文字、**Reset to default** あり）があります：
+すべてのサジェストで Kody がどのような口調になるかを決めます。各カテゴリの指示の上に適用されます。
 
 Kody が各サジェストを伝達する方法を制御します。これにより、PR コメントに表示されるメッセージの形式とトーンがカスタマイズされます：
 
@@ -119,8 +137,8 @@ v2PromptOverrides:
 この 4 つは Web UI が公開しているもので、それぞれ上限は 2000 文字です。Business Logic
 カテゴリにプロンプトの override はありません。
 
-設定ファイルは、UI に出てこないグループをもう 1 つ受け付けます — Kody が検出結果を分類する
-ための重大度ルーブリックです：
+設定ファイルは、Web UI のどのページでも編集できないグループをもう 1 つ受け付けます — 設定ファイル
+専用です。これは Kody が検出結果を分類するための重大度ルーブリックです：
 
 ```yaml
 v2PromptOverrides:
@@ -151,7 +169,7 @@ v2PromptOverrides:
 
 ## 外部参照
 
-すべてのカスタムプロンプト（カテゴリ、サジェスト、PR サマリー）は、Kody がアクセスできるコードベースの実際のファイルへの参照をサポートします。更新を保存すると、Kody は自動的に外部参照を検出し、将来のレビューのために解決します。
+すべてのカスタムプロンプト（カテゴリの指示、パーソナリティの指示、PR サマリーの指示）は、Kody がアクセスできるコードベースの実際のファイルへの参照をサポートします。更新を保存すると、Kody は自動的に外部参照を検出し、将来のレビューのために解決します。
 
 - 編集中のリポジトリのファイルを指定するには `@file:path/to/file.ts` を使用します。Kody はまずローカルでパスを見つけようとします。
 - 別のリポジトリのファイルを参照する場合やグローバルレベルでプロンプトを編集する場合は `@repo:org/project` を含めます。
@@ -439,7 +457,7 @@ v2PromptOverrides:
     **解決策：**
     - プロンプトをより具体的でフォーカスしたものにする
     - 無視したいパターンに対して除外を追加する
-    - [サジェスト制御](/ja/how_to_use/code_review/configs/suggestion_control)で最小重大度しきい値を上げる
+    - **What to review** で **Minimum severity to post** を上げる（[重大度しきい値](/ja/how_to_use/code_review/configs/suggestion_control)を参照）
     - カテゴリプロンプト間の冗長性を確認する
   </Accordion>
 
@@ -487,7 +505,7 @@ v2PromptOverrides:
   </Accordion>
 
   <Accordion title="カスタマイズする前にデフォルトのプロンプトを見ることができますか？">
-    はい。設定の任意のプロンプトをクリックしてデフォルトのコンテンツを表示します。
+    はい。各エディターは変更するまで Kody のデフォルトを表示し、**Reset to default** で元に戻せます。
   </Accordion>
 
   <Accordion title="プロンプトを変更すると既存の PR はどうなりますか？">
@@ -495,7 +513,7 @@ v2PromptOverrides:
   </Accordion>
 
   <Accordion title="kodus-config.yml でプロンプトをカスタマイズできますか？">
-    いいえ。カスタムプロンプトは意図的な変更を確保するために Web のみです。他の設定（無視パス、ブランチ）は `kodus-config.yml` を使用できます。
+    はい、`v2PromptOverrides` キーの下で設定できます — 上記の「`kodus-config.yml` で設定する」を参照してください。このファイルは `kodusConfigFileOverridesWebPreferences` を有効にして初めて読み込まれます。
   </Accordion>
 
   <Accordion title="すべてのプロンプトをカスタマイズすべきですか、それとも一部だけですか？">
@@ -506,8 +524,8 @@ v2PromptOverrides:
     シームレスに機能します。モデルの強みに合わせてプロンプトを調整してください。プライマリとフォールバックの両方が同じカスタムプロンプトを使用します。
   </Accordion>
 
-  <Accordion title="カテゴリプロンプトとサジェストプロンプトの違いは何ですか？">
-    **カテゴリプロンプト**は各レビューカテゴリで Kody が何を分析するかを制御します。**サジェストプロンプト**は Kody がチームに結果をどのように提示するかを制御します。両方を独立してカスタマイズできます。
+  <Accordion title="カテゴリの指示とパーソナリティの指示の違いは何ですか？">
+    **カテゴリの指示**（旧カテゴリプロンプト、**What to review** にあります）は各レビューカテゴリで Kody が何を分析するかを制御します。**パーソナリティの指示**（旧サジェストプロンプト、**What Kody writes** にあります）は Kody がチームに結果をどのように提示するかを制御します。両方を独立してカスタマイズできます。
   </Accordion>
 
   <Accordion title="サジェストプロンプトでマークダウンを使用できますか？">

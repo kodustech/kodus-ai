@@ -20,17 +20,6 @@ Por defecto, un PAT de Grano Fino puede no tener acceso al contenido de tu organ
 
 ## Generar el FGPAT (Token de Acceso Personal de Grano Fino)
 
-<iframe
-  width="560"
-  height="315"
-  src="https://www.youtube.com/embed/ESE-Hl-bAD0?si=pCufAgeLBe73K_g0"
-  title="YouTube video player"
-  frameborder="0"
-  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-  referrerpolicy="strict-origin-when-cross-origin"
-  allowfullscreen
-></iframe>
-
 Sigue estos pasos para configurar el token correctamente:
 
 1. **Accede a GitHub y ve a la configuración de tu perfil**:
@@ -75,4 +64,9 @@ Sigue estos pasos para configurar el token correctamente:
 
 ## Agregar el Token a Kody
 
-Después de generar el token, pégalo en la pantalla de configuración de Kody para la configuración de automatización. El modal se abrirá automáticamente en cuanto intentes habilitar la automatización.
+Después de generar el token, pégalo en Kodus:
+
+- **Durante el onboarding**: en **Connect your Git tool**, elige la pestaña **Github** y haz clic en **Connect via token**.
+- **Más tarde**: en la barra lateral, abre **Repositories**, haz clic en **Github** en **Connect a provider**, cambia a la pestaña **Token**, pega el token y haz clic en **Validate and save**.
+
+Con un token, las revisiones se publican con tu perfil de GitHub en lugar del de Kody, y GitHub Checks / el estado del PR no están disponibles.

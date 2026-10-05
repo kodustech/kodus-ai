@@ -27,8 +27,8 @@ Isso fornece as verificações de segurança integradas do Kodus. As regras abai
 
 ```
 Name: No raw SQL queries
-Scope: File
-Paths: **/*.ts, **/*.js, **/*.py
+Execution mode: Per file
+Path: **/*.ts, **/*.js, **/*.py
 Severity: Critical
 Instructions:
   Flag any use of string concatenation or template literals
@@ -43,8 +43,8 @@ Instructions:
 
 ```
 Name: No hardcoded secrets or credentials
-Scope: File
-Paths: **/*
+Execution mode: Per file
+Path: **/*
 Severity: Critical
 Instructions:
   Flag any string that looks like an API key, password,
@@ -61,7 +61,7 @@ Instructions:
 
 ```
 Name: Auth middleware must not be skipped
-Scope: Pull Request
+Execution mode: Per PR
 Severity: Critical
 Instructions:
   Check pr_files_diff for any route or controller that
@@ -78,8 +78,8 @@ Instructions:
 
 ```
 Name: No dangerouslySetInnerHTML without sanitization
-Scope: File
-Paths: **/*.tsx, **/*.jsx
+Execution mode: Per file
+Path: **/*.tsx, **/*.jsx
 Severity: Critical
 Instructions:
   Flag any use of dangerouslySetInnerHTML in fileDiff.
@@ -111,7 +111,7 @@ internal paths, or database details to the client.
 
 Para regras de segurança, você quer que descobertas críticas bloqueiem:
 
-1. Habilite **Solicitar Alterações** nas configurações de fluxo de trabalho de PR para que o Kody solicite mudanças quando problemas críticos forem encontrados
+1. Em **Code review → General**, ative **Enable changing status of Review to 'Request Changes'** para que o Kody solicite mudanças quando problemas críticos forem encontrados
 2. Defina as regras de segurança com severidade **Crítica** para que sempre apareçam acima de qualquer filtro de severidade
 3. NÃO defina um limite baixo em `maxSuggestions` — descobertas de segurança nunca devem ser suprimidas
 
@@ -121,7 +121,7 @@ Se você usar plugins MCP, pode verificar dependências:
 
 ```
 Name: No known vulnerable dependencies
-Scope: Pull Request
+Execution mode: Per PR
 Severity: Critical
 Instructions:
   If pr_files_diff modifies package.json, requirements.txt,

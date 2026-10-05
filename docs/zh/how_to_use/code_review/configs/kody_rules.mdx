@@ -3,27 +3,19 @@ title: "概述"
 description: "Kody 规则是您的团队设置的可自定义指南,用于自动执行代码质量、一致性、安全性和可维护性。"
 ---
 
-
-<iframe
-  width="100%"
-  height="400"
-  src="https://www.youtube.com/embed/KrzlUmmJh3s?si=igZuKTjlfT2FwRVm"
-  title="YouTube video player"
-  frameborder="0"
-  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-  referrerpolicy="strict-origin-when-cross-origin"
-  allowfullscreen
-></iframe>
+<Frame caption="仓库范围下的 Code review → Kody Rules：待审核项、Review Rules 与 Memories 标签页、筛选器和规则表">
+  <img src="/images/kody-rules.png" alt="Kody Rules page" />
+</Frame>
 
 ## Kody Rules 界面中的两种类型
 
-Kody 规则分为两个类别，通过设置中的选项卡界面管理：
+Kody 规则分为两个类别，通过侧边栏 **Code review → Kody Rules** 下的 **Review Rules** 和 **Memories** 选项卡管理。在 **Code review** 分组顶部的范围选择器中选择 **Global**（或某个代码库 / 目录），以决定您正在编辑的级别。
 
 <Tabs>
   <Tab title="审查规则">
     传统代码审查规则，在专门的代码审查阶段运行。它们分析文件差异和 PR 元数据以强制执行编码标准。
 
-    - 应用于**文件级**或**拉取请求级**
+    - 应用于**文件级**（执行模式 **Per file**）或**拉取请求级**（执行模式 **Per PR**）
     - 支持变量、文件引用和 MCP 函数
     - 在自动代码审查期间触发
   </Tab>
@@ -42,7 +34,7 @@ Kody 规则分为两个类别，通过设置中的选项卡界面管理：
 
 ### 创建自定义规则
 
-根据团队的确切需求定义规则。审查规则可以应用于两个不同的级别：**[文件级](#文件级规则)**和**[拉取请求级](#拉取请求级规则)**。两个级别都支持变量、文件引用和 MCP 函数来构建强大的、上下文感知的规则。
+根据团队的确切需求定义规则。在 **Review Rules** 选项卡中，点击 **New rule**（列表为空时为 **Write a rule**）打开规则对话框。审查规则可以应用于两个不同的级别，通过 **Execution mode** 字段选择：**[文件级](#文件级规则)**（**Per file**）和**[拉取请求级](#拉取请求级规则)**（**Per PR**）。两个级别都支持变量、文件引用和 MCP 函数来构建强大的、上下文感知的规则。
 
 #### 变量、文件引用和 MCP 函数
 
@@ -67,7 +59,7 @@ Kody 规则分为两个类别，通过设置中的选项卡界面管理：
   - `pr_author` - 拉取请求的作者
   - `pr_number` - 拉取请求编号
 
-在规则指令中使用这些变量来访问上下文数据，并将它们与 MCP 函数相结合以获取其他信息或执行动态分析。
+在规则指令中使用这些变量来访问上下文数据（**Instructions** 编辑器中的 **Variables** 菜单会插入所选执行模式下可用的变量），并将它们与 MCP 函数相结合以获取其他信息或执行动态分析。
 
 **文件引用：**
 
@@ -91,7 +83,7 @@ Kody 规则分为两个类别，通过设置中的选项卡界面管理：
 
 **MCP 函数：**
 
-通过规则编辑器中的 `@MCP` 下拉菜单访问 MCP（模型上下文协议）函数以获取其他数据和上下文。您可以使用在工作区的[插件](/zh/how_to_use/code_review/plugins)页面中连接的任何 MCP 工具或服务器。
+规则可以使用 MCP（模型上下文协议）函数来获取其他数据和上下文。您可以使用在工作区的[插件](/zh/how_to_use/code_review/plugins)页面中连接的任何 MCP 工具或服务器。规则编辑器中已不再提供 MCP 选择器。
 
 可用函数包括：
 
@@ -126,10 +118,12 @@ MCP 函数在规则评估期间执行，使规则能够适应当前代码库状�
 
 **如何配置：**
 
-- **规则名称**：清楚地定义规则目的
-- **文件路径**：使用 glob 模式将规则限制为特定文件或目录
-- **严重性**：设置为严重、高、中等或低
-- **详细说明**：使用 `fileDiff`，使用 `@file`/`@repo` 引用文件，并调用 MCP 函数以编写具有丰富上下文的强大规则
+- **Rule name**：清楚地定义规则目的
+- **Execution mode**：**Per file**（默认）
+- **Path**：使用 glob 模式将规则限制为特定文件或目录（留空则应用于所有文件）
+- **Instructions**：使用 `fileDiff`，使用 `@file`/`@repo` 引用文件，并调用 MCP 函数以编写具有丰富上下文的强大规则。新规则可以使用 **Start with a popular template**
+- **Severity**：设置为 Critical、High（默认）、Medium 或 Low
+- **Advanced settings**：**Inheritable**（默认开启；参见[规则继承](/zh/how_to_use/code_review/configs/rules_inheritance)）和 **Code examples**（**Bad example** / **Good example**）
 
 **配置示例：**
 
@@ -192,7 +186,7 @@ for (let i = 0; i < items.length; i++) {
 
 **如何配置：**
 
-创建过程与文件级规则相同，但您必须选择"拉取请求"范围。这种更广泛的上下文使能够分析跨文件依赖关系和整体 PR 质量。
+创建过程与文件级规则相同，但您必须将 **Execution mode** 设置为 **Per PR**（此模式下 **Path** 不适用）。这种更广泛的上下文使能够分析跨文件依赖关系和整体 PR 质量。
 
 **示例：**
 
@@ -240,9 +234,9 @@ for (let i = 0; i < items.length; i++) {
 
 立即利用经过验证的最佳实践：
 
-- 导航到 Kodus 仪表板中的发现规则。
-- 按严重性、语言或标签过滤规则。
-- 一键导入和激活规则。
+- 在 **Code review → Kody Rules**（**Review Rules** 选项卡）中，点击 **Discovery** 打开规则库（**Rules Marketplace**）。当规则列表为空时，也可以通过 **Browse the library** 进入，或在 ⌘K 命令面板中搜索 **Rules library**。
+- 从 **Featured** 开始，或切换到 **Browse** 搜索完整目录，并按 **Severity**、**Language** 或 **Packs** 过滤规则。
+- 打开一条规则并点击 **Add to my rules**，使用旁边的代码库选择器选择 **Global** 或应获得该规则的代码库（及目录）。
 
 **示例：**
 
@@ -302,10 +296,10 @@ for (let i = 0; i < items.length; i++) {
 
 您也可以手动创建记忆：
 
-1. 前往**代码审查设置** → **代码库** → **Kody 规则**
-2. 切换到**记忆**选项卡
-3. 点击**添加记忆**创建新条目
-4. 填写记忆内容和范围
+1. 在侧边栏 **Code review** 分组顶部的范围选择器中选择 **Global**（或代码库 / 目录），然后打开 **Kody Rules**。记忆会在您此处选择的范围内创建
+2. 切换到 **Memories** 选项卡
+3. 点击 **New memory**（列表为空时为 **Add a memory**）
+4. 填写 **Memory name** 和 **Instructions**，然后点击 **Create memory**
 
 ### 记忆范围
 
@@ -315,20 +309,21 @@ for (let i = 0; i < items.length; i++) {
 |------|------|------|
 | **目录** | 适用于代码库中匹配 glob 模式的文件 | `src/components/ui`、`src/**/*.ts` |
 | **代码库** | 适用于整个代码库 | 代码库中的所有文件 |
-| **组织** | 适用于组织中的所有代码库 | 组织中的所有代码库 |
+| **组织**（范围选择器中的 **Global**） | 适用于组织中的所有代码库 | 组织中的所有代码库 |
 
 ### LLM 生成记忆的审批
 
 默认情况下，AI 生成的记忆会自动激活。您可以要求在生效前进行手动审批：
 
-1. 前往**代码审查设置** → **代码库** → **Kody 规则** → **记忆**选项卡
-2. 启用 **LLM 生成记忆审批**
+1. 在您想要的范围（Global、某个代码库或某个目录）下前往 **Code review → Kody Rules**
+2. 点击 **Configuration** 打开侧边面板
+3. 启用 **Kody knowledge approval**
 
 启用后：
-- AI 生成的记忆进入**待审状态**，在批准之前不会生效
-- 显示待审记忆数量的通知徽章
-- 点击**待审记忆**以审查、批准、丢弃或转换待审项目
-- 新记忆的创建和对现有记忆的更新都通过审批流程
+- AI 生成的规则和记忆进入**待审状态**，在批准之前不会生效
+- **Review Rules** 和 **Memories** 选项卡上的徽章显示待审数量
+- 待审项目会出现在页面顶部的 **Pending review** 区域中，您可以在那里批准或丢弃它们（参见下方的[待审核](#待审核)）
+- 新规则/记忆的创建和对现有规则/记忆的更新都通过审批流程
 
 您也可以在 `kodus-config.yml` 中设置：
 
@@ -337,17 +332,14 @@ kodyKnowledgeApproval:
     enabled: true
 ```
 
-### 待审记忆审查
+### 待审核
 
-待审记忆模态窗口显示两个类别：
+**Pending review** 区域（"Rules and memories awaiting approval."）会将待审的规则和记忆一起列出，每一项都标记为 **Rule**、**Memory** 或 **Update**：
 
-- **新记忆**：等待批准的 AI 生成记忆
-- **记忆更新**：对现有记忆的建议更改
+- **新规则和记忆**：等待批准的 AI 生成项目。选择 **Approve** 激活该项目，或选择 **Discard** 拒绝它。
+- **更新**：对现有规则或记忆的建议更改，以差异形式显示。选择 **Update existing** 应用更改，选择 **Create new instead** 保留原有项目并将该建议添加为单独的项目，或选择 **Discard** 拒绝它。
 
-对于每个待审项目，您可以：
-- **应用**：激活记忆或应用更新
-- **丢弃**：拒绝记忆或更新
-- **转换为审查规则**：将记忆转换为标准审查规则
+选择多个项目并使用 **Bulk actions**（**Approve N**、**Create as new (N)**、**Discard N**）一次性处理。
 
 ## 下一步
 

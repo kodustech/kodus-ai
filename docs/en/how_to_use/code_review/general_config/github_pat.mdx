@@ -20,17 +20,6 @@ By default, a Fine-Grained PAT may not have access to your organization’s cont
 
 ## Generating the FGPAT (Fine-Grained Personal Access Token)
 
-<iframe
-  width="560"
-  height="315"
-  src="https://www.youtube.com/embed/ESE-Hl-bAD0?si=pCufAgeLBe73K_g0"
-  title="YouTube video player"
-  frameborder="0"
-  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-  referrerpolicy="strict-origin-when-cross-origin"
-  allowfullscreen
-></iframe>
-
 Follow these steps to set up the token correctly:
 
 1. **Access GitHub and go to your profile settings**:
@@ -75,4 +64,9 @@ Follow these steps to set up the token correctly:
 
 ## Adding the Token to Kody
 
-After generating the token, paste it in the Kody configuration screen for automation setup. The modal will open automatically as soon as you attempt to enable automation.
+After generating the token, paste it into Kodus:
+
+- **During onboarding**: on **Connect your Git tool**, pick the **Github** tab and click **Connect via token**.
+- **Later**: in the sidebar, open **Repositories**, click **Github** under **Connect a provider**, switch to the **Token** tab, paste the token and click **Validate and save**.
+
+With a token, reviews are published under your GitHub profile instead of Kody's, and GitHub Checks / PR status aren't available.

@@ -7,12 +7,16 @@ description: "Rastrea y gestiona las sugerencias no implementadas con la funció
 
 - **Seguimiento automático**: Captura automáticamente las sugerencias no implementadas de los PRs cerrados
 - **Resolución inteligente**: Se resuelve automáticamente cuando las sugerencias se implementan en futuros PRs
-- **Filtrado avanzado**: Guarda vistas personalizadas por estado, severidad y categoría
-- **Sin configuración**: Funciona automáticamente con tu flujo de trabajo de revisión de código existente
+- **Filtrado avanzado**: Filtra por estado, severidad, categoría y más, y guarda tus filtros predeterminados
+- **Sin configuración**: Funciona automáticamente con tu flujo de trabajo de revisión de código existente (desactívalo con el interruptor **Auto-create issues**)
 
 ## Qué es
 
 La función **Kody Issues** rastrea automáticamente todas las sugerencias generadas por Kody que **no se implementaron** en tus pull requests (PRs). Actúa como un sonar, proporcionando una lista en vivo de mejoras pendientes para asegurarte de que nunca pierdas de vista la retroalimentación crítica.
+
+Issues no es un elemento de la barra lateral: ábrelo desde la pestaña **Issues** en el [Cockpit](/es/how_to_use/cockpit/overview) (muestra el número de issues abiertos), o busca **Issues** en la paleta de comandos ⌘K (el camino de entrada cuando tu plan no incluye el Cockpit). La lista muestra **Status**, **Severity**, **Category**, **Title**, **Repository**, **File**, **Age** y **#PR(s)**, filtrada por defecto a los issues abiertos. Haz clic en una fila para abrir el panel de detalle del issue, donde puedes cambiar su estado y severidad, recorrer los issues con **J** / **K**, compartir un enlace con **Share** y ver **Team feedback from PR reactions**.
+
+El interruptor **Auto-create issues** en la parte superior derecha de la página activa o desactiva la creación automática de issues para el workspace (activado por defecto).
 
 <Frame caption="Panel de Kody Issues que muestra las sugerencias rastreadas con filtros y gestión de estado">
   <img src="/images/issues.png" alt="Panel de Kody Issues" />
@@ -74,14 +78,17 @@ La función **Kody Issues** rastrea automáticamente todas las sugerencias gener
 ### 4. Filtrado Avanzado
 
 <Warning>
-  Los filtros son herramientas poderosas: guarda vistas personalizadas para acceder rápidamente a los issues que más importan a tu flujo de trabajo.
+  Los filtros son herramientas poderosas: guárdalos como predeterminados para acceder rápidamente a los issues que más importan a tu flujo de trabajo.
 </Warning>
+
+Abre **Filters** en la parte superior de la lista (el botón muestra cuántos están activos):
 
 - **Filtros de estado**: Abierto, Resuelto, Descartado
 - **Filtros de severidad**: Critical, High, Medium, Low
 - **Filtros de categoría**: Seguridad, Rendimiento, Estilo de Código, etc.
 - **Filtros de repositorio**: Enfócate en proyectos específicos
-- **Guardar vistas personalizadas**: Aplica automáticamente tus filtros preferidos
+- **Título, ruta de archivo y números de PR**: Acota a issues específicos
+- **Set as default filters**: Aplica automáticamente tus filtros preferidos cada vez que abres Issues en este navegador (**Reset to default filters** los restablece)
 
 ## Por qué es Importante
 

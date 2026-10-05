@@ -17,8 +17,11 @@ Every chart and table respects the global **repository** and **date range** filt
 | --- | --- |
 | **Implementation rate** | % of sent suggestions the team implemented in the period |
 | **Suggestions sent** | How many suggestions Kodus delivered (as PR comments) in the period |
-| **Negative vote rate** | Share of reactions that were 👎, with the trend vs. the previous period |
-| **Criticals ignored in merged PRs** | Critical suggestions left unimplemented on PRs that were already merged — the actionable risk list |
+| **PRs processed** | Pull requests Kodus processed in the period, with the change vs. the previous period (shown when review-run data is available) |
+| **Negative vote rate** | Share of reactions that were 👎, with the trend vs. the previous period. Below 10 reactions it shows raw counts instead of a rate |
+| **Critical suggestions not yet addressed** | Critical suggestions left unimplemented on PRs that were already merged — the actionable risk list. Clicking it jumps to **Implementation rate by category**, to see which themes get ignored |
+
+When review-run data is available, a **Review processing outcomes** chart follows the cards: the weekly mix of review runs that succeeded, errored, or were skipped.
 
 ## Implementation rate
 
@@ -73,7 +76,7 @@ The status is computed per rule, in this priority order:
 | --- | --- | --- |
 | **Stale** | No triggers in the period | Review whether the rule is still needed |
 | **Low data** | Triggered, but too few times (fewer than 5) to judge | Wait for more data |
-| **Noisy** | The team actively downvotes it (≥ 3 👎 and more 👎 than 👍) | The rule is miscalibrated — rewrite or scope it (e.g. exclude tests) |
+| **Noisy** | The team actively downvotes it (≥ 3 👎, more 👎 than 👍, and at least one 👎 per 10 triggers) | The rule is miscalibrated — rewrite or scope it (e.g. exclude tests) |
 | **Ignored** | Triggers a lot but almost nothing is implemented (≤ 20%) | Question its relevance — does the team care about it? |
 | **Healthy** | Everything else | No action |
 
@@ -81,6 +84,6 @@ The status is computed per rule, in this priority order:
 
 ## Suggestions explorer
 
-Every drill-down — a category bar, a rule row, the "criticals ignored" card — opens the **suggestions explorer**: a filterable, paginated list of the actual suggestions behind the number.
+Every drill-down — a category bar (implementation or negative feedback) or a rule row — opens the **suggestions explorer** (the **Suggestions** page, breadcrumb **Cockpit › Suggestions**): a filterable, paginated list of the actual suggestions behind the number, for the Cockpit's date range.
 
-Filters: repository, category, severity, implementation status, Kody Rule, and free-text search. Each row expands to show the existing vs. suggested code and a link to the PR comment.
+Filters: repository, category, severity, implementation status, Kody Rule, and free-text search. Clicking a row opens a side panel with the existing vs. suggested code and an **Open in PR review** button that jumps to the suggestion on the pull request's review page in Kodus.

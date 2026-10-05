@@ -7,24 +7,23 @@ If Kodus stopped reviewing your PRs after working fine before, it's likely due t
 
 ## What is auto-pause
 
-Auto-pause prevents review spam during active development. When Kodus detects rapid consecutive pushes (default: 3 pushes in 15 minutes), it pauses reviews until the activity settles.
+Auto-pause prevents review spam during active development. When Kodus detects rapid consecutive pushes (default: 3 pushes in 15 minutes), it pauses reviews on that PR and posts an "Auto-paused – comment @kody start-review when you're ready." comment. Later pushes are skipped until you resume.
 
 This is a feature, not a bug — it avoids flooding PRs with multiple reviews while you're still actively pushing changes.
 
 ## How to resume
 
-- **Wait** for the cooldown period to pass, then push again
-- **Comment** `@kody start-review` on the PR to trigger a review immediately
+- **Comment** `@kody start-review` on the PR to resume and trigger a review immediately
 - **Change cadence** to "Automatic" if you always want reviews on every push
 
 ## Changing the behavior
 
-Go to **Code Review Settings** → **General** → **Review Cadence**:
+Go to **Code review → General** → **Enable Automated Code Review** → **Review Cadence**:
 
 | Mode | Behavior |
 |------|----------|
-| **Automatic** | Reviews every push — no pausing |
-| **Auto-pause** | Pauses during rapid pushes (default) |
+| **Automatic** | Reviews every push — no pausing (default) |
+| **Auto-pause** | Pauses after a burst of pushes; tune it with **Pushes to trigger pause** and **Time window (minutes)** |
 | **Manual** | Only reviews when you comment `@kody start-review` |
 
 For details, see [General Configuration](/en/how_to_use/code_review/configs/general).

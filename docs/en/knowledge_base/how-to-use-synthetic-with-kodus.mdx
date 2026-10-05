@@ -56,26 +56,25 @@ The primary flow is BYOK on Kodus Cloud. Self-hosted installs can use environmen
 
 ### Option 1 — BYOK on Kodus Cloud (recommended)
 
-1. In the Kodus web UI, open **Settings → BYOK** ([app.kodus.io/byok](https://app.kodus.io/byok)).
-2. Synthetic isn't in the curated catalog — click **Configure manually** at the bottom of the model list. Use `?slot=fallback` in the URL if configuring a fallback instead of the main model.
-3. Fill the wizard:
+1. In the sidebar, open **AI providers** ([app.kodus.io/byok](https://app.kodus.io/byok)).
+2. Synthetic has no dedicated tile — on the **Providers** tab, pick **OpenAI-compatible** under **Custom**. Which model runs by default and which is the fallback is set afterwards on the **Routing** tab.
+3. Fill the form:
 
    | Field | Value |
    | --- | --- |
-   | **Provider** | `OpenAI Compatible` |
    | **Base URL** | `https://api.synthetic.new/openai/v1` |
    | **Model** | e.g. `hf:zai-org/GLM-4.6` (use the `hf:` prefix and the full HuggingFace path) |
-   | **API Key** | your Synthetic API key |
-   | **Max Concurrent Requests** | start at `3–5` to fit the 5-hour budget on bigger PRs (under Advanced settings) |
+   | **API key** | your Synthetic API key |
+   | **Max concurrent requests** | start at `3–5` to fit the 5-hour budget on bigger PRs (under Advanced settings) |
 
 4. Click **Test & save**. Kodus probes the endpoint and persists the config on success. 401 means the key is wrong; 404 usually means the base URL or model path is wrong.
 
 <Tip>
-  The 500-messages-per-5-hours budget is per subscription, not per PR. For teams doing heavy continuous review, keep `Max Concurrent Requests` low enough that one big multi-file PR doesn't eat the window, or split the work across multiple subscriptions.
+  The 500-messages-per-5-hours budget is per subscription, not per PR. For teams doing heavy continuous review, keep **Max concurrent requests** low enough that one big multi-file PR doesn't eat the window, or split the work across multiple subscriptions.
 </Tip>
 
 <Note>
-  Configure Synthetic as **Main** and keep an OpenAI or Anthropic key as **Fallback** — when the 5-hour window fills up, Kodus automatically fails over and reviews keep flowing.
+  On the **Routing** tab, set Synthetic as **Model for all tasks** and an OpenAI or Anthropic model as **Fallback (optional)** — when the 5-hour window fills up, Kodus automatically fails over and reviews keep flowing.
 </Note>
 
 ### Option 2 — Self-hosted (environment variables)
@@ -114,8 +113,8 @@ Pick pay-per-token (Moonshot, Fireworks, Together, Groq) instead if traffic is b
 <AccordionGroup>
   <Accordion title="429 Too Many Requests inside the 5-hour window">
     - The subscription budget is per **5-hour rolling window**, not per hour or per month. Check how many requests you've sent recently in the Synthetic dashboard.
-    - Either wait for the window to roll forward, lower `Max Concurrent Requests` in BYOK, or upgrade/stack plans.
-    - Configure a `Fallback` BYOK provider so reviews keep running while you're rate-limited.
+    - Either wait for the window to roll forward, lower **Max concurrent requests** on the model (**AI providers** → **Edit model**), or upgrade/stack plans.
+    - Set a **Fallback (optional)** model on the **Routing** tab so reviews keep running while you're rate-limited.
   </Accordion>
 
   <Accordion title="401 / authentication errors">

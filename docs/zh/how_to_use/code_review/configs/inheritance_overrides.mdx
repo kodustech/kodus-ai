@@ -29,23 +29,30 @@ Kodus 配置跨三个级别工作:**全局**、**代码库**和**目录**。
 
 一旦被覆盖,字段将停止跟随父级并使用其本地值。
 
+## 在应用中
+
+- **切换级别:** 侧边栏 **Code review** 分组顶部的范围选择器会列出 **Global**("applies to every repository"),然后是每个拥有自身配置的代码库,其目录缩进显示在下方。切换范围时会停留在同一页面(General、What to review、Kody Rules、What Kody writes)。
+- **添加级别:** 在范围选择器中选择 **Add repository configuration**。**Create repository settings** 对话框会让您 **Select the target repository**,并可选择 **Select the target directories**;点击 **Create settings**。参见[目录级别设置](/zh/how_to_use/code_review/configs/directory_level)。
+- **查看覆盖:** 侧边栏中范围或页面旁的数字徽标统计在该级别被覆盖的设置数量("N settings overridden at this level")。在页面上,每个被覆盖的字段都会显示 **Overridden** 徽标;点击其撤销按钮可让该字段恢复继承。
+- **删除级别:** 范围选择器旁的 **⋯** 菜单中有 **Delete configuration**(目录范围下还有 **Edit directories**)。
+
 ## 示例
 
 <Tabs>
   <Tab title="全局更改传播">
-    您在全局级别更改**严重性阈值**。
+    您在全局级别更改 **Minimum severity to post**(位于 **What to review**)。
 
     所有没有覆盖的代码库和目录都会自动更新。已覆盖的保持不变。
   </Tab>
 
   <Tab title="代码库覆盖">
-    在代码库 X 中,您覆盖**审查开始消息**。
+    在代码库 X 中,您覆盖 **Review starts** 消息(位于 **What Kody writes → Comments during the review**)。
 
     代码库 X 内的目录现在从代码库 X 继承(除非它们有自己的覆盖)。
   </Tab>
 
   <Tab title="返回继承">
-    在代码库 Y 中,您删除**活动类别**的覆盖。
+    在代码库 Y 中,您删除 **What to review** 上类别开关的覆盖。
 
     该字段再次跟随全局并接收未来的全局更改。
   </Tab>

@@ -1,29 +1,31 @@
 ---
 title: "Tiempo de Ciclo del PR"
-description: "Mide el tiempo desde el primer commit hasta el despliegue en producción"
+description: "Mide cuánto tiempo permanecen abiertos los pull requests, desde que se abren hasta que se cierran"
 ---
 
 ## Qué es el Tiempo de Ciclo del PR
 
-El Tiempo de Ciclo del PR mide el tiempo total desde que un desarrollador confirma código por primera vez hasta que ese código se fusiona exitosamente en la rama predeterminada. Esta métrica representa la velocidad de entrega de extremo a extremo de tu proceso de desarrollo.
+El Tiempo de Ciclo del PR mide cuánto tiempo permanece abierto un pull request: desde que se abre hasta que se cierra. Esta métrica representa la velocidad de revisión y merge de tu proceso de desarrollo.
+
+En el Cockpit, es la tarjeta **PR Cycle Time (p75)** y el gráfico **PR Cycle Time** de la pestaña **Productivity**.
 
 ## Cómo lo Calculamos
 
-Rastreamos automáticamente el tiempo entre tu primer commit y cuando ese código se fusiona en la rama predeterminada (main/master). Dado que las fusiones en main típicamente representan cuándo el código está listo para producción, esto nos da una buena medida del tiempo de ciclo de tu desarrollo.
+Rastreamos automáticamente el tiempo entre el momento en que se abre cada pull request y el momento en que se cierra. Partimos de la fecha de apertura del PR y no de su primer commit, porque las ramas con rebase pueden arrastrar commits antiguos que inflarían el número. Para el tiempo dedicado antes de abrir el PR, consulta [Lead Time Breakdown](/es/how_to_use/cockpit/metrics/lead_time_breakdown).
 
 **Lo que Rastreamos:**
-- Tiempo desde el primer commit hasta la fusión del PR
-- El ciclo de desarrollo completo
+- Tiempo desde la apertura del PR hasta su cierre
+- PRs cerrados en el rango de fechas seleccionado
 - Cuánto tiempo tarda el código en integrarse
 
 **Lo que No Contamos:**
-- Tiempo dedicado a planificación o diseño (antes del primer commit)
+- Tiempo dedicado a planificar, diseñar o programar antes de abrir el PR
 - Tiempo después de la fusión (despliegue, adopción por parte del usuario, etc.)
 - Cambios fallidos o abandonados
 
 **Cómo se Calcula:**
 ```
-Tiempo de Ciclo del PR = (Hora de Fusión del PR) - (Hora del Primer Commit)
+Tiempo de Ciclo del PR = (Hora de Cierre del PR) - (Hora de Apertura del PR)
 ```
 
 Usamos el percentil 75 (P75) para mostrarte el tiempo de ciclo típico, filtrando los valores atípicos inusualmente largos que podrían distorsionar tu comprensión del rendimiento normal.

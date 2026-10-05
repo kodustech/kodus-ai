@@ -7,12 +7,12 @@ Cada time tem convenções que linters genéricos não cobrem — limites de arq
 
 ## Criando uma regra no Kodus
 
-1. Vá em **Configurações de Revisão de Código** → **Regras do Kody**
-2. Clique em **Adicionar Regra**
+1. Selecione **Global** (ou um repositório / diretório) no seletor de escopo no topo do grupo **Code review** na barra lateral e abra **Kody Rules**
+2. Clique em **New rule**
 3. Configure:
-   - **Nome** — o que a regra verifica (ex.: "Arquivos de serviço devem ter testes")
-   - **Escopo** — Nível de arquivo (analisa arquivos individuais) ou nível de PR (analisa o PR completo)
-   - **Caminho** — padrão glob para direcionar arquivos específicos (ex.: `src/services/**/*.ts`)
+   - **Rule name** — o que a regra verifica (ex.: "Arquivos de serviço devem ter testes")
+   - **Execution mode** — **Per file** (analisa cada arquivo alterado) ou **Per PR** (analisa o PR completo)
+   - **Path** — padrão glob para direcionar arquivos específicos (ex.: `src/services/**/*.ts`); não é usado por regras Per PR
    - **Severidade** — Crítica, Alta, Média ou Baixa
    - **Instruções** — descrição detalhada do que verificar
 
@@ -28,7 +28,7 @@ As regras podem acessar um contexto rico:
 
 ```
 Nome: A camada de domínio não deve depender da infraestrutura
-Escopo: Pull Request
+Execution mode: Per PR
 Instruções: Verifique pr_files_diff para qualquer importação em src/domain/
 que referencie src/infrastructure/. Consulte
 @file:docs/architecture.md para dependências permitidas.
@@ -38,7 +38,7 @@ que referencie src/infrastructure/. Consulte
 
 ```
 Nome: Todo serviço deve ter um arquivo de teste
-Escopo: Pull Request
+Execution mode: Per PR
 Instruções: Para cada arquivo modificado em src/services/,
 verifique se existe um arquivo de teste correspondente em test/services/.
 Use MCP para verificar a árvore de arquivos do repositório.
@@ -46,7 +46,7 @@ Use MCP para verificar a árvore de arquivos do repositório.
 
 ## Outras formas de adicionar regras
 
-- **Importar da Biblioteca de Regras** — navegue por regras comprovadas por linguagem e categoria
+- **Importar da Biblioteca de Regras** — clique em **Discovery** na página de Kody Rules para navegar por regras comprovadas por linguagem e categoria
 - **Sincronizar de ferramentas de IDE** — importe regras automaticamente do Cursor, Copilot, Claude
 - **Regras de repositório** — defina regras em arquivos markdown no seu repositório
 - **Geração automática** — o Kody sugere regras baseadas no seu histórico de revisões

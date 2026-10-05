@@ -15,7 +15,7 @@ BYOK (Bring Your Own Key) is the **default way Kodus uses LLMs across every plan
 
 ## How BYOK works
 
-BYOK is **provider-first**: you connect a provider once, add the models you want to it, and then route those models to Kody's tasks. The `/byok` screen has three tabs:
+BYOK is **provider-first**: you connect a provider once, add the models you want to it, and then route those models to Kody's tasks. In the app this lives on the **AI providers** page (sidebar → **AI providers**, formerly the **BYOK** page), which has three tabs:
 
 <CardGroup cols={3}>
   <Card title="Providers" icon="box">
@@ -25,41 +25,41 @@ BYOK is **provider-first**: you connect a provider once, add the models you want
     Choose which model runs each task — one default for everything, an optional fallback, and per-agent overrides.
   </Card>
   <Card title="Budget" icon="wallet">
-    Set an optional monthly spend limit across your connected models.
+    Set an optional monthly budget and get spend alerts as you approach it (alerts only — reviews keep running).
   </Card>
 </CardGroup>
 
 <Info>
-  **Who can edit this.** The BYOK page is **Owner-only** — connecting, testing, and deleting keys requires the **Owner** role. Other roles (Billing Manager, Repo Admin, Contributor) can't access `/byok`. See [Workspace Roles](/en/how_to_use/workspace_roles).
+  **Who can edit this.** The **AI providers** page is **Owner-only** — connecting, testing, and deleting keys requires the **Owner** role. Other roles (Billing Manager, Repo Admin, Contributor) can't access `/byok`. See [Workspace Roles](/en/how_to_use/workspace_roles).
 </Info>
 
 ## Connect a provider
 
 <Steps>
-  <Step title="Open BYOK settings">
-    Go to [app.kodus.io/byok](https://app.kodus.io/byok). On a fresh workspace you'll see **Connect your first provider**.
+  <Step title="Open AI providers">
+    In the sidebar, open **AI providers** ([app.kodus.io/byok](https://app.kodus.io/byok)). On a fresh workspace you'll see **Connect your first provider**.
   </Step>
 
   <Step title="Pick a provider">
     The provider grid is split in two:
 
-    - **Providers** — first-class providers you connect with just an API key (OpenAI, Anthropic, Google AI Studio, OpenRouter, Novita…).
-    - **Custom** — providers you point at your own endpoint or run an arbitrary model on: **OpenAI-compatible**, **Anthropic-compatible**, **Google Vertex AI**, and **Amazon Bedrock**. These are marked with a *Custom endpoint* hint.
+    - **Providers** — first-class providers you connect with just an API key (OpenAI, Anthropic, Google, OpenRouter, Novita, Moonshot, Z.ai…).
+    - **Custom** — providers you point at your own endpoint or run an arbitrary model on: **OpenAI-compatible**, **Anthropic-compatible**, **Google Vertex AI**, **Amazon Bedrock**, and **Azure OpenAI**. Custom endpoints are marked with a *Custom endpoint* hint.
 
     A provider you've already connected shows **Connected · N models**.
   </Step>
 
   <Step title="Add a model">
-    Picking a provider opens its **Add a model** form. Paste the API key once (reused for every model you add to that provider afterward), then choose the model:
+    Picking a provider opens its add-model form (**Add a … model**). Paste the API key once (reused for every model you add to that provider afterward), then choose the model:
 
     - If Kodus can list the provider's models, you get a dropdown.
     - Otherwise (custom endpoints, self-hosted, or when platform keys aren't configured), type the exact model ID.
 
-    Custom endpoints (OpenAI-compatible / Anthropic-compatible) also ask for a **base URL** first.
+    Custom endpoints (OpenAI-compatible / Anthropic-compatible) also ask for a **Base URL** first.
   </Step>
 
   <Step title="Tune advanced settings (optional)">
-    Under **Advanced settings**: thinking/reasoning, temperature, max output tokens, max input tokens, and max concurrent requests. Defaults are sensible for most providers — see [Reasoning](#reasoning--extended-thinking) and [Temperature](#temperature) for the fields Kodus locks or hides per model.
+    In the **Advanced (optional)** card, expand **Advanced settings**: **Thinking / Reasoning**, **Temperature**, **Max output tokens**, **Max input tokens**, and **Max concurrent requests**. Defaults are sensible for most providers — see [Reasoning](#reasoning--extended-thinking) and [Temperature](#temperature) for the fields Kodus locks or hides per model.
   </Step>
 
   <Step title="Test and save">
@@ -108,7 +108,7 @@ Once you've connected two or more models, the **Routing** tab decides which mode
   </Step>
 </Steps>
 
-Click **Save routing** to persist. **Reset agents to default** sends every per-agent override back to the default and clears the fallback (the default model itself is kept). A read-only **Per repository** panel below mirrors any per-repo model overrides set in Code Review Settings.
+Click **Save routing** to persist. **Reset agents to default** sends every per-agent override back to the default and clears the fallback (the default model itself is kept). A read-only **Per repository** panel below mirrors any per-repository (or per-directory) model overrides, which you set in **Code review → General → Code review model** with a repository or directory picked in the scope picker.
 
 <Note>
   With a single connected model, routing is skipped — every task uses that model. Connect a second model to make routing meaningful.
@@ -258,11 +258,11 @@ Moonshot and Z.ai each offer a subscription plan on a **different endpoint** tha
     </Accordion>
   </Tab>
 
-  <Tab title="OpenAI Compatible">
+  <Tab title="OpenAI-compatible">
     **Best for:** Specialized providers (Moonshot, Z.ai, Fireworks, Together, Groq, DeepSeek) or self-hosted endpoints.
 
     **How to configure:**
-    1. In the connect flow, pick **OpenAI Compatible** (under Custom).
+    1. In the connect flow, pick **OpenAI-compatible** (under Custom).
     2. Enter the base URL (e.g. `https://api.moonshot.ai/v1`, `https://api.z.ai/api/paas/v4/`, `https://api.fireworks.ai/inference/v1`).
     3. Provide the key and model ID.
 
@@ -305,7 +305,7 @@ Moonshot and Z.ai each offer a subscription plan on a **different endpoint** tha
 
 ## Reasoning / Extended Thinking
 
-The **Add a model** form exposes a **Thinking** toggle (Off / Low / Medium / High / Custom) under **Advanced settings**. The available options mirror what the model can actually do:
+The add-model form exposes a **Thinking / Reasoning** toggle (Off / Low / Medium / High / Custom) under **Advanced settings**. The available options mirror what the model can actually do:
 
 - A model that can't reason is locked to **Off** with a note.
 - A model that only reasons at certain levels (e.g. GPT-5's medium/high) disables the invalid ones.
@@ -329,7 +329,7 @@ When you pick Low / Medium / High, Kodus translates the level to each provider's
 
 ### Custom JSON override
 
-Picking **Custom** in the Thinking toggle reveals a JSON textarea. Paste the provider options directly — **Kodus auto-wraps them under the active provider's namespace**. You don't need to know the Vercel AI SDK routing rules.
+Picking **Custom** in the **Thinking / Reasoning** toggle reveals a JSON textarea. Paste the provider options directly — **Kodus auto-wraps them under the active provider's namespace**. You don't need to know the Vercel AI SDK routing rules.
 
 Use this when:
 
@@ -513,7 +513,7 @@ Under the hood, Kodus emits this into the Vercel AI SDK call:
 
 ### Advanced: raw JSON override
 
-If you need fields beyond `order` and `allow_fallbacks` (e.g. `ignore`, `data_collection`, `require_parameters`), switch **Thinking** to **Custom** in Advanced settings and paste the full routing payload — it's merged into `providerOptions` alongside any reasoning config:
+If you need fields beyond `order` and `allow_fallbacks` (e.g. `ignore`, `data_collection`, `require_parameters`), switch **Thinking / Reasoning** to **Custom** in Advanced settings and paste the full routing payload — it's merged into `providerOptions` alongside any reasoning config:
 
 ```json
 {
@@ -531,7 +531,7 @@ If you need fields beyond `order` and `allow_fallbacks` (e.g. `ignore`, `data_co
 
 ## Concurrency and rate limits
 
-The `maxConcurrentRequests` field (under **Advanced settings**) caps how many inflight requests Kodus sends to your provider in parallel. Most of the time, the default is fine — but subscription plans with strict concurrency caps need it set explicitly.
+The `maxConcurrentRequests` field (**Max concurrent requests**, under **Advanced settings**) caps how many inflight requests Kodus sends to your provider in parallel. Most of the time, the default is fine — but subscription plans with strict concurrency caps need it set explicitly.
 
 ### Values to set
 
@@ -576,7 +576,7 @@ The `maxConcurrentRequests` field (under **Advanced settings**) caps how many in
     Create separate API keys for Kodus. Makes usage auditing and key rotation easier.
   </Card>
   <Card title="Regular Rotation" icon="arrows-rotate">
-    Rotate keys periodically and update them in BYOK settings.
+    Rotate keys periodically and update them with **Edit provider** on the **AI providers** page.
   </Card>
   <Card title="Monitor Usage" icon="chart-bar">
     Check your provider dashboards for unusual patterns.
@@ -622,13 +622,13 @@ The `maxConcurrentRequests` field (under **Advanced settings**) caps how many in
   </Accordion>
 
   <Accordion title="Self-hosted env vars not showing">
-    - If Kodus is configured via `.env` (self-hosted Fixed Mode), the BYOK screen shows a blue info banner with the active provider/model — the key is never displayed for security.
+    - If Kodus is configured via `.env` (self-hosted Fixed Mode), the **AI providers** page shows an info banner with the active provider/model while no model is connected there — the key is never displayed for security.
     - Connecting a model and saving overrides the `.env` configuration.
   </Accordion>
 
   <Accordion title="High or unexpected costs">
-    - Reasoning adds tokens. If cost is spiking, lower **Thinking** from Medium to Low, or route heavy tasks to a cheaper model under **Per agent**.
-    - Check your provider dashboard for the per-model breakdown, and set a cap under the **Budget** tab.
+    - Reasoning adds tokens. If cost is spiking, lower **Thinking / Reasoning** from Medium to Low, or route heavy tasks to a cheaper model under **Per agent**.
+    - Check your provider dashboard for the per-model breakdown, and set a monthly budget with spend alerts under the **Budget** tab (alerts only — set a hard cap with your provider).
   </Accordion>
 </AccordionGroup>
 
@@ -656,6 +656,6 @@ The `maxConcurrentRequests` field (under **Advanced settings**) caps how many in
   </Accordion>
 
   <Accordion title="Can I use a self-hosted LLM (e.g. Ollama, vLLM)?">
-    Yes — via the **OpenAI Compatible** provider (under Custom). Enter your endpoint's base URL, the model ID it exposes, and a placeholder API key (most self-hosted runtimes ignore the key header but still require one).
+    Yes — via the **OpenAI-compatible** provider (under Custom). Enter your endpoint's base URL, the model ID it exposes, and a placeholder API key (most self-hosted runtimes ignore the key header but still require one).
   </Accordion>
 </AccordionGroup>

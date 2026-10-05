@@ -36,7 +36,7 @@ Escolha um por máquina. O CLI detecta automaticamente o que está disponível.
 
 - **Trial** — sem autenticação. 5 revisões por dia. Bom para "experimentar uma vez".
 - **Login pessoal** (`kodus auth login`) — uma conta individual. Tokens são atualizados automaticamente.
-- **Chave de equipe** (`kodus auth team-key --key kodus_xxxxx`) — uma chave compartilhada para uma equipe, gerada no painel. Recomendada para agentes de IA e onde não se deseja logins interativos.
+- **Chave de equipe** (`kodus auth team-key --key kodus_xxxxx`) — uma chave compartilhada para uma equipe, gerada no web app em **Organization → CLI keys**. Recomendada para agentes de IA e onde não se deseja logins interativos.
 - **Token CI/CD** (`kodus auth token`) — um token de longa duração para pipelines. Gerado de uma máquina com login, usado via `KODUS_TOKEN`.
 
 Veja [Primeiros Passos](getting_started) para a árvore de decisão completa.
@@ -57,7 +57,7 @@ Rule
 
 As regras se sobrepõem à revisão geral do Kodus — a IA as usa como critérios adicionais, não como substitutos.
 
-Gerencie regras pelo painel ou pelo CLI com `kodus rules create|update|view`. O CLI é útil quando você quer regras em controle de versão (gere-as a partir de um script, faça check-in em um repositório, reaplicar na provisionamento).
+Gerencie regras pelo web app (**Code review → Kody Rules**) ou pelo CLI com `kodus rules create|update|view`. O CLI é útil quando você quer regras em controle de versão (gere-as a partir de um script, faça check-in em um repositório, reaplicar na provisionamento).
 
 ## Configurações de Repositório
 

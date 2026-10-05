@@ -153,6 +153,8 @@ kodus auth login                              # 交互式登录
 kodus auth login -e user@mail.com -p password # 非交互式
 ```
 
+交互式登录会在浏览器中打开 **Authorize Kodus CLI** 页面；在该页面点击 **Authorize CLI** 即可完成。
+
 | 标志 | 简写 | 描述 |
 |------|------|------|
 | `--email <email>` | `-e` | 账户邮箱 |
@@ -281,7 +283,7 @@ kodus config centralized download --out ./centralized-config.zip
 
 ## `kodus config repo`
 
-查看和更新存储在 Kodus 中的仓库设置。需要团队密钥认证。使用 `.` 指代当前仓库。
+查看和更新存储在 Kodus 中的仓库设置。需要团队密钥认证，且该密钥需开启 **Allow repository configuration via CLI**（在 **Organization → CLI keys** 中对该密钥点击 **Configure**；默认关闭）。使用 `.` 指代当前仓库。
 
 <Note>`kodus config repo` 和 `kodus config remote` 是同一命令组的别名。</Note>
 
@@ -330,6 +332,8 @@ kodus config repo add-ignore-title . "^WIP:"
 ## `kodus rules`
 
 创建、更新和查看 Kody Rules — Kodus 在审查时应用的结构化规则。
+
+使用团队密钥时，该密钥需开启 **Allow Kody Rules management via CLI**（在 **Organization → CLI keys** 中对该密钥点击 **Configure**；默认关闭）。
 
 ### 用法
 
