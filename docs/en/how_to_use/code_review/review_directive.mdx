@@ -6,7 +6,7 @@ description: "Direct Kody's attention to a specific area of a pull request with 
 A **review directive** lets you tell Kody where to focus its deepest analysis for a single review. Instead of changing any configuration, you attach a short instruction when you trigger the review — for example, "focus on the auth and session logic" — and Kody spends its hardest analysis on the changed code that matches.
 
 <Note>
-  A directive is **ephemeral**: it applies to that one review run only. It is not saved to your settings and does not affect future reviews. To change Kody's behavior permanently, use [Custom Prompts](/en/how_to_use/code_review/configs/custom_prompts) or [Kody Rules](/en/how_to_use/code_review/configs/kody_rules) instead.
+  A directive is **ephemeral**: it applies to that one review run only. It is not saved to your settings and does not affect future reviews. To change Kody's behavior permanently, use category instructions and Kody's personality ([Instructions & Personality](/en/how_to_use/code_review/configs/custom_prompts), formerly Custom Prompts) or [Kody Rules](/en/how_to_use/code_review/configs/kody_rules) instead.
 </Note>
 
 ## When to Use It
@@ -133,7 +133,7 @@ To request access, message us on [Discord](https://discord.gg/TFZBRk9fT6) or ema
   </Accordion>
   <Accordion title="Weak examples">
     - `@kody review please be thorough` — no area to prioritize.
-    - `@kody review only comment on file X` — a directive is not a filter; use [ignore paths](/en/how_to_use/code_review/configs/general) to scope files instead.
+    - `@kody review only comment on file X` — a directive is not a filter; use [Ignored files](/en/how_to_use/code_review/configs/general) to scope files instead.
   </Accordion>
 </AccordionGroup>
 

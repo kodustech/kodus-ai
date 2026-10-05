@@ -1,17 +1,28 @@
 ---
-title: "自定义提示"
-description: "为每个类别和建议的编写方式自定义 Kody 的审查提示以匹配团队的需求"
+title: "指令与个性"
+description: "自定义 Kody 在每个审查类别中查找的内容以及建议的编写方式(以前称为 Custom Prompts),以匹配团队的需求"
 ---
 
-自定义提示让您完全控制 Kody 如何分析代码和沟通发现。定制 AI 在每个审查类别中查找的内容,以及如何呈现建议以匹配团队的标准和沟通风格。
+类别指令和 Kody 的个性(以前称为 **Custom Prompts**)让您完全控制 Kody 如何分析代码和沟通发现。定制 AI 在每个审查类别中查找的内容,以及如何呈现建议以匹配团队的标准和沟通风格。
 
-<Card
-  title="访问自定义提示设置"
-  icon="gear"
-  href="https://app.kodus.io/settings/code-review/global/custom-prompts"
->
-  为组织中的所有代码库配置自定义提示
-</Card>
+旧的 Custom Prompts 页面已从导航中移除。它的两个部分现在位于侧边栏 **Code review** 分组中的两个页面上:
+
+<CardGroup cols={2}>
+  <Card
+    title="类别指令"
+    icon="gear"
+    href="https://app.kodus.io/settings/code-review/global/review-scope"
+  >
+    **Code review → What to review**:Bug、Performance 和 Security 行上的 **Instructions** 编辑器
+  </Card>
+  <Card
+    title="Kody 的个性"
+    icon="comments"
+    href="https://app.kodus.io/settings/code-review/global/output"
+  >
+    **Code review → What Kody writes**:**Personality instructions** 编辑器
+  </Card>
+</CardGroup>
 
 ## 为什么使用自定义提示?
 
@@ -34,9 +45,13 @@ description: "为每个类别和建议的编写方式自定义 Kody 的审查提
 
 自定义提示在两个级别运行:
 
-### 类别提示
+### 类别指令(What to review)
 
-定义 Kody 在每个审查类别中查找的内容:
+定义 Kody 在每个审查类别中查找的内容。在 **Code review → What to review** 上,每个已启用的
+**Bug**、**Performance** 和 **Security** 行都有一个 **Instructions** 按钮,点击后会展开一个
+编辑器(*What counts as a bug issue* 等)。在您更改之前,它显示 Kody 的默认内容 —— 标签显示
+**Kody's default** 或 **Custom** —— **Reset to default** 可将其恢复。类别关闭时编辑器会被隐藏,
+Business Logic 没有指令。
 
 <Tabs>
   <Tab title="错误">
@@ -82,7 +97,12 @@ description: "为每个类别和建议的编写方式自定义 Kody 的审查提
   </Tab>
 </Tabs>
 
-### 建议提示
+### Kody 的个性(What Kody writes)
+
+以前是 **Suggestion Prompts** 的基础指令。在 **Code review → What Kody writes** 上,
+**Kody's personality** 部分有一个 **Personality instructions** 编辑器(最多 2000 个字符,
+可使用 **Reset to default**):决定 Kody 在每条建议中的语气。它叠加在每个类别的指令
+之上生效。
 
 控制 Kody 如何沟通每个单独的建议。这自定义了出现在 PR 评论中的消息格式和语气,例如:
 
@@ -118,7 +138,7 @@ v2PromptOverrides:
 
 这四项是网页界面所暴露的,每个字段上限为 2000 个字符。Business Logic 类别没有提示词覆盖。
 
-配置文件还接受一组界面上看不到的键 —— Kody 用来对发现进行分级的严重性评判标准:
+配置文件还接受一组网页界面中没有任何页面可以编辑的键 —— 它仅能通过配置文件设置。这是 Kody 用来对发现进行分级的严重性评判标准:
 
 ```yaml
 v2PromptOverrides:
@@ -149,7 +169,7 @@ v2PromptOverrides:
 
 ## 外部引用
 
-所有自定义提示——类别、建议和 PR 摘要——都支持引用 Kody 可以访问的代码库中的真实文件。当您保存更新时,Kody 会自动检测外部引用并为将来的审查解析它们。
+所有自定义提示——类别指令、个性指令和 PR 摘要指令——都支持引用 Kody 可以访问的代码库中的真实文件。当您保存更新时,Kody 会自动检测外部引用并为将来的审查解析它们。
 
 - 使用 `@file:path/to/file.ts` 指向您正在编辑的代码库中的文件;Kody 将首先尝试在本地找到路径。
 - 在引用另一个代码库中的文件或在全局级别编辑提示时包含 `@repo:org/project`。
@@ -437,7 +457,7 @@ v2PromptOverrides:
     **解决方案:**
     - 使提示更具体和集中
     - 为您想要忽略的模式添加排除项
-    - 在[建议控制](/zh/how_to_use/code_review/configs/suggestion_control)中提高最低严重性阈值
+    - 在 **What to review** 上提高 **Minimum severity to post**(参见[严重性阈值](/zh/how_to_use/code_review/configs/suggestion_control))
     - 检查类别提示之间的冗余
   </Accordion>
 
@@ -485,7 +505,7 @@ v2PromptOverrides:
   </Accordion>
 
   <Accordion title="在自定义之前我可以看到默认提示吗?">
-    可以。点击设置中的任何提示以查看默认内容。
+    可以。每个编辑器在您更改之前都会显示 Kody 的默认内容,**Reset to default** 可以将其恢复。
   </Accordion>
 
   <Accordion title="当我更改提示时,现有 PR 会发生什么?">
@@ -493,7 +513,7 @@ v2PromptOverrides:
   </Accordion>
 
   <Accordion title="我可以使用 kodus-config.yml 自定义提示吗?">
-    不可以。自定义提示仅限网页以确保有意更改。其他设置(忽略的路径、分支)可以使用 `kodus-config.yml`。
+    可以,在 `v2PromptOverrides` 键下配置 —— 参见上文"在 `kodus-config.yml` 中设置"。只有在启用 `kodusConfigFileOverridesWebPreferences` 之后该文件才会被读取。
   </Accordion>
 
   <Accordion title="我应该自定义所有提示还是只是一些?">
@@ -504,8 +524,8 @@ v2PromptOverrides:
     无缝工作。根据模型的优势定制提示。主和后备都使用相同的自定义提示。
   </Accordion>
 
-  <Accordion title="类别提示和建议提示之间有什么区别?">
-    **类别提示**控制 Kody 在每个审查类别中分析什么。**建议提示**控制 Kody 如何向团队呈现发现。您可以独立自定义两者。
+  <Accordion title="类别指令和个性指令之间有什么区别?">
+    **类别指令**(以前称为类别提示,位于 **What to review**)控制 Kody 在每个审查类别中分析什么。**个性指令**(以前称为建议提示,位于 **What Kody writes**)控制 Kody 如何向团队呈现发现。您可以独立自定义两者。
   </Accordion>
 
   <Accordion title="我可以在建议提示中使用 markdown 吗?">

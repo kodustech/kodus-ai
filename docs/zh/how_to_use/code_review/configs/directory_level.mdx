@@ -51,8 +51,10 @@ Kody 为每个 PR 选择单个配置:**目录** → **代码库** → **全局**
 
 ## 设置
 
-1. 打开代码库的代码审查设置
-2. 添加目录条目并分配配置
-3. 保存更改
+1. 在侧边栏中,打开 **Code review** 分组顶部的作用域选择器,然后选择 **Add repository configuration**
+2. 在 **Create repository settings** 中,**Select the target repository**,然后 **Select the target directories**(一个或多个文件夹),并点击 **Create settings**
+3. 选择新的目录作用域 —— 它会缩进显示在作用域选择器中所属代码库的下方 —— 然后在任意页面(General、What to review、Kody Rules、What Kody writes)中更改设置;设置页面通过 **Save settings** 保存
+
+之后如需更改文件夹,请使用作用域选择器旁边的 **⋯** 菜单 → **Edit directories**;**Delete configuration** 会删除该目录配置。
 
 如果您还使用 `kodus-config.yml`,它会覆盖网页设置(请参阅通用设置中的配置优先级)。

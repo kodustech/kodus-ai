@@ -11,13 +11,13 @@ Quando habilitado, o Kodus monitora a atividade de pull requests nos seus reposi
 
 -   **Atribuição Automática:** Se um usuário criar mais de um pull request, o Kodus verifica se há vagas de licença disponíveis na sua organização.
     -   Se uma vaga estiver disponível, o usuário recebe automaticamente uma licença e seus PRs serão revisados.
-    -   Se não houver vagas disponíveis, o Kodus reagirá ao pull request com um emoji de polegar para baixo (👎) no Github ou um emoji de cadeado (🔒) no Gitlab para indicar que a revisão não pôde ser realizada por falta de licenças.
+    -   Se não houver vagas disponíveis, o Kodus reagirá ao pull request com um emoji de polegar para baixo (👎) no Github ou um emoji de cadeado (🔒) no Gitlab para indicar que a revisão não pôde ser realizada por falta de licenças (somente quando **Show Status Feedback** está ativado em **Code review → General**).
 
 ## Usuários Ignorados
 
-Você pode configurar uma lista de **Usuários Ignorados**. Esses usuários serão excluídos do processo de atribuição automática.
+Você pode configurar uma lista de **Usuários Ignorados**. Esses usuários serão excluídos do processo de atribuição automática. A lista é definida na página **Repositories**, aba **PR author filters**, com **Exclude PR authors** (ou, no sentido inverso, **Only these PR authors**).
 
--   **Sem Revisões:** Pull requests criados por usuários ignorados não serão revisados pelo Kodus.
+-   **Sem Revisões:** Pull requests criados por usuários ignorados não serão revisados pelo Kodus — a menos que esse usuário tenha uma licença, o que se sobrepõe ao filtro.
 -   **Sem Reações:** O Kodus não reagirá aos PRs deles, mesmo que ultrapassem o limite de PRs. Será como se o Kodus ignorasse o PR completamente.
 
 Isso é útil para bots, contas de serviço ou membros específicos da equipe que não precisam de revisões de código.
@@ -26,8 +26,10 @@ Isso é útil para bots, contas de serviço ou membros específicos da equipe qu
 
 Para habilitar e configurar a Atribuição Automática de Licenças:
 
-1. Acesse suas **Configurações de Code Review**.
-2. Navegue até a aba **Assinatura**.
-3. Localize a seção **Atribuição automática de licenças**.
-    - Use o botão de alternância para habilitar ou desabilitar o recurso.
-    - Se habilitado, você pode selecionar usuários para adicionar à lista de **Usuários Ignorados**.
+1. Na barra lateral, abra **Organization → Subscription**.
+2. Permaneça na aba **PR licenses**.
+3. Ative ou desative **Auto-assign licenses**.
+    - **Release seats automatically** (no mesmo card) libera uma licença alguns dias (7 por padrão) depois que um membro sai da sua organização no git.
+    - Para excluir usuários, use **Repositories → PR author filters** (veja [Usuários Ignorados](#usuários-ignorados)).
+
+Esses toggles aparecem apenas com um plano pago ativo ou uma instância self-hosted licenciada, e apenas para membros que podem gerenciar assentos (Owners).

@@ -35,10 +35,12 @@ icon: "plug"
 
 ## 在 Kodus 中安装插件
 
-<iframe src="https://www.youtube.com/embed/rtBxGnb9nIs?si=z2538VqglaqBOpio" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen width="100%" height="500px"></iframe>
+<Frame caption="在 Plugins 中，点击 Add Custom Plugin 卡片上的 Add Plugin 会打开此表单">
+  <img src="/images/custom-plugin.png" alt="Add Custom Plugin form" />
+</Frame>
 
-1. 转到 Kodus 工作区内的**代码审查设置 → 插件**(测试版)。
-2. 点击**添加插件**。
+1. 在 Kodus 工作区的侧边栏中,打开 **Plugins**(Beta)。
+2. 在 **Add Custom Plugin** 卡片上,点击 **Add Plugin**。
 3. 填写表单:
 
    ```text
@@ -65,7 +67,7 @@ icon: "plug"
    @kody 您能从我们的 MCP 获取部署检查清单并确认是否需要功能标志吗?
    ```
 
-3. 在抽屉中,检查**插件**部分。您应该看到对新插件的调用。如果失败,展开错误以检查状态代码或验证消息。
+3. 查看 Kody 的回复:它应包含您的新插件返回的数据。如果没有,请在 **Plugins** 页面上确认插件的 URL、协议和授权。
 
 <Info>
   Kodus Docs MCP (`https://docs.kodus.io/mcp`) 是一个快速的健全性测试——您可以先安装它以确保您的工作区可以访问外部主机。

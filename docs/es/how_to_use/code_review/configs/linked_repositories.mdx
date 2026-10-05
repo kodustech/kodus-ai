@@ -83,7 +83,7 @@ Los dos primeros son la función funcionando como está diseñada. Para confirma
 
 ### En la app web
 
-Ve a **Code Review Settings → _tu repositorio_ → Linked Repositories**, elige un repositorio de la lista (solo aparecen los conectados) y guarda. Cada vínculo tiene dos campos opcionales, descritos abajo.
+En la barra lateral, elige tu repositorio en el selector de alcance en la parte superior del grupo **Code review** (si no aparece, crea primero sus ajustes con **Add repository configuration**) y luego abre **Code review → Linked repositories** (la página solo existe en el alcance de repositorio). Haz clic en **Add repository**, elige un repositorio en el diálogo **Add linked repository** (solo aparecen los conectados) y haz clic en **Save settings**. Cada vínculo tiene dos campos opcionales, **Instructions · optional** y **Branch / ref pin · optional**, descritos abajo.
 
 ### En `kodus-config.yml`
 
@@ -99,7 +99,7 @@ linkedRepositories:
 - `repository` (obligatorio) — nombre completo de un repositorio conectado a la organización (`owner/repo`).
 - `instructions`, `ref` — mismo significado que los campos de la app web (abajo).
 
-La interacción del archivo con la configuración web sigue las [reglas normales del archivo de configuración](/es/how_to_use/code_review/configs/general#prioridad-de-configuración): el archivo solo se lee cuando `kodusConfigFileOverridesWebPreferences` está habilitado para el repositorio (**Settings → Code Review → el repositorio → General**), se lee desde la **rama por defecto** del repositorio, y la lista `linkedRepositories` del archivo **reemplaza** la lista web de ese repositorio (las listas no se fusionan; `linkedRepositories: []` en el archivo apaga la función). El requisito de plan aplica sin importar dónde se declaren los vínculos.
+La interacción del archivo con la configuración web sigue las [reglas normales del archivo de configuración](/es/how_to_use/code_review/configs/general#prioridad-de-configuración): el archivo solo se lee cuando `kodusConfigFileOverridesWebPreferences` está habilitado para el repositorio (**kodus Config File Overrides Web Preferences** en **Code review → General** en el alcance de repositorio), se lee desde la **rama por defecto** del repositorio, y la lista `linkedRepositories` del archivo **reemplaza** la lista web de ese repositorio (las listas no se fusionan; `linkedRepositories: []` en el archivo apaga la función). El requisito de plan aplica sin importar dónde se declaren los vínculos.
 
 ### Instrucciones
 

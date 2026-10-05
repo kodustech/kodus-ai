@@ -35,10 +35,12 @@ Looking for remote MCP servers to try out?
 
 ## Install the plugin in Kodus
 
-<iframe src="https://www.youtube.com/embed/rtBxGnb9nIs?si=z2538VqglaqBOpio" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen width="100%" height="500px"></iframe>
+<Frame caption="Plugins → Add Custom Plugin card → Add Plugin opens this form">
+  <img src="/images/custom-plugin.png" alt="Add Custom Plugin form" />
+</Frame>
 
-1. Go to **Code Review Settings → Plugins** (beta) inside your Kodus workspace.
-2. Click **Add Plugin**.
+1. In the sidebar, open **Plugins** (Beta) inside your Kodus workspace.
+2. On the **Add Custom Plugin** card, click **Add Plugin**.
 3. Fill in the form:
 
    ```text
@@ -65,7 +67,7 @@ Looking for remote MCP servers to try out?
    @kody can you fetch the deployment checklist from our MCP and confirm whether feature flags are required?
    ```
 
-3. In the drawer, check the **Plugins** section. You should see a call to your new plugin. If it fails, expand the error to inspect the status code or validation message.
+3. Check Kody's reply: it should include data returned by your new plugin. If it doesn't, confirm the plugin's URL, protocol, and authorization on the **Plugins** page.
 
 <Info>
   The Kodus Docs MCP (`https://docs.kodus.io/mcp`) is a quick sanity test—you can install it first to ensure your workspace can reach external hosts.

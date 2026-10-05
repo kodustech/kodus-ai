@@ -11,23 +11,24 @@ description: "设置在每个拉取请求上自动运行的 AI 驱动代码审�
 
 ### 支持的平台
 
-- **GitHub** — 通过 GitHub App
-- **GitLab** — 通过 OAuth + webhooks
-- **Bitbucket** — 通过 webhooks
-- **Azure DevOps** — 通过 webhooks
+- **GitHub** — 通过 GitHub App（或个人访问令牌）
+- **GitLab** — 通过 OAuth（或个人访问令牌）
+- **Bitbucket** — 通过 API 令牌
+- **Azure DevOps**（Azure Repos）— 通过个人访问令牌
+- **Forgejo** — 通过个人访问令牌
 
 ### 分析内容
 
-默认情况下，Kodus 检查：
+默认情况下，Kodus 检查您可以在 **Code review → What to review** 中开启或关闭的类别，以及您自己的规则：
 - 安全问题（SQL 注入、XSS、硬编码密钥）
 - 性能问题（N+1 查询、缺少索引）
-- 错误处理差距
-- 潜在 bug（空指针、资源泄漏）
-- 代码风格和可维护性
-- 您的自定义 Kody 规则
+- 潜在 bug（空指针、资源泄漏、错误处理差距）
 - 业务逻辑合规性（根据关联任务需求验证）
+- 您的自定义 Kody 规则（用于代码风格和团队约定）
 
 ### 审查节奏选项
+
+在 **Code review → General** 中的 **Enable Automated Code Review** → **Review Cadence** 下设置审查节奏。
 
 | 模式 | 行为 |
 |------|------|
@@ -38,7 +39,7 @@ description: "设置在每个拉取请求上自动运行的 AI 驱动代码审�
 ## 开始使用
 
 1. 在 [kodus.io](https://kodus.io) 创建帐户或[自托管 Kodus](/zh/how_to_deploy/deploy_kodus/generic_vm)
-2. 连接您的 Git 提供商（GitHub、GitLab、Bitbucket 或 Azure DevOps）
+2. 连接您的 Git 提供商（GitHub、GitLab、Bitbucket、Azure DevOps 或 Forgejo）
 3. 选择要监控的代码库
 4. 打开一个 PR — Kodus 自动审查
 

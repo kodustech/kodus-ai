@@ -11,12 +11,13 @@ El Inicio de Sesión Único (SSO) te permite gestionar el acceso a Kodus a trav�
 
 <Steps>
     <Step title="Acceder a la configuración de SSO">
-        Navega a la configuración de tu organización en
-        [app.kodus.io/organization/sso](https://app.kodus.io/organization/sso)
+        En la barra lateral, abre **Organization → SSO**
+        ([app.kodus.io/organization/sso](https://app.kodus.io/organization/sso)).
+        SSO está disponible en el plan Enterprise (y durante una prueba); en otros planes la página muestra una vista previa bloqueada.
     </Step>
 
     <Step title="Completa la configuración de tu IdP">
-        Completa la configuración de tu IdP, como su ID de emisor, su URL y el certificado de firma. Estos pueden completarse manualmente o proporcionando la URL de metadatos de tu IdP o un archivo XML de metadatos.
+        En **SAML SSO Configuration**, completa la configuración de tu IdP: **IDP Issuer**, **SSO URL** y **X.509 Certificate**. Estos pueden completarse manualmente o proporcionando la **Metadata URL (optional)** de tu IdP (y luego **Fetch**) o un archivo XML de metadatos (**Upload Metadata XML File**).
 
         <Info>
             Estos valores generalmente se encuentran en la documentación de tu IdP o en su consola de administración.
@@ -24,7 +25,7 @@ El Inicio de Sesión Único (SSO) te permite gestionar el acceso a Kodus a trav�
     </Step>
 
     <Step title="Configura Kodus como SP en tu IdP">
-        Configura Kodus como SP en tu IdP proporcionando nuestro ID de entidad (`kodus-orchestrator` de forma predeterminada) y la URL de callback de tu organización que se encuentra en la página de configuración de SSO.
+        Configura Kodus como SP en tu IdP proporcionando nuestro ID de entidad (**Service Provider Entity ID**, `kodus-orchestrator` de forma predeterminada) y la **Callback URL** de tu organización, ambos mostrados en la página de configuración de SSO.
 
         Asegúrate de que el formato del ID de nombre esté configurado como correo electrónico.
 
@@ -33,8 +34,12 @@ El Inicio de Sesión Único (SSO) te permite gestionar el acceso a Kodus a trav�
         </Warning>
     </Step>
 
-    <Step title="Habilitar y probar SSO">
-        Habilita SSO en Kodus y prueba la configuración cerrando sesión e iniciando sesión nuevamente. Al intentar iniciar sesión con un dominio de correo electrónico asociado a tu IdP, tendrás la opción de iniciar sesión mediante SSO.
+    <Step title="Verifica tus dominios">
+        Agrega tus dominios de correo electrónico en **Allowed Domains** y haz clic en **Verify** en cada uno. En **Verify Enterprise Domain**, ingresa un correo electrónico de ese dominio para recibir un enlace de verificación (las instancias self-hosted verifican de inmediato). Cada dominio debe mostrar **Verified** antes de poder habilitar SSO.
+    </Step>
+
+    <Step title="Probar y habilitar SSO">
+        Haz clic en **Test connection** y completa un inicio de sesión en tu IdP. Tras una prueba exitosa, activa **Enable SAML SSO** y haz clic en **Save settings**. Al intentar iniciar sesión con un dominio de correo electrónico asociado a tu IdP, verás **Continue with SSO**.
     </Step>
 
 </Steps>

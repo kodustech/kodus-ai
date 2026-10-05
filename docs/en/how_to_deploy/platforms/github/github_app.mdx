@@ -141,6 +141,6 @@ The webhook URL must reach the webhooks service, not the frontend login page. Us
 
 Keep **Redirect on update** enabled. After installing or changing repository access, finish the **Setup URL** browser round trip back to Kodus. A successful `ping` or an ignored `installation` event does not create the Kodus integration.
 
-In Kodus Git Settings, confirm that the expected repository is connected. Then open a test pull request and check both the GitHub delivery response and Kodus webhook/worker logs. If connection is missing, check installation repository access, approved permissions, the Setup URL, and proxy routing.
+In Kodus, open **Repositories** in the sidebar (formerly **Git Settings**) and confirm that the expected repository is listed. Then open a test pull request and check both the GitHub delivery response and Kodus webhook/worker logs. If connection is missing, check installation repository access, approved permissions, the Setup URL, and proxy routing.
 
 [GitHub registration reference](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app).

@@ -56,26 +56,25 @@ Veja a lista ao vivo e preços atuais em [llm.chutes.ai/v1/models](https://llm.c
 
 ### Opção 1 — BYOK no Kodus Cloud (recomendado)
 
-1. Na interface do Kodus, abra **Configurações → BYOK** ([app.kodus.io/byok](https://app.kodus.io/byok)).
-2. O Chutes não está no catálogo curado — clique em **Configure manually** no final da lista de modelos. Use `?slot=fallback` na URL se estiver configurando um fallback em vez do modelo principal.
-3. Preencha o assistente:
+1. Na barra lateral, abra **AI providers** ([app.kodus.io/byok](https://app.kodus.io/byok)).
+2. O Chutes não tem um card dedicado — na aba **Providers**, escolha **OpenAI-compatible** em **Custom**. Qual modelo roda por padrão e qual é o fallback é definido depois, na aba **Routing**.
+3. Preencha o formulário:
 
    | Campo | Valor |
    | --- | --- |
-   | **Provider** | `OpenAI Compatible` |
    | **Base URL** | `https://llm.chutes.ai/v1` |
    | **Model** | ex.: `deepseek-ai/DeepSeek-V3-0324-TEE` |
-   | **API Key** | sua chave de API do Chutes |
-   | **Max Concurrent Requests** | `3–5` é um bom ponto de partida; aumente se não atingir o limite (em Advanced settings) |
+   | **API key** | sua chave de API do Chutes |
+   | **Max concurrent requests** | `3–5` é um bom ponto de partida; aumente se não atingir o limite (em Advanced settings) |
 
 4. Clique em **Test & save**. O Kodus sonda o endpoint e persiste a configuração em caso de sucesso.
 
 <Tip>
-  O limite 5× é calculado a partir dos preços por token. Modelos de ponta caros consomem o limite mais rapidamente do que os menores — se você quer maximizar revisões por real gasto, combine o Chutes com um modelo mais barato (Llama, variantes menores do Qwen) para PRs rotineiros e reserve os modelos de ponta para revisões complexas via uma regra do Kody ou perfil BYOK separado.
+  O limite 5× é calculado a partir dos preços por token. Modelos de ponta caros consomem o limite mais rapidamente do que os menores — se você quer maximizar revisões por real gasto, combine o Chutes com um modelo mais barato (Llama, variantes menores do Qwen) para PRs rotineiros e reserve os modelos de ponta para revisões complexas via um override por agente na aba **Routing** ou um **Code review model** por repositório (**Code review → General**).
 </Tip>
 
 <Note>
-  Como o Chutes roda em computação descentralizada, cold-start e latência de cauda variam mais do que em provedores dedicados. Configure uma chave OpenAI ou Anthropic como **Fallback** para que o Kodus possa fazer failover quando um nó estiver lento ou o limite mensal for atingido.
+  Como o Chutes roda em computação descentralizada, cold-start e latência de cauda variam mais do que em provedores dedicados. Defina um modelo OpenAI ou Anthropic como **Fallback (optional)** na aba **Routing** para que o Kodus possa fazer failover quando um nó estiver lento ou o limite mensal for atingido.
 </Note>
 
 ### Opção 2 — Self-hosted (variáveis de ambiente)
@@ -120,7 +119,7 @@ Escolha o Synthetic se quiser uma assinatura fixa mais simples sem matemática d
   <Accordion title="Limite mensal 5× atingido">
     - Verifique o uso atual no painel do Chutes.
     - Mude temporariamente para um modelo mais barato para estender o limite, ou faça upgrade de plano.
-    - Configure um provedor BYOK de `Fallback` para que as revisões continuem funcionando enquanto você está com o limite atingido.
+    - Defina um modelo **Fallback (optional)** na aba **Routing** para que as revisões continuem funcionando enquanto você está com o limite atingido.
   </Accordion>
 
   <Accordion title="Erros 401 / autenticação">
@@ -134,7 +133,7 @@ Escolha o Synthetic se quiser uma assinatura fixa mais simples sem matemática d
 
   <Accordion title="Latência lenta ou inconsistente">
     - O Chutes roda em computação descentralizada, então a latência de cauda é maior do que em nuvens dedicadas.
-    - Para revisões sensíveis à latência, prefira provedores dedicados; reserve o Chutes para trabalhos de revisão noturnos ou em lote, ou configure um provedor rápido como `Main` e o Chutes como `Fallback`.
+    - Para revisões sensíveis à latência, prefira provedores dedicados; reserve o Chutes para trabalhos de revisão noturnos ou em lote, ou defina um provedor rápido como **Model for all tasks** e o Chutes como **Fallback (optional)** em **Routing**.
   </Accordion>
 
   <Accordion title="Erros de conexão">

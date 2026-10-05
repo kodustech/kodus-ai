@@ -5,14 +5,14 @@ description: "Ajuste sua revisão de código com IA para exibir apenas as sugest
 
 Muitas sugestões de baixa prioridade podem fazer os desenvolvedores ignorarem completamente o feedback das revisões de código. O segredo é ajustar a revisão para que ela mostre o que importa e fique quieta no que não importa.
 
-## Filtros de revisão
+## Limite de severidade
 
 O Kodus filtra quais achados são efetivamente publicados:
 
-- **Severidade mínima** — mostra apenas sugestões no nível escolhido ou acima (padrão: Medium)
-- **Aplicar filtros às Kody Rules** — desligado por padrão, para que as regras do seu time sempre apareçam
+- **Minimum severity to post** — publica apenas sugestões no nível escolhido ou acima (padrão: Medium). O Kody ainda encontra problemas de severidade menor; ele apenas não comenta sobre eles.
+- **Apply the threshold to Kody Rules** — desligado por padrão, para que as regras do seu time sempre apareçam
 
-Configure em **Code Review Settings** → **Review filters**, ou no `kodus-config.yml`:
+Configure na barra lateral em **Code review → What to review** (antes **Review filters**), ou no `kodus-config.yml`:
 
 ```yaml
 suggestionControl:
@@ -20,9 +20,11 @@ suggestionControl:
   applyFiltersToKodyRules: false
 ```
 
+Os trechos de `kodus-config.yml` desta página só têm efeito em um repositório quando **kodus Config File Overrides Web Preferences** está ativado em **Code review → General** (escopo de repositório ou diretório).
+
 ## Ignorar arquivos e caminhos
 
-Ignore arquivos que geram ruído (arquivos de lock, código gerado, configurações):
+Ignore arquivos que geram ruído (arquivos de lock, código gerado, configurações). Adicione-os em **Ignored files** em **Code review → General**, ou no `kodus-config.yml`:
 
 ```yaml
 ignorePaths:
@@ -34,7 +36,7 @@ ignorePaths:
 
 ## Ignorar PRs pelo título
 
-Ignore PRs que não precisam de revisão (releases, atualizações de versão):
+Ignore PRs que não precisam de revisão (releases, atualizações de versão). Adicione palavras-chave em **Ignore title keywords** em **Code review → General**, ou no `kodus-config.yml`:
 
 ```yaml
 ignoredTitleKeywords:
@@ -45,7 +47,7 @@ ignoredTitleKeywords:
 
 ## Alternar categorias de análise
 
-Desative categorias inteiras de revisão que você não precisa:
+Desative categorias inteiras de revisão que você não precisa com os switches **Bug**, **Performance**, **Security** e **Business Logic** em **Code review → What to review**, ou no `kodus-config.yml`:
 
 ```yaml
 reviewOptions:
@@ -57,6 +59,6 @@ reviewOptions:
 
 ## Cadência de revisão
 
-Use **Pausa automática** para evitar spam durante o desenvolvimento ativo — o Kodus pausa as revisões quando detecta pushes consecutivos rápidos (padrão: 3 pushes em 15 minutos).
+Use **Auto-pause** (**Code review → General** → **Enable Automated Code Review** → **Review Cadence**) para evitar spam durante o desenvolvimento ativo — o Kodus pausa as revisões quando detecta pushes consecutivos rápidos (padrão: 3 pushes em 15 minutos).
 
-Para detalhes, consulte [Configuração Geral](/pt-BR/how_to_use/code_review/configs/general) e [Controle de Sugestões](/pt-BR/how_to_use/code_review/configs/suggestion_control).
+Para detalhes, consulte [Configuração Geral](/pt-BR/how_to_use/code_review/configs/general) e [Limite de severidade](/pt-BR/how_to_use/code_review/configs/suggestion_control).

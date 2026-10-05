@@ -15,7 +15,7 @@ BYOK(自带密钥)是 **Kodus 在所有套餐中使用 LLM 的默认方式** —
 
 ## BYOK 如何工作
 
-BYOK 是**提供商优先**的:您连接一次提供商,把想要的模型添加到该提供商上,然后将这些模型路由到 Kody 的各个任务。`/byok` 界面有三个标签页:
+BYOK 是**提供商优先**的:您连接一次提供商,把想要的模型添加到该提供商上,然后将这些模型路由到 Kody 的各个任务。在应用中,这位于 **AI providers** 页面(侧边栏 → **AI providers**,以前称为 **BYOK** 页面),它有三个标签页:
 
 <CardGroup cols={3}>
   <Card title="提供商" icon="box">
@@ -25,41 +25,41 @@ BYOK 是**提供商优先**的:您连接一次提供商,把想要的模型添加
     选择每个任务运行哪个模型 — 为所有任务设一个默认模型、一个可选的备用模型,以及按 agent 的覆盖。
   </Card>
   <Card title="预算" icon="wallet">
-    为您已连接的所有模型设置一个可选的月度开销上限。
+    设置一个可选的月度预算,并在接近预算时收到开销提醒(仅提醒 — 审查会继续运行)。
   </Card>
 </CardGroup>
 
 <Info>
-  **谁可以编辑此项。** BYOK 页面**仅限 Owner** — 连接、测试和删除密钥需要 **Owner** 角色。其他角色(Billing Manager、Repo Admin、Contributor)无法访问 `/byok`。参见[工作区角色](/zh/how_to_use/workspace_roles)。
+  **谁可以编辑此项。** **AI providers** 页面**仅限 Owner** — 连接、测试和删除密钥需要 **Owner** 角色。其他角色(Billing Manager、Repo Admin、Contributor)无法访问 `/byok`。参见[工作区角色](/zh/how_to_use/workspace_roles)。
 </Info>
 
 ## 连接提供商
 
 <Steps>
-  <Step title="打开 BYOK 设置">
-    访问 [app.kodus.io/byok](https://app.kodus.io/byok)。在全新的工作区中,您会看到**连接您的第一个提供商**。
+  <Step title="打开 AI providers">
+    在侧边栏中打开 **AI providers**([app.kodus.io/byok](https://app.kodus.io/byok))。在全新的工作区中,您会看到 **Connect your first provider**。
   </Step>
 
   <Step title="选择一个提供商">
     提供商网格分为两部分:
 
-    - **提供商** — 只需一个 API 密钥即可连接的一等提供商(OpenAI、Anthropic、Google AI Studio、OpenRouter、Novita……)。
-    - **自定义** — 指向您自己端点或运行任意模型的提供商:**OpenAI-compatible**、**Anthropic-compatible**、**Google Vertex AI** 和 **Amazon Bedrock**。它们带有 *Custom endpoint* 标记。
+    - **提供商** — 只需一个 API 密钥即可连接的一等提供商(OpenAI、Anthropic、Google、OpenRouter、Novita、Moonshot、Z.ai……)。
+    - **自定义** — 指向您自己端点或运行任意模型的提供商:**OpenAI-compatible**、**Anthropic-compatible**、**Google Vertex AI**、**Amazon Bedrock** 和 **Azure OpenAI**。自定义端点带有 *Custom endpoint* 标记。
 
     已经连接的提供商会显示**Connected · N models**。
   </Step>
 
   <Step title="添加模型">
-    选择一个提供商会打开它的**Add a model** 表单。粘贴一次 API 密钥(之后添加到该提供商的每个模型都会复用它),然后选择模型:
+    选择一个提供商会打开它的添加模型表单(**Add a … model**)。粘贴一次 API 密钥(之后添加到该提供商的每个模型都会复用它),然后选择模型:
 
     - 如果 Kodus 能列出该提供商的模型,您会得到一个下拉菜单。
     - 否则(自定义端点、自托管,或未配置平台密钥时),请输入精确的模型 ID。
 
-    自定义端点(OpenAI-compatible / Anthropic-compatible)还会先要求填写一个**基础 URL**。
+    自定义端点(OpenAI-compatible / Anthropic-compatible)还会先要求填写一个 **Base URL**。
   </Step>
 
   <Step title="调整高级设置(可选)">
-    在**高级设置**下:thinking/reasoning、温度、最大输出 token 数、最大输入 token 数,以及最大并发请求数。对大多数提供商来说默认值都是合理的 — 关于 Kodus 针对每个模型锁定或隐藏的字段,请参见[推理](#推理--扩展思考)和[温度](#温度)。
+    在 **Advanced (optional)** 卡片中展开 **Advanced settings**:**Thinking / Reasoning**、**Temperature**、**Max output tokens**、**Max input tokens** 和 **Max concurrent requests**。对大多数提供商来说默认值都是合理的 — 关于 Kodus 针对每个模型锁定或隐藏的字段,请参见[推理](#推理--扩展思考)和[温度](#温度)。
   </Step>
 
   <Step title="测试并保存">
@@ -108,7 +108,7 @@ BYOK 是**提供商优先**的:您连接一次提供商,把想要的模型添加
   </Step>
 </Steps>
 
-点击**Save routing** 以持久化。**Reset agents to default** 会把每个按 agent 的覆盖都还原为默认,并清除备用(默认模型本身保留)。下方一个只读的**Per repository** 面板会镜像在代码审查设置中设定的任何按仓库的模型覆盖。
+点击**Save routing** 以持久化。**Reset agents to default** 会把每个按 agent 的覆盖都还原为默认,并清除备用(默认模型本身保留)。下方一个只读的 **Per repository** 面板会镜像任何按仓库(或按目录)的模型覆盖,这些覆盖在 **Code review → General → Code review model** 中设置,需先在范围选择器中选中某个仓库或目录。
 
 <Note>
   只连接了一个模型时,路由会被跳过 — 每个任务都使用那个模型。请连接第二个模型,让路由变得有意义。
@@ -251,11 +251,11 @@ Moonshot 和 Z.ai 都在按 token 付费的开发者 API 之外,各自提供一�
     </Accordion>
   </Tab>
 
-  <Tab title="OpenAI Compatible">
+  <Tab title="OpenAI-compatible">
     **最适合:**专业提供商(Moonshot、Z.ai、Fireworks、Together、Groq、DeepSeek)或自托管端点。
 
     **如何配置:**
-    1. 在连接流程中选择 **OpenAI Compatible**(位于自定义下)。
+    1. 在连接流程中选择 **OpenAI-compatible**(位于自定义下)。
     2. 输入基础 URL(例如 `https://api.moonshot.ai/v1`、`https://api.z.ai/api/paas/v4/`、`https://api.fireworks.ai/inference/v1`)。
     3. 提供密钥和模型 ID。
 
@@ -294,7 +294,7 @@ Moonshot 和 Z.ai 都在按 token 付费的开发者 API 之外,各自提供一�
 
 ## 推理 / 扩展思考
 
-**Add a model** 表单在**高级设置**下提供一个 **Thinking** 开关(Off / Low / Medium / High / Custom)。可用选项反映模型实际能做什么:
+添加模型表单在 **Advanced settings** 下提供一个 **Thinking / Reasoning** 开关(Off / Low / Medium / High / Custom)。可用选项反映模型实际能做什么:
 
 - 无法推理的模型被锁定为 **Off** 并带有说明。
 - 仅在某些级别推理的模型(例如 GPT-5 的 medium/high)会禁用无效的级别。
@@ -318,7 +318,7 @@ Moonshot 和 Z.ai 都在按 token 付费的开发者 API 之外,各自提供一�
 
 ### 自定义 JSON 覆盖
 
-在 Thinking 开关中选择 **Custom** 会显示一个 JSON 文本框。直接粘贴提供商选项 — **Kodus 会自动把它们包裹在当前提供商的命名空间下**。您无需了解 Vercel AI SDK 的路由规则。
+在 **Thinking / Reasoning** 开关中选择 **Custom** 会显示一个 JSON 文本框。直接粘贴提供商选项 — **Kodus 会自动把它们包裹在当前提供商的命名空间下**。您无需了解 Vercel AI SDK 的路由规则。
 
 在以下情况使用:
 
@@ -502,7 +502,7 @@ OpenRouter 是一个路由器 — 当您请求某个模型(例如 `moonshotai/ki
 
 ### 进阶:原始 JSON 覆盖
 
-如果您需要 `order` 和 `allow_fallbacks` 之外的字段(例如 `ignore`、`data_collection`、`require_parameters`),请在 Advanced settings 中将 **Thinking** 切换到 **Custom**,并粘贴完整的路由 payload — 它会与任何推理配置一起被合并进 `providerOptions`:
+如果您需要 `order` 和 `allow_fallbacks` 之外的字段(例如 `ignore`、`data_collection`、`require_parameters`),请在 Advanced settings 中将 **Thinking / Reasoning** 切换到 **Custom**,并粘贴完整的路由 payload — 它会与任何推理配置一起被合并进 `providerOptions`:
 
 ```json
 {
@@ -520,7 +520,7 @@ OpenRouter 是一个路由器 — 当您请求某个模型(例如 `moonshotai/ki
 
 ## 并发与速率限制
 
-`maxConcurrentRequests` 字段(**高级设置**下)限制 Kodus 并行向您的提供商发送的未完成请求数。多数情况下默认值即可 — 但有严格并发限制的订阅方案需要显式设置。
+`maxConcurrentRequests` 字段(**Max concurrent requests**,位于 **Advanced settings** 下)限制 Kodus 并行向您的提供商发送的未完成请求数。多数情况下默认值即可 — 但有严格并发限制的订阅方案需要显式设置。
 
 ### 应设置的值
 
@@ -565,7 +565,7 @@ OpenRouter 是一个路由器 — 当您请求某个模型(例如 `moonshotai/ki
     为 Kodus 创建独立的 API 密钥,便于审计使用情况和轮换密钥。
   </Card>
   <Card title="定期轮换" icon="arrows-rotate">
-    定期轮换密钥,并在 BYOK 设置中更新。
+    定期轮换密钥,并在 **AI providers** 页面上通过 **Edit provider** 更新。
   </Card>
   <Card title="监控使用" icon="chart-bar">
     检查您的提供商仪表板是否有异常模式。
@@ -611,13 +611,13 @@ OpenRouter 是一个路由器 — 当您请求某个模型(例如 `moonshotai/ki
   </Accordion>
 
   <Accordion title="自托管环境变量未显示">
-    - 如果 Kodus 通过 `.env`(自托管固定模式)配置,BYOK 界面会显示一个蓝色信息横幅,标明当前活动的提供商/模型 — 出于安全考虑,密钥不会显示。
+    - 如果 Kodus 通过 `.env`(自托管固定模式)配置,在该页面尚未连接任何模型时,**AI providers** 页面会显示一个信息横幅,标明当前活动的提供商/模型 — 出于安全考虑,密钥不会显示。
     - 连接一个模型并保存会覆盖 `.env` 配置。
   </Accordion>
 
   <Accordion title="高或意外的成本">
-    - 推理会增加 token 消耗。如果成本飙升,将 **Thinking** 从 Medium 降到 Low,或在**按 agent** 下把繁重任务路由到更便宜的模型。
-    - 查看提供商仪表板中的按模型分解,并在**预算**标签页下设置上限。
+    - 推理会增加 token 消耗。如果成本飙升,将 **Thinking / Reasoning** 从 Medium 降到 Low,或在**按 agent** 下把繁重任务路由到更便宜的模型。
+    - 查看提供商仪表板中的按模型分解,并在 **Budget** 标签页下设置带开销提醒的月度预算(仅提醒 — 硬性上限请在提供商处设置)。
   </Accordion>
 </AccordionGroup>
 
@@ -645,6 +645,6 @@ OpenRouter 是一个路由器 — 当您请求某个模型(例如 `moonshotai/ki
   </Accordion>
 
   <Accordion title="我可以使用自托管 LLM(例如 Ollama、vLLM)吗?">
-    可以 — 通过 **OpenAI Compatible** 提供商(位于自定义下)。输入端点的基础 URL、它暴露的模型 ID,以及占位 API 密钥(多数自托管运行时忽略密钥请求头,但仍要求提供)。
+    可以 — 通过 **OpenAI-compatible** 提供商(位于自定义下)。输入端点的基础 URL、它暴露的模型 ID,以及占位 API 密钥(多数自托管运行时忽略密钥请求头,但仍要求提供)。
   </Accordion>
 </AccordionGroup>

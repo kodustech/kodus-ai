@@ -7,7 +7,8 @@ Not every team wants every metric visible. Cockpit lets an Owner turn off whole 
 individual charts for the **entire organization** — useful when a metric is noisy for your
 workflow, or when you don't want per-developer numbers on display at all.
 
-Go to **Organization → Cockpit Configuration** (`/organization/cockpit`).
+In the sidebar, open **Organization → Cockpit visibility** (`/organization/cockpit`). The page is titled
+**Cockpit Configuration**; click **Save settings** to apply your changes.
 
 <Info>
   This is an **organization-wide** setting, not a per-user preference. Turning a metric off
@@ -16,7 +17,8 @@ Go to **Organization → Cockpit Configuration** (`/organization/cockpit`).
 
 ## Tabs
 
-The Cockpit is split into two tabs, and each can be hidden:
+The Cockpit has two metric tabs, and each can be hidden (the **Issues** tab next to them isn't
+controlled here):
 
 | Tab | What it holds |
 | --- | --- |
@@ -30,18 +32,18 @@ The Cockpit is split into two tabs, and each can be hidden:
 Hiding the Productivity tab also hides everything inside it, so the individual toggles below
 only matter while that tab is on.
 
-## Summary metrics
+## Summary cards
 
 The cards at the top of the Productivity tab:
 
 | Metric | What it shows |
 | --- | --- |
 | **Deploy Frequency** | How often your team deploys to production |
-| **PR Cycle Time** | Average time from PR creation to merge |
+| **PR Cycle Time** | Time from PR creation to merge (75th percentile) |
 | **Bug Ratio** | Percentage of PRs that are bug fixes |
 | **PR Size** | Average size of pull requests |
 
-## Detailed charts
+## Detail charts
 
 The charts below the summary cards:
 

@@ -12,7 +12,7 @@ Getting a new team up and running with Kodus takes about 30 minutes. This guide 
 
 1. Sign up at [kodus.io](https://kodus.io) or access your self-hosted instance
 2. Create a new workspace for your team
-3. Connect your Git provider (GitHub, GitLab, Bitbucket, or Azure DevOps)
+3. Connect your Git provider (GitHub, GitLab, Bitbucket, Azure Repos, or Forgejo)
 4. Select the repositories to monitor
 
 ## Step 2 — Set the review baseline
@@ -34,15 +34,15 @@ suggestionControl:
 automatedReviewActive: true
 ```
 
-This gives you automated reviews with a reasonable suggestion limit. Adjust after a week based on feedback.
+This gives you automated reviews with a reasonable severity threshold. Adjust after a week based on feedback.
 
 ## Step 3 — Import existing rules from IDE tools
 
 If your team already uses Cursor, Copilot, or Claude rules:
 
-1. Go to **Code Review Settings** → **Kody Rules**
+1. In the sidebar, pick the repository in the scope picker at the top of the **Code review** group, open **Kody Rules**, click **Configuration**, and turn on **Auto-sync rules from repo**
 2. Kodus detects `.cursorrules`, `.github/copilot-instructions.md`, and `.claude` files
-3. Import the ones that make sense for code review
+3. Review the imported rules and keep the ones that make sense for code review
 
 This avoids having to rewrite rules from scratch.
 
@@ -82,8 +82,8 @@ Add rules for things that must never happen:
 
 ```
 Name: No console.log in production code
-Scope: File
-Paths: src/**/*.ts
+Execution mode: Per file
+Path: src/**/*.ts
 Severity: High
 Instructions: Flag any console.log, console.warn, or console.error
 in fileDiff. Use the project logger instead.
@@ -92,8 +92,8 @@ Exclude test files (*.spec.ts, *.test.ts).
 
 ```
 Name: No hardcoded API URLs
-Scope: File
-Paths: src/**/*.ts
+Execution mode: Per file
+Path: src/**/*.ts
 Severity: Critical
 Instructions: Flag any hardcoded URL (http:// or https://)
 in fileDiff that looks like an API endpoint.
@@ -102,7 +102,7 @@ URLs must come from environment variables or config files.
 
 ## Step 6 — Connect task management (optional but recommended)
 
-Connect Jira, Linear, Notion, or ClickUp in **Settings** → **Plugins** to enable business logic validation. This lets Kodus check if PRs implement what the tasks describe.
+Connect Jira, Linear, Notion, or ClickUp in **Plugins** (in the sidebar) to enable business logic validation. This lets Kodus check if PRs implement what the tasks describe.
 
 ## Step 7 — Run a pilot PR
 
@@ -117,16 +117,16 @@ Open a test PR and verify:
 
 After a week of reviews, check in with the team:
 
-- Are there too many suggestions? → Raise `severityLevelFilter` or lower `maxSuggestions`
+- Are there too many suggestions? → Raise **Minimum severity to post** in **Code review → What to review** (`severityLevelFilter` in `kodus-config.yml`)
 - Are rules too noisy? → Narrow the file paths or add exclusions
 - Missing important patterns? → Add new rules or Memories
-- Want auto-generated rules? → Click **Generate Kody Rules** to get suggestions from review history
+- Want auto-generated rules? → Pick the repository in the scope picker, open **Code review → Kody Rules**, click **Configuration**, and turn on **Generate from past reviews** to get suggestions from review history
 
 ## Tips
 
 - Don't overload with rules on day one — start small and grow
 - Let the team teach Kody naturally through conversation before formalizing as rules
 - Use `@kody start-review` for the first few PRs so the team sees Kodus in action
-- Enable LLM-generated memories approval if you want to review what Kody learns
+- Turn on **Kody knowledge approval** (**Code review → Kody Rules → Configuration**) if you want to review what Kody learns
 
 For the full setup guide, see [Quickstart](/en/how_to_use/quickstart).

@@ -20,17 +20,6 @@ Kody が自動コードレビューを実行できるようにするには、Git
 
 ## FGPAT（Fine-Grained Personal Access Token）の生成
 
-<iframe
-  width="560"
-  height="315"
-  src="https://www.youtube.com/embed/ESE-Hl-bAD0?si=pCufAgeLBe73K_g0"
-  title="YouTube video player"
-  frameborder="0"
-  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-  referrerpolicy="strict-origin-when-cross-origin"
-  allowfullscreen
-></iframe>
-
 トークンを正しく設定するには、以下の手順に従ってください：
 
 1. **GitHub にアクセスし、プロフィール設定に移動します**：
@@ -75,4 +64,9 @@ Kody が自動コードレビューを実行できるようにするには、Git
 
 ## Kody へのトークンの追加
 
-トークンを生成した後、自動化設定の Kody 設定画面に貼り付けます。自動化を有効にしようとするとすぐに、モーダルが自動的に開きます。
+トークンを生成した後、Kodus に貼り付けます：
+
+- **オンボーディング中**：**Connect your Git tool** で **Github** タブを選び、**Connect via token** をクリックします。
+- **後から**：サイドバーで **Repositories** を開き、**Connect a provider** の下の **Github** をクリックし、**Token** タブに切り替えてトークンを貼り付け、**Validate and save** をクリックします。
+
+トークンを使用する場合、レビューは Kody ではなくあなたの GitHub プロフィールで公開され、GitHub Checks / PR ステータスは利用できません。

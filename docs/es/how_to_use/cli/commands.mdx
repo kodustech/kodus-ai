@@ -157,6 +157,8 @@ kodus auth login                              # Inicio de sesión interactivo
 kodus auth login -e user@mail.com -p password # No interactivo
 ```
 
+El inicio de sesión interactivo abre la página **Authorize Kodus CLI** en tu navegador; haz clic en **Authorize CLI** allí para terminar.
+
 | Flag                    | Corto | Descripción            |
 | ----------------------- | ----- | ---------------------- |
 | `--email <email>`       | `-e`  | Correo de la cuenta    |
@@ -285,7 +287,7 @@ Para una guía completa, consulta: [/en/how_to_use/code_review/configs/centraliz
 
 ## `kodus config repo`
 
-Inspecciona y actualiza la configuración del repositorio almacenada en Kodus. Se requiere autenticación con clave de equipo. Usa `.` para apuntar al repositorio actual.
+Inspecciona y actualiza la configuración del repositorio almacenada en Kodus. Se requiere autenticación con clave de equipo, y la clave necesita tener activado **Allow repository configuration via CLI** (**Organization → CLI keys**, **Configure** en la clave; desactivado por defecto). Usa `.` para apuntar al repositorio actual.
 
 <Note>`kodus config repo` y `kodus config remote` son alias del mismo grupo de comandos.</Note>
 
@@ -334,6 +336,8 @@ kodus config repo add-ignore-title . "^WIP:"
 ## `kodus rules`
 
 Crea, actualiza y visualiza Kody Rules — reglas estructuradas que Kodus aplica durante la revisión.
+
+Con una clave de equipo, la clave necesita tener activado **Allow Kody Rules management via CLI** (**Organization → CLI keys**, **Configure** en la clave; desactivado por defecto).
 
 ### Uso
 

@@ -27,8 +27,8 @@ This gives you Kodus' built-in security checks. The rules below add your team's 
 
 ```
 Name: No raw SQL queries
-Scope: File
-Paths: **/*.ts, **/*.js, **/*.py
+Execution mode: Per file
+Path: **/*.ts, **/*.js, **/*.py
 Severity: Critical
 Instructions:
   Flag any use of string concatenation or template literals
@@ -43,8 +43,8 @@ Instructions:
 
 ```
 Name: No hardcoded secrets or credentials
-Scope: File
-Paths: **/*
+Execution mode: Per file
+Path: **/*
 Severity: Critical
 Instructions:
   Flag any string that looks like an API key, password,
@@ -61,7 +61,7 @@ Instructions:
 
 ```
 Name: Auth middleware must not be skipped
-Scope: Pull Request
+Execution mode: Per PR
 Severity: Critical
 Instructions:
   Check pr_files_diff for any route or controller that
@@ -78,8 +78,8 @@ Instructions:
 
 ```
 Name: No dangerouslySetInnerHTML without sanitization
-Scope: File
-Paths: **/*.tsx, **/*.jsx
+Execution mode: Per file
+Path: **/*.tsx, **/*.jsx
 Severity: Critical
 Instructions:
   Flag any use of dangerouslySetInnerHTML in fileDiff.
@@ -111,7 +111,7 @@ internal paths, or database details to the client.
 
 For security rules, you want critical findings to block:
 
-1. Enable **Request Changes** in PR Workflow settings so Kody requests changes when critical issues are found
+1. In **Code review → General**, turn on **Enable changing status of Review to 'Request Changes'** so Kody requests changes when critical issues are found
 2. Set security rules to **Critical** severity so they always surface above any severity filter
 3. Do NOT set a low `maxSuggestions` limit — security findings should never be suppressed
 
@@ -121,7 +121,7 @@ If you use MCP plugins, you can check dependencies:
 
 ```
 Name: No known vulnerable dependencies
-Scope: Pull Request
+Execution mode: Per PR
 Severity: Critical
 Instructions:
   If pr_files_diff modifies package.json, requirements.txt,

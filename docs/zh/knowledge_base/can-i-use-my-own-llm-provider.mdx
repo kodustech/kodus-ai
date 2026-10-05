@@ -7,21 +7,15 @@ description: "带上自己的 API 密钥,选择首选的 LLM 提供商用于 Kod
 
 ## 工作原理
 
-1. 打开**设置 → BYOK**([app.kodus.io/byok](https://app.kodus.io/byok))
-2. 从精选目录中选择一个**推荐模型**,或点击**手动配置**接入任意其他提供商/端点
-3. 粘贴您的 API 密钥并点击**测试并保存** — Kodus 会在持久化前通过一次低成本的元数据调用验证密钥
+1. 在侧边栏中打开 **AI providers**([app.kodus.io/byok](https://app.kodus.io/byok))
+2. 在 **Providers** 选项卡上选择您的提供商 — 或者对于任意其他端点,选择 **Custom** 下的 **OpenAI-compatible** / **Anthropic-compatible**
+3. 粘贴您的 API 密钥,选择模型,然后点击 **Test & save** — Kodus 会在保存前测试连接
 
-## 精选推荐模型
+## 支持的提供商
 
-一键可用的卡片,附带预调整的默认值(温度、最大 token 数、推理级别):
+网格中的 **Providers** 部分列出了一流提供商,例如 Anthropic、OpenAI、Google、OpenRouter、Novita、Moonshot 和 Z.ai。**Custom** 部分涵盖由您自行让 Kodus 指向的端点:OpenAI-compatible、Anthropic-compatible、Google Vertex AI、Amazon Bedrock 和 Azure OpenAI。
 
-- Claude Sonnet 4.6 / Opus 4.7(Anthropic)
-- Gemini 3.1 Pro 自定义工具(Google)
-- GPT-5.4(OpenAI)
-- Kimi K2.6 Coding(Moonshot AI — 开发者 API 或 Kimi Code Plan)
-- GLM 5.1(Z.ai — 开发者 API 或 Coding Plan)
-
-对于列表之外的模型,**手动配置**向导会指引您接入任意 OpenAI、Anthropic、Google、OpenRouter、Novita 或 OpenAI 兼容端点。
+当 Kodus 能够列出某个提供商的模型时,**Model** 选择器会显示这些模型(推荐模型排在前面,另有 **Type model manually** 选项);否则,您需要输入确切的模型 ID。思考/推理、温度、token 限制和最大并发请求数位于 **Advanced (optional)** 下。
 
 ## 为什么使用自己的提供商
 
@@ -29,7 +23,7 @@ description: "带上自己的 API 密钥,选择首选的 LLM 提供商用于 Kod
 - **成本管理** — 使用您现有的计费关系,无加价
 - **模型选择** — 选择最适合您代码库的模型
 - **合规性** — 满足 AI 工具使用的内部要求
-- **故障转移韧性** — 配置主 + 备用,在提供商中断期间保持审查运行
+- **故障转移韧性** — 在 **Routing** 选项卡上设置一个 **Fallback (optional)** 模型,在提供商中断期间保持审查运行
 
 ## 自托管 LLM 提供商
 
@@ -37,8 +31,8 @@ description: "带上自己的 API 密钥,选择首选的 LLM 提供商用于 Kod
 
 - Novita、Groq、Together AI、Fireworks AI
 - Chutes、Synthetic
-- 您自己的 Ollama / vLLM / TGI 实例(通过 `OpenAI Compatible` 提供商)
+- 您自己的 Ollama / vLLM / TGI 实例(通过 **OpenAI-compatible** 提供商)
 
 设置指南请参见 [Cookbook](/zh/cookbook/novita) 和知识库中各提供商的专门文档。
 
-完整的 BYOK 流程(目录、手动向导、方案选择器、高级调优)请参见[自带密钥](/zh/how_to_use/byok)。
+完整的 BYOK 流程(提供商、路由、高级调优)请参见[自带密钥](/zh/how_to_use/byok)。

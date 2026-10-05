@@ -7,21 +7,15 @@ Sí. Kodus admite Bring Your Own Key (BYOK) en todos los planes, lo que te permi
 
 ## Cómo funciona
 
-1. Abre **Configuración → BYOK** ([app.kodus.io/byok](https://app.kodus.io/byok))
-2. Elige un **modelo recomendado** del catálogo curado, o haz clic en **Configure manually** para cualquier otro proveedor/endpoint
-3. Pega tu clave de API y haz clic en **Test & save** — Kodus valida la clave con una llamada de metadatos económica antes de persistirla
+1. En la barra lateral, abre **AI providers** ([app.kodus.io/byok](https://app.kodus.io/byok))
+2. En la pestaña **Providers**, elige tu proveedor — o **OpenAI-compatible** / **Anthropic-compatible** en **Custom** para cualquier otro endpoint
+3. Pega tu clave de API, elige el modelo y haz clic en **Test & save** — Kodus prueba la conexión antes de guardar
 
-## Modelos recomendados curados
+## Proveedores compatibles
 
-Tarjetas listas para un solo clic con valores por defecto preajustados (temperatura, máximo de tokens, nivel de razonamiento):
+La sección **Providers** de la cuadrícula lista proveedores de primera clase como Anthropic, OpenAI, Google, OpenRouter, Novita, Moonshot y Z.ai. La sección **Custom** cubre endpoints a los que tú mismo apuntas Kodus: OpenAI-compatible, Anthropic-compatible, Google Vertex AI, Amazon Bedrock y Azure OpenAI.
 
-- Claude Sonnet 4.6 / Opus 4.7 (Anthropic)
-- Gemini 3.1 Pro custom tools (Google)
-- GPT-5.4 (OpenAI)
-- Kimi K2.6 Coding (Moonshot AI — Developer API o Kimi Code Plan)
-- GLM 5.1 (Z.ai — Developer API o Coding Plan)
-
-Para modelos fuera de esta lista, el asistente **Configure manually** te guía a través de cualquier endpoint de OpenAI, Anthropic, Google, OpenRouter, Novita o compatible con OpenAI.
+Cuando Kodus puede listar los modelos de un proveedor, el selector **Model** los muestra (primero los recomendados, además de **Type model manually**); de lo contrario, escribes el ID exacto del modelo. Thinking/razonamiento, temperatura, límites de tokens y máximo de solicitudes concurrentes están en **Advanced (optional)**.
 
 ## Por qué usar tu propio proveedor
 
@@ -29,7 +23,7 @@ Para modelos fuera de esta lista, el asistente **Configure manually** te guía a
 - **Gestión de costos** — usa tu relación de facturación existente, sin márgenes
 - **Elección de modelo** — elige el modelo que funciona mejor para tu base de código
 - **Cumplimiento** — satisface los requisitos internos para el uso de herramientas de IA
-- **Resiliencia de respaldo** — configura un principal + respaldo para mantener las revisiones funcionando durante interrupciones del proveedor
+- **Resiliencia de respaldo** — define un modelo **Fallback (optional)** en la pestaña **Routing** para mantener las revisiones funcionando durante interrupciones del proveedor
 
 ## Proveedores de LLM auto-alojados
 
@@ -37,8 +31,8 @@ Si alojas Kodus tú mismo, puedes apuntar BYOK a endpoints auto-alojados o agreg
 
 - Novita, Groq, Together AI, Fireworks AI
 - Chutes, Synthetic
-- Tu propia instancia de Ollama / vLLM / TGI (mediante el proveedor `OpenAI Compatible`)
+- Tu propia instancia de Ollama / vLLM / TGI (mediante el proveedor **OpenAI-compatible**)
 
 Para guías de configuración, consulta el [Cookbook](/es/cookbook/novita) y la documentación específica de cada proveedor en la base de conocimiento.
 
-Para el flujo completo de BYOK (catálogo, asistente manual, selectores de plan, ajustes avanzados), consulta [Bring Your Own Key](/es/how_to_use/byok).
+Para el flujo completo de BYOK (proveedores, enrutamiento, ajustes avanzados), consulta [Bring Your Own Key](/es/how_to_use/byok).

@@ -56,26 +56,25 @@ Synthetic は HuggingFace スタイルのプレフィックス（`hf:org/model`�
 
 ### オプション1 — Kodus Cloud での BYOK（推奨）
 
-1. Kodus ウェブ UI で、**設定 → BYOK** を開きます（[app.kodus.io/byok](https://app.kodus.io/byok)）。
-2. Synthetic はキュレートされたカタログにはありません — モデルリストの下部にある **Configure manually** をクリックします。メインモデルの代わりにフォールバックを設定する場合は URL に `?slot=fallback` を使用します。
-3. ウィザードを入力します：
+1. サイドバーで **AI providers** を開きます（[app.kodus.io/byok](https://app.kodus.io/byok)）。
+2. Synthetic には専用のタイルがありません — **Providers** タブで **Custom** の下にある **OpenAI-compatible** を選択します。デフォルトで実行するモデルとフォールバックのモデルは、後から **Routing** タブで設定します。
+3. フォームを入力します：
 
    | フィールド | 値 |
    | --- | --- |
-   | **プロバイダー** | `OpenAI Compatible` |
    | **ベース URL** | `https://api.synthetic.new/openai/v1` |
    | **モデル** | 例：`hf:zai-org/GLM-4.6`（`hf:` プレフィックスと完全な HuggingFace パスを使用） |
-   | **APIキー** | Synthetic APIキー |
-   | **Max Concurrent Requests** | 大きな PR の5時間バジェットに収まるよう `3〜5` から始める（Advanced settings 内） |
+   | **API key** | Synthetic APIキー |
+   | **Max concurrent requests** | 大きな PR の5時間バジェットに収まるよう `3〜5` から始める（Advanced settings 内） |
 
 4. **Test & save** をクリックします。Kodus はエンドポイントをプローブし、成功時に設定を保存します。401 はキーが間違っていることを意味し、404 は通常ベース URL またはモデルパスが間違っていることを意味します。
 
 <Tip>
-  500メッセージ/5時間のバジェットはサブスクリプション単位で、PR 単位ではありません。継続的なレビューを行うチームには、1つの大きなマルチファイル PR がウィンドウを消費しないよう `Max Concurrent Requests` を十分に低く保つか、複数のサブスクリプションに作業を分散させてください。
+  500メッセージ/5時間のバジェットはサブスクリプション単位で、PR 単位ではありません。継続的なレビューを行うチームには、1つの大きなマルチファイル PR がウィンドウを消費しないよう **Max concurrent requests** を十分に低く保つか、複数のサブスクリプションに作業を分散させてください。
 </Tip>
 
 <Note>
-  Synthetic を**メイン**として設定し、OpenAI または Anthropic キーを**フォールバック**として保持します — 5時間ウィンドウが一杯になったとき、Kodus は自動的にフェイルオーバーしてレビューが継続されます。
+  **Routing** タブで Synthetic を **Model for all tasks** に、OpenAI または Anthropic のモデルを **Fallback (optional)** に設定します — 5時間ウィンドウが一杯になったとき、Kodus は自動的にフェイルオーバーしてレビューが継続されます。
 </Note>
 
 ### オプション2 — セルフホスト（環境変数）
@@ -114,8 +113,8 @@ docker-compose logs api worker | grep -iE "synthetic|api\.synthetic"
 <AccordionGroup>
   <Accordion title="5時間ウィンドウ内での 429 Too Many Requests">
     - サブスクリプションバジェットは1時間や月ごとではなく、**5時間ローリングウィンドウ**ごとです。Synthetic ダッシュボードで最近送信したリクエスト数を確認します。
-    - ウィンドウのロールフォワードを待つか、BYOK で `Max Concurrent Requests` を下げるか、プランをアップグレード/追加します。
-    - レート制限中もレビューが継続されるよう `Fallback` BYOK プロバイダーを設定します。
+    - ウィンドウのロールフォワードを待つか、モデルの **Max concurrent requests**（**AI providers** → **Edit model**）を下げるか、プランをアップグレード/追加します。
+    - レート制限中もレビューが継続されるよう、**Routing** タブで **Fallback (optional)** モデルを設定します。
   </Accordion>
 
   <Accordion title="401 / 認証エラー">

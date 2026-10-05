@@ -28,7 +28,7 @@ There are two ways to stop a rule from being inherited:
 
 ### 1) Mark a rule as non‑inheritable (at creation time)
 
-When creating a rule at any level (Global, Repository, or Directory), you can mark it as “non‑inheritable.”
+When creating a rule at any level (Global, Repository, or Directory), you can mark it as “non‑inheritable”: in the rule dialog, open **Advanced settings** and turn off **Inheritable** (it is on by default).
 
 Effect:
 - The rule applies only at the level where it was created.
@@ -38,7 +38,7 @@ Use this when a rule is intentionally specific to a particular scope and should 
 
 ### 2) Exclude a parent rule from a child level
 
-From a child configuration (Repository or Directory), you can explicitly exclude a rule that would otherwise be inherited from the parent.
+From a child configuration (Repository or Directory), you can explicitly exclude a rule that would otherwise be inherited from the parent: on **Code review → Kody Rules** at that scope, open the inherited rule and turn on **Override and disable for this scope**. The rule then shows as **Disabled** at that level.
 
 Effect:
 - The rule is not applied at that exact child level.

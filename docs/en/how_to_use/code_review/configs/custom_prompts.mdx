@@ -1,17 +1,28 @@
 ---
-title: "Custom Prompts"
-description: "Customize Kody's review prompts for each category and how suggestions are written to match your team's needs"
+title: "Instructions & Personality"
+description: "Customize what Kody looks for in each review category and how suggestions are written (formerly Custom Prompts) to match your team's needs"
 ---
 
-Custom Prompts give you complete control over how Kody analyzes your code and communicates findings. Tailor what the AI looks for in each review category and how it presents suggestions to match your team's standards and communication style.
+Category instructions and Kody's personality (formerly **Custom Prompts**) give you complete control over how Kody analyzes your code and communicates findings. Tailor what the AI looks for in each review category and how it presents suggestions to match your team's standards and communication style.
 
-<Card
-  title="Access Custom Prompts Settings"
-  icon="gear"
-  href="https://app.kodus.io/settings/code-review/global/custom-prompts"
->
-  Configure your custom prompts for all repositories in your organization
-</Card>
+The old Custom Prompts page is gone from the navigation. Its two parts now live on two pages of the sidebar's **Code review** group:
+
+<CardGroup cols={2}>
+  <Card
+    title="Category instructions"
+    icon="gear"
+    href="https://app.kodus.io/settings/code-review/global/review-scope"
+  >
+    **Code review → What to review**: an **Instructions** editor on the Bug, Performance and Security rows
+  </Card>
+  <Card
+    title="Kody's personality"
+    icon="comments"
+    href="https://app.kodus.io/settings/code-review/global/output"
+  >
+    **Code review → What Kody writes**: the **Personality instructions** editor
+  </Card>
+</CardGroup>
 
 ## Why Use Custom Prompts?
 
@@ -34,9 +45,13 @@ Custom Prompts give you complete control over how Kody analyzes your code and co
 
 Custom Prompts operate at two levels:
 
-### Category Prompts
+### Category instructions (What to review)
 
-Define what Kody looks for in each review category:
+Define what Kody looks for in each review category. On **Code review → What to review**, each
+enabled **Bug**, **Performance** and **Security** row has an **Instructions** button that expands
+an editor (*What counts as a bug issue*, and so on). It shows Kody's default until you change it —
+the chip reads **Kody's default** or **Custom** — and **Reset to default** restores it. The editor
+is hidden while the category is switched off, and Business Logic has no instructions.
 
 <Tabs>
   <Tab title="Bug">
@@ -82,7 +97,12 @@ Define what Kody looks for in each review category:
   </Tab>
 </Tabs>
 
-### Suggestion Prompts
+### Kody's personality (What Kody writes)
+
+Formerly the **Suggestion Prompts** base instruction. On **Code review → What Kody writes**, the
+**Kody's personality** section has a **Personality instructions** editor (max 2000 characters,
+**Reset to default** available): how Kody sounds in every suggestion. It applies on top of each
+category's instructions.
 
 Control how Kody communicates each individual suggestion. This customizes the message format and tone that appears in PR comments, like:
 
@@ -119,8 +139,8 @@ v2PromptOverrides:
 These four are what the web UI exposes, and each is capped at 2000 characters. There is no
 prompt override for the Business Logic category.
 
-The config file accepts one more group that the UI doesn't surface — the severity rubric Kody
-uses to classify a finding:
+The config file accepts one more group that no page in the web UI edits — it is config-file
+only. This is the severity rubric Kody uses to classify a finding:
 
 ```yaml
 v2PromptOverrides:
@@ -152,7 +172,7 @@ The file is only read once `kodusConfigFileOverridesWebPreferences` is enabled (
 
 ## External References
 
-All custom prompts—Category, Suggestion, and PR Summary—support referencing real files from the codebases Kody can access. When you save an update, Kody automatically detects external references and resolves them for future reviews.
+All custom prompts—category instructions, personality instructions, and PR summary instructions—support referencing real files from the codebases Kody can access. When you save an update, Kody automatically detects external references and resolves them for future reviews.
 
 - Use `@file:path/to/file.ts` to point at files in the repository you're editing; Kody will try to locate the path locally first.
 - Include `@repo:org/project` when referencing files from another repository or when editing prompts at the global level.
@@ -441,7 +461,7 @@ Only differentiate suggestion formats when there's a real reason:
     **Solutions:**
     - Make prompts more specific and focused
     - Add exclusions for patterns you want to ignore
-    - Raise minimum severity threshold in [Suggestion Control](/en/how_to_use/code_review/configs/suggestion_control)
+    - Raise **Minimum severity to post** on **What to review** (see [Severity Threshold](/en/how_to_use/code_review/configs/suggestion_control))
     - Check for redundancy between category prompts
   </Accordion>
 
@@ -489,7 +509,7 @@ Only differentiate suggestion formats when there's a real reason:
   </Accordion>
 
   <Accordion title="Can I see the default prompts before customizing?">
-    Yes. Click into any prompt in settings to view default content.
+    Yes. Each editor shows Kody's default until you change it, and **Reset to default** brings it back.
   </Accordion>
 
   <Accordion title="What happens to existing PRs when I change prompts?">
@@ -497,7 +517,7 @@ Only differentiate suggestion formats when there's a real reason:
   </Accordion>
 
   <Accordion title="Can I customize prompts with kodus-config.yml?">
-    No. Custom prompts are web-only to ensure intentional changes. Other settings (ignored paths, branches) can use `kodus-config.yml`.
+    Yes, under the `v2PromptOverrides` key — see "Setting them in `kodus-config.yml`" above. The file is only read once `kodusConfigFileOverridesWebPreferences` is enabled.
   </Accordion>
 
   <Accordion title="Should I customize all prompts or just some?">
@@ -508,8 +528,8 @@ Only differentiate suggestion formats when there's a real reason:
     Works seamlessly. Tailor prompts to your model's strengths. Both primary and fallback use the same custom prompts.
   </Accordion>
 
-  <Accordion title="What's the difference between Category prompts and Suggestion prompts?">
-    **Category prompts** control what Kody analyzes in each review category. **Suggestion prompts** control how Kody presents findings to your team. You can customize both independently.
+  <Accordion title="What's the difference between category instructions and personality instructions?">
+    **Category instructions** (formerly Category prompts, on **What to review**) control what Kody analyzes in each review category. **Personality instructions** (formerly Suggestion prompts, on **What Kody writes**) control how Kody presents findings to your team. You can customize both independently.
   </Accordion>
 
   <Accordion title="Can I use markdown in suggestion prompts?">

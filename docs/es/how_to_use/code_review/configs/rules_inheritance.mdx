@@ -28,7 +28,7 @@ Hay dos formas de evitar que una regla sea heredada:
 
 ### 1) Marcar una regla como no heredable (al momento de la creación)
 
-Al crear una regla en cualquier nivel (Global, Repositorio o Directorio), puedes marcarla como "no heredable".
+Al crear una regla en cualquier nivel (Global, Repositorio o Directorio), puedes marcarla como "no heredable": en el diálogo de la regla, abre **Advanced settings** y desactiva **Inheritable** (está activado por defecto).
 
 Efecto:
 - La regla se aplica solo en el nivel donde fue creada.
@@ -38,7 +38,7 @@ Usa esto cuando una regla sea intencionalmente específica de un alcance particu
 
 ### 2) Excluir una regla padre de un nivel hijo
 
-Desde una configuración hija (Repositorio o Directorio), puedes excluir explícitamente una regla que de otro modo se heredaría del padre.
+Desde una configuración hija (Repositorio o Directorio), puedes excluir explícitamente una regla que de otro modo se heredaría del padre: en **Code review → Kody Rules** en ese alcance, abre la regla heredada y activa **Override and disable for this scope**. La regla aparece entonces como **Disabled** en ese nivel.
 
 Efecto:
 - La regla no se aplica en ese nivel hijo exacto.

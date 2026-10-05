@@ -24,14 +24,13 @@ If no links are configured, the feature is fully off (zero extra cost).
 
 Linked repositories are **per repository**, not global. Relationships are directional: links on `frontend` apply only when reviewing PRs in `frontend`.
 
-1. Open **Code Review Settings**.
-2. Select a **specific repository** (not Global).
-3. Open the **Linked Repositories** page in that repository's menu.
-4. Add sibling repos that are already connected to your organization.
-5. Optionally set:
-   - **Instructions** — free-text hint for Kody (e.g. “REST API this frontend consumes”).
-   - **Ref** — optional branch/tag pin. Leave empty to use the automatic ref cascade (below).
-6. Save.
+1. In the scope picker at the top of the **Code review** group in the sidebar, pick a **specific repository** (not Global).
+2. Open **Linked repositories** (it only appears at repository scope).
+3. Click **Add repository** and pick sibling repos that are already connected to your organization.
+4. Optionally set:
+   - **Instructions · optional** — free-text hint for Kody (e.g. “REST API this frontend consumes”).
+   - **Branch / ref pin · optional** — branch/tag pin. Leave empty to use the automatic ref cascade (below).
+5. Click **Save settings**.
 
 You can link at most **3** repositories. Only repos already connected to the same organization are accepted.
 
@@ -133,5 +132,5 @@ Prefer **narrow, directional** links (the consumer points at the producer) over 
 - [Linked Repositories settings reference](/en/how_to_use/code_review/configs/linked_repositories) — the settings page, field by field
 
 - [How to share coding standards across repositories](/en/knowledge_base/how-to-share-standards-across-repositories) — org-level rules and inheritance (not source context)
-- [How to review PRs with project-specific context](/en/knowledge_base/how-to-review-prs-with-project-context) — memories, file references, custom prompts, MCP
+- [How to review PRs with project-specific context](/en/knowledge_base/how-to-review-prs-with-project-context) — memories, file references, category instructions, MCP
 - [How to reduce code review noise](/en/knowledge_base/how-to-reduce-code-review-noise) — keep reviews focused when you add more context

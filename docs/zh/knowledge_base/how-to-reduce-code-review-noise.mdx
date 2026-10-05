@@ -5,14 +5,14 @@ description: "调整 AI 代码审查，仅显示最相关的建议，避免警�
 
 过多的低优先级建议会让开发者完全忽略代码审查反馈。关键是调整审查，使其显示重要的内容，对不重要的保持安静。
 
-## 审查过滤器
+## 严重性阈值
 
 Kodus 会过滤哪些发现真正被发布:
 
-- **最低严重性** —— 只显示达到或高于阈值的建议(默认:Medium)
-- **对 Kody Rules 应用过滤器** —— 默认关闭,让团队自己的规则始终出现
+- **Minimum severity to post** —— 只发布达到或高于阈值的建议(默认:Medium)。Kody 仍然会发现较低严重性的问题,只是不会对其发表评论。
+- **Apply the threshold to Kody Rules** —— 默认关闭,让团队自己的规则始终出现
 
-在 **Code Review Settings** → **Review filters** 或 `kodus-config.yml` 中配置:
+在侧边栏的 **Code review → What to review**(原 **Review filters**)中或在 `kodus-config.yml` 中配置:
 
 ```yaml
 suggestionControl:
@@ -20,9 +20,11 @@ suggestionControl:
   applyFiltersToKodyRules: false
 ```
 
+只有在 **Code review → General** 中(代码库或目录范围)开启了 **kodus Config File Overrides Web Preferences** 时,本页中的 `kodus-config.yml` 片段才会对该代码库生效。
+
 ## 忽略文件和路径
 
-跳过产生噪音的文件（锁定文件、生成的代码、配置）：
+跳过产生噪音的文件（锁定文件、生成的代码、配置）。在 **Code review → General** 的 **Ignored files** 下添加它们，或在 `kodus-config.yml` 中配置：
 
 ```yaml
 ignorePaths:
@@ -34,7 +36,7 @@ ignorePaths:
 
 ## 按标题跳过 PR
 
-跳过不需要审查的 PR（发布、版本升级）：
+跳过不需要审查的 PR（发布、版本升级）。在 **Code review → General** 的 **Ignore title keywords** 下添加关键词，或在 `kodus-config.yml` 中配置：
 
 ```yaml
 ignoredTitleKeywords:
@@ -45,7 +47,7 @@ ignoredTitleKeywords:
 
 ## 切换分析类别
 
-禁用您不需要的审查类别：
+使用 **Code review → What to review** 中的 **Bug**、**Performance**、**Security** 和 **Business Logic** 开关禁用您不需要的审查类别，或在 `kodus-config.yml` 中配置：
 
 ```yaml
 reviewOptions:
@@ -57,6 +59,6 @@ reviewOptions:
 
 ## 审查节奏
 
-使用**自动暂停**防止活跃开发期间的垃圾信息 — 当 Kodus 检测到快速连续推送时暂停审查（默认：15 分钟内 3 次推送）。
+使用 **Auto-pause**（**Code review → General** → **Enable Automated Code Review** → **Review Cadence**）防止活跃开发期间的垃圾信息 — 当 Kodus 检测到快速连续推送时暂停审查（默认：15 分钟内 3 次推送）。
 
-更多详情，请参阅[通用配置](/zh/how_to_use/code_review/configs/general)和[建议控制](/zh/how_to_use/code_review/configs/suggestion_control)。
+更多详情，请参阅[通用配置](/zh/how_to_use/code_review/configs/general)和[严重性阈值](/zh/how_to_use/code_review/configs/suggestion_control)。

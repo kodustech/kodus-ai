@@ -7,12 +7,12 @@ Cada equipo tiene convenciones que los linters genéricos no cubren — límites
 
 ## Crear una regla en Kodus
 
-1. Ve a **Configuración de Revisión de Código** → **Kody Rules**
-2. Haz clic en **Agregar Regla**
+1. Selecciona **Global** (o un repositorio / directorio) en el selector de alcance en la parte superior del grupo **Code review** de la barra lateral y luego abre **Kody Rules**
+2. Haz clic en **New rule**
 3. Configura:
-   - **Nombre** — qué verifica la regla (por ejemplo, "Los archivos de servicio deben tener pruebas")
-   - **Alcance** — A nivel de archivo (analiza archivos individuales) o a nivel de PR (analiza el PR completo)
-   - **Ruta** — patrón glob para apuntar a archivos específicos (por ejemplo, `src/services/**/*.ts`)
+   - **Rule name** — qué verifica la regla (por ejemplo, "Los archivos de servicio deben tener pruebas")
+   - **Execution mode** — **Per file** (analiza cada archivo modificado) o **Per PR** (analiza el PR completo)
+   - **Path** — patrón glob para apuntar a archivos específicos (por ejemplo, `src/services/**/*.ts`); las reglas Per PR no lo usan
    - **Severidad** — Crítica, Alta, Media o Baja
    - **Instrucciones** — descripción detallada de qué verificar
 
@@ -28,7 +28,7 @@ Las reglas pueden acceder a un contexto enriquecido:
 
 ```
 Nombre: La capa de dominio no debe depender de la infraestructura
-Alcance: Pull Request
+Modo de ejecución: Per PR
 Instrucciones: Verificar en pr_files_diff si hay alguna importación en src/domain/
 que haga referencia a src/infrastructure/. Consultar
 @file:docs/architecture.md para las dependencias permitidas.
@@ -38,7 +38,7 @@ que haga referencia a src/infrastructure/. Consultar
 
 ```
 Nombre: Cada servicio debe tener un archivo de prueba
-Alcance: Pull Request
+Modo de ejecución: Per PR
 Instrucciones: Para cada archivo modificado en src/services/,
 verificar que exista un archivo de prueba correspondiente en test/services/.
 Usar MCP para revisar el árbol de archivos del repositorio.
@@ -46,7 +46,7 @@ Usar MCP para revisar el árbol de archivos del repositorio.
 
 ## Más formas de agregar reglas
 
-- **Importar desde la Biblioteca de Reglas** — navega por reglas probadas por lenguaje y categoría
+- **Importar desde la Biblioteca de Reglas** — haz clic en **Discovery** en la página de Kody Rules para navegar por reglas probadas por lenguaje y categoría
 - **Sincronizar desde herramientas de IDE** — importa automáticamente reglas desde Cursor, Copilot, Claude
 - **Reglas de repositorio** — define reglas en archivos markdown en tu repositorio
 - **Generación automática** — Kody sugiere reglas basadas en tu historial de revisiones

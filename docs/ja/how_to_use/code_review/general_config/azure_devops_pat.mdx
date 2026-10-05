@@ -47,7 +47,7 @@ Kody が自動コードレビューを実行できるようにするには、Azu
 
 ## Kody へのトークンの追加
 
-トークンを生成した後、Kody の自動化設定画面に貼り付けます。自動化を有効にしようとすると、設定モーダルが自動的に開きます。
+トークンを生成した後、Kodus に貼り付けます：オンボーディング中（**Connect your Git tool** → **Azure Repos** タブ → **Connect via token**）、または後からサイドバーの **Repositories** → **Connect a provider** → **Azure Repos** で行います。**Organization name** と **Personal Access Token** を入力し、**Validate and save** をクリックします。
 
 ## トラブルシューティング：Kody が Azure DevOps で PR をレビューしない
 
@@ -57,7 +57,7 @@ Kody が接続されているが、**新しいプルリクエストで何も起�
 
 Azure DevOps で PAT を開き、[PAT の生成](#pat個人用アクセストークンの生成)に記載されているすべてのスコープが有効になっていることを確認します。最もよく見逃されるのは **コード：読み取りと書き込み** です — **書き込み**なしでは、Kody はリポジトリを読み取れますがレビューコメントを投稿できないため、レビューが「サイレントに実行」されます。
 
-スコープが追加される前に PAT が作成された場合、Azure DevOps はそれを遡及的に追加しません。完全なスコープリストで新しい PAT を作成し、Kody の自動化設定で更新してください。
+スコープが追加される前に PAT が作成された場合、Azure DevOps はそれを遡及的に追加しません。完全なスコープリストで新しい PAT を作成し、それで再接続してください（**Repositories** → プロバイダーカードの **Reset** → **Just reset the integration** を選び、新しいトークンで Azure Repos を再度接続します）。
 
 ### 2. ユーザーのプロジェクト権限を確認する
 

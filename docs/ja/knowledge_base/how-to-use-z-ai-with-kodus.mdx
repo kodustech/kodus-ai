@@ -10,7 +10,7 @@ Z.AI（Zhipu AI によって開発）は GLM ファミリーのモデルを提�
 
 より大量または変動するワークロードには、Z.AI は標準 Developer API で同じモデルへのペイパートークンアクセスも提供しています。
 
-両方のパスは OpenAI 互換エンドポイントを公開しているため、Kodus は `OpenAI Compatible` プロバイダー（または BYOK のキュレートされた **GLM 5.1** カードを介して直接）を通じて通信します。
+両方のパスは OpenAI 互換エンドポイントを公開しているため、Kodus は **OpenAI-compatible** プロバイダーを通じて通信できます。Kodus には専用の **Z.ai** プロバイダーもあり、Z.AI の Anthropic 互換エンドポイント（`https://api.z.ai/api/anthropic`）経由で接続します。
 
 ## プランの概要
 
@@ -28,7 +28,7 @@ Z.AI（Zhipu AI によって開発）は GLM ファミリーのモデルを提�
 
 - クォータはローリング**5時間**ウィンドウと**週次**ウィンドウでリセットされます — 月次上限ではなくその上限を念頭に計画してください。
 - カバレッジには GLM-5.1、GLM-5-Turbo、GLM-5、GLM-4.5、GLM-4.5-Air が含まれます。
-- 専用エンドポイント：`https://api.z.ai/api/coding/paas/v4` — Coding Plan キーは**ここでのみ動作**します。
+- Coding Plan のエンドポイント：`https://api.z.ai/api/anthropic`（Anthropic 互換 — Kodus の **Z.ai** プロバイダーが使用するもの）と `https://api.z.ai/api/coding/paas/v4`（OpenAI 互換）。標準の `/api/paas/v4/` エンドポイントは Coding Plan を消費しません。
 
 ### ペイパートークン Developer API
 
@@ -53,7 +53,7 @@ Z.AI（Zhipu AI によって開発）は GLM ファミリーのモデルを提�
     4. キーをコピーします — 再度見ることはできません。
 
     <Note>
-      Coding Plan キーは `/api/coding/paas/v4` エンドポイントに紐づいています。標準の `/api/paas/v4/` エンドポイントに対して送信すると**401 を返します**。
+      Coding Plan キーは Coding Plan のエンドポイント（`/api/anthropic` と `/api/coding/paas/v4`）に紐づいています。標準の `/api/paas/v4/` エンドポイントに対して送信すると**401 を返します**。
     </Note>
   </Tab>
 
@@ -70,37 +70,33 @@ Z.AI（Zhipu AI によって開発）は GLM ファミリーのモデルを提�
 
 ## Kodus で Z.AI を設定する
 
-主なフローは Kodus Cloud での BYOK です — キュレートされた **GLM 5.1** カードがエンドポイントの切り替えを処理します。プロセスレベルでプロバイダーを固定することを好むセルフホストユーザーは、代わりに環境変数を使用できます。
+主なフローは Kodus Cloud の **AI providers** ページです。プロセスレベルでプロバイダーを固定することを好むセルフホストユーザーは、代わりに環境変数を使用できます。
 
-### オプション1 — Kodus Cloud での BYOK（推奨）
+### オプション1 — Kodus Cloud の Z.ai プロバイダー（推奨）
 
 <Steps>
-  <Step title="BYOK を開き GLM 5.1 を選択">
-    [app.kodus.io/byok](https://app.kodus.io/byok) にアクセスし、メインモデルセクションの **GLM 5.1** カードをクリックします。
+  <Step title="AI providers を開き Z.ai を選択">
+    サイドバーで **AI providers** を開きます（[app.kodus.io/byok](https://app.kodus.io/byok)）。**Providers** タブで **Z.ai** タイルをクリックします（**Connect your first provider** の下、またはすでにプロバイダーを接続している場合は **Add another provider** の下）。
   </Step>
 
-  <Step title="プランを選択">
-    カードは **Plan** セレクターとともに展開します。以下を選択します：
-    - **Developer API** — キーが [z.ai/manage-apikey](https://z.ai/manage-apikey/apikey-list) からの場合
-    - **Coding Plan** — キーが [GLM Coding Plan サブスクリプション](https://z.ai/subscribe) からの場合
-
-    ベース URL と "Get a key" リンクは自動的にプランに合わせて更新されます。
+  <Step title="APIキーを貼り付けてモデルを入力">
+    Z.AI キーを **API key** カードに貼り付け、**Model** にモデル ID（例：`glm-5.1`）を入力します。Kodus は `https://api.z.ai/api/anthropic` エンドポイント（Z.AI が GLM Coding Plan 向けに文書化している Anthropic 互換エンドポイント）を自動で入力するため、このタイルにはプランセレクターもベース URL フィールドもありません。特定の OpenAI 互換エンドポイントを使用したい場合は、下記のオプション2を使用してください。
   </Step>
 
-  <Step title="APIキーを貼り付ける">
-    キーのみ — 他に設定するものはありません。Coding Plan ユーザーの場合、Kodus は Advanced settings に `maxConcurrentRequests=1` を事前入力し、これは Lite/Pro ティアの制限と一致します。Max ティアの場合は 30 に増やしてください。
+  <Step title="同時実行数を設定（Coding Plan）">
+    Kodus は同時実行数を事前入力しません。Coding Plan Lite/Pro では、**Advanced (optional)** を開いて **Max concurrent requests** を `1` に設定します。Max ティアの場合は最大 30 まで上げてください。
   </Step>
 
   <Step title="Test & save">
-    **Test & save** をクリックします。Kodus は安価なメタデータ呼び出しでエンドポイントをプローブし、成功時に設定を保存します。401 はキーが選択したプランのエンドポイントと一致しないことを意味し、404 はベース URL が間違っていることを意味します。
+    **Test & save** をクリックします。Kodus は接続をテストし、成功時に設定を保存します。401 はキーがエンドポイントと一致しないことを意味します。
   </Step>
 </Steps>
 
 ### Reasoning のチューニング（任意）
 
-キュレートされた GLM 5.1 カードは **Thinking: Medium** を事前入力し、これは OpenAI 互換プロバイダーでは `thinking: { type: "enabled" }` を生成します。ほとんどのワークロードではこれで問題ありません。オーバーライドする2つのケース：
+**Thinking / Reasoning** は **Advanced (optional)** の下にあります。GLM では、Off 以外のレベルはすべて `thinking: { type: "enabled" }` を生成し、ほとんどのワークロードではこれで問題ありません。オーバーライドする2つのケース：
 
-- **特定のトークン予算を強制** — Advanced settings で **Thinking** を **Custom** に切り替え、以下を貼り付け：
+- **特定のトークン予算を強制** — **Thinking / Reasoning** を **Custom** に切り替え、以下を貼り付け：
 
   ```json
   {
@@ -117,30 +113,29 @@ Z.AI（Zhipu AI によって開発）は GLM ファミリーのモデルを提�
   ```
 
 <Note>
-  名前空間のラップは不要です — Kodus が送信前に `openaiCompatible`（アクティブなプロバイダー）で自動ラップします。詳しくは [main BYOK doc → Custom JSON override](/ja/how_to_use/byok#カスタム-json-オーバーライド) を参照してください。
+  名前空間のラップは不要です — Kodus が送信前にオプションをアクティブなプロバイダーの名前空間でラップします。詳しくは [main BYOK doc → Custom JSON override](/ja/how_to_use/byok#カスタム-json-オーバーライド) を参照してください。
 </Note>
 
 ### 同時実行数のチューニング
 
-- **Coding Plan Lite / Pro**：事前入力された `maxConcurrentRequests=1` を維持します。それ以上にすると `429 Too much concurrency` を返します。
+- **Coding Plan Lite / Pro**：**Max concurrent requests** を `1` に設定します。それ以上にすると `429 Too much concurrency` を返します。
 - **Coding Plan Max**：最初に `5` に上げ、429 が発生しなければ最大 `30` まで。Max ティアは最大30 concurrent を許可します。
 - **Developer API**：空のまま開始（制限なし）。レート制限エラーが発生したら `5` に下げ、その後調整します。
 
 <Note>
-  GLM 5.1 を**メイン**モデルとして設定し、OpenAI または Anthropic キーを**フォールバック**として保持することで、Coding Plan の5時間ウィンドウが枯渇してもレビューが継続されます。Kodus は自動的にフェイルオーバーします。
+  **Routing** タブで GLM 5.1 を **Model for all tasks** に、OpenAI または Anthropic のモデルを **Fallback (optional)** に設定することで、Coding Plan の5時間ウィンドウが枯渇してもレビューが継続されます。Kodus は自動的にフェイルオーバーします。
 </Note>
 
-### オプション2 — 手動設定
+### オプション2 — OpenAI 互換エンドポイント
 
-キュレートされたカタログにない GLM バリアント（例：GLM-5 または GLM-4.5）が必要な場合、カタログ下部の **Configure manually** をクリックして以下を入力します：
+Z.AI の OpenAI 互換エンドポイントのいずれかを通じて接続するには、**AI providers** を開き、**Providers** タブの **Custom** の下にある **OpenAI-compatible** を選択して以下を入力します：
 
 | フィールド | 値 |
 | --- | --- |
-| **プロバイダー** | `OpenAI Compatible` |
 | **ベース URL** | `https://api.z.ai/api/coding/paas/v4`（Coding Plan）<br />`https://api.z.ai/api/paas/v4/`（Developer API） |
 | **モデル** | `glm-5.1`、`glm-5`、`glm-5-turbo`、`glm-4.5`、`glm-4.5-air` |
-| **APIキー** | Z.AI キー（上記のベース URL と一致） |
-| **Max Concurrent Requests** | Lite/Pro Coding Plan では `1`；Max では最大 `30`；Developer API では空のまま |
+| **API key** | Z.AI キー（上記のベース URL と一致） |
+| **Max concurrent requests**（**Advanced (optional)** の下） | Lite/Pro Coding Plan では `1`；Max では最大 `30`；Developer API では空のまま |
 
 ### オプション3 — セルフホスト（環境変数）
 
@@ -154,7 +149,7 @@ API_OPEN_AI_API_KEY="your-z-ai-api-key"
 ```
 
 <Note>
-  このパスは意図的に BYOK を無効にしているセルフホスト Kodus インストールにのみ必要です。セルフホストインスタンスで BYOK が有効な場合は、**オプション1**を優先してください — キュレートされたカードがエンドポイントのロジックを処理します。
+  このパスは意図的に BYOK を無効にしているセルフホスト Kodus インストールにのみ必要です。セルフホストインスタンスで BYOK が有効な場合は、**オプション1**を優先してください — **AI providers** ページはクラウドと同じように動作します。
 </Note>
 
 `.env` を編集後、API とワーカーコンテナを再起動して統合を確認します：
@@ -169,26 +164,26 @@ docker-compose logs api worker | grep -iE "z\.ai|glm"
 
 - 予測可能なレビュアーチームがあり、定額月額コストを希望する場合は **Coding Plan** を選択します。5時間および週次クォータは、サブスクリプション料金に対して約15〜30倍の同等 API 支出に相当します。
 - トラフィックがバースト的な場合、最大コンテキストウィンドウへの不定期アクセスが必要な場合、または PR ボリュームに応じてコストを線形にスケールしたい場合は**ペイパートークン**を選択します。
-- **ペアにする**：Coding Plan をメインとして使用し、サブスクリプションウィンドウを枯渇させるバーストをカバーするため、Developer API キー（または完全に異なるプロバイダー）をフォールバックとして使用します。
+- **ペアにする**：**Routing** で Coding Plan を **Model for all tasks** として使用し、サブスクリプションウィンドウを枯渇させるバーストをカバーするため、Developer API キー（または完全に異なるプロバイダー）を **Fallback (optional)** として使用します。
 
 ## トラブルシューティング
 
 <AccordionGroup>
   <Accordion title="Test 後の 401 — キーがエンドポイントと一致しない">
-    - Coding Plan キーは `/api/coding/paas/v4` でのみ動作します。Developer API キーは `/api/paas/v4/` でのみ動作します。
-    - キュレートされたカードでは、**Plan** セレクターがキータイプと一致することを確認してください。
-    - 手動モードでは、ベース URL がキーの出所と一致することを確認してください。
+    - Coding Plan キーは `/api/anthropic` と `/api/coding/paas/v4` で動作し、`/api/paas/v4/` では動作しません。Developer API キーは `/api/paas/v4/` を使用します。
+    - **Z.ai** タイルは常に `https://api.z.ai/api/anthropic` を使用します。キーが別のエンドポイントでのみ有効な場合は、その **Base URL** を指定して **OpenAI-compatible** 経由で接続してください。
+    - **OpenAI-compatible** では、**Base URL** がキーの出所と一致することを確認してください。
   </Accordion>
 
   <Accordion title="レビュー時の 'Too much concurrency'">
-    - Lite および Pro Coding Plan ティアは通常、**1 concurrent リクエスト**のみを許可します。Kodus がこれを事前入力します；Max でのみ上げてください。
+    - Lite および Pro Coding Plan ティアは通常、**1 concurrent リクエスト**のみを許可します。**Max concurrent requests** を `1` に設定し、Max でのみ上げてください。
     - まだ 429 にヒットしている場合は、Advanced settings で **Max concurrent requests** を下げます。
   </Accordion>
 
   <Accordion title="Coding Plan でクォータ枯渇">
     - クォータは**5時間ローリングウィンドウ**と**週次ウィンドウ**で適用されます。どちらかに達すると HTTP 429 を返します。
     - Z.AI コンソールで残りのクォータを確認します。
-    - オプション：次のウィンドウを待つ、より高いティアにアップグレードする、またはギャップをカバーするために Developer API キーをフォールバックとして設定する。
+    - オプション：次のウィンドウを待つ、より高いティアにアップグレードする、またはギャップをカバーするために Developer API キーを **Routing** の **Fallback (optional)** モデルとして設定する。
   </Accordion>
 
   <Accordion title="モデルが見つからない">

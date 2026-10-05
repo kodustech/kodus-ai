@@ -56,26 +56,25 @@ Chutes は HuggingFace スタイルの `org/model` 識別子を使用し、一�
 
 ### オプション1 — Kodus Cloud での BYOK（推奨）
 
-1. Kodus ウェブ UI で、**設定 → BYOK** を開きます（[app.kodus.io/byok](https://app.kodus.io/byok)）。
-2. Chutes はキュレートされたカタログにはありません — モデルリストの下部にある **Configure manually** をクリックします。メインモデルの代わりにフォールバックを設定する場合は URL に `?slot=fallback` を使用します。
-3. ウィザードを入力します：
+1. サイドバーで **AI providers** を開きます（[app.kodus.io/byok](https://app.kodus.io/byok)）。
+2. Chutes には専用のタイルがありません — **Providers** タブで **Custom** の下にある **OpenAI-compatible** を選択します。デフォルトで実行するモデルとフォールバックのモデルは、後から **Routing** タブで設定します。
+3. フォームを入力します：
 
    | フィールド | 値 |
    | --- | --- |
-   | **プロバイダー** | `OpenAI Compatible` |
    | **ベース URL** | `https://llm.chutes.ai/v1` |
    | **モデル** | 例：`deepseek-ai/DeepSeek-V3-0324-TEE` |
-   | **APIキー** | Chutes APIキー |
-   | **Max Concurrent Requests** | `3〜5` が安全な出発点；上限に達しなければ上げる（Advanced settings 内） |
+   | **API key** | Chutes APIキー |
+   | **Max concurrent requests** | `3〜5` が安全な出発点；上限に達しなければ上げる（Advanced settings 内） |
 
 4. **Test & save** をクリックします。Kodus はエンドポイントをプローブし、成功時に設定を保存します。
 
 <Tip>
-  5× 上限はトークン単価から計算されます。高価なフロンティアモデルは小さなモデルよりも上限を速く消費します — ドル当たりのレビューを最大化したい場合は、定期的な PR には Chutes を安価なモデル（Llama、Qwen 小型バリアント）と組み合わせ、複雑なレビューには Kody ルールまたは別の BYOK プロファイルを通じてフロンティアモデルを節約してください。
+  5× 上限はトークン単価から計算されます。高価なフロンティアモデルは小さなモデルよりも上限を速く消費します — ドル当たりのレビューを最大化したい場合は、定期的な PR には Chutes を安価なモデル（Llama、Qwen 小型バリアント）と組み合わせ、複雑なレビューには **Routing** タブでのエージェントごとのオーバーライド、またはリポジトリごとの **Code review model**（**Code review → General**）を通じてフロンティアモデルを節約してください。
 </Tip>
 
 <Note>
-  Chutes は分散コンピュートで実行されるため、コールドスタートと末尾レイテンシは専用プロバイダーよりも変動が大きくなります。ノードが遅いか月次上限に達した場合に Kodus がフェイルオーバーできるよう、OpenAI または Anthropic キーを**フォールバック**として設定します。
+  Chutes は分散コンピュートで実行されるため、コールドスタートと末尾レイテンシは専用プロバイダーよりも変動が大きくなります。ノードが遅いか月次上限に達した場合に Kodus がフェイルオーバーできるよう、**Routing** タブで OpenAI または Anthropic のモデルを **Fallback (optional)** として設定します。
 </Note>
 
 ### オプション2 — セルフホスト（環境変数）
@@ -120,7 +119,7 @@ docker-compose logs api worker | grep -iE "chutes|llm\.chutes"
   <Accordion title="月次 5× 上限に達した">
     - Chutes ダッシュボードで現在の使用量を確認します。
     - 上限を延ばすために一時的により安価なモデルに切り替えるか、ティアをアップグレードします。
-    - 上限に達している間もレビューが継続されるよう `Fallback` BYOK プロバイダーを設定します。
+    - 上限に達している間もレビューが継続されるよう、**Routing** タブで **Fallback (optional)** モデルを設定します。
   </Accordion>
 
   <Accordion title="401 / 認証エラー">
@@ -134,7 +133,7 @@ docker-compose logs api worker | grep -iE "chutes|llm\.chutes"
 
   <Accordion title="遅いまたは不安定なレイテンシ">
     - Chutes は分散コンピュートで実行されるため、末尾レイテンシは専用クラウドより高くなります。
-    - レイテンシに敏感なレビューには専用プロバイダーを優先し、夜間またはバッチレビュージョブに Chutes を予約するか、高速プロバイダーを `Main` として、Chutes を `Fallback` として設定します。
+    - レイテンシに敏感なレビューには専用プロバイダーを優先し、夜間またはバッチレビュージョブに Chutes を予約するか、**Routing** で高速プロバイダーを **Model for all tasks** として、Chutes を **Fallback (optional)** として設定します。
   </Accordion>
 
   <Accordion title="接続エラー">

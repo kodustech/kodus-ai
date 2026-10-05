@@ -41,8 +41,8 @@ PIIを含むデータベースフィールドはアプリケーションレベ�
 
 ```
 Name: データの変更には監査ロギングが必要
-Scope: File
-Paths: src/services/**/*.ts, src/repositories/**/*.ts
+Execution mode: Per file
+Path: src/services/**/*.ts, src/repositories/**/*.ts
 Severity: Critical
 Instructions:
   fileDiffにユーザーデータまたは機密レコードに対する
@@ -58,8 +58,8 @@ Instructions:
 
 ```
 Name: ユーザーデータにはソフトデリートが必要
-Scope: File
-Paths: src/**/*.ts
+Execution mode: Per file
+Path: src/**/*.ts
 Severity: Critical
 Instructions:
   ユーザーデータを含むテーブル/コレクションに対する
@@ -75,8 +75,8 @@ Instructions:
 
 ```
 Name: ログまたはエラーレスポンスにPIIは禁止
-Scope: File
-Paths: src/**/*.ts
+Execution mode: Per file
+Path: src/**/*.ts
 Severity: Critical
 Instructions:
   fileDiffでPIIフィールドを含む可能性があるロギングステートメント
@@ -89,8 +89,8 @@ Instructions:
 
 ```
 Name: PIIフィールドには暗号化ヘルパーが必要
-Scope: File
-Paths: src/entities/**/*.ts, src/models/**/*.ts
+Execution mode: Per file
+Path: src/entities/**/*.ts, src/models/**/*.ts
 Severity: Critical
 Instructions:
   fileDiffがPIIを含むエンティティ/モデルフィールドを
@@ -104,7 +104,7 @@ Instructions:
 
 ```
 Name: 新しいエンドポイントには認証ガードが必要
-Scope: Pull Request
+Execution mode: Per PR
 Severity: Critical
 Instructions:
   pr_files_diffで新しいルート定義またはコントローラーメソッドを確認する。
@@ -120,7 +120,7 @@ Instructions:
 
 ```
 Name: コンプライアンスへの影響評価
-Scope: Pull Request
+Execution mode: Per PR
 Severity: High
 Instructions:
   pr_files_diffが src/entities/、src/models/、
@@ -135,9 +135,9 @@ Instructions:
 
 ## ステップ6 — 適用のために設定する
 
-1. コンプライアンス違反がマージをブロックするよう **変更をリクエスト** を有効にする
+1. **Code review → General** で **Enable changing status of Review to 'Request Changes'** をオンにし、コンプライアンス違反がマージをブロックするようにする
 2. すべてのコンプライアンスルールを **重大** 重要度に設定する
-3. ルール継承を使用して組織内のすべてのリポジトリにコンプライアンスルールを適用する
+3. ルール継承を使用して組織内のすべてのリポジトリにコンプライアンスルールを適用する — スコープピッカーで **Global** を選択してルールを作成する
 
 ## チェックリスト
 
@@ -147,7 +147,7 @@ Instructions:
 - [ ] 暗号化ルールがエンティティ/モデル定義をカバーしている
 - [ ] アクセス制御ルールがすべての新しいエンドポイントをカバーしている
 - [ ] 重大な結果に対して「変更をリクエスト」が有効になっている
-- [ ] ルールが一貫性のために組織レベルで設定されている
+- [ ] ルールが一貫性のために **Global** スコープ（組織全体）で設定されている
 - [ ] テストPRでルールが正しく発火することが確認された
 
 ルールの設定の詳細については、[Kodyルール](/ja/how_to_use/code_review/configs/kody_rules) を参照してください。

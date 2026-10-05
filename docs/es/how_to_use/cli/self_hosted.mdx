@@ -55,7 +55,7 @@ Si estás ejecutando Kodus en tu propia infraestructura, el CLI funciona de la m
   <Step title="Autenticarse">
     <Tabs>
       <Tab title="Clave de Equipo (Recomendado)">
-        Genera una clave de equipo desde tu panel de Kodus auto-alojado y configúrala:
+        Genera una clave de equipo en la aplicación web de tu Kodus auto-alojado, en **Organization → CLI keys**, y configúrala:
 
         ```bash
         kodus auth team-key --key kodus_xxxxx
@@ -74,7 +74,7 @@ Si estás ejecutando Kodus en tu propia infraestructura, el CLI funciona de la m
         kodus auth login
         ```
 
-        Ingresa el correo y la contraseña registrados en tu instancia auto-alojada. Los tokens se almacenan localmente en `~/.kodus/credentials.json` con permisos restringidos (600).
+        El CLI abre la página **Authorize Kodus CLI** de tu aplicación web auto-alojada. Inicia sesión con la cuenta registrada en tu instancia y luego haz clic en **Authorize CLI**. Para un inicio de sesión no interactivo, pasa `--email` y `--password` en su lugar (consulta [`auth login`](/es/how_to_use/cli/commands#auth-login)). Los tokens se almacenan localmente en `~/.kodus/credentials.json` con permisos restringidos (600).
       </Tab>
       <Tab title="Token de CI/CD">
         Genera un token desde una cuenta personal y luego úsalo en los pipelines:
@@ -234,7 +234,7 @@ Esto instala el CLI, configura la clave de equipo y despliega los skills de revi
 
   <Accordion title="Autenticación fallida (401)">
     - Ejecuta `kodus auth status` para verificar tu estado de autenticación actual
-    - Si usas una clave de equipo, verifica que sea válida en tu panel auto-alojado
+    - Si usas una clave de equipo, verifica que siga **Active** en **Organization → CLI keys** de tu aplicación web auto-alojada
     - Si usas inicio de sesión personal, los tokens expiran después de 1 hora: el CLI los actualiza automáticamente, pero es posible que necesites volver a iniciar sesión si el token de actualización también expiró
     - Asegúrate de que `KODUS_API_URL` apunte a la instancia correcta
   </Accordion>
@@ -247,6 +247,6 @@ Esto instala el CLI, configura la clave de equipo y despliega los skills de revi
   </Accordion>
 
   <Accordion title="Límite de dispositivos alcanzado">
-    Tu instancia auto-alojada puede aplicar límites de dispositivos por organización. Contacta a tu administrador para aumentar el límite o eliminar dispositivos antiguos del panel.
+    Tu instancia auto-alojada puede aplicar límites de dispositivos por organización. La aplicación web no tiene una lista de dispositivos para limpiar, así que contacta a tu administrador para aumentar el límite (la configuración `CLI_DEVICE_LIMIT` de la API; `0`, el valor por defecto, significa sin límite).
   </Accordion>
 </AccordionGroup>

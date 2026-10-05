@@ -14,7 +14,7 @@ O Kodus suporta três níveis de configuração que se mapeiam naturalmente para
 
 | Nível | Aplica-se a | Exemplo |
 |-------|-------------|---------|
-| **Organização** | Todos os repositórios | "Nunca commitar arquivos `.env`" |
+| **Global** | Todos os repositórios | "Nunca commitar arquivos `.env`" |
 | **Repositório** | O monorepo | "Usar conventional commits" |
 | **Diretório** | Um pacote específico | "Componentes React devem usar PascalCase" |
 
@@ -36,13 +36,12 @@ monorepo/
 
 ## Passo 2 — Crie configs em nível de diretório
 
-Vá para **Configurações de Code Review** → **Repositório** → clique em um diretório para configurá-lo.
+Na barra lateral, abra o seletor de escopo no topo do grupo **Code review** e escolha **Add repository configuration**. Em **Create repository settings**, use **Select the target repository** (o monorepo), depois **Select the target directories** (uma ou mais pastas de pacote) e clique em **Create settings**. Cada diretório aparece recuado sob o repositório no seletor de escopo — selecione-o para configurá-lo.
 
 Cada diretório pode ter seus próprios:
 - **Kody Rules** (em nível de arquivo e de PR)
-- **Opções de revisão** (quais tipos de análise habilitar)
-- **Controle de sugestões** (filtros de severidade, máximo de sugestões)
-- **Caminhos ignorados**
+- **What to review** (quais categorias habilitar e a severidade mínima para publicar)
+- **Ignored files** (em **General**)
 
 ## Passo 3 — Escreva regras direcionadas
 
@@ -50,8 +49,8 @@ Cada diretório pode ter seus próprios:
 
 ```
 Name: React components must use design system tokens
-Scope: File
-Paths: apps/web/src/components/**/*.tsx
+Execution mode: Per file
+Path: apps/web/src/components/**/*.tsx
 Severity: High
 Instructions:
   Check fileDiff for hardcoded colors, spacing, or font sizes.
@@ -63,8 +62,8 @@ Instructions:
 
 ```
 Name: Domain layer must not import from infrastructure
-Scope: File
-Paths: apps/api/src/domain/**/*.ts
+Execution mode: Per file
+Path: apps/api/src/domain/**/*.ts
 Severity: Critical
 Instructions:
   Check fileDiff for any import from "../infrastructure",
@@ -77,7 +76,7 @@ Instructions:
 
 ```
 Name: Public API changes require changeset
-Scope: Pull Request
+Execution mode: Per PR
 Severity: High
 Instructions:
   If pr_files_diff modifies any file in libs/shared/src/index.ts
@@ -100,13 +99,13 @@ CommonJS require() is not allowed anywhere.
 Any breaking change requires a major version bump and a changeset.
 ```
 
-## Passo 5 — Configure o controle de sugestões por diretório
+## Passo 5 — Defina o limite de severidade por diretório
 
-Pacotes de alto tráfego podem precisar de limites mais rígidos:
+Pacotes de alto tráfego podem precisar de filtros mais rígidos. Selecione o diretório no seletor de escopo, abra **What to review** e defina **Minimum severity to post**:
 
-- **apps/web/** — máximo 5 sugestões, filtro de severidade média (frontend evolui rápido)
-- **libs/shared/** — máximo 15 sugestões, filtro de severidade baixa (estabilidade importa)
-- **infra/** — máximo 3 sugestões, filtro de severidade alta (menos, mas críticas)
+- **apps/web/** — **Medium** (frontend evolui rápido)
+- **libs/shared/** — **Low/All** (estabilidade importa)
+- **infra/** — **High** (menos, mas críticas)
 
 ## Passo 6 — Ignore caminhos gerados
 

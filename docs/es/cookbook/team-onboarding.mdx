@@ -12,7 +12,7 @@ Poner en marcha un nuevo equipo con Kodus lleva unos 30 minutos. Esta guía reco
 
 1. Regístrate en [kodus.io](https://kodus.io) o accede a tu instancia autohospedada
 2. Crea un nuevo workspace para tu equipo
-3. Conecta tu proveedor de Git (GitHub, GitLab, Bitbucket o Azure DevOps)
+3. Conecta tu proveedor de Git (GitHub, GitLab, Bitbucket, Azure Repos o Forgejo)
 4. Selecciona los repositorios a monitorear
 
 ## Paso 2 — Establece la línea base de revisión
@@ -34,15 +34,15 @@ suggestionControl:
 automatedReviewActive: true
 ```
 
-Esto te da revisiones automatizadas con un límite razonable de sugerencias. Ajusta después de una semana según los comentarios recibidos.
+Esto te da revisiones automatizadas con un umbral de severidad razonable. Ajusta después de una semana según los comentarios recibidos.
 
 ## Paso 3 — Importa reglas existentes de herramientas del IDE
 
 Si tu equipo ya usa reglas de Cursor, Copilot o Claude:
 
-1. Ve a **Configuración de Code Review** → **Kody Rules**
+1. En la barra lateral, selecciona el repositorio en el selector de alcance en la parte superior del grupo **Code review**, abre **Kody Rules**, haz clic en **Configuration** y activa **Auto-sync rules from repo**
 2. Kodus detecta archivos `.cursorrules`, `.github/copilot-instructions.md` y `.claude`
-3. Importa las que tengan sentido para la revisión de código
+3. Revisa las reglas importadas y conserva las que tengan sentido para la revisión de código
 
 Esto evita tener que reescribir las reglas desde cero.
 
@@ -82,8 +82,8 @@ Añade reglas para cosas que nunca deben ocurrir:
 
 ```
 Name: No console.log in production code
-Scope: File
-Paths: src/**/*.ts
+Execution mode: Per file
+Path: src/**/*.ts
 Severity: High
 Instructions: Flag any console.log, console.warn, or console.error
 in fileDiff. Use the project logger instead.
@@ -92,8 +92,8 @@ Exclude test files (*.spec.ts, *.test.ts).
 
 ```
 Name: No hardcoded API URLs
-Scope: File
-Paths: src/**/*.ts
+Execution mode: Per file
+Path: src/**/*.ts
 Severity: Critical
 Instructions: Flag any hardcoded URL (http:// or https://)
 in fileDiff that looks like an API endpoint.
@@ -102,7 +102,7 @@ URLs must come from environment variables or config files.
 
 ## Paso 6 — Conecta la gestión de tareas (opcional pero recomendado)
 
-Conecta Jira, Linear, Notion o ClickUp en **Configuración** → **Plugins** para habilitar la validación de lógica de negocio. Esto permite a Kodus verificar si los PRs implementan lo que describen las tareas.
+Conecta Jira, Linear, Notion o ClickUp en **Plugins** (en la barra lateral) para habilitar la validación de lógica de negocio. Esto permite a Kodus verificar si los PRs implementan lo que describen las tareas.
 
 ## Paso 7 — Ejecuta un PR piloto
 
@@ -117,16 +117,16 @@ Abre un PR de prueba y verifica:
 
 Tras una semana de revisiones, consulta al equipo:
 
-- ¿Hay demasiadas sugerencias? → Sube `severityLevelFilter` o baja `maxSuggestions`
+- ¿Hay demasiadas sugerencias? → Sube **Minimum severity to post** en **Code review → What to review** (`severityLevelFilter` en `kodus-config.yml`)
 - ¿Las reglas generan demasiado ruido? → Reduce las rutas de archivos o añade exclusiones
 - ¿Faltan patrones importantes? → Añade nuevas reglas o Memorias
-- ¿Quieres reglas generadas automáticamente? → Haz clic en **Generar Kody Rules** para obtener sugerencias del historial de revisiones
+- ¿Quieres reglas generadas automáticamente? → Selecciona el repositorio en el selector de alcance, abre **Code review → Kody Rules**, haz clic en **Configuration** y activa **Generate from past reviews** para obtener sugerencias del historial de revisiones
 
 ## Consejos
 
 - No sobrecargues con reglas el primer día — empieza pequeño y crece
 - Deja que el equipo enseñe a Kody de forma natural mediante conversaciones antes de formalizarlo como reglas
 - Usa `@kody start-review` durante los primeros PRs para que el equipo vea a Kodus en acción
-- Habilita la aprobación de memorias generadas por LLM si quieres revisar lo que aprende Kody
+- Activa **Kody knowledge approval** (**Code review → Kody Rules → Configuration**) si quieres revisar lo que aprende Kody
 
 Para la guía de configuración completa, consulta [Inicio rápido](/es/how_to_use/quickstart).

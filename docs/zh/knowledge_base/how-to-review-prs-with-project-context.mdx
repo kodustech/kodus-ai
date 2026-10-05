@@ -27,13 +27,15 @@ Domain layer must never depend on infrastructure.
 并使用 @file:src/shared/base-controller.ts 中定义的基类。
 ```
 
-### 自定义提示
+### 类别说明（原 Custom Prompts）
 
 添加 Kody 在每次审查中包含的项目特定说明：
 
-1. 前往**代码审查设置** → **自定义提示**
-2. 添加架构描述、团队指南或领域知识等上下文
+1. 在侧边栏中打开 **Code review → What to review**
+2. 编辑 **Bug**、**Performance** 或 **Security** 类别的 **Instructions**，加入架构描述、团队指南或领域知识等上下文
 3. Kody 在每次代码审查分析中包含此内容
+
+如需更改 Kody 表述建议的方式（语气、长度），请使用 **Code review → What Kody writes** 中的 **Kody's personality**。
 
 ### MCP 插件
 
@@ -49,6 +51,6 @@ Domain layer must never depend on infrastructure.
 1. 通过**记忆**定义架构规则：`@kody remember: we follow CQRS pattern in this service`
 2. 创建引用文档的**审查规则**：`@file:docs/architecture.md`
 3. 连接 **Jira** 使 Kody 根据任务需求验证 PR
-4. 添加领域特定知识的**自定义提示**
+4. 在 **What to review** 中添加类别 **Instructions**，提供领域特定知识
 
-更多详情，请参阅[自定义提示](/zh/how_to_use/code_review/configs/custom_prompts)和[插件](/zh/how_to_use/code_review/plugins)。
+更多详情，请参阅[类别说明（原 Custom Prompts）](/zh/how_to_use/code_review/configs/custom_prompts)和[插件](/zh/how_to_use/code_review/plugins)。

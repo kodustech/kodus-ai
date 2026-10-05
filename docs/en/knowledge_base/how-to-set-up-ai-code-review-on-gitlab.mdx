@@ -8,20 +8,20 @@ Kodus integrates with GitLab via OAuth and webhooks. Once configured, merge requ
 ## Steps
 
 1. **Create an account** at [kodus.io](https://kodus.io) or [self-host Kodus](/en/how_to_deploy/deploy_kodus/generic_vm)
-2. **Connect GitLab** — authorize via OAuth during setup
-3. **Configure webhooks** — follow the guided setup to enable merge request events
-4. **Select projects** — choose which GitLab projects Kodus should review
+2. **Connect GitLab** — in the **Connect your Git tool** step of onboarding, click **Install Gitlab app** to authorize via OAuth, or **Connect via token** (you can also connect later from **Repositories** in the sidebar)
+3. **Select projects** — choose which GitLab projects Kodus should review
+4. **Webhooks** — Kodus registers the merge request webhook automatically when you save the selection. If that didn't happen (for example on some self-hosted installs), add it manually with the [GitLab Webhooks](/en/how_to_deploy/platforms/gitlab/gitlab_webhook) guide
 5. **Open a merge request** — Kodus reviews it automatically
 
 ## What you get
 
 - Automated reviews on every MR
 - Comments posted directly in the merge request
-- Customizable rules and suggestion controls
+- Customizable rules, review categories, and a minimum severity threshold
 - Business logic validation against linked tasks
 
 ## Custom configuration
 
-Drop a `kodus-config.yml` in your repo root to customize behavior per project.
+Drop a `kodus-config.yml` in your repo root to customize behavior per project. The file overrides web settings once **kodus Config File Overrides Web Preferences** is on for that project (**Code review → General**).
 
 For the full setup guide, see [GitLab OAuth](/en/how_to_deploy/platforms/gitlab/gitlab_oauth) and [GitLab Webhooks](/en/how_to_deploy/platforms/gitlab/gitlab_webhook).

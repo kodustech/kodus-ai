@@ -17,8 +17,11 @@ Cada gráfico y tabla respeta los filtros globales de **repositorio** y **rango 
 | --- | --- |
 | **Implementation rate** | % de sugerencias enviadas que el equipo implementó en el período |
 | **Suggestions sent** | Cuántas sugerencias entregó Kodus (como comentarios en los PR) en el período |
-| **Negative vote rate** | Proporción de reacciones que fueron 👎, con la tendencia respecto al período anterior |
-| **Criticals ignored in merged PRs** | Sugerencias críticas que quedaron sin implementar en PR que ya fueron fusionados — la lista de riesgos accionables |
+| **PRs processed** | Pull requests que Kodus procesó en el período, con la variación respecto al período anterior (se muestra cuando hay datos de ejecuciones de revisión disponibles) |
+| **Negative vote rate** | Proporción de reacciones que fueron 👎, con la tendencia respecto al período anterior. Con menos de 10 reacciones muestra los conteos brutos en lugar de una tasa |
+| **Critical suggestions not yet addressed** | Sugerencias críticas que quedaron sin implementar en PR que ya fueron fusionados — la lista de riesgos accionables. Al hacer clic, salta a **Implementation rate by category**, para ver qué temas se ignoran |
+
+Cuando hay datos de ejecuciones de revisión disponibles, después de las tarjetas aparece un gráfico **Review processing outcomes**: la distribución semanal de ejecuciones de revisión que tuvieron éxito, fallaron o se omitieron.
 
 ## Implementation rate
 
@@ -73,7 +76,7 @@ El estado se calcula por regla, en este orden de prioridad:
 | --- | --- | --- |
 | **Stale** (Obsoleta) | Sin disparos en el período | Revisa si la regla sigue siendo necesaria |
 | **Low data** (Datos insuficientes) | Se disparó, pero muy pocas veces (menos de 5) para evaluarla | Espera más datos |
-| **Noisy** (Ruidosa) | El equipo la rechaza activamente (≥ 3 👎 y más 👎 que 👍) | La regla está mal calibrada — reescríbela o acota su alcance (p. ej. excluir tests) |
+| **Noisy** (Ruidosa) | El equipo la rechaza activamente (≥ 3 👎, más 👎 que 👍 y al menos un 👎 por cada 10 disparos) | La regla está mal calibrada — reescríbela o acota su alcance (p. ej. excluir tests) |
 | **Ignored** (Ignorada) | Se dispara mucho pero casi nada se implementa (≤ 20%) | Cuestiona su relevancia — ¿le importa al equipo? |
 | **Healthy** (Saludable) | Todo lo demás | Sin acción |
 
@@ -81,6 +84,6 @@ El estado se calcula por regla, en este orden de prioridad:
 
 ## Explorador de sugerencias
 
-Cada profundización — una barra de categoría, una fila de regla, la tarjeta de "criticals ignored" — abre el **explorador de sugerencias**: una lista filtrable y paginada de las sugerencias reales detrás del número.
+Cada profundización — una barra de categoría (de implementación o de feedback negativo) o una fila de regla — abre el **explorador de sugerencias** (la página **Suggestions**, ruta de navegación **Cockpit › Suggestions**): una lista filtrable y paginada de las sugerencias reales detrás del número, para el rango de fechas del Cockpit.
 
-Filtros: repositorio, categoría, severidad, estado de implementación, Kody Rule y búsqueda de texto libre. Cada fila se expande para mostrar el código existente vs. el sugerido y un enlace al comentario del PR.
+Filtros: repositorio, categoría, severidad, estado de implementación, Kody Rule y búsqueda de texto libre. Al hacer clic en una fila se abre un panel lateral con el código existente vs. el sugerido y un botón **Open in PR review** que lleva a la sugerencia en la página de revisión del pull request en Kodus.

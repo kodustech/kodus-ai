@@ -1,17 +1,28 @@
 ---
-title: "Prompts Personalizados"
-description: "Personalize os prompts de revisão de Kody para cada categoria e a forma como as sugestões são escritas, de acordo com as necessidades da sua equipe"
+title: "Instruções e Personalidade"
+description: "Personalize o que Kody busca em cada categoria de revisão e a forma como as sugestões são escritas (antigos Prompts Personalizados), de acordo com as necessidades da sua equipe"
 ---
 
-Os Prompts Personalizados oferecem controle total sobre como Kody analisa seu código e comunica os achados. Adapte o que a IA busca em cada categoria de revisão e como ela apresenta sugestões para corresponder aos padrões e ao estilo de comunicação da sua equipe.
+As instruções de categoria e a personalidade de Kody (antigos **Prompts Personalizados**) oferecem controle total sobre como Kody analisa seu código e comunica os achados. Adapte o que a IA busca em cada categoria de revisão e como ela apresenta sugestões para corresponder aos padrões e ao estilo de comunicação da sua equipe.
 
-<Card
-  title="Acessar Configurações de Prompts Personalizados"
-  icon="gear"
-  href="https://app.kodus.io/settings/code-review/global/custom-prompts"
->
-  Configure seus prompts personalizados para todos os repositórios da sua organização
-</Card>
+A antiga página de Prompts Personalizados saiu da navegação. Suas duas partes agora ficam em duas páginas do grupo **Code review** da barra lateral:
+
+<CardGroup cols={2}>
+  <Card
+    title="Instruções de categoria"
+    icon="gear"
+    href="https://app.kodus.io/settings/code-review/global/review-scope"
+  >
+    **Code review → What to review**: um editor de **Instructions** nas linhas Bug, Performance e Security
+  </Card>
+  <Card
+    title="Personalidade de Kody"
+    icon="comments"
+    href="https://app.kodus.io/settings/code-review/global/output"
+  >
+    **Code review → What Kody writes**: o editor **Personality instructions**
+  </Card>
+</CardGroup>
 
 ## Por Que Usar Prompts Personalizados?
 
@@ -34,9 +45,13 @@ Os Prompts Personalizados oferecem controle total sobre como Kody analisa seu c�
 
 Os Prompts Personalizados operam em dois níveis:
 
-### Prompts de Categoria
+### Instruções de categoria (What to review)
 
-Definem o que Kody busca em cada categoria de revisão:
+Definem o que Kody busca em cada categoria de revisão. Em **Code review → What to review**, cada
+linha habilitada de **Bug**, **Performance** e **Security** tem um botão **Instructions** que expande
+um editor (*What counts as a bug issue*, e assim por diante). Ele mostra o padrão de Kody até você alterá-lo —
+o chip indica **Kody's default** ou **Custom** — e **Reset to default** o restaura. O editor
+fica oculto enquanto a categoria está desativada, e Business Logic não tem instruções.
 
 <Tabs>
   <Tab title="Bug">
@@ -82,7 +97,12 @@ Definem o que Kody busca em cada categoria de revisão:
   </Tab>
 </Tabs>
 
-### Prompts de Sugestão
+### Personalidade de Kody (What Kody writes)
+
+Antiga instrução base dos **Prompts de Sugestão**. Em **Code review → What Kody writes**, a seção
+**Kody's personality** tem um editor **Personality instructions** (máximo de 2000 caracteres,
+com **Reset to default** disponível): como Kody soa em cada sugestão. Ela se aplica por cima das
+instruções de cada categoria.
 
 Controlam como Kody comunica cada sugestão individual. Isso personaliza o formato e o tom da mensagem que aparece nos comentários do PR, como:
 
@@ -119,8 +139,8 @@ v2PromptOverrides:
 Esses quatro são os que a interface web expõe, e cada um tem limite de 2000 caracteres. Não há
 override de prompt para a categoria Business Logic.
 
-O arquivo de config aceita mais um grupo que a interface não mostra — a rubrica de severidade
-que o Kody usa para classificar um achado:
+O arquivo de config aceita mais um grupo que nenhuma página da interface web edita — ele existe
+apenas no arquivo de config. É a rubrica de severidade que o Kody usa para classificar um achado:
 
 ```yaml
 v2PromptOverrides:
@@ -153,7 +173,7 @@ O arquivo só é lido depois que `kodusConfigFileOverridesWebPreferences` estive
 
 ## Referências Externas
 
-Todos os prompts personalizados — de Categoria, Sugestão e Resumo de PR — suportam referências a arquivos reais das bases de código que Kody pode acessar. Quando você salva uma atualização, Kody detecta automaticamente as referências externas e as resolve para revisões futuras.
+Todos os prompts personalizados — instruções de categoria, instruções de personalidade e instruções de resumo de PR — suportam referências a arquivos reais das bases de código que Kody pode acessar. Quando você salva uma atualização, Kody detecta automaticamente as referências externas e as resolve para revisões futuras.
 
 - Use `@file:caminho/para/arquivo.ts` para apontar para arquivos no repositório que você está editando; Kody tentará localizar o caminho localmente primeiro.
 - Inclua `@repo:org/projeto` ao referenciar arquivos de outro repositório ou ao editar prompts no nível global.
@@ -442,7 +462,7 @@ Diferencie os formatos de sugestão apenas quando há uma razão real:
     **Soluções:**
     - Torne os prompts mais específicos e focados
     - Adicione exclusões para padrões que você quer ignorar
-    - Aumente o limiar mínimo de severidade em [Controle de Sugestões](/pt-BR/how_to_use/code_review/configs/suggestion_control)
+    - Aumente **Minimum severity to post** em **What to review** (veja [Limite de Severidade](/pt-BR/how_to_use/code_review/configs/suggestion_control))
     - Verifique redundâncias entre os prompts de categoria
   </Accordion>
 
@@ -490,7 +510,7 @@ Diferencie os formatos de sugestão apenas quando há uma razão real:
   </Accordion>
 
   <Accordion title="Posso ver os prompts padrão antes de personalizar?">
-    Sim. Clique em qualquer prompt nas configurações para ver o conteúdo padrão.
+    Sim. Cada editor mostra o padrão de Kody até você alterá-lo, e **Reset to default** o traz de volta.
   </Accordion>
 
   <Accordion title="O que acontece com PRs existentes quando eu altero os prompts?">
@@ -498,7 +518,7 @@ Diferencie os formatos de sugestão apenas quando há uma razão real:
   </Accordion>
 
   <Accordion title="Posso personalizar prompts com kodus-config.yml?">
-    Não. Os prompts personalizados são apenas via interface web para garantir alterações intencionais. Outras configurações (caminhos ignorados, branches) podem usar `kodus-config.yml`.
+    Sim, sob a chave `v2PromptOverrides` — veja "Definindo no `kodus-config.yml`" acima. O arquivo só é lido quando `kodusConfigFileOverridesWebPreferences` está habilitado.
   </Accordion>
 
   <Accordion title="Devo personalizar todos os prompts ou apenas alguns?">
@@ -509,8 +529,8 @@ Diferencie os formatos de sugestão apenas quando há uma razão real:
     Funciona perfeitamente. Adapte os prompts aos pontos fortes do seu modelo. Tanto o primário quanto o fallback usam os mesmos prompts personalizados.
   </Accordion>
 
-  <Accordion title="Qual é a diferença entre prompts de Categoria e prompts de Sugestão?">
-    **Prompts de Categoria** controlam o que Kody analisa em cada categoria de revisão. **Prompts de Sugestão** controlam como Kody apresenta os achados para sua equipe. Você pode personalizar ambos de forma independente.
+  <Accordion title="Qual é a diferença entre instruções de categoria e instruções de personalidade?">
+    **Instruções de categoria** (antigos prompts de Categoria, em **What to review**) controlam o que Kody analisa em cada categoria de revisão. **Instruções de personalidade** (antigos prompts de Sugestão, em **What Kody writes**) controlam como Kody apresenta os achados para sua equipe. Você pode personalizar ambos de forma independente.
   </Accordion>
 
   <Accordion title="Posso usar markdown em prompts de sugestão?">

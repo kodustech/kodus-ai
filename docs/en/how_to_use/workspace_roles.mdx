@@ -52,21 +52,23 @@ Here's a detailed breakdown of what each role can do, based on the actual permis
 
 ## Managing Workspace Members
 
+Workspace members are managed on the **Workspace members** tab of **Organization → Subscription** — there is no separate members page. Only **Owners** can invite members, change roles, or remove members.
+
 ### Adding New Members
 
-1. Navigate to your workspace **Members** section
-2. Click **"Invite member"** button
-3. Enter the member's email address
-4. Select the appropriate role for the new member
-5. Send the invitation
+1. In the sidebar, open **Organization → Subscription** and pick the **Workspace members** tab
+2. Click **Invite member**
+3. In **Workspace member invitation**, type the member's email and click **Add to invite list** (repeat for more people)
+4. Click **Send invites**
+5. Invited members join as **Contributor**; change their role afterwards (see below)
 
 ### Auto-Join for Workspace Members
 
 Enable auto-join to allow users with matching email domains to join your workspace automatically.
 
 **How to enable:**
-1. Go to [Organization Settings](https://app.kodus.io/organization/general)
-2. Enable auto-join for your organization
+1. Go to **Organization → General** ([app.kodus.io/organization/general](https://app.kodus.io/organization/general))
+2. Under **Auto Join**, turn on **Enable Auto Join**, enter your domain, and save
 3. Currently works with your registered account email domain only
 4. Need a different domain? Contact us in the community
 
@@ -78,18 +80,22 @@ Enable auto-join to allow users with matching email domains to join your workspa
 
 ### Changing Member Roles
 
-1. Go to the **Members** section in your workspace
+1. Go to **Organization → Subscription → Workspace members**
 2. Find the member whose role you want to change
-3. Click on their current role dropdown
-4. Select the new role from the available options
+3. Open the select in their **Role** column
+4. Select the new role (**Owner**, **Billing Manager**, **Repo Admin**, or **Contributor**)
 5. The change takes effect immediately
+
+For a **Repository Admin**, assign the repositories they can edit with the **+** button next to their role, which opens **Assign repositories**.
 
 ### Removing Members
 
-1. In the **Members** section, locate the member to remove
-2. Click the **"Actions"** menu (three dots)
-3. Select **"Remove from workspace"**
-4. Confirm the removal in the dialog
+1. In **Organization → Subscription → Workspace members**, locate the member to remove
+2. Open the **Actions** menu (three dots) in their row
+3. Select **Delete**
+4. Confirm with **Remove** in the dialog
+
+The same menu has **Approve** for members marked **Needs approval** and **Copy invite link** to share a member's invite link again.
 
 ## Security Considerations
 
@@ -103,7 +109,7 @@ Enable auto-join to allow users with matching email domains to join your workspa
 <AccordionGroup>
   <Accordion title="I can't invite new members to the workspace">
     **Solutions:**
-    - Verify you have Owner or Repository Admin role
+    - Verify you have the Owner role — only Owners can invite members
     - Check if your workspace has reached any system limits
     - Ensure you have the correct permissions in your account
   </Accordion>
@@ -111,7 +117,7 @@ Enable auto-join to allow users with matching email domains to join your workspa
   <Accordion title="A member can't edit code review configurations">
     **Solutions:**
     - Confirm the member has Repository Admin or Owner role for the specific repository
-    - Check if the member has "own" permissions for the repository they want to edit
+    - For a Repository Admin, check that the repository is assigned to them (**Assign repositories** in the **Role** column of **Workspace members**)
     - Verify the member's role assignment is correct
   </Accordion>
 

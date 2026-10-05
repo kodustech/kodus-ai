@@ -7,7 +7,8 @@ description: "組織として見せたくない Cockpit のタブや個別メト
 タブ全体や個別のチャートを**組織全体**に対してオフにできます — そのメトリクスが自分たちの
 運用ではノイズになる場合や、開発者ごとの数値を表示したくない場合に有効です。
 
-**Organization → Cockpit Configuration**（`/organization/cockpit`）を開きます。
+サイドバーで **Organization → Cockpit visibility**（`/organization/cockpit`）を開きます。ページのタイトルは
+**Cockpit Configuration** です。変更を適用するには **Save settings** をクリックします。
 
 <Info>
   これは**組織単位**の設定であり、ユーザーごとの環境設定ではありません。メトリクスをオフに
@@ -16,7 +17,8 @@ description: "組織として見せたくない Cockpit のタブや個別メト
 
 ## タブ
 
-Cockpit は 2 つのタブに分かれており、それぞれ非表示にできます：
+Cockpit には 2 つのメトリクスタブがあり、それぞれ非表示にできます（その隣にある **Issues** タブは
+ここでは制御されません）：
 
 | タブ | 内容 |
 | --- | --- |
@@ -30,14 +32,14 @@ Cockpit は 2 つのタブに分かれており、それぞれ非表示にでき
 Productivity タブを非表示にすると、その中身もすべて非表示になります。したがって以下の個別
 トグルは、そのタブが有効な間だけ意味を持ちます。
 
-## サマリーメトリクス
+## サマリーカード
 
 Productivity タブ上部のカード：
 
 | メトリクス | 内容 |
 | --- | --- |
 | **Deploy Frequency** | 本番デプロイの頻度 |
-| **PR Cycle Time** | PR 作成からマージまでの平均時間 |
+| **PR Cycle Time** | PR 作成からマージまでの時間（75 パーセンタイル） |
 | **Bug Ratio** | バグ修正 PR の割合 |
 | **PR Size** | PR の平均サイズ |
 

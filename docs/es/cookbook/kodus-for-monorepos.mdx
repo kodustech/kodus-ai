@@ -14,7 +14,7 @@ Kodus admite tres niveles de configuración que se mapean de forma natural a un 
 
 | Nivel | Aplica a | Ejemplo |
 |-------|---------|---------|
-| **Organización** | Todos los repos | "Nunca commitear archivos `.env`" |
+| **Global** | Todos los repos | "Nunca commitear archivos `.env`" |
 | **Repositorio** | El monorepo | "Usar conventional commits" |
 | **Directorio** | Un paquete específico | "Los componentes React deben usar PascalCase" |
 
@@ -36,13 +36,12 @@ monorepo/
 
 ## Paso 2 — Crea configuraciones a nivel de directorio
 
-Ve a **Configuración de Code Review** → **Repositorio** → haz clic en un directorio para configurarlo.
+En la barra lateral, abre el selector de alcance en la parte superior del grupo **Code review** y elige **Add repository configuration**. En **Create repository settings**, usa **Select the target repository** (el monorepo), luego **Select the target directories** (una o más carpetas de paquetes) y haz clic en **Create settings**. Cada directorio aparece con sangría bajo el repositorio en el selector de alcance; selecciónalo para configurarlo.
 
 Cada directorio puede tener su propia:
 - **Kody Rules** (a nivel de archivo y de PR)
-- **Opciones de revisión** (qué tipos de análisis habilitar)
-- **Control de sugerencias** (filtros de severidad, máximo de sugerencias)
-- **Rutas ignoradas**
+- **What to review** (qué categorías habilitar y la severidad mínima para publicar)
+- **Ignored files** (en **General**)
 
 ## Paso 3 — Escribe reglas específicas
 
@@ -50,8 +49,8 @@ Cada directorio puede tener su propia:
 
 ```
 Name: React components must use design system tokens
-Scope: File
-Paths: apps/web/src/components/**/*.tsx
+Execution mode: Per file
+Path: apps/web/src/components/**/*.tsx
 Severity: High
 Instructions:
   Check fileDiff for hardcoded colors, spacing, or font sizes.
@@ -63,8 +62,8 @@ Instructions:
 
 ```
 Name: Domain layer must not import from infrastructure
-Scope: File
-Paths: apps/api/src/domain/**/*.ts
+Execution mode: Per file
+Path: apps/api/src/domain/**/*.ts
 Severity: Critical
 Instructions:
   Check fileDiff for any import from "../infrastructure",
@@ -77,7 +76,7 @@ Instructions:
 
 ```
 Name: Public API changes require changeset
-Scope: Pull Request
+Execution mode: Per PR
 Severity: High
 Instructions:
   If pr_files_diff modifies any file in libs/shared/src/index.ts
@@ -100,13 +99,13 @@ CommonJS require() is not allowed anywhere.
 Any breaking change requires a major version bump and a changeset.
 ```
 
-## Paso 5 — Configura el control de sugerencias por directorio
+## Paso 5 — Define el umbral de severidad por directorio
 
-Los paquetes con mucho tráfico pueden necesitar límites más estrictos:
+Los paquetes con mucho tráfico pueden necesitar filtros más estrictos. Selecciona el directorio en el selector de alcance, abre **What to review** y define **Minimum severity to post**:
 
-- **apps/web/** — máx. 5 sugerencias, filtro de severidad media (el frontend avanza rápido)
-- **libs/shared/** — máx. 15 sugerencias, filtro de severidad baja (la estabilidad importa)
-- **infra/** — máx. 3 sugerencias, filtro de severidad alta (menos pero críticas)
+- **apps/web/** — **Medium** (el frontend avanza rápido)
+- **libs/shared/** — **Low/All** (la estabilidad importa)
+- **infra/** — **High** (menos pero críticas)
 
 ## Paso 6 — Ignora rutas generadas
 

@@ -4,7 +4,7 @@ description: "Create custom Kody Rules directly in your repository using markdow
 ---
 
 <Info>
-Repository Rules use the same auto-sync mechanism as IDE rule file detection. Enable "Auto-sync rules from repo" in settings to activate both features. See <a href="/en/how_to_use/code_review/configs/rules_file_detection">Rules File Detection</a> for setup.
+Repository Rules use the same auto-sync mechanism as IDE rule file detection. Enable **Auto-sync rules from repo** (on **Code review → Kody Rules** at repository scope, under **Configuration**) to activate both features. See <a href="/en/how_to_use/code_review/configs/rules_file_detection">Rules File Detection</a> for setup.
 </Info>
 
 ## How to Use
@@ -17,7 +17,7 @@ Repository rule files are imported **verbatim** — no LLM conversion. The front
 ### Synchronization
 - **Automatic Detection**: Repository rules are automatically detected and synchronized when enabled
 - **Manual Sync**: Add `@kody-sync` to any rule file to sync it individually (works even with auto-sync disabled)
-- **Web Application**: Synchronized rules appear in your Kodus web application dashboard
+- **Web Application**: Synchronized rules appear on the repository's **Code review → Kody Rules** page, with the **Auto-sync** origin
 - **Real-time Updates**: Changes to rule files are synced when Pull Requests are closed
 
 ## File Location
@@ -162,7 +162,7 @@ Added new endpoint `/api/users/profile` with corresponding test file `tests/api/
 To use Repository Rules, you have two options:
 
 ### Option 1: Enable Auto-Sync (Recommended)
-1. **Enable Rules File Detection**: Toggle "Auto-sync rules from repo" in settings
+1. **Enable Rules File Detection**: Pick the repository in the **Code review** scope picker, open **Kody Rules → Configuration**, and turn on **Auto-sync rules from repo**
 2. **Create rule files**: Place `.md` files in `.kody/rules/**` or `rules/**` directories
 3. **Automatic sync**: All rule files sync when PRs are closed
 

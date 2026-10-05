@@ -47,7 +47,7 @@ Copie o token gerado e armazene-o com segurança, pois você precisará dele par
 
 ## Adicionando o Token ao Kody
 
-Após gerar o token, cole-o na tela de configuração de automação do Kody. O modal de configuração abrirá automaticamente quando você tentar habilitar a automação.
+Após gerar o token, cole-o no Kodus: durante o onboarding (**Connect your Git tool** → aba **Azure Repos** → **Connect via token**), ou depois, na barra lateral, em **Repositories** → **Connect a provider** → **Azure Repos**. Preencha **Organization name** e **Personal Access Token** e clique em **Validate and save**.
 
 ## Solução de Problemas: Kody não está revisando PRs no Azure DevOps
 
@@ -57,7 +57,7 @@ Se Kody está conectado mas **nada acontece em novos pull requests** — sem rea
 
 Abra o PAT no Azure DevOps e confirme que cada escopo listado em [Gerando o PAT](#gerando-o-pat-personal-access-token) está habilitado. O mais frequentemente esquecido é **Code: Read & Write** — sem **Write**, Kody pode ler seus repositórios mas não pode postar comentários de revisão, então as revisões "executam em silêncio".
 
-Se o PAT foi criado antes de um escopo ser adicionado, o Azure DevOps não o adicionará retroativamente. Crie um novo PAT com a lista completa de escopos e atualize-o na configuração de automação do Kody.
+Se o PAT foi criado antes de um escopo ser adicionado, o Azure DevOps não o adicionará retroativamente. Crie um novo PAT com a lista completa de escopos e reconecte com ele (**Repositories** → **Reset** no card do provedor → **Just reset the integration**, depois conecte o Azure Repos novamente com o novo token).
 
 ### 2. Verifique as permissões do usuário no projeto
 

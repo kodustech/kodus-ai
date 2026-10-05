@@ -20,17 +20,6 @@ description: "生成 Kody 进行代码审查所需的 GitHub Fine-Grained PAT,�
 
 ## 生成 FGPAT(细粒度个人访问令牌)
 
-<iframe
-  width="560"
-  height="315"
-  src="https://www.youtube.com/embed/ESE-Hl-bAD0?si=pCufAgeLBe73K_g0"
-  title="YouTube video player"
-  frameborder="0"
-  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-  referrerpolicy="strict-origin-when-cross-origin"
-  allowfullscreen
-></iframe>
-
 按照以下步骤正确设置令牌:
 
 1. **访问 GitHub 并进入您的个人资料设置**:
@@ -75,4 +64,9 @@ description: "生成 Kody 进行代码审查所需的 GitHub Fine-Grained PAT,�
 
 ## 将令牌添加到 Kody
 
-生成令牌后,将其粘贴到 Kody 配置屏幕中进行自动化设置。一旦您尝试启用自动化,模态框将自动打开。
+生成令牌后,将其粘贴到 Kodus 中:
+
+- **在入门引导期间**:在 **Connect your Git tool** 上选择 **Github** 标签页,然后点击 **Connect via token**。
+- **之后**:在侧边栏中打开 **Repositories**,点击 **Connect a provider** 下的 **Github**,切换到 **Token** 标签页,粘贴令牌并点击 **Validate and save**。
+
+使用令牌时,审查会以您的 GitHub 个人资料而不是 Kody 的身份发布,并且 GitHub Checks / PR 状态不可用。

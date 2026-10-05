@@ -156,6 +156,8 @@ kodus auth login                              # インタラクティブなロ�
 kodus auth login -e user@mail.com -p password # 非インタラクティブ
 ```
 
+インタラクティブなログインでは、ブラウザで **Authorize Kodus CLI** ページが開きます。そこで **Authorize CLI** をクリックして完了します。
+
 | フラグ                  | 短縮形 | 説明             |
 | ----------------------- | ------ | ---------------- |
 | `--email <email>`       | `-e`   | アカウントのメール |
@@ -284,7 +286,7 @@ kodus config centralized download --out ./centralized-config.zip
 
 ## `kodus config repo`
 
-Kodus に保存されたリポジトリ設定を確認・更新します。チームキー認証が必要です。現在のリポジトリを対象にするには `.` を使用します。
+Kodus に保存されたリポジトリ設定を確認・更新します。チームキー認証が必要で、そのキーで **Allow repository configuration via CLI** がオンになっている必要があります（**Organization → CLI keys** でキーの **Configure** から設定。デフォルトはオフ）。現在のリポジトリを対象にするには `.` を使用します。
 
 <Note>`kodus config repo` と `kodus config remote` は同じコマンドグループのエイリアスです。</Note>
 
@@ -333,6 +335,8 @@ kodus config repo add-ignore-title . "^WIP:"
 ## `kodus rules`
 
 Kody Rules を作成、更新、表示します — Kodus がレビュー中に適用する構造化ルール。
+
+チームキーを使用する場合、そのキーで **Allow Kody Rules management via CLI** がオンになっている必要があります（**Organization → CLI keys** でキーの **Configure** から設定。デフォルトはオフ）。
 
 ### 使用方法
 

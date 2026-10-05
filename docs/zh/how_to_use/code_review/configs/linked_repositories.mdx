@@ -83,7 +83,7 @@ const isNotApproved =
 
 ### 在 Web 应用中
 
-进入 **Code Review Settings → _你的代码库_ → Linked Repositories**,从列表中选择一个代码库(只显示已连接的),然后保存。每个关联有两个可选字段,说明如下。
+在侧边栏 **Code review** 分组顶部的范围选择器中选择你的代码库(如果它不在列表中,先用 **Add repository configuration** 创建它的设置),然后打开 **Code review → Linked repositories**(该页面只存在于代码库范围)。点击 **Add repository**,在 **Add linked repository** 对话框中选择一个代码库(只显示已连接的),然后点击 **Save settings**。每个关联有两个可选字段:**Instructions · optional** 和 **Branch / ref pin · optional**,说明如下。
 
 ### 在 `kodus-config.yml` 中
 
@@ -99,7 +99,7 @@ linkedRepositories:
 - `repository`(必填)—— 已连接到组织的代码库的完整名称(`owner/repo`)。
 - `instructions`、`ref` —— 与 Web 应用中的字段含义相同(见下文)。
 
-该文件与 Web 设置的交互遵循常规的[配置文件规则](/zh/how_to_use/code_review/configs/general#配置优先级):只有在该代码库启用了 `kodusConfigFileOverridesWebPreferences`(**Settings → Code Review → 该代码库 → General**)时才会读取文件,文件从代码库的**默认分支**读取,并且文件中的 `linkedRepositories` 列表会**替换**该代码库在 Web 中的列表(两个列表不会合并;文件中的 `linkedRepositories: []` 会关闭该功能)。无论关联在哪里声明,套餐要求都同样适用。
+该文件与 Web 设置的交互遵循常规的[配置文件规则](/zh/how_to_use/code_review/configs/general#配置优先级):只有在该代码库启用了 `kodusConfigFileOverridesWebPreferences`(代码库范围下 **Code review → General** 中的 **kodus Config File Overrides Web Preferences**)时才会读取文件,文件从代码库的**默认分支**读取,并且文件中的 `linkedRepositories` 列表会**替换**该代码库在 Web 中的列表(两个列表不会合并;文件中的 `linkedRepositories: []` 会关闭该功能)。无论关联在哪里声明,套餐要求都同样适用。
 
 ### Instructions(说明)
 

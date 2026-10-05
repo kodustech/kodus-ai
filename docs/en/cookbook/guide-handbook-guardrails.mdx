@@ -18,7 +18,7 @@ Follow the flow and any repo can evolve from “handbook PDF” to “living pol
 
 ## Pre-flight checklist
 
-- You have permission to edit **Code Review Settings → Kody Rules**.
+- You have permission to edit **Code review → Kody Rules**.
 - The policy pack lives in the repo (e.g., `docs/engineering-standards.md`). If yours sits in another path, adjust accordingly. If it lives in Notion, Confluence, or Google Docs, plan to expose it through a remote MCP endpoint.
 - You know which topics should be evaluated at the file level (controllers, configs) versus PR level (feature flags, rollout narratives, architecture).
 
@@ -77,7 +77,7 @@ Only flag code that clearly violates those bullets. If the section is missing, s
 
 ## Phase 3 – Translate sections into Kody Rules
 
-Open **Code Review Settings → Kody Rules** and map each policy section to the appropriate scope.
+In the sidebar, open **Code review → Kody Rules** and map each policy section to the appropriate execution mode and path.
 
 | Policy section         | Rule type     | Scope example                     | Severity |
 | ---------------------- | ------------- | --------------------------------- | -------- |
@@ -90,8 +90,8 @@ Open **Code Review Settings → Kody Rules** and map each policy section to the 
 
 ```
 Name: Enforce tracing fields on new endpoints
-Scope: File
-Paths: web/apps/**/controllers/**/*.ts
+Execution mode: Per file
+Path: web/apps/**/controllers/**/*.ts
 Severity: High
 Instructions:
   Compare fileDiff with Architecture → New endpoints in @file:docs/engineering-standards.md.
@@ -103,7 +103,7 @@ Instructions:
 
 ```
 Name: Require feature flags for risky changes
-Scope: Pull Request
+Execution mode: Per PR
 Severity: Critical
 Instructions:
   Scan pr_files_diff for routes/services/domain files that add major functionality.

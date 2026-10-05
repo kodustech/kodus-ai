@@ -6,7 +6,8 @@ description: "通过一个组织级设置,隐藏你的组织不希望展示的�
 并非每个团队都希望所有指标可见。驾驶舱允许 Owner 为**整个组织**关闭整个标签页或单个图表 ——
 当某个指标对你们的流程来说噪音过大,或你不希望展示按开发者维度的数字时,这很有用。
 
-前往 **Organization → Cockpit Configuration**(`/organization/cockpit`)。
+在侧边栏中打开 **Organization → Cockpit visibility**(`/organization/cockpit`)。该页面的标题为
+**Cockpit Configuration**;点击 **Save settings** 应用你的更改。
 
 <Info>
   这是**组织级**设置,不是按用户的偏好。关闭某个指标会对所有人隐藏它。
@@ -14,7 +15,7 @@ description: "通过一个组织级设置,隐藏你的组织不希望展示的�
 
 ## 标签页
 
-驾驶舱分为两个标签页,每个都可以隐藏:
+驾驶舱有两个指标标签页,每个都可以隐藏(旁边的 **Issues** 标签页不受此处控制):
 
 | 标签页 | 包含内容 |
 | --- | --- |
@@ -27,18 +28,18 @@ description: "通过一个组织级设置,隐藏你的组织不希望展示的�
 
 隐藏 Productivity 标签页同时会隐藏其中的全部内容,因此下面的单项开关只在该标签页开启时才有意义。
 
-## 摘要指标
+## 摘要卡片
 
 Productivity 标签页顶部的卡片:
 
 | 指标 | 展示内容 |
 | --- | --- |
 | **Deploy Frequency** | 团队向生产环境部署的频率 |
-| **PR Cycle Time** | 从 PR 创建到合并的平均时长 |
+| **PR Cycle Time** | 从 PR 创建到合并的时长(第 75 百分位) |
 | **Bug Ratio** | 属于 bug 修复的 PR 占比 |
 | **PR Size** | pull request 的平均大小 |
 
-## 详细图表
+## 明细图表
 
 摘要卡片下方的图表:
 

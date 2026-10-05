@@ -7,19 +7,19 @@ Si ya tienes reglas definidas en Cursor, GitHub Copilot, Claude u otras herramie
 
 ## Cómo funciona
 
-Kodus detecta archivos de reglas en tu repositorio y ofrece sincronizarlos como Kody Rules. Los formatos de archivo compatibles incluyen:
+Kodus detecta archivos de reglas en tu repositorio y los sincroniza como Kody Rules. Los formatos de archivo compatibles incluyen:
 
 - `.cursorrules` (Cursor)
 - `.github/copilot-instructions.md` (GitHub Copilot)
-- Archivos `.claude` (Claude)
+- `CLAUDE.md` (Claude)
 - Otros archivos de configuración de herramientas de IA
 
 ## Configuración
 
-1. Ve a **Configuración de Revisión de Código** → **Kody Rules**
-2. Kodus detecta automáticamente archivos de reglas compatibles en tu repositorio
-3. Revisa las reglas detectadas e importa las que desees
-4. Las reglas importadas se agregan como Kody Rules y se aplican durante la revisión de código
+1. Selecciona el repositorio en el selector de alcance en la parte superior del grupo **Code review** de la barra lateral, abre **Kody Rules** y haz clic en **Configuration**
+2. Activa **Auto-sync rules from repo**. La primera vez, Kodus pregunta si quieres escanear el repositorio de inmediato (**Sync now**) o usar **Skip initial scan**
+3. Kodus importa los archivos de reglas que encuentra como Kody Rules (origen **Auto-sync**) y los mantiene sincronizados a partir de entonces
+4. Las reglas importadas se aplican de inmediato durante la revisión de código. Para revisarlas primero, activa **Kody knowledge approval** en la misma hoja de **Configuration**: las reglas importadas esperarán entonces en la sección **Pending review** hasta que las apruebes (**Approve**) o descartes (**Discard**)
 
 ## Por qué esto importa
 

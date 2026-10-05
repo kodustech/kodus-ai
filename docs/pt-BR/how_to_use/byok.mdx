@@ -15,7 +15,7 @@ BYOK (Bring Your Own Key) é a **forma padrão como o Kodus usa LLMs em todos os
 
 ## Como o BYOK funciona
 
-O BYOK é **provider-first**: você conecta um provedor uma vez, adiciona os modelos que quiser a ele e então roteia esses modelos para as tarefas da Kody. A tela `/byok` tem três abas:
+O BYOK é **provider-first**: você conecta um provedor uma vez, adiciona os modelos que quiser a ele e então roteia esses modelos para as tarefas da Kody. No app, isso fica na página **AI providers** (barra lateral → **AI providers**, antiga página **BYOK**), que tem três abas:
 
 <CardGroup cols={3}>
   <Card title="Providers" icon="box">
@@ -25,41 +25,41 @@ O BYOK é **provider-first**: você conecta um provedor uma vez, adiciona os mod
     Escolha qual modelo roda cada tarefa — um padrão para tudo, um fallback opcional e overrides por agente.
   </Card>
   <Card title="Budget" icon="wallet">
-    Defina um limite mensal de gasto opcional entre os modelos conectados.
+    Defina um orçamento mensal opcional e receba alertas de gasto conforme se aproxima dele (apenas alertas — as revisões continuam rodando).
   </Card>
 </CardGroup>
 
 <Info>
-  **Quem pode editar isso.** A página de BYOK é **exclusiva do Owner** — conectar, testar e excluir chaves exige o role **Owner**. Os demais roles (Billing Manager, Repo Admin, Contributor) não conseguem acessar `/byok`. Veja [Roles do workspace](/pt-BR/how_to_use/workspace_roles).
+  **Quem pode editar isso.** A página **AI providers** é **exclusiva do Owner** — conectar, testar e excluir chaves exige o role **Owner**. Os demais roles (Billing Manager, Repo Admin, Contributor) não conseguem acessar `/byok`. Veja [Roles do workspace](/pt-BR/how_to_use/workspace_roles).
 </Info>
 
 ## Conectar um provedor
 
 <Steps>
-  <Step title="Abrir as configurações de BYOK">
-    Acesse [app.kodus.io/byok](https://app.kodus.io/byok). Em um workspace novo você verá **Connect your first provider**.
+  <Step title="Abrir AI providers">
+    Na barra lateral, abra **AI providers** ([app.kodus.io/byok](https://app.kodus.io/byok)). Em um workspace novo você verá **Connect your first provider**.
   </Step>
 
   <Step title="Escolha um provedor">
     A grade de provedores é dividida em duas partes:
 
-    - **Providers** — provedores de primeira classe que você conecta apenas com uma chave de API (OpenAI, Anthropic, Google AI Studio, OpenRouter, Novita…).
-    - **Custom** — provedores que você aponta para seu próprio endpoint ou nos quais roda um modelo arbitrário: **OpenAI-compatible**, **Anthropic-compatible**, **Google Vertex AI** e **Amazon Bedrock**. Eles vêm marcados com a dica *Custom endpoint*.
+    - **Providers** — provedores de primeira classe que você conecta apenas com uma chave de API (OpenAI, Anthropic, Google, OpenRouter, Novita, Moonshot, Z.ai…).
+    - **Custom** — provedores que você aponta para seu próprio endpoint ou nos quais roda um modelo arbitrário: **OpenAI-compatible**, **Anthropic-compatible**, **Google Vertex AI**, **Amazon Bedrock** e **Azure OpenAI**. Endpoints personalizados vêm marcados com a dica *Custom endpoint*.
 
     Um provedor que você já conectou exibe **Connected · N models**.
   </Step>
 
   <Step title="Adicione um modelo">
-    Escolher um provedor abre o formulário **Add a model** dele. Cole a chave de API uma vez (reutilizada em cada modelo que você adicionar àquele provedor depois) e então escolha o modelo:
+    Escolher um provedor abre o formulário de adicionar modelo dele (**Add a … model**). Cole a chave de API uma vez (reutilizada em cada modelo que você adicionar àquele provedor depois) e então escolha o modelo:
 
     - Se o Kodus conseguir listar os modelos do provedor, você recebe um dropdown.
     - Caso contrário (endpoints personalizados, self-hosted ou quando chaves de plataforma não estão configuradas), digite o Model ID exato.
 
-    Endpoints personalizados (OpenAI-compatible / Anthropic-compatible) também pedem uma **base URL** primeiro.
+    Endpoints personalizados (OpenAI-compatible / Anthropic-compatible) também pedem uma **Base URL** primeiro.
   </Step>
 
   <Step title="Ajuste configurações avançadas (opcional)">
-    Em **Advanced settings**: thinking/reasoning, temperature, max output tokens, max input tokens e max concurrent requests. Os padrões são sensatos para a maioria dos provedores — veja [Reasoning](#reasoning--extended-thinking) e [Temperature](#temperature) para os campos que o Kodus trava ou oculta por modelo.
+    No card **Advanced (optional)**, expanda **Advanced settings**: **Thinking / Reasoning**, **Temperature**, **Max output tokens**, **Max input tokens** e **Max concurrent requests**. Os padrões são sensatos para a maioria dos provedores — veja [Reasoning](#reasoning--extended-thinking) e [Temperature](#temperature) para os campos que o Kodus trava ou oculta por modelo.
   </Step>
 
   <Step title="Teste e salve">
@@ -108,7 +108,7 @@ Depois de conectar dois ou mais modelos, a aba **Routing** decide qual modelo ro
   </Step>
 </Steps>
 
-Clique em **Save routing** para persistir. **Reset agents to default** envia todos os overrides por agente de volta ao padrão e limpa o fallback (o modelo padrão em si é mantido). Um painel **Per repository** somente leitura abaixo espelha quaisquer overrides de modelo por repositório definidos em Code Review Settings.
+Clique em **Save routing** para persistir. **Reset agents to default** envia todos os overrides por agente de volta ao padrão e limpa o fallback (o modelo padrão em si é mantido). Um painel **Per repository** somente leitura abaixo espelha quaisquer overrides de modelo por repositório (ou por diretório), que você define em **Code review → General → Code review model** com um repositório ou diretório escolhido no seletor de escopo.
 
 <Note>
   Com um único modelo conectado, o routing é ignorado — toda tarefa usa esse modelo. Conecte um segundo modelo para que o routing faça sentido.
@@ -251,11 +251,11 @@ Moonshot e Z.ai cada uma oferece um plano de assinatura em um **endpoint diferen
     </Accordion>
   </Tab>
 
-  <Tab title="OpenAI Compatible">
+  <Tab title="OpenAI-compatible">
     **Melhor para:** provedores especializados (Moonshot, Z.ai, Fireworks, Together, Groq, DeepSeek) ou endpoints self-hosted.
 
     **Como configurar:**
-    1. No fluxo de conexão, escolha **OpenAI Compatible** (em Custom).
+    1. No fluxo de conexão, escolha **OpenAI-compatible** (em Custom).
     2. Informe a URL base (ex.: `https://api.moonshot.ai/v1`, `https://api.z.ai/api/paas/v4/`, `https://api.fireworks.ai/inference/v1`).
     3. Forneça a chave e o Model ID.
 
@@ -294,7 +294,7 @@ Moonshot e Z.ai cada uma oferece um plano de assinatura em um **endpoint diferen
 
 ## Reasoning / Extended Thinking
 
-O formulário **Add a model** expõe um toggle **Thinking** (Off / Low / Medium / High / Custom) em **Advanced settings**. As opções disponíveis espelham o que o modelo realmente consegue fazer:
+O formulário de adicionar modelo expõe um toggle **Thinking / Reasoning** (Off / Low / Medium / High / Custom) em **Advanced settings**. As opções disponíveis espelham o que o modelo realmente consegue fazer:
 
 - Um modelo que não consegue raciocinar fica travado em **Off** com uma nota.
 - Um modelo que só raciocina em certos níveis (ex.: o medium/high do GPT-5) desabilita os inválidos.
@@ -318,7 +318,7 @@ Quando você escolhe Low / Medium / High, o Kodus traduz o nível para o formato
 
 ### Sobrescrita via JSON customizado
 
-Escolher **Custom** no toggle Thinking revela uma textarea de JSON. Cole as opções do provedor diretamente — **o Kodus faz o auto-wrap sob o namespace do provedor ativo**. Você não precisa conhecer as regras de roteamento do Vercel AI SDK.
+Escolher **Custom** no toggle **Thinking / Reasoning** revela uma textarea de JSON. Cole as opções do provedor diretamente — **o Kodus faz o auto-wrap sob o namespace do provedor ativo**. Você não precisa conhecer as regras de roteamento do Vercel AI SDK.
 
 Use isso quando:
 
@@ -502,7 +502,7 @@ Nos bastidores, o Kodus emite isto na chamada ao Vercel AI SDK:
 
 ### Avançado: sobrescrita via JSON bruto
 
-Se você precisa de campos além de `order` e `allow_fallbacks` (ex.: `ignore`, `data_collection`, `require_parameters`), mude **Thinking** para **Custom** em Advanced settings e cole o payload de roteamento completo — ele é mesclado em `providerOptions` junto com qualquer configuração de reasoning:
+Se você precisa de campos além de `order` e `allow_fallbacks` (ex.: `ignore`, `data_collection`, `require_parameters`), mude **Thinking / Reasoning** para **Custom** em Advanced settings e cole o payload de roteamento completo — ele é mesclado em `providerOptions` junto com qualquer configuração de reasoning:
 
 ```json
 {
@@ -520,7 +520,7 @@ Se você precisa de campos além de `order` e `allow_fallbacks` (ex.: `ignore`, 
 
 ## Simultaneidade e limites de taxa
 
-O campo `maxConcurrentRequests` (em **Advanced settings**) limita quantas requisições em voo o Kodus envia ao seu provedor em paralelo. Na maioria das vezes, o padrão é suficiente — mas planos de assinatura com limites estritos de simultaneidade precisam defini-lo explicitamente.
+O campo `maxConcurrentRequests` (**Max concurrent requests**, em **Advanced settings**) limita quantas requisições em voo o Kodus envia ao seu provedor em paralelo. Na maioria das vezes, o padrão é suficiente — mas planos de assinatura com limites estritos de simultaneidade precisam defini-lo explicitamente.
 
 ### Valores a definir
 
@@ -565,7 +565,7 @@ O campo `maxConcurrentRequests` (em **Advanced settings**) limita quantas requis
     Crie chaves de API separadas para o Kodus. Facilita auditoria de uso e rotação de chaves.
   </Card>
   <Card title="Rotação Regular" icon="arrows-rotate">
-    Rotacione as chaves periodicamente e atualize-as nas configurações BYOK.
+    Rotacione as chaves periodicamente e atualize-as com **Edit provider** na página **AI providers**.
   </Card>
   <Card title="Monitorar Uso" icon="chart-bar">
     Verifique os painéis do seu provedor em busca de padrões incomuns.
@@ -611,13 +611,13 @@ O campo `maxConcurrentRequests` (em **Advanced settings**) limita quantas requis
   </Accordion>
 
   <Accordion title="Variáveis de ambiente self-hosted não aparecem">
-    - Se o Kodus está configurado via `.env` (Fixed Mode self-hosted), a tela de BYOK exibe um banner informativo azul com o provedor/modelo ativo — a chave nunca é exibida por segurança.
+    - Se o Kodus está configurado via `.env` (Fixed Mode self-hosted), a página **AI providers** exibe um banner informativo com o provedor/modelo ativo enquanto nenhum modelo estiver conectado ali — a chave nunca é exibida por segurança.
     - Conectar um modelo e salvar sobrescreve a configuração do `.env`.
   </Accordion>
 
   <Accordion title="Custos altos ou inesperados">
-    - Reasoning adiciona tokens. Se o custo está disparando, reduza **Thinking** de Medium para Low, ou roteie tarefas pesadas para um modelo mais barato em **Per agent**.
-    - Verifique o painel do seu provedor para o detalhamento por modelo, e defina um limite na aba **Budget**.
+    - Reasoning adiciona tokens. Se o custo está disparando, reduza **Thinking / Reasoning** de Medium para Low, ou roteie tarefas pesadas para um modelo mais barato em **Per agent**.
+    - Verifique o painel do seu provedor para o detalhamento por modelo, e defina um orçamento mensal com alertas de gasto na aba **Budget** (apenas alertas — defina um limite rígido no seu provedor).
   </Accordion>
 </AccordionGroup>
 
@@ -645,6 +645,6 @@ O campo `maxConcurrentRequests` (em **Advanced settings**) limita quantas requis
   </Accordion>
 
   <Accordion title="Posso usar um LLM self-hosted (ex.: Ollama, vLLM)?">
-    Sim — via o provedor **OpenAI Compatible** (em Custom). Informe a URL base do seu endpoint, o Model ID que ele expõe e uma chave de API placeholder (a maioria dos runtimes self-hosted ignora o header da chave, mas ainda exige um).
+    Sim — via o provedor **OpenAI-compatible** (em Custom). Informe a URL base do seu endpoint, o Model ID que ele expõe e uma chave de API placeholder (a maioria dos runtimes self-hosted ignora o header da chave, mas ainda exige um).
   </Accordion>
 </AccordionGroup>

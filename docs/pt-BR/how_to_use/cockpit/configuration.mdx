@@ -7,7 +7,8 @@ Nem todo time quer todas as métricas visíveis. O Cockpit permite que um Owner 
 inteiras ou gráficos individuais para a **organização inteira** — útil quando uma métrica é
 ruidosa para o seu fluxo, ou quando você não quer números por desenvolvedor em exibição.
 
-Vá em **Organization → Cockpit Configuration** (`/organization/cockpit`).
+Na barra lateral, abra **Organization → Cockpit visibility** (`/organization/cockpit`). A página tem o título
+**Cockpit Configuration**; clique em **Save settings** para aplicar suas alterações.
 
 <Info>
   Esta é uma configuração **da organização**, não uma preferência por usuário. Desligar uma
@@ -16,7 +17,8 @@ Vá em **Organization → Cockpit Configuration** (`/organization/cockpit`).
 
 ## Abas
 
-O Cockpit é dividido em duas abas, e cada uma pode ser escondida:
+O Cockpit tem duas abas de métricas, e cada uma pode ser escondida (a aba **Issues** ao lado delas não é
+controlada aqui):
 
 | Aba | O que contém |
 | --- | --- |
@@ -30,18 +32,18 @@ O Cockpit é dividido em duas abas, e cada uma pode ser escondida:
 Esconder a aba Productivity também esconde tudo que está dentro dela, então os toggles
 individuais abaixo só importam enquanto essa aba estiver ligada.
 
-## Métricas de resumo
+## Cards de resumo
 
 Os cards no topo da aba Productivity:
 
 | Métrica | O que mostra |
 | --- | --- |
 | **Deploy Frequency** | Com que frequência o time faz deploy para produção |
-| **PR Cycle Time** | Tempo médio da criação do PR até o merge |
+| **PR Cycle Time** | Tempo da criação do PR até o merge (75º percentil) |
 | **Bug Ratio** | Percentual de PRs que são correções de bug |
 | **PR Size** | Tamanho médio dos pull requests |
 
-## Gráficos detalhados
+## Gráficos de detalhe
 
 Os gráficos abaixo dos cards de resumo:
 

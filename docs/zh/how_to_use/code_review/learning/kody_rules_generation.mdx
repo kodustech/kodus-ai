@@ -12,59 +12,50 @@ description: "Kody 可以通过分析团队的代码审查历史自动生成自�
 - **自动生成**:Kody 分析您的审查历史以创建新规则
 - **数据驱动**:使用 3 个月的审查数据获取智能见解
 - **智能建议**:基于实际团队模式生成规则
-- **需要手动导入**:生成的规则必须手动审查和导入才能生效
+- **可选审批**:生成的规则默认处于激活状态;开启 **Kody knowledge approval** 可在每条规则生效前先进行审查
 - **持续学习**:随着团队发展每周更新规则
 
-<iframe
-  width="100%"
-  height="400"
-  src="https://www.youtube.com/embed/e1SOwOEVZB4?si=RJ7gKGaLgtJ1CRKt"
-  title="YouTube video player"
-  frameborder="0"
-  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-  referrerpolicy="strict-origin-when-cross-origin"
-></iframe>
+<Frame caption="Kody Rules 的 Configuration 面板中的 Generate from past reviews 和 Kody knowledge approval">
+  <img src="/images/sync-rules.png" alt="Kody Rules Configuration sheet" />
+</Frame>
 
 ## 工作原理
 
-### 1. 访问规则生成
+### 1. 开启规则生成
 
-导航到您的代码库设置:
+规则生成按代码库设置:
 
-1. 转到**代码审查设置** → **代码库** → **Kody 规则**
-2. 查找**"生成 Kody 规则"**按钮
-3. 点击开始自动生成过程
+1. 在侧边栏中,通过 **Code review** 分组顶部的范围选择器选择代码库,然后打开 **Kody Rules**
+2. 点击 **Configuration** 打开侧边面板
+3. 开启 **Generate from past reviews**
+4. 可选:使用开关下方的审查者选择器(默认为 **Learning from all reviewers**)排除 Kody 不应从其审查评论中学习的开发者
 
 ### 2. 分析过程
 
-当您点击"生成 Kody 规则"时,Kody 将:
+当您首次为某个代码库开启 **Generate from past reviews** 时,Kody 将:
 
-- **扫描审查历史**:分析代码库中最近 3 个月的代码审查
+- **扫描审查历史**:分析代码库中最近 3 个月已关闭的 PR
 - **识别模式**:发现常见的反馈主题和编码偏好
 - **提取标准**:将审查模式转换为可操作的规则
-- **生成建议**:创建针对团队风格定制的自定义规则建议
+- **生成规则**:创建针对团队风格定制的自定义规则
+
+这可能需要几分钟。生成的规则随后会出现在该代码库的 **Kody Rules** 页面上。
 
 ### 3. 审查生成的规则
 
-分析完成后:
+生成的规则以 **Kody-generated** 来源列出(使用 **Filters → Origin → Kody-generated** 仅查看这些规则)。打开其中任意一条,即可像其他规则一样编辑、暂停或删除它。
 
-1. 将出现**"查看新规则"**按钮
-2. 点击查看生成的规则建议
-3. 浏览建议的规则及其解释
-4. **重要**:规则尚未激活 - 此时它们只是建议
-
-### 4. 导入规则(激活所需)
+### 4. 在规则生效前进行审批
 
 <Warning>
-  **关键步骤**:在您手动导入之前,生成的规则不会生效。
+  默认情况下,生成的规则**一经创建即处于激活状态**,并会在下一次代码审查中执行。
 </Warning>
 
-要使规则生效:
+要在生成的规则生效前对其进行审查,请在同一个 **Configuration** 面板中开启 **Kody knowledge approval**。开启审批后:
 
-- **选择性选择**:仅导入符合团队需求的规则
-- **自定义**:在导入前根据需要修改规则
-- **应用**:将选定的规则添加到活动规则集
-- **激活**:只有导入的规则才会在代码审查期间执行
+- **待审查**:新生成的规则会进入 Kody Rules 页面顶部的 **Pending review** 区域,而不会被执行
+- **选择性选择**:对符合团队需求的规则点击 **Approve**,其余的点击 **Discard**
+- **激活**:只有已批准的规则才会在代码审查期间执行
 
 ## 持续学习
 
@@ -73,7 +64,7 @@ description: "Kody 可以通过分析团队的代码审查历史自动生成自�
 - **每周更新**:Kody 每周生成新的规则建议
 - **演变标准**:规则建议随着团队的编码风格演变而调整
 - **精确度提高**:建议随着时间的推移变得更加精确
-- **定期审查**:每周出现新的规则建议供您审查
+- **定期审查**:每周出现新规则(开启审批时出现在 **Pending review** 中)
 
 ## 要求
 

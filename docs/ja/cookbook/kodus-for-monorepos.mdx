@@ -14,7 +14,7 @@ Kodusはモノレポに自然にマッピングされる3つの設定レベル�
 
 | レベル | 適用範囲 | 例 |
 |-------|-----------|---------|
-| **組織** | すべてのリポジトリ | "`.env` ファイルをコミットしない" |
+| **Global** | すべてのリポジトリ | "`.env` ファイルをコミットしない" |
 | **リポジトリ** | モノレポ | "コンベンショナルコミットを使用する" |
 | **ディレクトリ** | 特定のパッケージ | "ReactコンポーネントはPascalCaseを使用する必要がある" |
 
@@ -36,13 +36,12 @@ monorepo/
 
 ## ステップ2 — ディレクトリレベルの設定を作成する
 
-**コードレビュー設定** → **リポジトリ** に移動し、設定するディレクトリをクリックします。
+サイドバーで **Code review** グループ上部のスコープピッカーを開き、**Add repository configuration** を選択します。**Create repository settings** で **Select the target repository**（モノレポ）を選び、次に **Select the target directories**（1つ以上のパッケージフォルダ）を選んで **Create settings** をクリックします。各ディレクトリはスコープピッカー内でリポジトリの下にインデントされて表示されます — 設定するにはそれを選択してください。
 
 各ディレクトリは以下を持つことができます：
 - **Kodyルール**（ファイルレベルとPRレベル）
-- **レビューオプション**（有効にする分析タイプ）
-- **提案コントロール**（重要度フィルター、最大提案数）
-- **除外パス**
+- **What to review**（有効にするカテゴリと、投稿する最小重要度）
+- **Ignored files**（**General** 内）
 
 ## ステップ3 — ターゲットを絞ったルールを作成する
 
@@ -50,8 +49,8 @@ monorepo/
 
 ```
 Name: ReactコンポーネントはデザインシステムトークンをDesign System Tokensを使用する必要がある
-Scope: File
-Paths: apps/web/src/components/**/*.tsx
+Execution mode: Per file
+Path: apps/web/src/components/**/*.tsx
 Severity: High
 Instructions:
   fileDiffでハードコードされた色、スペーシング、またはフォントサイズを確認する。
@@ -63,8 +62,8 @@ Instructions:
 
 ```
 Name: ドメイン層はインフラストラクチャからインポートしてはならない
-Scope: File
-Paths: apps/api/src/domain/**/*.ts
+Execution mode: Per file
+Path: apps/api/src/domain/**/*.ts
 Severity: Critical
 Instructions:
   fileDiffで "../infrastructure"、"../../infrastructure"、
@@ -77,7 +76,7 @@ Instructions:
 
 ```
 Name: パブリックAPIの変更にはチェンジセットが必要
-Scope: Pull Request
+Execution mode: Per PR
 Severity: High
 Instructions:
   pr_files_diffがlibsshared/src/index.ts内のファイルを変更したり、
@@ -100,13 +99,13 @@ CommonJSのrequire()はどこでも使用できない。
 破壊的変更にはメジャーバージョンのバンプとチェンジセットが必要。
 ```
 
-## ステップ5 — ディレクトリごとに提案コントロールを設定する
+## ステップ5 — ディレクトリごとに重要度のしきい値を設定する
 
-トラフィックの多いパッケージにはより厳格な制限が必要な場合があります：
+トラフィックの多いパッケージにはより厳格なフィルターが必要な場合があります。スコープピッカーでディレクトリを選択し、**What to review** を開いて **Minimum severity to post** を設定します：
 
-- **apps/web/** — 最大5件の提案、中程度の重要度フィルター（フロントエンドは速く変化する）
-- **libs/shared/** — 最大15件の提案、低い重要度フィルター（安定性が重要）
-- **infra/** — 最大3件の提案、高い重要度フィルター（少なくても重要なもの）
+- **apps/web/** — **Medium**（フロントエンドは速く変化する）
+- **libs/shared/** — **Low/All**（安定性が重要）
+- **infra/** — **High**（少なくても重要なもの）
 
 ## ステップ6 — 生成されたパスを除外する
 
