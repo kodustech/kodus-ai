@@ -44,6 +44,7 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
     // Default ECS protection time in minutes
     private readonly JOB_PROTECTION_MINUTES = 60;
     private activeJobs = 0;
+    private protectionSync: Promise<void> = Promise.resolve();
 
     constructor(
         @Inject(JOB_PROCESSOR_SERVICE_TOKEN)
@@ -285,9 +286,7 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
     ): Promise<void> {
         this.activeJobs++;
         try {
-            await this.taskProtectionService.protectTask(
-                this.JOB_PROTECTION_MINUTES,
-            );
+            await this.syncTaskProtection();
             return await this.processWorkflowJob(
                 consumerId,
                 queueName,
@@ -295,9 +294,32 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
                 amqpMsg,
             );
         } finally {
-            await this.taskProtectionService.unprotectTask();
             this.activeJobs--;
+            await this.syncTaskProtection();
         }
+    }
+
+    /**
+     * Task protection is per ECS task, not per job: it must stay on while
+     * ANY job runs. Unprotecting whenever one job finished left the task
+     * scale-in/deploy eligible with other jobs still in flight, and those
+     * were SIGKILLed mid-review.
+     *
+     * Calls are chained so protect/unprotect requests reach the ECS agent
+     * in order, and each one reads `activeJobs` when it runs — the last
+     * request always reflects the current state.
+     */
+    private syncTaskProtection(): Promise<void> {
+        this.protectionSync = this.protectionSync
+            .catch(() => undefined)
+            .then(() =>
+                this.activeJobs > 0
+                    ? this.taskProtectionService.protectTask(
+                          this.JOB_PROTECTION_MINUTES,
+                      )
+                    : this.taskProtectionService.unprotectTask(),
+            );
+        return this.protectionSync;
     }
 
     private async processWorkflowJob(

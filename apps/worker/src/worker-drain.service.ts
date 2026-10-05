@@ -37,6 +37,8 @@ export class WorkerDrainService implements OnApplicationShutdown {
             metadata: { signal, drainTimeoutMs: this.drainTimeoutMs },
         });
 
+        await this.cancelConsumers();
+
         try {
             // AmqpConnection.close():
             // - cancels all consumers (stop getting new messages)
@@ -68,5 +70,28 @@ export class WorkerDrainService implements OnApplicationShutdown {
                 error: error instanceof Error ? error : undefined,
             });
         }
+    }
+
+    /**
+     * AmqpConnection.close() claims to cancel consumers first, but it does
+     * so via ChannelWrapper.cancelAll(), which only knows consumers created
+     * through the wrapper. golevelup (<= 9.1.0) creates @RabbitSubscribe
+     * consumers on the raw amqplib channel inside addSetup, so cancelAll()
+     * cancels nothing and a draining worker keeps taking new jobs until
+     * SIGKILL. Cancel them explicitly through golevelup's own registry.
+     */
+    private async cancelConsumers(): Promise<void> {
+        const consumerTags = this.amqpConnection?.consumerTags ?? [];
+
+        const results = await Promise.allSettled(
+            consumerTags.map((tag) => this.amqpConnection!.cancelConsumer(tag)),
+        );
+        const failed = results.filter((r) => r.status === 'rejected').length;
+
+        this.logger.log({
+            message: 'Worker drain: RabbitMQ consumers cancelled',
+            context: WorkerDrainService.name,
+            metadata: { cancelled: consumerTags.length - failed, failed },
+        });
     }
 }
