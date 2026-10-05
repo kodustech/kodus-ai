@@ -823,12 +823,18 @@ export class PullRequestsService implements IPullRequestsService {
         });
 
         if (prLevelSuggestions && prLevelSuggestions.length > 0) {
-            await this.addPrLevelSuggestions(
-                pullRequest.number,
-                repository.name,
-                prLevelSuggestions,
-                organizationAndTeamData,
-            );
+            // Append to the record the identity lookup already resolved rather
+            // than looking it up again by repository name: in the #2059 scenario
+            // two repositories of one organization share a name, and a name
+            // lookup can return the OTHER repository's document, splitting this
+            // save's suggestions onto a foreign record (#2076 review).
+            await this.update(existingPR, {
+                prLevelSuggestions: [
+                    ...(existingPR.prLevelSuggestions ?? []),
+                    ...prLevelSuggestions,
+                ],
+                updatedAt: new Date().toISOString(),
+            });
         }
 
         return this.handleExistingPullRequest(
@@ -1074,11 +1080,20 @@ export class PullRequestsService implements IPullRequestsService {
         repository: any,
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<any> {
-        if (repository?.id) {
+        // The write paths store `repository.id?.toString()` on a Mixed path
+        // Mongoose does not cast, so a numeric provider id (GitHub webhook
+        // `repository.id`, GitLab `project.id`) must be stringified here too or
+        // the query never matches the stored value and the id key is a silent
+        // no-op (#2076 review).
+        const repositoryId = repository?.id
+            ? String(repository.id)
+            : undefined;
+
+        if (repositoryId) {
             const byId =
                 await this.pullRequestsRepository.findByNumberAndRepositoryId(
                     pullRequestNumber,
-                    repository.id,
+                    repositoryId,
                     organizationAndTeamData,
                 );
             if (byId) {
@@ -1087,11 +1102,29 @@ export class PullRequestsService implements IPullRequestsService {
         }
 
         if (repository?.name) {
-            return this.pullRequestsRepository.findByNumberAndRepositoryName(
-                pullRequestNumber,
-                repository.name,
-                organizationAndTeamData,
-            );
+            const byName =
+                await this.pullRequestsRepository.findByNumberAndRepositoryName(
+                    pullRequestNumber,
+                    repository.name,
+                    organizationAndTeamData,
+                );
+
+            // A name hit is this pull request's document only when the stored
+            // row carries no id (a legacy document) or carries THIS repository's
+            // id. A non-empty, different id means the row belongs to another
+            // repository that merely shares the name; updating it would rewrite
+            // its `repository.id` from this payload and hand it this save's
+            // suggestions — the cross-repository contamination of #2059
+            // (#2076 review).
+            const storedId = byName?.repository?.id;
+            const sameRepository =
+                !repositoryId ||
+                !storedId ||
+                String(storedId) === repositoryId;
+
+            if (byName && sameRepository) {
+                return byName;
+            }
         }
 
         this.logger.warn({
