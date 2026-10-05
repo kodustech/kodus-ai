@@ -423,6 +423,16 @@ describe('classifyLLMError', () => {
             // alternative ignored the underscore. "upstream" is not a status
             // keyword, so this must stay UNKNOWN rather than cascade.
             'cloudflare: upstream_530 reported by the edge',
+            // Annotation punctuation in front is a number / id / issue, not a
+            // status: every one of these introduces a value, not an HTTP code,
+            // so the bare alternative must refuse them just like a separator
+            // (#1898 review).
+            'issue #503 is still open in the tracker',
+            'the ledger entry $503 was rejected by the parser',
+            'branch {503 is unreachable during the walk',
+            'vlan (503 on the edge switch is down',
+            'selector value =503 was not found',
+            'connection on port :503 refused',
         ])('bare digit inside a larger number (%s) → not TRANSIENT', (msg) => {
             const err = new Error(msg);
             expect(classifyLLMError(err).category).not.toBe(
