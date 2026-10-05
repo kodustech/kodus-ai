@@ -72,9 +72,10 @@ describe('PullRequestsService.handleInitialPullRequest — E11000 race recovery 
         // Stub the two private helpers `handleInitialPullRequest` runs
         // before reaching `create()` — we don't care what they do for
         // this regression, only that they don't error out.
-        jest.spyOn(service as any, 'initializeCodeReviewStructure').mockResolvedValue(
-            { ...fakeStructure },
-        );
+        jest.spyOn(
+            service as any,
+            'initializeCodeReviewStructure',
+        ).mockResolvedValue({ ...fakeStructure });
         jest.spyOn(service as any, 'addFilesToStructure').mockImplementation(
             async (s: any) => s,
         );
@@ -159,7 +160,9 @@ describe('PullRequestsService.handleInitialPullRequest — E11000 race recovery 
         // Fallback returns null (e.g. lookup raced, or different
         // `repository.id` between webhooks). We do NOT silently swallow
         // — the error propagates so the caller can fail loudly.
-        pullRequestsRepository.findByNumberAndRepositoryId.mockResolvedValue(null);
+        pullRequestsRepository.findByNumberAndRepositoryId.mockResolvedValue(
+            null,
+        );
 
         await expect(callHandleInitial()).rejects.toBe(e11000);
     });
@@ -181,6 +184,97 @@ describe('PullRequestsService.handleInitialPullRequest — E11000 race recovery 
         const result = await callHandleInitial();
 
         expect(result).toBe(fresh);
+        expect(
+            pullRequestsRepository.findByNumberAndRepositoryId,
+        ).not.toHaveBeenCalled();
+    });
+});
+
+/**
+ * Regression test for issue #2059 — two repositories that share a name.
+ *
+ * The save path resolved the existing record with
+ * `findByNumberAndRepositoryName`, so two repositories of one organization
+ * whose names collide across owners or providers (GitLab
+ * `jairo.litman/kody-format-probe-1822` MR !2 and Bitbucket
+ * `wellingtonsantana01/kody-format-probe-1822` PR #2) landed on ONE document:
+ * the second save overwrote the first PR's suggestions and its feedback was
+ * never attributed. The unique index has always been
+ * `(number, repository.id, organizationId)` — the name was the wrong key, and
+ * `repository.name` is mutable besides (a renamed repository would miss too).
+ */
+describe('PullRequestsService.aggregateAndSaveDataStructure — existing-PR identity (issue #2059)', () => {
+    let service: PullRequestsService;
+    let pullRequestsRepository: any;
+
+    const stubRepository = {
+        id: 'repo-uuid-stable',
+        name: 'kody-format-probe-1822',
+    };
+    const stubOrg = {
+        organizationId: 'org-1',
+        teamId: 'team-1',
+    };
+
+    beforeEach(() => {
+        pullRequestsRepository = {
+            create: jest.fn(),
+            update: jest.fn(),
+            findByNumberAndRepositoryId: jest.fn().mockResolvedValue(null),
+            findByNumberAndRepositoryName: jest.fn().mockResolvedValue(null),
+        };
+
+        service = new PullRequestsService(
+            pullRequestsRepository as any,
+            {} as any,
+        );
+
+        // Only the identity lookup is under test: the helpers the save path
+        // runs before and after it are stubbed out.
+        jest.spyOn(
+            service as any,
+            'prefetchUsersForExtraction',
+        ).mockResolvedValue(undefined);
+        jest.spyOn(service as any, 'extractUser').mockResolvedValue(null);
+        jest.spyOn(service as any, 'extractUsers').mockResolvedValue([]);
+        jest.spyOn(
+            service as any,
+            'handleInitialPullRequest',
+        ).mockResolvedValue(null);
+        jest.spyOn(service as any, 'update').mockResolvedValue(null);
+    });
+
+    function callSave(repository: any) {
+        return (service as any).aggregateAndSaveDataStructure(
+            { number: 2, user: { username: 'someone' } },
+            repository,
+            [],
+            [],
+            [],
+            PlatformType.BITBUCKET,
+            stubOrg,
+            [],
+        );
+    }
+
+    it('looks the existing PR up by repository.id, never by repository.name', async () => {
+        await callSave(stubRepository);
+
+        expect(
+            pullRequestsRepository.findByNumberAndRepositoryId,
+        ).toHaveBeenCalledWith(2, stubRepository.id, stubOrg);
+        // A name match is what merged two repositories into one record.
+        expect(
+            pullRequestsRepository.findByNumberAndRepositoryName,
+        ).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the name only when the provider gave no repository id', async () => {
+        await callSave({ name: 'kody-format-probe-1822' });
+
+        expect(
+            pullRequestsRepository.findByNumberAndRepositoryName,
+        ).toHaveBeenCalledWith(2, 'kody-format-probe-1822', stubOrg);
         expect(
             pullRequestsRepository.findByNumberAndRepositoryId,
         ).not.toHaveBeenCalled();

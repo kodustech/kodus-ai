@@ -744,12 +744,24 @@ export class PullRequestsService implements IPullRequestsService {
             platformType,
         );
 
-        const existingPR =
-            await this.pullRequestsRepository.findByNumberAndRepositoryName(
-                pullRequest?.number,
-                repository.name,
-                organizationAndTeamData,
-            );
+        // Identity is the repository ID — the column the unique index
+        // (`number_1_repository.id_1_organizationId_1`) already enforces — not
+        // the repository name. Two repositories in one organization can share
+        // a name across owners or providers, and matching on the name merged
+        // their records: the second save overwrote the first PR's suggestions
+        // and left its feedback unattributed (#2059). The name is only a
+        // fallback for the providers that hand us no id.
+        const existingPR = repository?.id
+            ? await this.pullRequestsRepository.findByNumberAndRepositoryId(
+                  pullRequest?.number,
+                  repository.id,
+                  organizationAndTeamData,
+              )
+            : await this.pullRequestsRepository.findByNumberAndRepositoryName(
+                  pullRequest?.number,
+                  repository?.name,
+                  organizationAndTeamData,
+              );
 
         if (!existingPR) {
             return this.handleInitialPullRequest(
