@@ -55,17 +55,19 @@ export function isRetryTarget(
     return RETRY_TARGET_EXCHANGES.includes(exchange as RetryTargetExchange);
 }
 
-/** The type the app topology declares the exchange with; one source of truth. */
+/** The type each exchange is declared with in the app topology; one source of truth. */
+const DECLARED_EXCHANGE_TYPES = new Map<string, string>(
+    RABBITMQ_TOPOLOGY_CONFIG.exchanges.map((e) => [e.name, e.type]),
+);
+
 function declaredType(exchange: RetryTargetExchange): string {
-    const declared = RABBITMQ_TOPOLOGY_CONFIG.exchanges.find(
-        (e) => e.name === exchange,
-    );
-    if (!declared) {
+    const type = DECLARED_EXCHANGE_TYPES.get(exchange);
+    if (!type) {
         throw new Error(
             `Retry target ${exchange} is not declared in RABBITMQ_TOPOLOGY_CONFIG`,
         );
     }
-    return declared.type;
+    return type;
 }
 
 /**
