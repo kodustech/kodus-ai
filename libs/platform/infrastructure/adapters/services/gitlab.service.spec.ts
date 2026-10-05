@@ -686,6 +686,51 @@ describe('GitlabService', () => {
             delete process.env.API_GITLAB_CODE_MANAGEMENT_WEBHOOK;
         });
 
+        it('serializes two overlapping saves so the newest observation is the last write', async () => {
+            // A double click on Save, a retry, two tabs: each fires
+            // createMergeRequestWebhook unawaited, and each run replaces the
+            // whole stored set. Without a queue the run that STARTED first can
+            // finish last and overwrite the newer observation — a phantom
+            // failure for a project whose hook now exists, or a fresh failure
+            // erased by the stale write (#2003 review).
+            const { createOrUpdateConfig } = setUpWebhookCreation({
+                repositories: [{ id: 11 }],
+                add: jest.fn().mockResolvedValue({}),
+            });
+            const order: string[] = [];
+            let releaseFirst: (() => void) | undefined;
+            const firstGate = new Promise<void>((resolve) => {
+                releaseFirst = resolve;
+            });
+            let writeCount = 0;
+            createOrUpdateConfig.mockImplementation(async () => {
+                writeCount += 1;
+                const id = writeCount;
+                order.push(`start-${id}`);
+                if (id === 1) await firstGate;
+                order.push(`end-${id}`);
+            });
+
+            const first = service.createMergeRequestWebhook({
+                organizationAndTeamData,
+            });
+            const second = service.createMergeRequestWebhook({
+                organizationAndTeamData,
+            });
+            // Let both runs reach the write.
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            await new Promise((resolve) => setTimeout(resolve, 0));
+
+            // The second write must not start while the first is in flight:
+            // that is what makes the newer observation the surviving one.
+            expect(order).toEqual(['start-1']);
+
+            releaseFirst?.();
+            await Promise.all([first, second]);
+
+            expect(order).toEqual(['start-1', 'end-1', 'start-2', 'end-2']);
+        });
+
         it('records a failure for every selected project when auth resolution fails', async () => {
             // An expired or revoked token fails for every project at once: the
             // alert has to name them all, otherwise the silent failure #1983 is

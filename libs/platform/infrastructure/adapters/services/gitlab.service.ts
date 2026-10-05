@@ -131,6 +131,39 @@ const AWARD_EMOJI_CONCURRENCY = 5;
  */
 const GITLAB_MAX_PER_PAGE = 100;
 
+/**
+ * Serializes the webhook-failure writes per organization+team, in call order.
+ *
+ * `createMergeRequestWebhook` is fired unawaited (two tabs, a double click on
+ * Save, a retry), so two overlapping reconciliations of the SAME selection
+ * would otherwise race on one stored value and the run that STARTED first could
+ * finish last, replacing a newer observation with an older one: a phantom
+ * failure for a repository whose hook now exists, or a fresh failure erased by
+ * the stale write. Queuing the writes in call order makes the last observation
+ * win (#2003 review).
+ *
+ * Module scope, not an instance field: the service can be request-scoped, and
+ * the two saves that race are two requests.
+ */
+const webhookFailureWrites = new Map<string, Promise<void>>();
+
+function queueWebhookFailureWrite(
+    key: string,
+    write: () => Promise<void>,
+): Promise<void> {
+    const previous = webhookFailureWrites.get(key) ?? Promise.resolve();
+    const next = previous
+        .catch(() => undefined)
+        .then(write)
+        .finally(() => {
+            if (webhookFailureWrites.get(key) === next) {
+                webhookFailureWrites.delete(key);
+            }
+        });
+    webhookFailureWrites.set(key, next);
+    return next;
+}
+
 @Injectable()
 @IntegrationServiceDecorator(PlatformType.GITLAB, 'codeManagement')
 export class GitlabService implements Omit<
@@ -3177,17 +3210,25 @@ export class GitlabService implements Omit<
                 metadata: { organizationAndTeamData },
             });
 
-            await this.recordWebhookCreationFailures(
-                organizationAndTeamData,
-                failures,
+            await queueWebhookFailureWrite(
+                this.webhookFailureWriteKey(organizationAndTeamData),
+                () =>
+                    this.recordWebhookCreationFailures(
+                        organizationAndTeamData,
+                        failures,
+                    ),
             );
             return;
         }
 
         if (this.sameSelection(selection, currentRepositories)) {
-            await this.recordWebhookCreationFailures(
-                organizationAndTeamData,
-                failures,
+            await queueWebhookFailureWrite(
+                this.webhookFailureWriteKey(organizationAndTeamData),
+                () =>
+                    this.recordWebhookCreationFailures(
+                        organizationAndTeamData,
+                        failures,
+                    ),
             );
             return;
         }
@@ -3199,6 +3240,14 @@ export class GitlabService implements Omit<
             serviceName: 'GitlabService createMergeRequestWebhook',
             metadata: { organizationAndTeamData },
         });
+    }
+
+    /** The write queue is per organization AND team: two teams of one
+     * organization reconcile different selections. */
+    private webhookFailureWriteKey(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): string {
+        return `${organizationAndTeamData?.organizationId ?? ''}:${organizationAndTeamData?.teamId ?? ''}`;
     }
 
     private describeWebhookCreationFailure(error: any): string {

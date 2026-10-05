@@ -55,7 +55,13 @@ export default async function GitSettings() {
             getIntegrationConfig({ teamId }),
             getAutoLicenseAssignmentConfig().catch(() => undefined),
             getOrganizationMembers({ teamId }).catch(() => MEMBERS_UNAVAILABLE),
-            getWebhookCreationFailures(teamId).catch(() => ({})),
+            // Not swallowed: an empty payload reads as "this team has no
+            // webhook failures", which is the healthy answer the endpoint
+            // exists to distinguish from a read that failed. The rejection
+            // falls into the catch below, so the page says the data could not
+            // be loaded instead of quietly rendering the healthy state
+            // (#2003 review).
+            getWebhookCreationFailures(teamId),
         ]);
     } catch (err) {
         console.error("[GitSettings] error fetching data:", err);
