@@ -77,9 +77,7 @@ describe('classifyLLMError', () => {
                 404,
             );
             const info = classifyLLMError(err, 'google_vertex');
-            expect(info.category).toBe(
-                LlmErrorCategory.MODEL_ACCESS_DENIED,
-            );
+            expect(info.category).toBe(LlmErrorCategory.MODEL_ACCESS_DENIED);
             expect(info.friendlyMessage).toMatch(/Model Garden/i);
         });
 
@@ -153,7 +151,11 @@ describe('classifyLLMError', () => {
             });
         }
 
-        function apiError(statusCode: number, message: string, responseBody?: string) {
+        function apiError(
+            statusCode: number,
+            message: string,
+            responseBody?: string,
+        ) {
             return new APICallError({
                 message,
                 url: 'https://llm.example.test/v1/chat/completions',
@@ -182,7 +184,7 @@ describe('classifyLLMError', () => {
             );
         });
 
-        it('classifies from the last attempt\'s response body', () => {
+        it("classifies from the last attempt's response body", () => {
             const err = exhausted(
                 apiError(
                     429,
@@ -234,14 +236,15 @@ describe('classifyLLMError', () => {
     });
 
     describe('message-string fallback (no HTTP status)', () => {
-        it.each(['model_not_found', 'No such model: x', 'The model x does not exist'])(
-            '"%s" → MODEL_NOT_FOUND',
-            (message) => {
-                expect(classifyLLMError(new Error(message)).category).toBe(
-                    LlmErrorCategory.MODEL_NOT_FOUND,
-                );
-            },
-        );
+        it.each([
+            'model_not_found',
+            'No such model: x',
+            'The model x does not exist',
+        ])('"%s" → MODEL_NOT_FOUND', (message) => {
+            expect(classifyLLMError(new Error(message)).category).toBe(
+                LlmErrorCategory.MODEL_NOT_FOUND,
+            );
+        });
 
         // The review path rebuilds the error from the harness trace as a plain
         // Error, so the status can be gone and only the SDK's text survives.
@@ -401,6 +404,19 @@ describe('classifyLLMError', () => {
             'Failed: request id req_a503b on the model call',
             'the deployment 05d503ee45x is not reachable',
             'blob payload ...d504e2f... failed to parse',
+            // Same class with a `_`, `-`, `.` or `/` in front: `req_503ab`,
+            // `trace-503x`, `blob_503f` and a URL path segment are id/hash
+            // fragments, not statuses. Only the explicit-keyword alternative
+            // (http/err/error/status/code) may read a status across a
+            // separator (#1898 review).
+            'Failed: request id req_503ab on the model call',
+            'trace-503x rejected the call',
+            'blob_503f could not be parsed',
+            'docs https://cdn.example.com/releases/503 failed to parse',
+            // `cloudflare: upstream_530` used to match only because the first
+            // alternative ignored the underscore. "upstream" is not a status
+            // keyword, so this must stay UNKNOWN rather than cascade.
+            'cloudflare: upstream_530 reported by the edge',
         ])('bare digit inside a larger number (%s) → not TRANSIENT', (msg) => {
             const err = new Error(msg);
             expect(classifyLLMError(err).category).not.toBe(
@@ -409,13 +425,13 @@ describe('classifyLLMError', () => {
         });
 
         it.each([
-            // The status is often glued to letters or an underscore rather than
+            // The status is often glued to letters or a separator rather than
             // surrounded by whitespace. Word boundaries are defined over
             // [A-Za-z0-9_], so `\b` rejected these and they fell back to
-            // UNKNOWN — which never triggers the BYOK fallback.
+            // UNKNOWN — which never triggers the BYOK fallback. A separator is
+            // only read as part of a status behind one of these keywords.
             'upstream responded HTTP_503',
             'proxy hop failed: ERR_502',
-            'cloudflare: upstream_530 reported by the edge',
             'gateway returned http504',
             'connect failed with 502badgateway via the mesh proxy',
         ])('status glued to a word (%s) → TRANSIENT', (msg) => {
@@ -520,7 +536,9 @@ describe('classifyLLMError', () => {
             });
             const msg = classifyLLMError(err).friendlyMessage;
             expect(msg).toContain('**To resolve, choose one:**');
-            expect(msg.split('\n').filter((l) => l.startsWith('- ')).length).toBe(3);
+            expect(
+                msg.split('\n').filter((l) => l.startsWith('- ')).length,
+            ).toBe(3);
         });
     });
 });
@@ -547,16 +565,18 @@ describe('isTerminalCategory', () => {
 
 describe('llmErrorLogLevel', () => {
     it('terminal BYOK billing (suspended account) → warn', () => {
-        const err = new Error('Account xxx is suspended, spending limit reached');
+        const err = new Error(
+            'Account xxx is suspended, spending limit reached',
+        );
         expect(llmErrorLogLevel(err)).toBe('warn');
     });
     it('auth-invalid → warn', () => {
         expect(llmErrorLogLevel(errorWithStatus('nope', 401))).toBe('warn');
     });
     it('unknown / genuine fault → error', () => {
-        expect(llmErrorLogLevel(new Error('TypeError: x is not a function'))).toBe(
-            'error',
-        );
+        expect(
+            llmErrorLogLevel(new Error('TypeError: x is not a function')),
+        ).toBe('error');
     });
 });
 
