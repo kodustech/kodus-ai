@@ -96,6 +96,20 @@ describe('BusinessLogicValidationStage — input contract', () => {
         });
     });
 
+    it('leaves no timeout pending once the agent has answered', async () => {
+        jest.useFakeTimers();
+        try {
+            passGate();
+
+            await stage.execute(buildContext());
+
+            expect(agent.execute).toHaveBeenCalledTimes(1);
+            expect(jest.getTimerCount()).toBe(0);
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
     it('passes org + BYOK override + prepareContext to the agent (the LLM input contract)', async () => {
         passGate();
         const context = buildContext();

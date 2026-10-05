@@ -194,12 +194,13 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
                 },
             });
 
-            const timeoutPromise = new Promise<never>((_, reject) =>
-                setTimeout(
+            let timeout: NodeJS.Timeout | undefined;
+            const timeoutPromise = new Promise<never>((_, reject) => {
+                timeout = setTimeout(
                     () => reject(new Error('BusinessLogicValidation timeout')),
                     BusinessLogicValidationStage.TIMEOUT_MS,
-                ),
-            );
+                );
+            });
 
             const agentPromise =
                 this.businessRulesValidationAgentProvider.execute({
@@ -214,7 +215,10 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
                     byokModelId: context.codeReviewConfig?.byokModelId,
                 });
 
-            const result = await Promise.race([agentPromise, timeoutPromise]);
+            const result = await Promise.race([
+                agentPromise,
+                timeoutPromise,
+            ]).finally(() => clearTimeout(timeout));
 
             // [diag] What the agent returned — the decisive signal: the
             // NO_TASK_MCP sentinel (preflight found no task-management MCP), the
