@@ -1271,7 +1271,7 @@ describe('KodyRulesSyncService — stale deletion snapshots', () => {
                 kind === 'ide'
                     ? await service.transitionIdeSyncRulesStatus({
                           organizationAndTeamData: org,
-                          repositoryId: 'repo-1',
+                          repositoryIds: ['repo-1'],
                           targetStatus: KodyRulesStatus.DELETED,
                       })
                     : await service.purgeGlobalRulesForSourceRepository({
@@ -1412,5 +1412,62 @@ describe('KodyRulesSyncService.countIdeSyncRulesInheritingGlobal', () => {
         await expect(
             service.countIdeSyncRulesInheritingGlobal(ORG),
         ).resolves.toEqual({ active: 0, paused: 0, deleted: 0, pinned: 0 });
+    });
+});
+
+describe('KodyRulesSyncService — bulk IDE rule transitions across repositories', () => {
+    const ORG = { organizationId: 'org-1', teamId: 'team-1' };
+
+    const ideRule = (repositoryId: string) => ({
+        uuid: `rule-${repositoryId}`,
+        repositoryId,
+        sourcePath: '.cursorrules',
+        status: KodyRulesStatus.ACTIVE,
+    });
+
+    const makeService = () => {
+        const kodyRulesService = {
+            findByOrganizationId: jest.fn().mockResolvedValue({
+                rules: [ideRule('a'), ideRule('b'), ideRule('c')],
+            }),
+        };
+        const createOrUpdateKodyRulesUseCase = {
+            execute: jest.fn().mockResolvedValue({}),
+        };
+        const deps: any[] = new Array(KodyRulesSyncService.length).fill({});
+        deps[0] = kodyRulesService;
+        deps[5] = createOrUpdateKodyRulesUseCase;
+        const service = new (KodyRulesSyncService as any)(...deps);
+        return { service, kodyRulesService, createOrUpdateKodyRulesUseCase };
+    };
+
+    it('loads the organization rules once and pauses only the listed repositories', async () => {
+        const { service, kodyRulesService, createOrUpdateKodyRulesUseCase } =
+            makeService();
+
+        await service.pauseAllIdeSyncRulesForRepositories({
+            organizationAndTeamData: ORG,
+            repositoryIds: ['a', 'b'],
+        });
+
+        expect(kodyRulesService.findByOrganizationId).toHaveBeenCalledTimes(1);
+        const paused = createOrUpdateKodyRulesUseCase.execute.mock.calls.map(
+            ([dto]: [any]) => [dto.uuid, dto.status],
+        );
+        expect(paused).toEqual([
+            ['rule-a', KodyRulesStatus.PAUSED],
+            ['rule-b', KodyRulesStatus.PAUSED],
+        ]);
+    });
+
+    it('does nothing for an empty list', async () => {
+        const { service, kodyRulesService } = makeService();
+
+        await service.pauseAllIdeSyncRulesForRepositories({
+            organizationAndTeamData: ORG,
+            repositoryIds: [],
+        });
+
+        expect(kodyRulesService.findByOrganizationId).not.toHaveBeenCalled();
     });
 });

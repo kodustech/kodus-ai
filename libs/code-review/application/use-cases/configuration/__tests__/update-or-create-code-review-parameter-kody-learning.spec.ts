@@ -95,6 +95,29 @@ function build(globalConfigs: Record<string, unknown>, repos: RepoSeed[]) {
 
 describe('UpdateOrCreateCodeReviewParameterUseCase — Kody Rules learning inheritance', () => {
     describe('IDE rules sync turned off', () => {
+        it('on a global save, sends one cleanup for all the repos that flipped, not one per repo', async () => {
+            const { save, disabledEvents } = build(
+                { ideRulesSyncEnabled: true },
+                [
+                    { id: 'a' },
+                    { id: 'b' },
+                    { id: 'own-on', configs: { ideRulesSyncEnabled: true } },
+                ],
+            );
+
+            await save({
+                ideRulesSyncEnabled: false,
+                ideSyncDisableAction: 'delete',
+            });
+
+            expect(disabledEvents()).toEqual([
+                expect.objectContaining({
+                    repositoryIds: ['a', 'b'],
+                    action: 'delete',
+                }),
+            ]);
+        });
+
         it('on a global save, fires the cleanup for every repo that inherited "on", with the chosen action', async () => {
             const { save, disabledEvents } = build(
                 { ideRulesSyncEnabled: true },
@@ -112,7 +135,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — Kody Rules learning inher
 
             expect(disabledEvents()).toEqual([
                 expect.objectContaining({
-                    repositoryId: 'inherits',
+                    repositoryIds: ['inherits'],
                     action: 'pause',
                 }),
             ]);
@@ -131,7 +154,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — Kody Rules learning inher
 
             expect(disabledEvents()).toEqual([
                 expect.objectContaining({
-                    repositoryId: 'repo-1',
+                    repositoryIds: ['repo-1'],
                     action: 'delete',
                 }),
             ]);
@@ -149,7 +172,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — Kody Rules learning inher
 
             expect(disabledEvents()).toEqual([
                 expect.objectContaining({
-                    repositoryId: 'repo-1',
+                    repositoryIds: ['repo-1'],
                     action: 'keep',
                 }),
             ]);

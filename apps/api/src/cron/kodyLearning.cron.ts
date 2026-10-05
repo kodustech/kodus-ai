@@ -2,7 +2,7 @@ import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 
-import { resolveKodyLearningSettings } from '@libs/common/utils/kody-rules/kody-learning-settings';
+import { createKodyLearningSettingsResolver } from '@libs/common/utils/kody-rules/kody-learning-settings';
 import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
@@ -294,12 +294,11 @@ export class KodyLearningCronProvider {
             // does NOT gate on isSelected: right after onboarding repos sit in
             // the config with isSelected=false, and requiring it here meant the
             // cron never generated for a fresh team.
+            const resolveSettings = createKodyLearningSettingsResolver(
+                codeReviewConfig.configValue,
+            );
             const enabledRepos = repos.filter(
-                (repo) =>
-                    resolveKodyLearningSettings(
-                        codeReviewConfig.configValue,
-                        repo.id,
-                    ).kodyRulesGeneratorEnabled,
+                (repo) => resolveSettings(repo.id).kodyRulesGeneratorEnabled,
             );
 
             if (enabledRepos.length === 0) {

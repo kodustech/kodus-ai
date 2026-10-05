@@ -92,7 +92,7 @@ import {
     KODY_RULES_SERVICE_TOKEN,
 } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
 import { KodyRulesType } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
-import { resolveKodyLearningSettings } from '@libs/common/utils/kody-rules/kody-learning-settings';
+import { createKodyLearningSettingsResolver } from '@libs/common/utils/kody-rules/kody-learning-settings';
 import { GenerateInitialKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/generate-initial-kody-rules.use-case';
 import {
     InvalidGroupPathError,
@@ -867,16 +867,20 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                   String(repo.id),
               );
 
+        const resolveBefore =
+            createKodyLearningSettingsResolver(previousConfig);
+        const resolveAfter = createKodyLearningSettingsResolver(updatedConfig);
+        // Defaulting to 'keep' is deliberate: any caller that doesn't pass an
+        // explicit action gets the least destructive option, which avoids the
+        // silent-deletion regression.
+        const ideSyncDisableAction = params.ideSyncDisableAction ?? 'keep';
+        const ideSyncDisabledIds: string[] = [];
+
         for (const id of repositoryIds) {
-            const before = resolveKodyLearningSettings(previousConfig, id);
-            const after = resolveKodyLearningSettings(updatedConfig, id);
+            const before = resolveBefore(id);
+            const after = resolveAfter(id);
 
             if (before.ideRulesSyncEnabled && !after.ideRulesSyncEnabled) {
-                // Defaulting to 'keep' is deliberate: any caller that doesn't
-                // pass an explicit action gets the least destructive option,
-                // which avoids the silent-deletion regression.
-                const action = params.ideSyncDisableAction ?? 'keep';
-
                 this.logger.log({
                     message: 'IDE rules sync turned off for repository',
                     context: UpdateOrCreateCodeReviewParameterUseCase.name,
@@ -884,16 +888,10 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                         organizationAndTeamData,
                         repositoryId: id,
                         level,
-                        action,
+                        action: ideSyncDisableAction,
                     },
                 });
-
-                const event: IdeRulesSyncDisabledEvent = {
-                    organizationAndTeamData,
-                    repositoryId: id,
-                    action,
-                };
-                this.eventEmitter.emit(IDE_RULES_SYNC_DISABLED_EVENT, event);
+                ideSyncDisabledIds.push(id);
             } else if (
                 !before.ideRulesSyncEnabled &&
                 after.ideRulesSyncEnabled
@@ -938,6 +936,17 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             ) {
                 this.seedInitialKodyRules(organizationAndTeamData, id);
             }
+        }
+
+        // One cleanup for the whole save: the listener loads the org's rules
+        // once instead of once per repository.
+        if (ideSyncDisabledIds.length > 0) {
+            const event: IdeRulesSyncDisabledEvent = {
+                organizationAndTeamData,
+                repositoryIds: ideSyncDisabledIds,
+                action: ideSyncDisableAction,
+            };
+            this.eventEmitter.emit(IDE_RULES_SYNC_DISABLED_EVENT, event);
         }
     }
 

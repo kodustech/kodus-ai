@@ -375,12 +375,12 @@ export type ImportedKodyRulesCounts = {
 
 export const getImportedKodyRulesCount = async (params: {
     repositoryId: string;
-    // Required for repositoryId "global": the count spans the repositories
-    // that inherit the team's global setting.
-    teamId?: string;
+    teamId: string;
 }): Promise<ImportedKodyRulesCounts> => {
-    const query = new URLSearchParams({ repositoryId: params.repositoryId });
-    if (params.teamId) query.set("teamId", params.teamId);
+    const query = new URLSearchParams({
+        repositoryId: params.repositoryId,
+        teamId: params.teamId,
+    });
     const url = `${KODY_RULES_PATHS.COUNT_IMPORTED_KODY_RULES}?${query.toString()}`;
     const result = await authorizedFetch<ImportedKodyRulesCounts>(url);
     return result ?? { active: 0, paused: 0, deleted: 0, pinned: 0 };

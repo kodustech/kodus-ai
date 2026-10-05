@@ -1,6 +1,21 @@
 import { CodeReviewParameter } from '@libs/core/infrastructure/config/types/general/codeReviewConfig.type';
 
-import { resolveKodyLearningSettings } from './kody-learning-settings';
+import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
+
+import {
+    createKodyLearningSettingsResolver,
+    resolveKodyLearningSettings,
+} from './kody-learning-settings';
+
+jest.mock('@libs/common/utils/validateCodeReviewConfigFile', () => {
+    const actual = jest.requireActual(
+        '@libs/common/utils/validateCodeReviewConfigFile',
+    );
+    return {
+        ...actual,
+        getDefaultKodusConfigFile: jest.fn(actual.getDefaultKodusConfigFile),
+    };
+});
 
 const buildConfig = (
     globalConfigs: Record<string, unknown>,
@@ -128,5 +143,41 @@ describe('resolveKodyLearningSettings', () => {
         expect(
             resolveKodyLearningSettings(config, '123').ideRulesSyncEnabled,
         ).toBe(true);
+    });
+});
+
+describe('createKodyLearningSettingsResolver', () => {
+    const config = buildConfig(
+        { ideRulesSyncEnabled: true, kodyLearningExcludedReviewers: ['bot'] },
+        [
+            { id: 'inherits', configs: {} },
+            {
+                id: 'own',
+                configs: {
+                    ideRulesSyncEnabled: false,
+                    kodyRulesGeneratorEnabled: false,
+                },
+            },
+        ],
+    );
+
+    it('resolves every repository the same way as resolveKodyLearningSettings', () => {
+        const resolve = createKodyLearningSettingsResolver(config);
+
+        for (const id of ['inherits', 'own', 'unknown']) {
+            expect(resolve(id)).toEqual(
+                resolveKodyLearningSettings(config, id),
+            );
+        }
+    });
+
+    it('reads the default config once, however many repositories it resolves', () => {
+        const getDefaults = jest.mocked(getDefaultKodusConfigFile);
+        getDefaults.mockClear();
+
+        const resolve = createKodyLearningSettingsResolver(config);
+        ['inherits', 'own', 'unknown', 'inherits'].forEach((id) => resolve(id));
+
+        expect(getDefaults).toHaveBeenCalledTimes(1);
     });
 });

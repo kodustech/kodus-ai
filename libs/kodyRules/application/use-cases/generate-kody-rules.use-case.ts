@@ -13,7 +13,7 @@ import {
     ICodeBaseConfigService,
 } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import { requiresKnowledgeApproval } from '@libs/common/utils/kody-rules/knowledge-approval';
-import { resolveKodyLearningSettings } from '@libs/common/utils/kody-rules/kody-learning-settings';
+import { createKodyLearningSettingsResolver } from '@libs/common/utils/kody-rules/kody-learning-settings';
 import { with429Retry } from '@libs/core/infrastructure/http/rate-limit-retry';
 import { GenerateKodyRulesDTO } from '@libs/core/domain/dtos/generate-kody-rules.dto';
 
@@ -895,13 +895,15 @@ export class GenerateKodyRulesUseCase {
                 organizationAndTeamData,
             );
 
+            const resolveSettings = createKodyLearningSettingsResolver(
+                codeReviewConfig?.configValue,
+            );
+
             return {
                 forRepo: (repositoryId: string) =>
                     toSet(
-                        resolveKodyLearningSettings(
-                            codeReviewConfig?.configValue,
-                            repositoryId,
-                        ).kodyLearningExcludedReviewers,
+                        resolveSettings(repositoryId)
+                            .kodyLearningExcludedReviewers,
                     ),
             };
         } catch (error) {

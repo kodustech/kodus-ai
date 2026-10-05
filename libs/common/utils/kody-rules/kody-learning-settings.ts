@@ -8,35 +8,57 @@ export type KodyLearningSettings = {
     kodyLearningExcludedReviewers: string[];
 };
 
-/**
- * The learning settings a repository actually runs with: default → global →
- * repository. Directory-level values are ignored on purpose, because rule
- * generation and IDE rule-file sync both work per repository.
- */
-export function resolveKodyLearningSettings(
-    codeReviewConfig:
-        | Pick<CodeReviewParameter, 'configs' | 'repositories'>
-        | null
-        | undefined,
-    repositoryId: string,
-): KodyLearningSettings {
-    const repository = codeReviewConfig?.repositories?.find(
-        (repo) => String(repo.id) === String(repositoryId),
-    );
+type CodeReviewConfigLike =
+    Pick<CodeReviewParameter, 'configs' | 'repositories'> | null | undefined;
 
-    const resolved = deepMerge<Record<string, unknown>>(
+/**
+ * Resolves the learning settings repositories actually run with: default →
+ * global → repository. Directory-level values are ignored on purpose, because
+ * rule generation and IDE rule-file sync both work per repository.
+ *
+ * The defaults and the global level are merged once, so callers resolving
+ * many repositories should build one resolver and reuse it.
+ */
+export function createKodyLearningSettingsResolver(
+    codeReviewConfig: CodeReviewConfigLike,
+): (repositoryId: string) => KodyLearningSettings {
+    const resolvedGlobal = deepMerge<Record<string, unknown>>(
         getDefaultKodusConfigFile() as Record<string, unknown>,
         (codeReviewConfig?.configs ?? {}) as Record<string, unknown>,
-        (repository?.configs ?? {}) as Record<string, unknown>,
     );
 
-    return {
-        ideRulesSyncEnabled: resolved.ideRulesSyncEnabled === true,
-        kodyRulesGeneratorEnabled: resolved.kodyRulesGeneratorEnabled === true,
-        kodyLearningExcludedReviewers: Array.isArray(
-            resolved.kodyLearningExcludedReviewers,
-        )
-            ? (resolved.kodyLearningExcludedReviewers as unknown[]).map(String)
-            : [],
+    const repositoryConfigs = new Map<string, Record<string, unknown>>(
+        (codeReviewConfig?.repositories ?? []).map((repo) => [
+            String(repo.id),
+            (repo.configs ?? {}) as Record<string, unknown>,
+        ]),
+    );
+
+    return (repositoryId: string) => {
+        const resolved = deepMerge<Record<string, unknown>>(
+            resolvedGlobal,
+            repositoryConfigs.get(String(repositoryId)) ?? {},
+        );
+
+        return {
+            ideRulesSyncEnabled: resolved.ideRulesSyncEnabled === true,
+            kodyRulesGeneratorEnabled:
+                resolved.kodyRulesGeneratorEnabled === true,
+            kodyLearningExcludedReviewers: Array.isArray(
+                resolved.kodyLearningExcludedReviewers,
+            )
+                ? (resolved.kodyLearningExcludedReviewers as unknown[]).map(
+                      String,
+                  )
+                : [],
+        };
     };
+}
+
+/** Learning settings of a single repository. See the resolver above. */
+export function resolveKodyLearningSettings(
+    codeReviewConfig: CodeReviewConfigLike,
+    repositoryId: string,
+): KodyLearningSettings {
+    return createKodyLearningSettingsResolver(codeReviewConfig)(repositoryId);
 }

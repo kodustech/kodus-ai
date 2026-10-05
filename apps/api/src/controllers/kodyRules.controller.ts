@@ -979,7 +979,7 @@ export class KodyRulesController {
 
     @ApiBearerAuth('jwt')
     @Get('/imported/count')
-    @UseGuards(PolicyGuard)
+    @UseGuards(PolicyGuard, KodyRulesTenantGuard)
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -996,22 +996,16 @@ export class KodyRulesController {
             'orphan-rules banner.',
     })
     @ApiQuery({ name: 'repositoryId', type: String, required: true })
-    @ApiQuery({
-        name: 'teamId',
-        type: String,
-        required: false,
-        description: 'Required when repositoryId=global.',
-    })
+    @ApiQuery({ name: 'teamId', type: String, required: true })
     @ApiOkResponse({ type: ApiObjectResponseDto })
     public async countImportedRules(
         @Query('repositoryId') repositoryId: string,
-        @Query('teamId') teamIdParam?: string,
+        @Query('teamId') teamId: string,
     ) {
         const organizationId = this.request.user.organization.uuid;
         if (!organizationId) {
             throw new Error('Organization ID not found');
         }
-        const teamId = teamIdParam ?? (this.request.user as any).team?.uuid;
 
         return this.manageImportedKodyRulesUseCase.count({
             organizationAndTeamData: { organizationId, teamId },
