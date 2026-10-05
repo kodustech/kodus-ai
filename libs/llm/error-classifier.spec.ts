@@ -413,6 +413,12 @@ describe('classifyLLMError', () => {
             'trace-503x rejected the call',
             'blob_503f could not be parsed',
             'docs https://cdn.example.com/releases/503 failed to parse',
+            // Punctuation that only ever introduces a NUMBER or a base64 window:
+            // `1,503 tokens` is a count, and a standard-base64 blob carries
+            // `+`/`/`. Reading the triple as a status there would send a
+            // permanent failure down the paid fallback (#1898 review).
+            'the response mentioned 1,503 tokens before failing',
+            'payload QmFz+503 was rejected by the provider',
             // `cloudflare: upstream_530` used to match only because the first
             // alternative ignored the underscore. "upstream" is not a status
             // keyword, so this must stay UNKNOWN rather than cascade.

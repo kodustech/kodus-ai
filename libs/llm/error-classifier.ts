@@ -414,12 +414,12 @@ function matchByMessage(lower: string): LlmErrorCategory {
         // letter/separator adjacency ONLY when it sits behind an explicit
         // status keyword (`HTTP_503`, `ERR_502`, `http504`, `status: 530`,
         // `code_503`). A bare digit glued to arbitrary letters or a separator
-        // is a request id, hash, URL path or base64 blob (`req_a503b`,
-        // `req_503ab`, `trace-503x`, `...d503e...`, `/releases/503`), NOT a
-        // status — matching it would mis-classify a permanent failure as
+        // is a request id, hash, URL path, base64 blob or a thousands-separated
+        // number (`req_a503b`, `req_503ab`, `trace-503x`, `...d503e...`,
+        // `/releases/503`, `1,503 tokens`, `+503`), NOT a status — matching it would mis-classify a permanent failure as
         // TRANSIENT, wrongly cascade to the paid fallback and surface a wrong
         // message (#1875, #1898 review).
-        /(?<![a-z0-9_./-])(?:502|503|504|530)(?!\d)|(?<![a-z0-9])(?:http|err|error|status|code)[_-]?(?:502|503|504|530)(?!\d)/.test(
+        /(?<![a-z0-9_./,+-])(?:502|503|504|530)(?!\d)|(?<![a-z0-9])(?:http|err|error|status|code)[_-]?(?:502|503|504|530)(?!\d)/.test(
             lower,
         )
     ) {
