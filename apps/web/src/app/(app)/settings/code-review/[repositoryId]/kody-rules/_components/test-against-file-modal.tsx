@@ -22,7 +22,7 @@ type TestAgainstFileModalProps = {
 };
 
 // "Will any of these rules fire on this file?" — debug helper for the
-// quintoandar-style scope leak. The user pastes a repo-relative file
+// customer-reported scope leak. The user pastes a repo-relative file
 // path and immediately sees which rules would match it (and which ones
 // would not). Pure client-side: re-uses the same minimatch options the
 // backend pipeline applies.

@@ -508,7 +508,7 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
         expect(lastCall.previousDecisions).toBe(previousDecisions);
     });
 
-    // ── language resolution + forwarding (Starian GitLab MR !16111) ──────────
+    // ── language resolution + forwarding (customer-reported) ──────────
     // The sharded judge's system prompts have zero language templating on
     // their own; execute() must resolve `input.languageResultPrompt` via the
     // SAME `resolveLanguageLabel` helper the other review agents use

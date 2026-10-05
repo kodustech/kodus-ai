@@ -2,7 +2,7 @@
 
 ## Contexto
 
-Investigação Physitrack (2026-07): recall de kody rules limitado pela **detecção do judge**,
+Investigação de cliente (2026-07): recall de kody rules limitado pela **detecção do judge**,
 não pelos filtros (fase1==fase2 medido). Experimento validado no eval
 (`evals/kody-rules/summarize-rules.js` + `rails-convention-cases-summarized.json`):
 rules >1000 chars pré-processadas em **"WHAT TO VALIDATE / HOW TO VALIDATE"**
@@ -29,7 +29,7 @@ Variantes testadas e **rejeitadas** (não repetir): exemplos antes da descriçã
    - No write (create/update/import): hook fire-and-forget no choke point
      `libs/ee/kodyRules/service/kodyRules.service.ts` (todos os caminhos convergem ali).
      Update que encurta a rule (≤1000) limpa `summary`.
-   - Lazy backfill na review (cobre legado, ex.: 27 rules Physitrack): rule longa sem
+   - Lazy backfill na review (cobre legado, ex.: 27 rules de um cliente): rule longa sem
      summary válido → gera + persiste + usa na própria execução. Concorrência limitada (3).
      Falha de geração → usa texto integral, review nunca bloqueia.
 5. **Política de modelo** (mesma da review): BYOK main → sem BYOK+trial: managed →
@@ -50,4 +50,4 @@ Variantes testadas e **rejeitadas** (não repetir): exemplos antes da descriçã
 
 - Unit specs acima.
 - Regressão: matriz do eval análogo (`run-full-pipeline.js`) — números devem bater com o v1.
-- Pós-deploy: log de hash-mismatch monitorável; primeira review da Physitrack popula os summaries.
+- Pós-deploy: log de hash-mismatch monitorável; primeira review do cliente popula os summaries.

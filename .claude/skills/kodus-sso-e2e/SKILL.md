@@ -16,7 +16,7 @@ and which failed, with the exact failure surface.
 
 - User asks to validate SSO is still working after code changes.
 - User wants confidence that both SaaS deployments (`*.kodus.io`) and
-  self-hosted deployments (`*.web.scorpion.co`-style) still authenticate.
+  self-hosted deployments (`*.web.acme.co`-style) still authenticate.
 - Pre-merge / pre-release sanity check on changes that touch the SSO
   callback path, cookie domain derivation, or the `/sso-callback` page.
 - After bumping `passport-saml`, `next-auth`, `@nestjs/passport`.
@@ -132,11 +132,11 @@ To **prove the cookie domain was computed correctly**, two options
 ### 6) Multi-shape coverage (only when explicitly requested)
 
 The default shape is `kodus.lvh.me` (3-label common parent — analog
-of cloud `.kodus.io`). To also exercise the Dmitry shape (4-label
-common parent — analog of `.web.scorpion.co`):
+of cloud `.kodus.io`). To also exercise the self-hosted shape (4-label
+common parent — analog of `.web.acme.co`):
 
 ```sh
-SSO_E2E_DOMAIN=web.scorpion.lvh.me ./scripts/sso-e2e/run.sh
+SSO_E2E_DOMAIN=web.acme.lvh.me ./scripts/sso-e2e/run.sh
 ```
 
 Same mkcert wildcard cert covers both shapes; same Caddy; same

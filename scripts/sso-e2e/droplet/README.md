@@ -12,7 +12,7 @@ Why this exists alongside the local `scripts/sso-e2e/run.sh`:
   cert chain, real DNS, and >4-label common-parent shapes are never exercised.
 - Cloud VM mode lights up a 6-label common parent (`.<IP>.sslip.io`) which
   is the deepest production-realistic shape — strictly stricter than the
-  3-label `.kodus.io` (SaaS) and 4-label `.web.scorpion.co` (Dmitry) cases.
+  3-label `.kodus.io` (SaaS) and 4-label `.web.acme.co` (customer) cases.
 
 ## What you need before running
 

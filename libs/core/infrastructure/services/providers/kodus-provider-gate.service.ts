@@ -17,7 +17,7 @@ import { isKodusProviderAvailable } from './kodus-provider-availability';
  *   2. rollout — the `kodus-provider` feature in the catalog is at stage
  *      `alpha`, so an org must be on the alpha release track AND be
  *      allow-listed on the PostHog flag's release conditions. That is where
- *      the private-alpha list lives (Kodus's own org, ClickBus, …) — never
+ *      the private-alpha list lives (Kodus's own org, a few customers, …) — never
  *      customer ids in the repo.
  *
  * Every org-facing surface asks this one service: the provider picker, the

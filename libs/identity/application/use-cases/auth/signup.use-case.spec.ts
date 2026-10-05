@@ -68,7 +68,7 @@ describe('SignUpUseCase — user status when joining an existing org', () => {
         const deps = buildDeps();
         await buildUseCase(deps).execute(
             {
-                email: 'sso-user@scorpion.co',
+                email: 'sso-user@acme.co',
                 name: 'SSO User',
                 password: 'random-bytes',
                 organizationId: 'org-1',
@@ -119,7 +119,7 @@ describe('SignUpUseCase — user status when joining an existing org', () => {
             deps.organizationService.findOne.mockResolvedValue(null);
 
             await buildUseCase(deps).execute({
-                email: 'owner@scorpion.co',
+                email: 'owner@acme.co',
                 name: 'Owner',
                 password: 'random-bytes',
             } as any);

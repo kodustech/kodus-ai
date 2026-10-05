@@ -84,7 +84,7 @@ function makeService(): {
 
     // Bypass the auth + octokit creation paths — these touch DB / network
     jest.spyOn(service as any, 'getGithubAuthDetails').mockResolvedValue({
-        org: 'quintoandar',
+        org: 'acme',
     });
     jest.spyOn(service as any, 'instanceOctokit').mockResolvedValue(
         octokit as any,
@@ -111,7 +111,7 @@ describe('GithubService — cache layer (commit b7606bb5c)', () => {
             expect(result).toBe('main');
             expect(octokit.repos.get).toHaveBeenCalledTimes(1);
             expect(octokit.repos.get).toHaveBeenCalledWith({
-                owner: 'quintoandar',
+                owner: 'acme',
                 repo: 'backend-services',
             });
         });

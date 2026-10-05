@@ -15,7 +15,7 @@ import { AuthController } from '../auth.controller';
  *
  * If a future refactor breaks the wiring (e.g. someone re-hardcodes
  * `.kodus.io` or drops the host argument), this spec fails on the
- * Dmitry / self-hosted shape — the exact regression we just fixed.
+ * Self-hosted shape — the exact regression we just fixed.
  */
 describe('AuthController.ssoCallback — SSO handoff cookie Domain', () => {
     let controller: AuthController;
@@ -119,24 +119,24 @@ describe('AuthController.ssoCallback — SSO handoff cookie Domain', () => {
         });
     });
 
-    describe('self-hosted topology (Dmitry repro)', () => {
-        it('sets Domain=.web.scorpion.co for the original Dmitry host shape in production', async () => {
+    describe('self-hosted topology (customer repro)', () => {
+        it('sets Domain=.web.acme.co for the original customer host shape in production', async () => {
             const r = await callSsoCallback({
-                apiHost: 'kodus-api-dev.web.scorpion.co',
-                frontendUrl: 'https://kodus-dev.web.scorpion.co',
+                apiHost: 'kodus-api-dev.web.acme.co',
+                frontendUrl: 'https://kodus-dev.web.acme.co',
                 nodeEnv: 'production',
             });
-            expect(r.cookieOptions.domain).toBe('.web.scorpion.co');
+            expect(r.cookieOptions.domain).toBe('.web.acme.co');
             expect(r.cookieOptions.secure).toBe(true);
             expect(r.redirectUrl).toBe(
-                'https://kodus-dev.web.scorpion.co/sso-callback',
+                'https://kodus-dev.web.acme.co/sso-callback',
             );
         });
 
         it('does NOT regress to a hardcoded .kodus.io for non-kodus deployments', async () => {
             const r = await callSsoCallback({
-                apiHost: 'kodus-api-dev.web.scorpion.co',
-                frontendUrl: 'https://kodus-dev.web.scorpion.co',
+                apiHost: 'kodus-api-dev.web.acme.co',
+                frontendUrl: 'https://kodus-dev.web.acme.co',
                 nodeEnv: 'production',
             });
             expect(r.cookieOptions.domain).not.toBe('.kodus.io');
