@@ -1,180 +1,160 @@
 {
-  "name": "jira-key-with-rovo",
-  "issue": "#1941",
-  "trackers": [
-    {
-      "integrationId": "atlassian-rovo-default",
-      "appName": "Atlassian Rovo",
-      "provider": "kodusmcp",
-      "category": "task-management",
-      "responseShape": "jira",
-      "tools": [
+    "name": "jira-key-with-rovo",
+    "issue": "#1941",
+    "trackers": [
         {
-          "name": "getAccessibleAtlassianResources",
-          "kind": "sites",
-          "inputSchema": {
-            "type": "object",
-            "properties": {}
-          }
-        },
-        {
-          "name": "getJiraIssue",
-          "kind": "get",
-          "idArg": "issueIdOrKey",
-          "description": "Get a Jira issue by key",
-          "inputSchema": {
-            "type": "object",
-            "properties": {
-              "cloudId": {
-                "type": "string"
-              },
-              "issueIdOrKey": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "cloudId",
-              "issueIdOrKey"
+            "integrationId": "atlassian-rovo-default",
+            "appName": "Atlassian Rovo",
+            "provider": "kodusmcp",
+            "category": "task-management",
+            "responseShape": "jira",
+            "tools": [
+                {
+                    "name": "getAccessibleAtlassianResources",
+                    "kind": "sites",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {}
+                    }
+                },
+                {
+                    "name": "getJiraIssue",
+                    "kind": "get",
+                    "idArg": "issueIdOrKey",
+                    "description": "Get a Jira issue by key",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "cloudId": {
+                                "type": "string"
+                            },
+                            "issueIdOrKey": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["cloudId", "issueIdOrKey"]
+                    }
+                },
+                {
+                    "name": "searchJiraIssuesUsingJql",
+                    "kind": "list",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "cloudId": {
+                                "type": "string"
+                            },
+                            "jql": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["cloudId", "jql"]
+                    }
+                },
+                {
+                    "name": "search",
+                    "kind": "list",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["query"]
+                    }
+                },
+                {
+                    "name": "createJiraIssue",
+                    "kind": "write",
+                    "description": "Create a new Jira issue in a given project",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "cloudId": {
+                                "type": "string"
+                            },
+                            "projectKey": {
+                                "type": "string"
+                            },
+                            "issueTypeName": {
+                                "type": "string"
+                            },
+                            "summary": {
+                                "type": "string"
+                            },
+                            "description": {
+                                "type": "string"
+                            }
+                        },
+                        "required": [
+                            "cloudId",
+                            "projectKey",
+                            "issueTypeName",
+                            "summary"
+                        ]
+                    }
+                },
+                {
+                    "name": "editJiraIssue",
+                    "kind": "write",
+                    "description": "Update the details of an existing Jira issue",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "cloudId": {
+                                "type": "string"
+                            },
+                            "issueIdOrKey": {
+                                "type": "string"
+                            },
+                            "fields": {
+                                "type": "object"
+                            }
+                        },
+                        "required": ["cloudId", "issueIdOrKey", "fields"]
+                    }
+                },
+                {
+                    "name": "addCommentToJiraIssue",
+                    "kind": "write",
+                    "description": "Adds a comment to an existing Jira issue",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "cloudId": {
+                                "type": "string"
+                            },
+                            "issueIdOrKey": {
+                                "type": "string"
+                            },
+                            "commentBody": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["cloudId", "issueIdOrKey", "commentBody"]
+                    }
+                }
+            ],
+            "extraWriteTools": ["transitionJiraIssue"],
+            "tasks": [
+                {
+                    "id": "REC-7",
+                    "title": "Scale servings",
+                    "description": "Cooks can change servings; amounts recalculate.",
+                    "acceptanceCriteria": [
+                        "Amounts are rounded to two decimals"
+                    ]
+                }
             ]
-          }
-        },
-        {
-          "name": "searchJiraIssuesUsingJql",
-          "kind": "list",
-          "inputSchema": {
-            "type": "object",
-            "properties": {
-              "cloudId": {
-                "type": "string"
-              },
-              "jql": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "cloudId",
-              "jql"
-            ]
-          }
-        },
-        {
-          "name": "search",
-          "kind": "list",
-          "inputSchema": {
-            "type": "object",
-            "properties": {
-              "query": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "query"
-            ]
-          }
-        },
-        {
-          "name": "createJiraIssue",
-          "kind": "write",
-          "description": "Create a new Jira issue in a given project",
-          "inputSchema": {
-            "type": "object",
-            "properties": {
-              "cloudId": {
-                "type": "string"
-              },
-              "projectKey": {
-                "type": "string"
-              },
-              "issueTypeName": {
-                "type": "string"
-              },
-              "summary": {
-                "type": "string"
-              },
-              "description": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "cloudId",
-              "projectKey",
-              "issueTypeName",
-              "summary"
-            ]
-          }
-        },
-        {
-          "name": "editJiraIssue",
-          "kind": "write",
-          "description": "Update the details of an existing Jira issue",
-          "inputSchema": {
-            "type": "object",
-            "properties": {
-              "cloudId": {
-                "type": "string"
-              },
-              "issueIdOrKey": {
-                "type": "string"
-              },
-              "fields": {
-                "type": "object"
-              }
-            },
-            "required": [
-              "cloudId",
-              "issueIdOrKey",
-              "fields"
-            ]
-          }
-        },
-        {
-          "name": "addCommentToJiraIssue",
-          "kind": "write",
-          "description": "Adds a comment to an existing Jira issue",
-          "inputSchema": {
-            "type": "object",
-            "properties": {
-              "cloudId": {
-                "type": "string"
-              },
-              "issueIdOrKey": {
-                "type": "string"
-              },
-              "commentBody": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "cloudId",
-              "issueIdOrKey",
-              "commentBody"
-            ]
-          }
         }
-      ],
-      "extraWriteTools": [
-        "transitionJiraIssue"
-      ],
-      "tasks": [
-        {
-          "id": "REC-7",
-          "title": "Scale servings",
-          "description": "Cooks can change servings; amounts recalculate.",
-          "acceptanceCriteria": [
-            "Amounts are rounded to two decimals"
-          ]
-        }
-      ]
+    ],
+    "pullRequest": {
+        "title": "feat(REC-7): scale servings",
+        "body": "Implements REC-7."
+    },
+    "expect": {
+        "outcome": "validated",
+        "taskContains": ["rounded to two decimals"]
     }
-  ],
-  "pullRequest": {
-    "title": "feat(REC-7): scale servings",
-    "body": "Implements REC-7."
-  },
-  "expect": {
-    "outcome": "validated",
-    "taskContains": [
-      "rounded to two decimals"
-    ]
-  }
 }

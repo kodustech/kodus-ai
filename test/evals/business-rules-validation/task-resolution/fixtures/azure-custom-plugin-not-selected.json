@@ -1,138 +1,128 @@
 {
-  "name": "azure-custom-plugin-not-selected",
-  "issue": "#1884",
-  "trackers": [
-    {
-      "integrationId": "int-custom-azure",
-      "appName": "Azure DevOps",
-      "provider": "custom",
-      "category": null,
-      "responseShape": "azure",
-      "tools": [
+    "name": "azure-custom-plugin-not-selected",
+    "issue": "#1884",
+    "trackers": [
         {
-          "name": "wit_work_item",
-          "kind": "get",
-          "idArg": "id",
-          "readAction": "get",
-          "description": "Get or create a work item",
-          "inputSchema": {
-            "type": "object",
-            "properties": {
-              "action": {
-                "type": "string",
-                "enum": [
-                  "get",
-                  "create"
-                ]
-              },
-              "id": {
-                "type": "number"
-              },
-              "project": {
-                "type": "string"
-              },
-              "fields": {
-                "type": "object"
-              }
-            },
-            "required": [
-              "action"
+            "integrationId": "int-custom-azure",
+            "appName": "Azure DevOps",
+            "provider": "custom",
+            "category": null,
+            "responseShape": "azure",
+            "tools": [
+                {
+                    "name": "wit_work_item",
+                    "kind": "get",
+                    "idArg": "id",
+                    "readAction": "get",
+                    "description": "Get or create a work item",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "action": {
+                                "type": "string",
+                                "enum": ["get", "create"]
+                            },
+                            "id": {
+                                "type": "number"
+                            },
+                            "project": {
+                                "type": "string"
+                            },
+                            "fields": {
+                                "type": "object"
+                            }
+                        },
+                        "required": ["action"]
+                    }
+                },
+                {
+                    "name": "search_workitem",
+                    "kind": "list",
+                    "description": "Search work items by text",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "searchText": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["searchText"]
+                    }
+                },
+                {
+                    "name": "wit_list_backlogs",
+                    "kind": "list",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "project": {
+                                "type": "string"
+                            },
+                            "team": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["project", "team"]
+                    }
+                }
+            ],
+            "extraWriteTools": [
+                "wiki_upsert_page",
+                "repo_pull_request_thread_create",
+                "repo_create_branch",
+                "wit_update_work_item",
+                "wit_add_child_work_items",
+                "wit_create_work_item",
+                "testplan_create_plan_write",
+                "testplan_add_cases_write",
+                "testplan_update_case_write",
+                "testplan_create_suite_write",
+                "testplan_link_suite_write",
+                "pipelines_run",
+                "pipelines_cancel",
+                "pipelines_update",
+                "pipelines_create",
+                "pipelines_retry",
+                "work_create_iteration",
+                "work_assign_iteration",
+                "work_update_team",
+                "work_create_area",
+                "work_delete_area",
+                "repo_update_pull_request",
+                "repo_merge_pull_request",
+                "repo_delete_branch",
+                "repo_lock_branch",
+                "repo_add_reviewer",
+                "repo_remove_reviewer",
+                "repo_vote",
+                "wiki_create",
+                "wiki_delete_page",
+                "wiki_move_page",
+                "advsec_dismiss_alert",
+                "search_replace_code",
+                "release_create",
+                "release_delete",
+                "artifact_delete",
+                "wit_delete_work_item",
+                "wit_link_work_items"
+            ],
+            "tasks": [
+                {
+                    "id": "27",
+                    "title": "Scale servings",
+                    "description": "Cooks change servings and see amounts recalculated.",
+                    "acceptanceCriteria": [
+                        "Amounts are rounded to two decimals"
+                    ]
+                }
             ]
-          }
-        },
-        {
-          "name": "search_workitem",
-          "kind": "list",
-          "description": "Search work items by text",
-          "inputSchema": {
-            "type": "object",
-            "properties": {
-              "searchText": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "searchText"
-            ]
-          }
-        },
-        {
-          "name": "wit_list_backlogs",
-          "kind": "list",
-          "inputSchema": {
-            "type": "object",
-            "properties": {
-              "project": {
-                "type": "string"
-              },
-              "team": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "project",
-              "team"
-            ]
-          }
         }
-      ],
-      "extraWriteTools": [
-        "wiki_upsert_page",
-        "repo_pull_request_thread_create",
-        "repo_create_branch",
-        "wit_update_work_item",
-        "wit_add_child_work_items",
-        "wit_create_work_item",
-        "testplan_create_plan_write",
-        "testplan_add_cases_write",
-        "testplan_update_case_write",
-        "testplan_create_suite_write",
-        "testplan_link_suite_write",
-        "pipelines_run",
-        "pipelines_cancel",
-        "pipelines_update",
-        "pipelines_create",
-        "pipelines_retry",
-        "work_create_iteration",
-        "work_assign_iteration",
-        "work_update_team",
-        "work_create_area",
-        "work_delete_area",
-        "repo_update_pull_request",
-        "repo_merge_pull_request",
-        "repo_delete_branch",
-        "repo_lock_branch",
-        "repo_add_reviewer",
-        "repo_remove_reviewer",
-        "repo_vote",
-        "wiki_create",
-        "wiki_delete_page",
-        "wiki_move_page",
-        "advsec_dismiss_alert",
-        "search_replace_code",
-        "release_create",
-        "release_delete",
-        "artifact_delete",
-        "wit_delete_work_item",
-        "wit_link_work_items"
-      ],
-      "tasks": [
-        {
-          "id": "27",
-          "title": "Scale servings",
-          "description": "Cooks change servings and see amounts recalculated.",
-          "acceptanceCriteria": [
-            "Amounts are rounded to two decimals"
-          ]
-        }
-      ]
+    ],
+    "pullRequest": {
+        "title": "feat(AB#27): scale servings",
+        "body": "Implements AB#27."
+    },
+    "expect": {
+        "outcome": "silent"
     }
-  ],
-  "pullRequest": {
-    "title": "feat(AB#27): scale servings",
-    "body": "Implements AB#27."
-  },
-  "expect": {
-    "outcome": "silent"
-  }
 }

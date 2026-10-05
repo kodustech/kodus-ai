@@ -315,6 +315,8 @@ export class FakeMcpHost {
         const description = `${task.description ?? ''}${criteria}`;
 
         switch (tracker.responseShape) {
+            case 'linear_markdown':
+                return `# ${task.id}: ${task.title}\n\n${description}`;
             case 'linear':
                 return {
                     id: `uuid-${task.id}`,
@@ -343,7 +345,8 @@ export class FakeMcpHost {
     }
 
     private toolText(value: unknown) {
-        return { content: [{ type: 'text', text: JSON.stringify(value) }] };
+        const text = typeof value === 'string' ? value : JSON.stringify(value);
+        return { content: [{ type: 'text', text }] };
     }
 
     private toolError(message: string) {

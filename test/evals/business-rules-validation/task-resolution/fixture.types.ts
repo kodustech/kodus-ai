@@ -36,7 +36,8 @@ export type TrackerFixture = {
     provider: 'kodusmcp' | 'custom';
     category: 'task-management' | null;
     /** The JSON the real server wraps a task in. */
-    responseShape: 'linear' | 'jira' | 'azure';
+    /** `linear_markdown`: the task as markdown text instead of JSON. */
+    responseShape: 'linear' | 'linear_markdown' | 'jira' | 'azure';
     tools: TrackerTool[];
     /** Write tools added by name only, to reproduce a server's full surface. */
     extraWriteTools?: string[];

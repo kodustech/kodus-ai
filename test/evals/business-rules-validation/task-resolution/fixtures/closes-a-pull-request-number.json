@@ -1,22 +1,22 @@
 {
-  "name": "closes-a-pull-request-number",
-  "issue": "#1941",
-  "repository": {
-    "issues": [
-      {
-        "number": 70,
-        "title": "feat: servings model",
-        "isPullRequest": true
-      }
-    ]
-  },
-  "gitIssuesConnected": true,
-  "trackers": [],
-  "pullRequest": {
-    "title": "feat: scale servings",
-    "body": "Follow-up of #70"
-  },
-  "expect": {
-    "outcome": "silent"
-  }
+    "name": "closes-a-pull-request-number",
+    "issue": "#1941",
+    "repository": {
+        "issues": [
+            {
+                "number": 70,
+                "title": "feat: servings model",
+                "isPullRequest": true
+            }
+        ]
+    },
+    "gitIssuesConnected": true,
+    "trackers": [],
+    "pullRequest": {
+        "title": "feat: scale servings",
+        "body": "Follow-up of #70"
+    },
+    "expect": {
+        "outcome": "silent"
+    }
 }

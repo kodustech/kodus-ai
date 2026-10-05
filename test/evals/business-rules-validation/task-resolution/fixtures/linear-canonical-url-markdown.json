@@ -1,13 +1,13 @@
 {
-    "name": "linear-unknown-key-in-known-team",
-    "issue": "#1941",
+    "name": "linear-canonical-url-markdown",
+    "issue": "#1810",
     "trackers": [
         {
             "integrationId": "linear-default",
             "appName": "Linear",
             "provider": "kodusmcp",
             "category": "task-management",
-            "responseShape": "linear",
+            "responseShape": "linear_markdown",
             "tools": [
                 {
                     "name": "get_issue",
@@ -123,10 +123,11 @@
         }
     ],
     "pullRequest": {
-        "title": "feat(PLAT-999): scale servings",
-        "body": "Adds servings scaling."
+        "title": "feat: scale servings",
+        "body": "Refs: https://linear.app/acme/issue/PLAT-41/recipes-scale-servings"
     },
     "expect": {
-        "outcome": "silent"
+        "outcome": "validated",
+        "taskContains": ["recalculated", "rounded to two decimals"]
     }
 }
