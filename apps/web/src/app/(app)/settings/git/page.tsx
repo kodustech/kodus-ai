@@ -41,6 +41,7 @@ export default async function GitSettings() {
     let webhookFailures: Awaited<
         ReturnType<typeof getWebhookCreationFailures>
     > = {};
+    let webhookFailuresUnavailable = false;
     let connectionsError = false;
 
     try {
@@ -55,13 +56,16 @@ export default async function GitSettings() {
             getIntegrationConfig({ teamId }),
             getAutoLicenseAssignmentConfig().catch(() => undefined),
             getOrganizationMembers({ teamId }).catch(() => MEMBERS_UNAVAILABLE),
-            // Not swallowed: an empty payload reads as "this team has no
-            // webhook failures", which is the healthy answer the endpoint
-            // exists to distinguish from a read that failed. The rejection
-            // falls into the catch below, so the page says the data could not
-            // be loaded instead of quietly rendering the healthy state
-            // (#2003 review).
-            getWebhookCreationFailures(teamId),
+            // Ancillary read: left unguarded it would reject the whole batch
+            // and blank the connections and repositories that loaded fine,
+            // because those are only assigned by the destructuring. So it is
+            // guarded -- but NOT with an empty payload, which reads as the
+            // healthy "this team has no webhook failures": the table is told
+            // the status could not be loaded instead (#2003 review).
+            getWebhookCreationFailures(teamId).catch(() => {
+                webhookFailuresUnavailable = true;
+                return {};
+            }),
         ]);
     } catch (err) {
         console.error("[GitSettings] error fetching data:", err);
@@ -152,6 +156,9 @@ export default async function GitSettings() {
                                 platformName={gitConnection.platformName}
                                 repositories={connectedRepositories}
                                 webhookFailures={webhookFailures}
+                                webhookFailuresUnavailable={
+                                    webhookFailuresUnavailable
+                                }
                             />
                         ) : (
                             <GitProviders />

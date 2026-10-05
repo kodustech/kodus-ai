@@ -19,10 +19,12 @@ export const GitRepositoriesTable = ({
     platformName,
     repositories,
     webhookFailures,
+    webhookFailuresUnavailable,
 }: {
     repositories: AwaitedReturnType<typeof getIntegrationConfig>;
     platformName: string;
     webhookFailures?: Record<string, WebhookCreationFailure>;
+    webhookFailuresUnavailable?: boolean;
 }) => {
     const [query, setQuery] = useState("");
     const canCreate = usePermission(Action.Create, ResourceType.GitSettings);
@@ -39,6 +41,17 @@ export const GitRepositoriesTable = ({
 
     return (
         <div>
+            {webhookFailuresUnavailable && (
+                <Alert variant="warning" className="mb-3">
+                    <TriangleAlert />
+                    <AlertTitle>Could not load webhook status</AlertTitle>
+                    <AlertDescription>
+                        The repositories below are up to date, but whether Kody
+                        is notified of their pull requests could not be read
+                        this time. Reload the page to try again.
+                    </AlertDescription>
+                </Alert>
+            )}
             {withoutWebhook.length > 0 && (
                 <Alert variant="warning" className="mb-3">
                     <TriangleAlert />
