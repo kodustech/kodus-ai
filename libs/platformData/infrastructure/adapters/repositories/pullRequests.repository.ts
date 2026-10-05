@@ -161,13 +161,13 @@ export class PullRequestsRepository implements IPullRequestsRepository {
 
     async findByNumberAndRepositoryId(
         pullRequestNumber: number,
-        repositoryName: string,
+        repositoryId: string,
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<PullRequestsEntity | null> {
         const pullRequest = await this.pullRequestsModel
             .findOne({
                 'number': pullRequestNumber,
-                'repository.id': repositoryName,
+                'repository.id': repositoryId,
                 'organizationId': organizationAndTeamData.organizationId,
             })
             .lean();
