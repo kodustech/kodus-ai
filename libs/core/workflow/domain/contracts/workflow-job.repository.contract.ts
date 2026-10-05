@@ -14,11 +14,16 @@ export interface IWorkflowJobRepository {
      * Update a job. An optional `guard` makes the write conditional on the
      * caller still owning the job's lease (#1830 review); in that mode the
      * method resolves `false` when nothing was written, i.e. the lease is gone.
+     * The `noLiveOwner` form is for a caller that holds no lease at all and
+     * must still not stamp over a live worker: it resolves `false` when a
+     * running worker owns the row.
      */
     update(
         id: string,
         data: any,
-        guard?: { leaseOwner: string; requireProcessing?: boolean },
+        guard?:
+            | { leaseOwner: string; requireProcessing?: boolean }
+            | { noLiveOwner: true },
     ): Promise<any>;
     findOne(id: string): Promise<any>;
     findMany(query: any): Promise<{ data: any[]; total?: number }>;

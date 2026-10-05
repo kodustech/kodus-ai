@@ -472,27 +472,34 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
             });
 
             const owned = await this.handleFailure(jobId, error, {
-                // Only a run that actually CLAIMED the lease can be reported as
-                // "no longer owned". A failure raised before the claim (the
-                // payload check, the rate-limit gate) runs the same guard against
-                // a row that is still PENDING with no leaseOwner, so it matches
-                // nothing and would be read as "another worker owns this" — while
-                // in fact nobody does. Passing ownedBy only when the lease was
-                // claimed keeps that case on the unguarded write, which is what
-                // stamps the FAILED status and lets the rethrow below reach the
-                // consumer's error handler for a republish (#1830 review).
+                // A run that DID claim the lease is answered on its own lease; a
+                // failure raised before the claim (the payload check, the
+                // rate-limit gate — both throw before the PROCESSING/leaseOwner
+                // write) has no lease to match. Reading that miss as "another
+                // worker owns this" returned early, so the consumer acked the
+                // message and the job vanished with no FAILED stamp, no
+                // republish and no notice. But no lease is not the same as
+                // nobody running the job: a redelivery of the same jobId can be
+                // consumed while another worker holds the row (the inbox dedupes
+                // on (consumerId, messageId), and the reaper republishes with a
+                // fresh messageId), so this path asks whether any live worker
+                // owns the row instead. On a row nobody owns the write still
+                // lands, which is what stamps the FAILED status and lets the
+                // rethrow below reach the consumer's error handler for a
+                // republish (#1830 review).
                 ownedBy: leaseClaimed ? this.instanceId : undefined,
+                requireNoLiveOwner: !leaseClaimed,
                 organizationId: this.organizationIdFor(job),
             });
 
-            // The guarded write reports whether this worker still owned the
-            // row. If it did not, the job belongs to another worker now: there
+            // An explicit `false` means another worker owns the row now: there
             // is nobody left to notify on this run, and rethrowing would make
             // the catches above stamp FAILED/PERMANENT unguarded over the row
             // that worker is running — the very state the fence refused to
-            // write (#1830 review). A run that never held the lease has nothing
-            // to have lost, so it keeps failing loudly and republishing.
-            if (leaseClaimed && !owned) {
+            // write (#1830 review). A run that never held the lease and found
+            // the row free has nothing to have lost, so it keeps failing loudly
+            // and republishing.
+            if (owned === false) {
                 return;
             }
 
