@@ -844,9 +844,14 @@ export class PullRequestsService implements IPullRequestsService {
                         existingPR.repository?.id,
                         organizationAndTeamData,
                     );
+                const resolved = latest ?? existingPR;
+                // The base must come from the document we actually write to:
+                // on a re-read miss (`latest` null) the target falls back to the
+                // resolved snapshot, and `$set`ing a `[]` base would erase its
+                // stored suggestions (#2076 review).
                 const latestPrLevelSuggestions =
-                    latest?.prLevelSuggestions ?? [];
-                await this.update(latest ?? existingPR, {
+                    resolved.prLevelSuggestions ?? [];
+                await this.update(resolved, {
                     prLevelSuggestions: [
                         ...latestPrLevelSuggestions,
                         ...prLevelSuggestions,

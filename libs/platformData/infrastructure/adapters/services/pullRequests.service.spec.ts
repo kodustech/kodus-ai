@@ -429,6 +429,30 @@ describe('PullRequestsService.aggregateAndSaveDataStructure — existing-PR iden
         );
     });
 
+    it('keeps the snapshot array when the pre-append re-read misses', async () => {
+        // A re-read that returns null happens for the legacy documents the
+        // name lookup resolves; the append must still start from the
+        // snapshot's stored suggestions instead of `$set`ing just the new
+        // batch over them (#2076 review).
+        const snapshot = {
+            uuid: 'snapshot',
+            repository: { id: 'repo-uuid-stable' },
+            prLevelSuggestions: [{ id: 'old' }],
+        };
+        pullRequestsRepository.findByNumberAndRepositoryId
+            .mockResolvedValueOnce(snapshot)
+            .mockResolvedValueOnce(null);
+
+        await callSaveWithSuggestions(stubRepository, [{ id: 'new' }]);
+
+        expect((service as any).update).toHaveBeenCalledWith(
+            snapshot,
+            expect.objectContaining({
+                prLevelSuggestions: [{ id: 'old' }, { id: 'new' }],
+            }),
+        );
+    });
+
     it('logs and continues when appending pr-level suggestions fails', async () => {
         // The main save is already committed; a rejection on the append must
         // not fail the webhook/review event (#2076 review).
