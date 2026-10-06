@@ -51,6 +51,26 @@ describe('applyRevisionLinks (#2039/#2020)', () => {
         expect(s[0].suggestionContent).toBe('x');
     });
 
+    it('carries the reference into the full explanation the agent surfaces read, once', () => {
+        const s = [
+            {
+                revisesSuggestionId: 'sug-1',
+                suggestionContent: 'Short body.',
+                fullExplanation: 'The whole explanation.',
+                llmPrompt: 'Title\n\nThe whole explanation.',
+            },
+        ];
+        applyRevisionLinks(s, [prior]);
+        applyRevisionLinks(s, [prior]);
+        expect(s[0].fullExplanation).toMatch(
+            /^\*\*Revises an earlier Kody suggestion\*\*.*\n\nThe whole explanation\.$/s,
+        );
+        expect(s[0].fullExplanation.match(/Revises an earlier/g)).toHaveLength(
+            1,
+        );
+        expect(s[0].llmPrompt.match(/Revises an earlier/g)).toHaveLength(1);
+    });
+
     it('keeps the published reference in the correction prompt, without duplicating it', () => {
         const s = [
             {

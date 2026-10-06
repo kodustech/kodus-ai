@@ -307,3 +307,115 @@ describe('fallback title excludes fenced source', () => {
         expect(s.llmPrompt).toContain('```ts');
     });
 });
+
+describe('agent-facing text keeps what the comment adds after formatting', () => {
+    const rule = {
+        uuid: 'rule-1',
+        title: 'Guard nullable users',
+        rule: 'Dereference a user only after checking it exists.',
+        severity: 'high',
+    };
+    const ctxWithRule = (over: Record<string, unknown> = {}) =>
+        makeContext({
+            codeReviewConfig: {
+                reviewOptions: {},
+                heavy: false,
+                resolvedModelSlot: { provider: 'openai', model: 'gpt-4o-mini' },
+                kodyRules: [rule],
+            },
+            ...over,
+        });
+
+    it('the rule link reaches the full explanation and the prompt', async () => {
+        const { stage, reviewOrchestrator } = makeStage();
+        reviewOrchestrator.execute.mockResolvedValue(
+            happyEnvelope([
+                sugg({
+                    label: 'kody_rules',
+                    brokenKodyRulesIds: ['rule-1'],
+                    suggestionContent: RAW,
+                }),
+            ]),
+        );
+
+        const [s] = analyzedSuggestions(await run(stage, ctxWithRule()));
+
+        expect(s.suggestionContent).toContain(
+            'Kody rule violation: [Guard nullable users]',
+        );
+        expect(s.fullExplanation).toContain(
+            'Kody rule violation: [Guard nullable users]',
+        );
+        expect(s.llmPrompt.match(/Kody rule violation/g)).toHaveLength(1);
+    });
+
+    it('the revision reference reaches the full explanation, and the prompt once', async () => {
+        const { stage, reviewOrchestrator } = makeStage();
+        reviewOrchestrator.execute.mockResolvedValue(
+            happyEnvelope([
+                sugg({
+                    suggestionContent: RAW,
+                    revisesSuggestionId: 'prior-1',
+                }),
+            ]),
+        );
+
+        const [s] = analyzedSuggestions(
+            await run(
+                stage,
+                makeContext({
+                    previousDecisions: [
+                        {
+                            suggestionId: 'prior-1',
+                            relevantFile: 'src/user.ts',
+                            relevantLinesStart: 10,
+                            suggestionContent: 'Earlier fix.',
+                            label: 'bug',
+                            outcome: 'implemented',
+                            decidedAt: '2026-10-03T10:00:00Z',
+                        },
+                    ],
+                }),
+            ),
+        );
+
+        expect(s.fullExplanation).toMatch(
+            /^\*\*Revises an earlier Kody suggestion\*\*/,
+        );
+        expect(
+            s.llmPrompt.match(/Revises an earlier Kody suggestion/g),
+        ).toHaveLength(1);
+    });
+
+    it('a merged finding with no text of its own is not titled with its location list', async () => {
+        const { stage, reviewOrchestrator } = makeStage();
+        const empty = {
+            label: 'kody_rules',
+            brokenKodyRulesIds: ['rule-1'],
+            oneSentenceSummary: '',
+            suggestionContent: '',
+            existingCode: '',
+            improvedCode: '',
+        };
+        reviewOrchestrator.execute.mockResolvedValue(
+            happyEnvelope([
+                sugg({
+                    ...empty,
+                    relevantLinesStart: 10,
+                    relevantLinesEnd: 10,
+                }),
+                sugg({
+                    ...empty,
+                    relevantLinesStart: 12,
+                    relevantLinesEnd: 12,
+                }),
+            ]),
+        );
+
+        const analyzed = analyzedSuggestions(await run(stage, ctxWithRule()));
+
+        for (const s of analyzed) {
+            expect(s.oneSentenceSummary).not.toMatch(/Also found in/);
+        }
+    });
+});

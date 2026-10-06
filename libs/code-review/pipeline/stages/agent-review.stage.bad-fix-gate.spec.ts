@@ -160,7 +160,15 @@ describe('AgentReviewStage — improvedCode publication gate (#1833)', () => {
             /^\*\*Revises an earlier Kody suggestion\*\*/,
         );
         expect(published.llmPrompt).toContain(published.oneSentenceSummary);
-        expect(published.llmPrompt).toContain(published.fullExplanation);
+        expect(published.fullExplanation).toMatch(
+            /^\*\*Revises an earlier Kody suggestion\*\*/,
+        );
+        expect(published.llmPrompt.match(/Revises an earlier/g)).toHaveLength(
+            1,
+        );
+        expect(published.llmPrompt).toContain(
+            published.fullExplanation.split('\n\n').slice(1).join('\n\n'),
+        );
     });
 
     it('assigns distinct suggestion IDs to PR-level findings of the same rule across rounds', async () => {

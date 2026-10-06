@@ -1568,22 +1568,19 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 );
                 const markdownLink = `[${escapedTitle}](${ruleLink})`;
 
-                let content = s.suggestionContent || '';
-                // Skip if the link is already embedded (shouldn't happen
-                // now that enrichment runs once post-formatter, but stay
-                // idempotent in case this block runs twice).
-                if (content.includes(ruleLink)) {
-                    continue;
+                // The same link goes in the body and in the full explanation,
+                // which the prompt and the agent surfaces read. Each text links
+                // the rule title where it names it, or gains a link line.
+                const withRuleLink = (text: string): string => {
+                    if (text.includes(ruleLink)) return text;
+                    return text.includes(rule.title)
+                        ? text.replace(rule.title, markdownLink)
+                        : `${text}\n\nKody rule violation: ${markdownLink}`;
+                };
+                s.suggestionContent = withRuleLink(s.suggestionContent || '');
+                if (s.fullExplanation) {
+                    s.fullExplanation = withRuleLink(s.fullExplanation);
                 }
-
-                if (content.includes(rule.title)) {
-                    // Replace the first occurrence of the title with the link
-                    content = content.replace(rule.title, markdownLink);
-                } else {
-                    // Append a link line at the end
-                    content += `\n\nKody rule violation: ${markdownLink}`;
-                }
-                s.suggestionContent = content;
             }
 
             // llmPrompt feeds the "Prompt for LLM" block, the consolidated
