@@ -392,4 +392,71 @@ describe('PullRequestsService.aggregateAndSaveDataStructure — existing-PR iden
             pullRequestsRepository.findByNumberAndRepositoryName,
         ).not.toHaveBeenCalled();
     });
+
+    it('re-reads by id before appending so a concurrent append is preserved', async () => {
+        // `existingPR` is the snapshot from the identity lookup at the start of
+        // the save; the awaited update and network calls happen in between. If
+        // the append based on that snapshot it would `$set` the whole array and
+        // silently drop a suggestion a concurrent writer appended meanwhile
+        // (#2076 review). The append must start from a fresh document.
+        const snapshot = {
+            uuid: 'snapshot',
+            repository: { id: 'repo-uuid-stable' },
+            prLevelSuggestions: [{ id: 'old' }],
+        };
+        const fresher = {
+            uuid: 'fresher',
+            repository: { id: 'repo-uuid-stable' },
+            prLevelSuggestions: [{ id: 'old' }, { id: 'concurrent' }],
+        };
+        pullRequestsRepository.findByNumberAndRepositoryId
+            .mockResolvedValueOnce(snapshot)
+            .mockResolvedValueOnce(fresher);
+
+        await callSaveWithSuggestions(stubRepository, [{ id: 'new' }]);
+
+        // The re-read reloaded the document and the append kept BOTH the
+        // snapshot's suggestion and the concurrent writer's.
+        expect((service as any).update).toHaveBeenCalledWith(
+            fresher,
+            expect.objectContaining({
+                prLevelSuggestions: [
+                    { id: 'old' },
+                    { id: 'concurrent' },
+                    { id: 'new' },
+                ],
+            }),
+        );
+    });
+
+    it('logs and continues when appending pr-level suggestions fails', async () => {
+        // The main save is already committed; a rejection on the append must
+        // not fail the webhook/review event (#2076 review).
+        const byId = { uuid: 'by-id', repository: { id: 'repo-uuid-stable' } };
+        pullRequestsRepository.findByNumberAndRepositoryId.mockResolvedValue(
+            byId,
+        );
+        jest.spyOn(
+            service as any,
+            'handleExistingPullRequest',
+        ).mockResolvedValue({ handled: true });
+        const loggerSpy = jest
+            .spyOn((service as any).logger, 'error')
+            .mockImplementation(() => {});
+        // First `update` is the main save (resolves); the append rejects.
+        (service as any).update
+            .mockResolvedValueOnce(null)
+            .mockRejectedValueOnce(new Error('mongo down'));
+
+        await expect(
+            callSaveWithSuggestions(stubRepository, [{ id: 'new' }]),
+        ).resolves.toBeDefined();
+
+        expect(loggerSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: 'Failed to append PR level suggestions',
+            }),
+        );
+        expect((service as any).handleExistingPullRequest).toHaveBeenCalled();
+    });
 });

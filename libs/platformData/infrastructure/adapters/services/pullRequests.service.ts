@@ -828,13 +828,45 @@ export class PullRequestsService implements IPullRequestsService {
             // two repositories of one organization share a name, and a name
             // lookup can return the OTHER repository's document, splitting this
             // save's suggestions onto a foreign record (#2076 review).
-            await this.update(existingPR, {
-                prLevelSuggestions: [
-                    ...(existingPR.prLevelSuggestions ?? []),
-                    ...prLevelSuggestions,
-                ],
-                updatedAt: new Date().toISOString(),
-            });
+            //
+            // Re-read the document by that same identity right before the write:
+            // `existingPR` is the snapshot captured before the awaited update and
+            // network calls above, and appending to it as a whole-array `$set`
+            // would silently overwrite whatever a concurrent writer (the review
+            // stage, or a second webhook) appended in the meantime (#2076
+            // review). Appending must also stay non-fatal: the main save is
+            // already committed, so a rejection here is logged and the event
+            // still reported as handled.
+            try {
+                const latest =
+                    await this.pullRequestsRepository.findByNumberAndRepositoryId(
+                        pullRequest?.number,
+                        existingPR.repository?.id,
+                        organizationAndTeamData,
+                    );
+                const latestPrLevelSuggestions =
+                    latest?.prLevelSuggestions ?? [];
+                await this.update(latest ?? existingPR, {
+                    prLevelSuggestions: [
+                        ...latestPrLevelSuggestions,
+                        ...prLevelSuggestions,
+                    ],
+                    updatedAt: new Date().toISOString(),
+                });
+            } catch (error) {
+                this.logger.error({
+                    message: 'Failed to append PR level suggestions',
+                    context: PullRequestsService.name,
+                    error,
+                    metadata: {
+                        pullRequestNumber: pullRequest?.number,
+                        repositoryId: existingPR.repository?.id,
+                        suggestionsCount: prLevelSuggestions.length,
+                        organizationId: organizationAndTeamData?.organizationId,
+                        teamId: organizationAndTeamData?.teamId,
+                    },
+                });
+            }
         }
 
         return this.handleExistingPullRequest(
@@ -1085,9 +1117,7 @@ export class PullRequestsService implements IPullRequestsService {
         // `repository.id`, GitLab `project.id`) must be stringified here too or
         // the query never matches the stored value and the id key is a silent
         // no-op (#2076 review).
-        const repositoryId = repository?.id
-            ? String(repository.id)
-            : undefined;
+        const repositoryId = repository?.id ? String(repository.id) : undefined;
 
         if (repositoryId) {
             const byId =
@@ -1118,9 +1148,7 @@ export class PullRequestsService implements IPullRequestsService {
             // (#2076 review).
             const storedId = byName?.repository?.id;
             const sameRepository =
-                !repositoryId ||
-                !storedId ||
-                String(storedId) === repositoryId;
+                !repositoryId || !storedId || String(storedId) === repositoryId;
 
             if (byName && sameRepository) {
                 return byName;
