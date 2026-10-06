@@ -1304,6 +1304,41 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 );
             }
 
+            // Every finding renders under a bounded title: the model's summary,
+            // or the first sentence of the body when the model left it out.
+            // Resolved before formatting and shaping, so both see the title the
+            // reader sees and neither repeats it as the body's opening.
+            const titleCounts = {
+                fromSummary: 0,
+                fromBody: 0,
+                cut: 0,
+                empty: 0,
+            };
+            for (const s of deduped) {
+                const hadSummary = !!s.oneSentenceSummary?.trim();
+                s.oneSentenceSummary = resolveSuggestionTitle({
+                    summary: s.oneSentenceSummary,
+                    body: (
+                        s.fullExplanation ||
+                        s.suggestionContent ||
+                        ''
+                    ).replace(/```[\s\S]*?```/g, ' '),
+                });
+                if (!s.oneSentenceSummary) titleCounts.empty++;
+                else if (hadSummary) titleCounts.fromSummary++;
+                else titleCounts.fromBody++;
+                if (s.oneSentenceSummary.endsWith('…')) titleCounts.cut++;
+            }
+            this.logger.log({
+                message: `[AGENT] Titled ${deduped.length} suggestions (from summary ${titleCounts.fromSummary}, from body ${titleCounts.fromBody}, cut ${titleCounts.cut}, empty ${titleCounts.empty})`,
+                context: this.stageName,
+                metadata: {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    prNumber: context.pullRequest?.number,
+                    ...titleCounts,
+                },
+            });
+
             const savedGenerationMain =
                 context.codeReviewConfig?.v2PromptOverrides?.generation?.main;
             const writingGuidelines =
@@ -1551,46 +1586,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 s.suggestionContent = content;
             }
 
-            // Every finding renders under a bounded title: the model's summary,
-            // or the first sentence of the body when the model left it out.
             // llmPrompt feeds the "Prompt for LLM" block, the consolidated
             // @agentPrompt and validate-suggestions' fixer instruction, so it
             // carries the title and the whole explanation, not the short body.
-            const titleCounts = {
-                fromSummary: 0,
-                fromBody: 0,
-                cut: 0,
-                empty: 0,
-            };
             for (const s of deduped) {
-                const hadSummary = !!s.oneSentenceSummary?.trim();
-                s.oneSentenceSummary = resolveSuggestionTitle({
-                    summary: s.oneSentenceSummary,
-                    body: (
-                        s.fullExplanation ||
-                        s.suggestionContent ||
-                        ''
-                    ).replace(/```[\s\S]*?```/g, ' '),
-                });
-                if (!s.oneSentenceSummary) titleCounts.empty++;
-                else if (hadSummary) titleCounts.fromSummary++;
-                else titleCounts.fromBody++;
-                if (s.oneSentenceSummary.endsWith('…')) titleCounts.cut++;
                 if (s.fullExplanation) {
                     s.llmPrompt = s.oneSentenceSummary
                         ? `${s.oneSentenceSummary}\n\n${s.fullExplanation}`
                         : s.fullExplanation;
                 }
             }
-            this.logger.log({
-                message: `[AGENT] Titled ${deduped.length} suggestions (from summary ${titleCounts.fromSummary}, from body ${titleCounts.fromBody}, cut ${titleCounts.cut}, empty ${titleCounts.empty})`,
-                context: this.stageName,
-                metadata: {
-                    organizationAndTeamData: context.organizationAndTeamData,
-                    prNumber: context.pullRequest?.number,
-                    ...titleCounts,
-                },
-            });
 
             // #2039/#2020: a finding that revises, reverses or exists because
             // of an earlier Kody suggestion on this PR says so, in a line the

@@ -133,6 +133,48 @@ describe('AgentReviewStage — suggestion title', () => {
         );
     });
 
+    it.each([
+        ['team guidelines', { generation: { main: 'Write like a mentor.' } }],
+        ['the default guidelines', undefined],
+    ])(
+        'does not repeat a title built from the body as the body opening, with %s',
+        async (_name, v2PromptOverrides) => {
+            // No summary and no formatter rewrite: the title comes from the
+            // body's first sentence, so the body must not open with it again.
+            const { stage, reviewOrchestrator } = makeStage();
+            reviewOrchestrator.execute.mockResolvedValue(
+                happyEnvelope([
+                    sugg({
+                        oneSentenceSummary: '',
+                        suggestionContent:
+                            'The user object can be null here. Reading name throws a TypeError. Guard it before reading name.',
+                    }),
+                ]),
+            );
+            const ctx = makeContext({
+                codeReviewConfig: {
+                    reviewOptions: {},
+                    heavy: false,
+                    resolvedModelSlot: {
+                        provider: 'openai',
+                        model: 'gpt-4o-mini',
+                    },
+                    ...(v2PromptOverrides ? { v2PromptOverrides } : {}),
+                },
+            });
+
+            const [analyzed] = analyzedSuggestions(await run(stage, ctx));
+
+            expect(analyzed.oneSentenceSummary).toBe(
+                'The user object can be null here',
+            );
+            expect(analyzed.suggestionContent).not.toMatch(
+                /^The user object can be null here/,
+            );
+            expect(analyzed.suggestionContent).toContain('TypeError');
+        },
+    );
+
     it('cuts a summary longer than the title ceiling', async () => {
         const { stage, reviewOrchestrator } = makeStage();
         const longSummary =
