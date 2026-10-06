@@ -316,6 +316,12 @@ describe('implicitReplyGate — Bitbucket prompt reply', () => {
         ).toBeUndefined();
     });
 
+    it('stays quiet when the routed message is the prompt reply itself', () => {
+        expect(implicitReplyGate([kody(1), human(5), promptReply])).toBe(
+            'kody_author',
+        );
+    });
+
     it('still stops at the cap of real answers', () => {
         const answers = Array.from({ length: 10 }, (_, i) => kody(10 + i));
 

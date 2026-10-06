@@ -69,9 +69,13 @@ export function implicitReplyGate(
     fullThread: ThreadMessage[] | undefined,
 ): ImplicitReplySilence | undefined {
     // The prompt reply Kody posts under a Bitbucket finding is part of the
-    // finding, not an answer: it does not count toward either cap.
+    // finding, not an answer: it does not count toward either cap. The routed
+    // message stays, so Kody's own prompt reply is still silenced as Kody's.
     const thread = fullThread?.filter(
-        (m, i) => i === 0 || !(m.isKody && isKodyPromptReply(m.body)),
+        (m, i) =>
+            i === 0 ||
+            i === fullThread.length - 1 ||
+            !(m.isKody && isKodyPromptReply(m.body)),
     );
     if (!thread || thread.length < 2 || !thread[0].isKody) {
         return 'not_kody_thread';
