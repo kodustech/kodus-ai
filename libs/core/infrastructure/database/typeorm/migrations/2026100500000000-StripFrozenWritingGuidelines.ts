@@ -52,6 +52,7 @@ export class StripFrozenWritingGuidelines2026100500000000 implements MigrationIn
 
         const byMatch: Record<string, number> = {};
         let updated = 0;
+        let skipped = 0;
         for (const row of rows) {
             const { value, removed } = stripFrozenWritingGuidelines(
                 row.configValue,
@@ -67,6 +68,29 @@ export class StripFrozenWritingGuidelines2026100500000000 implements MigrationIn
                 );
             }
 
+            // A save since the read deactivated this version or changed it;
+            // the newer value wins and this row is left for reviews to read.
+            const changed: Array<{ uuid: string }> = await queryRunner.query(
+                `WITH changed AS (
+                    UPDATE "parameters"
+                       SET "configValue" = $1::jsonb, "updatedAt" = NOW()
+                     WHERE uuid = $2 AND "configKey" = 'code_review_config' AND active = true
+                       AND "configValue" = $3::jsonb
+                 RETURNING uuid
+                 ) SELECT uuid FROM changed`,
+                [
+                    JSON.stringify(value),
+                    row.uuid,
+                    JSON.stringify(row.configValue),
+                ],
+            );
+            if (!changed.length) {
+                skipped++;
+                console.log(
+                    `[StripFrozenWritingGuidelines] row ${row.uuid}: changed since it was read; skipped`,
+                );
+                continue;
+            }
             await queryRunner.query(
                 `INSERT INTO "${BACKUP_TABLE}" (uuid, original, migrated)
                  VALUES ($1, $2::jsonb, $3::jsonb)
@@ -76,12 +100,6 @@ export class StripFrozenWritingGuidelines2026100500000000 implements MigrationIn
                     JSON.stringify(row.configValue),
                     JSON.stringify(value),
                 ],
-            );
-            await queryRunner.query(
-                `UPDATE "parameters"
-                    SET "configValue" = $1::jsonb, "updatedAt" = NOW()
-                  WHERE uuid = $2 AND "configKey" = 'code_review_config' AND active = true`,
-                [JSON.stringify(value), row.uuid],
             );
 
             updated++;
@@ -95,7 +113,7 @@ export class StripFrozenWritingGuidelines2026100500000000 implements MigrationIn
         }
 
         console.log(
-            `[StripFrozenWritingGuidelines] updated ${updated} of ${rows.length} active code_review_config rows; levels removed by text: ${JSON.stringify(byMatch)}; originals in "${BACKUP_TABLE}"`,
+            `[StripFrozenWritingGuidelines] updated ${updated} of ${rows.length} active code_review_config rows, ${skipped} skipped; levels removed by text: ${JSON.stringify(byMatch)}; originals in "${BACKUP_TABLE}"`,
         );
     }
 

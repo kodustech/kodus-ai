@@ -487,6 +487,89 @@ const canonical = (v: unknown): string =>
         );
 
         itPg(
+            'a row saved again between its read and its write keeps the newer save',
+            async () => {
+                const frozen = seeds.filter(
+                    (s) =>
+                        s.configKey === 'code_review_config' &&
+                        s.active &&
+                        canonical(expectedValue(s)) !==
+                            canonical(s.configValue),
+                );
+                const [versioned, inPlace] = frozen;
+                const newerUuid = uuidv4();
+                const newerSave = {
+                    configs: gen('Saved after the migration read'),
+                };
+                const inPlaceEdit = { configs: gen('Edited in place') };
+
+                // A real QueryRunner whose SELECT is followed, before any UPDATE,
+                // by a settings save on another connection: the versioned save the
+                // app does, and an in-place edit.
+                const runner = ds.createQueryRunner();
+                const realQuery = runner.query.bind(runner);
+                let interfered = false;
+                (runner as any).query = async (
+                    sql: string,
+                    params?: unknown[],
+                ) => {
+                    const result = await realQuery(sql, params);
+                    if (!interfered && /SELECT uuid, "configValue"/.test(sql)) {
+                        interfered = true;
+                        await ds.query(
+                            `UPDATE parameters SET active = false WHERE uuid = $1`,
+                            [versioned.uuid],
+                        );
+                        await ds.query(
+                            `INSERT INTO parameters (uuid, "configKey", "configValue", active, team_id)
+                         VALUES ($1, 'code_review_config', $2::jsonb, true, $3)`,
+                            [
+                                newerUuid,
+                                JSON.stringify(newerSave),
+                                versioned.teamId,
+                            ],
+                        );
+                        await ds.query(
+                            `UPDATE parameters SET "configValue" = $1::jsonb WHERE uuid = $2`,
+                            [JSON.stringify(inPlaceEdit), inPlace.uuid],
+                        );
+                    }
+                    return result;
+                };
+
+                await new StripFrozenWritingGuidelines2026100500000000().up(
+                    runner,
+                );
+                await runner.release();
+
+                const now = await current();
+                expect(canonical(now.get(versioned.uuid)!.configValue)).toBe(
+                    canonical(versioned.configValue),
+                );
+                expect(canonical(now.get(newerUuid)!.configValue)).toBe(
+                    canonical(newerSave),
+                );
+                expect(canonical(now.get(inPlace.uuid)!.configValue)).toBe(
+                    canonical(inPlaceEdit),
+                );
+                const backedUp: Array<{ uuid: string }> = await ds.query(
+                    `SELECT uuid FROM "${BACKUP}"`,
+                );
+                expect(backedUp.map((b) => b.uuid)).not.toContain(
+                    versioned.uuid,
+                );
+                expect(backedUp.map((b) => b.uuid)).not.toContain(inPlace.uuid);
+                expect(backedUp).toHaveLength(frozen.length - 2);
+                expect(log).toHaveBeenLastCalledWith(
+                    expect.stringContaining(`updated ${frozen.length - 2} of `),
+                );
+                expect(log).toHaveBeenLastCalledWith(
+                    expect.stringContaining('2 skipped'),
+                );
+            },
+        );
+
+        itPg(
             'a second up() changes nothing and keeps the first backup',
             async () => {
                 await ds.runMigrations();

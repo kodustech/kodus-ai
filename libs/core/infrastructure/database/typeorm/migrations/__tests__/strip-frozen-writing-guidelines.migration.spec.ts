@@ -340,7 +340,7 @@ interface Row {
  * table DDL, the SELECT of active rows, the backup INSERT, the UPDATE of
  * parameters, and down()'s restore and DROP. jsonb is returned parsed.
  */
-function makeQueryRunner(rows: Row[]) {
+function makeQueryRunner(rows: Row[], afterSelect?: (rows: Row[]) => void) {
     const backup = new Map<string, { original: unknown; migrated: unknown }>();
     let backupExists = false;
     const statements: string[] = [];
@@ -353,12 +353,14 @@ function makeQueryRunner(rows: Row[]) {
             return [];
         }
         if (/^SELECT uuid, "configValue" FROM "parameters"/i.test(s)) {
-            return rows
+            const read = rows
                 .filter((r) => r.configKey === 'code_review_config' && r.active)
                 .map((r) => ({
                     uuid: r.uuid,
                     configValue: clone(r.configValue),
                 }));
+            afterSelect?.(rows);
+            return read;
         }
         if (/^INSERT INTO/i.test(s)) {
             const [uuid, original, migrated] = params as [
@@ -374,20 +376,19 @@ function makeQueryRunner(rows: Row[]) {
             }
             return [];
         }
-        if (
-            /^UPDATE "parameters" .* AND "configKey" = 'code_review_config' AND active = true$/i.test(
-                s,
-            )
-        ) {
-            const [value, uuid] = params as [string, string];
+        if (/^WITH changed AS \( UPDATE "parameters"/i.test(s)) {
+            const [value, uuid, expected] = params as [string, string, string];
             const row = rows.find(
                 (r) =>
                     r.uuid === uuid &&
                     r.configKey === 'code_review_config' &&
-                    r.active,
+                    r.active &&
+                    JSON.stringify(r.configValue) ===
+                        JSON.stringify(JSON.parse(expected)),
             );
-            if (row) row.configValue = JSON.parse(value);
-            return [];
+            if (!row) return [];
+            row.configValue = JSON.parse(value);
+            return [{ uuid }];
         }
         if (/^SELECT b.uuid/i.test(s)) {
             if (!backupExists) return [];
@@ -512,6 +513,36 @@ describe('StripFrozenWritingGuidelines migration', () => {
         expect(JSON.stringify([...backup.entries()])).toBe(firstBackup);
         expect(log).toHaveBeenLastCalledWith(
             expect.stringContaining('updated 0 of 4'),
+        );
+    });
+
+    it('up(): skips a row saved again between its read and its write, without a backup', async () => {
+        const target = 'frozen-global';
+        const { queryRunner, rows, backup } = makeQueryRunner(seed(), (all) => {
+            // A settings save deactivates the version and inserts a new one;
+            // an in-place edit changes the value. Both must win.
+            all.find((r) => r.uuid === target)!.active = false;
+            all.find((r) => r.uuid === 'frozen-repo')!.configValue = config(
+                gen('Edited in place'),
+            );
+        });
+
+        await new StripFrozenWritingGuidelines2026100500000000().up(
+            queryRunner,
+        );
+
+        expect(rows.find((r) => r.uuid === target)!.configValue).toEqual(
+            original(seed(), target),
+        );
+        expect(rows.find((r) => r.uuid === 'frozen-repo')!.configValue).toEqual(
+            config(gen('Edited in place')),
+        );
+        expect(backup.size).toBe(0);
+        expect(log).toHaveBeenLastCalledWith(
+            expect.stringContaining('updated 0 of 4'),
+        );
+        expect(log).toHaveBeenLastCalledWith(
+            expect.stringContaining('2 skipped'),
         );
     });
 
