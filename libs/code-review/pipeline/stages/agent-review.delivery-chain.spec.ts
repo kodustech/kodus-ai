@@ -589,4 +589,35 @@ describe('delivery chain: a merged finding keeps its other locations', () => {
             ).toEqual([]);
         },
     );
+
+    it('posts two unrelated findings separately when the model groups them anyway', async () => {
+        // The guard, not the model, decides: different bugs in different
+        // words are not merged, so neither comment gets a location list.
+        const unrelated = [
+            duplicateFindings()[0],
+            {
+                relevantFile: DUP_FILE,
+                relevantLinesStart: 11,
+                relevantLinesEnd: 11,
+                label: 'bug',
+                severity: 'medium',
+                oneSentenceSummary:
+                    'find predicate assigns instead of comparing',
+                suggestionContent:
+                    'WHAT: the predicate uses = so every lookup matches the first entry. WHY: callers silently get the wrong record. HOW: compare with ===.',
+                existingCode: '',
+                improvedCode: '',
+            },
+        ];
+
+        const { posted } = await runChain(unrelated, over());
+
+        expect(posted.inline.map((c) => c.line).sort()).toEqual([11, 19]);
+        for (const comment of posted.inline) {
+            expect(body(comment)).not.toContain('Also found in');
+            expect(String(comment.suggestion?.llmPrompt ?? '')).not.toContain(
+                'Also found in',
+            );
+        }
+    });
 });

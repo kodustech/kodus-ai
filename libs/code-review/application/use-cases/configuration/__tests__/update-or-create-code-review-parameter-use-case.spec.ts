@@ -1713,6 +1713,8 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
 
         // The settings page writes the default into the form as editor JSON
         // and sends it on any save; this one only changes another setting.
+        // The editor keeps list, bold and inline code as structure and marks,
+        // so the text it stores has none of their markdown characters.
         const editorJson = JSON.stringify({
             type: 'doc',
             content: currentDefaultWritingGuidelines()
@@ -1722,7 +1724,10 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                     content: [
                         {
                             type: 'text',
-                            text: line.replace(/^- /, '').replace(/\*\*/g, ''),
+                            text: line
+                                .replace(/^- /, '')
+                                .replace(/\*\*/g, '')
+                                .replace(/`/g, ''),
                         },
                     ],
                 })),
