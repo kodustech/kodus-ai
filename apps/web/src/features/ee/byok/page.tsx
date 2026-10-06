@@ -15,6 +15,8 @@ import { validateOrganizationLicense } from "src/features/ee/subscription/_servi
 import { ByokPageClient } from "./_components/page.client";
 import { isBYOKSubscriptionPlan } from "./_utils";
 
+const COST_SUMMARY_TIMEOUT_MS = 3_000;
+
 export default async function ByokPage() {
     const [byokConfig, llmConfigStatus, teamId, dateRange] = await Promise.all([
         getBYOK().catch(() => null),
@@ -51,11 +53,17 @@ export default async function ByokPage() {
         : null;
     const isBYOK = subscription ? isBYOKSubscriptionPlan(subscription) : false;
 
-    const summary = await getSummaryTokenUsage({
-        startDate: dateRange.startDate,
-        endDate: dateRange.endDate,
-        byok: isBYOK,
-    }).catch(() => null);
+    // Bounded: the whole page waits on this, and for a high-volume org the
+    // summary aggregation can run for minutes. Past the deadline the page
+    // renders without cost chips instead of streaming a skeleton forever.
+    const summary = await getSummaryTokenUsage(
+        {
+            startDate: dateRange.startDate,
+            endDate: dateRange.endDate,
+            byok: isBYOK,
+        },
+        { signal: AbortSignal.timeout(COST_SUMMARY_TIMEOUT_MS) },
+    ).catch(() => null);
 
     // Per-model cost keyed by BYOKModelConfig.id — the v2 replacement for the
     // removed main/fallback cost pair. Resolved per models[].model.
