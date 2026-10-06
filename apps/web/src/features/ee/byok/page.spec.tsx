@@ -56,6 +56,16 @@ describe("ByokPage", () => {
         deadline.abort(new DOMException("timed out", "TimeoutError"));
         const element = await page;
 
+        // No entry → no chip. A "no-usage" entry would claim the model was
+        // unused, which a timed-out summary cannot know.
+        expect(element.props.costByModelId).toEqual({});
+    });
+
+    it("shows no-usage only when the summary answered without that model", async () => {
+        summaryMock.mockResolvedValue({ totals: {}, totalCost: {}, byModel: [] });
+
+        const element = await ByokPage();
+
         expect(element.props.costByModelId).toEqual({
             "m-1": { status: "no-data", reason: "no-usage" },
         });

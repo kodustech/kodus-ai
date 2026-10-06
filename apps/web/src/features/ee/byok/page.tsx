@@ -67,12 +67,17 @@ export default async function ByokPage() {
 
     // Per-model cost keyed by BYOKModelConfig.id — the v2 replacement for the
     // removed main/fallback cost pair. Resolved per models[].model.
+    // Only when the summary answered: resolving against a timed-out or failed
+    // summary would yield "no-usage" and render a false "No usage in this
+    // period" chip on every model — no entry renders no chip instead.
     const costByModelId: Record<string, ByokModelCost> = {};
-    for (const model of byokConfig?.models ?? []) {
-        costByModelId[model.id] = resolveByokModelCost(
-            model.model,
-            summary?.byModel,
-        );
+    if (summary) {
+        for (const model of byokConfig?.models ?? []) {
+            costByModelId[model.id] = resolveByokModelCost(
+                model.model,
+                summary.byModel,
+            );
+        }
     }
 
     // Human label for the window the cost covers (same range as Costs screen).
