@@ -32,11 +32,13 @@ export const getTokenUsageOverview = async (
 
 export const getSummaryTokenUsage = async (
     filters: TokenUsageQueryContract,
+    init?: { signal?: AbortSignal },
 ) => {
     return await authorizedFetch<UsageSummaryContract>(
         TOKEN_USAGE_PATHS.GET_SUMMARY,
         {
             params: { ...filters },
+            signal: init?.signal,
         },
     );
 };
