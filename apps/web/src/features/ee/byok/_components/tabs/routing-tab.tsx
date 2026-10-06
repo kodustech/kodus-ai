@@ -133,7 +133,9 @@ export const RoutingTab = ({
         return groupModelsByProvider(config).flatMap((group) =>
             group.models.map((m) => ({
                 id: m.id,
-                label: formatModelLabel(m.model),
+                // A model saved without its id still has to render (and be
+                // searchable) — fall back to the slot id, never undefined.
+                label: formatModelLabel(m.model) || m.id,
                 provider: group.credential.provider,
                 capabilities: capsById.get(m.id),
             })),

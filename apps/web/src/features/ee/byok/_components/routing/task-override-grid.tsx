@@ -100,7 +100,9 @@ export const ModelCombobox = ({
                         if (itemValue === "__default__") return 1;
                         const model = models.find((m) => m.id === itemValue);
                         if (!model) return 0;
-                        return model.label
+                        // A stored model can reach the pool without a label;
+                        // filter on its id then rather than throw mid-keystroke.
+                        return (model.label || model.id || "")
                             .toLowerCase()
                             .includes(term.toLowerCase())
                             ? 1
@@ -145,8 +147,36 @@ export const ModelCombobox = ({
                                 : { ok: true as const };
                             const selected = model.id === value;
 
-                            const item = (
+                            const label = (
+                                <span
+                                    dir="rtl"
+                                    title={model.label}
+                                    style={{ textAlign: "left" }}
+                                    className={cn(
+                                        "min-w-0 truncate",
+                                        !gate.ok
+                                            ? "text-text-tertiary"
+                                            : selected
+                                                ? "text-primary font-medium"
+                                                : undefined,
+                                    )}>
+                                    {model.label || model.id}
+                                </span>
+                            );
+
+                            // The CommandItem must be a DIRECT child of the
+                            // list: on every keystroke cmdk re-sorts by moving
+                            // each item with `appendChild(item.closest(
+                            // "[cmdk-group-items] > *"))`, which is null for an
+                            // item wrapped in an element outside a group, and
+                            // appendChild(null) threw on the first character.
+                            // So the tooltip of a disabled (incompatible)
+                            // option lives INSIDE the item, on a span that
+                            // opts back into pointer events (the disabled item
+                            // itself has none).
+                            return (
                                 <CommandItem
+                                    key={model.id}
                                     value={model.id}
                                     disabled={!gate.ok}
                                     onSelect={() => {
@@ -154,53 +184,29 @@ export const ModelCombobox = ({
                                         onSelect(model.id);
                                         setOpen(false);
                                     }}>
-                                    <span className="flex min-w-0 items-center gap-2">
-                                        {gate.ok ? (
+                                    {gate.ok ? (
+                                        <span className="flex min-w-0 items-center gap-2">
                                             <ProviderAvatar
                                                 provider={model.provider}
                                             />
-                                        ) : (
-                                            <AlertTriangleIcon className="text-warning size-3.5 shrink-0" />
-                                        )}
-                                        <span
-                                            dir="rtl"
-                                            title={model.label}
-                                            style={{ textAlign: "left" }}
-                                            className={cn(
-                                                "min-w-0 truncate",
-                                                !gate.ok
-                                                    ? "text-text-tertiary"
-                                                    : selected
-                                                        ? "text-primary font-medium"
-                                                        : undefined,
-                                            )}>
-                                            {model.label}
+                                            {label}
                                         </span>
-                                    </span>
+                                    ) : (
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <span className="pointer-events-auto flex min-w-0 items-center gap-2">
+                                                    <AlertTriangleIcon className="text-warning size-3.5 shrink-0" />
+                                                    {label}
+                                                </span>
+                                            </TooltipTrigger>
+                                            {gate.reason && (
+                                                <TooltipContent className="max-w-64">
+                                                    {gate.reason}
+                                                </TooltipContent>
+                                            )}
+                                        </Tooltip>
+                                    )}
                                 </CommandItem>
-                            );
-
-                            // Disabled (incompatible) options carry a tooltip
-                            // with the human reason — the LIVE pre-save warning.
-                            if (!gate.ok && gate.reason) {
-                                return (
-                                    <Tooltip key={model.id}>
-                                        <TooltipTrigger asChild>
-                                            <span className="block">
-                                                {item}
-                                            </span>
-                                        </TooltipTrigger>
-                                        <TooltipContent className="max-w-64">
-                                            {gate.reason}
-                                        </TooltipContent>
-                                    </Tooltip>
-                                );
-                            }
-
-                            return (
-                                <span key={model.id} className="block">
-                                    {item}
-                                </span>
                             );
                         })}
                     </CommandList>
