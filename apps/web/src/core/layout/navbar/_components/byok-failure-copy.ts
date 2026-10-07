@@ -11,8 +11,21 @@
 export function byokFailureCopy(
     provider: string,
     category?: string,
+    /** The provider's own sentence (`sampleError` on the notification). */
+    providerMessage?: string,
 ): { title: string; body: string } {
     const tail = "Reviews using this model may fail until it's resolved.";
+
+    // An aggregator answers 404 both for "no such model" and for "no upstream
+    // your routing allows serves it" (OpenRouter with pinned providers). Only
+    // the body tells them apart, and "check the model id" sends someone with a
+    // correct id and a working key chasing the wrong thing.
+    if (category === "MODEL_NOT_FOUND" && isRoutingRefusal(providerMessage)) {
+        return {
+            title: `${provider} has no allowed provider for the configured model`,
+            body: `The model and key are fine, but the providers ${provider} is allowed to route to don't serve this model. Allow a provider that serves it (for OpenRouter, the pinned providers or the account's allowed providers), or pick a model they serve. ${tail}`,
+        };
+    }
 
     switch (category) {
         case "AUTH_INVALID":
@@ -42,4 +55,18 @@ export function byokFailureCopy(
                 body: `${provider} returned errors on recent requests. Its latest answer is in the details below. ${tail}`,
             };
     }
+}
+
+/**
+ * Mirror of `isRoutingRefusal` in libs/llm/error-classifier.ts — a copy on
+ * purpose: importing a value from `@libs/*` breaks the isolated web build.
+ */
+function isRoutingRefusal(providerMessage?: string): boolean {
+    const said = (providerMessage ?? "").toLowerCase();
+    if (!said) return false;
+    return (
+        said.includes("allowed-providers") ||
+        said.includes("allowed providers") ||
+        (said.includes("no allowed") && said.includes("provider"))
+    );
 }

@@ -36,6 +36,31 @@ describe("byokFailureCopy", () => {
         }
     });
 
+    it("does not send a pinned-provider refusal to the model id or the key", () => {
+        // OpenRouter's 404 when the pinned/allowed providers serve no upstream
+        // for the model: same category as a wrong id, different fix.
+        const said =
+            "No allowed providers are available for the selected model.";
+        const { title, body } = byokFailureCopy(
+            "OpenRouter",
+            "MODEL_NOT_FOUND",
+            said,
+        );
+        expect(`${title} ${body}`).toMatch(/allow/i);
+        expect(body).not.toMatch(/check the model id/i);
+        expect(title).not.toMatch(/key/i);
+        expect(`${title} ${body}`).not.toMatch(billing);
+    });
+
+    it("still points at the model id for a genuinely missing model", () => {
+        const { body } = byokFailureCopy(
+            "OpenRouter",
+            "MODEL_NOT_FOUND",
+            'model "gpt-nope" does not exist',
+        );
+        expect(body).toMatch(/check the model id/i);
+    });
+
     it("keeps the billing hint where it is the cause", () => {
         expect(byokFailureCopy("OpenAI", "QUOTA_EXCEEDED").body).toMatch(
             /balance|credit|quota/i,

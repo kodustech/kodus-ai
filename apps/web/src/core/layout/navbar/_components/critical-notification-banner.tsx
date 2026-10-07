@@ -118,6 +118,9 @@ export const CriticalNotificationBanner = () => {
         ? byokFailureCopy(
               provider ?? "your provider",
               typeof category === "string" ? category : undefined,
+              typeof banner.delivery.metadata?.sampleError === "string"
+                  ? banner.delivery.metadata.sampleError
+                  : undefined,
           )
         : null;
     const title = byokCopy?.title ?? banner.delivery.title;
