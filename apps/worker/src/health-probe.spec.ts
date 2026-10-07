@@ -371,6 +371,26 @@ describe('startHealthProbe', () => {
             });
         });
 
+        it('still answers the probe when the logger throws', async () => {
+            const logger = {
+                warn: jest.fn(() => {
+                    throw new Error('logger down');
+                }),
+            };
+            server = startHealthProbe({
+                port: 0,
+                appContext: makeAppContext({ managedConnection: { isConnected: () => false } }),
+                requireAmqp: true,
+                logger,
+            });
+            await waitListening(server);
+
+            const res = await getHealth(server);
+
+            expect(res.statusCode).toBe(503);
+            expect(logger.warn).toHaveBeenCalled();
+        });
+
         it('does not log a healthy probe', async () => {
             const logger = { warn: jest.fn() };
             server = startHealthProbe({

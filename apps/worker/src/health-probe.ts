@@ -201,22 +201,6 @@ export function startHealthProbe(opts: HealthProbeOptions): http.Server {
 
         lastProbe = { at: startedAt, ok: result.ok, status: result.status };
 
-        // ECS only records "unhealthy" — without this line a recycled task
-        // leaves no trace of WHY the probe failed (or that it never did).
-        // Time spent queued behind a blocked event loop happens BEFORE this
-        // handler runs; the event-loop monitor is what measures that.
-        if (!result.ok) {
-            logger.warn({
-                message: `Health probe failing: ${result.status}`,
-                context: 'WorkerHealthProbe',
-                metadata: {
-                    status: result.status,
-                    msSinceBoot: startedAt - bootTs,
-                    ...(result.details ?? {}),
-                },
-            });
-        }
-
         res.writeHead(result.ok ? 200 : 503, {
             'content-type': 'application/json',
         });
@@ -227,6 +211,28 @@ export function startHealthProbe(opts: HealthProbeOptions): http.Server {
                 ...(result.details ?? {}),
             }),
         );
+
+        // ECS only records "unhealthy" — without this line a recycled task
+        // leaves no trace of WHY the probe failed (or that it never did).
+        // Time spent queued behind a blocked event loop happens BEFORE this
+        // handler runs; the event-loop monitor is what measures that.
+        // Logged after the response, and guarded: logging must never be
+        // the reason a probe goes unanswered.
+        if (!result.ok) {
+            try {
+                logger.warn({
+                    message: `Health probe failing: ${result.status}`,
+                    context: 'WorkerHealthProbe',
+                    metadata: {
+                        status: result.status,
+                        msSinceBoot: startedAt - bootTs,
+                        ...(result.details ?? {}),
+                    },
+                });
+            } catch {
+                // best-effort
+            }
+        }
     });
 
     server.listen(port, '0.0.0.0', () => {

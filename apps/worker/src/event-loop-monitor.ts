@@ -38,25 +38,31 @@ export function startEventLoopMonitor(
     histogram.enable();
 
     const timer = setInterval(() => {
-        const maxMs = histogram.max / NS_PER_MS;
-        const probe = getLastHealthProbe();
-        const payload = {
-            message: `Event loop delay max=${Math.round(maxMs)}ms`,
-            context: 'EventLoopMonitor',
-            metadata: {
-                p50Ms: Math.round(histogram.percentile(50) / NS_PER_MS),
-                p99Ms: Math.round(histogram.percentile(99) / NS_PER_MS),
-                maxMs: Math.round(maxMs),
-                meanMs: Math.round(histogram.mean / NS_PER_MS),
-                windowMs: intervalMs,
-                msSinceLastProbe: probe ? Date.now() - probe.at : null,
-                lastProbeStatus: probe?.status ?? null,
-            },
-        };
-        histogram.reset();
+        // A throw inside a timer callback would crash the process — this is
+        // diagnostics, it must never take the worker down.
+        try {
+            const maxMs = histogram.max / NS_PER_MS;
+            const probe = getLastHealthProbe();
+            const payload = {
+                message: `Event loop delay max=${Math.round(maxMs)}ms`,
+                context: 'EventLoopMonitor',
+                metadata: {
+                    p50Ms: Math.round(histogram.percentile(50) / NS_PER_MS),
+                    p99Ms: Math.round(histogram.percentile(99) / NS_PER_MS),
+                    maxMs: Math.round(maxMs),
+                    meanMs: Math.round(histogram.mean / NS_PER_MS),
+                    windowMs: intervalMs,
+                    msSinceLastProbe: probe ? Date.now() - probe.at : null,
+                    lastProbeStatus: probe?.status ?? null,
+                },
+            };
+            histogram.reset();
 
-        if (maxMs > warnMs) logger.warn(payload);
-        else logger.log(payload);
+            if (maxMs > warnMs) logger.warn(payload);
+            else logger.log(payload);
+        } catch {
+            histogram.reset();
+        }
     }, intervalMs);
     timer.unref();
 

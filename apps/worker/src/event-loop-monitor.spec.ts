@@ -48,6 +48,20 @@ describe('startEventLoopMonitor', () => {
         expect(metadata.maxMs).toBeGreaterThanOrEqual(350);
     });
 
+    it('survives a throwing logger and keeps reporting', async () => {
+        const logger = {
+            log: jest.fn(() => {
+                throw new Error('logger down');
+            }),
+            warn: jest.fn(),
+        };
+        stop = startEventLoopMonitor({ intervalMs: 50, logger });
+
+        await nextTick(180);
+
+        expect(logger.log.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+
     it('stops reporting once stopped', async () => {
         const logger = { log: jest.fn(), warn: jest.fn() };
         stop = startEventLoopMonitor({ intervalMs: 50, logger });
