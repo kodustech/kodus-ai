@@ -33,7 +33,7 @@ export class CodeReviewFeedbackConsumer {
     ) {}
 
     @RabbitSubscribe({
-        exchange: 'orchestrator.exchange.delayed',
+        exchange: 'orchestrator.exchange',
         routingKey: 'codeReviewFeedback.syncCodeReviewReactions',
         queue: 'codeReviewFeedback.syncCodeReviewReactions.queue',
         allowNonJsonMessages: true,

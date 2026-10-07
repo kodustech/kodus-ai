@@ -8,6 +8,14 @@ import {
     calculateBackoffInterval,
 } from '@libs/common/utils/polling';
 import { isRateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
+import {
+    isRetryTarget,
+    pickRetryBucket,
+    RETRY_BUCKET_HEADER,
+    RETRY_EXCHANGE,
+    RETRY_TARGET_HEADER,
+    RetryTargetExchange,
+} from './config/rabbitmq-retry-topology';
 
 /**
  * Backoff configuration for consumer retries.
@@ -39,9 +47,10 @@ const RATE_LIMITED_MAX_DELAY_MS = 60 * 60 * 1000;
  *
  * IMPORTANT: Requires the following RabbitMQ topology:
  * - For any `<base>` exchange in use:
- *   - `<base>.delayed` (type: x-delayed-message, x-delayed-type: topic)
  *   - `<base>.dlx` (type: topic)
- * - The delayed exchange plugin must be installed: rabbitmq_delayed_message_exchange
+ *   - an entry in RETRY_TARGET_EXCHANGES, so a retry can return to it
+ * - The retry wait queues (rabbitmq-retry-topology.ts), declared by
+ *   RabbitMQDLQInitializer. No broker plugin is needed.
  */
 @Injectable()
 export class RabbitMQErrorHandler implements OnModuleInit {
@@ -89,18 +98,25 @@ export class RabbitMQErrorHandler implements OnModuleInit {
         const headers = { ...msg.properties.headers };
         const retryCount = (headers[this.RETRY_COUNT_HEADER] || 0) as number;
         const messageId = msg.properties.messageId;
-        const baseExchange = this.getBaseExchange(msg.fields.exchange);
-        const delayedExchange = `${baseExchange}.delayed`;
+        // A retry comes back through the return exchange, so the exchange it
+        // was delivered from no longer names its base; the header does.
+        const target = headers[RETRY_TARGET_HEADER];
+        const baseExchange = isRetryTarget(target)
+            ? target
+            : this.getBaseExchange(msg.fields.exchange);
         const dlxExchange = `${baseExchange}.dlx`;
 
         try {
-            if (retryCount < this.maxRetriesConsumer) {
+            if (
+                retryCount < this.maxRetriesConsumer &&
+                isRetryTarget(baseExchange)
+            ) {
                 await this.retryWithDelay(
                     msg,
                     headers,
                     retryCount,
                     error,
-                    delayedExchange,
+                    baseExchange,
                 );
             } else {
                 await this.sendToDLQ(
@@ -146,7 +162,7 @@ export class RabbitMQErrorHandler implements OnModuleInit {
         headers: Record<string, any>,
         retryCount: number,
         error: any,
-        delayedExchange: string,
+        baseExchange: RetryTargetExchange,
     ): Promise<void> {
         const nextRetryCount = retryCount + 1;
         headers[this.RETRY_COUNT_HEADER] = nextRetryCount;
@@ -154,8 +170,12 @@ export class RabbitMQErrorHandler implements OnModuleInit {
         const delayMs = isRateLimitError(error)
             ? this.computeRateLimitedDelay(error.resetAt)
             : this.computeTransientDelay(nextRetryCount);
+        const bucketMs = pickRetryBucket(delayMs);
 
-        headers['x-delay'] = delayMs;
+        // Left over from a retry published before #1663; meaningless now.
+        delete headers['x-delay'];
+        headers[RETRY_TARGET_HEADER] = baseExchange;
+        headers[RETRY_BUCKET_HEADER] = String(bucketMs);
 
         this.logger.warn({
             message: `Message processing failed, retrying (${nextRetryCount}/${this.maxRetriesConsumer})`,
@@ -165,12 +185,16 @@ export class RabbitMQErrorHandler implements OnModuleInit {
                 routingKey: msg.fields.routingKey,
                 retryCount: nextRetryCount,
                 delayMs,
+                bucketMs,
+                baseExchange,
                 error: error?.message,
             },
         });
 
+        // The original routing key, unchanged: it is the key the message
+        // dead-letters with, and the base exchange routes on it.
         await this.amqpConnection.publish(
-            delayedExchange,
+            RETRY_EXCHANGE,
             msg.fields.routingKey,
             msg.content,
             {
@@ -259,6 +283,8 @@ export class RabbitMQErrorHandler implements OnModuleInit {
     }
 
     private getBaseExchange(exchange: string): string {
+        // `.delayed` is no longer declared, but a broker upgraded from before
+        // #1663 still delivers the retries its plugin was holding through it.
         if (exchange.endsWith('.delayed')) {
             return exchange.slice(0, -'.delayed'.length);
         }

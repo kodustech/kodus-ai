@@ -61,7 +61,7 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
 
     /**
      * Webhook-processing jobs
-     * Delayed exchange bindings are created by RabbitMQDLQInitializer.
+     * Retries return through the wait queues RabbitMQDLQInitializer declares.
      */
     @RabbitSubscribe({
         exchange: 'workflow.exchange',
@@ -91,7 +91,7 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
 
     /**
      * Code-review jobs
-     * Delayed exchange bindings are created by RabbitMQDLQInitializer.
+     * Retries return through the wait queues RabbitMQDLQInitializer declares.
      */
     @RabbitSubscribe({
         exchange: 'workflow.exchange',
@@ -152,7 +152,7 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
 
     /**
      * Implementation Check jobs
-     * Delayed exchange bindings are created by RabbitMQDLQInitializer.
+     * Retries return through the wait queues RabbitMQDLQInitializer declares.
      */
     @RabbitSubscribe({
         exchange: 'workflow.exchange',
@@ -182,7 +182,7 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
 
     /**
      * AST Graph Build jobs
-     * Delayed exchange bindings are created by RabbitMQDLQInitializer.
+     * Retries return through the wait queues RabbitMQDLQInitializer declares.
      *
      * Uses Single Active Consumer so only ONE worker at a time pulls from
      * this queue (up to prefetchCount in-flight). Combined with
@@ -230,7 +230,7 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
 
     /**
      * AST Graph Incremental Update jobs
-     * Delayed exchange bindings are created by RabbitMQDLQInitializer.
+     * Retries return through the wait queues RabbitMQDLQInitializer declares.
      *
      * Single Active Consumer + prefetchCount=5 caps global concurrency
      * at 5 — see handleAstGraphBuildJob for rationale.
