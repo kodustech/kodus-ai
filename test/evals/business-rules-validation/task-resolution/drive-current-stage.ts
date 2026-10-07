@@ -1,5 +1,6 @@
 import { BusinessValidationService } from '@libs/agents/business-validation/business-validation.service';
 import { IntentJudge } from '@libs/agents/business-validation/judge/intent-judge';
+import { BusinessLogicPublisher } from '@libs/platform/application/services/business-logic-publisher.service';
 import { SkillLoaderService } from '@libs/agents/skills/skill-loader.service';
 import { BusinessLogicValidationStage } from '@libs/code-review/pipeline/stages/business-logic-validation.stage';
 
@@ -13,6 +14,10 @@ export type ResolutionObservation = {
     outcome: ResolutionFixture['expect']['outcome'];
     /** What the judge was given as the task, when it ran at all. */
     taskReadByJudge?: string;
+    /** The tasks the judge read, in order. */
+    judgedTasks: string[];
+    /** Whether the PR passed, for a validated case. */
+    checkPasses?: boolean;
     /** Text posted on the PR, if anything. */
     comment?: string;
     /** Write calls made on any tracker. */
@@ -22,9 +27,7 @@ export type ResolutionObservation = {
 };
 
 /** Fixture fields this driver cannot express. A case using one is not measured. */
-export const CURRENT_STAGE_UNSUPPORTED: Array<keyof ResolutionFixture> = [
-    'settings',
-];
+export const CURRENT_STAGE_UNSUPPORTED: Array<keyof ResolutionFixture> = [];
 
 const ORG = { organizationId: 'org-eval', teamId: 'team-eval' };
 
@@ -60,23 +63,59 @@ export async function driveCurrentStage(
 
         // The judge is the boundary: capture what it read instead of calling a model.
         let taskReadByJudge: string | undefined;
+        const judgedTasks: string[] = [];
         const judge = jest
             .spyOn(IntentJudge.prototype, 'judge')
             .mockImplementation(async (input) => {
                 taskReadByJudge = input.taskText;
+                judgedTasks.push(input.task.id);
                 return {
                     needsMoreInfo: false,
-                    status: 'compliant',
+                    status: 'issues_found',
                     findings: [],
-                    summary:
-                        '## Business Rules Validation\n**Status:** Compliant',
+                    requirements: [
+                        {
+                            requirement:
+                                'Quantities are rounded to two decimals',
+                            state: 'missing',
+                            evidence: [],
+                            confidence: 'high',
+                        },
+                    ],
+                    outOfScope: [],
+                    summary: 'One requirement is missing.',
                 };
             });
         const translate = jest
             .spyOn(IntentJudge.prototype, 'translate')
             .mockImplementation(async (message) => message);
 
-        const stage = new BusinessLogicValidationStage(service);
+        // The real publisher, writing to a code host that records comments.
+        const posted: string[] = [];
+        const codeHost = {
+            createIssueComment: async (params: { body: string }) => {
+                posted.push(params.body);
+                return { id: posted.length };
+            },
+            updateIssueComment: async (params: { body: string }) => {
+                posted.push(params.body);
+                return {};
+            },
+            getAllCommentsInPullRequest: async () => [],
+        };
+        const runs = {
+            latestForPullRequest: async () => undefined,
+            create: async () => 'run',
+            clearPendingRecheck: async () => undefined,
+        };
+        const publisher = new BusinessLogicPublisher(
+            service,
+            codeHost as never,
+            { getAdapter: () => ({}) } as never,
+            runs as never,
+        );
+
+        const stage = new BusinessLogicValidationStage(service, publisher);
         const result = await stage.execute(
             frozenContext({
                 organizationAndTeamData: ORG,
@@ -93,7 +132,21 @@ export async function driveCurrentStage(
                     name: fixture.repository.name,
                     fullName: `${fixture.repository.owner}/${fixture.repository.name}`,
                 },
-                codeReviewConfig: { reviewOptions: { business_logic: true } },
+                codeReviewConfig: {
+                    reviewOptions: { business_logic: true },
+                    ...(fixture.settings
+                        ? {
+                              businessLogic: {
+                                  taskSource: fixture.settings.taskSource,
+                                  taskSourceTool: fixture.settings.lookupTool,
+                                  criteriaLocation:
+                                      fixture.settings.criteriaLocation,
+                                  criteriaHeading:
+                                      fixture.settings.criteriaHeading,
+                              },
+                          }
+                        : {}),
+                },
                 pipelineMetadata: {},
                 errors: [],
                 changedFiles: fixture.pullRequest.files.map((file) => ({
@@ -106,8 +159,7 @@ export async function driveCurrentStage(
         judge.mockRestore();
         translate.mockRestore();
 
-        const comment: string | undefined =
-            result.businessLogicResults?.[0]?.suggestionContent;
+        const comment: string | undefined = posted[posted.length - 1];
         return {
             outcome:
                 taskReadByJudge !== undefined
@@ -116,6 +168,13 @@ export async function driveCurrentStage(
                       ? 'comment'
                       : 'silent',
             taskReadByJudge,
+            judgedTasks,
+            ...(taskReadByJudge !== undefined
+                ? {
+                      checkPasses:
+                          result.businessLogicOutcome?.kind === 'success',
+                  }
+                : {}),
             comment,
             writes: host.calls.filter((c) => c.kind === 'write'),
             debug: {

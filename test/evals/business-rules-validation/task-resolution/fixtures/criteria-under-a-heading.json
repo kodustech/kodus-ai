@@ -1,6 +1,6 @@
 {
-    "name": "linear-key-in-title",
-    "issue": "#1941",
+    "name": "criteria-under-a-heading",
+    "issue": "plan UC-23",
     "trackers": [
         {
             "integrationId": "linear-default",
@@ -112,12 +112,7 @@
                 {
                     "id": "PLAT-41",
                     "title": "Recipes: scale servings",
-                    "description": "Let cooks change the number of servings on a recipe and see every ingredient amount recalculated.",
-                    "acceptanceCriteria": [
-                        "Amounts scale linearly with the servings count",
-                        "Amounts are rounded to two decimals",
-                        "Servings below 1 are rejected"
-                    ]
+                    "description": "## Context\nCooks asked to change servings.\n\n## Acceptance criteria\n- Amounts scale linearly with the servings count\n- Amounts are rounded to two decimals\n\n## Out of scope\n- Unit conversion between metric and imperial"
                 }
             ]
         }
@@ -128,7 +123,12 @@
     },
     "expect": {
         "outcome": "validated",
-        "taskContains": ["recalculated", "rounded to two decimals"],
-        "checkPasses": false
+        "taskContains": [
+            "Acceptance Criteria:\n- Amounts scale linearly with the servings count\n- Amounts are rounded to two decimals"
+        ]
+    },
+    "settings": {
+        "criteriaLocation": "heading",
+        "criteriaHeading": "Acceptance criteria"
     }
 }

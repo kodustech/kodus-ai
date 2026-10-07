@@ -36,6 +36,10 @@
                     }
                 },
                 {
+                    "name": "getVisibleJiraProjects",
+                    "kind": "teams"
+                },
+                {
                     "name": "searchJiraIssuesUsingJql",
                     "kind": "list",
                     "inputSchema": {
@@ -154,6 +158,7 @@
         "body": "Implements REC-70."
     },
     "expect": {
-        "outcome": "silent"
+        "outcome": "comment",
+        "commentContains": ["REC-70 doesn't exist in Jira", "REC-7"]
     }
 }

@@ -42,7 +42,7 @@
                 },
                 {
                     "name": "list_teams",
-                    "kind": "list",
+                    "kind": "teams",
                     "description": "List teams",
                     "inputSchema": {
                         "type": "object",

@@ -167,7 +167,7 @@ export class FakeMcpHost {
         }
         const raw = Buffer.concat(chunks).toString('utf8');
         const handler = this.handlers.get((req.url ?? '').split('?')[0]);
-        if (!handler) {
+        if (typeof handler !== 'function') {
             res.writeHead(404).end();
             return;
         }
@@ -258,7 +258,7 @@ export class FakeMcpHost {
                 args,
                 kind: writes
                     ? 'write'
-                    : tool.kind === 'sites'
+                    : tool.kind === 'sites' || tool.kind === 'teams'
                       ? 'list'
                       : tool.kind,
             });
@@ -275,6 +275,15 @@ export class FakeMcpHost {
                         scopes: ['read:jira-work'],
                     },
                 ]);
+            }
+            if (tool.kind === 'teams') {
+                // Team or project keys, never tasks: what tells a typo from a version.
+                const keys = [
+                    ...new Set(tracker.tasks.map((t) => t.id.split('-')[0])),
+                ];
+                return this.toolText(
+                    keys.map((key) => ({ id: `team-${key}`, key, name: key })),
+                );
             }
             if (tool.kind === 'list') {
                 return this.toolText(

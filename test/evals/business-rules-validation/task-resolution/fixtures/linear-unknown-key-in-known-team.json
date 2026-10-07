@@ -42,7 +42,7 @@
                 },
                 {
                     "name": "list_teams",
-                    "kind": "list",
+                    "kind": "teams",
                     "description": "List teams",
                     "inputSchema": {
                         "type": "object",
@@ -127,6 +127,7 @@
         "body": "Adds servings scaling."
     },
     "expect": {
-        "outcome": "silent"
+        "outcome": "comment",
+        "commentContains": ["PLAT-999 doesn't exist in Linear"]
     }
 }

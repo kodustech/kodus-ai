@@ -1,6 +1,6 @@
 {
-    "name": "linear-key-in-title",
-    "issue": "#1941",
+    "name": "two-tasks-in-one-pr",
+    "issue": "plan UC-16",
     "trackers": [
         {
             "integrationId": "linear-default",
@@ -118,17 +118,25 @@
                         "Amounts are rounded to two decimals",
                         "Servings below 1 are rejected"
                     ]
+                },
+                {
+                    "id": "PLAT-42",
+                    "title": "Recipes: print view",
+                    "description": "Show a printable version of a recipe with scaled amounts.",
+                    "acceptanceCriteria": [
+                        "Print view hides navigation",
+                        "Print view shows scaled amounts"
+                    ]
                 }
             ]
         }
     ],
     "pullRequest": {
-        "title": "feat(PLAT-41): scale servings",
-        "body": "Adds servings scaling."
+        "title": "feat: servings and print view",
+        "body": "Closes PLAT-41\nCloses PLAT-42"
     },
     "expect": {
         "outcome": "validated",
-        "taskContains": ["recalculated", "rounded to two decimals"],
-        "checkPasses": false
+        "judgedTasks": ["PLAT-41", "PLAT-42"]
     }
 }

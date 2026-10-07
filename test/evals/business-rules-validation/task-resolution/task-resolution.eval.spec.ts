@@ -71,6 +71,12 @@ describe('business-logic task resolution', () => {
             for (const text of want.commentNotContains ?? []) {
                 expect(seen.comment ?? '').not.toContain(text);
             }
+            if (want.judgedTasks) {
+                expect(seen.judgedTasks).toEqual(want.judgedTasks);
+            }
+            if (want.checkPasses !== undefined) {
+                expect(seen.checkPasses).toBe(want.checkPasses);
+            }
             expect(seen.writes.map((w) => `${w.server}:${w.tool}`)).toEqual([]);
         });
     }

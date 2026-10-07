@@ -1,6 +1,6 @@
 {
-    "name": "linear-key-in-title",
-    "issue": "#1941",
+    "name": "release-with-many-tasks",
+    "issue": "plan UC-17",
     "trackers": [
         {
             "integrationId": "linear-default",
@@ -118,17 +118,42 @@
                         "Amounts are rounded to two decimals",
                         "Servings below 1 are rejected"
                     ]
+                },
+                {
+                    "id": "PLAT-42",
+                    "title": "Recipes: print view",
+                    "description": "Show a printable version of a recipe with scaled amounts.",
+                    "acceptanceCriteria": [
+                        "Print view hides navigation",
+                        "Print view shows scaled amounts"
+                    ]
+                },
+                {
+                    "id": "PLAT-43",
+                    "title": "Recipes: favorites",
+                    "description": "Let cooks save recipes as favorites so they find them again.",
+                    "acceptanceCriteria": [
+                        "A recipe can be starred",
+                        "Starred recipes are listed first"
+                    ]
+                },
+                {
+                    "id": "PLAT-44",
+                    "title": "Recipes: share link",
+                    "description": "Let cooks share a read-only link to a recipe with anyone.",
+                    "acceptanceCriteria": [
+                        "The link opens without login",
+                        "The link shows the recipe read-only"
+                    ]
                 }
             ]
         }
     ],
     "pullRequest": {
-        "title": "feat(PLAT-41): scale servings",
-        "body": "Adds servings scaling."
+        "title": "release: 2.3.0",
+        "body": "Closes PLAT-41\nCloses PLAT-42\nCloses PLAT-43\nCloses PLAT-44"
     },
     "expect": {
-        "outcome": "validated",
-        "taskContains": ["recalculated", "rounded to two decimals"],
-        "checkPasses": false
+        "outcome": "silent"
     }
 }

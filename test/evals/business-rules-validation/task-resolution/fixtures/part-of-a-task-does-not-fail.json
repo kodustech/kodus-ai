@@ -1,6 +1,6 @@
 {
-    "name": "linear-key-in-title",
-    "issue": "#1941",
+    "name": "part-of-a-task-does-not-fail",
+    "issue": "plan UC-18",
     "trackers": [
         {
             "integrationId": "linear-default",
@@ -123,12 +123,11 @@
         }
     ],
     "pullRequest": {
-        "title": "feat(PLAT-41): scale servings",
-        "body": "Adds servings scaling."
+        "title": "feat: round scaled amounts",
+        "body": "Part of PLAT-41: only the rounding."
     },
     "expect": {
         "outcome": "validated",
-        "taskContains": ["recalculated", "rounded to two decimals"],
-        "checkPasses": false
+        "checkPasses": true
     }
 }

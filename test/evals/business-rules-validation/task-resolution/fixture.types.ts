@@ -15,12 +15,13 @@ export type TrackerTask = {
 /**
  * How a tool answers. `get` looks the task up by the value of `idArg`; `list`
  * returns every task; `sites` returns the Atlassian sites the token reaches;
+ * `teams` returns the team or project keys (`PLAT`), never a task;
  * `write` changes nothing but is recorded, so a case can assert the fetch
  * never wrote to the customer's tracker.
  */
 export type TrackerTool = {
     name: string;
-    kind: 'get' | 'list' | 'write' | 'sites';
+    kind: 'get' | 'list' | 'write' | 'sites' | 'teams';
     description?: string;
     idArg?: string;
     /** For a tool with an `action` enum (Azure `wit_work_item`): the only
@@ -72,10 +73,13 @@ export type ResolutionFixture = {
      * driver ignores this; the resolver reads it.
      */
     settings?: {
-        /** 'managed' (default) or the integrationId of one plugin. */
+        /** 'auto' (default) or the integrationId of one plugin. */
         taskSource?: string;
         /** For a custom plugin: the tool that reads a task by its id. */
         lookupTool?: string;
+        /** Where the task's acceptance criteria live. */
+        criteriaLocation?: 'auto' | 'heading' | 'field';
+        criteriaHeading?: string;
     };
     pullRequest: {
         number: number;
@@ -99,5 +103,12 @@ export type ResolutionFixture = {
         commentContains?: string[];
         /** Comments that must never be posted for this case. */
         commentNotContains?: string[];
+        /** For `validated`: the tasks the judge read, in order. */
+        judgedTasks?: string[];
+        /**
+         * For `validated`: whether the check passes when the judge reports one
+         * requirement MISSING (the driver's judge always does).
+         */
+        checkPasses?: boolean;
     };
 };

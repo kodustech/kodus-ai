@@ -1,141 +1,126 @@
 ---
 title: "Business Logic Validation"
-description: "Compare your pull request against business rules or specs with @kody -v business-logic."
+description: "Check each pull request against the task it references, requirement by requirement."
 ---
 
 ## Overview
 
-Business Logic Validation lets you confirm that a pull request implements the expected behaviour described in a spec, document, or ticket. Kody analyzes the PR diff, brings in the referenced business context, and flags mismatches before you merge.
+Business Logic Validation checks that a pull request delivers what its task asks for. Kody finds the task the PR references, reads it from your task tracker, and lists every requirement with where it stands in the code. The result is one comment on the PR, kept up to date, and the `kody/business-logic` check.
 
 <img src="https://kodus.io/wp-content/uploads/2025/10/business-logic.gif" alt="Example of using business logic validation" />
 
 ## Prerequisites
-- If you want Kody to **automatically fetch task context** from tools like Jira, Linear, Notion, or ClickUp, the corresponding plugin must be connected in your workspace's [Plugins](/en/how_to_use/code_review/plugins) page.
-- Any link you share (Jira, Slack, Google Docs, etc.) must be reachable through the plugins installed in your workspace.
-- You can always **provide the spec inline** without any plugin — just paste the requirements directly in the PR comment.
 
-## Enabling Business Logic Validation
+- A task tracker connected in [Plugins](/en/how_to_use/code_review/plugins): Linear, Jira (Atlassian Rovo), Notion, Git Issues, or a custom plugin.
+- Kody only **reads** tasks, one at a time, by their id. It never searches, lists or writes to your tracker.
+- Without a tracker, you can still paste the task text in the command (see below).
 
-Business Logic Validation is **enabled by default**. You can control it in two ways:
+## Turning it on
 
-**Via `kodus-config.yml`:**
+Business Logic is on by default. Turn it on or off in **Code review → What to review**, on the **Business Logic** row, or in `kodus-config.yml`:
 
 ```yaml
 reviewOptions:
   business_logic: true
 ```
 
-**Via the web UI:**
+Click **Configure** on that row to open the Business Logic settings.
 
-In the sidebar, open **Code review → What to review** (at **Global**, or pick a repository or directory in the scope picker) and toggle the **Business Logic** switch. If no task management plugin is connected, the row shows **Needs a task management plugin** while the category is on.
+## How Kody finds the task
 
-When enabled, Kody runs business logic validation automatically during every PR review, in addition to the on-demand command.
+Kody looks for task references in the PR title, branch name and description, in that order:
 
-## Running On-Demand
+- Keys like `PROJ-123` (Jira, Linear and most trackers)
+- `#123` and `owner/repo#123` (Git issues; a number that is a pull request is ignored)
+- `AB#123` (Azure Boards)
+- Links to Linear, Jira, Notion, GitHub/GitLab issues and Azure work items
 
-You can also trigger validation manually at any time:
+A reference only counts once the tracker returns a task with that exact id, so `UTF-8` or `gpt-5` in a title are never mistaken for tasks.
 
-1. Open the main PR comment box (outside of inline code suggestions).
-2. Mention Kody and add the validation command: `@kody -v business-logic ...`.
-3. Provide the spec content inline or paste a link that Kody can fetch via the available plugins.
-4. Submit the comment and wait for Kody's response in the same thread.
+- **"Closes PROJ-1"** or a key in the title or branch: the PR is checked against the whole task.
+- **"Part of PROJ-1"** or **"Refs PROJ-1"**: the PR delivers a slice. What's missing is listed, but doesn't fail the check.
+- **Up to three tasks** are checked per PR, one section each. A PR that states more (a release or a merge) is skipped.
 
-The command only triggers from the main conversation box; replies inside inline suggestions are ignored.
+## The five states
 
-You can re-run the validation at any time — simply post the command again in a new comment. Follow-ups must be a fresh command; replying directly to Kody's message in the Git UI is not supported.
+| State | Meaning | Fails the check |
+|---|---|---|
+| **MET** | The diff implements it. | No |
+| **PARTIAL** | Part of it is implemented. | Only if you choose |
+| **MISSING** | No evidence in this PR diff. | Yes, by default |
+| **CHECK MANUALLY** | A visual or flow requirement, one Kody isn't sure about, or one that may live in a file too large to read. | Never |
+| **NOT IN TASK** | A change the task doesn't ask for. | Only if you choose |
 
-### Examples
+Every row cites the file and line it is based on, and says what to change.
 
-- Jira ticket: `@kody -v business-logic https://kodustech.atlassian.net/jira/software/c/projects/KC/boards/2?selectedIssue=KC-1292`
-- Linear issue: `@kody -v business-logic https://linear.app/your-team/issue/TEAM-123`
-- Notion page: `@kody -v business-logic https://www.notion.so/your-workspace/Feature-Spec-abc123`
-- Google Doc: `@kody -v business-logic https://docs.google.com/document/d/1234567890/edit`
-- Slack conversation: `@kody -v business-logic https://kodustech.slack.com/archives/C070E5E97DE/p1727814000000000`
-- Inline spec snippet: `@kody -v business-logic Rule XYZ — orders above $500 must issue cashback credits.`
+## On the pull request
 
-## What Kody Does
+- Kody checks the PR on its **first review**. Turn on **Re-check on every push** to check every push instead.
+- Re-check any time with `@kody -v business-logic`. The **same comment is edited**; Kody never posts a second one.
+- A PR that meets its task gets only the green `kody/business-logic` check. Turn on **Comment when every requirement is met** to get the comment too.
+- The check exists on GitHub and Forgejo. Make it required in your branch protection to block merging on a failing check. On GitLab, Bitbucket and Azure Repos the comment is the signal.
 
-1. **Fetches the PR diff** and pull request metadata.
-2. **Retrieves the task context** — from the linked task management tool (Jira, Linear, etc.) or from inline text you supplied.
-3. **Classifies task context quality** — determines how thorough the analysis can be based on available information.
-4. **Compares implementation against requirements** — checks each acceptance criterion against the PR diff.
-5. **Reports findings** with severity levels and requirement tracing.
+### Replying to the comment
 
-If Kody cannot reach the resource or lacks permissions, it will call that out so you can adjust access or provide the information another way.
+Reply to the Business Logic comment and mention `@kody`:
 
-## Task Context Quality
+- **Disagree**: "It's covered in `useDrag.ts`". Kody re-checks what you pointed at and either marks it MET or says what it looked at and keeps it.
+- **Accept a finding** (reviewers and maintainers only, never the PR author): "Keyboard reordering is out of scope, moved to SAA-102". Kody confirms SAA-102 exists, marks the row **ACCEPTED** with who accepted it, and the check passes if nothing else blocks it. The decision stays on later re-checks.
 
-Kody automatically classifies the quality of the task context before analysis, which affects the depth of validation:
+## When Kody stays quiet
 
-| Quality | Description | Analysis Behavior |
-|---------|-------------|-------------------|
-| **Complete** | Has title, description, and acceptance criteria | Thorough criterion-by-criterion analysis |
-| **Partial** | Has title and description but no acceptance criteria | Best-effort analysis from described behavior |
-| **Minimal** | Has only a title or very short description | Conservative — flags only obvious gaps |
-| **Empty** | No meaningful task context found | Returns a "Need Task Information" response |
+Kody comments only when the author can do something about it:
 
-## Understanding the Output
+| Situation | On the PR |
+|---|---|
+| The task has only a title | A comment asking for acceptance criteria |
+| `SAA-999` doesn't exist, but SAA is a team in your tracker | A comment saying it looks like a typo, with the closest real tasks |
+| No task referenced | Nothing; the check is skipped |
+| A GitHub issue, but only Linear is connected | Nothing; admins see a count on the settings page |
+| The tracker is down or its token expired | Nothing; the check is skipped, owners are notified, and Kody re-checks once the tracker answers |
 
-### Finding Severities
+The reason for every skip is recorded and shown on the Business Logic settings page.
 
-Each finding includes a severity level:
+## Running on demand
 
-- **MUST_FIX** — A required business rule is not implemented, is incorrect, or contradicts task requirements
-- **SUGGESTION** — A relevant edge case, robustness, or maintainability point is not covered
-- **INFO** — Useful observation that does not block compliance
+Comment on the PR (not on a line of code):
 
-### Grounded Findings
+- `@kody -v business-logic`: re-check the tasks the PR references
+- `@kody -v business-logic PROJ-123` or a task link: check against that task
+- `@kody -v business-logic` followed by the requirements as text: check against what you wrote, no tracker needed
 
-Every finding is **traceable to a specific requirement** from the task context. Each finding includes:
+## Settings
 
-- **Requirement** — The exact quote from the task that establishes the requirement
-- **Missing in code** — What is absent or wrong in the PR diff
-- **Suggested action** — A concrete implementation action
+Open **Code review → What to review → Business Logic → Configure**. Every setting can be set globally and overridden per repository or directory.
 
-Kody does not invent requirements. If a finding cannot be traced back to a specific sentence in the task, it is not reported.
+- **Task source**: every connected tracker, or one plugin. For a custom plugin (for example Azure DevOps), pick the tool that reads one task by its id; only read-only tools are offered. Use **Try it with a real task** to check what Kody reads before saving.
+- **Where acceptance criteria live**: detected automatically, under a heading in the description, or in a field (for Jira, the custom field your team fills).
+- **What fails the check**: MISSING by default; add PARTIAL and NOT IN TASK if you want.
+- **Team guidance**: notes Kody follows when it judges, for example "Feature flags count as implemented when the flag exists and defaults to off". It can't change the verdict format or make Kody invent requirements.
 
-### Scope Mismatch Detection
+The same settings in `kodus-config.yml`:
 
-If the PR diff appears to be working in a different domain than the task itself, Kody detects this as a **scope mismatch** and reports it as the leading finding, rather than producing misleading gap analysis.
-
-### Example Output
-
-```markdown
-## Business Rules Validation
-
-**Task:** KC-1441 - Team-scoped Kody rules
-**Task Link:** https://kodustech.atlassian.net/browse/KC-1441
-**Status:** Issues Found
-**Confidence:** high
-
-### Findings
-
-#### MUST_FIX: No evidence of team-scoped rule resolution in this PR diff
-**Requirement:** "Rules must be resolved by organization and team
-to avoid cross-workspace billing mismatch."
-**Missing in code:** No evidence in this PR diff of adding `teamId`
-to the relevant persistence or lookup path.
-**Suggested action:** Add `teamId` to rule persistence and query filters.
-
-#### SUGGESTION: No evidence of deterministic mixed-license handling
-**Requirement:** "When teams have different subscription states,
-behavior must remain deterministic."
-**Missing in code:** No evidence in this PR diff of logic handling
-mixed subscription states.
-**Suggested action:** Add deterministic fallback and error handling
-scoped to team.
-
-### Requirements Verified
-- AC #1: "Team-scoped reads/writes" — Implemented in `rules.service.ts:42`
-- AC #2: "Multi-workspace billing path" — Implemented in `billing.service.ts:118`
-
----
-*Analysis performed by Kodus AI Business Rules Validator*
+```yaml
+businessLogic:
+  taskSource: 'auto'
+  failOn: ['missing']
+  criteriaLocation: 'heading'
+  criteriaHeading: 'Acceptance criteria'
+  commentWhenMet: false
+  recheckOnPush: false
 ```
 
-## Tips
+## From the CLI
 
-- Break large specs into sections and validate them individually to keep feedback focused.
-- When sharing private links, double-check that the required plugin (e.g., Jira, Slack, Google Drive) is installed and authorized for your workspace.
-- After addressing findings, rerun the command to confirm the PR now aligns with the business rules.
-- Provide acceptance criteria in your task for the most thorough analysis — tasks with explicit criteria get criterion-by-criterion validation.
+A coding agent can check its work before opening the PR:
+
+```bash
+kodus pr business-validation --task-id AB#8
+kodus pr business-validation --task-id AB#8 --format json
+```
+
+It checks your local changes against the task and prints one line per requirement and the status. With `--format json` (or `--agent`) it prints the same verdict structured, for an agent to act on. Nothing is posted to a pull request.
+
+## Cockpit
+
+**Cockpit → Delivered as asked** shows the share of PRs that met their task, changes not in the task, how often developers agreed with Kody, and the split by who wrote the code (people or coding agents, from commit authors and `Co-Authored-By` trailers) and by team.
