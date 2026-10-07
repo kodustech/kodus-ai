@@ -98,3 +98,11 @@ IssuesSchema.index(
         name: 'organization_label_severity_open',
     },
 );
+
+// 5. By org/repository, any status. Every index above is partial on
+// `status: 'open'`, so reads that don't filter by status (IssuesRepository.find,
+// the KODUS_LIST_KODY_ISSUES MCP tool) fell back to a full collection scan.
+IssuesSchema.index(
+    { 'organizationId': 1, 'repository.name': 1 },
+    { name: 'organization_repository_any_status', background: true },
+);

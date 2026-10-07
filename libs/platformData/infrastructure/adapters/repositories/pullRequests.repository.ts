@@ -31,6 +31,7 @@ import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/del
 import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enums/implementationStatus.enum';
 import { clampPatchForPersistWithFlag } from '@libs/platformData/domain/pullRequests/utils/diff-budget';
 import { UNRESOLVED_RANK_BONUS } from '@libs/platformData/domain/pullRequests/deep-link-rank';
+import { MONGO_QUERY_MAX_TIME_MS } from '@libs/core/infrastructure/database/mongo/query-timeout';
 
 // Bounds findSuggestionsByPRAndFilenames / findPrLevelSuggestionsByPR in the
 // aggregation itself, instead of fetching a whole PR's suggestion history and
@@ -89,9 +90,13 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         organizationId: string,
         repositoryIds?: string[],
     ): Promise<Array<{ number: number; repositoryId: string }>> {
+        // The title is user input from the PR list search box: match it as
+        // literal text. Unescaped, `fix(api` throws, `.*` matches everything
+        // and a crafted pattern can backtrack for the whole maxTimeMS budget.
+        const literal = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const filter: any = {
             organizationId,
-            title: { $regex: title, $options: 'i' },
+            title: { $regex: literal, $options: 'i' },
         };
 
         if (repositoryIds?.length) {
@@ -101,6 +106,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         const results = await this.pullRequestsModel
             .find(filter, { 'number': 1, 'repository.id': 1 })
             .lean()
+            .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
             .exec();
 
         return results.map((doc) => ({
@@ -217,16 +223,26 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             return [];
         }
 
-        const orConditions = criteria.map((c) => ({
-            'number': c.number,
-            'repository.id': c.repositoryId,
-        }));
+        // Bounded `$in` on both keys instead of one `$or` branch per pair: with
+        // ~20 indexes on this collection the planner hits its indexed-OR limit
+        // (`maxIndexedOrSolutionsReached`) and can settle on an org-wide scan
+        // that applies the `$or` in FETCH (prod: 98s avg, 155s max). `$in` x
+        // `$in` gives tight bounds on the unique (number, repository.id, org)
+        // index; the cross-product superset is trimmed to the exact pairs below.
+        const numbers = [...new Set(criteria.map((c) => c.number))];
+        const repositoryIds = [
+            ...new Set(criteria.map((c) => String(c.repositoryId))),
+        ];
+        const wanted = new Set(
+            criteria.map((c) => `${c.repositoryId}:${c.number}`),
+        );
 
-        const pullRequests = await this.pullRequestsModel
+        const candidates = await this.pullRequestsModel
             .find(
                 {
                     organizationId,
-                    $or: orConditions,
+                    'number': { $in: numbers },
+                    'repository.id': { $in: repositoryIds },
                 },
                 {
                     // PERF: Exclude heavy fields - suggestion counts come from aggregation
@@ -237,7 +253,12 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                 },
             )
             .lean()
+            .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
             .exec();
+
+        const pullRequests = candidates.filter((pr) =>
+            wanted.has(`${pr.repository?.id}:${pr.number}`),
+        );
 
         return mapSimpleModelsToEntities(pullRequests, PullRequestsEntity);
     }
@@ -686,6 +707,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                     },
                 },
             ])
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
             .exec();
 
         // Build the result map
@@ -813,6 +835,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                 // and filters in memory, so this runs rarely (not per keystroke).
                 { $limit: Math.max(1, Math.min(limit, 500)) },
             ])
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
             .exec();
 
         // Author email is deliberately NOT returned: the autocomplete only
@@ -894,7 +917,10 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             filter['files.suggestions.deliveryStatus'] = DeliveryStatus.SENT;
         }
 
-        return this.pullRequestsModel.countDocuments(filter).exec();
+        return this.pullRequestsModel
+            .countDocuments(filter)
+            .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
+            .exec();
     }
 
     async findFileWithSuggestions(
@@ -1303,6 +1329,23 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                         status: statusFilter,
                     },
                 },
+                // Keep only what the stages below read before unwinding: each
+                // `$unwind` copies the document once per element, and a full PR
+                // (patches, every suggestion's content) is the dominant cost of
+                // this query (prod: ~33 runs/min from CheckIfPRCanBeApproved).
+                {
+                    $project: {
+                        'number': 1,
+                        'organizationId': 1,
+                        'status': 1,
+                        'provider': 1,
+                        'repository.id': 1,
+                        'repository.name': 1,
+                        'files.suggestions.id': 1,
+                        'files.suggestions.deliveryStatus': 1,
+                        'files.suggestions.comment': 1,
+                    },
+                },
                 {
                     $unwind: '$files',
                 },
@@ -1354,6 +1397,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                     },
                 },
             ])
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
             .exec();
 
         return result;
